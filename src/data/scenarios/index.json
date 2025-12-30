@@ -1,0 +1,22 @@
+{
+  "scenarios": [
+    {
+      "id": "sc001",
+      "title": "活三を見つけよう",
+      "difficulty": "beginner",
+      "description": "連珠の基本、活三パターンを学びます"
+    },
+    {
+      "id": "sc002",
+      "title": "活四を防ごう",
+      "difficulty": "beginner",
+      "description": "相手の活四を見つけて防御する練習をします"
+    },
+    {
+      "id": "sc003",
+      "title": "禁じ手を覚えよう",
+      "difficulty": "beginner",
+      "description": "黒石の禁じ手（三三・四四・長連）を学びます"
+    }
+  ]
+}
