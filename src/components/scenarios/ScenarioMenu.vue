@@ -15,7 +15,13 @@ const emit = defineEmits<{
 const progressStore = useProgressStore();
 
 // Computed
-const scenarios = computed(() => scenariosIndex.scenarios as Scenario[]);
+const scenarios = computed(() => {
+  const allScenarios: Scenario[] = [];
+  Object.values(scenariosIndex.difficulties).forEach((diff) => {
+    allScenarios.push(...(diff.scenarios as Scenario[]));
+  });
+  return allScenarios;
+});
 
 const scenarioProgress = computed(() =>
   scenarios.value.map((scenario) => ({
