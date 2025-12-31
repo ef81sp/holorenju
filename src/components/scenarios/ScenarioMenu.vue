@@ -139,9 +139,11 @@ const getDifficultyLabel = (difficulty: string): string => {
 
 <style scoped>
 .scenario-menu {
-  min-height: 100vh;
+  height: 100%;
   padding: 40px 20px;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  overflow-y: auto;
+  box-sizing: border-box;
 }
 
 .header {

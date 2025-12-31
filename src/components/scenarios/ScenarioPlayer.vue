@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, nextTick, onMounted, ref } from "vue";
+import { useElementSize } from "@vueuse/core";
 
 import CharacterDialog from "@/components/character/CharacterDialog.vue";
 import RenjuBoard from "@/components/game/RenjuBoard.vue";
@@ -36,6 +37,16 @@ const currentStepIndex = ref(0);
 const isStepCompleted = ref(false);
 const showHint = ref(false);
 
+// 盤フレームサイズ計測用
+const boardFrameRef = ref<HTMLElement | null>(null);
+const { width: boardFrameWidth, height: boardFrameHeight } = useElementSize(
+  boardFrameRef,
+  {
+    width: 0,
+    height: 0,
+  },
+);
+
 // Computed
 const currentStep = computed<ScenarioStep | null>(() => {
   if (!scenario.value) {
@@ -52,6 +63,34 @@ const isLastStep = computed(() => {
 });
 
 const canProceed = computed(() => isStepCompleted.value);
+
+const boardSize = computed(() => {
+  // 余白とgapを考慮したサイズ計算
+  const availableWidth = boardFrameWidth.value;
+  const availableHeight = boardFrameHeight.value;
+
+  // 初期値が0の場合は計算しない（最小サイズを返す）
+  if (availableWidth === 0 || availableHeight === 0) {
+    console.log("[ScenarioPlayer] boardSize: availableWidth or Height is 0");
+    return 400; // 最小デフォルトサイズ
+  }
+
+  // padding, gapを考慮して少し小さめに
+  const margin = 20;
+  const calculatedSize = Math.min(
+    availableWidth - margin,
+    availableHeight - margin,
+  );
+
+  console.log("[ScenarioPlayer] boardSize computed:", {
+    availableWidth,
+    availableHeight,
+    margin,
+    calculatedSize,
+  });
+
+  return calculatedSize;
+});
 
 // Methods
 const loadScenario = async (): Promise<void> => {
@@ -218,8 +257,14 @@ const handleBack = (): void => {
 };
 
 // Lifecycle
-onMounted(() => {
+onMounted(async () => {
   loadScenario();
+
+  await nextTick();
+  console.log("[ScenarioPlayer] Initial size:", {
+    width: boardFrameWidth.value,
+    height: boardFrameHeight.value,
+  });
 });
 </script>
 
@@ -246,78 +291,128 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- メインコンテンツ -->
-    <div class="content">
-      <!-- 左側：盤面 -->
-      <div class="board-section">
+    <!-- 盤面フレーム（左上 11×6）-->
+    <div
+      ref="boardFrameRef"
+      class="board-section"
+    >
+      <div class="board-wrapper">
         <RenjuBoard
           :board-state="gameStore.board"
           :disabled="isStepCompleted"
+          :stage-size="boardSize"
           @place-stone="handlePlaceStone"
         />
+      </div>
 
-        <!-- ヒント表示 -->
-        <div
-          v-if="showHint && currentStep?.hint"
-          class="hint-box"
+      <!-- ヒント表示 -->
+      <div
+        v-if="showHint && currentStep?.hint"
+        class="hint-box"
+      >
+        💡 {{ currentStep.hint }}
+      </div>
+    </div>
+
+    <!-- 説明・コントロール部（右側 5×9）-->
+    <div class="info-section">
+      <!-- 説明 -->
+      <div class="step-description">
+        <h3>{{ currentStep?.title }}</h3>
+        <p>{{ currentStep?.description }}</p>
+      </div>
+
+      <!-- コントロール -->
+      <div class="controls">
+        <button
+          v-if="!isStepCompleted"
+          class="hint-button"
+          @click="toggleHint"
         >
-          💡 {{ currentStep.hint }}
-        </div>
+          {{ showHint ? "ヒントを隠す" : "ヒントを見る" }}
+        </button>
+
+        <button
+          v-if="canProceed"
+          class="next-button"
+          @click="nextStep"
+        >
+          {{ isLastStep ? "シナリオ完了" : "次のステップへ" }}
+        </button>
       </div>
+    </div>
 
-      <!-- 右側：対話とコントロール -->
-      <div class="dialog-section">
-        <!-- キャラクター対話 -->
-        <CharacterDialog
-          :message="dialogStore.currentMessage"
-          :position="
-            dialogStore.currentMessage?.character === 'fubuki'
-              ? 'left'
-              : 'right'
-          "
-        />
-
-        <!-- 説明 -->
-        <div class="step-description">
-          <h3>{{ currentStep?.title }}</h3>
-          <p>{{ currentStep?.description }}</p>
-        </div>
-
-        <!-- コントロール -->
-        <div class="controls">
-          <button
-            v-if="!isStepCompleted"
-            class="hint-button"
-            @click="toggleHint"
-          >
-            {{ showHint ? "ヒントを隠す" : "ヒントを見る" }}
-          </button>
-
-          <button
-            v-if="canProceed"
-            class="next-button"
-            @click="nextStep"
-          >
-            {{ isLastStep ? "シナリオ完了" : "次のステップへ" }}
-          </button>
-        </div>
-      </div>
+    <!-- セリフ部（左下 11×2）-->
+    <div class="character-dialog-section">
+      <CharacterDialog
+        :message="dialogStore.currentMessage"
+        :position="
+          dialogStore.currentMessage?.character === 'fubuki' ? 'left' : 'right'
+        "
+      />
     </div>
   </div>
 </template>
 
 <style scoped>
 .scenario-player {
-  min-height: 100vh;
+  width: 100%;
+  height: 100%;
+  display: grid;
+  grid-template-columns: 11fr 5fr;
+  grid-template-rows: 1fr 6fr 2fr;
   padding: 20px;
   background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  gap: 20px;
+  box-sizing: border-box;
 }
 
 .header {
+  grid-column: 1 / 2;
+  grid-row: 1;
   display: flex;
   align-items: center;
   gap: 20px;
-  margin-bottom: 30px;
+}
+
+.board-section {
+  grid-column: 1;
+  grid-row: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  overflow: hidden;
+  min-height: 0; /* grid itemの最小サイズをリセット */
+}
+
+.board-wrapper {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0; /* flex itemの最小サイズをリセット */
+}
+
+.info-section {
+  grid-column: 2;
+  grid-row: 1 / 4;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  overflow-y: auto;
+}
+
+.character-dialog-section {
+  grid-column: 1;
+  grid-row: 3;
+  padding: 20px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  overflow-y: auto;
 }
 
 .back-button {
@@ -346,30 +441,13 @@ onMounted(() => {
   font-size: 14px;
 }
 
-.content {
-  display: flex;
-  gap: 40px;
-  align-items: flex-start;
-}
-
-.board-section {
-  flex-shrink: 0;
-}
-
 .hint-box {
-  margin-top: 20px;
   padding: 16px;
   background: #fff9c4;
   border: 2px solid #fbc02d;
   border-radius: 8px;
-  max-width: 600px;
-}
-
-.dialog-section {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
+  align-self: center;
+  max-width: 100%;
 }
 
 .step-description {
@@ -392,8 +470,8 @@ onMounted(() => {
 
 .controls {
   display: flex;
+  flex-direction: column;
   gap: 12px;
-  flex-wrap: wrap;
 }
 
 .hint-button,
@@ -405,6 +483,7 @@ onMounted(() => {
   font-weight: bold;
   cursor: pointer;
   transition: all 0.2s;
+  text-align: center;
 }
 
 .hint-button {
@@ -425,18 +504,5 @@ onMounted(() => {
 .next-button:hover {
   background: #45a049;
   transform: translateY(-2px);
-}
-
-@media (max-width: 1024px) {
-  .content {
-    flex-direction: column;
-  }
-
-  .board-section {
-    width: 100%;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-  }
 }
 </style>

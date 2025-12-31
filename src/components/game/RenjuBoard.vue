@@ -11,12 +11,14 @@ import { ref, computed } from "vue";
 interface Props {
   boardState?: BoardState;
   disabled?: boolean;
+  stageSize?: number;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   boardState: () =>
     new Array(15).fill(null).map(() => new Array(15).fill(null)),
   disabled: false,
+  stageSize: 640,
 });
 
 // Emits
@@ -26,18 +28,48 @@ const emit = defineEmits<{
 
 // 定数
 const BOARD_SIZE = 15;
-const CELL_SIZE = 40;
-const PADDING = 40;
 const MARGIN_MULTIPLIER = 2;
 const OFFSET_ONE = 1;
-const STAGE_WIDTH =
-  CELL_SIZE * (BOARD_SIZE - OFFSET_ONE) + PADDING * MARGIN_MULTIPLIER;
-const STAGE_HEIGHT =
-  CELL_SIZE * (BOARD_SIZE - OFFSET_ONE) + PADDING * MARGIN_MULTIPLIER;
+const EFFECTIVE_CELLS = BOARD_SIZE - OFFSET_ONE + MARGIN_MULTIPLIER;
 const STONE_RADIUS_RATIO = 0.45;
-const STONE_RADIUS = CELL_SIZE * STONE_RADIUS_RATIO;
 const GRID_STROKE_WIDTH = 1;
 const LOWER_BOUND = 0;
+
+// Refs
+const stageSize = computed(() => {
+  const value = props.stageSize || 640;
+  console.log("[RenjuBoard] stageSize computed:", {
+    propsStageSize: props.stageSize,
+    computedValue: value,
+  });
+  return value;
+});
+
+// 動的に計算されるセルサイズ
+const CELL_SIZE = computed(() => stageSize.value / EFFECTIVE_CELLS);
+
+const PADDING = computed(() => CELL_SIZE.value);
+
+const STAGE_WIDTH = computed(() => stageSize.value);
+
+const STAGE_HEIGHT = computed(() => stageSize.value);
+
+const STONE_RADIUS = computed(() => CELL_SIZE.value * STONE_RADIUS_RATIO);
+
+// Stage configuration
+const stageConfig = computed(() => {
+  const config = {
+    width: STAGE_WIDTH.value,
+    height: STAGE_HEIGHT.value,
+  };
+  console.log("[RenjuBoard] stageConfig computed:", {
+    stageSize: stageSize.value,
+    STAGE_WIDTH: STAGE_WIDTH.value,
+    STAGE_HEIGHT: STAGE_HEIGHT.value,
+    config,
+  });
+  return config;
+});
 
 // 状態
 const previewStone = ref<PreviewStone | null>(null);
@@ -80,15 +112,17 @@ const generateGridLines = (): {
   strokeWidth: number;
 }[] => {
   const lines: { points: number[]; stroke: string; strokeWidth: number }[] = [];
+  const currentCellSize = CELL_SIZE.value;
+  const currentPadding = PADDING.value;
 
   for (let i = LOWER_BOUND; i < BOARD_SIZE; i += 1) {
     // 横線
     lines.push({
       points: [
-        PADDING,
-        PADDING + i * CELL_SIZE,
-        PADDING + (BOARD_SIZE - OFFSET_ONE) * CELL_SIZE,
-        PADDING + i * CELL_SIZE,
+        currentPadding,
+        currentPadding + i * currentCellSize,
+        currentPadding + (BOARD_SIZE - OFFSET_ONE) * currentCellSize,
+        currentPadding + i * currentCellSize,
       ],
       stroke: "#000",
       strokeWidth: GRID_STROKE_WIDTH,
@@ -97,10 +131,10 @@ const generateGridLines = (): {
     // 縦線
     lines.push({
       points: [
-        PADDING + i * CELL_SIZE,
-        PADDING,
-        PADDING + i * CELL_SIZE,
-        PADDING + (BOARD_SIZE - OFFSET_ONE) * CELL_SIZE,
+        currentPadding + i * currentCellSize,
+        currentPadding,
+        currentPadding + i * currentCellSize,
+        currentPadding + (BOARD_SIZE - OFFSET_ONE) * currentCellSize,
       ],
       stroke: "#000",
       strokeWidth: GRID_STROKE_WIDTH,
@@ -124,14 +158,14 @@ const positionToPixels = (
   row: number,
   col: number,
 ): { x: number; y: number } => ({
-  x: PADDING + col * CELL_SIZE,
-  y: PADDING + row * CELL_SIZE,
+  x: PADDING.value + col * CELL_SIZE.value,
+  y: PADDING.value + row * CELL_SIZE.value,
 });
 
 // ピクセル位置を座標に変換
 const pixelsToPosition = (x: number, y: number): Position | null => {
-  const col = Math.round((x - PADDING) / CELL_SIZE);
-  const row = Math.round((y - PADDING) / CELL_SIZE);
+  const col = Math.round((x - PADDING.value) / CELL_SIZE.value);
+  const row = Math.round((y - PADDING.value) / CELL_SIZE.value);
 
   if (
     row >= LOWER_BOUND &&
@@ -230,10 +264,7 @@ const handleStageMouseLeave = (): void => {
 <template>
   <div class="renju-board">
     <v-stage
-      :config="{
-        width: STAGE_WIDTH,
-        height: STAGE_HEIGHT,
-      }"
+      :config="stageConfig"
       @mousedown="handleStageClick"
       @mousemove="handleStageMouseMove"
       @mouseleave="handleStageMouseLeave"
@@ -321,7 +352,10 @@ const handleStageMouseLeave = (): void => {
 
 <style scoped>
 .renju-board {
-  display: inline-block;
+  display: block;
+  width: 100%;
+  height: 100%;
+  aspect-ratio: 1;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
   border-radius: 8px;
   overflow: hidden;
