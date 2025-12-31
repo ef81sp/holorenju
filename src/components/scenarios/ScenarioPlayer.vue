@@ -75,17 +75,14 @@ const boardSize = computed(() => {
     return 400; // 最小デフォルトサイズ
   }
 
-  // padding, gapを考慮して少し小さめに
-  const margin = 20;
   const calculatedSize = Math.min(
-    availableWidth - margin,
-    availableHeight - margin,
+    availableWidth,
+    availableHeight,
   );
 
   console.log("[ScenarioPlayer] boardSize computed:", {
     availableWidth,
     availableHeight,
-    margin,
     calculatedSize,
   });
 
@@ -363,7 +360,7 @@ onMounted(async () => {
   grid-template-rows: 1fr 6fr 2fr;
   padding: var(--size-20);
   background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-  gap: var(--size-20);
+  gap: var(--size-10);
   box-sizing: border-box;
 }
 

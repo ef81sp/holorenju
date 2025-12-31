@@ -28,9 +28,6 @@ const emit = defineEmits<{
 
 // 定数
 const BOARD_SIZE = 15;
-const MARGIN_MULTIPLIER = 2;
-const OFFSET_ONE = 1;
-const EFFECTIVE_CELLS = BOARD_SIZE - OFFSET_ONE + MARGIN_MULTIPLIER;
 const STONE_RADIUS_RATIO = 0.45;
 const GRID_STROKE_WIDTH = 1;
 const LOWER_BOUND = 0;
@@ -45,14 +42,28 @@ const stageSize = computed(() => {
   return value;
 });
 
-// 動的に計算されるセルサイズ
-const CELL_SIZE = computed(() => stageSize.value / EFFECTIVE_CELLS);
-
-const PADDING = computed(() => CELL_SIZE.value);
-
+// 動的に計算されるstageのサイズ
 const STAGE_WIDTH = computed(() => stageSize.value);
 
 const STAGE_HEIGHT = computed(() => stageSize.value);
+
+// 動的に計算されるセルサイズ
+// 盤面は15×15なので、セル間隔は14。上下左右のパディングを含めに16で割る
+const CELL_SIZE = computed(() => STAGE_WIDTH.value / 16);
+
+// 盤面を中央に配置するようにパディングを計算（上下左右対称）
+const PADDING = computed(() => {
+  const width = STAGE_WIDTH.value;
+  const cellSize = CELL_SIZE.value;
+  const padding = (width - (BOARD_SIZE - 1) * cellSize) / 2;
+  console.log("[RenjuBoard] PADDING calculated:", {
+    STAGE_WIDTH: width,
+    CELL_SIZE: cellSize,
+    boardWidth: (BOARD_SIZE - 1) * cellSize,
+    PADDING: padding,
+  });
+  return padding;
+});
 
 const STONE_RADIUS = computed(() => CELL_SIZE.value * STONE_RADIUS_RATIO);
 
@@ -121,7 +132,7 @@ const generateGridLines = (): {
       points: [
         currentPadding,
         currentPadding + i * currentCellSize,
-        currentPadding + (BOARD_SIZE - OFFSET_ONE) * currentCellSize,
+        currentPadding + (BOARD_SIZE - 1) * currentCellSize,
         currentPadding + i * currentCellSize,
       ],
       stroke: "#000",
@@ -134,7 +145,7 @@ const generateGridLines = (): {
         currentPadding + i * currentCellSize,
         currentPadding,
         currentPadding + i * currentCellSize,
-        currentPadding + (BOARD_SIZE - OFFSET_ONE) * currentCellSize,
+        currentPadding + (BOARD_SIZE - 1) * currentCellSize,
       ],
       stroke: "#000",
       strokeWidth: GRID_STROKE_WIDTH,
@@ -352,12 +363,9 @@ const handleStageMouseLeave = (): void => {
 
 <style scoped>
 .renju-board {
-  display: block;
-  width: 100%;
-  height: 100%;
+  display: inline-block;
   aspect-ratio: 1;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  border-radius: 8px;
   overflow: hidden;
   cursor: pointer;
 }
