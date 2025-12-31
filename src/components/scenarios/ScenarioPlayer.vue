@@ -5,6 +5,7 @@ import { useElementSize } from "@vueuse/core";
 import CharacterDialog from "@/components/character/CharacterDialog.vue";
 import RenjuBoard from "@/components/game/RenjuBoard.vue";
 import { parseInitialBoard } from "@/logic/boardParser";
+import { useAppStore } from "@/stores/appStore";
 import { useDialogStore } from "@/stores/dialogStore";
 import { useGameStore } from "@/stores/gameStore";
 import { useProgressStore } from "@/stores/progressStore";
@@ -21,13 +22,8 @@ interface Props {
 
 const props = defineProps<Props>();
 
-// Emits
-const emit = defineEmits<{
-  complete: [];
-  back: [];
-}>();
-
 // Stores
+const appStore = useAppStore();
 const gameStore = useGameStore();
 const dialogStore = useDialogStore();
 const progressStore = useProgressStore();
@@ -260,11 +256,11 @@ const nextStep = (): void => {
 
 const completeScenario = (): void => {
   progressStore.completeScenario(props.scenarioId);
-  emit("complete");
+  appStore.goToScenarioList();
 };
 
 const handleBack = (): void => {
-  emit("back");
+  appStore.goToScenarioList();
 };
 
 // Lifecycle

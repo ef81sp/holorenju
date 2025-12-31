@@ -29,6 +29,7 @@ export const useAppStore = defineStore("app", {
       }
       this.selectedMode = mode;
       this.scene = "difficulty";
+      this.pushHistory();
     },
 
     selectDifficulty(difficulty: Difficulty) {
@@ -39,11 +40,13 @@ export const useAppStore = defineStore("app", {
       this.selectedDifficulty = difficulty;
       this.currentPage = 0;
       this.scene = "scenarioList";
+      this.pushHistory();
     },
 
     selectScenario(scenarioId: string) {
       this.selectedScenarioId = scenarioId;
       this.scene = "scenarioPlay";
+      this.pushHistory();
     },
 
     goToMenu() {
@@ -52,6 +55,7 @@ export const useAppStore = defineStore("app", {
       this.selectedDifficulty = null;
       this.currentPage = 0;
       this.selectedScenarioId = null;
+      this.pushHistory();
     },
 
     goToDifficulty() {
@@ -59,6 +63,7 @@ export const useAppStore = defineStore("app", {
       this.selectedDifficulty = null;
       this.currentPage = 0;
       this.selectedScenarioId = null;
+      this.pushHistory();
     },
 
     goToScenarioList() {
@@ -68,10 +73,12 @@ export const useAppStore = defineStore("app", {
       }
       this.scene = "scenarioList";
       this.selectedScenarioId = null;
+      this.pushHistory();
     },
 
     setPage(page: number) {
       this.currentPage = page;
+      this.pushHistory();
     },
 
     restoreState(state: Partial<AppState>) {

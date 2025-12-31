@@ -43,16 +43,23 @@ const handleBack = () => {
       <div class="difficulty-buttons">
         <button
           class="difficulty-button"
-          :style="{ background: 'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)' }"
+          :style="{
+            background: 'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)',
+          }"
           @click="handleSelectDifficulty('beginner')"
         >
           <div class="button-icon">🌱</div>
           <div class="button-text-area">
             <div class="button-text">入門</div>
-            <p class="button-description">五目並べとの違いや、基本的なルールを学びます</p>
+            <p class="button-description">
+              五目並べとの違いや、基本的なルールを学びます
+            </p>
           </div>
           <div class="progress-info">
-            <span class="progress-text">{{ beginnerProgress.completed }} / {{ beginnerProgress.total }}</span>
+            <span class="progress-text"
+              >{{ beginnerProgress.completed }} /
+              {{ beginnerProgress.total }}</span
+            >
             <progress
               class="progress-bar"
               :value="beginnerProgress.rate"
@@ -62,7 +69,9 @@ const handleBack = () => {
         </button>
         <button
           class="difficulty-button"
-          :style="{ background: 'linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)' }"
+          :style="{
+            background: 'linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)',
+          }"
           @click="handleSelectDifficulty('intermediate')"
         >
           <div class="button-icon">⭐</div>
@@ -71,7 +80,10 @@ const handleBack = () => {
             <p class="button-description">基本的な戦術や考え方を学びます</p>
           </div>
           <div class="progress-info">
-            <span class="progress-text">{{ intermediateProgress.completed }} / {{ intermediateProgress.total }}</span>
+            <span class="progress-text"
+              >{{ intermediateProgress.completed }} /
+              {{ intermediateProgress.total }}</span
+            >
             <progress
               class="progress-bar"
               :value="intermediateProgress.rate"
@@ -81,7 +93,9 @@ const handleBack = () => {
         </button>
         <button
           class="difficulty-button"
-          :style="{ background: 'linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)' }"
+          :style="{
+            background: 'linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)',
+          }"
           @click="handleSelectDifficulty('advanced')"
         >
           <div class="button-icon">🔥</div>
@@ -90,7 +104,10 @@ const handleBack = () => {
             <p class="button-description">実戦的な高度なテクニックを学びます</p>
           </div>
           <div class="progress-info">
-            <span class="progress-text">{{ advancedProgress.completed }} / {{ advancedProgress.total }}</span>
+            <span class="progress-text"
+              >{{ advancedProgress.completed }} /
+              {{ advancedProgress.total }}</span
+            >
             <progress
               class="progress-bar"
               :value="advancedProgress.rate"
