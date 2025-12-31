@@ -19,6 +19,14 @@
     "no-debugger": "error",
     "typescript/no-explicit-any": "error",
     "typescript/no-unused-vars": "error",
+    "typescript/explicit-function-return-type": [
+      "warn",
+      {
+        "allowExpressions": true,
+        "allowTypedFunctionExpressions": true,
+        "allowHigherOrderFunctions": true
+      }
+    ],
     "no-magic-numbers": "off",
     "id-length": "off",
     "max-statements": "off",
