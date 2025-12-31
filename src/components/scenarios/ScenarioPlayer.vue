@@ -470,7 +470,7 @@ onMounted(async () => {
   border: none;
   border-radius: 8px;
   font-size: var(--size-16);
-  font-weight: bold;
+  font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
   text-align: center;

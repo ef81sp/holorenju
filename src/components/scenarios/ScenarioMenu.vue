@@ -189,7 +189,7 @@ const getDifficultyLabel = (difficulty: string): string => {
 }
 
 .progress-item .value {
-  font-weight: bold;
+  font-weight: 500;
 }
 
 .progress-bar {
@@ -251,7 +251,7 @@ const getDifficultyLabel = (difficulty: string): string => {
   border-radius: 6px;
   color: white;
   font-size: var(--size-12);
-  font-weight: bold;
+  font-weight: 500;
 }
 
 .description {
@@ -288,7 +288,7 @@ const getDifficultyLabel = (difficulty: string): string => {
 
 .completed-badge {
   color: var(--color-fubuki-primary);
-  font-weight: bold;
+  font-weight: 500;
   font-size: var(--size-14);
 }
 
@@ -299,7 +299,7 @@ const getDifficultyLabel = (difficulty: string): string => {
   border: none;
   border-radius: 8px;
   font-size: var(--size-14);
-  font-weight: bold;
+  font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
   margin-left: auto;

@@ -1,7 +1,7 @@
 :root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-family: "Kiwi Maru", "Hiragino Kaku Gothic ProN", "ヒラギノ角ゴ ProN W3", "Yu Gothic Medium", "游ゴシック Medium", YuGothic, "游ゴシック体", sans-serif;
   line-height: 1.5;
-  font-weight: 400;
+  font-weight: 300;
 
   /* キャラクターカラー - 白上フブキ */
   --color-fubuki-primary: #54c7ea;
