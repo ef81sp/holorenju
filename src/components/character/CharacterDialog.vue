@@ -125,8 +125,8 @@ const handleChoiceClick = (choiceId: string): void => {
 
 .avatar {
   flex-shrink: 0;
-  width: 56px;
-  height: 56px;
+  width: var(--size-56);
+  height: var(--size-56);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -135,13 +135,13 @@ const handleChoiceClick = (choiceId: string): void => {
 }
 
 .avatar-icon {
-  font-size: 32px;
+  font-size: var(--size-32);
 }
 
 .dialog-bubble {
   flex: 1;
-  max-width: 500px;
-  padding: 16px;
+  max-width: var(--size-500);
+  padding: var(--size-16);
   background: white;
   border-radius: 12px;
   border: 2px solid;
@@ -175,31 +175,31 @@ const handleChoiceClick = (choiceId: string): void => {
 
 .character-name {
   font-weight: bold;
-  font-size: 14px;
-  margin-bottom: 8px;
+  font-size: var(--size-14);
+  margin-bottom: var(--size-8);
 }
 
 .dialog-text {
   color: #333;
   line-height: 1.6;
-  font-size: 16px;
+  font-size: var(--size-16);
   white-space: pre-wrap;
 }
 
 .choices {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-top: 16px;
+  gap: var(--size-8);
+  margin-top: var(--size-16);
 }
 
 .choice-button {
-  padding: 10px 16px;
+  padding: var(--size-10) var(--size-16);
   background: #f5f5f5;
   border: 2px solid #ddd;
   border-radius: 8px;
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--size-14);
   transition: all 0.2s;
   text-align: left;
 }
@@ -220,16 +220,16 @@ const handleChoiceClick = (choiceId: string): void => {
   }
 
   .avatar {
-    width: 48px;
-    height: 48px;
+    width: var(--size-48);
+    height: var(--size-48);
   }
 
   .avatar-icon {
-    font-size: 28px;
+    font-size: 2.917vw; /* 28px */
   }
 
   .dialog-text {
-    font-size: 14px;
+    font-size: var(--size-14);
   }
 }
 </style>

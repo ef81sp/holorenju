@@ -361,9 +361,9 @@ onMounted(async () => {
   display: grid;
   grid-template-columns: 11fr 5fr;
   grid-template-rows: 1fr 6fr 2fr;
-  padding: 20px;
+  padding: var(--size-20);
   background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-  gap: 20px;
+  gap: var(--size-20);
   box-sizing: border-box;
 }
 
@@ -372,7 +372,7 @@ onMounted(async () => {
   grid-row: 1;
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: var(--size-20);
 }
 
 .board-section {
@@ -382,7 +382,7 @@ onMounted(async () => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: var(--size-12);
   overflow: hidden;
   min-height: 0; /* grid itemの最小サイズをリセット */
 }
@@ -401,14 +401,14 @@ onMounted(async () => {
   grid-row: 1 / 4;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: var(--size-20);
   overflow-y: auto;
 }
 
 .character-dialog-section {
   grid-column: 1;
   grid-row: 3;
-  padding: 20px;
+  padding: var(--size-20);
   background: white;
   border-radius: 12px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
@@ -416,12 +416,12 @@ onMounted(async () => {
 }
 
 .back-button {
-  padding: 10px 20px;
+  padding: var(--size-10) var(--size-20);
   background: white;
   border: 2px solid #ddd;
   border-radius: 8px;
   cursor: pointer;
-  font-size: 16px;
+  font-size: var(--size-16);
   transition: all 0.2s;
 }
 
@@ -436,13 +436,13 @@ onMounted(async () => {
 }
 
 .scenario-info p {
-  margin: 5px 0 0;
+  margin: var(--size-5) 0 0;
   color: #666;
-  font-size: 14px;
+  font-size: var(--size-14);
 }
 
 .hint-box {
-  padding: 16px;
+  padding: var(--size-16);
   background: #fff9c4;
   border: 2px solid #fbc02d;
   border-radius: 8px;
@@ -451,14 +451,14 @@ onMounted(async () => {
 }
 
 .step-description {
-  padding: 20px;
+  padding: var(--size-20);
   background: white;
   border-radius: 12px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .step-description h3 {
-  margin: 0 0 10px;
+  margin: 0 0 var(--size-10);
   color: #333;
 }
 
@@ -471,15 +471,15 @@ onMounted(async () => {
 .controls {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--size-12);
 }
 
 .hint-button,
 .next-button {
-  padding: 12px 24px;
+  padding: var(--size-12) var(--size-24);
   border: none;
   border-radius: 8px;
-  font-size: 16px;
+  font-size: var(--size-16);
   font-weight: bold;
   cursor: pointer;
   transition: all 0.2s;

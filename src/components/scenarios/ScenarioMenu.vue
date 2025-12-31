@@ -140,7 +140,7 @@ const getDifficultyLabel = (difficulty: string): string => {
 <style scoped>
 .scenario-menu {
   height: 100%;
-  padding: 40px 20px;
+  padding: var(--size-40) var(--size-20);
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   overflow-y: auto;
   box-sizing: border-box;
@@ -149,25 +149,25 @@ const getDifficultyLabel = (difficulty: string): string => {
 .header {
   text-align: center;
   color: white;
-  margin-bottom: 40px;
+  margin-bottom: var(--size-40);
 }
 
 .header h1 {
-  font-size: 48px;
-  margin: 0 0 10px;
+  font-size: var(--size-48);
+  margin: 0 0 var(--size-10);
   text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 .subtitle {
-  font-size: 20px;
-  margin: 0 0 30px;
+  font-size: var(--size-20);
+  margin: 0 0 var(--size-30);
   opacity: 0.9;
 }
 
 .progress-summary {
-  max-width: 600px;
+  max-width: var(--size-600);
   margin: 0 auto;
-  padding: 20px;
+  padding: var(--size-20);
   background: rgba(255, 255, 255, 0.1);
   border-radius: 12px;
   backdrop-filter: blur(10px);
@@ -176,8 +176,8 @@ const getDifficultyLabel = (difficulty: string): string => {
 .progress-item {
   display: flex;
   justify-content: space-between;
-  margin-bottom: 10px;
-  font-size: 16px;
+  margin-bottom: var(--size-10);
+  font-size: var(--size-16);
 }
 
 .progress-item .label {
@@ -189,11 +189,11 @@ const getDifficultyLabel = (difficulty: string): string => {
 }
 
 .progress-bar {
-  height: 8px;
+  height: var(--size-8);
   background: rgba(255, 255, 255, 0.2);
   border-radius: 4px;
   overflow: hidden;
-  margin-top: 15px;
+  margin-top: 1.563vw; /* 15px */
 }
 
 .progress-fill {
@@ -203,17 +203,17 @@ const getDifficultyLabel = (difficulty: string): string => {
 }
 
 .scenario-list {
-  max-width: 1200px;
+  max-width: var(--size-1200);
   margin: 0 auto;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-  gap: 30px;
+  grid-template-columns: repeat(auto-fit, minmax(var(--size-350), 1fr));
+  gap: var(--size-30);
 }
 
 .scenario-card {
   background: white;
   border-radius: 16px;
-  padding: 24px;
+  padding: var(--size-24);
   cursor: pointer;
   transition: all 0.3s;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
@@ -232,69 +232,69 @@ const getDifficultyLabel = (difficulty: string): string => {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 16px;
+  margin-bottom: var(--size-16);
 }
 
 .card-header h3 {
   margin: 0;
   color: #333;
-  font-size: 24px;
+  font-size: var(--size-24);
   flex: 1;
 }
 
 .difficulty-badge {
-  padding: 6px 12px;
+  padding: 0.625vw var(--size-12); /* 6px 12px */
   border-radius: 6px;
   color: white;
-  font-size: 12px;
+  font-size: var(--size-12);
   font-weight: bold;
 }
 
 .description {
   color: #666;
   line-height: 1.6;
-  margin-bottom: 20px;
+  margin-bottom: var(--size-20);
 }
 
 .objectives h4 {
-  margin: 0 0 10px;
+  margin: 0 0 var(--size-10);
   color: #333;
-  font-size: 16px;
+  font-size: var(--size-16);
 }
 
 .objectives ul {
   margin: 0;
-  padding-left: 20px;
+  padding-left: var(--size-20);
   color: #666;
 }
 
 .objectives li {
-  margin-bottom: 6px;
+  margin-bottom: 0.625vw; /* 6px */
 }
 
 .card-footer {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-top: 20px;
-  padding-top: 20px;
+  margin-top: var(--size-20);
+  padding-top: var(--size-20);
   border-top: 1px solid #eee;
-  gap: 12px;
+  gap: var(--size-12);
 }
 
 .completed-badge {
   color: #4caf50;
   font-weight: bold;
-  font-size: 14px;
+  font-size: var(--size-14);
 }
 
 .start-button {
-  padding: 10px 20px;
+  padding: var(--size-10) var(--size-20);
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
   border: none;
   border-radius: 8px;
-  font-size: 14px;
+  font-size: var(--size-14);
   font-weight: bold;
   cursor: pointer;
   transition: all 0.2s;
@@ -308,11 +308,11 @@ const getDifficultyLabel = (difficulty: string): string => {
 
 @media (max-width: 768px) {
   .header h1 {
-    font-size: 32px;
+    font-size: var(--size-32);
   }
 
   .subtitle {
-    font-size: 16px;
+    font-size: var(--size-16);
   }
 
   .scenario-list {
