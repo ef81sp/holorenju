@@ -13,6 +13,7 @@
   -moz-osx-font-smoothing: grayscale;
 
   /* 960px基準の相対値変数 (960px = 100vw) */
+  --size-2: 0.208vw; /* 2px */
   --size-5: 0.521vw; /* 5px */
   --size-8: 0.833vw; /* 8px */
   --size-10: 1.042vw; /* 10px */

@@ -61,6 +61,6 @@ const handleBack = (): void => {
 
 body {
   margin: 0;
-  padding: 0;
+  padding: 0
 }
 </style>

@@ -12,6 +12,7 @@
     "format": "oxfmt .",
     "format:check": "oxfmt --check .",
     "type-check": "vue-tsc -b",
+    "check-fix": "pnpm run type-check && pnpm run format && pnpm run lint:fix",
     "check": "pnpm run type-check && pnpm run format:check && pnpm run lint"
   },
   "dependencies": {

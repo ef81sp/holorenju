@@ -51,46 +51,44 @@ const handleChoiceClick = (choiceId: string): void => {
     class="character-dialog"
     :class="`position-${position}`"
   >
-    <div class="dialog-container">
-      <!-- アバター -->
+    <!-- アバター -->
+    <div
+      class="avatar"
+      :style="{ backgroundColor: characterInfo?.avatarBg }"
+    >
+      <div class="avatar-icon">
+        {{ message.character === "fubuki" ? "🦊" : "🌸" }}
+      </div>
+    </div>
+
+    <!-- 吹き出し -->
+    <div
+      class="dialog-bubble"
+      :style="{ borderColor: characterInfo?.color }"
+    >
       <div
-        class="avatar"
-        :style="{ backgroundColor: characterInfo?.avatarBg }"
+        class="character-name"
+        :style="{ color: characterInfo?.color }"
       >
-        <div class="avatar-icon">
-          {{ message.character === "fubuki" ? "🦊" : "🌸" }}
-        </div>
+        {{ characterInfo?.name }}
+      </div>
+      <div class="dialog-text">
+        {{ message.text }}
       </div>
 
-      <!-- 吹き出し -->
+      <!-- 選択肢 -->
       <div
-        class="dialog-bubble"
-        :style="{ borderColor: characterInfo?.color }"
+        v-if="message.choices && message.choices.length > 0"
+        class="choices"
       >
-        <div
-          class="character-name"
-          :style="{ color: characterInfo?.color }"
+        <button
+          v-for="choice in message.choices"
+          :key="choice.id"
+          class="choice-button"
+          @click="handleChoiceClick(choice.id)"
         >
-          {{ characterInfo?.name }}
-        </div>
-        <div class="dialog-text">
-          {{ message.text }}
-        </div>
-
-        <!-- 選択肢 -->
-        <div
-          v-if="message.choices && message.choices.length > 0"
-          class="choices"
-        >
-          <button
-            v-for="choice in message.choices"
-            :key="choice.id"
-            class="choice-button"
-            @click="handleChoiceClick(choice.id)"
-          >
-            {{ choice.text }}
-          </button>
-        </div>
+          {{ choice.text }}
+        </button>
       </div>
     </div>
   </div>
@@ -98,14 +96,18 @@ const handleChoiceClick = (choiceId: string): void => {
 
 <style scoped>
 .character-dialog {
-  margin: 16px 0;
+  display: flex;
+  gap: var(--size-12);
+  align-items: flex-start;
+  padding-block: var(--size-5);
   animation: fadeIn 0.3s ease-in;
+  height: 100%;
 }
 
 @keyframes fadeIn {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(var(--size-10));
   }
   to {
     opacity: 1;
@@ -113,13 +115,7 @@ const handleChoiceClick = (choiceId: string): void => {
   }
 }
 
-.dialog-container {
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-}
-
-.position-right .dialog-container {
+.position-right.character-dialog {
   flex-direction: row-reverse;
 }
 
@@ -131,7 +127,7 @@ const handleChoiceClick = (choiceId: string): void => {
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 var(--size-5) var(--size-5) rgba(0, 0, 0, 0.1);
 }
 
 .avatar-icon {
@@ -140,36 +136,36 @@ const handleChoiceClick = (choiceId: string): void => {
 
 .dialog-bubble {
   flex: 1;
-  max-width: var(--size-500);
-  padding: var(--size-16);
+  height: 100%;
+  padding: var(--size-8);
   background: white;
-  border-radius: 12px;
-  border: 2px solid;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border-radius: var(--size-12);
+  border: var(--size-2) solid;
+  box-shadow: 0 var(--size-5) var(--size-8) rgba(0, 0, 0, 0.1);
   position: relative;
 }
 
 .position-left .dialog-bubble::before {
   content: "";
   position: absolute;
-  left: -10px;
-  top: 20px;
+  left: calc(-1 * var(--size-10));
+  top: var(--size-20);
   width: 0;
   height: 0;
   border-style: solid;
-  border-width: 10px 10px 10px 0;
+  border-width: var(--size-10) var(--size-10) var(--size-10) 0;
   border-color: transparent currentColor transparent transparent;
 }
 
 .position-right .dialog-bubble::before {
   content: "";
   position: absolute;
-  right: -10px;
-  top: 20px;
+  right: calc(-1 * var(--size-10));
+  top: var(--size-20);
   width: 0;
   height: 0;
   border-style: solid;
-  border-width: 10px 0 10px 10px;
+  border-width: var(--size-10) 0 var(--size-10) var(--size-10);
   border-color: transparent transparent transparent currentColor;
 }
 
@@ -197,7 +193,7 @@ const handleChoiceClick = (choiceId: string): void => {
   padding: var(--size-10) var(--size-16);
   background: #f5f5f5;
   border: 2px solid #ddd;
-  border-radius: 8px;
+  border-radius: var(--size-8);
   cursor: pointer;
   font-size: var(--size-14);
   transition: all 0.2s;
@@ -207,29 +203,10 @@ const handleChoiceClick = (choiceId: string): void => {
 .choice-button:hover {
   background: #e8e8e8;
   border-color: #4a9eff;
-  transform: translateX(4px);
+  transform: translateX(var(--size-5));
 }
 
 .choice-button:active {
-  transform: translateX(4px) scale(0.98);
-}
-
-@media (max-width: 768px) {
-  .dialog-bubble {
-    max-width: 100%;
-  }
-
-  .avatar {
-    width: var(--size-48);
-    height: var(--size-48);
-  }
-
-  .avatar-icon {
-    font-size: 2.917vw; /* 28px */
-  }
-
-  .dialog-text {
-    font-size: var(--size-14);
-  }
+  transform: translateX(var(--size-5)) scale(0.98);
 }
 </style>

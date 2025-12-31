@@ -358,7 +358,7 @@ onMounted(async () => {
   display: grid;
   grid-template-columns: 11fr 5fr;
   grid-template-rows: 1fr 6fr 2fr;
-  padding: var(--size-20);
+  padding: var(--size-14);
   background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
   gap: var(--size-10);
   box-sizing: border-box;
@@ -405,10 +405,7 @@ onMounted(async () => {
 .character-dialog-section {
   grid-column: 1;
   grid-row: 3;
-  padding: var(--size-20);
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  background: transparent;
   overflow-y: auto;
 }
 
