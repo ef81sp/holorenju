@@ -1,17 +1,20 @@
 :root {
-  font-family: "Kiwi Maru", "Hiragino Kaku Gothic ProN", "ヒラギノ角ゴ ProN W3", "Yu Gothic Medium", "游ゴシック Medium", YuGothic, "游ゴシック体", sans-serif;
+  font-family:
+    "Kiwi Maru", "Hiragino Kaku Gothic ProN", "ヒラギノ角ゴ ProN W3",
+    "Yu Gothic Medium", "游ゴシック Medium", YuGothic, "游ゴシック体",
+    sans-serif;
   line-height: 1.5;
   font-weight: 300;
 
   /* キャラクターカラー - 白上フブキ */
   --color-fubuki-primary: #54c7ea;
   --color-fubuki-bg: #77dfff;
-  --color-fubuki-bg-light: rgba(119, 223, 255, 0.3);
+  --color-fubuki-bg-light: #77dfff4d;
 
   /* キャラクターカラー - さくらみこ */
   --color-miko-primary: #fe4b74;
   --color-miko-bg: #ff9cb4;
-  --color-miko-bg-light: rgba(255, 156, 180, 0.2);
+  --color-miko-bg-light: #ff9cb433;
 
   /* ブランドカラー */
   --color-holo-cyan: #5fdeec;
@@ -23,6 +26,9 @@
   --color-border: #dddddd;
   --color-bg-white: #ffffff;
   --color-bg-gray: #f5f5f5;
+
+  /* ブロック背景用カラー */
+  --color-block-bg: #764ba233;
 
   /* グラデーション */
   --gradient-main: linear-gradient(135deg, #5fdeec 0%, #46c0ef 100%);

@@ -4,6 +4,7 @@ import { computed } from "vue";
 
 import scenariosIndex from "@/data/scenarios/index.json";
 import { useProgressStore } from "@/stores/progressStore";
+import ProgressSummary from "./ProgressSummary.vue";
 
 // Emits
 const emit = defineEmits<{
@@ -56,29 +57,11 @@ const getDifficultyLabel = (difficulty: string): string => {
 <template>
   <div class="scenario-menu">
     <div class="header">
-      <h1>フブキ先生の連珠教室</h1>
-      <p class="subtitle">学習シナリオを選んでください</p>
-
-      <!-- 進捗サマリー -->
-      <div class="progress-summary">
-        <div class="progress-item">
-          <span class="label">完了したシナリオ:</span>
-          <span class="value">
-            {{ progressStore.completedScenarios.length }} /
-            {{ scenarios.length }}
-          </span>
-        </div>
-        <div class="progress-item">
-          <span class="label">総合スコア:</span>
-          <span class="value">{{ progressStore.totalScore }}点</span>
-        </div>
-        <div class="progress-bar">
-          <div
-            class="progress-fill"
-            :style="{ width: `${progressStore.completionRate}%` }"
-          />
-        </div>
+      <div>
+        <h1>ホロ連珠</h1>
+        <small>フブみこさんと学ぶ連珠教室</small>
       </div>
+      <ProgressSummary :total-scenarios="scenarios.length" />
     </div>
 
     <!-- シナリオリスト -->
@@ -151,14 +134,23 @@ const getDifficultyLabel = (difficulty: string): string => {
 }
 
 .header {
-  text-align: center;
-  color: white;
+  display: grid;
+  grid-template-columns: 3fr 1fr;
+  gap: var(--size-20);
+  align-items: start;
   margin-bottom: var(--size-40);
+  color: var(--color-text-primary);
+  font-size: var(--size32);
+  line-height: var(--size-32);
+  & small {
+    font-size: var(--size-16);
+    opacity: 0.8;
+  }
 }
 
 .header h1 {
   font-size: var(--size-48);
-  margin: 0 0 var(--size-10);
+  margin: 0;
   text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
 }
 
@@ -166,44 +158,6 @@ const getDifficultyLabel = (difficulty: string): string => {
   font-size: var(--size-20);
   margin: 0 0 var(--size-30);
   opacity: 0.9;
-}
-
-.progress-summary {
-  max-width: var(--size-600);
-  margin: 0 auto;
-  padding: var(--size-20);
-  background: rgba(0, 0, 0, 0.15);
-  border-radius: 12px;
-  backdrop-filter: blur(10px);
-}
-
-.progress-item {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: var(--size-10);
-  font-size: var(--size-16);
-}
-
-.progress-item .label {
-  opacity: 0.9;
-}
-
-.progress-item .value {
-  font-weight: 500;
-}
-
-.progress-bar {
-  height: var(--size-8);
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 4px;
-  overflow: hidden;
-  margin-top: 1.563vw; /* 15px */
-}
-
-.progress-fill {
-  height: 100%;
-  background: var(--gradient-accent);
-  transition: width 0.3s ease;
 }
 
 .scenario-list {
