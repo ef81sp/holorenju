@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref, TransitionGroup } from "vue";
 import { useAppStore } from "@/stores/appStore";
 import { useProgressStore } from "@/stores/progressStore";
 import ScenarioCard from "./ScenarioCard.vue";
@@ -25,6 +25,9 @@ const totalPages = computed(() =>
   Math.ceil(scenarios.value.length / ITEMS_PER_PAGE),
 );
 
+// ページ遷移方向
+const direction = ref<'next' | 'prev'>('next');
+
 // 現在のページに表示するシナリオ（絶対番号付き）
 const displayedScenarios = computed(() => {
   const start = currentPage.value * ITEMS_PER_PAGE;
@@ -45,10 +48,12 @@ const goToPage = (page: number) => {
 };
 
 const nextPage = () => {
+  direction.value = 'next';
   goToPage(currentPage.value + 1);
 };
 
 const prevPage = () => {
+  direction.value = 'prev';
   goToPage(currentPage.value - 1);
 };
 
@@ -146,18 +151,22 @@ const isCompleted = (scenarioId: string) =>
         ←
       </button>
 
-      <div class="scenarios-grid">
+      <TransitionGroup
+        :name="`slide-${direction}`"
+        tag="div"
+        class="scenarios-grid"
+      >
         <ScenarioCard
           v-for="scenario in displayedScenarios"
           :id="scenario.id"
-          :key="scenario.id"
+          :key="scenario.id + currentPage"
           :title="scenario.title"
           :description="scenario.description"
           :is-completed="isCompleted(scenario.id)"
           :scenario-index="scenario.absoluteIndex"
           @select="handleSelectScenario"
         />
-      </div>
+      </TransitionGroup>
 
       <button
         class="page-button page-button-right"
@@ -178,7 +187,6 @@ const isCompleted = (scenarioId: string) =>
   width: 100%;
   height: 100%;
   padding: var(--size-40) var(--size-20);
-  overflow-y: auto;
   box-sizing: border-box;
 }
 
@@ -205,7 +213,41 @@ const isCompleted = (scenarioId: string) =>
   grid-template-columns: repeat(3, 1fr);
   gap: var(--size-20);
   align-content: start;
-  overflow-y: auto;
+  height: calc(var(--size-180) * 2 + var(--size-20));
+}
+
+/* 次へ（右から左） */
+.slide-next-enter-active,
+.slide-next-leave-active,
+.slide-next-move {
+  transition: all 0.2s ease-in-out;
+}
+
+.slide-next-enter-from {
+  opacity: 0;
+  transform: translateX(100%);
+}
+
+.slide-next-leave-to {
+  opacity: 0;
+  transform: translateX(-100%);
+}
+
+/* 戻る（左から右） */
+.slide-prev-enter-active,
+.slide-prev-leave-active,
+.slide-prev-move {
+  transition: all 0.2s ease-in-out;
+}
+
+.slide-prev-enter-from {
+  opacity: 0;
+  transform: translateX(-100%);
+}
+
+.slide-prev-leave-to {
+  opacity: 0;
+  transform: translateX(100%);
 }
 
 .page-button {
