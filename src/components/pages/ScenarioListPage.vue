@@ -25,10 +25,15 @@ const totalPages = computed(() =>
   Math.ceil(scenarios.value.length / ITEMS_PER_PAGE),
 );
 
-// 現在のページに表示するシナリオ
+// 現在のページに表示するシナリオ（絶対番号付き）
 const displayedScenarios = computed(() => {
   const start = currentPage.value * ITEMS_PER_PAGE;
-  return scenarios.value.slice(start, start + ITEMS_PER_PAGE);
+  return scenarios.value
+    .slice(start, start + ITEMS_PER_PAGE)
+    .map((scenario, index) => ({
+      ...scenario,
+      absoluteIndex: start + index + 1,
+    }));
 });
 
 // ページ変更
@@ -132,6 +137,15 @@ const isCompleted = (scenarioId: string) =>
     </PageHeader>
 
     <div class="content">
+      <button
+        class="page-button page-button-left"
+        :disabled="currentPage === 0"
+        :aria-label="`前へ（ページ${currentPage}/${totalPages}）`"
+        @click="prevPage"
+      >
+        ←
+      </button>
+
       <div class="scenarios-grid">
         <ScenarioCard
           v-for="scenario in displayedScenarios"
@@ -140,26 +154,19 @@ const isCompleted = (scenarioId: string) =>
           :title="scenario.title"
           :description="scenario.description"
           :is-completed="isCompleted(scenario.id)"
+          :scenario-index="scenario.absoluteIndex"
           @select="handleSelectScenario"
         />
       </div>
 
-      <div class="pagination">
-        <button
-          class="page-button"
-          :disabled="currentPage === 0"
-          @click="prevPage"
-        >
-          ← 前へ
-        </button>
-        <button
-          class="page-button"
-          :disabled="currentPage === totalPages - 1"
-          @click="nextPage"
-        >
-          次へ →
-        </button>
-      </div>
+      <button
+        class="page-button page-button-right"
+        :disabled="currentPage === totalPages - 1"
+        :aria-label="`次へ（ページ${currentPage + 2}/${totalPages}）`"
+        @click="nextPage"
+      >
+        →
+      </button>
     </div>
   </div>
 </template>
@@ -184,44 +191,57 @@ const isCompleted = (scenarioId: string) =>
   font-weight: bold;
 }
 
-.scenarios-grid {
+.content {
   flex: 1;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(var(--size-350), 1fr));
-  gap: var(--size-24);
-  overflow-y: auto;
-  padding: var(--size-16);
+  grid-template-columns: var(--size-80) 1fr var(--size-80);
+  gap: var(--size-20);
+  align-items: center;
+  padding-block: var(--size-16);
 }
 
-.pagination {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--size-32);
-  margin-top: var(--size-32);
+.scenarios-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--size-20);
+  align-content: start;
+  overflow-y: auto;
 }
 
 .page-button {
-  padding: var(--size-12) var(--size-24);
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  width: var(--size-80);
+  height: var(--size-80);
+  background: var(--gradient-main);
   color: white;
   border: none;
-  border-radius: var(--size-8);
-  font-size: var(--size-16);
+  border-radius: 50%;
+  font-size: var(--size-40);
   font-weight: bold;
   cursor: pointer;
   transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .page-button:hover:not(:disabled) {
-  transform: scale(1.05);
+  opacity: 0.9;
   box-shadow: 0 var(--size-5) var(--size-12) rgba(102, 126, 234, 0.4);
+  transform: scale(1.1);
 }
 
 .page-button:disabled {
-  opacity: 0.3;
+  opacity: 0.2;
   cursor: not-allowed;
   background: #ccc;
+}
+
+.page-button-left {
+  justify-self: center;
+}
+
+.page-button-right {
+  justify-self: center;
 }
 
 .page-dots {
