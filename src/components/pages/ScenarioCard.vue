@@ -83,8 +83,8 @@ const handleStart = () => {
 
 .completed-badge {
   position: absolute;
-  top: calc(-1 * var(--size-8));
-  right: calc(-1 * var(--size-8));
+  top: calc(-1 * var(--size-20));
+  left: calc(-1 * var(--size-8));
   background: #48bb78;
   color: white;
   font-size: var(--size-12);
