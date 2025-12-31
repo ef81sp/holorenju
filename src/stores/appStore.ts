@@ -75,14 +75,21 @@ export const useAppStore = defineStore("app", {
     },
 
     restoreState(state: Partial<AppState>) {
-      if (state.scene) {this.scene = state.scene;}
-      if (state.selectedMode !== undefined)
-        {this.selectedMode = state.selectedMode;}
-      if (state.selectedDifficulty !== undefined)
-        {this.selectedDifficulty = state.selectedDifficulty;}
-      if (state.currentPage !== undefined) {this.currentPage = state.currentPage;}
-      if (state.selectedScenarioId !== undefined)
-        {this.selectedScenarioId = state.selectedScenarioId;}
+      if (state.scene) {
+        this.scene = state.scene;
+      }
+      if (state.selectedMode !== undefined) {
+        this.selectedMode = state.selectedMode;
+      }
+      if (state.selectedDifficulty !== undefined) {
+        this.selectedDifficulty = state.selectedDifficulty;
+      }
+      if (state.currentPage !== undefined) {
+        this.currentPage = state.currentPage;
+      }
+      if (state.selectedScenarioId !== undefined) {
+        this.selectedScenarioId = state.selectedScenarioId;
+      }
     },
 
     pushHistory() {
