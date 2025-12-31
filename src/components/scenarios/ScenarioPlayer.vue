@@ -8,6 +8,7 @@ import { parseInitialBoard } from "@/logic/boardParser";
 import { useDialogStore } from "@/stores/dialogStore";
 import { useGameStore } from "@/stores/gameStore";
 import { useProgressStore } from "@/stores/progressStore";
+import scenariosIndex from "@/data/scenarios/index.json";
 
 import type { Scenario, ScenarioStep } from "@/types/scenario";
 import type { DialogMessage } from "@/types/character";
@@ -89,9 +90,25 @@ const boardSize = computed(() => {
 // Methods
 const loadScenario = async (): Promise<void> => {
   try {
-    const scenarioModule = await import(
-      `@/data/scenarios/${props.scenarioId}.json`
-    );
+    // Index.jsonからシナリオパスを取得
+    let scenarioPath = "";
+    for (const [, difficultyData] of Object.entries(
+      scenariosIndex.difficulties,
+    )) {
+      const found = difficultyData.scenarios.find(
+        (s) => s.id === props.scenarioId,
+      );
+      if (found) {
+        scenarioPath = found.path;
+        break;
+      }
+    }
+
+    if (!scenarioPath) {
+      throw new Error(`Scenario not found: ${props.scenarioId}`);
+    }
+
+    const scenarioModule = await import(`../../data/scenarios/${scenarioPath}`);
     const scenarioData = scenarioModule.default as Scenario;
 
     scenario.value = scenarioData;
