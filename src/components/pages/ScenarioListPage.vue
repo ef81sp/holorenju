@@ -10,7 +10,9 @@ const progressStore = useProgressStore();
 
 // シナリオ一覧を取得
 const scenarios = computed(() => {
-  if (!appStore.selectedDifficulty) {return [];}
+  if (!appStore.selectedDifficulty) {
+    return [];
+  }
   const diffData = scenariosIndex.difficulties[appStore.selectedDifficulty];
   return diffData?.scenarios || [];
 });
@@ -30,7 +32,9 @@ const displayedScenarios = computed(() => {
 
 // ページ変更
 const goToPage = (page: number) => {
-  if (page < 0 || page >= totalPages.value) {return;}
+  if (page < 0 || page >= totalPages.value) {
+    return;
+  }
   appStore.setPage(page);
 };
 
@@ -44,8 +48,11 @@ const prevPage = () => {
 
 // キーボード操作
 const handleKeyDown = (e: KeyboardEvent) => {
-  if (e.key === "ArrowLeft") {prevPage();}
-  else if (e.key === "ArrowRight") {nextPage();}
+  if (e.key === "ArrowLeft") {
+    prevPage();
+  } else if (e.key === "ArrowRight") {
+    nextPage();
+  }
 };
 
 // タッチ操作用
@@ -62,17 +69,23 @@ const handleTouchEnd = (e: TouchEvent) => {
 
   if (Math.abs(diff) > 50) {
     // 50px以上のスワイプで反応
-    if (diff > 0)
-      {nextPage();} // 左スワイプ
-    else {prevPage();} // 右スワイプ
+    if (diff > 0) {
+      nextPage();
+    } // 左スワイプ
+    else {
+      prevPage();
+    } // 右スワイプ
   }
 };
 
 // ホイール操作
 const handleWheel = (e: WheelEvent) => {
   e.preventDefault();
-  if (e.deltaY > 0) {nextPage();}
-  else if (e.deltaY < 0) {prevPage();}
+  if (e.deltaY > 0) {
+    nextPage();
+  } else if (e.deltaY < 0) {
+    prevPage();
+  }
 };
 
 onMounted(() => {
@@ -94,7 +107,8 @@ const handleBack = () => {
 };
 
 // クリア状態チェック
-const isCompleted = (scenarioId: string) => progressStore.completedScenarios.includes(scenarioId);
+const isCompleted = (scenarioId: string) =>
+  progressStore.completedScenarios.includes(scenarioId);
 </script>
 
 <template>
