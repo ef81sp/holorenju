@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useAppStore } from "@/stores/appStore";
 import { useProgressStore } from "@/stores/progressStore";
 import ScenarioCard from "./ScenarioCard.vue";
+import PageHeader from "@/components/common/PageHeader.vue";
 import scenariosIndex from "@/data/scenarios/index.json";
 
 const appStore = useAppStore();
@@ -118,54 +119,47 @@ const isCompleted = (scenarioId: string) =>
     @touchend="handleTouchEnd"
     @wheel.passive="handleWheel"
   >
-    <button
-      class="back-button"
-      @click="handleBack"
+    <PageHeader
+      title="シナリオ選択"
+      show-back
+      @back="handleBack"
     >
-      ← 戻る
-    </button>
+      <template #right>
+        <div class="page-indicator">
+          {{ currentPage + 1 }} / {{ totalPages }}
+        </div>
+      </template>
+    </PageHeader>
 
-    <div class="header">
-      <h1 class="title">シナリオ選択</h1>
-      <div class="page-indicator">{{ currentPage + 1 }} / {{ totalPages }}</div>
-    </div>
-
-    <div class="scenarios-grid">
-      <ScenarioCard
-        v-for="scenario in displayedScenarios"
-        :id="scenario.id"
-        :key="scenario.id"
-        :title="scenario.title"
-        :description="scenario.description"
-        :is-completed="isCompleted(scenario.id)"
-        @select="handleSelectScenario"
-      />
-    </div>
-
-    <div class="pagination">
-      <button
-        class="page-button"
-        :disabled="currentPage === 0"
-        @click="prevPage"
-      >
-        ← 前へ
-      </button>
-      <div class="page-dots">
-        <span
-          v-for="i in totalPages"
-          :key="i"
-          class="dot"
-          :class="{ active: i - 1 === currentPage }"
-          @click="goToPage(i - 1)"
+    <div class="content">
+      <div class="scenarios-grid">
+        <ScenarioCard
+          v-for="scenario in displayedScenarios"
+          :id="scenario.id"
+          :key="scenario.id"
+          :title="scenario.title"
+          :description="scenario.description"
+          :is-completed="isCompleted(scenario.id)"
+          @select="handleSelectScenario"
         />
       </div>
-      <button
-        class="page-button"
-        :disabled="currentPage >= totalPages - 1"
-        @click="nextPage"
-      >
-        次へ →
-      </button>
+
+      <div class="pagination">
+        <button
+          class="page-button"
+          :disabled="currentPage === 0"
+          @click="prevPage"
+        >
+          ← 前へ
+        </button>
+        <button
+          class="page-button"
+          :disabled="currentPage === totalPages - 1"
+          @click="nextPage"
+        >
+          次へ →
+        </button>
+      </div>
     </div>
   </div>
 </template>
@@ -176,45 +170,9 @@ const isCompleted = (scenarioId: string) =>
   flex-direction: column;
   width: 100%;
   height: 100%;
-  padding: var(--size-32);
-  position: relative;
-  overflow: hidden;
-}
-
-.back-button {
-  position: absolute;
-  top: var(--size-32);
-  left: var(--size-32);
-  padding: var(--size-12) var(--size-24);
-  background: rgba(255, 255, 255, 0.9);
-  border: var(--size-2) solid #ddd;
-  border-radius: var(--size-8);
-  cursor: pointer;
-  font-size: var(--size-16);
-  font-weight: bold;
-  transition: all 0.2s ease;
-  z-index: 10;
-}
-
-.back-button:hover {
-  background: white;
-  border-color: #999;
-  transform: translateX(calc(-1 * var(--size-5)));
-}
-
-.header {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--size-32);
-  margin-bottom: var(--size-32);
-}
-
-.title {
-  font-size: var(--size-32);
-  font-weight: bold;
-  color: #333;
-  margin: 0;
+  padding: var(--size-40) var(--size-20);
+  overflow-y: auto;
+  box-sizing: border-box;
 }
 
 .page-indicator {
@@ -229,7 +187,7 @@ const isCompleted = (scenarioId: string) =>
 .scenarios-grid {
   flex: 1;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(var(--size-350), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(var(--size-350), 1fr));
   gap: var(--size-24);
   overflow-y: auto;
   padding: var(--size-16);
