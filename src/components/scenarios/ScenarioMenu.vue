@@ -31,11 +31,16 @@ const handleSelectScenario = (scenarioId: string): void => {
 
 const getDifficultyColor = (difficulty: string): string => {
   const colors = {
-    advanced: "#F44336",
-    beginner: "#4CAF50",
-    intermediate: "#FF9800",
+    advanced:
+      "linear-gradient(135deg, var(--color-miko-primary), var(--color-holo-purple))",
+    beginner:
+      "linear-gradient(135deg, var(--color-fubuki-primary), var(--color-fubuki-bg))",
+    intermediate:
+      "linear-gradient(135deg, var(--color-holo-cyan), var(--color-fubuki-primary))",
   };
-  return colors[difficulty as keyof typeof colors] || "#999";
+  return (
+    colors[difficulty as keyof typeof colors] || "var(--color-text-secondary)"
+  );
 };
 
 const getDifficultyLabel = (difficulty: string): string => {
@@ -90,7 +95,7 @@ const getDifficultyLabel = (difficulty: string): string => {
           <span
             class="difficulty-badge"
             :style="{
-              backgroundColor: getDifficultyColor(scenario.difficulty),
+              backgroundImage: getDifficultyColor(scenario.difficulty),
             }"
           >
             {{ getDifficultyLabel(scenario.difficulty) }}
@@ -117,7 +122,7 @@ const getDifficultyLabel = (difficulty: string): string => {
           <span
             class="difficulty-badge"
             :style="{
-              backgroundColor: getDifficultyColor(scenario.difficulty),
+              backgroundImage: getDifficultyColor(scenario.difficulty),
             }"
           >
             {{ getDifficultyLabel(scenario.difficulty) }}
@@ -141,7 +146,6 @@ const getDifficultyLabel = (difficulty: string): string => {
 .scenario-menu {
   height: 100%;
   padding: var(--size-40) var(--size-20);
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   overflow-y: auto;
   box-sizing: border-box;
 }
@@ -168,7 +172,7 @@ const getDifficultyLabel = (difficulty: string): string => {
   max-width: var(--size-600);
   margin: 0 auto;
   padding: var(--size-20);
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.15);
   border-radius: 12px;
   backdrop-filter: blur(10px);
 }
@@ -198,7 +202,7 @@ const getDifficultyLabel = (difficulty: string): string => {
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #4caf50, #8bc34a);
+  background: var(--gradient-accent);
   transition: width 0.3s ease;
 }
 
@@ -237,7 +241,7 @@ const getDifficultyLabel = (difficulty: string): string => {
 
 .card-header h3 {
   margin: 0;
-  color: #333;
+  color: var(--color-text-primary);
   font-size: var(--size-24);
   flex: 1;
 }
@@ -251,21 +255,21 @@ const getDifficultyLabel = (difficulty: string): string => {
 }
 
 .description {
-  color: #666;
+  color: var(--color-text-secondary);
   line-height: 1.6;
   margin-bottom: var(--size-20);
 }
 
 .objectives h4 {
   margin: 0 0 var(--size-10);
-  color: #333;
+  color: var(--color-text-primary);
   font-size: var(--size-16);
 }
 
 .objectives ul {
   margin: 0;
   padding-left: var(--size-20);
-  color: #666;
+  color: var(--color-text-secondary);
 }
 
 .objectives li {
@@ -283,14 +287,14 @@ const getDifficultyLabel = (difficulty: string): string => {
 }
 
 .completed-badge {
-  color: #4caf50;
+  color: var(--color-fubuki-primary);
   font-weight: bold;
   font-size: var(--size-14);
 }
 
 .start-button {
   padding: var(--size-10) var(--size-20);
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #5fdeec 0%, #46c0ef 100%);
   color: white;
   border: none;
   border-radius: 8px;

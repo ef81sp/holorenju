@@ -47,6 +47,11 @@ const handleBack = (): void => {
 
 <style>
 #app {
+  background: linear-gradient(
+    135deg,
+    var(--color-fubuki-bg-light) 0%,
+    var(--color-miko-bg-light) 100%
+  );
   font-family:
     -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
     Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
@@ -61,6 +66,6 @@ const handleBack = (): void => {
 
 body {
   margin: 0;
-  padding: 0
+  padding: 0;
 }
 </style>

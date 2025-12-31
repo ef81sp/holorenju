@@ -27,13 +27,13 @@ const characterInfo = computed(() => {
   const charType = props.message.character as "fubuki" | "miko";
   return {
     fubuki: {
-      avatarBg: "#E3F2FD",
-      color: "#4A9EFF",
+      avatarBg: "#77DFFF",
+      color: "#54C7EA",
       name: "フブキ先生",
     },
     miko: {
-      avatarBg: "#FFE4F0",
-      color: "#FF69B4",
+      avatarBg: "#FF9CB4",
+      color: "#FE4B74",
       name: "みこ",
     },
   }[charType];
@@ -176,7 +176,7 @@ const handleChoiceClick = (choiceId: string): void => {
 }
 
 .dialog-text {
-  color: #333;
+  color: var(--color-text-primary);
   line-height: 1.6;
   font-size: var(--size-16);
   white-space: pre-wrap;
@@ -191,8 +191,8 @@ const handleChoiceClick = (choiceId: string): void => {
 
 .choice-button {
   padding: var(--size-10) var(--size-16);
-  background: #f5f5f5;
-  border: 2px solid #ddd;
+  background: var(--color-bg-gray);
+  border: 2px solid var(--color-border);
   border-radius: var(--size-8);
   cursor: pointer;
   font-size: var(--size-14);
@@ -201,8 +201,8 @@ const handleChoiceClick = (choiceId: string): void => {
 }
 
 .choice-button:hover {
-  background: #e8e8e8;
-  border-color: #4a9eff;
+  background: var(--color-fubuki-bg);
+  border-color: var(--color-fubuki-primary);
   transform: translateX(var(--size-5));
 }
 

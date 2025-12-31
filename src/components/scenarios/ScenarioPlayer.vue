@@ -75,10 +75,7 @@ const boardSize = computed(() => {
     return 400; // 最小デフォルトサイズ
   }
 
-  const calculatedSize = Math.min(
-    availableWidth,
-    availableHeight,
-  );
+  const calculatedSize = Math.min(availableWidth, availableHeight);
 
   console.log("[ScenarioPlayer] boardSize computed:", {
     availableWidth,
@@ -359,7 +356,6 @@ onMounted(async () => {
   grid-template-columns: 11fr 5fr;
   grid-template-rows: 1fr 6fr 2fr;
   padding: var(--size-14);
-  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
   gap: var(--size-10);
   box-sizing: border-box;
 }
@@ -437,8 +433,8 @@ onMounted(async () => {
 
 .hint-box {
   padding: var(--size-16);
-  background: #fff9c4;
-  border: 2px solid #fbc02d;
+  background: var(--color-fubuki-bg);
+  border: 2px solid var(--color-fubuki-primary);
   border-radius: 8px;
   align-self: center;
   max-width: 100%;
@@ -481,22 +477,22 @@ onMounted(async () => {
 }
 
 .hint-button {
-  background: #ffe082;
-  color: #333;
+  background: var(--color-fubuki-primary);
+  color: white;
 }
 
 .hint-button:hover {
-  background: #ffd54f;
+  background: #4a9ec9;
   transform: translateY(-2px);
 }
 
 .next-button {
-  background: #4caf50;
+  background: var(--color-holo-purple);
   color: white;
 }
 
 .next-button:hover {
-  background: #45a049;
+  background: #5e3f7a;
   transform: translateY(-2px);
 }
 </style>
