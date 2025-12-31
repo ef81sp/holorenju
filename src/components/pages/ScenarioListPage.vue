@@ -196,7 +196,9 @@ const isCompleted = (scenarioId: string) =>
   background: rgba(255, 255, 255, 0.8);
   padding: var(--size-8) var(--size-16);
   border-radius: var(--size-8);
-  font-weight: bold;
+  font-weight: 500;
+  width: var(--size-80);
+  text-align: center;
 }
 
 .content {
