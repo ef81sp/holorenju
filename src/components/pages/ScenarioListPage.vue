@@ -159,7 +159,7 @@ const isCompleted = (scenarioId: string) =>
         <ScenarioCard
           v-for="scenario in displayedScenarios"
           :id="scenario.id"
-          :key="scenario.id + currentPage"
+          :key="scenario.absoluteIndex"
           :title="scenario.title"
           :description="scenario.description"
           :is-completed="isCompleted(scenario.id)"
@@ -182,6 +182,9 @@ const isCompleted = (scenarioId: string) =>
 
 <style scoped>
 .scenario-list-page {
+  --slide-duration: 0.2s;
+  --slide-easing: ease-in-out;
+
   display: flex;
   flex-direction: column;
   width: 100%;
@@ -220,14 +223,26 @@ const isCompleted = (scenarioId: string) =>
 
 /* 次へ（右から左） */
 .slide-next-enter-active,
-.slide-next-leave-active,
+.slide-next-leave-active {
+  transition: all var(--slide-duration) var(--slide-easing);
+}
+
 .slide-next-move {
-  transition: all 0.2s ease-in-out;
+  transition: transform var(--slide-duration) var(--slide-easing);
 }
 
 .slide-next-enter-from {
   opacity: 0;
   transform: translateX(100%);
+}
+
+.slide-next-enter-to {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.slide-next-leave-active {
+  position: absolute;
 }
 
 .slide-next-leave-to {
@@ -237,14 +252,26 @@ const isCompleted = (scenarioId: string) =>
 
 /* 戻る（左から右） */
 .slide-prev-enter-active,
-.slide-prev-leave-active,
+.slide-prev-leave-active {
+  transition: all var(--slide-duration) var(--slide-easing);
+}
+
 .slide-prev-move {
-  transition: all 0.2s ease-in-out;
+  transition: transform var(--slide-duration) var(--slide-easing);
 }
 
 .slide-prev-enter-from {
   opacity: 0;
   transform: translateX(-100%);
+}
+
+.slide-prev-enter-to {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.slide-prev-leave-active {
+  position: absolute;
 }
 
 .slide-prev-leave-to {
