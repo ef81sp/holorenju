@@ -176,21 +176,21 @@ const isCompleted = (scenarioId: string) =>
   flex-direction: column;
   width: 100%;
   height: 100%;
-  padding: 2rem;
+  padding: var(--size-32);
   position: relative;
   overflow: hidden;
 }
 
 .back-button {
   position: absolute;
-  top: 2rem;
-  left: 2rem;
-  padding: 0.75rem 1.5rem;
+  top: var(--size-32);
+  left: var(--size-32);
+  padding: var(--size-12) var(--size-24);
   background: rgba(255, 255, 255, 0.9);
-  border: 2px solid #ddd;
-  border-radius: 0.5rem;
+  border: var(--size-2) solid #ddd;
+  border-radius: var(--size-8);
   cursor: pointer;
-  font-size: 1rem;
+  font-size: var(--size-16);
   font-weight: bold;
   transition: all 0.2s ease;
   z-index: 10;
@@ -199,57 +199,57 @@ const isCompleted = (scenarioId: string) =>
 .back-button:hover {
   background: white;
   border-color: #999;
-  transform: translateX(-4px);
+  transform: translateX(calc(-1 * var(--size-5)));
 }
 
 .header {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 2rem;
-  margin-bottom: 2rem;
+  gap: var(--size-32);
+  margin-bottom: var(--size-32);
 }
 
 .title {
-  font-size: 2rem;
+  font-size: var(--size-32);
   font-weight: bold;
   color: #333;
   margin: 0;
 }
 
 .page-indicator {
-  font-size: 1.2rem;
+  font-size: var(--size-20);
   color: #666;
   background: rgba(255, 255, 255, 0.8);
-  padding: 0.5rem 1rem;
-  border-radius: 0.5rem;
+  padding: var(--size-8) var(--size-16);
+  border-radius: var(--size-8);
   font-weight: bold;
 }
 
 .scenarios-grid {
   flex: 1;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fill, minmax(var(--size-350), 1fr));
+  gap: var(--size-24);
   overflow-y: auto;
-  padding: 1rem;
+  padding: var(--size-16);
 }
 
 .pagination {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 2rem;
-  margin-top: 2rem;
+  gap: var(--size-32);
+  margin-top: var(--size-32);
 }
 
 .page-button {
-  padding: 0.75rem 1.5rem;
+  padding: var(--size-12) var(--size-24);
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
   border: none;
-  border-radius: 0.5rem;
-  font-size: 1rem;
+  border-radius: var(--size-8);
+  font-size: var(--size-16);
   font-weight: bold;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -257,7 +257,7 @@ const isCompleted = (scenarioId: string) =>
 
 .page-button:hover:not(:disabled) {
   transform: scale(1.05);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 var(--size-5) var(--size-12) rgba(102, 126, 234, 0.4);
 }
 
 .page-button:disabled {
@@ -268,12 +268,12 @@ const isCompleted = (scenarioId: string) =>
 
 .page-dots {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--size-8);
 }
 
 .dot {
-  width: 0.75rem;
-  height: 0.75rem;
+  width: var(--size-12);
+  height: var(--size-12);
   border-radius: 50%;
   background: #ddd;
   cursor: pointer;

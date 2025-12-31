@@ -85,21 +85,21 @@ const handleBack = () => {
   justify-content: center;
   width: 100%;
   height: 100%;
-  gap: 2rem;
+  gap: var(--size-32);
   position: relative;
-  padding: 2rem;
+  padding: var(--size-32);
 }
 
 .back-button {
   position: absolute;
-  top: 2rem;
-  left: 2rem;
-  padding: 0.75rem 1.5rem;
+  top: var(--size-32);
+  left: var(--size-32);
+  padding: var(--size-12) var(--size-24);
   background: rgba(255, 255, 255, 0.9);
-  border: 2px solid #ddd;
-  border-radius: 0.5rem;
+  border: var(--size-2) solid #ddd;
+  border-radius: var(--size-8);
   cursor: pointer;
-  font-size: 1rem;
+  font-size: var(--size-16);
   font-weight: bold;
   transition: all 0.2s ease;
 }
@@ -107,11 +107,11 @@ const handleBack = () => {
 .back-button:hover {
   background: white;
   border-color: #999;
-  transform: translateX(-4px);
+  transform: translateX(calc(-1 * var(--size-5)));
 }
 
 .title {
-  font-size: 2.5rem;
+  font-size: var(--size-40);
   font-weight: bold;
   color: var(--primary-color, #333);
   margin: 0;
@@ -120,26 +120,26 @@ const handleBack = () => {
 .difficulty-buttons {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
-  width: min(400px, 80%);
+  gap: var(--size-24);
+  width: min(var(--size-500), 80%);
 }
 
 .difficulty-button {
-  padding: 1.5rem 2rem;
+  padding: var(--size-24) var(--size-32);
   border: none;
-  border-radius: 1rem;
+  border-radius: var(--size-16);
   cursor: pointer;
   transition: all 0.3s ease;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 var(--size-5) var(--size-16) rgba(0, 0, 0, 0.1);
 }
 
 .difficulty-button:hover:not(:disabled) {
-  transform: translateY(-4px);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+  transform: translateY(calc(-1 * var(--size-5)));
+  box-shadow: 0 var(--size-8) var(--size-20) rgba(0, 0, 0, 0.2);
 }
 
 .difficulty-button:active:not(:disabled) {
-  transform: translateY(-2px);
+  transform: translateY(calc(-1 * var(--size-2)));
 }
 
 .difficulty-button.disabled {
@@ -152,29 +152,29 @@ const handleBack = () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 1rem;
+  gap: var(--size-16);
   position: relative;
 }
 
 .button-icon {
-  font-size: 2rem;
+  font-size: var(--size-32);
 }
 
 .button-text {
-  font-size: 1.5rem;
+  font-size: var(--size-24);
   font-weight: bold;
   color: #333;
 }
 
 .badge {
   position: absolute;
-  right: -0.5rem;
-  top: -0.5rem;
+  right: calc(-1 * var(--size-8));
+  top: calc(-1 * var(--size-8));
   background: #ff6b6b;
   color: white;
-  font-size: 0.7rem;
-  padding: 0.25rem 0.5rem;
-  border-radius: 0.5rem;
+  font-size: var(--size-12);
+  padding: var(--size-5) var(--size-8);
+  border-radius: var(--size-8);
   font-weight: bold;
 }
 </style>

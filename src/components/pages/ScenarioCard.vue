@@ -45,16 +45,16 @@ const handleStart = () => {
 .scenario-card {
   position: relative;
   background: white;
-  border-radius: 1rem;
-  padding: 1.5rem;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  border-radius: var(--size-16);
+  padding: var(--size-24);
+  box-shadow: 0 var(--size-5) var(--size-16) rgba(0, 0, 0, 0.1);
   transition: all 0.3s ease;
-  border: 2px solid transparent;
+  border: var(--size-2) solid transparent;
 }
 
 .scenario-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+  transform: translateY(calc(-1 * var(--size-5)));
+  box-shadow: 0 var(--size-8) var(--size-20) rgba(0, 0, 0, 0.15);
   border-color: #667eea;
 }
 
@@ -65,32 +65,32 @@ const handleStart = () => {
 
 .completed-badge {
   position: absolute;
-  top: -0.5rem;
-  right: -0.5rem;
+  top: calc(-1 * var(--size-8));
+  right: calc(-1 * var(--size-8));
   background: #48bb78;
   color: white;
-  font-size: 0.8rem;
-  padding: 0.35rem 0.75rem;
-  border-radius: 1rem;
+  font-size: var(--size-14);
+  padding: var(--size-5) var(--size-12);
+  border-radius: var(--size-16);
   font-weight: bold;
-  box-shadow: 0 2px 8px rgba(72, 187, 120, 0.4);
+  box-shadow: 0 var(--size-2) var(--size-8) rgba(72, 187, 120, 0.4);
 }
 
 .card-content {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: var(--size-16);
 }
 
 .card-title {
-  font-size: 1.25rem;
+  font-size: var(--size-20);
   font-weight: bold;
   color: #333;
   margin: 0;
 }
 
 .card-description {
-  font-size: 0.95rem;
+  font-size: var(--size-16);
   color: #666;
   margin: 0;
   line-height: 1.5;
@@ -98,12 +98,12 @@ const handleStart = () => {
 
 .start-button {
   align-self: flex-end;
-  padding: 0.75rem 1.5rem;
+  padding: var(--size-12) var(--size-24);
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
   border: none;
-  border-radius: 0.5rem;
-  font-size: 1rem;
+  border-radius: var(--size-8);
+  font-size: var(--size-16);
   font-weight: bold;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -111,7 +111,7 @@ const handleStart = () => {
 
 .start-button:hover {
   transform: scale(1.05);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 var(--size-5) var(--size-12) rgba(102, 126, 234, 0.4);
 }
 
 .start-button:active {
