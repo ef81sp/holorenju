@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref, Transition } from "vue";
 import { useAppStore, type AppState } from "@/stores/appStore";
 import MenuPage from "./pages/MenuPage.vue";
 import DifficultyPage from "./pages/DifficultyPage.vue";
@@ -13,6 +13,11 @@ const confirmDialogRef = ref<InstanceType<typeof ConfirmDialog> | null>(null);
 
 const currentScene = computed(() => appStore.scene);
 const selectedScenarioId = computed(() => appStore.selectedScenarioId);
+const transitionName = computed(() =>
+  appStore.transitionDirection === "back"
+    ? "scale-fade-back"
+    : "scale-fade-forward",
+);
 
 // 戻る確認用の状態
 const pendingPopState = ref<AppState | null>(null);
@@ -74,25 +79,30 @@ onUnmounted(() => {
 
 <template>
   <div class="main-container">
-    <MenuPage v-if="currentScene === 'menu'" />
-    <DifficultyPage v-else-if="currentScene === 'difficulty'" />
-    <ScenarioListPage v-else-if="currentScene === 'scenarioList'" />
-    <ScenarioPlayer
-      v-else-if="currentScene === 'scenarioPlay' && selectedScenarioId"
-      :scenario-id="selectedScenarioId"
-    />
-
-    <!-- 戻る確認ダイアログ -->
-    <ConfirmDialog
-      ref="confirmDialogRef"
-      title="シナリオを中断しますか？"
-      message="シナリオをリセットして、一覧に戻ります。"
-      confirm-text="戻る"
-      cancel-text="続ける"
-      @confirm="handleConfirmBack"
-      @cancel="handleCancelBack"
-    />
+    <Transition
+      :name="transitionName"
+      mode="out-in"
+    >
+      <MenuPage v-if="currentScene === 'menu'" />
+      <DifficultyPage v-else-if="currentScene === 'difficulty'" />
+      <ScenarioListPage v-else-if="currentScene === 'scenarioList'" />
+      <ScenarioPlayer
+        v-else-if="currentScene === 'scenarioPlay' && selectedScenarioId"
+        :scenario-id="selectedScenarioId"
+      />
+    </Transition>
   </div>
+
+  <!-- 戻る確認ダイアログ -->
+  <ConfirmDialog
+    ref="confirmDialogRef"
+    title="シナリオを中断しますか？"
+    message="シナリオをリセットして、一覧に戻ります。"
+    confirm-text="戻る"
+    cancel-text="続ける"
+    @confirm="handleConfirmBack"
+    @cancel="handleCancelBack"
+  />
 </template>
 
 <style scoped>
@@ -100,5 +110,61 @@ onUnmounted(() => {
   width: 100%;
   height: 100%;
   overflow: hidden;
+}
+
+/* 前進アニメーション（拡大して退場） */
+.scale-fade-forward-enter-active,
+.scale-fade-forward-leave-active {
+  transition:
+    opacity 0.15s ease-out 0.05s,
+    transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1) 0.05s;
+}
+
+.scale-fade-forward-enter-from {
+  opacity: 0;
+  transform: scale(0.9);
+}
+
+.scale-fade-forward-enter-to {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.scale-fade-forward-leave-from {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.scale-fade-forward-leave-to {
+  opacity: 0;
+  transform: scale(1.1);
+}
+
+/* 後退アニメーション（縮小して退場） */
+.scale-fade-back-enter-active,
+.scale-fade-back-leave-active {
+  transition:
+    opacity 0.15s ease-out 0.05s,
+    transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1) 0.05s;
+}
+
+.scale-fade-back-enter-from {
+  opacity: 0;
+  transform: scale(1.1);
+}
+
+.scale-fade-back-enter-to {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.scale-fade-back-leave-from {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.scale-fade-back-leave-to {
+  opacity: 0;
+  transform: scale(0.9);
 }
 </style>

@@ -26,7 +26,7 @@ const totalPages = computed(() =>
 );
 
 // ページ遷移方向
-const direction = ref<'next' | 'prev'>('next');
+const direction = ref<"next" | "prev">("next");
 
 // 現在のページに表示するシナリオ（絶対番号付き）
 const displayedScenarios = computed(() => {
@@ -48,12 +48,12 @@ const goToPage = (page: number) => {
 };
 
 const nextPage = () => {
-  direction.value = 'next';
+  direction.value = "next";
   goToPage(currentPage.value + 1);
 };
 
 const prevPage = () => {
-  direction.value = 'prev';
+  direction.value = "prev";
   goToPage(currentPage.value - 1);
 };
 

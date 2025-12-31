@@ -3,6 +3,7 @@ import { defineStore } from "pinia";
 export type Scene = "menu" | "difficulty" | "scenarioList" | "scenarioPlay";
 export type Mode = "training" | "cpu";
 export type Difficulty = "beginner" | "intermediate" | "advanced";
+export type TransitionDirection = "forward" | "back";
 
 export interface AppState {
   scene: Scene;
@@ -12,13 +13,18 @@ export interface AppState {
   selectedScenarioId: string | null;
 }
 
+interface AppStoreState extends AppState {
+  transitionDirection: TransitionDirection;
+}
+
 export const useAppStore = defineStore("app", {
-  state: (): AppState => ({
+  state: (): AppStoreState => ({
     scene: "menu",
     selectedMode: null,
     selectedDifficulty: null,
     currentPage: 0,
     selectedScenarioId: null,
+    transitionDirection: "forward",
   }),
 
   actions: {
@@ -27,6 +33,7 @@ export const useAppStore = defineStore("app", {
         // CPU対戦は未実装
         return;
       }
+      this.transitionDirection = "forward";
       this.selectedMode = mode;
       this.scene = "difficulty";
       this.pushHistory();
@@ -37,6 +44,7 @@ export const useAppStore = defineStore("app", {
         console.error("Mode not selected");
         return;
       }
+      this.transitionDirection = "forward";
       this.selectedDifficulty = difficulty;
       this.currentPage = 0;
       this.scene = "scenarioList";
@@ -44,12 +52,14 @@ export const useAppStore = defineStore("app", {
     },
 
     selectScenario(scenarioId: string) {
+      this.transitionDirection = "forward";
       this.selectedScenarioId = scenarioId;
       this.scene = "scenarioPlay";
       this.pushHistory();
     },
 
     goToMenu() {
+      this.transitionDirection = "back";
       this.scene = "menu";
       this.selectedMode = null;
       this.selectedDifficulty = null;
@@ -59,6 +69,7 @@ export const useAppStore = defineStore("app", {
     },
 
     goToDifficulty() {
+      this.transitionDirection = "back";
       this.scene = "difficulty";
       this.selectedDifficulty = null;
       this.currentPage = 0;
@@ -71,6 +82,7 @@ export const useAppStore = defineStore("app", {
         console.error("Difficulty not selected");
         return;
       }
+      this.transitionDirection = "back";
       this.scene = "scenarioList";
       this.selectedScenarioId = null;
       this.pushHistory();
@@ -82,6 +94,7 @@ export const useAppStore = defineStore("app", {
     },
 
     restoreState(state: Partial<AppState>) {
+      this.transitionDirection = "back";
       if (state.scene) {
         this.scene = state.scene;
       }
