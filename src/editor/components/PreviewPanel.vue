@@ -235,21 +235,19 @@ const currentBoard = computed(() => {
 
 <style scoped>
 .preview-panel {
-  padding: 1.5rem;
+  padding: calc(var(--size-unit) * 0.6);
   background-color: white;
   border: 1px solid var(--color-border);
   border-radius: 4px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-  max-height: 600px;
-  overflow-y: auto;
 }
 
 .preview-panel h3 {
   margin-top: 0;
-  margin-bottom: 1rem;
-  font-size: 1.1rem;
+  margin-bottom: calc(var(--size-unit) * 0.4);
+  font-size: calc(var(--size-unit) * 1.2);
   border-bottom: 2px solid var(--color-primary);
-  padding-bottom: 0.5rem;
+  padding-bottom: calc(var(--size-unit) * 0.3);
 }
 
 .preview-empty {
@@ -264,12 +262,12 @@ const currentBoard = computed(() => {
 .preview-content {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: calc(var(--size-unit) * 0.6);
 }
 
 .preview-demo,
 .preview-problem {
-  padding: 1rem;
+  padding: calc(var(--size-unit) * 0.6);
   background-color: var(--color-background-soft);
   border-radius: 4px;
   border-left: 4px solid var(--color-primary);
@@ -278,15 +276,15 @@ const currentBoard = computed(() => {
 .preview-demo h4,
 .preview-problem h4 {
   margin-top: 0;
-  margin-bottom: 1rem;
-  font-size: 1rem;
+  margin-bottom: calc(var(--size-unit) * 0.5);
+  font-size: calc(var(--size-unit) * 1.1);
 }
 
 .preview-info {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  font-size: 0.9rem;
+  gap: calc(var(--size-unit) * 0.3);
+  font-size: calc(var(--size-unit) * 1);
 }
 
 .preview-info p {

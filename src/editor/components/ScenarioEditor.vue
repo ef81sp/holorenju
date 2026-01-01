@@ -616,7 +616,7 @@ const handleLoadFromDirectory = async (): Promise<void> => {
 .scenario-editor-wrapper {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100%;
   background-color: var(--color-background);
 }
 
@@ -627,6 +627,7 @@ const handleLoadFromDirectory = async (): Promise<void> => {
   padding: calc(var(--size-unit) * 0.8);
   background-color: var(--color-background-soft);
   border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
 }
 
 .editor-header h1 {
@@ -702,9 +703,9 @@ const handleLoadFromDirectory = async (): Promise<void> => {
 .editor-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
-  flex: 1;
   gap: calc(var(--size-unit) * 0.8);
   padding: calc(var(--size-unit) * 0.8);
+  flex: 1;
   overflow: hidden;
 }
 
@@ -716,11 +717,12 @@ const handleLoadFromDirectory = async (): Promise<void> => {
   overflow-y: auto;
   padding-right: calc(var(--size-unit) * 0.4);
   min-width: 0;
+  height: 100%;
 }
 
 .preview-section {
   background-color: white;
-  padding: calc(var(--size-unit) * 0.8);
+  padding: calc(var(--size-unit) * 0.4);
   border: 1px solid var(--color-border);
   border-radius: 3px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
@@ -728,10 +730,10 @@ const handleLoadFromDirectory = async (): Promise<void> => {
 
 .preview-section h3 {
   margin-top: 0;
-  margin-bottom: calc(var(--size-unit) * 0.4);
-  font-size: calc(var(--size-unit) * 1.3);
+  margin-bottom: calc(var(--size-unit) * 0.3);
+  font-size: calc(var(--size-unit) * 1.2);
   border-bottom: 1px solid var(--color-border);
-  padding-bottom: calc(var(--size-unit) * 0.3);
+  padding-bottom: calc(var(--size-unit) * 0.2);
 }
 
 .section-info {
