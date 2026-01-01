@@ -29,7 +29,7 @@ const boardState = computed(() => {
   for (let row = 0; row < 15; row++) {
     state[row] = [];
     for (let col = 0; col < 15; col++) {
-      const char = props.board[row]?.[col] ?? "e";
+      const char = props.board[row]?.[col] ?? "-";
       if (char === "x") {
         state[row][col] = "black";
       } else if (char === "o") {
@@ -52,7 +52,7 @@ const handleCellClick = (position: Position): void => {
 };
 
 const handleReset = (): void => {
-  const emptyBoard = Array(15).fill("e".repeat(15));
+  const emptyBoard = Array(15).fill("-".repeat(15));
   emit("update:board", emptyBoard);
 };
 
@@ -71,9 +71,9 @@ const handleLoadFromClipboard = async (): Promise<void> => {
         console.warn("各行は15文字である必要があります。");
         return;
       }
-      if (!/^[exo]{15}$/.test(line)) {
+      if (!/^[-xo]{15}$/.test(line)) {
         console.warn(
-          "無効な文字が含まれています。e(空), x(黒), o(白) のみ使用可能です。",
+          "無効な文字が含まれています。-(未指定), x(黒), o(白) のみ使用可能です。",
         );
         return;
       }

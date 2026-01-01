@@ -1,18 +1,14 @@
-import type { BoardState, Position, StoneColor } from "@/types/game";
+import type { BoardState, StoneColor } from "@/types/game";
 
 /**
  * 配列形式の盤面テキストをBoardStateに変換します
  * - : 空白（null）
  * x : 黒石（black）
  * o : 白石（white）
- * e : expectedMove の位置（解析時に抽出、盤面上は空白として扱う）
  * @param boardLines 配列形式の盤面（15行×15列、各要素は15文字）
- * @returns 解析結果 { board: 盤面状態, expectedMoves: 正解位置の配列 }
+ * @returns 盤面状態
  */
-export function parseInitialBoard(boardLines: string[]): {
-  board: BoardState;
-  expectedMoves: Position[];
-} {
+export function parseInitialBoard(boardLines: string[]): BoardState {
   if (boardLines.length !== 15) {
     throw new Error(
       `盤面は15行である必要があります。受け取った行数: ${boardLines.length}`,
@@ -20,7 +16,6 @@ export function parseInitialBoard(boardLines: string[]): {
   }
 
   const board: BoardState = [];
-  const expectedMoves: Position[] = [];
 
   for (let i = 0; i < 15; i++) {
     const line = boardLines[i];
@@ -42,13 +37,9 @@ export function parseInitialBoard(boardLines: string[]): {
         stone = "black";
       } else if (char === "o") {
         stone = "white";
-      } else if (char === "e") {
-        // 'e' は expectedMove の位置を示す（盤面上は空白）
-        stone = null;
-        expectedMoves.push({ row: i, col: j });
       } else {
         throw new Error(
-          `無効な文字が含まれています。行${i}列${j}: ${char}（有効: -, x, o, e）`,
+          `無効な文字が含まれています。行${i}列${j}: ${char}（有効: -, x, o）`,
         );
       }
 
@@ -58,5 +49,5 @@ export function parseInitialBoard(boardLines: string[]): {
     board.push(row);
   }
 
-  return { board, expectedMoves };
+  return board;
 }

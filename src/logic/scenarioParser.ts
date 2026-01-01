@@ -539,7 +539,7 @@ function validateDialogueLineArray(
 // ===== 盤面バリデーション =====
 
 const BOARD_SIZE = 15;
-const VALID_BOARD_CHARS = /^[exo]*$/; // E(空白), x(黒), o(白)
+const VALID_BOARD_CHARS = /^[-xo]*$/; // -(未指定), x(黒), o(白)
 
 /**
  * 盤面の妥当性を検証（JSON編集時の検証用）
@@ -572,7 +572,7 @@ export function validateBoardState(board: unknown[]): string[] {
 
     if (!VALID_BOARD_CHARS.test(row)) {
       errors.push(
-        `Board[${rowIndex}] contains invalid characters. Use only 'e' (empty), 'x' (black), 'o' (white)`,
+        `Board[${rowIndex}] contains invalid characters. Use only '-' (unspecified), 'x' (black), 'o' (white)`,
       );
     }
   });

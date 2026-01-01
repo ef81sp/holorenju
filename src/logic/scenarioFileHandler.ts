@@ -150,7 +150,7 @@ export function createEmptyDemoSection(): DemoSection {
     id: "demo_section",
     type: "demo" as const,
     title: "デモセクション",
-    initialBoard: Array(15).fill("e".repeat(15)),
+    initialBoard: Array(15).fill("-".repeat(15)),
     dialogues: [],
   };
 }
@@ -163,7 +163,7 @@ export function createEmptyProblemSection(): ProblemSection {
     id: "problem_section",
     type: "problem" as const,
     title: "問題セクション",
-    initialBoard: Array(15).fill("e".repeat(15)),
+    initialBoard: Array(15).fill("-".repeat(15)),
     description: "",
     successConditions: [
       {
@@ -191,7 +191,7 @@ export function boardToASCII(board: string[]): string {
   board.forEach((row, i) => {
     const chars = row.split("").map((c) => {
       switch (c) {
-        case "e":
+        case "-":
           return " .";
         case "x":
           return " ●";
@@ -254,7 +254,7 @@ export interface BoardCell {
  * セルの内容を取得
  */
 export function getBoardCell(board: string[], cell: BoardCell): string {
-  return board[cell.row]?.[cell.col] ?? "e";
+  return board[cell.row]?.[cell.col] ?? "-";
 }
 
 /**
@@ -263,7 +263,7 @@ export function getBoardCell(board: string[], cell: BoardCell): string {
 export function setBoardCell(
   board: string[],
   cell: BoardCell,
-  value: "e" | "x" | "o",
+  value: "-" | "x" | "o",
 ): string[] {
   const newBoard = [...board];
   const row = newBoard[cell.row].split("");
@@ -273,17 +273,17 @@ export function setBoardCell(
 }
 
 /**
- * セルを次の状態に循環させる（e → x → o → e）
+ * セルを次の状態に循環させる（- → x → o → -）
  */
 export function cycleBoardCell(board: string[], cell: BoardCell): string[] {
   const current = getBoardCell(board, cell);
-  let next: "e" | "x" | "o" = "e";
-  if (current === "e") {
+  let next: "-" | "x" | "o" = "-";
+  if (current === "-") {
     next = "x";
   } else if (current === "x") {
     next = "o";
   } else {
-    next = "e";
+    next = "-";
   }
   return setBoardCell(board, cell, next);
 }
