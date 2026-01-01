@@ -12,6 +12,7 @@ interface Props {
   boardState?: BoardState;
   disabled?: boolean;
   stageSize?: number;
+  allowOverwrite?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -19,11 +20,13 @@ const props = withDefaults(defineProps<Props>(), {
     new Array(15).fill(null).map(() => new Array(15).fill(null)),
   disabled: false,
   stageSize: 640,
+  allowOverwrite: false,
 });
 
 // Emits
 const emit = defineEmits<{
   placeStone: [position: Position];
+  hoverCell: [position: Position | null];
 }>();
 
 // 定数
@@ -35,7 +38,7 @@ const LOWER_BOUND = 0;
 // Refs
 const stageSize = computed(() => {
   const value = props.stageSize || 640;
-  console.log("[RenjuBoard] stageSize computed:", {
+  console.warn("[RenjuBoard] stageSize computed:", {
     propsStageSize: props.stageSize,
     computedValue: value,
   });
@@ -56,7 +59,7 @@ const PADDING = computed(() => {
   const width = STAGE_WIDTH.value;
   const cellSize = CELL_SIZE.value;
   const padding = (width - (BOARD_SIZE - 1) * cellSize) / 2;
-  console.log("[RenjuBoard] PADDING calculated:", {
+  console.warn("[RenjuBoard] PADDING calculated:", {
     STAGE_WIDTH: width,
     CELL_SIZE: cellSize,
     boardWidth: (BOARD_SIZE - 1) * cellSize,
@@ -73,7 +76,7 @@ const stageConfig = computed(() => {
     width: STAGE_WIDTH.value,
     height: STAGE_HEIGHT.value,
   };
-  console.log("[RenjuBoard] stageConfig computed:", {
+  console.warn("[RenjuBoard] stageConfig computed:", {
     stageSize: stageSize.value,
     STAGE_WIDTH: STAGE_WIDTH.value,
     STAGE_HEIGHT: STAGE_HEIGHT.value,
@@ -216,7 +219,12 @@ const handleStageClick = (e: {
   }
 
   // すでに石が置かれている場所はクリック不可
-  if (props.boardState[position.row]?.[position.col]) {
+  if (!props.allowOverwrite && props.boardState[position.row]?.[position.col]) {
+    return;
+  }
+
+  if (props.allowOverwrite) {
+    emit("placeStone", position);
     return;
   }
 
@@ -259,16 +267,22 @@ const handleStageMouseMove = (e: {
 
   const position = pixelsToPosition(pointerPosition.x, pointerPosition.y);
 
-  if (position && !props.boardState[position.row]?.[position.col]) {
+  if (
+    position &&
+    (props.allowOverwrite || !props.boardState[position.row]?.[position.col])
+  ) {
     hoveredPosition.value = position;
+    emit("hoverCell", position);
   } else {
     hoveredPosition.value = null;
+    emit("hoverCell", null);
   }
 };
 
 // マウスリーブハンドラー
 const handleStageMouseLeave = (): void => {
   hoveredPosition.value = null;
+  emit("hoverCell", null);
 };
 </script>
 

@@ -1,0 +1,415 @@
+<script setup lang="ts">
+import { computed, ref } from "vue";
+import { useEditorStore } from "@/editor/stores/editorStore";
+import RenjuBoard from "@/components/game/RenjuBoard.vue";
+import type {
+  DemoSection,
+  ProblemSection,
+  BoardAction,
+} from "@/types/scenario";
+import type { BoardState, StoneColor } from "@/types/game";
+
+const editorStore = useEditorStore();
+const dialoguePageIndex = ref(0);
+
+// ボード文字列を BoardState に変換
+const stringBoardToBoardState = (boardLines: string[]): BoardState =>
+  boardLines.map((line) =>
+    line.split("").map((char) => {
+      if (char === "x") {
+        return "black" as StoneColor;
+      }
+      if (char === "o") {
+        return "white" as StoneColor;
+      }
+      return null;
+    }),
+  );
+
+const previewContent = computed(() => {
+  const section = editorStore.currentSection;
+  if (!section) {
+    return null;
+  }
+
+  if (section.type === "demo") {
+    const demoSection = section as DemoSection;
+    return {
+      type: "demo" as const,
+      initialBoard: demoSection.initialBoard,
+      dialogueCount: demoSection.dialogues.length,
+      dialogues: demoSection.dialogues,
+      firstDialogue: demoSection.dialogues[0],
+    };
+  }
+  const problemSection = section as ProblemSection;
+  return {
+    type: "problem" as const,
+    board: problemSection.initialBoard,
+    description: problemSection.description,
+    conditionCount: problemSection.successConditions.length,
+  };
+});
+
+// ダイアログページング関連
+const currentDialogue = computed(() => {
+  if (!previewContent.value || previewContent.value.type !== "demo") {
+    return null;
+  }
+  const { dialogues } = previewContent.value;
+  if (dialogues.length === 0) {
+    return null;
+  }
+  return dialogues[dialoguePageIndex.value];
+});
+
+const dialoguePaginationInfo = computed(() => {
+  if (!previewContent.value || previewContent.value.type !== "demo") {
+    return null;
+  }
+  const total = previewContent.value.dialogues.length;
+  return {
+    current: dialoguePageIndex.value + 1,
+    total,
+  };
+});
+
+const goPreviousDialogue = (): void => {
+  if (dialoguePageIndex.value > 0) {
+    dialoguePageIndex.value--;
+  }
+};
+
+const goNextDialogue = (): void => {
+  if (!previewContent.value || previewContent.value.type !== "demo") {
+    return;
+  }
+  if (dialoguePageIndex.value < previewContent.value.dialogues.length - 1) {
+    dialoguePageIndex.value++;
+  }
+};
+
+// セクション切り替え時にページをリセット
+const resetDialoguePage = (): void => {
+  dialoguePageIndex.value = 0;
+};
+
+// 現在のダイアログまで操作を適用した盤面を計算
+const currentBoard = computed(() => {
+  if (!previewContent.value) {
+    return null;
+  }
+
+  if (previewContent.value.type === "problem") {
+    return stringBoardToBoardState(previewContent.value.board);
+  }
+
+  const { initialBoard, dialogues } = previewContent.value;
+  let board = stringBoardToBoardState(initialBoard);
+
+  // 現在のダイアログインデックスまでのアクションを適用（現在のダイアログを含む）
+  for (let i = 0; i <= dialoguePageIndex.value; i++) {
+    const dialogue = dialogues[i];
+    if (dialogue.boardAction) {
+      const action = dialogue.boardAction as BoardAction;
+      if (action.type === "place") {
+        const placeAction = action as Extract<BoardAction, { type: "place" }>;
+        const { row, col } = placeAction.position;
+        board[row][col] = placeAction.color;
+      } else if (action.type === "remove") {
+        const removeAction = action as Extract<BoardAction, { type: "remove" }>;
+        const { row, col } = removeAction.position;
+        board[row][col] = null;
+      }
+    }
+  }
+
+  return board;
+});
+</script>
+
+<template>
+  <div class="preview-panel">
+    <h3>プレビュー</h3>
+
+    <div
+      v-if="!previewContent"
+      class="preview-empty"
+    >
+      セクションを選択するとプレビューが表示されます
+    </div>
+
+    <div
+      v-else
+      class="preview-content"
+    >
+      <div
+        v-if="previewContent.type === 'demo'"
+        class="preview-demo"
+      >
+        <h4>{{ editorStore.currentSection?.title }}</h4>
+        <div class="preview-info">
+          <div class="dialogue-header">
+            <p>
+              <strong>ダイアログ数:</strong> {{ previewContent.dialogueCount }}
+            </p>
+            <div
+              v-if="previewContent.dialogueCount > 1"
+              class="dialogue-controls"
+            >
+              <button
+                class="dialogue-btn"
+                :disabled="dialoguePageIndex === 0"
+                @click="goPreviousDialogue"
+              >
+                ◀
+              </button>
+              <span class="dialogue-position">{{ dialoguePaginationInfo?.current }}/{{
+                dialoguePaginationInfo?.total
+              }}</span>
+              <button
+                class="dialogue-btn"
+                :disabled="
+                  dialoguePageIndex === previewContent.dialogueCount - 1
+                "
+                @click="goNextDialogue"
+              >
+                ▶
+              </button>
+            </div>
+          </div>
+          <div
+            v-if="previewContent.dialogueCount > 0"
+            class="dialogue-display"
+          >
+            <div
+              v-if="currentDialogue"
+              class="dialogue-item"
+            >
+              <span class="character-name">{{ currentDialogue.character }}:</span>
+              <span class="dialogue-content">{{ currentDialogue.text }}</span>
+            </div>
+          </div>
+          <p
+            v-if="previewContent.dialogueCount === 0"
+            class="no-dialogue"
+          >
+            台詞なし
+          </p>
+        </div>
+      </div>
+
+      <div
+        v-else
+        class="preview-problem"
+      >
+        <h4>{{ editorStore.currentSection?.title }}</h4>
+        <div class="preview-info">
+          <p><strong>説明:</strong></p>
+          <p class="description-preview">
+            {{ previewContent.description || "(説明なし)" }}
+          </p>
+          <p>
+            <strong>成功条件数:</strong> {{ previewContent.conditionCount }}
+          </p>
+        </div>
+      </div>
+
+      <div class="preview-board">
+        <h5 v-if="previewContent.type === 'demo'">
+          盤面 (ステップ {{ dialoguePaginationInfo?.current || 1 }})
+        </h5>
+        <h5 v-else>初期盤面</h5>
+        <div class="board-container">
+          <RenjuBoard
+            v-if="currentBoard"
+            :board-state="currentBoard"
+            :disabled="true"
+            :stage-size="300"
+          />
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.preview-panel {
+  padding: 1.5rem;
+  background-color: white;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  max-height: 600px;
+  overflow-y: auto;
+}
+
+.preview-panel h3 {
+  margin-top: 0;
+  margin-bottom: 1rem;
+  font-size: 1.1rem;
+  border-bottom: 2px solid var(--color-primary);
+  padding-bottom: 0.5rem;
+}
+
+.preview-empty {
+  padding: 2rem;
+  text-align: center;
+  color: var(--color-text-secondary);
+  background-color: var(--color-background-soft);
+  border-radius: 4px;
+  border: 1px dashed var(--color-border);
+}
+
+.preview-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.preview-demo,
+.preview-problem {
+  padding: 1rem;
+  background-color: var(--color-background-soft);
+  border-radius: 4px;
+  border-left: 4px solid var(--color-primary);
+}
+
+.preview-demo h4,
+.preview-problem h4 {
+  margin-top: 0;
+  margin-bottom: 1rem;
+  font-size: 1rem;
+}
+
+.preview-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.preview-info p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.dialogue-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.dialogue-header p {
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.dialogue-display {
+  padding: 0.5rem;
+  background-color: white;
+  border-radius: 3px;
+  border-left: 3px solid #4caf50;
+  margin-bottom: 0.5rem;
+}
+
+.dialogue-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.character-name {
+  font-weight: bold;
+  color: var(--color-text);
+}
+
+.dialogue-content {
+  font-style: italic;
+  color: var(--color-text-secondary, #555);
+  line-height: 1.4;
+}
+
+.dialogue-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.dialogue-position {
+  font-size: 0.75rem;
+  min-width: 2.5rem;
+  text-align: center;
+  color: var(--color-text-secondary);
+}
+
+.dialogue-btn {
+  padding: 0.3rem 0.5rem;
+  font-size: 0.75rem;
+  background-color: var(--color-primary);
+  color: var(--color-text);
+  border: 1px solid var(--color-primary);
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.dialogue-btn:hover:not(:disabled) {
+  background-color: var(--color-background-soft);
+}
+
+.dialogue-btn:disabled {
+  background-color: var(--color-background-soft);
+  border-color: var(--color-border);
+  color: var(--color-text-secondary);
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.no-dialogue {
+  color: var(--color-text-secondary, #999);
+  font-style: italic;
+}
+
+.dialogue-preview {
+  display: block;
+  padding: 0.5rem;
+  background-color: white;
+  border-radius: 3px;
+  border-left: 3px solid #4caf50;
+  margin-top: 0.25rem;
+  font-style: italic;
+}
+
+.description-preview {
+  padding: 0.5rem;
+  background-color: white;
+  border-radius: 3px;
+  border-left: 3px solid #2196f3;
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+.preview-board {
+  padding: 1rem;
+  background-color: var(--color-background-soft);
+  border-radius: 4px;
+}
+
+.preview-board h5 {
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.board-container {
+  display: flex;
+  justify-content: center;
+  padding: 0.5rem;
+  background-color: white;
+  border-radius: 3px;
+  border: 1px solid var(--color-border);
+}
+</style>

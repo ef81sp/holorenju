@@ -7,6 +7,7 @@ import ScenarioListPage from "./pages/ScenarioListPage.vue";
 import ScenarioPlayer from "./scenarios/ScenarioPlayer.vue";
 // oxlint-disable-next-line consistent-type-imports
 import ConfirmDialog from "./common/ConfirmDialog.vue";
+import ScenarioEditor from "@/editor/components/ScenarioEditor.vue";
 
 const appStore = useAppStore();
 const confirmDialogRef = ref<InstanceType<typeof ConfirmDialog> | null>(null);
@@ -90,6 +91,7 @@ onUnmounted(() => {
         v-else-if="currentScene === 'scenarioPlay' && selectedScenarioId"
         :scenario-id="selectedScenarioId"
       />
+      <ScenarioEditor v-else-if="currentScene === 'editor'" />
     </Transition>
   </div>
 

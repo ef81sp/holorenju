@@ -1,6 +1,11 @@
 import { defineStore } from "pinia";
 
-export type Scene = "menu" | "difficulty" | "scenarioList" | "scenarioPlay";
+export type Scene =
+  | "menu"
+  | "difficulty"
+  | "scenarioList"
+  | "scenarioPlay"
+  | "editor";
 export type Mode = "training" | "cpu";
 export type Difficulty = "beginner" | "intermediate" | "advanced";
 export type TransitionDirection = "forward" | "back";
@@ -85,6 +90,12 @@ export const useAppStore = defineStore("app", {
       this.transitionDirection = "back";
       this.scene = "scenarioList";
       this.selectedScenarioId = null;
+      this.pushHistory();
+    },
+
+    goToEditor() {
+      this.transitionDirection = "forward";
+      this.scene = "editor";
       this.pushHistory();
     },
 

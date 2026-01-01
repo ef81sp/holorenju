@@ -39,7 +39,8 @@
     "max-params": "off",
     "no-plusplus": "off",
     "no-continue": "off",
-    "sort-imports": "off"
+    "sort-imports": "off",
+    "no-undefined": "off"
   },
   "overrides": [
     {

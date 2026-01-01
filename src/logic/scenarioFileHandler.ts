@@ -1,0 +1,289 @@
+/**
+ * シナリオファイルハンドラー
+ *
+ * JSONファイルの読み込み・保存・バリデーション
+ */
+
+import type { Scenario, DemoSection, ProblemSection } from "../types/scenario";
+
+import { parseScenario, validateBoardState } from "./scenarioParser";
+
+// ===== ファイル読み込み =====
+
+/**
+ * JSONファイルを読み込んでScenario型にパース
+ * @throws {Error} パース失敗時
+ */
+export async function loadScenarioFromFile(file: File): Promise<Scenario> {
+  const text = await file.text();
+  const data = JSON.parse(text);
+  return parseScenario(data);
+}
+
+/**
+ * JSONテキストをScenario型にパース
+ * @throws {Error} パース失敗時
+ */
+export function parseScenarioFromText(text: string): Scenario {
+  const data = JSON.parse(text);
+  return parseScenario(data);
+}
+
+// ===== ファイル保存 =====
+
+/**
+ * ScenarioをJSONファイルとしてダウンロード
+ */
+export function downloadScenarioAsJSON(scenario: Scenario): void {
+  const json = JSON.stringify(scenario, null, 2);
+  const blob = new Blob([json], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${scenario.id}.json`;
+  link.click();
+
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * ScenarioをJSONテキストに変換
+ */
+export function scenarioToJSON(scenario: Scenario): string {
+  return JSON.stringify(scenario, null, 2);
+}
+
+// ===== バリデーション結果 =====
+
+export interface ValidationResult {
+  isValid: boolean;
+  errors: ValidationError[];
+}
+
+export interface ValidationError {
+  type: "parse" | "board";
+  path: string;
+  message: string;
+}
+
+/**
+ * シナリオ全体をバリデーション
+ * @returns バリデーション結果
+ */
+export function validateScenarioCompletely(data: unknown): ValidationResult {
+  const errors: ValidationError[] = [];
+
+  // 1. パース時のエラーをキャッチ
+  let scenario: Scenario | null = null;
+  try {
+    scenario = parseScenario(data);
+  } catch (error) {
+    return {
+      isValid: false,
+      errors: [
+        {
+          type: "parse",
+          path: "root",
+          message: error instanceof Error ? error.message : "Unknown error",
+        },
+      ],
+    };
+  }
+
+  if (!scenario) {
+    return {
+      isValid: false,
+      errors: [],
+    };
+  }
+
+  // 2. 盤面のバリデーション
+  for (let sectionIndex = 0; sectionIndex < scenario.sections.length; sectionIndex += 1) {
+    const section = scenario.sections[sectionIndex];
+    const boardErrors = validateBoardState(section.initialBoard);
+    for (const msg of boardErrors) {
+      errors.push({
+        type: "board",
+        path: `sections[${sectionIndex}].initialBoard`,
+        message: msg,
+      });
+    }
+  }
+
+  return {
+    isValid: errors.length === 0,
+    errors,
+  };
+}
+
+// ===== テンプレート =====
+
+/**
+ * 空の新規シナリオテンプレート
+ */
+/**
+ * 自動採番でシナリオIDを生成
+ */
+export function generateScenarioId(): string {
+  const timestamp = Date.now().toString(36); // タイムスタンプを36進数に変換
+  const random = Math.random().toString(36).substring(2, 7); // ランダムな文字を5文字
+  return `scenario_${timestamp}_${random}`;
+}
+
+export function createEmptyScenario(): Scenario {
+  return {
+    id: generateScenarioId(),
+    title: "新しいシナリオ",
+    difficulty: "beginner",
+    description: "",
+    objectives: [],
+    sections: [],
+  };
+}
+
+/**
+ * 空のデモセクションテンプレート
+ */
+export function createEmptyDemoSection(): DemoSection {
+  return {
+    id: "demo_section",
+    type: "demo" as const,
+    title: "デモセクション",
+    initialBoard: Array(15).fill("e".repeat(15)),
+    dialogues: [],
+  };
+}
+
+/**
+ * 空の問題セクションテンプレート
+ */
+export function createEmptyProblemSection(): ProblemSection {
+  return {
+    id: "problem_section",
+    type: "problem" as const,
+    title: "問題セクション",
+    initialBoard: Array(15).fill("e".repeat(15)),
+    description: "",
+    successConditions: [
+      {
+        type: "position" as const,
+        positions: [],
+        color: "black" as const,
+      },
+    ],
+    feedback: {
+      success: [{ character: "", text: "" }],
+      failure: [{ character: "", text: "" }],
+    },
+  };
+}
+
+// ===== 盤面変換 =====
+
+/**
+ * 盤面文字列配列をASCII表示（デバッグ用）
+ */
+export function boardToASCII(board: string[]): string {
+  const header = `  ${Array.from({ length: 15 }, (_, i) => i.toString().padStart(2, " ")).join("")}`;
+  const lines = [header];
+
+  board.forEach((row, i) => {
+    const chars = row.split("").map((c) => {
+      switch (c) {
+        case "e":
+          return " .";
+        case "x":
+          return " ●";
+        case "o":
+          return " ○";
+        default:
+          return " ?";
+      }
+    });
+    lines.push(i.toString().padStart(2, " ") + chars.join(""));
+  });
+
+  return lines.join("\n");
+}
+
+/**
+ * 盤面配列を編集可能な2次元配列に変換
+ */
+/**
+ * 盤面文字列配列を2次元配列に変換
+ */
+export function boardStringToArray(board: string[]): string[][] {
+  return board.map((row) => row.split(""));
+}
+
+/**
+ * 盤面文字列配列をBoardStateに変換（e='null', x='black', o='white'）
+ */
+export function boardStringToBoardState(
+  board: string[],
+): ("black" | "white" | null)[][] {
+  return board.map((row) =>
+    row.split("").map((char) => {
+      if (char === "x") {
+        return "black";
+      }
+      if (char === "o") {
+        return "white";
+      }
+      return null;
+    }),
+  );
+}
+
+/**
+ * 編集済み2次元配列を盤面文字列配列に変換
+ */
+export function boardArrayToString(board: string[][]): string[] {
+  return board.map((row) => row.join(""));
+}
+
+// ===== ボード座標ユーティリティ =====
+
+export interface BoardCell {
+  row: number;
+  col: number;
+}
+
+/**
+ * セルの内容を取得
+ */
+export function getBoardCell(board: string[], cell: BoardCell): string {
+  return board[cell.row]?.[cell.col] ?? "e";
+}
+
+/**
+ * セルの内容を設定（新しい盤面を返す）
+ */
+export function setBoardCell(
+  board: string[],
+  cell: BoardCell,
+  value: "e" | "x" | "o",
+): string[] {
+  const newBoard = [...board];
+  const row = newBoard[cell.row].split("");
+  row[cell.col] = value;
+  newBoard[cell.row] = row.join("");
+  return newBoard;
+}
+
+/**
+ * セルを次の状態に循環させる（e → x → o → e）
+ */
+export function cycleBoardCell(board: string[], cell: BoardCell): string[] {
+  const current = getBoardCell(board, cell);
+  let next: "e" | "x" | "o" = "e";
+  if (current === "e") {
+    next = "x";
+  } else if (current === "x") {
+    next = "o";
+  } else {
+    next = "e";
+  }
+  return setBoardCell(board, cell, next);
+}

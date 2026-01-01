@@ -13,7 +13,7 @@ const emit = defineEmits<{
   select: [scenarioId: string];
 }>();
 
-const handleStart = () => {
+const handleStart = (): void => {
   emit("select", props.id);
 };
 </script>
@@ -122,7 +122,7 @@ const handleStart = () => {
   align-self: flex-end;
   padding: var(--size-8) var(--size-16);
   background: var(--gradient-main);
-  color: white;
+  color: var(--color-text-primary);
   border: none;
   border-radius: var(--size-6);
   font-size: var(--size-12);

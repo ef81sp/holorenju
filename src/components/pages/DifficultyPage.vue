@@ -9,7 +9,9 @@ const appStore = useAppStore();
 const progressStore = useProgressStore();
 
 // 各難易度の進捗計算
-const getProgress = (difficulty: Difficulty) => {
+const getProgress = (
+  difficulty: Difficulty,
+): { completed: number; total: number; rate: number } => {
   const difficultyData = scenariosIndex.difficulties[difficulty];
   const total = difficultyData.scenarios.length;
   const completed = difficultyData.scenarios.filter((scenario) =>
@@ -23,11 +25,11 @@ const beginnerProgress = computed(() => getProgress("beginner"));
 const intermediateProgress = computed(() => getProgress("intermediate"));
 const advancedProgress = computed(() => getProgress("advanced"));
 
-const handleSelectDifficulty = (difficulty: Difficulty) => {
+const handleSelectDifficulty = (difficulty: Difficulty): void => {
   appStore.selectDifficulty(difficulty);
 };
 
-const handleBack = () => {
+const handleBack = (): void => {
   appStore.goToMenu();
 };
 </script>
@@ -56,10 +58,8 @@ const handleBack = () => {
             </p>
           </div>
           <div class="progress-info">
-            <span class="progress-text"
-              >{{ beginnerProgress.completed }} /
-              {{ beginnerProgress.total }}</span
-            >
+            <span class="progress-text">{{ beginnerProgress.completed }} /
+              {{ beginnerProgress.total }}</span>
             <progress
               class="progress-bar"
               :value="beginnerProgress.rate"
@@ -80,10 +80,8 @@ const handleBack = () => {
             <p class="button-description">基本的な戦術や考え方を学びます</p>
           </div>
           <div class="progress-info">
-            <span class="progress-text"
-              >{{ intermediateProgress.completed }} /
-              {{ intermediateProgress.total }}</span
-            >
+            <span class="progress-text">{{ intermediateProgress.completed }} /
+              {{ intermediateProgress.total }}</span>
             <progress
               class="progress-bar"
               :value="intermediateProgress.rate"
@@ -104,10 +102,8 @@ const handleBack = () => {
             <p class="button-description">実戦的な高度なテクニックを学びます</p>
           </div>
           <div class="progress-info">
-            <span class="progress-text"
-              >{{ advancedProgress.completed }} /
-              {{ advancedProgress.total }}</span
-            >
+            <span class="progress-text">{{ advancedProgress.completed }} /
+              {{ advancedProgress.total }}</span>
             <progress
               class="progress-bar"
               :value="advancedProgress.rate"

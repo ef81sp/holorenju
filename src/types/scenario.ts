@@ -7,33 +7,152 @@ import type { Position } from "./game";
 // シナリオの難易度
 type ScenarioDifficulty = "beginner" | "intermediate" | "advanced";
 
-// シナリオのステップ
-interface ScenarioStep {
+// ===== ベースセクション =====
+
+interface BaseSection {
   id: string;
+  type: "demo" | "problem";
   title: string;
-  description: string;
-  initialBoard: string[];
-  expectedMoves?: Position[];
-  hint?: string;
-  dialogs?: Record<string, unknown>;
 }
 
-// シナリオ
+type Section = DemoSection | ProblemSection;
+
+// ===== デモセクション =====
+
+interface DemoSection extends BaseSection {
+  type: "demo";
+  initialBoard: string[];
+  dialogues: DemoDialogue[];
+}
+
+interface DemoDialogue {
+  id: string;
+  character: string;
+  text: string;
+  emotion?: string;
+  boardAction?: BoardAction;
+}
+
+// ===== 盤面操作 =====
+
+type BoardAction =
+  | PlaceMoveAction
+  | RemoveMoveAction
+  | SetBoardAction
+  | MarkAction
+  | LineAction;
+
+interface PlaceMoveAction {
+  type: "place";
+  position: Position;
+  color: "black" | "white";
+  highlight?: boolean;
+}
+
+interface RemoveMoveAction {
+  type: "remove";
+  position: Position;
+}
+
+interface SetBoardAction {
+  type: "setBoard";
+  board: string[];
+}
+
+interface MarkAction {
+  type: "mark";
+  positions: Position[];
+  markType: "circle" | "cross" | "arrow";
+  label?: string;
+}
+
+interface LineAction {
+  type: "line";
+  fromPosition: Position;
+  toPosition: Position;
+  action: "draw" | "remove";
+  style?: "solid" | "dashed";
+}
+
+// ===== 問題セクション =====
+
+interface ProblemSection extends BaseSection {
+  type: "problem";
+  initialBoard: string[];
+  description: string;
+  successConditions: SuccessCondition[];
+  hints?: Hint[];
+  feedback: ProblemFeedback;
+}
+
+type SuccessCondition =
+  | PositionCondition
+  | PatternCondition
+  | SequenceCondition;
+
+interface PositionCondition {
+  type: "position";
+  positions: Position[];
+  color: "black" | "white";
+}
+
+interface PatternCondition {
+  type: "pattern";
+  pattern: string;
+  color: "black" | "white";
+}
+
+interface SequenceCondition {
+  type: "sequence";
+  moves: (Position & { color: "black" | "white" })[];
+  strict: boolean;
+}
+
+interface Hint {
+  level: number;
+  dialogue?: {
+    character: string;
+    text: string;
+    emotion?: string;
+  };
+  marks?: {
+    positions: Position[];
+    markType: "circle" | "cross" | "arrow";
+  };
+}
+
+interface ProblemFeedback {
+  success: DialogueLine[];
+  failure: DialogueLine[];
+  progress?: DialogueLine[];
+}
+
+interface DialogueLine {
+  character: string;
+  text: string;
+  emotion?: string;
+}
+
+// ===== シナリオ全体 =====
+
 interface Scenario {
   id: string;
   title: string;
   difficulty: ScenarioDifficulty;
   description: string;
   objectives: string[];
-  steps: ScenarioStep[];
-  dialogs?: Record<string, unknown>;
+  sections: Section[];
 }
 
-// シナリオの進行状態
+// ===== 進行状況 =====
+
 interface ScenarioProgress {
   scenarioId: string;
-  currentStepIndex: number;
-  completedSteps: string[];
+  currentSectionIndex: number;
+  completedSections: string[];
+  currentDialogueIndex?: number;
+  attempts?: Record<string, number>;
+  hintsUsed?: Record<string, number>;
   isCompleted: boolean;
   score: number;
 }
@@ -49,8 +168,26 @@ interface LearningProgress {
 
 export type {
   ScenarioDifficulty,
-  ScenarioStep,
+  Section,
+  DemoSection,
+  DemoDialogue,
+  BoardAction,
+  PlaceMoveAction,
+  RemoveMoveAction,
+  SetBoardAction,
+  MarkAction,
+  LineAction,
+  ProblemSection,
+  SuccessCondition,
+  PositionCondition,
+  PatternCondition,
+  SequenceCondition,
+  Hint,
+  ProblemFeedback,
+  DialogueLine,
   Scenario,
   ScenarioProgress,
   LearningProgress,
+  BaseSection,
+  Position,
 };

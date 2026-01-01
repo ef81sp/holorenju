@@ -4,14 +4,14 @@ import { useElementSize } from "@vueuse/core";
 
 import CharacterDialog from "@/components/character/CharacterDialog.vue";
 import RenjuBoard from "@/components/game/RenjuBoard.vue";
-import { parseInitialBoard } from "@/logic/boardParser";
+import { boardStringToBoardState } from "@/logic/scenarioFileHandler";
 import { useAppStore } from "@/stores/appStore";
 import { useDialogStore } from "@/stores/dialogStore";
 import { useGameStore } from "@/stores/gameStore";
 import { useProgressStore } from "@/stores/progressStore";
 import scenariosIndex from "@/data/scenarios/index.json";
 
-import type { Scenario, ScenarioStep } from "@/types/scenario";
+import type { Scenario, Section } from "@/types/scenario";
 import type { DialogMessage } from "@/types/character";
 import type { Position } from "@/types/game";
 
@@ -30,8 +30,8 @@ const progressStore = useProgressStore();
 
 // State
 const scenario = ref<Scenario | null>(null);
-const currentStepIndex = ref(0);
-const isStepCompleted = ref(false);
+const currentSectionIndex = ref(0);
+const isSectionCompleted = ref(false);
 const showHint = ref(false);
 
 // 盤フレームサイズ計測用
@@ -45,21 +45,21 @@ const { width: boardFrameWidth, height: boardFrameHeight } = useElementSize(
 );
 
 // Computed
-const currentStep = computed<ScenarioStep | null>(() => {
+const currentSection = computed<Section | null>(() => {
   if (!scenario.value) {
     return null;
   }
-  return scenario.value.steps[currentStepIndex.value] ?? null;
+  return scenario.value.sections[currentSectionIndex.value] ?? null;
 });
 
-const isLastStep = computed(() => {
+const isLastSection = computed(() => {
   if (!scenario.value) {
     return false;
   }
-  return currentStepIndex.value >= scenario.value.steps.length - 1;
+  return currentSectionIndex.value >= scenario.value.sections.length - 1;
 });
 
-const canProceed = computed(() => isStepCompleted.value);
+const canProceed = computed(() => isSectionCompleted.value);
 
 const boardSize = computed(() => {
   // 余白とgapを考慮したサイズ計算
@@ -68,13 +68,13 @@ const boardSize = computed(() => {
 
   // 初期値が0の場合は計算しない（最小サイズを返す）
   if (availableWidth === 0 || availableHeight === 0) {
-    console.log("[ScenarioPlayer] boardSize: availableWidth or Height is 0");
+    console.warn("[ScenarioPlayer] boardSize: availableWidth or Height is 0");
     return 400; // 最小デフォルトサイズ
   }
 
   const calculatedSize = Math.min(availableWidth, availableHeight);
 
-  console.log("[ScenarioPlayer] boardSize computed:", {
+  console.warn("[ScenarioPlayer] boardSize computed:", {
     availableWidth,
     availableHeight,
     calculatedSize,
@@ -111,13 +111,11 @@ const loadScenario = async (): Promise<void> => {
     progressStore.startScenario(props.scenarioId);
 
     // 初期盤面をセット
-    if (currentStep.value) {
-      const { board, expectedMoves } = parseInitialBoard(
-        currentStep.value.initialBoard,
+    if (currentSection.value) {
+      const boardState = boardStringToBoardState(
+        currentSection.value.initialBoard,
       );
-      currentStep.value.expectedMoves = expectedMoves;
-      gameStore.setBoard(board);
-      showIntroDialog();
+      gameStore.setBoard(boardState);
     }
   } catch (error) {
     console.error("Failed to load scenario:", props.scenarioId, error);
@@ -125,19 +123,27 @@ const loadScenario = async (): Promise<void> => {
 };
 
 const showIntroDialog = (): void => {
-  if (!scenario.value?.dialogs) {
-    return;
-  }
-
-  const { intro } = scenario.value.dialogs as Record<string, unknown>;
-
-  if (intro && Array.isArray(intro) && intro.length > 0) {
-    dialogStore.showMessage(intro[0] as DialogMessage);
+  // 新しい構造では、デモセクションのダイアログから取得
+  const firstSection = scenario.value?.sections[0];
+  if (firstSection && firstSection.type === "demo") {
+    const [firstDialogue] = firstSection.dialogues;
+    if (firstDialogue) {
+      dialogStore.showMessage({
+        character: firstDialogue.character,
+        text: firstDialogue.text,
+        emotion: firstDialogue.emotion,
+      } as DialogMessage);
+    }
   }
 };
 
 const handlePlaceStone = (position: Position): void => {
-  if (isStepCompleted.value) {
+  if (isSectionCompleted.value) {
+    return;
+  }
+
+  // 新構造では問題セクションのみ実装
+  if (!currentSection.value || currentSection.value.type !== "problem") {
     return;
   }
 
@@ -151,105 +157,84 @@ const handlePlaceStone = (position: Position): void => {
     return;
   }
 
-  // 正解判定
-  if (
-    currentStep.value?.expectedMoves &&
-    currentStep.value.expectedMoves.length > 0
-  ) {
-    const isCorrect = currentStep.value.expectedMoves.some(
-      (expected) =>
-        position.row === expected.row && position.col === expected.col,
-    );
-    if (isCorrect) {
-      handleCorrectMove();
-    } else {
-      handleIncorrectMove();
-    }
-  }
+  // 成功条件の判定ロジックは今後の実装対象
+  handleIncorrectMove();
 };
 
 const handleCorrectMove = (): void => {
-  isStepCompleted.value = true;
+  isSectionCompleted.value = true;
   showHint.value = false;
 
   // 正解のフィードバックを表示
-  const correctMessages = currentStep.value?.dialogs?.correct as
-    | DialogMessage[]
-    | undefined;
-  if (correctMessages && correctMessages.length > 0) {
-    dialogStore.showMessage(correctMessages[0]);
+  if (currentSection.value && currentSection.value.type === "problem") {
+    if (currentSection.value.feedback.success.length > 0) {
+      const [msg] = currentSection.value.feedback.success;
+      dialogStore.showMessage({
+        character: msg.character,
+        text: msg.text,
+        emotion: msg.emotion,
+      } as DialogMessage);
+    }
   }
 
   // 進度を記録
-  if (currentStep.value) {
-    progressStore.completeStep(props.scenarioId, currentStep.value.id, 100);
+  if (currentSection.value) {
+    progressStore.completeSection(
+      props.scenarioId,
+      currentSection.value.id,
+      100,
+    );
   }
 };
 
 const handleIncorrectMove = (): void => {
   // 不正解のフィードバックを表示
-  const incorrectMessages = currentStep.value?.dialogs?.incorrect as
-    | DialogMessage[]
-    | undefined;
-  if (incorrectMessages && incorrectMessages.length > 0) {
-    dialogStore.showMessage(incorrectMessages[0]);
+  if (currentSection.value && currentSection.value.type === "problem") {
+    if (currentSection.value.feedback.failure.length > 0) {
+      const [msg] = currentSection.value.feedback.failure;
+      dialogStore.showMessage({
+        character: msg.character,
+        text: msg.text,
+        emotion: msg.emotion,
+      } as DialogMessage);
+    }
   }
 
   // 盤面をリセット
-  if (currentStep.value) {
-    const { board, expectedMoves } = parseInitialBoard(
-      currentStep.value.initialBoard,
+  if (currentSection.value) {
+    const boardState = boardStringToBoardState(
+      currentSection.value.initialBoard,
     );
-    currentStep.value.expectedMoves = expectedMoves;
-    gameStore.setBoard(board);
+    gameStore.setBoard(boardState);
   }
 };
 
 const showForbiddenFeedback = (): void => {
-  if (!scenario.value?.dialogs) {
-    return;
-  }
-
-  const forbidden = scenario.value.dialogs.forbidden_detected as
-    | DialogMessage[]
-    | undefined;
-
-  if (forbidden && forbidden.length > 0) {
-    dialogStore.showMessage(forbidden[0]);
-  }
-
-  // 盤面をリセット
-  if (currentStep.value) {
-    const { board, expectedMoves } = parseInitialBoard(
-      currentStep.value.initialBoard,
-    );
-    currentStep.value.expectedMoves = expectedMoves;
-    gameStore.setBoard(board);
-  }
+  // 禁じ手のフィードバック（新構造では未実装）
+  // 禁じ手の応答はシナリオ拡張時に追加予定
 };
 
 const toggleHint = (): void => {
   showHint.value = !showHint.value;
 };
 
-const nextStep = (): void => {
+const nextSection = (): void => {
   if (!canProceed.value) {
     return;
   }
 
-  if (isLastStep.value) {
+  if (isLastSection.value) {
     completeScenario();
   } else {
-    currentStepIndex.value += 1;
-    isStepCompleted.value = false;
+    currentSectionIndex.value += 1;
+    isSectionCompleted.value = false;
     showHint.value = false;
 
-    if (currentStep.value) {
-      const { board, expectedMoves } = parseInitialBoard(
-        currentStep.value.initialBoard,
+    if (currentSection.value) {
+      const boardState = boardStringToBoardState(
+        currentSection.value.initialBoard,
       );
-      currentStep.value.expectedMoves = expectedMoves;
-      gameStore.setBoard(board);
+      gameStore.setBoard(boardState);
     }
   }
 };
@@ -268,7 +253,7 @@ onMounted(async () => {
   loadScenario();
 
   await nextTick();
-  console.log("[ScenarioPlayer] Initial size:", {
+  console.warn("[ScenarioPlayer] Initial size:", {
     width: boardFrameWidth.value,
     height: boardFrameHeight.value,
   });
@@ -291,8 +276,8 @@ onMounted(async () => {
       <div class="scenario-info">
         <h2>{{ scenario.title }}</h2>
         <p>
-          {{ currentStep?.title }} ({{ currentStepIndex + 1 }}/{{
-            scenario.steps.length
+          {{ currentSection?.id }} ({{ currentSectionIndex + 1 }}/{{
+            scenario.sections.length
           }})
         </p>
       </div>
@@ -306,7 +291,7 @@ onMounted(async () => {
       <div class="board-wrapper">
         <RenjuBoard
           :board-state="gameStore.board"
-          :disabled="isStepCompleted"
+          :disabled="isSectionCompleted"
           :stage-size="boardSize"
           @place-stone="handlePlaceStone"
         />
@@ -314,10 +299,15 @@ onMounted(async () => {
 
       <!-- ヒント表示 -->
       <div
-        v-if="showHint && currentStep?.hint"
+        v-if="
+          showHint &&
+            currentSection?.type === 'problem' &&
+            currentSection.hints &&
+            currentSection.hints.length > 0
+        "
         class="hint-box"
       >
-        💡 {{ currentStep.hint }}
+        💡 {{ currentSection.hints[0] }}
       </div>
     </div>
 
@@ -325,14 +315,16 @@ onMounted(async () => {
     <div class="info-section">
       <!-- 説明 -->
       <div class="step-description">
-        <h3>{{ currentStep?.title }}</h3>
-        <p>{{ currentStep?.description }}</p>
+        <h3>{{ currentSection?.id }}</h3>
+        <p v-if="currentSection?.type === 'problem'">
+          {{ currentSection.description }}
+        </p>
       </div>
 
       <!-- コントロール -->
       <div class="controls">
         <button
-          v-if="!isStepCompleted"
+          v-if="!isSectionCompleted"
           class="hint-button"
           @click="toggleHint"
         >
@@ -342,9 +334,9 @@ onMounted(async () => {
         <button
           v-if="canProceed"
           class="next-button"
-          @click="nextStep"
+          @click="nextSection"
         >
-          {{ isLastStep ? "シナリオ完了" : "次のステップへ" }}
+          {{ isLastSection ? "シナリオ完了" : "次のセクションへ" }}
         </button>
       </div>
     </div>
@@ -491,7 +483,7 @@ onMounted(async () => {
 
 .hint-button {
   background: var(--color-fubuki-primary);
-  color: white;
+  color: var(--color-text-primary);
 }
 
 .hint-button:hover {
@@ -501,7 +493,7 @@ onMounted(async () => {
 
 .next-button {
   background: var(--color-holo-purple);
-  color: white;
+  color: var(--color-text-primary);
 }
 
 .next-button:hover {

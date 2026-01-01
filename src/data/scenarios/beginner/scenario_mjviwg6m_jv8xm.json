@@ -1,0 +1,109 @@
+{
+  "id": "scenario_mjviwg6m_jv8xm",
+  "title": "連珠って？",
+  "difficulty": "beginner",
+  "description": "五目並べとの違い",
+  "objectives": [],
+  "sections": [
+    {
+      "id": "demo_section",
+      "type": "demo",
+      "title": "デモセクション",
+      "description": "連珠と五目並べの違いを見てみましょう",
+      "initialBoard": [
+        "eeeeeeeeeeeeeee",
+        "eeeeeeeeeeeeeee",
+        "eeeeeeeeeeeeeee",
+        "eeeeeeeeeeeeeee",
+        "eeeeeeeeeeeeeee",
+        "eeeeeeeeeeeeeee",
+        "eeeeeeeexeeeeee",
+        "eeeeeeexeeeeeee",
+        "eeeeeexeeeeeeee",
+        "eeeeeeeeeeeeeee",
+        "eeeeeeeeeeeeeee",
+        "eeeeeeeeeeeeeee",
+        "eeeeeeeeeeeeeee",
+        "eeeeeeeeeeeeeee",
+        "eeeeeeeeeeeeeee"
+      ],
+      "dialogues": [
+        {
+          "id": "d-1767276711722",
+          "character": "fubuki",
+          "text": "こんこんきーつね！",
+          "emotion": "normal"
+        },
+        {
+          "id": "d-1767276725871",
+          "character": "fubuki",
+          "text": "石を置いちゃうよ",
+          "emotion": "normal",
+          "boardAction": {
+            "type": "place",
+            "position": {
+              "row": 5,
+              "col": 9
+            },
+            "color": "black"
+          }
+        }
+      ]
+    },
+    {
+      "id": "problem_section",
+      "type": "problem",
+      "title": "問題セクション",
+      "initialBoard": [
+        "eeeeeeeeeeeeeee",
+        "eeeeeeeeeeeeeee",
+        "eeeeeeeeeeeeeee",
+        "eeeeeeeeeeeeeee",
+        "eeeeeeeeeeeeeee",
+        "eeeeeeeeeeeeeee",
+        "eeeeeeeexeeeeee",
+        "eeeeeeexeeeeeee",
+        "eeeeeexeeeeeeee",
+        "eeeeeeeeeeeeeee",
+        "eeeeeeeeeeeeeee",
+        "eeeeeeeeeeeeeee",
+        "eeeeeeeeeeeeeee",
+        "eeeeeeeeeeeeeee",
+        "eeeeeeeeeeeeeee"
+      ],
+      "description": "棒四を作ってみましょう",
+      "successConditions": [
+        {
+          "type": "position",
+          "positions": [
+            {
+              "row": 5,
+              "col": 9
+            },
+            {
+              "row": 9,
+              "col": 5
+            }
+          ],
+          "color": "black"
+        }
+      ],
+      "feedback": {
+        "success": [
+          {
+            "character": "fubuki",
+            "text": "ないすー！",
+            "emotion": "normal"
+          }
+        ],
+        "failure": [
+          {
+            "character": "miko",
+            "text": "お゙お゙お゙……",
+            "emotion": "surprised"
+          }
+        ]
+      }
+    }
+  ]
+}

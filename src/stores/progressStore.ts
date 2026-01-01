@@ -38,8 +38,8 @@ export const useProgressStore = defineStore("progress", () => {
 
     if (!scenarioProgress.value.has(scenarioId)) {
       scenarioProgress.value.set(scenarioId, {
-        completedSteps: [],
-        currentStepIndex: 0,
+        completedSections: [],
+        currentSectionIndex: 0,
         isCompleted: false,
         scenarioId,
         score: 0,
@@ -47,9 +47,9 @@ export const useProgressStore = defineStore("progress", () => {
     }
   }
 
-  function completeStep(
+  function completeSection(
     scenarioId: string,
-    stepId: string,
+    sectionId: string,
     score: number,
   ): void {
     const progress = scenarioProgress.value.get(scenarioId);
@@ -57,8 +57,8 @@ export const useProgressStore = defineStore("progress", () => {
       return;
     }
 
-    if (!progress.completedSteps.includes(stepId)) {
-      progress.completedSteps.push(stepId);
+    if (!progress.completedSections.includes(sectionId)) {
+      progress.completedSections.push(sectionId);
       progress.score += score;
       totalScore.value += score;
     }
@@ -156,7 +156,7 @@ export const useProgressStore = defineStore("progress", () => {
     completionRate,
     // Actions
     startScenario,
-    completeStep,
+    completeSection,
     completeScenario,
     addAchievement,
     saveProgress,

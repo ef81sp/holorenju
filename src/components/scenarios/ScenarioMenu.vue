@@ -255,7 +255,7 @@ const getDifficultyLabel = (difficulty: string): string => {
 .start-button {
   padding: var(--size-10) var(--size-20);
   background: linear-gradient(135deg, #5fdeec 0%, #46c0ef 100%);
-  color: white;
+  color: var(--color-text-primary);
   border: none;
   border-radius: 8px;
   font-size: var(--size-14);

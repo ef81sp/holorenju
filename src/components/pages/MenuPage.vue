@@ -3,13 +3,17 @@ import { useAppStore } from "@/stores/appStore";
 import PageHeader from "@/components/common/PageHeader.vue";
 const appStore = useAppStore();
 
-const handleSelectTraining = () => {
+const handleSelectTraining = (): void => {
   appStore.selectMode("training");
 };
 
-const handleSelectCPU = () => {
+const handleSelectCPU = (): void => {
   // CPU対戦は未実装
   appStore.selectMode("cpu");
+};
+
+const handleSelectEditor = (): void => {
+  appStore.goToEditor();
 };
 </script>
 
@@ -39,6 +43,17 @@ const handleSelectCPU = () => {
             <p class="button-description">今後実装予定</p>
           </div>
           <span class="badge">未実装</span>
+        </button>
+        <button
+          class="menu-button"
+          style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%)"
+          @click="handleSelectEditor"
+        >
+          <div class="button-icon">⚙️</div>
+          <div class="button-text-area">
+            <span class="button-text">シナリオ編集</span>
+            <p class="button-description">シナリオを作成・編集</p>
+          </div>
         </button>
       </div>
     </div>
@@ -116,12 +131,12 @@ const handleSelectCPU = () => {
 .button-text {
   font-size: var(--size-20);
   font-weight: bold;
-  color: white;
+  color: var(--color-text-primary);
 }
 
 .button-description {
   font-size: var(--size-12);
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--color-text-secondary);
   margin: 0;
   padding: 0;
   word-break: auto-phrase;

@@ -3,7 +3,7 @@
  */
 
 // キャラクターの種類
-type CharacterType = "fubuki" | "miko";
+type CharacterType = "fubuki" | "miko" | "narration";
 
 // キャラクターの表情
 type Emotion = "normal" | "happy" | "thinking" | "surprised" | "explaining";

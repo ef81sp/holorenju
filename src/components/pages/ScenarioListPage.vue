@@ -40,25 +40,25 @@ const displayedScenarios = computed(() => {
 });
 
 // ページ変更
-const goToPage = (page: number) => {
+const goToPage = (page: number): void => {
   if (page < 0 || page >= totalPages.value) {
     return;
   }
   appStore.setPage(page);
 };
 
-const nextPage = () => {
+const nextPage = (): void => {
   direction.value = "next";
   goToPage(currentPage.value + 1);
 };
 
-const prevPage = () => {
+const prevPage = (): void => {
   direction.value = "prev";
   goToPage(currentPage.value - 1);
 };
 
 // キーボード操作
-const handleKeyDown = (e: KeyboardEvent) => {
+const handleKeyDown = (e: KeyboardEvent): void => {
   if (e.key === "ArrowLeft") {
     prevPage();
   } else if (e.key === "ArrowRight") {
@@ -70,11 +70,11 @@ const handleKeyDown = (e: KeyboardEvent) => {
 const touchStartX = ref(0);
 const touchEndX = ref(0);
 
-const handleTouchStart = (e: TouchEvent) => {
+const handleTouchStart = (e: TouchEvent): void => {
   touchStartX.value = e.touches[0].clientX;
 };
 
-const handleTouchEnd = (e: TouchEvent) => {
+const handleTouchEnd = (e: TouchEvent): void => {
   touchEndX.value = e.changedTouches[0].clientX;
   const diff = touchStartX.value - touchEndX.value;
 
@@ -90,7 +90,7 @@ const handleTouchEnd = (e: TouchEvent) => {
 };
 
 // ホイール操作
-const handleWheel = (e: WheelEvent) => {
+const handleWheel = (e: WheelEvent): void => {
   e.preventDefault();
   if (e.deltaY > 0) {
     nextPage();
@@ -108,17 +108,17 @@ onUnmounted(() => {
 });
 
 // シナリオ選択
-const handleSelectScenario = (scenarioId: string) => {
+const handleSelectScenario = (scenarioId: string): void => {
   appStore.selectScenario(scenarioId);
 };
 
 // 戻る
-const handleBack = () => {
+const handleBack = (): void => {
   appStore.goToDifficulty();
 };
 
 // クリア状態チェック
-const isCompleted = (scenarioId: string) =>
+const isCompleted = (scenarioId: string): boolean =>
   progressStore.completedScenarios.includes(scenarioId);
 </script>
 

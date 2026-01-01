@@ -1,0 +1,223 @@
+<script setup lang="ts">
+import { useEditorStore } from "@/editor/stores/editorStore";
+
+const editorStore = useEditorStore();
+
+// Methods
+const updateScenarioInfo = (key: string, value: unknown): void => {
+  editorStore.updateScenarioInfo({
+    [key]: value,
+  } as Parameters<typeof editorStore.updateScenarioInfo>[0]);
+};
+
+const addObjective = (): void => {
+  const newObjectives = [...editorStore.scenario.objectives, ""];
+  updateScenarioInfo("objectives", newObjectives);
+};
+
+const removeObjective = (index: number): void => {
+  const newObjectives = editorStore.scenario.objectives.filter(
+    (_, i) => i !== index,
+  );
+  updateScenarioInfo("objectives", newObjectives);
+};
+
+const updateObjective = (index: number, value: string): void => {
+  const newObjectives = [...editorStore.scenario.objectives];
+  newObjectives[index] = value;
+  updateScenarioInfo("objectives", newObjectives);
+};
+</script>
+
+<template>
+  <form class="scenario-form">
+    <!-- ID (自動採番、編集不可) -->
+    <div class="form-group">
+      <label for="scenario-id">ID (自動採番)</label>
+      <input
+        id="scenario-id"
+        type="text"
+        :value="editorStore.scenario.id"
+        readonly
+        class="form-input"
+        style="background-color: var(--color-bg-secondary); cursor: not-allowed"
+      >
+    </div>
+
+    <!-- Title -->
+    <div class="form-group">
+      <label for="scenario-title">タイトル</label>
+      <input
+        id="scenario-title"
+        type="text"
+        :value="editorStore.scenario.title"
+        class="form-input"
+        @input="
+          (e) =>
+            updateScenarioInfo('title', (e.target as HTMLInputElement).value)
+        "
+      >
+    </div>
+
+    <!-- Difficulty -->
+    <div class="form-group">
+      <label for="scenario-difficulty">難易度</label>
+      <select
+        id="scenario-difficulty"
+        :value="editorStore.scenario.difficulty"
+        class="form-input"
+        @change="
+          (e) =>
+            updateScenarioInfo(
+              'difficulty',
+              (e.target as HTMLSelectElement).value,
+            )
+        "
+      >
+        <option value="beginner">Beginner</option>
+        <option value="intermediate">Intermediate</option>
+        <option value="advanced">Advanced</option>
+      </select>
+    </div>
+
+    <!-- Description -->
+    <div class="form-group">
+      <label for="scenario-description">説明</label>
+      <textarea
+        id="scenario-description"
+        :value="editorStore.scenario.description"
+        class="form-textarea"
+        rows="4"
+        @input="
+          (e) =>
+            updateScenarioInfo(
+              'description',
+              (e.target as HTMLTextAreaElement).value,
+            )
+        "
+      />
+    </div>
+
+    <!-- Objectives -->
+    <div class="form-group">
+      <label>目標 (Objectives)</label>
+      <div class="objectives-list">
+        <div
+          v-for="(objective, index) in editorStore.scenario.objectives"
+          :key="index"
+          class="objective-item"
+        >
+          <input
+            type="text"
+            :value="objective"
+            class="form-input"
+            placeholder="目標を入力"
+            @input="
+              (e) =>
+                updateObjective(index, (e.target as HTMLInputElement).value)
+            "
+          >
+          <button
+            class="btn-remove"
+            @click="removeObjective(index)"
+          >
+            ✕
+          </button>
+        </div>
+      </div>
+      <button
+        type="button"
+        class="btn-add"
+        @click="addObjective"
+      >
+        + 目標を追加
+      </button>
+    </div>
+  </form>
+</template>
+
+<style scoped>
+.scenario-form {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--size-unit) * 0.6);
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--size-unit) * 0.3);
+}
+
+.form-group label {
+  font-weight: 600;
+  font-size: calc(var(--size-unit) * 1.1);
+  color: var(--color-text);
+}
+
+.form-input,
+.form-textarea {
+  padding: calc(var(--size-unit) * 0.3);
+  border: 1px solid var(--color-border);
+  border-radius: 3px;
+  font-size: calc(var(--size-unit) * 1.1);
+  font-family: inherit;
+}
+
+.form-input:focus,
+.form-textarea:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.05);
+}
+
+.form-textarea {
+  resize: vertical;
+  min-height: calc(var(--size-unit) * 8);
+}
+
+.objectives-list {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--size-unit) * 0.3);
+}
+
+.objective-item {
+  display: flex;
+  gap: calc(var(--size-unit) * 0.3);
+  align-items: center;
+}
+
+.objective-item .form-input {
+  flex: 1;
+}
+
+.btn-remove {
+  padding: calc(var(--size-unit) * 0.3) calc(var(--size-unit) * 0.5);
+  background-color: #ff6b6b;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: calc(var(--size-unit) * 1);
+  transition: opacity 0.2s;
+}
+
+.btn-remove:hover {
+  opacity: 0.8;
+}
+
+.btn-add {
+  padding: calc(var(--size-unit) * 0.3) calc(var(--size-unit) * 0.6);
+  background-color: var(--color-primary);
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: calc(var(--size-unit) * 1.1);
+  transition: opacity 0.2s;
+  align-self: flex-start;
+}
+
+.btn-add:hover {
+  opacity: 0.9;
+}
+</style>
