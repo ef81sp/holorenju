@@ -248,11 +248,9 @@ const handleSave = (): void => {
   if (!result.isValid) {
     console.warn("バリデーションエラーを検出しました");
     alert(
-      `バリデーションエラーがあります:\n\n${
-        result.errors
-          .map((e) => `[${e.type}] ${e.path}: ${e.message}`)
-          .join("\n")
-      }`,
+      `バリデーションエラーがあります:\n\n${result.errors
+        .map((e) => `[${e.type}] ${e.path}: ${e.message}`)
+        .join("\n")}`,
     );
     return;
   }
@@ -364,6 +362,7 @@ const handleSaveToDirectory = async (): Promise<void> => {
       const errorMessages = result.errors
         .map((e) => `[${e.type}] ${e.path}: ${e.message}`)
         .join("\n");
+      // oxlint-disable-next-line no-alert
       alert(`❌ バリデーションエラーがあります:\n\n${errorMessages}`);
       editorStore.setValidationErrors(
         result.errors.map((e) => ({ path: e.path, message: e.message })),
@@ -396,10 +395,6 @@ const handleSaveToDirectory = async (): Promise<void> => {
     console.warn(
       `✅ ${editorStore.scenario.difficulty}/${fileName} を保存しました`,
     );
-
-    // Index.json を更新
-    await regenerateScenarioIndex(scenarioDir.value, editorStore.scenario);
-    console.warn("✅ シナリオ一覧 (index.json) を再生成しました");
   } catch (error) {
     console.error("❌ ファイル保存に失敗しました:", error);
     if (error instanceof Error) {
@@ -486,12 +481,39 @@ const handleLoadFromDirectory = async (): Promise<void> => {
     console.error("ファイル読み込みに失敗しました:", error);
   }
 };
+
+const handleGenerateIndex = async (): Promise<void> => {
+  if (!scenarioDir.value) {
+    console.warn("先にディレクトリを選択してください");
+    return;
+  }
+
+  try {
+    console.warn("🔄 index.json を再生成中...");
+    await regenerateScenarioIndex(scenarioDir.value, null);
+    console.warn("✅ index.json を再生成しました");
+  } catch (error) {
+    console.error("❌ index.json の生成に失敗しました:", error);
+    if (error instanceof Error) {
+      console.error("エラー詳細:", error.message);
+    }
+  }
+};
 </script>
 
 <template>
   <div class="scenario-editor-wrapper">
     <header class="editor-header">
-      <h1>シナリオエディタ</h1>
+      <div class="header-title">
+        <h1>シナリオエディタ</h1>
+        <span
+          v-if="editorStore.scenario.id"
+          class="scenario-title"
+          :class="{ unsaved: editorStore.isDirty }"
+        >
+          - {{ editorStore.scenario.title }}{{ editorStore.isDirty ? "*" : "" }}
+        </span>
+      </div>
       <div class="header-controls">
         <button
           class="btn-secondary"
@@ -533,6 +555,14 @@ const handleLoadFromDirectory = async (): Promise<void> => {
         </button>
         <button
           class="btn-secondary"
+          :disabled="!scenarioDir"
+          title="index.json を再生成"
+          @click="handleGenerateIndex"
+        >
+          🔄 Index生成
+        </button>
+        <button
+          class="btn-secondary"
           @click="() => (showJsonInput = !showJsonInput)"
         >
           {{ showJsonInput ? "閉じる" : "JSON入出力" }}
@@ -561,7 +591,6 @@ const handleLoadFromDirectory = async (): Promise<void> => {
 
         <!-- セクション詳細（タイトル・説明） -->
         <section class="editor-section">
-          <h2>セクション詳細</h2>
           <SectionEditor
             mode="detail"
             detail-part="meta"
@@ -624,51 +653,66 @@ const handleLoadFromDirectory = async (): Promise<void> => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: calc(var(--size-unit) * 0.8);
-  background-color: var(--color-background-soft);
+  padding: var(--size-8);
+  background-color: var(--color-bg-gray);
   border-bottom: 1px solid var(--color-border);
   flex-shrink: 0;
 }
 
-.editor-header h1 {
+.header-title {
+  display: flex;
+  align-items: center;
+  gap: var(--size-5);
+}
+
+.header-title h1 {
   margin: 0;
-  font-size: calc(var(--size-unit) * 1.8);
+  font-size: var(--size-20);
+}
+
+.scenario-title {
+  font-size: var(--size-14);
+  color: var(--color-text-secondary);
+}
+
+.scenario-title.unsaved {
+  font-weight: 500;
 }
 
 .header-controls {
   display: flex;
-  gap: calc(var(--size-unit) * 0.4);
+  gap: var(--size-5);
   flex-wrap: wrap;
 }
 
 .file-input-label {
-  padding: calc(var(--size-unit) * 0.4) calc(var(--size-unit) * 0.8);
+  padding: var(--size-5) var(--size-8);
   background-color: white;
   border: 1px solid var(--color-border);
   border-radius: 3px;
   cursor: pointer;
   transition: all 0.2s;
-  font-size: calc(var(--size-unit) * 1.2);
+  font-size: var(--size-12);
 }
 
 .file-input-label:hover {
-  background-color: var(--color-background-soft);
+  background-color: var(--color-bg-gray);
 }
 
 .btn-primary,
 .btn-secondary,
 .btn-small {
-  padding: calc(var(--size-unit) * 0.4) calc(var(--size-unit) * 0.8);
+  padding: var(--size-5) var(--size-8);
   border: 1px solid var(--color-border);
   border-radius: 3px;
   cursor: pointer;
-  font-size: calc(var(--size-unit) * 1.2);
+  font-size: var(--size-12);
   transition: all 0.2s;
 }
 
 .btn-primary {
-  background-color: var(--color-primary);
-  border-color: var(--color-primary);
+  background-color: #4a90e2;
+  border-color: #4a90e2;
 }
 
 .btn-primary:hover {
@@ -682,29 +726,29 @@ const handleLoadFromDirectory = async (): Promise<void> => {
 
 .btn-secondary {
   background-color: white;
-  color: var(--color-primary);
-  border-color: var(--color-primary);
+  color: #4a90e2;
+  border-color: #4a90e2;
 }
 
 .btn-secondary:hover {
-  background-color: var(--color-background-soft);
+  background-color: var(--color-bg-gray);
 }
 
 .btn-small {
-  padding: calc(var(--size-unit) * 0.3) calc(var(--size-unit) * 0.6);
-  font-size: calc(var(--size-unit) * 1.1);
+  padding: var(--size-2) var(--size-6);
+  font-size: var(--size-12);
   background-color: white;
 }
 
 .btn-small:hover {
-  background-color: var(--color-background-soft);
+  background-color: var(--color-bg-gray);
 }
 
 .editor-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
-  gap: calc(var(--size-unit) * 0.8);
-  padding: calc(var(--size-unit) * 0.8);
+  gap: var(--size-8);
+  padding: var(--size-8);
   flex: 1;
   overflow: hidden;
 }
@@ -713,16 +757,16 @@ const handleLoadFromDirectory = async (): Promise<void> => {
 .right-panel {
   display: flex;
   flex-direction: column;
-  gap: calc(var(--size-unit) * 0.6);
+  gap: var(--size-6);
   overflow-y: auto;
-  padding-right: calc(var(--size-unit) * 0.4);
+  padding-right: var(--size-5);
   min-width: 0;
   height: 100%;
 }
 
 .preview-section {
   background-color: white;
-  padding: calc(var(--size-unit) * 0.4);
+  padding: var(--size-5);
   border: 1px solid var(--color-border);
   border-radius: 3px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
@@ -730,21 +774,21 @@ const handleLoadFromDirectory = async (): Promise<void> => {
 
 .preview-section h3 {
   margin-top: 0;
-  margin-bottom: calc(var(--size-unit) * 0.3);
-  font-size: calc(var(--size-unit) * 1.2);
+  margin-bottom: var(--size-2);
+  font-size: var(--size-12);
   border-bottom: 1px solid var(--color-border);
-  padding-bottom: calc(var(--size-unit) * 0.2);
+  padding-bottom: var(--size-2);
 }
 
 .section-info {
   margin: 0;
-  font-size: calc(var(--size-unit) * 1.1);
+  font-size: var(--size-12);
   color: var(--color-text-secondary);
 }
 
 .editor-section {
   background-color: white;
-  padding: calc(var(--size-unit) * 0.8);
+  padding: var(--size-8);
   border: 1px solid var(--color-border);
   border-radius: 3px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
@@ -752,51 +796,51 @@ const handleLoadFromDirectory = async (): Promise<void> => {
 
 .editor-section h2 {
   margin-top: 0;
-  margin-bottom: calc(var(--size-unit) * 0.6);
-  font-size: calc(var(--size-unit) * 1.4);
-  border-bottom: 2px solid var(--color-primary);
-  padding-bottom: calc(var(--size-unit) * 0.3);
+  margin-bottom: var(--size-6);
+  font-size: var(--size-14);
+  border-bottom: 2px solid #4a90e2;
+  padding-bottom: var(--size-2);
 }
 
 .editor-section summary {
   cursor: pointer;
   font-weight: 600;
-  font-size: calc(var(--size-unit) * 1.4);
-  padding: calc(var(--size-unit) * 0.4);
-  border-bottom: 2px solid var(--color-primary);
-  margin: calc(var(--size-unit) * -0.8);
+  font-size: var(--size-14);
+  padding: var(--size-5);
+  border-bottom: 2px solid #4a90e2;
+  margin: calc(var(--size-8) * -1);
   margin-bottom: 0;
   user-select: none;
 }
 
 .editor-section summary:hover {
-  background-color: var(--color-background-soft);
+  background-color: var(--color-bg-gray);
 }
 
 .editor-section .section-content {
-  padding-top: calc(var(--size-unit) * 0.6);
+  padding-top: var(--size-6);
 }
 
 .json-panel {
-  padding: calc(var(--size-unit) * 0.6);
+  padding: var(--size-6);
   background-color: #f5f5f5;
   border: 1px solid var(--color-border);
   border-radius: 3px;
-  margin-bottom: calc(var(--size-unit) * 0.6);
+  margin-bottom: var(--size-6);
 }
 
 .json-controls {
   display: flex;
-  gap: calc(var(--size-unit) * 0.4);
-  margin-bottom: calc(var(--size-unit) * 0.4);
+  gap: var(--size-5);
+  margin-bottom: var(--size-5);
 }
 
 .json-textarea {
   width: 100%;
-  height: calc(var(--size-unit) * 20);
-  padding: calc(var(--size-unit) * 0.4);
+  height: 200px;
+  padding: var(--size-5);
   font-family: monospace;
-  font-size: calc(var(--size-unit) * 1);
+  font-size: var(--size-10);
   border: 1px solid var(--color-border);
   border-radius: 3px;
   resize: vertical;

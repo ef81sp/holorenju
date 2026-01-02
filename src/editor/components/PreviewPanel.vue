@@ -235,7 +235,7 @@ const currentBoard = computed(() => {
 
 <style scoped>
 .preview-panel {
-  padding: calc(var(--size-unit) * 0.6);
+  padding: var(--size-6);
   background-color: white;
   border: 1px solid var(--color-border);
   border-radius: 4px;
@@ -244,17 +244,17 @@ const currentBoard = computed(() => {
 
 .preview-panel h3 {
   margin-top: 0;
-  margin-bottom: calc(var(--size-unit) * 0.4);
-  font-size: calc(var(--size-unit) * 1.2);
-  border-bottom: 2px solid var(--color-primary);
-  padding-bottom: calc(var(--size-unit) * 0.3);
+  margin-bottom: var(--size-5);
+  font-size: var(--size-12);
+  border-bottom: 2px solid #4a90e2;
+  padding-bottom: var(--size-2);
 }
 
 .preview-empty {
   padding: 2rem;
   text-align: center;
   color: var(--color-text-secondary);
-  background-color: var(--color-background-soft);
+  background-color: var(--color-bg-gray);
   border-radius: 4px;
   border: 1px dashed var(--color-border);
 }
@@ -262,29 +262,29 @@ const currentBoard = computed(() => {
 .preview-content {
   display: flex;
   flex-direction: column;
-  gap: calc(var(--size-unit) * 0.6);
+  gap: var(--size-6);
 }
 
 .preview-demo,
 .preview-problem {
-  padding: calc(var(--size-unit) * 0.6);
-  background-color: var(--color-background-soft);
+  padding: var(--size-6);
+  background-color: var(--color-bg-gray);
   border-radius: 4px;
-  border-left: 4px solid var(--color-primary);
+  border-left: 4px solid #4a90e2;
 }
 
 .preview-demo h4,
 .preview-problem h4 {
   margin-top: 0;
-  margin-bottom: calc(var(--size-unit) * 0.5);
-  font-size: calc(var(--size-unit) * 1.1);
+  margin-bottom: var(--size-5);
+  font-size: var(--size-12);
 }
 
 .preview-info {
   display: flex;
   flex-direction: column;
-  gap: calc(var(--size-unit) * 0.3);
-  font-size: calc(var(--size-unit) * 1);
+  gap: var(--size-2);
+  font-size: var(--size-10);
 }
 
 .preview-info p {
@@ -346,20 +346,20 @@ const currentBoard = computed(() => {
 .dialogue-btn {
   padding: 0.3rem 0.5rem;
   font-size: 0.75rem;
-  background-color: var(--color-primary);
+  background-color: #4a90e2;
   color: var(--color-text);
-  border: 1px solid var(--color-primary);
+  border: 1px solid #4a90e2;
   border-radius: 3px;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .dialogue-btn:hover:not(:disabled) {
-  background-color: var(--color-background-soft);
+  background-color: var(--color-bg-gray);
 }
 
 .dialogue-btn:disabled {
-  background-color: var(--color-background-soft);
+  background-color: var(--color-bg-gray);
   border-color: var(--color-border);
   color: var(--color-text-secondary);
   cursor: not-allowed;
@@ -392,7 +392,7 @@ const currentBoard = computed(() => {
 
 .preview-board {
   padding: 1rem;
-  background-color: var(--color-background-soft);
+  background-color: var(--color-bg-gray);
   border-radius: 4px;
 }
 

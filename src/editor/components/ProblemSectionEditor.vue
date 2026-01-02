@@ -104,7 +104,10 @@ const removeSuccessCondition = (index: number): void => {
   setSuccessConditions(newConditions);
 };
 
-const changeConditionType = (index: number, type: SuccessCondition["type"]): void => {
+const changeConditionType = (
+  index: number,
+  type: SuccessCondition["type"],
+): void => {
   if (!currentSection.value) {
     return;
   }
@@ -268,7 +271,10 @@ const updateSequenceMove = (
   setSuccessConditions(newConditions);
 };
 
-const removeSequenceMove = (conditionIndex: number, moveIndex: number): void => {
+const removeSequenceMove = (
+  conditionIndex: number,
+  moveIndex: number,
+): void => {
   if (!currentSection.value) {
     return;
   }
@@ -1264,13 +1270,13 @@ const removeFeedbackLine = (key: FeedbackKey, index: number): void => {
 .problem-section-editor {
   display: flex;
   flex-direction: column;
-  gap: calc(var(--size-unit) * 0.8);
+  gap: var(--size-8);
 }
 
 .detail-grid {
   display: grid;
   grid-template-columns: 1fr;
-  gap: calc(var(--size-unit) * 0.8);
+  gap: var(--size-8);
   align-items: start;
 }
 
@@ -1278,33 +1284,33 @@ const removeFeedbackLine = (key: FeedbackKey, index: number): void => {
 .detail-right {
   display: flex;
   flex-direction: column;
-  gap: calc(var(--size-unit) * 0.6);
+  gap: var(--size-6);
 }
 
 .form-group {
   display: flex;
   flex-direction: column;
-  gap: calc(var(--size-unit) * 0.3);
+  gap: var(--size-2);
 }
 
 .form-group label {
   font-weight: 600;
-  font-size: calc(var(--size-unit) * 1.1);
+  font-size: var(--size-12);
 }
 
 .form-input,
 .form-textarea {
-  padding: calc(var(--size-unit) * 0.3);
+  padding: var(--size-2);
   border: 1px solid var(--color-border);
   border-radius: 3px;
-  font-size: calc(var(--size-unit) * 1.1);
+  font-size: var(--size-12);
   font-family: inherit;
 }
 
 .form-input:focus,
 .form-textarea:focus {
   outline: none;
-  border-color: var(--color-primary);
+  border-color: #4a90e2;
   box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.05);
 }
 
@@ -1313,28 +1319,28 @@ const removeFeedbackLine = (key: FeedbackKey, index: number): void => {
 }
 
 .board-editor-wrapper {
-  background-color: var(--color-background-soft);
+  background-color: var(--color-bg-gray);
   border: 1px solid var(--color-border);
   border-radius: 3px;
-  padding: calc(var(--size-unit) * 0.6);
+  padding: var(--size-6);
 }
 
 .board-editor-wrapper summary {
   cursor: pointer;
   font-weight: 600;
-  font-size: calc(var(--size-unit) * 1.1);
-  margin-bottom: calc(var(--size-unit) * 0.5);
+  font-size: var(--size-12);
+  margin-bottom: var(--size-5);
   user-select: none;
 }
 
 .board-editor-wrapper summary:hover {
-  color: var(--color-primary);
+  color: #4a90e2;
 }
 
 .conditions-section,
 .feedback-section {
-  padding: calc(var(--size-unit) * 0.6);
-  background-color: var(--color-background-soft);
+  padding: var(--size-6);
+  background-color: var(--color-bg-gray);
   border-radius: 3px;
   border: 1px solid var(--color-border);
 }
@@ -1343,14 +1349,14 @@ const removeFeedbackLine = (key: FeedbackKey, index: number): void => {
 .feedback-section summary {
   cursor: pointer;
   font-weight: 600;
-  font-size: calc(var(--size-unit) * 1.1);
-  margin-bottom: calc(var(--size-unit) * 0.5);
+  font-size: var(--size-12);
+  margin-bottom: var(--size-5);
   user-select: none;
 }
 
 .conditions-section summary:hover,
 .feedback-section summary:hover {
-  color: var(--color-primary);
+  color: #4a90e2;
 }
 
 .conditions-header {
@@ -1364,12 +1370,12 @@ const removeFeedbackLine = (key: FeedbackKey, index: number): void => {
 }
 
 .btn-add-small {
-  padding: calc(var(--size-unit) * 0.3) calc(var(--size-unit) * 0.6);
-  background-color: var(--color-primary);
+  padding: var(--size-2) var(--size-6);
+  background-color: #4a90e2;
   border: none;
   border-radius: 3px;
   cursor: pointer;
-  font-size: calc(var(--size-unit) * 1);
+  font-size: var(--size-10);
   transition: opacity 0.2s;
 }
 
@@ -1378,25 +1384,25 @@ const removeFeedbackLine = (key: FeedbackKey, index: number): void => {
 }
 
 .empty-state {
-  padding: calc(var(--size-unit) * 0.8);
+  padding: var(--size-8);
   text-align: center;
   color: var(--color-text-secondary);
   background-color: white;
   border-radius: 3px;
-  font-size: calc(var(--size-unit) * 1.1);
+  font-size: var(--size-12);
 }
 
 .conditions-list {
   display: flex;
   flex-direction: column;
-  gap: calc(var(--size-unit) * 0.6);
+  gap: var(--size-6);
 }
 
 .condition-item {
   display: flex;
   flex-direction: column;
-  gap: calc(var(--size-unit) * 0.4);
-  padding: calc(var(--size-unit) * 0.6);
+  gap: var(--size-5);
+  padding: var(--size-6);
   background-color: white;
   border-radius: 3px;
   border: 1px solid var(--color-border);
@@ -1404,23 +1410,23 @@ const removeFeedbackLine = (key: FeedbackKey, index: number): void => {
 
 .condition-header {
   display: flex;
-  gap: calc(var(--size-unit) * 0.3);
+  gap: var(--size-2);
   align-items: center;
 }
 
 .form-input-small {
   flex: 1;
-  min-width: calc(var(--size-unit) * 8);
-  padding: calc(var(--size-unit) * 0.3);
-  font-size: calc(var(--size-unit) * 1);
+  min-width: 80px;
+  padding: var(--size-2);
+  font-size: var(--size-10);
 }
 
 .btn-remove-small {
-  padding: calc(var(--size-unit) * 0.3) calc(var(--size-unit) * 0.5);
+  padding: var(--size-2) var(--size-5);
   background-color: #ff6b6b;
   border: none;
   cursor: pointer;
-  font-size: calc(var(--size-unit) * 1);
+  font-size: var(--size-10);
   border-radius: 3px;
   transition: opacity 0.2s;
 }
@@ -1432,20 +1438,20 @@ const removeFeedbackLine = (key: FeedbackKey, index: number): void => {
 .condition-body {
   display: flex;
   flex-direction: column;
-  gap: calc(var(--size-unit) * 0.5);
-  padding-top: calc(var(--size-unit) * 0.4);
+  gap: var(--size-5);
+  padding-top: var(--size-5);
 }
 
 .field-row {
   display: flex;
-  gap: calc(var(--size-unit) * 0.4);
+  gap: var(--size-5);
   flex-wrap: wrap;
   align-items: center;
 }
 
 .checkbox-row label {
   display: flex;
-  gap: calc(var(--size-unit) * 0.3);
+  gap: var(--size-2);
   align-items: center;
 }
 
@@ -1453,24 +1459,24 @@ const removeFeedbackLine = (key: FeedbackKey, index: number): void => {
 .moves-list {
   display: flex;
   flex-direction: column;
-  gap: calc(var(--size-unit) * 0.4);
+  gap: var(--size-5);
 }
 
 .position-row,
 .move-row {
   display: flex;
   flex-wrap: wrap;
-  gap: calc(var(--size-unit) * 0.4);
+  gap: var(--size-5);
   align-items: center;
 }
 
 .btn-inline {
-  padding: calc(var(--size-unit) * 0.3) calc(var(--size-unit) * 0.5);
-  background-color: var(--color-background-soft);
+  padding: var(--size-2) var(--size-5);
+  background-color: var(--color-bg-gray);
   border: 1px solid var(--color-border);
   border-radius: 3px;
   cursor: pointer;
-  font-size: calc(var(--size-unit) * 1);
+  font-size: var(--size-10);
 }
 
 .btn-inline:hover {
@@ -1478,8 +1484,8 @@ const removeFeedbackLine = (key: FeedbackKey, index: number): void => {
 }
 
 .hints-section {
-  padding: calc(var(--size-unit) * 0.6);
-  background-color: var(--color-background-soft);
+  padding: var(--size-6);
+  background-color: var(--color-bg-gray);
   border-radius: 3px;
   border: 1px solid var(--color-border);
 }
@@ -1487,14 +1493,14 @@ const removeFeedbackLine = (key: FeedbackKey, index: number): void => {
 .hints-list {
   display: flex;
   flex-direction: column;
-  gap: calc(var(--size-unit) * 0.6);
+  gap: var(--size-6);
 }
 
 .hint-item {
   display: flex;
   flex-direction: column;
-  gap: calc(var(--size-unit) * 0.4);
-  padding: calc(var(--size-unit) * 0.6);
+  gap: var(--size-5);
+  padding: var(--size-6);
   background-color: white;
   border: 1px solid var(--color-border);
   border-radius: 3px;
@@ -1502,7 +1508,7 @@ const removeFeedbackLine = (key: FeedbackKey, index: number): void => {
 
 .hint-header {
   display: flex;
-  gap: calc(var(--size-unit) * 0.4);
+  gap: var(--size-5);
   align-items: center;
 }
 
@@ -1510,20 +1516,20 @@ const removeFeedbackLine = (key: FeedbackKey, index: number): void => {
 .hint-marks {
   display: flex;
   flex-direction: column;
-  gap: calc(var(--size-unit) * 0.4);
+  gap: var(--size-5);
 }
 
 .feedback-groups {
   display: flex;
   flex-direction: column;
-  gap: calc(var(--size-unit) * 0.6);
+  gap: var(--size-6);
 }
 
 .feedback-group {
   display: flex;
   flex-direction: column;
-  gap: calc(var(--size-unit) * 0.4);
-  padding: calc(var(--size-unit) * 0.6);
+  gap: var(--size-5);
+  padding: var(--size-6);
   background-color: white;
   border: 1px solid var(--color-border);
   border-radius: 3px;
@@ -1538,15 +1544,15 @@ const removeFeedbackLine = (key: FeedbackKey, index: number): void => {
 .feedback-lines {
   display: flex;
   flex-direction: column;
-  gap: calc(var(--size-unit) * 0.4);
+  gap: var(--size-5);
 }
 
 .feedback-line {
   display: flex;
   flex-direction: column;
-  gap: calc(var(--size-unit) * 0.3);
-  padding: calc(var(--size-unit) * 0.5);
-  background-color: var(--color-background-soft);
+  gap: var(--size-2);
+  padding: var(--size-5);
+  background-color: var(--color-bg-gray);
   border: 1px solid var(--color-border);
   border-radius: 3px;
 }
@@ -1555,12 +1561,12 @@ const removeFeedbackLine = (key: FeedbackKey, index: number): void => {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: calc(var(--size-unit) * 0.4);
+  gap: var(--size-5);
 }
 
 .feedback-text-row {
   display: flex;
-  gap: calc(var(--size-unit) * 0.4);
+  gap: var(--size-5);
   align-items: flex-start;
 }
 
@@ -1571,6 +1577,6 @@ const removeFeedbackLine = (key: FeedbackKey, index: number): void => {
 .field-label {
   color: var(--color-fubuki-primary);
   font-weight: 600;
-  font-size: calc(var(--size-unit) * 0.9);
+  font-size: 9px;
 }
 </style>

@@ -107,27 +107,31 @@ const handleHover = (position: Position | null): void => {
       <div class="editor-controls">
         <button
           class="btn-small"
+          title="クリップボードから盤面を読み込み"
           @click="handleLoadFromClipboard"
         >
-          クリップボードから読み込み
+          📋 読込
         </button>
         <button
           class="btn-small"
+          title="クリップボードに盤面をコピー"
           @click="handleCopyToClipboard"
         >
-          クリップボードにコピー
+          📋 コピー
         </button>
         <button
           class="btn-small btn-danger"
+          title="盤面をリセット"
           @click="handleReset"
         >
-          リセット
+          🔄 リセット
         </button>
         <button
           class="btn-small"
+          title="デバッグ情報の表示/非表示"
           @click="showDebugInfo = !showDebugInfo"
         >
-          {{ showDebugInfo ? "デバッグ非表示" : "デバッグ表示" }}
+          {{ showDebugInfo ? "🐛 非表示" : "🐛 表示" }}
         </button>
       </div>
     </div>
@@ -173,7 +177,7 @@ const handleHover = (position: Position | null): void => {
   padding: 1rem;
   border: 1px solid var(--color-border);
   border-radius: 4px;
-  background-color: var(--color-background-soft);
+  background-color: var(--color-bg-gray);
 }
 
 .editor-header {
@@ -204,8 +208,8 @@ const handleHover = (position: Position | null): void => {
 }
 
 .btn-small:hover {
-  background-color: var(--color-background-soft);
-  border-color: var(--color-primary);
+  background-color: var(--color-bg-gray);
+  border-color: #4a90e2;
 }
 
 .btn-small.btn-danger {

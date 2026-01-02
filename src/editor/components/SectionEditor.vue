@@ -26,14 +26,16 @@ const handleRemoveSection = (index: number): void => {
   editorStore.removeSection(index);
 };
 
-const handleSelectSection = (index: number): void => {
-  editorStore.selectSection(index);
+const handleMoveSectionUp = (index: number): void => {
+  editorStore.moveSectionUp(index);
 };
 
-const updateSectionId = (value: string): void => {
-  if (editorStore.currentSection) {
-    editorStore.updateCurrentSection({ id: value });
-  }
+const handleMoveSectionDown = (index: number): void => {
+  editorStore.moveSectionDown(index);
+};
+
+const handleSelectSection = (index: number): void => {
+  editorStore.selectSection(index);
 };
 
 const handleTypeChange = (type: "demo" | "problem"): void => {
@@ -89,17 +91,35 @@ const handleTypeChange = (type: "demo" | "problem"): void => {
               class="section-type"
               :class="section.type"
             >
-              {{ section.type === "demo" ? "📖" : "❓" }}
+              {{ section.type === "demo" ? "📖 デモ" : "❓ 問題" }}
             </span>
-            <span class="section-title">{{ section.title }}</span>
-            <span class="section-id">({{ section.id }})</span>
+            <span class="section-title">（{{ section.title }}）</span>
           </button>
-          <button
-            class="btn-delete"
-            @click="handleRemoveSection(index)"
-          >
-            ✕
-          </button>
+          <div class="section-actions-buttons">
+            <button
+              class="btn-move"
+              :disabled="index === 0"
+              title="上に移動"
+              @click="handleMoveSectionUp(index)"
+            >
+              ▲
+            </button>
+            <button
+              class="btn-move"
+              :disabled="index === editorStore.scenario.sections.length - 1"
+              title="下に移動"
+              @click="handleMoveSectionDown(index)"
+            >
+              ▼
+            </button>
+            <button
+              class="btn-delete"
+              title="削除"
+              @click="handleRemoveSection(index)"
+            >
+              ✕
+            </button>
+          </div>
         </div>
       </div>
     </template>
@@ -110,7 +130,7 @@ const handleTypeChange = (type: "demo" | "problem"): void => {
         v-if="editorStore.currentSection"
         class="section-detail"
       >
-        <h3>セクション詳細: {{ editorStore.currentSection.title }}</h3>
+        <h2>セクション詳細: {{ editorStore.currentSection.title }}</h2>
 
         <div
           v-if="props.detailPart !== 'content'"
@@ -122,9 +142,9 @@ const handleTypeChange = (type: "demo" | "problem"): void => {
               type="text"
               :value="editorStore.currentSection.id"
               class="form-input"
-              @input="
-                (e) => updateSectionId((e.target as HTMLInputElement).value)
-              "
+              disabled
+              readonly
+              title="セクションIDは自動採番されます（読み取り専用）"
             >
           </div>
           <div class="form-group">
@@ -168,21 +188,21 @@ const handleTypeChange = (type: "demo" | "problem"): void => {
 .section-editor {
   display: flex;
   flex-direction: column;
-  gap: calc(var(--size-unit) * 0.8);
+  gap: var(--size-8);
 }
 
 .section-actions {
   display: flex;
-  gap: calc(var(--size-unit) * 0.4);
+  gap: var(--size-5);
 }
 
 .btn-add {
-  padding: calc(var(--size-unit) * 0.4) calc(var(--size-unit) * 0.8);
-  background-color: var(--color-primary);
+  padding: var(--size-5) var(--size-8);
+  background-color: #4a90e2;
   border: none;
   border-radius: 3px;
   cursor: pointer;
-  font-size: calc(var(--size-unit) * 1.1);
+  font-size: var(--size-12);
   transition: opacity 0.2s;
 }
 
@@ -191,13 +211,13 @@ const handleTypeChange = (type: "demo" | "problem"): void => {
 }
 
 .empty-state {
-  padding: calc(var(--size-unit) * 1.2);
+  padding: var(--size-12);
   text-align: center;
   color: var(--color-text-secondary);
-  background-color: var(--color-background-soft);
+  background-color: var(--color-bg-gray);
   border-radius: 3px;
   border: 1px dashed var(--color-border);
-  font-size: calc(var(--size-unit) * 1.1);
+  font-size: var(--size-12);
 }
 
 .sections-list {
@@ -222,20 +242,20 @@ const handleTypeChange = (type: "demo" | "problem"): void => {
 }
 
 .section-item.active {
-  background-color: var(--color-background-soft);
+  background-color: var(--color-bg-gray);
 }
 
 .section-item-content {
   flex: 1;
   display: flex;
   align-items: center;
-  gap: calc(var(--size-unit) * 0.5);
-  padding: calc(var(--size-unit) * 0.5) calc(var(--size-unit) * 0.7);
+  gap: var(--size-5);
+  padding: var(--size-5) var(--size-6);
   background: none;
   border: none;
   cursor: pointer;
   text-align: left;
-  font-size: calc(var(--size-unit) * 1.1);
+  font-size: var(--size-12);
   transition: background-color 0.2s;
 }
 
@@ -244,8 +264,8 @@ const handleTypeChange = (type: "demo" | "problem"): void => {
 }
 
 .section-type {
-  font-size: calc(var(--size-unit) * 1.4);
-  min-width: calc(var(--size-unit) * 1.5);
+  font-size: var(--size-14);
+  min-width: var(--size-16);
 }
 
 .section-title {
@@ -253,17 +273,36 @@ const handleTypeChange = (type: "demo" | "problem"): void => {
   color: var(--color-text);
 }
 
-.section-id {
-  font-size: calc(var(--size-unit) * 1);
-  color: var(--color-text-secondary);
+.section-actions-buttons {
+  display: flex;
+  gap: 0;
+}
+
+.btn-move {
+  padding: var(--size-5);
+  background-color: #4a90e2;
+  border: none;
+  cursor: pointer;
+  font-size: var(--size-10);
+  transition: opacity 0.2s;
+  min-width: var(--size-24);
+}
+
+.btn-move:hover:not(:disabled) {
+  opacity: 0.8;
+}
+
+.btn-move:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
 }
 
 .btn-delete {
-  padding: calc(var(--size-unit) * 0.5);
+  padding: var(--size-5);
   background-color: #ff6b6b;
   border: none;
   cursor: pointer;
-  font-size: calc(var(--size-unit) * 1.1);
+  font-size: var(--size-12);
   transition: opacity 0.2s;
 }
 
@@ -272,49 +311,49 @@ const handleTypeChange = (type: "demo" | "problem"): void => {
 }
 
 .section-detail {
-  padding: calc(var(--size-unit) * 0.8);
+  padding: var(--size-8);
   background-color: white;
-  border: 2px solid var(--color-primary);
+  border: 2px solid #4a90e2;
   border-radius: 3px;
-  margin-top: calc(var(--size-unit) * 0.6);
+  margin-top: var(--size-6);
 }
 
 .section-detail h3 {
   margin-top: 0;
-  margin-bottom: calc(var(--size-unit) * 0.8);
-  font-size: calc(var(--size-unit) * 1.3);
-  color: var(--color-primary);
+  margin-bottom: var(--size-8);
+  font-size: var(--size-14);
+  color: #4a90e2;
 }
 
 .section-meta {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: calc(var(--size-unit) * 0.6);
-  margin-bottom: calc(var(--size-unit) * 0.8);
+  gap: var(--size-6);
+  margin-bottom: var(--size-8);
 }
 
 .form-group {
   display: flex;
   flex-direction: column;
-  gap: calc(var(--size-unit) * 0.3);
+  gap: var(--size-2);
 }
 
 .form-group label {
   font-weight: 600;
-  font-size: calc(var(--size-unit) * 1.1);
+  font-size: var(--size-12);
 }
 
 .form-input {
-  padding: calc(var(--size-unit) * 0.3);
+  padding: var(--size-2);
   border: 1px solid var(--color-border);
   border-radius: 3px;
-  font-size: calc(var(--size-unit) * 1.1);
+  font-size: var(--size-12);
   font-family: inherit;
 }
 
 .form-input:focus {
   outline: none;
-  border-color: var(--color-primary);
+  border-color: #4a90e2;
   box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.05);
 }
 </style>

@@ -70,12 +70,17 @@ export async function loadDirectoryHandle(): Promise<FileSystemDirectoryHandle |
           // パーミッションが有効か確認
           try {
             const typedHandle = handle as FileSystemDirectoryHandle & {
-              queryPermission?: (options: { mode: "readwrite" }) => Promise<string>;
+              queryPermission?: (options: {
+                mode: "readwrite";
+              }) => Promise<string>;
             };
             const permissionResult = typedHandle.queryPermission
               ? await typedHandle.queryPermission({ mode: "readwrite" })
               : "prompt";
-            const permission = permissionResult as "granted" | "denied" | "prompt";
+            const permission = permissionResult as
+              | "granted"
+              | "denied"
+              | "prompt";
             if (permission === "granted") {
               resolve(handle);
             } else {

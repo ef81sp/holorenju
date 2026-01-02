@@ -140,51 +140,51 @@ const updateObjective = (index: number, value: string): void => {
 .scenario-form {
   display: flex;
   flex-direction: column;
-  gap: calc(var(--size-unit) * 0.6);
+  gap: var(--size-6);
 }
 
 .form-group {
   display: flex;
   flex-direction: column;
-  gap: calc(var(--size-unit) * 0.3);
+  gap: var(--size-2);
 }
 
 .form-group label {
   font-weight: 600;
-  font-size: calc(var(--size-unit) * 1.1);
+  font-size: var(--size-12);
   color: var(--color-text);
 }
 
 .form-input,
 .form-textarea {
-  padding: calc(var(--size-unit) * 0.3);
+  padding: var(--size-2);
   border: 1px solid var(--color-border);
   border-radius: 3px;
-  font-size: calc(var(--size-unit) * 1.1);
+  font-size: var(--size-12);
   font-family: inherit;
 }
 
 .form-input:focus,
 .form-textarea:focus {
   outline: none;
-  border-color: var(--color-primary);
+  border-color: #4a90e2;
   box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.05);
 }
 
 .form-textarea {
   resize: vertical;
-  min-height: calc(var(--size-unit) * 8);
+  min-height: 80px;
 }
 
 .objectives-list {
   display: flex;
   flex-direction: column;
-  gap: calc(var(--size-unit) * 0.3);
+  gap: var(--size-2);
 }
 
 .objective-item {
   display: flex;
-  gap: calc(var(--size-unit) * 0.3);
+  gap: var(--size-2);
   align-items: center;
 }
 
@@ -193,12 +193,12 @@ const updateObjective = (index: number, value: string): void => {
 }
 
 .btn-remove {
-  padding: calc(var(--size-unit) * 0.3) calc(var(--size-unit) * 0.5);
+  padding: var(--size-2) var(--size-5);
   background-color: #ff6b6b;
   border: none;
   border-radius: 3px;
   cursor: pointer;
-  font-size: calc(var(--size-unit) * 1);
+  font-size: var(--size-10);
   transition: opacity 0.2s;
 }
 
@@ -207,12 +207,12 @@ const updateObjective = (index: number, value: string): void => {
 }
 
 .btn-add {
-  padding: calc(var(--size-unit) * 0.3) calc(var(--size-unit) * 0.6);
-  background-color: var(--color-primary);
+  padding: var(--size-2) var(--size-6);
+  background-color: #4a90e2;
   border: none;
   border-radius: 3px;
   cursor: pointer;
-  font-size: calc(var(--size-unit) * 1.1);
+  font-size: var(--size-12);
   transition: opacity 0.2s;
   align-self: flex-start;
 }

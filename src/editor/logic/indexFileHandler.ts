@@ -54,26 +54,85 @@ const saveIndexJson = async (
   await writable.close();
 };
 
+const scanDifficultyDirectory = async (
+  diffDir: FileSystemDirectoryHandle,
+  difficulty: string,
+): Promise<IndexScenarioEntry[]> => {
+  const scenarios: IndexScenarioEntry[] = [];
+
+  // @ts-expect-error entriesは存在するはず
+  for await (const [name, handle] of diffDir.entries()) {
+    if (!name.endsWith(".json") || handle.kind !== "file") {
+      // eslint-disable-next-line no-continue
+      continue;
+    }
+
+    const file = await (handle as FileSystemFileHandle).getFile();
+    const text = await file.text();
+    const data = JSON.parse(text);
+
+    if (data.id && data.title && data.description) {
+      scenarios.push({
+        id: data.id,
+        title: data.title,
+        description: data.description,
+        path: `${difficulty}/${name}`,
+      });
+    }
+  }
+
+  return scenarios;
+};
+
 export const regenerateScenarioIndex = async (
   dirHandle: FileSystemDirectoryHandle,
-  scenario: Scenario,
+  scenario: Scenario | null,
 ): Promise<void> => {
   const indexData = cloneDefaultIndex();
-  const difficultyKey = scenario.difficulty;
-  const entry: IndexScenarioEntry = {
-    id: scenario.id,
-    title: scenario.title,
-    description: scenario.description,
-    path: `${difficultyKey}/${scenario.id}.json`,
-  };
 
-  indexData.difficulties[difficultyKey] = {
-    ...(indexData.difficulties[difficultyKey] ?? {
-      label: difficultyKey,
-      scenarios: [],
-    }),
-    scenarios: [entry],
-  };
+  if (scenario) {
+    // 特定のシナリオだけを更新
+    const difficultyKey = scenario.difficulty;
+    const entry: IndexScenarioEntry = {
+      id: scenario.id,
+      title: scenario.title,
+      description: scenario.description,
+      path: `${difficultyKey}/${scenario.id}.json`,
+    };
+
+    indexData.difficulties[difficultyKey] = {
+      ...(indexData.difficulties[difficultyKey] ?? {
+        label: difficultyKey,
+        scenarios: [],
+      }),
+      scenarios: [entry],
+    };
+  } else {
+    // すべての難易度ディレクトリをスキャンしてindex.jsonを再生成
+    const difficulties = ["beginner", "intermediate", "advanced"] as const;
+
+    // eslint-disable-next-line no-await-in-loop
+    for (const difficulty of difficulties) {
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        const diffDir = await dirHandle.getDirectoryHandle(difficulty, {
+          create: false,
+        });
+        // eslint-disable-next-line no-await-in-loop
+        const scenarios = await scanDifficultyDirectory(diffDir, difficulty);
+
+        if (scenarios.length > 0) {
+          indexData.difficulties[difficulty] = {
+            label: difficulty,
+            scenarios,
+          };
+        }
+      } catch {
+        // ディレクトリが存在しない場合はスキップ
+        console.warn(`難易度ディレクトリ '${difficulty}' が見つかりません`);
+      }
+    }
+  }
 
   await saveIndexJson(dirHandle, indexData);
   console.warn("✅ index.json を再生成しました");

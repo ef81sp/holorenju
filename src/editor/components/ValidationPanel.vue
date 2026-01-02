@@ -29,7 +29,7 @@ const editorStore = useEditorStore();
 <style scoped>
 .validation-panel {
   margin: 0;
-  padding: calc(var(--size-unit) * 0.6);
+  padding: var(--size-6);
   background-color: #fff3cd;
   border: 2px solid #ffc107;
   border-radius: 3px;
@@ -40,20 +40,20 @@ const editorStore = useEditorStore();
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: calc(var(--size-unit) * 0.5);
-  padding-bottom: calc(var(--size-unit) * 0.3);
+  margin-bottom: var(--size-5);
+  padding-bottom: var(--size-2);
   border-bottom: 1px solid #ffc107;
 }
 
 .validation-header h3 {
   margin: 0;
-  font-size: calc(var(--size-unit) * 1.2);
+  font-size: var(--size-12);
   color: #856404;
 }
 
 .error-count {
   margin: 0;
-  font-size: calc(var(--size-unit) * 1);
+  font-size: var(--size-10);
   color: #856404;
   font-weight: 600;
 }
@@ -61,13 +61,13 @@ const editorStore = useEditorStore();
 .errors-list {
   display: flex;
   flex-direction: column;
-  gap: calc(var(--size-unit) * 0.4);
-  max-height: calc(var(--size-unit) * 25);
+  gap: var(--size-5);
+  max-height: 250px;
   overflow-y: auto;
 }
 
 .error-item {
-  padding: calc(var(--size-unit) * 0.5);
+  padding: var(--size-5);
   background-color: rgba(255, 255, 255, 0.7);
   border-left: 3px solid #dc3545;
   border-radius: 3px;
@@ -75,14 +75,14 @@ const editorStore = useEditorStore();
 
 .error-path {
   font-family: monospace;
-  font-size: calc(var(--size-unit) * 1);
+  font-size: var(--size-10);
   color: #dc3545;
   font-weight: 600;
-  margin-bottom: calc(var(--size-unit) * 0.2);
+  margin-bottom: var(--size-2);
 }
 
 .error-message {
-  font-size: calc(var(--size-unit) * 1);
+  font-size: var(--size-10);
   color: #856404;
   line-height: 1.4;
 }

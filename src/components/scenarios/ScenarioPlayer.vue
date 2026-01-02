@@ -276,7 +276,7 @@ onMounted(async () => {
       <div class="scenario-info">
         <h2>{{ scenario.title }}</h2>
         <p>
-          {{ currentSection?.id }} ({{ currentSectionIndex + 1 }}/{{
+          {{ currentSection?.title }} ({{ currentSectionIndex + 1 }}/{{
             scenario.sections.length
           }})
         </p>

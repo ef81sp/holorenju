@@ -5,6 +5,7 @@ import BoardVisualEditor from "./BoardVisualEditor.vue";
 import type { DemoSection, DemoDialogue, BoardAction } from "@/types/scenario";
 import type { Position } from "@/types/game";
 import type { CharacterType, Emotion } from "@/types/character";
+import { generateDialogueId } from "@/logic/scenarioFileHandler";
 
 const editorStore = useEditorStore();
 
@@ -51,14 +52,16 @@ const updateSectionTitle = (title: string): void => {
 
 const addDialogue = (): void => {
   if (currentSection.value) {
+    const newDialogues = [...currentSection.value.dialogues];
     const newDialogue: DemoDialogue = {
-      id: `d-${Date.now()}`,
+      id: generateDialogueId(newDialogues),
       character: "",
       text: "",
     };
+    newDialogues.push(newDialogue);
     editorStore.updateCurrentSection({
       ...currentSection.value,
-      dialogues: [...currentSection.value.dialogues, newDialogue],
+      dialogues: newDialogues,
     });
   }
 };
@@ -68,6 +71,10 @@ const removeDialogue = (index: number): void => {
     const newDialogues = currentSection.value.dialogues.filter(
       (_, i) => i !== index,
     );
+    // 削除後に残りのダイアログのIDを再採番
+    newDialogues.forEach((dialogue, idx) => {
+      dialogue.id = `dialogue_${idx + 1}`;
+    });
     editorStore.updateCurrentSection({
       ...currentSection.value,
       dialogues: newDialogues,
@@ -75,7 +82,10 @@ const removeDialogue = (index: number): void => {
   }
 };
 
-const updateDialogue = (index: number, updates: Partial<DemoDialogue>): void => {
+const updateDialogue = (
+  index: number,
+  updates: Partial<DemoDialogue>,
+): void => {
   if (currentSection.value) {
     const newDialogues = [...currentSection.value.dialogues];
     newDialogues[index] = { ...newDialogues[index], ...updates };
@@ -132,7 +142,10 @@ const setBoardAction = (index: number, action?: BoardAction): void => {
   updateDialogue(index, { boardAction: action });
 };
 
-const changeBoardActionType = (index: number, type: BoardAction["type"]): void => {
+const changeBoardActionType = (
+  index: number,
+  type: BoardAction["type"],
+): void => {
   setBoardAction(index, createBoardAction(type));
 };
 
@@ -153,7 +166,10 @@ const updateBoardActionPosition = (
   const nextValue = Math.max(0, Math.min(14, value));
   const action = dialogue.boardAction;
 
-  if ((action.type === "place" || action.type === "remove") && key === "position") {
+  if (
+    (action.type === "place" || action.type === "remove") &&
+    key === "position"
+  ) {
     const updatedPos: Position = { ...action.position, [field]: nextValue };
     setBoardAction(index, { ...action, position: updatedPos });
     return;
@@ -161,7 +177,10 @@ const updateBoardActionPosition = (
 
   if (action.type === "line") {
     if (key === "fromPosition") {
-      const updatedPos: Position = { ...action.fromPosition, [field]: nextValue };
+      const updatedPos: Position = {
+        ...action.fromPosition,
+        [field]: nextValue,
+      };
       setBoardAction(index, { ...action, fromPosition: updatedPos });
       return;
     }
@@ -172,7 +191,10 @@ const updateBoardActionPosition = (
   }
 };
 
-const updateBoardActionColor = (index: number, color: "black" | "white"): void => {
+const updateBoardActionColor = (
+  index: number,
+  color: "black" | "white",
+): void => {
   const dialogue = currentSection.value?.dialogues[index];
   if (!dialogue?.boardAction || dialogue.boardAction.type !== "place") {
     return;
@@ -180,7 +202,10 @@ const updateBoardActionColor = (index: number, color: "black" | "white"): void =
   setBoardAction(index, { ...dialogue.boardAction, color });
 };
 
-const updateBoardActionHighlight = (index: number, highlight: boolean): void => {
+const updateBoardActionHighlight = (
+  index: number,
+  highlight: boolean,
+): void => {
   const dialogue = currentSection.value?.dialogues[index];
   if (!dialogue?.boardAction || dialogue.boardAction.type !== "place") {
     return;
@@ -225,7 +250,10 @@ const updateBoardActionMarkPosition = (
   setBoardAction(index, { ...dialogue.boardAction, positions });
 };
 
-const removeBoardActionMarkPosition = (index: number, posIndex: number): void => {
+const removeBoardActionMarkPosition = (
+  index: number,
+  posIndex: number,
+): void => {
   const dialogue = currentSection.value?.dialogues[index];
   if (!dialogue?.boardAction || dialogue.boardAction.type !== "mark") {
     return;
@@ -338,12 +366,9 @@ const updateBoardActionLine = (
                   :value="dialogue.id"
                   class="form-input form-input-small"
                   placeholder="ID"
-                  @input="
-                    (e) =>
-                      updateDialogue(index, {
-                        id: (e.target as HTMLInputElement).value,
-                      })
-                  "
+                  readonly
+                  disabled
+                  title="ダイアログIDは自動採番されます（読み取り専用）"
                 >
                 <select
                   :value="dialogue.character"
@@ -385,13 +410,31 @@ const updateBoardActionLine = (
                     {{ emotion }}
                   </option>
                 </select>
-                <button
-                  type="button"
-                  class="btn-remove-small"
-                  @click.prevent="removeDialogue(index)"
-                >
-                  ✕
-                </button>
+                <div class="dialogue-actions-buttons">
+                  <button
+                    type="button"
+                    class="btn-move"
+                    :disabled="index === 0"
+                    @click.prevent="editorStore.moveDialogueUp(index)"
+                  >
+                    ▲
+                  </button>
+                  <button
+                    type="button"
+                    class="btn-move"
+                    :disabled="index === currentSection.dialogues.length - 1"
+                    @click.prevent="editorStore.moveDialogueDown(index)"
+                  >
+                    ▼
+                  </button>
+                  <button
+                    type="button"
+                    class="btn-remove-small"
+                    @click.prevent="removeDialogue(index)"
+                  >
+                    ✕
+                  </button>
+                </div>
               </div>
               <textarea
                 :value="dialogue.text"
@@ -809,13 +852,13 @@ const updateBoardActionLine = (
 .demo-section-editor {
   display: flex;
   flex-direction: column;
-  gap: calc(var(--size-unit) * 0.8);
+  gap: var(--size-8);
 }
 
 .detail-grid {
   display: grid;
   grid-template-columns: 1fr;
-  gap: calc(var(--size-unit) * 0.8);
+  gap: var(--size-8);
   align-items: start;
 }
 
@@ -823,31 +866,31 @@ const updateBoardActionLine = (
 .detail-right {
   display: flex;
   flex-direction: column;
-  gap: calc(var(--size-unit) * 0.6);
+  gap: var(--size-6);
 }
 
 .form-group {
   display: flex;
   flex-direction: column;
-  gap: calc(var(--size-unit) * 0.3);
+  gap: var(--size-2);
 }
 
 .form-group label {
   font-weight: 600;
-  font-size: calc(var(--size-unit) * 1.1);
+  font-size: var(--size-12);
 }
 
 .form-input {
-  padding: calc(var(--size-unit) * 0.3);
-  border: 1px solid var(--color-border);
+  padding: var(--size-2);
+  border: 1px solid var(--color-border-heavy);
   border-radius: 3px;
-  font-size: calc(var(--size-unit) * 1.1);
+  font-size: var(--size-12);
   font-family: inherit;
 }
 
 .form-input:focus {
   outline: none;
-  border-color: var(--color-primary);
+  border-color: #4a90e2;
   box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.05);
 }
 
@@ -855,23 +898,23 @@ const updateBoardActionLine = (
   background-color: var(--color-background-soft);
   border: 1px solid var(--color-border);
   border-radius: 3px;
-  padding: calc(var(--size-unit) * 0.6);
+  padding: var(--size-6);
 }
 
 .board-editor-wrapper summary {
   cursor: pointer;
   font-weight: 600;
-  font-size: calc(var(--size-unit) * 1.1);
-  margin-bottom: calc(var(--size-unit) * 0.5);
+  font-size: var(--size-12);
+  margin-bottom: var(--size-5);
   user-select: none;
 }
 
 .board-editor-wrapper summary:hover {
-  color: var(--color-primary);
+  color: #4a90e2;
 }
 
 .dialogues-section {
-  padding: calc(var(--size-unit) * 0.6);
+  padding: var(--size-6);
   background-color: var(--color-background-soft);
   border-radius: 3px;
   border: 1px solid var(--color-border);
@@ -887,8 +930,8 @@ const updateBoardActionLine = (
   justify-content: space-between;
   align-items: center;
   font-weight: 600;
-  font-size: calc(var(--size-unit) * 1.1);
-  margin-bottom: calc(var(--size-unit) * 0.5);
+  font-size: var(--size-12);
+  margin-bottom: var(--size-5);
 }
 
 .dialogues-header span {
@@ -896,12 +939,12 @@ const updateBoardActionLine = (
 }
 
 .btn-add-small {
-  padding: calc(var(--size-unit) * 0.3) calc(var(--size-unit) * 0.6);
-  background-color: var(--color-primary);
+  padding: var(--size-2) var(--size-6);
+  background-color: #4a90e2;
   border: none;
   border-radius: 3px;
   cursor: pointer;
-  font-size: calc(var(--size-unit) * 1);
+  font-size: var(--size-10);
   transition: opacity 0.2s;
 }
 
@@ -910,25 +953,25 @@ const updateBoardActionLine = (
 }
 
 .empty-state {
-  padding: calc(var(--size-unit) * 0.8);
+  padding: var(--size-8);
   text-align: center;
   color: var(--color-text-secondary);
   background-color: white;
   border-radius: 3px;
-  font-size: calc(var(--size-unit) * 1.1);
+  font-size: var(--size-12);
 }
 
 .dialogues-list {
   display: flex;
   flex-direction: column;
-  gap: calc(var(--size-unit) * 0.6);
+  gap: var(--size-6);
 }
 
 .dialogue-item {
   display: flex;
   flex-direction: column;
-  gap: calc(var(--size-unit) * 0.4);
-  padding: calc(var(--size-unit) * 0.6);
+  gap: var(--size-5);
+  padding: var(--size-6);
   background-color: white;
   border-radius: 3px;
   border: 1px solid var(--color-border);
@@ -936,24 +979,49 @@ const updateBoardActionLine = (
 
 .dialogue-header {
   display: flex;
-  gap: calc(var(--size-unit) * 0.3);
+  gap: var(--size-2);
   align-items: flex-start;
   flex-wrap: wrap;
 }
 
+.dialogue-actions-buttons {
+  display: flex;
+  gap: var(--size-2);
+  margin-left: auto;
+}
+
+.btn-move {
+  padding: var(--size-2) var(--size-5);
+  background-color: #4a90e2;
+  border: none;
+  cursor: pointer;
+  font-size: var(--size-10);
+  border-radius: 3px;
+  transition: opacity 0.2s;
+}
+
+.btn-move:hover:not(:disabled) {
+  opacity: 0.8;
+}
+
+.btn-move:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
 .form-input-small {
   flex: 1;
-  min-width: calc(var(--size-unit) * 10);
-  padding: calc(var(--size-unit) * 0.3);
-  font-size: calc(var(--size-unit) * 1);
+  min-width: var(--size-100);
+  padding: var(--size-2);
+  font-size: var(--size-10);
 }
 
 .btn-remove-small {
-  padding: calc(var(--size-unit) * 0.3) calc(var(--size-unit) * 0.5);
+  padding: var(--size-2) var(--size-5);
   background-color: #ff6b6b;
   border: none;
   cursor: pointer;
-  font-size: calc(var(--size-unit) * 1);
+  font-size: var(--size-10);
   border-radius: 3px;
   transition: opacity 0.2s;
 }
@@ -963,30 +1031,30 @@ const updateBoardActionLine = (
 }
 
 .form-textarea {
-  padding: calc(var(--size-unit) * 0.3);
+  padding: var(--size-2);
   border: 1px solid var(--color-border);
   border-radius: 3px;
-  font-size: calc(var(--size-unit) * 1);
+  font-size: var(--size-10);
   font-family: inherit;
   resize: vertical;
 }
 
 .form-textarea:focus {
   outline: none;
-  border-color: var(--color-primary);
+  border-color: #4a90e2;
 }
 
 .dialogue-hint {
   color: var(--color-text-secondary);
   font-style: italic;
-  font-size: calc(var(--size-unit) * 1);
+  font-size: var(--size-10);
 }
 
 .board-action-block {
   display: flex;
   flex-direction: column;
-  gap: calc(var(--size-unit) * 0.4);
-  padding: calc(var(--size-unit) * 0.5);
+  gap: var(--size-5);
+  padding: var(--size-5);
   background-color: var(--color-background-soft);
   border: 1px solid var(--color-border);
   border-radius: 3px;
@@ -1001,42 +1069,42 @@ const updateBoardActionLine = (
 .board-action-body {
   display: flex;
   flex-direction: column;
-  gap: calc(var(--size-unit) * 0.4);
+  gap: var(--size-5);
 }
 
 .board-action-section {
   display: flex;
   flex-direction: column;
-  gap: calc(var(--size-unit) * 0.4);
+  gap: var(--size-5);
 }
 
 .field-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: calc(var(--size-unit) * 0.4);
+  gap: var(--size-5);
 }
 
 .positions-list {
   display: flex;
   flex-direction: column;
-  gap: calc(var(--size-unit) * 0.3);
+  gap: var(--size-2);
 }
 
 .position-row {
   display: flex;
   flex-wrap: wrap;
-  gap: calc(var(--size-unit) * 0.3);
+  gap: var(--size-2);
   align-items: center;
 }
 
 .btn-inline {
-  padding: calc(var(--size-unit) * 0.3) calc(var(--size-unit) * 0.6);
+  padding: var(--size-2) var(--size-6);
   border: 1px solid var(--color-border);
   background-color: white;
   border-radius: 3px;
   cursor: pointer;
-  font-size: calc(var(--size-unit) * 1);
+  font-size: var(--size-10);
 }
 
 .btn-inline:hover {
@@ -1045,7 +1113,7 @@ const updateBoardActionLine = (
 
 .checkbox-inline {
   display: flex;
-  gap: calc(var(--size-unit) * 0.3);
+  gap: var(--size-2);
   align-items: center;
 }
 </style>

@@ -6,7 +6,7 @@
   "objectives": [],
   "sections": [
     {
-      "id": "demo_section",
+      "id": "section_1",
       "type": "demo",
       "title": "デモセクション",
       "initialBoard": [
@@ -50,7 +50,7 @@
       ]
     },
     {
-      "id": "problem_section",
+      "id": "section_2",
       "type": "problem",
       "title": "問題セクション",
       "initialBoard": [

@@ -6,6 +6,10 @@
   line-height: 1.5;
   font-weight: 300;
 
+  /* フォント */
+  --font-weight-normal: 300;
+  --font-weight-bold: 500;
+
   /* キャラクターカラー - 白上フブキ */
   --color-fubuki-primary: #54c7ea;
   --color-fubuki-bg: #77dfff;

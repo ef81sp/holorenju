@@ -99,7 +99,11 @@ export function validateScenarioCompletely(data: unknown): ValidationResult {
   }
 
   // 2. 盤面のバリデーション
-  for (let sectionIndex = 0; sectionIndex < scenario.sections.length; sectionIndex += 1) {
+  for (
+    let sectionIndex = 0;
+    sectionIndex < scenario.sections.length;
+    sectionIndex += 1
+  ) {
     const section = scenario.sections[sectionIndex];
     const boardErrors = validateBoardState(section.initialBoard);
     for (const msg of boardErrors) {
@@ -129,6 +133,22 @@ export function generateScenarioId(): string {
   const timestamp = Date.now().toString(36); // タイムスタンプを36進数に変換
   const random = Math.random().toString(36).substring(2, 7); // ランダムな文字を5文字
   return `scenario_${timestamp}_${random}`;
+}
+
+/**
+ * シナリオ内のセクション数に基づいて自動採番されたセクションIDを生成
+ */
+export function generateSectionId(scenarioSections: unknown[]): string {
+  const sectionNumber = scenarioSections.length + 1;
+  return `section_${sectionNumber}`;
+}
+
+/**
+ * ダイアログ数に基づいて自動採番されたダイアログIDを生成
+ */
+export function generateDialogueId(dialogues: unknown[]): string {
+  const dialogueNumber = dialogues.length + 1;
+  return `dialogue_${dialogueNumber}`;
 }
 
 export function createEmptyScenario(): Scenario {

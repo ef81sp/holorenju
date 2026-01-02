@@ -12,7 +12,7 @@ export default defineConfig({
   },
   server: {
     watch: {
-      ignored: ["**/src/data/scenarios/index.json"],
+      ignored: ["**/src/data/scenarios/**"],
     },
   },
 });
