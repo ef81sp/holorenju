@@ -5,7 +5,9 @@ import type {
   PreviewStone,
   StoneColor,
 } from "@/types/game";
-import { ref, computed } from "vue";
+import { ref, computed, nextTick, onMounted, onBeforeUnmount } from "vue";
+import Konva from "konva";
+import { useBoardStore } from "@/stores/boardStore";
 
 // Props
 interface Props {
@@ -46,6 +48,13 @@ const stageSize = computed(() => {
   });
   return value;
 });
+
+// ストア
+const boardStore = useBoardStore();
+
+// アニメーション用のref（最後に配置された石）
+// テンプレート refs のマップ。ref コールバック内で直接操作する
+const stoneRefs: Record<string, unknown> = {};
 
 // 動的に計算されるstageのサイズ
 const STAGE_WIDTH = computed(() => stageSize.value);
@@ -120,6 +129,7 @@ const placedStones = computed<PlacedStone[]>(() => {
 
   return stones;
 });
+
 
 // 盤面のグリッド線を生成
 const generateGridLines = (): {
@@ -370,6 +380,58 @@ const generateCursorCorners = (): {
     { points: bottomRight2, stroke: color, strokeWidth: cornerWidth },
   ];
 };
+
+// 最後に配置された石をアニメーション（上から降ってくるパターン）
+const animateLastPlacedStone = (stoneKey: string, position?: Position): void => {
+  nextTick(() => {
+    const nodeRef = stoneRefs[stoneKey];
+    if (!nodeRef) {
+      return;
+    }
+
+    // @ts-expect-error: Vue template ref methods
+    const konvaNode = nodeRef.getNode?.();
+    if (!konvaNode || !position) {
+      return;
+    }
+
+    // 現在のy位置を取得
+    const targetY = positionToPixels(position.row, position.col).y;
+    const startY = targetY - CELL_SIZE.value * 0.25;
+
+    // 初期状態を設定
+    konvaNode.y(startY);
+    konvaNode.opacity(0.5);
+    konvaNode.scaleX(0.8);
+    konvaNode.scaleY(0.8);
+
+    // アニメーション実行
+    const tween = new Konva.Tween({
+      node: konvaNode,
+      duration: 0.2,
+      y: targetY,
+      opacity: 1,
+      scaleX: 1,
+      scaleY: 1,
+      easing: Konva.Easings.EaseOut,
+    });
+
+    tween.play();
+  });
+};
+
+// BoardStoreのコールバック登録
+onMounted(() => {
+  boardStore.setOnStonePlacedCallback((position: Position) => {
+    const stoneKey = `${position.row}-${position.col}`;
+    animateLastPlacedStone(stoneKey, position);
+  });
+});
+
+// コールバック削除
+onBeforeUnmount(() => {
+  boardStore.setOnStonePlacedCallback(null);
+});
 </script>
 
 <template>
@@ -413,8 +475,14 @@ const generateCursorCorners = (): {
 
         <!-- 配置済みの石 -->
         <v-circle
-          v-for="(stone, index) in placedStones"
-          :key="`stone-${index}`"
+          v-for="stone in placedStones"
+          :key="`stone-${stone.row}-${stone.col}`"
+          :ref="(el: unknown) => {
+            const stoneKey = `${stone.row}-${stone.col}`;
+            if (el) {
+              stoneRefs[stoneKey] = el;
+            }
+          }"
           :config="{
             x: positionToPixels(stone.row, stone.col).x,
             y: positionToPixels(stone.row, stone.col).y,

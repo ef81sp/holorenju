@@ -15,6 +15,14 @@ import { createEmptyBoard } from "@/logic/renjuRules";
 export const useBoardStore = defineStore("board", () => {
   // State
   const board = ref<BoardState>(createEmptyBoard());
+  const lastPlacedStone = ref<{
+    position: Position;
+    color: StoneColor;
+  } | null>(null);
+
+  // Callbacks
+  type OnStonePlacedCallback = (position: Position, color: StoneColor) => void;
+  let onStonePlacedCallback: OnStonePlacedCallback | null = null;
 
   // Actions
   function placeStone(
@@ -35,6 +43,14 @@ export const useBoardStore = defineStore("board", () => {
       row[position.col] = color;
     }
 
+    // 最後に配置された石の情報を記録
+    lastPlacedStone.value = { position, color };
+
+    // コールバック実行
+    if (onStonePlacedCallback) {
+      onStonePlacedCallback(position, color);
+    }
+
     return { success: true };
   }
 
@@ -52,19 +68,29 @@ export const useBoardStore = defineStore("board", () => {
 
   function setBoard(newBoard: BoardState): void {
     board.value = newBoard.map((row: StoneColor[]) => [...row]);
+    // SetBoard時はアニメーション対象外にするため、lastPlacedStoneをクリア
+    lastPlacedStone.value = null;
   }
 
   function resetBoard(): void {
     board.value = createEmptyBoard();
+    lastPlacedStone.value = null;
+  }
+
+  // コールバック設定関数
+  function setOnStonePlacedCallback(callback: OnStonePlacedCallback | null): void {
+    onStonePlacedCallback = callback;
   }
 
   return {
     // State
     board,
+    lastPlacedStone,
     // Actions
     placeStone,
     removeStone,
     setBoard,
     resetBoard,
+    setOnStonePlacedCallback,
   };
 });

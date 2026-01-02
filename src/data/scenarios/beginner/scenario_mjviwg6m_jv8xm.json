@@ -16,9 +16,9 @@
         "---------------",
         "---------------",
         "---------------",
-        "--------x------",
-        "-------x-------",
-        "------x--------",
+        "---------------",
+        "---------------",
+        "---------------",
         "---------------",
         "---------------",
         "---------------",
@@ -29,45 +29,18 @@
       "dialogues": [
         {
           "id": "dialogue_1",
-          "character": "fubuki",
+          "character": "miko",
           "text": [
             {
               "type": "text",
-              "content": "こんこん"
-            },
-            {
-              "type": "emphasis",
-              "content": "きーつね"
-            },
-            {
-              "type": "text",
-              "content": "！"
+              "content": "フブさん……れんたまってなに……"
             }
           ],
-          "emotion": 0
+          "emotion": 23
         },
         {
           "id": "dialogue_2",
           "character": "fubuki",
-          "text": [
-            {
-              "type": "text",
-              "content": "石を置いちゃうよ"
-            }
-          ],
-          "emotion": 1,
-          "boardAction": {
-            "type": "place",
-            "position": {
-              "row": 5,
-              "col": 9
-            },
-            "color": "black"
-          }
-        },
-        {
-          "id": "dialogue_3",
-          "character": "miko",
           "text": [
             {
               "type": "ruby",
@@ -76,10 +49,71 @@
             },
             {
               "type": "text",
-              "content": "って五目並べと何が違うの？"
+              "content": "だよ。危ないイントネーションやめてね"
             }
           ],
-          "emotion": 23
+          "emotion": 0
+        },
+        {
+          "id": "dialogue_3",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "基本的には五目並べと一緒なんだけど、五目並べには致命的な欠点がある！"
+            }
+          ],
+          "emotion": 0
+        },
+        {
+          "id": "dialogue_4",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "おお……"
+            }
+          ],
+          "emotion": 0
+        },
+        {
+          "id": "dialogue_5",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "黒が"
+            },
+            {
+              "type": "emphasis",
+              "content": "めちゃんこ有利"
+            },
+            {
+              "type": "text",
+              "content": "なんだ。たとえば……"
+            }
+          ],
+          "emotion": 0
+        },
+        {
+          "id": "dialogue_6",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "5つ並べた時点で完成だから、妨害せずに並べていったら絶対に先手の黒が勝つし"
+            }
+          ],
+          "emotion": 0,
+          "boardAction": {
+            "type": "place",
+            "position": {
+              "row": 7,
+              "col": 7
+            },
+            "color": "black",
+            "highlight": false
+          }
         }
       ]
     },
