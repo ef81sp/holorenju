@@ -160,7 +160,7 @@ const handleNextDialogue = (): void => {
   grid-template-columns: 4fr 7fr 5fr;
   grid-template-rows: 7fr 2fr;
   padding: var(--size-14);
-  gap: var(--size-10);
+  gap: var(--size-14);
   box-sizing: border-box;
   position: relative;
 }
@@ -170,6 +170,7 @@ const handleNextDialogue = (): void => {
   grid-row: 1;
   display: flex;
   flex-direction: column;
+  justify-content: space-between;
   gap: var(--size-12);
   overflow: hidden;
 }
