@@ -12,13 +12,23 @@ import DialogText from "@/components/common/DialogText.vue";
 // Props
 interface Props {
   message: DialogMessage | null;
-  position?: "left" | "right";
+  leftCharacter?: {
+    character: CharacterType;
+    emotion: EmotionId;
+    isActive: boolean;
+  } | null;
+  rightCharacter?: {
+    character: CharacterType;
+    emotion: EmotionId;
+    isActive: boolean;
+  } | null;
   canNavigatePrevious?: boolean;
   canNavigateNext?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  position: "left",
+  leftCharacter: null,
+  rightCharacter: null,
   canNavigatePrevious: false,
   canNavigateNext: false,
 });
@@ -31,8 +41,13 @@ const emit = defineEmits<{
   dialogPrevious: [];
 }>();
 
-// キャラクター情報
-const characterInfo = computed(() => {
+// 選択肢がクリックされた
+const handleChoiceClick = (choiceId: string): void => {
+  emit("choiceSelected", choiceId);
+};
+
+// 吹き出し用キャラクター情報
+const messageCharacterInfo = computed(() => {
   if (!props.message) {
     return null;
   }
@@ -51,75 +66,96 @@ const characterInfo = computed(() => {
     },
   }[charType];
 });
-
-// 選択肢がクリックされた
-const handleChoiceClick = (choiceId: string): void => {
-  emit("choiceSelected", choiceId);
-};
 </script>
 
 <template>
-  <div
-    v-if="message"
-    class="character-dialog"
-    :class="`position-${position}`"
-  >
-    <!-- アバター -->
+  <div class="character-dialog">
+    <!-- 左キャラクター -->
     <div
-      class="avatar"
-      :style="{ backgroundColor: characterInfo?.avatarBg }"
+      v-if="leftCharacter"
+      :key="`left-${leftCharacter.character}`"
+      class="character-slot left-slot"
+      :class="{ 'is-active': leftCharacter.isActive }"
     >
-      <CharacterSprite
-        :character="message.character"
-        :emotion-id="message.emotion"
-      />
+      <div
+        class="avatar"
+        :style="{ backgroundColor: leftCharacter.isActive ? (leftCharacter.character === 'fubuki' ? '#77DFFF' : '#FF9CB4') : '#CCCCCC' }"
+      >
+        <CharacterSprite
+          :character="leftCharacter.character"
+          :emotion-id="leftCharacter.emotion"
+          :is-active="leftCharacter.isActive"
+        />
+      </div>
     </div>
 
-    <!-- 吹き出し -->
-    <div
-      class="dialog-bubble"
-      :style="{ borderColor: characterInfo?.color }"
-      @click="() => emit('dialogClicked')"
-    >
-      <div class="character-name-container">
-        <div
-          class="character-name"
-          :style="{ color: characterInfo?.color }"
-        >
-          {{ characterInfo?.name }}
+    <!-- セリフ部分 -->
+    <div class="dialog-content">
+      <div
+        v-if="message"
+        class="dialog-bubble"
+        :style="{ borderColor: messageCharacterInfo?.color }"
+        @click="() => emit('dialogClicked')"
+      >
+        <div class="character-name-container">
+          <div
+            class="character-name"
+            :style="{ color: messageCharacterInfo?.color }"
+          >
+            {{ messageCharacterInfo?.name }}
+          </div>
+          <div class="dialogue-nav-buttons">
+            <button
+              class="nav-button"
+              :disabled="!canNavigatePrevious"
+              @click.stop="emit('dialogPrevious')"
+            >
+              ◀戻る
+            </button>
+            <button
+              class="nav-button"
+              :disabled="!canNavigateNext"
+              @click.stop="emit('dialogNext')"
+            >
+              進む▶
+            </button>
+          </div>
         </div>
-        <div class="dialogue-nav-buttons">
+        <DialogText :nodes="message.text" />
+
+        <!-- 選択肢 -->
+        <div
+          v-if="message.choices && message.choices.length > 0"
+          class="choices"
+        >
           <button
-            class="nav-button"
-            :disabled="!canNavigatePrevious"
-            @click.stop="emit('dialogPrevious')"
+            v-for="choice in message.choices"
+            :key="choice.id"
+            class="choice-button"
+            @click="handleChoiceClick(choice.id)"
           >
-            ◀戻る
-          </button>
-          <button
-            class="nav-button"
-            :disabled="!canNavigateNext"
-            @click.stop="emit('dialogNext')"
-          >
-            進む▶
+            {{ choice.text }}
           </button>
         </div>
       </div>
-      <DialogText :nodes="message.text" />
+    </div>
 
-      <!-- 選択肢 -->
+    <!-- 右キャラクター -->
+    <div
+      v-if="rightCharacter"
+      :key="`right-${rightCharacter.character}`"
+      class="character-slot right-slot"
+      :class="{ 'is-active': rightCharacter.isActive }"
+    >
       <div
-        v-if="message.choices && message.choices.length > 0"
-        class="choices"
+        class="avatar"
+        :style="{ backgroundColor: rightCharacter.isActive ? (rightCharacter.character === 'fubuki' ? '#77DFFF' : '#FF9CB4') : '#CCCCCC' }"
       >
-        <button
-          v-for="choice in message.choices"
-          :key="choice.id"
-          class="choice-button"
-          @click="handleChoiceClick(choice.id)"
-        >
-          {{ choice.text }}
-        </button>
+        <CharacterSprite
+          :character="rightCharacter.character"
+          :emotion-id="rightCharacter.emotion"
+          :is-active="rightCharacter.isActive"
+        />
       </div>
     </div>
   </div>
@@ -129,10 +165,35 @@ const handleChoiceClick = (choiceId: string): void => {
 .character-dialog {
   display: flex;
   gap: var(--size-12);
-  align-items: flex-start;
+  align-items: stretch;
   padding-block: var(--size-5);
-  animation: fadeIn 0.3s ease-in;
   height: 100%;
+}
+
+.character-slot {
+  flex-shrink: 0;
+  width: var(--size-100);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  animation: fadeIn 0.3s ease-in;
+}
+
+.character-slot.left-slot {
+  order: 1;
+}
+
+.character-slot.right-slot {
+  order: 3;
+}
+
+.character-slot .avatar {
+  transform: translateY(var(--size-4));
+  transition: transform 0.3s ease-in-out;
+}
+
+.character-slot.is-active .avatar {
+  transform: translateY(0);
 }
 
 @keyframes fadeIn {
@@ -146,19 +207,23 @@ const handleChoiceClick = (choiceId: string): void => {
   }
 }
 
-.position-right.character-dialog {
-  flex-direction: row-reverse;
+.dialog-content {
+  flex: 1;
+  order: 2;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
 }
 
 .avatar {
-  flex-shrink: 0;
-  max-height: var(--size-100);
+  width: 100%;
   aspect-ratio: 1;
   border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
   box-shadow: 0 var(--size-5) var(--size-5) rgba(0, 0, 0, 0.1);
+  border: var(--size-2) solid var(--color-border);
 }
 
 .avatar-icon {
@@ -166,7 +231,6 @@ const handleChoiceClick = (choiceId: string): void => {
 }
 
 .dialog-bubble {
-  flex: 1;
   height: 100%;
   padding: var(--size-8);
   background: white;
@@ -174,37 +238,14 @@ const handleChoiceClick = (choiceId: string): void => {
   border: var(--size-2) solid;
   box-shadow: 0 var(--size-5) var(--size-8) rgba(0, 0, 0, 0.1);
   position: relative;
-}
-
-.position-left .dialog-bubble::before {
-  content: "";
-  position: absolute;
-  left: calc(-1 * var(--size-10));
-  top: var(--size-20);
-  width: 0;
-  height: 0;
-  border-style: solid;
-  border-width: var(--size-10) var(--size-10) var(--size-10) 0;
-  border-color: transparent currentColor transparent transparent;
-}
-
-.position-right .dialog-bubble::before {
-  content: "";
-  position: absolute;
-  right: calc(-1 * var(--size-10));
-  top: var(--size-20);
-  width: 0;
-  height: 0;
-  border-style: solid;
-  border-width: var(--size-10) 0 var(--size-10) var(--size-10);
-  border-color: transparent transparent transparent currentColor;
+  animation: fadeIn 0.3s ease-in;
 }
 
 .character-name-container {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: var(--size-8);
+  margin-bottom: calc(var(--size-4) * -1);
   gap: var(--size-8);
 }
 

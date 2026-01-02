@@ -116,12 +116,20 @@ export const useScenarioNavigation = (
       const scenarioData = parseScenario(rawScenarioData);
 
       scenario.value = scenarioData;
-      
+
       // すべてのセクションのダイアログを統合
       const dialogueMappings: DialogueMapping[] = [];
-      for (let sectionIndex = 0; sectionIndex < scenarioData.sections.length; sectionIndex++) {
+      for (
+        let sectionIndex = 0;
+        sectionIndex < scenarioData.sections.length;
+        sectionIndex++
+      ) {
         const section = scenarioData.sections[sectionIndex];
-        for (let dialogueIndex = 0; dialogueIndex < section.dialogues.length; dialogueIndex++) {
+        for (
+          let dialogueIndex = 0;
+          dialogueIndex < section.dialogues.length;
+          dialogueIndex++
+        ) {
           dialogueMappings.push({
             dialogue: section.dialogues[dialogueIndex],
             sectionIndex,
@@ -130,7 +138,7 @@ export const useScenarioNavigation = (
         }
       }
       allDialogues.value = dialogueMappings;
-      
+
       progressStore.startScenario(scenarioId);
 
       // 初期盤面をセット
@@ -170,7 +178,7 @@ export const useScenarioNavigation = (
       currentDialogueIndex.value += 1;
       const mapping = allDialogues.value[currentDialogueIndex.value];
       const prevMapping = allDialogues.value[currentDialogueIndex.value - 1];
-      
+
       // セクションが変わった場合、盤面を初期化
       if (mapping.sectionIndex !== prevMapping.sectionIndex) {
         const newSection = scenario.value?.sections[mapping.sectionIndex];
@@ -178,7 +186,7 @@ export const useScenarioNavigation = (
           const boardState = boardStringToBoardState(newSection.initialBoard);
           gameStore.setBoard(boardState);
           currentSectionIndex.value = mapping.sectionIndex;
-          
+
           // 新しいセクション内の前のダイアログまでのボードアクションを適用
           for (let i = 0; i < mapping.sectionDialogueIndex; i++) {
             const dialogue = newSection.dialogues[i];
@@ -188,7 +196,7 @@ export const useScenarioNavigation = (
           }
         }
       }
-      
+
       showDialogueWithAction(mapping.dialogue);
     }
   };
@@ -201,7 +209,7 @@ export const useScenarioNavigation = (
       currentDialogueIndex.value -= 1;
       const mapping = allDialogues.value[currentDialogueIndex.value];
       const nextMapping = allDialogues.value[currentDialogueIndex.value + 1];
-      
+
       // セクションが変わった場合、盤面を初期化
       if (mapping.sectionIndex !== nextMapping.sectionIndex) {
         const newSection = scenario.value?.sections[mapping.sectionIndex];
@@ -209,7 +217,7 @@ export const useScenarioNavigation = (
           const boardState = boardStringToBoardState(newSection.initialBoard);
           gameStore.setBoard(boardState);
           currentSectionIndex.value = mapping.sectionIndex;
-          
+
           // 前のセクション内の前のダイアログまでのボードアクションを適用
           for (let i = 0; i < mapping.sectionDialogueIndex; i++) {
             const dialogue = newSection.dialogues[i];
@@ -224,7 +232,7 @@ export const useScenarioNavigation = (
         if (section) {
           const boardState = boardStringToBoardState(section.initialBoard);
           gameStore.setBoard(boardState);
-          
+
           // 前のダイアログまでのボードアクションを再実行
           for (let i = 0; i < mapping.sectionDialogueIndex; i++) {
             const dialogue = section.dialogues[i];
@@ -234,7 +242,7 @@ export const useScenarioNavigation = (
           }
         }
       }
-      
+
       showDialogueWithAction(mapping.dialogue);
     }
   };

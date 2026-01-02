@@ -10,9 +10,12 @@ import { getCharacterSpriteUrl } from "@/logic/characterSprites";
 interface Props {
   character: CharacterType;
   emotionId: EmotionId;
+  isActive?: boolean;
 }
 
-const props = defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), {
+  isActive: true,
+});
 
 const coords = computed(() => EMOTION_COORDS[props.emotionId]);
 const spriteUrl = computed(() =>
@@ -58,6 +61,7 @@ watch([spriteUrl, coords], cropSprite, { immediate: true });
     v-if="croppedImageUrl"
     :src="croppedImageUrl"
     class="character-sprite"
+    :class="{ inactive: !isActive }"
     alt="character sprite"
   />
 </template>
@@ -68,5 +72,13 @@ watch([spriteUrl, coords], cropSprite, { immediate: true });
   width: 100%;
   height: 100%;
   object-fit: contain;
+  transition:
+    filter 0.3s ease,
+    opacity 0.3s ease;
+}
+
+.character-sprite.inactive {
+  filter: grayscale(100%);
+  opacity: 0.5;
 }
 </style>
