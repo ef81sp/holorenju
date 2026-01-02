@@ -7,13 +7,11 @@ interface Props {
   description: string;
   canProceed: boolean;
   isLastSection: boolean;
-  showHint: boolean;
 }
 
 defineProps<Props>();
 
 const emits = defineEmits<{
-  toggleHint: [];
   nextSection: [];
 }>();
 </script>
@@ -36,13 +34,6 @@ const emits = defineEmits<{
 
       <!-- コントロール -->
       <div class="controls">
-        <button
-          class="hint-button"
-          @click="emits('toggleHint')"
-        >
-          {{ showHint ? "ヒントを隠す" : "ヒントを見る" }}
-        </button>
-
         <button
           v-if="canProceed"
           class="next-button"
@@ -109,7 +100,6 @@ const emits = defineEmits<{
   gap: var(--size-12);
 }
 
-.hint-button,
 .next-button {
   padding: var(--size-12) var(--size-20);
   border: none;
@@ -119,19 +109,6 @@ const emits = defineEmits<{
   cursor: pointer;
   transition: all 0.2s;
   text-align: center;
-}
-
-.hint-button {
-  background: var(--color-fubuki-primary);
-  color: var(--color-text-primary);
-}
-
-.hint-button:hover {
-  background: #4a9ec9;
-  transform: translateY(-2px);
-}
-
-.next-button {
   background: var(--color-holo-purple);
   color: var(--color-text-primary);
 }

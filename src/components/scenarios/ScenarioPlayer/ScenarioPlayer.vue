@@ -55,9 +55,6 @@ const keyboardNav = useKeyboardNavigation((position) => {
   );
 });
 
-// State
-const showHint = ref(false);
-
 // Lifecycle
 onMounted(async () => {
   await scenarioNav.loadScenario();
@@ -76,10 +73,6 @@ onUnmounted(() => {
 
 const handlePlaceStone = (): void => {
   keyboardNav.placeStoneAtCursor();
-};
-
-const handleToggleHint = (): void => {
-  showHint.value = !showHint.value;
 };
 
 const handleNextDialogue = (): void => {
@@ -128,8 +121,6 @@ const handleNextDialogue = (): void => {
         :total-sections="scenarioNav.scenario.value.sections.length"
         :can-proceed="scenarioNav.canProceed.value"
         :is-last-section="scenarioNav.isLastSection.value"
-        :show-hint="showHint"
-        @toggle-hint="handleToggleHint"
         @next-section="scenarioNav.nextSection"
       />
     </div>
