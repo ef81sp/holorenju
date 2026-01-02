@@ -86,7 +86,7 @@ export const useScenarioNavigation = (
       }
 
       const scenarioModule = await import(
-        `../../../../data/scenarios/${scenarioPath}`
+        /* @vite-ignore */ `../../../../data/scenarios/${scenarioPath}`
       );
       const scenarioData = scenarioModule.default as Scenario;
 
