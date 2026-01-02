@@ -4,7 +4,6 @@ import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
 import BackButton from "./BackButton.vue";
 import KeyboardControlInfo from "./KeyboardControlInfo.vue";
 import ScenarioInfoPanel from "./ScenarioInfoPanel.vue";
-import BoardSection from "./BoardSection.vue";
 import RenjuBoard from "@/components/game/RenjuBoard.vue";
 import DialogSection from "./DialogSection.vue";
 import { useScenarioNavigation } from "./composables/useScenarioNavigation";
@@ -40,20 +39,36 @@ const onSectionComplete = (): void => {
 
 const problemSolver = useProblemSolver(props.scenarioId, onSectionComplete);
 
-const keyboardNav = useKeyboardNavigation((position) => {
-  if (
-    !scenarioNav.currentSection.value ||
-    scenarioNav.currentSection.value.type !== "problem"
-  ) {
-    return;
-  }
+const keyboardNav = useKeyboardNavigation(
+  (position) => {
+    if (
+      !scenarioNav.currentSection.value ||
+      scenarioNav.currentSection.value.type !== "problem"
+    ) {
+      return;
+    }
 
-  problemSolver.handlePlaceStone(
-    position,
-    scenarioNav.currentSection.value as ProblemSection,
-    scenarioNav.isSectionCompleted.value,
-  );
-});
+    problemSolver.handlePlaceStone(
+      position,
+      scenarioNav.currentSection.value as ProblemSection,
+      scenarioNav.isSectionCompleted.value,
+    );
+  },
+  (direction) => {
+    if (
+      !scenarioNav.currentSection.value ||
+      scenarioNav.currentSection.value.type !== "demo"
+    ) {
+      return;
+    }
+
+    if (direction === "next") {
+      scenarioNav.nextDialogue();
+    } else {
+      scenarioNav.previousDialogue();
+    }
+  },
+);
 
 // Lifecycle
 onMounted(async () => {
@@ -90,6 +105,7 @@ const handleNextDialogue = (): void => {
       <BackButton @back="scenarioNav.goBack" />
       <KeyboardControlInfo
         :cursor-position="keyboardNav.cursorPosition.value"
+        :section-type="scenarioNav.currentSection.value?.type"
       />
     </div>
 
@@ -126,6 +142,7 @@ const handleNextDialogue = (): void => {
     </div>
 
     <!-- セリフ部（左下 11×2）-->
+     <!-- FIXME: can-navigate-nextは問題セクションにdialogueプロパティを追加したら直す -->
     <div class="dialog-section-slot">
       <DialogSection
         :message="dialogStore.currentMessage"
@@ -137,13 +154,7 @@ const handleNextDialogue = (): void => {
             : 0
         "
         :can-navigate-previous="scenarioNav.currentDialogueIndex.value > 0"
-        :can-navigate-next="
-          scenarioNav.currentDialogueIndex.value <
-          (scenarioNav.currentSection.value?.type === 'demo'
-            ? scenarioNav.currentSection.value.dialogues.length
-            : 0) -
-            1
-        "
+        :can-navigate-next="true"
         @dialog-clicked="handleNextDialogue"
         @next-dialogue="scenarioNav.nextDialogue"
         @previous-dialogue="scenarioNav.previousDialogue"

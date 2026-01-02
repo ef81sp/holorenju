@@ -25,7 +25,11 @@ const emits = defineEmits<{
     <CharacterDialog
       :message="message"
       :position="message?.character === 'fubuki' ? 'left' : 'right'"
+      :can-navigate-previous="canNavigatePrevious"
+      :can-navigate-next="canNavigateNext"
       @dialog-clicked="isDemo ? emits('dialogClicked') : undefined"
+      @dialog-next="emits('nextDialogue')"
+      @dialog-previous="emits('previousDialogue')"
     />
   </div>
 </template>

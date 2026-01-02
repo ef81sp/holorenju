@@ -13,16 +13,22 @@ import DialogText from "@/components/common/DialogText.vue";
 interface Props {
   message: DialogMessage | null;
   position?: "left" | "right";
+  canNavigatePrevious?: boolean;
+  canNavigateNext?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   position: "left",
+  canNavigatePrevious: false,
+  canNavigateNext: false,
 });
 
 // Emits
 const emit = defineEmits<{
   choiceSelected: [choiceId: string];
   dialogClicked: [];
+  dialogNext: [];
+  dialogPrevious: [];
 }>();
 
 // キャラクター情報
@@ -75,11 +81,29 @@ const handleChoiceClick = (choiceId: string): void => {
       :style="{ borderColor: characterInfo?.color }"
       @click="() => emit('dialogClicked')"
     >
-      <div
-        class="character-name"
-        :style="{ color: characterInfo?.color }"
-      >
-        {{ characterInfo?.name }}
+      <div class="character-name-container">
+        <div
+          class="character-name"
+          :style="{ color: characterInfo?.color }"
+        >
+          {{ characterInfo?.name }}
+        </div>
+        <div class="dialogue-nav-buttons">
+          <button
+            class="nav-button"
+            :disabled="!canNavigatePrevious"
+            @click.stop="emit('dialogPrevious')"
+          >
+            ◀戻る
+          </button>
+          <button
+            class="nav-button"
+            :disabled="!canNavigateNext"
+            @click.stop="emit('dialogNext')"
+          >
+            進む▶
+          </button>
+        </div>
       </div>
       <DialogText :nodes="message.text" />
 
@@ -176,10 +200,43 @@ const handleChoiceClick = (choiceId: string): void => {
   border-color: transparent transparent transparent currentColor;
 }
 
+.character-name-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--size-8);
+  gap: var(--size-8);
+}
+
 .character-name {
   font-weight: 500;
   font-size: var(--size-14);
-  margin-bottom: var(--size-8);
+}
+
+.dialogue-nav-buttons {
+  display: flex;
+  gap: var(--size-6);
+}
+
+.nav-button {
+  padding: var(--size-2);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: var(--size-12);
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  transition: color 0.2s;
+  white-space: nowrap;
+}
+
+.nav-button:hover:not(:disabled) {
+  color: var(--color-fubuki-primary);
+}
+
+.nav-button:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
 }
 
 .dialog-text {

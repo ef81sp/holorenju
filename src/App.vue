@@ -8,10 +8,11 @@ const fullscreenPromptRef = useTemplateRef<typeof FullscreenPrompt>(
   "fullscreenPromptRef",
 );
 
-const { showFullscreenPrompt, handleNeverShow, isPromptDisabled, isMobile } = useFullscreenPrompt(
-  // oxlint-disable-next-line @typescript-eslint/no-explicit-any 解決できないよ〜〜〜
-  fullscreenPromptRef as any,
-);
+const { showFullscreenPrompt, handleNeverShow, isPromptDisabled, isMobile } =
+  useFullscreenPrompt(
+    // oxlint-disable-next-line @typescript-eslint/no-explicit-any 解決できないよ〜〜〜
+    fullscreenPromptRef as any,
+  );
 
 onMounted(() => {
   showFullscreenPrompt();

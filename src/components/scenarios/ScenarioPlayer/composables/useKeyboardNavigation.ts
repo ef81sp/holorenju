@@ -6,10 +6,12 @@ import type { Position } from "@/types/game";
  * キーボード操作全般を管理するComposable
  *
  * W/A/S/Dキーでカーソル移動、Space/Enterキーで石の配置をトリガーします。
+ * 左右キーでセリフナビゲーション（デモセクション時のみ）。
  * リスナーの登録・削除、カーソル位置の管理を行います。
  */
 export const useKeyboardNavigation = (
   onPlaceStone: (position: Position) => void,
+  onDialogueNavigate?: (direction: "next" | "previous") => void,
 ): {
   cursorPosition: Ref<Position>;
   handleKeyDown: (event: KeyboardEvent) => void;
@@ -47,6 +49,18 @@ export const useKeyboardNavigation = (
       case "enter":
         event.preventDefault();
         placeStoneAtCursor();
+        break;
+      case "arrowleft":
+        event.preventDefault();
+        if (onDialogueNavigate) {
+          onDialogueNavigate("previous");
+        }
+        break;
+      case "arrowright":
+        event.preventDefault();
+        if (onDialogueNavigate) {
+          onDialogueNavigate("next");
+        }
         break;
       default:
         break;

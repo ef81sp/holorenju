@@ -58,7 +58,7 @@ const emits = defineEmits<{
   padding: var(--size-16);
   background: linear-gradient(135deg, #f5f5f5 0%, #e8e8e8 100%);
   border-radius: 8px;
-  border-left: 4px solid var(--color-holo-purple);
+  border-left: 4px solid var(--color-holo-blue);
 }
 
 .title-block h2 {

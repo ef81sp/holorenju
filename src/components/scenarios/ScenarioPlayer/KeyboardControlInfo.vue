@@ -3,21 +3,31 @@ import type { Position } from "@/types/game";
 
 interface Props {
   cursorPosition: Position;
+  sectionType?: "demo" | "problem" | null;
 }
 
-defineProps<Props>();
+withDefaults(defineProps<Props>(), {
+  sectionType: null,
+});
 </script>
 
 <template>
   <div class="keyboard-control-info">
     <div class="control-title">キーボード操作</div>
-    <div class="control-keys">
-      <span class="key">W/A/S/D</span>: カーソル移動
+    <div
+      class="control-keys"
+    >
+      <span class="key">←/→</span>: セリフ移動
     </div>
-    <div class="control-keys"><span class="key">Space/Enter</span>: 配置</div>
-    <div class="cursor-position">
-      位置: ({{ cursorPosition.row }}, {{ cursorPosition.col }})
-    </div>
+    <template v-if="sectionType === 'problem'">
+      <div class="control-keys">
+        <span class="key">W/A/S/D</span>: カーソル移動
+      </div>
+      <div class="control-keys"><span class="key">Space/Enter</span>: 配置</div>
+      <div class="cursor-position">
+        位置: ({{ cursorPosition.row }}, {{ cursorPosition.col }})
+      </div>
+    </template>
   </div>
 </template>
 
