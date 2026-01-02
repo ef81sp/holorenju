@@ -165,7 +165,7 @@ export const useScenarioNavigation = (
     }
 
     currentDialogueIndex.value = 0;
-    const mapping = allDialogues.value[0];
+    const [mapping] = allDialogues.value;
     currentSectionIndex.value = mapping.sectionIndex;
     showDialogueWithAction(mapping.dialogue);
   };
@@ -211,22 +211,7 @@ export const useScenarioNavigation = (
       const nextMapping = allDialogues.value[currentDialogueIndex.value + 1];
 
       // セクションが変わった場合、盤面を初期化
-      if (mapping.sectionIndex !== nextMapping.sectionIndex) {
-        const newSection = scenario.value?.sections[mapping.sectionIndex];
-        if (newSection) {
-          const boardState = boardStringToBoardState(newSection.initialBoard);
-          boardStore.setBoard(boardState);
-          currentSectionIndex.value = mapping.sectionIndex;
-
-          // 前のセクション内の前のダイアログまでのボードアクションを適用
-          for (let i = 0; i < mapping.sectionDialogueIndex; i++) {
-            const dialogue = newSection.dialogues[i];
-            if (dialogue.boardAction) {
-              applyBoardAction(dialogue.boardAction);
-            }
-          }
-        }
-      } else {
+      if (mapping.sectionIndex === nextMapping.sectionIndex) {
         // 同じセクション内での移動の場合
         const section = scenario.value?.sections[mapping.sectionIndex];
         if (section) {
@@ -236,6 +221,21 @@ export const useScenarioNavigation = (
           // 前のダイアログまでのボードアクションを再実行
           for (let i = 0; i < mapping.sectionDialogueIndex; i++) {
             const dialogue = section.dialogues[i];
+            if (dialogue.boardAction) {
+              applyBoardAction(dialogue.boardAction);
+            }
+          }
+        }
+      } else {
+        const newSection = scenario.value?.sections[mapping.sectionIndex];
+        if (newSection) {
+          const boardState = boardStringToBoardState(newSection.initialBoard);
+          boardStore.setBoard(boardState);
+          currentSectionIndex.value = mapping.sectionIndex;
+
+          // 前のセクション内の前のダイアログまでのボードアクションを適用
+          for (let i = 0; i < mapping.sectionDialogueIndex; i++) {
+            const dialogue = newSection.dialogues[i];
             if (dialogue.boardAction) {
               applyBoardAction(dialogue.boardAction);
             }

@@ -29,7 +29,7 @@ const cellSize = 144;
 const croppedImageUrl = ref<string>("");
 
 // スプライトシートから切り出し
-const cropSprite = () => {
+const cropSprite = (): void => {
   const img = new Image();
   img.crossOrigin = "anonymous";
   img.src = spriteUrl.value;

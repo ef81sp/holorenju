@@ -2,7 +2,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
 
 import BackButton from "./BackButton.vue";
-import KeyboardControlInfo from "./KeyboardControlInfo.vue";
+import ControlInfo from "./ControlInfo.vue";
 import ScenarioInfoPanel from "./ScenarioInfoPanel.vue";
 import RenjuBoard from "@/components/game/RenjuBoard.vue";
 import DialogSection from "./DialogSection.vue";
@@ -102,7 +102,7 @@ const handleNextDialogue = (): void => {
     <!-- 操作セクション（左上 4×7）-->
     <div class="control-section-slot">
       <BackButton @back="scenarioNav.goBack" />
-      <KeyboardControlInfo
+      <ControlInfo
         :cursor-position="keyboardNav.cursorPosition.value"
         :section-type="scenarioNav.currentSection.value?.type"
       />

@@ -145,9 +145,9 @@ function validateProblemSection(
   );
   const feedback = validateFeedback(data, "feedback", `${path}.feedback`);
   const dialogues =
-    data.dialogues !== undefined
-      ? validateDialogueArray(data, "dialogues", `${path}.dialogues`)
-      : [];
+    data.dialogues === undefined
+      ? []
+      : validateDialogueArray(data, "dialogues", `${path}.dialogues`);
 
   return {
     id,

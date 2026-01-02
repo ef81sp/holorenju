@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import RenjuBoard from "@/components/game/RenjuBoard.vue";
-import KeyboardControlInfo from "./KeyboardControlInfo.vue";
+import ControlInfo from "./ControlInfo.vue";
 import type { BoardState, Position } from "@/types/game";
 
 interface Props {
@@ -21,7 +21,7 @@ const emits = defineEmits<{
   <div class="board-section">
     <div class="board-wrapper">
       <!-- Keyboard control UI -->
-      <KeyboardControlInfo :cursor-position="cursorPosition" />
+      <ControlInfo :cursor-position="cursorPosition" />
       <RenjuBoard
         :board-state="boardState"
         :disabled="disabled"
