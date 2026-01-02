@@ -14,6 +14,7 @@ import { useGameStore } from "@/stores/gameStore";
 import { useDialogStore } from "@/stores/dialogStore";
 
 import type { ProblemSection } from "@/types/scenario";
+import type { Position } from "@/types/game";
 
 // Props
 interface Props {
@@ -40,20 +41,7 @@ const onSectionComplete = (): void => {
 const problemSolver = useProblemSolver(props.scenarioId, onSectionComplete);
 
 const keyboardNav = useKeyboardNavigation(
-  (position) => {
-    if (
-      !scenarioNav.currentSection.value ||
-      scenarioNav.currentSection.value.type !== "problem"
-    ) {
-      return;
-    }
-
-    problemSolver.handlePlaceStone(
-      position,
-      scenarioNav.currentSection.value as ProblemSection,
-      scenarioNav.isSectionCompleted.value,
-    );
-  },
+  () => handlePlaceStone(),
   (direction) => {
     if (!scenarioNav.currentSection.value) {
       return;
@@ -83,8 +71,22 @@ onUnmounted(() => {
   keyboardNav.detachKeyListener();
 });
 
-const handlePlaceStone = (): void => {
-  keyboardNav.placeStoneAtCursor();
+const handlePlaceStone = (position?: Position): void => {
+  if (
+    !scenarioNav.currentSection.value ||
+    scenarioNav.currentSection.value.type !== "problem"
+  ) {
+    return;
+  }
+
+  // Position が指定されていればそれを使用、なければカーソル位置
+  const targetPosition = position || keyboardNav.cursorPosition.value;
+
+  problemSolver.handlePlaceStone(
+    targetPosition,
+    scenarioNav.currentSection.value as ProblemSection,
+    scenarioNav.isSectionCompleted.value,
+  );
 };
 
 const handleNextDialogue = (): void => {

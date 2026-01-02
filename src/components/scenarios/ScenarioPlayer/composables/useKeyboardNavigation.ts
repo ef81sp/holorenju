@@ -10,7 +10,7 @@ import type { Position } from "@/types/game";
  * リスナーの登録・削除、カーソル位置の管理を行います。
  */
 export const useKeyboardNavigation = (
-  onPlaceStone: (position: Position) => void,
+  onPlaceStone: () => void,
   onDialogueNavigate?: (direction: "next" | "previous") => void,
 ): {
   cursorPosition: Ref<Position>;
@@ -93,7 +93,7 @@ export const useKeyboardNavigation = (
    * 現在のカーソル位置に石を配置
    */
   const placeStoneAtCursor = (): void => {
-    onPlaceStone(cursorPosition.value);
+    onPlaceStone();
   };
 
   /**

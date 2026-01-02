@@ -51,7 +51,7 @@ export const useProblemSolver = (
 
     // すでに石が置かれている場合はスキップ
     if (boardStore.board[position.row][position.col] !== null) {
-      console.warn("[handlePlaceStone] Cell already occupied");
+      console.warn("[handlePlaceStone] Cell already occupied", position);
       return;
     }
 
