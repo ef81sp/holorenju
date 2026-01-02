@@ -41,7 +41,7 @@ const updateObjective = (index: number, value: string): void => {
         readonly
         class="form-input"
         style="background-color: var(--color-bg-secondary); cursor: not-allowed"
-      >
+      />
     </div>
 
     <!-- Title -->
@@ -56,7 +56,7 @@ const updateObjective = (index: number, value: string): void => {
           (e) =>
             updateScenarioInfo('title', (e.target as HTMLInputElement).value)
         "
-      >
+      />
     </div>
 
     <!-- Difficulty -->
@@ -116,7 +116,7 @@ const updateObjective = (index: number, value: string): void => {
               (e) =>
                 updateObjective(index, (e.target as HTMLInputElement).value)
             "
-          >
+          />
           <button
             class="btn-remove"
             @click="removeObjective(index)"

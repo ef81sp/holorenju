@@ -58,8 +58,9 @@ const handleBack = (): void => {
             </p>
           </div>
           <div class="progress-info">
-            <span class="progress-text">{{ beginnerProgress.completed }} /
-              {{ beginnerProgress.total }}</span>
+            <span class="progress-text">
+              {{ beginnerProgress.completed }} / {{ beginnerProgress.total }}
+            </span>
             <progress
               class="progress-bar"
               :value="beginnerProgress.rate"
@@ -80,8 +81,10 @@ const handleBack = (): void => {
             <p class="button-description">基本的な戦術や考え方を学びます</p>
           </div>
           <div class="progress-info">
-            <span class="progress-text">{{ intermediateProgress.completed }} /
-              {{ intermediateProgress.total }}</span>
+            <span class="progress-text">
+              {{ intermediateProgress.completed }} /
+              {{ intermediateProgress.total }}
+            </span>
             <progress
               class="progress-bar"
               :value="intermediateProgress.rate"
@@ -102,8 +105,9 @@ const handleBack = (): void => {
             <p class="button-description">実戦的な高度なテクニックを学びます</p>
           </div>
           <div class="progress-info">
-            <span class="progress-text">{{ advancedProgress.completed }} /
-              {{ advancedProgress.total }}</span>
+            <span class="progress-text">
+              {{ advancedProgress.completed }} / {{ advancedProgress.total }}
+            </span>
             <progress
               class="progress-bar"
               :value="advancedProgress.rate"

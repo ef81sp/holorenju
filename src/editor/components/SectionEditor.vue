@@ -145,7 +145,7 @@ const handleTypeChange = (type: "demo" | "problem"): void => {
               disabled
               readonly
               title="セクションIDは自動採番されます（読み取り専用）"
-            >
+            />
           </div>
           <div class="form-group">
             <label>タイプ</label>

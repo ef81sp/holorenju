@@ -23,9 +23,7 @@ export const getCharacterSpriteUrl = (() => {
     if (!cache[key]) {
       const charName = character === "fubuki" ? "shirakamifubuki" : "sakramiko";
       const charId = character === "fubuki" ? "01" : "00";
-      const filename = `Holoface${charId}-${charName}-${String(
-        imageSet,
-      ).padStart(2, "0")}.png`;
+      const filename = `Holoface${charId}-${charName}-${String(imageSet).padStart(2, "0")}.png`;
 
       cache[key] = new URL(
         `../assets/characters/${filename}`,

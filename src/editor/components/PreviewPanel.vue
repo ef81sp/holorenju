@@ -166,9 +166,11 @@ const currentBoard = computed(() => {
               >
                 ◀
               </button>
-              <span class="dialogue-position">{{ dialoguePaginationInfo?.current }}/{{
-                dialoguePaginationInfo?.total
-              }}</span>
+              <span class="dialogue-position">
+                {{ dialoguePaginationInfo?.current }}/{{
+                  dialoguePaginationInfo?.total
+                }}
+              </span>
               <button
                 class="dialogue-btn"
                 :disabled="

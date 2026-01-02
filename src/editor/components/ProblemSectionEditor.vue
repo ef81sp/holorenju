@@ -365,7 +365,7 @@ const removeFeedbackLine = (key: FeedbackKey, index: number): void => {
             @input="
               (e) => updateSectionTitle((e.target as HTMLInputElement).value)
             "
-          >
+          />
         </div>
 
         <!-- 説明 -->
@@ -499,7 +499,7 @@ const removeFeedbackLine = (key: FeedbackKey, index: number): void => {
                             Number((e.target as HTMLInputElement).value),
                           )
                       "
-                    >
+                    />
                     <label>列</label>
                     <input
                       type="number"
@@ -516,7 +516,7 @@ const removeFeedbackLine = (key: FeedbackKey, index: number): void => {
                             Number((e.target as HTMLInputElement).value),
                           )
                       "
-                    >
+                    />
                     <button
                       class="btn-inline"
                       @click="removePositionFromCondition(index, posIndex)"
@@ -568,7 +568,7 @@ const removeFeedbackLine = (key: FeedbackKey, index: number): void => {
                           pattern: (e.target as HTMLInputElement).value,
                         })
                     "
-                  >
+                  />
                 </div>
               </div>
 
@@ -588,7 +588,7 @@ const removeFeedbackLine = (key: FeedbackKey, index: number): void => {
                             (e.target as HTMLInputElement).checked,
                           )
                       "
-                    >
+                    />
                     strict（順序厳密）
                   </label>
                 </div>
@@ -614,7 +614,7 @@ const removeFeedbackLine = (key: FeedbackKey, index: number): void => {
                             Number((e.target as HTMLInputElement).value),
                           )
                       "
-                    >
+                    />
                     <label>列</label>
                     <input
                       type="number"
@@ -631,7 +631,7 @@ const removeFeedbackLine = (key: FeedbackKey, index: number): void => {
                             Number((e.target as HTMLInputElement).value),
                           )
                       "
-                    >
+                    />
                     <label>色</label>
                     <select
                       :value="move.color"
@@ -749,7 +749,7 @@ const removeFeedbackLine = (key: FeedbackKey, index: number): void => {
                             ) as any,
                           })
                       "
-                    >
+                    />
                   </div>
                   <div class="feedback-text-row">
                     <textarea
@@ -844,7 +844,7 @@ const removeFeedbackLine = (key: FeedbackKey, index: number): void => {
                             ) as any,
                           })
                       "
-                    >
+                    />
                   </div>
                   <div class="feedback-text-row">
                     <textarea
@@ -939,7 +939,7 @@ const removeFeedbackLine = (key: FeedbackKey, index: number): void => {
                             ) as any,
                           })
                       "
-                    >
+                    />
                   </div>
                   <div class="feedback-text-row">
                     <textarea

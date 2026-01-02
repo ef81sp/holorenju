@@ -324,7 +324,7 @@ const updateBoardActionLine = (
             @input="
               (e) => updateSectionTitle((e.target as HTMLInputElement).value)
             "
-          >
+          />
         </div>
       </div>
 
@@ -385,7 +385,7 @@ const updateBoardActionLine = (
                   readonly
                   disabled
                   title="ダイアログIDは自動採番されます（読み取り専用）"
-                >
+                />
                 <select
                   :value="dialogue.character"
                   class="form-input form-input-small"
@@ -423,7 +423,8 @@ const updateBoardActionLine = (
                   <span
                     v-else
                     class="placeholder"
-                  >表情選択</span>
+                    >表情選択</span
+                  >
                 </button>
                 <div class="dialogue-actions-buttons">
                   <button
@@ -531,7 +532,7 @@ const updateBoardActionLine = (
                               Number((e.target as HTMLInputElement).value),
                             )
                         "
-                      >
+                      />
                       <label>列</label>
                       <input
                         type="number"
@@ -548,7 +549,7 @@ const updateBoardActionLine = (
                               Number((e.target as HTMLInputElement).value),
                             )
                         "
-                      >
+                      />
                     </div>
                     <div class="field-row">
                       <label>色</label>
@@ -579,7 +580,7 @@ const updateBoardActionLine = (
                                 (e.target as HTMLInputElement).checked,
                               )
                           "
-                        >
+                        />
                         ハイライト
                       </label>
                     </div>
@@ -606,7 +607,7 @@ const updateBoardActionLine = (
                               Number((e.target as HTMLInputElement).value),
                             )
                         "
-                      >
+                      />
                       <label>列</label>
                       <input
                         type="number"
@@ -623,7 +624,7 @@ const updateBoardActionLine = (
                               Number((e.target as HTMLInputElement).value),
                             )
                         "
-                      >
+                      />
                     </div>
                   </div>
 
@@ -679,7 +680,7 @@ const updateBoardActionLine = (
                               label: (e.target as HTMLInputElement).value,
                             })
                         "
-                      >
+                      />
                     </div>
                     <div class="positions-list">
                       <div
@@ -704,7 +705,7 @@ const updateBoardActionLine = (
                                 Number((e.target as HTMLInputElement).value),
                               )
                           "
-                        >
+                        />
                         <label>列</label>
                         <input
                           type="number"
@@ -721,7 +722,7 @@ const updateBoardActionLine = (
                                 Number((e.target as HTMLInputElement).value),
                               )
                           "
-                        >
+                        />
                         <button
                           type="button"
                           class="btn-inline"
@@ -764,7 +765,7 @@ const updateBoardActionLine = (
                                 Number((e.target as HTMLInputElement).value),
                               )
                           "
-                        >
+                        />
                         <input
                           type="number"
                           min="0"
@@ -780,7 +781,7 @@ const updateBoardActionLine = (
                                 Number((e.target as HTMLInputElement).value),
                               )
                           "
-                        >
+                        />
                       </div>
                       <div class="position-row">
                         <label>終了 行/列</label>
@@ -799,7 +800,7 @@ const updateBoardActionLine = (
                                 Number((e.target as HTMLInputElement).value),
                               )
                           "
-                        >
+                        />
                         <input
                           type="number"
                           min="0"
@@ -815,7 +816,7 @@ const updateBoardActionLine = (
                                 Number((e.target as HTMLInputElement).value),
                               )
                           "
-                        >
+                        />
                       </div>
                     </div>
                     <div class="field-row">

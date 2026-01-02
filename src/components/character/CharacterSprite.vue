@@ -59,7 +59,7 @@ watch([spriteUrl, coords], cropSprite, { immediate: true });
     :src="croppedImageUrl"
     class="character-sprite"
     alt="character sprite"
-  >
+  />
 </template>
 
 <style scoped>

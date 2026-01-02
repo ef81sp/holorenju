@@ -139,9 +139,9 @@ const handleNextDialogue = (): void => {
         :can-navigate-previous="scenarioNav.currentDialogueIndex.value > 0"
         :can-navigate-next="
           scenarioNav.currentDialogueIndex.value <
-            (scenarioNav.currentSection.value?.type === 'demo'
-              ? scenarioNav.currentSection.value.dialogues.length
-              : 0) -
+          (scenarioNav.currentSection.value?.type === 'demo'
+            ? scenarioNav.currentSection.value.dialogues.length
+            : 0) -
             1
         "
         @dialog-clicked="handleNextDialogue"

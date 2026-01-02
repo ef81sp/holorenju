@@ -152,7 +152,9 @@ const handleSelectFileFromDirectory = async (): Promise<void> => {
         }
         const difficultyDir = await scenarioDir.value.getDirectoryHandle(
           difficultyName,
-          { create: false },
+          {
+            create: false,
+          },
         );
         const typedDifficultyDir =
           difficultyDir as FileSystemDirectoryHandle & {
@@ -415,7 +417,9 @@ const handleLoadFromDirectory = async (): Promise<void> => {
     try {
       targetDir = await scenarioDir.value.getDirectoryHandle(
         editorStore.scenario.difficulty,
-        { create: false },
+        {
+          create: false,
+        },
       );
     } catch {
       console.warn(
@@ -533,7 +537,7 @@ const handleGenerateIndex = async (): Promise<void> => {
             accept=".json"
             style="display: none"
             @change="handleFileSelect"
-          >
+          />
           📄 ファイル選択
         </label>
         <button
