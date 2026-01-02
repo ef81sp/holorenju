@@ -136,7 +136,7 @@ const handleSelectEditor = (): void => {
 
 .button-description {
   font-size: var(--size-12);
-  color: var(--color-text-secondary);
+  color: #eeeeee;
   margin: 0;
   padding: 0;
   word-break: auto-phrase;
