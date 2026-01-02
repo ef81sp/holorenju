@@ -4,7 +4,7 @@ import { useAppStore, type AppState } from "@/stores/appStore";
 import MenuPage from "./pages/MenuPage.vue";
 import DifficultyPage from "./pages/DifficultyPage.vue";
 import ScenarioListPage from "./pages/ScenarioListPage.vue";
-import ScenarioPlayer from "./scenarios/ScenarioPlayer.vue";
+import { ScenarioPlayer } from "./scenarios/ScenarioPlayer";
 // oxlint-disable-next-line consistent-type-imports
 import ConfirmDialog from "./common/ConfirmDialog.vue";
 import ScenarioEditor from "@/editor/components/ScenarioEditor.vue";
