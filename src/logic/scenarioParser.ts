@@ -16,7 +16,6 @@ import type {
   BoardAction,
   SuccessCondition,
   Position,
-  Hint,
   ProblemFeedback,
   DialogueLine,
 } from "../types/scenario";
@@ -145,11 +144,6 @@ function validateProblemSection(
   );
   const feedback = validateFeedback(data, "feedback", `${path}.feedback`);
 
-  // Hintsはオプション
-  const hints = data.hints
-    ? validateHintArray(data, "hints", `${path}.hints`)
-    : undefined;
-
   return {
     id,
     type: "problem",
@@ -157,7 +151,6 @@ function validateProblemSection(
     initialBoard,
     description,
     successConditions,
-    hints,
     feedback,
   };
 }
@@ -406,75 +399,6 @@ function validateMoveArray(
 /**
  * ヒント配列をバリデーション
  */
-function validateHintArray(
-  data: Record<string, unknown>,
-  key: string,
-  path: string,
-): Hint[] {
-  const value = data[key];
-
-  if (!Array.isArray(value)) {
-    throw new Error(`${path} must be an array`);
-  }
-
-  return value.map((item, index) => validateHint(item, `${path}[${index}]`));
-}
-
-/**
- * ヒントをバリデーション
- */
-function validateHint(data: unknown, path: string): Hint {
-  if (!isObject(data)) {
-    throw new Error(`${path} must be an object`);
-  }
-
-  const level = validateNumber(data, "level", `${path}.level`);
-
-  const dialogue = data.dialogue
-    ? (() => {
-        const d = data.dialogue;
-        if (!isObject(d)) {
-          throw new Error(`${path}.dialogue must be an object`);
-        }
-        return {
-          character: validateString(
-            d,
-            "character",
-            `${path}.dialogue.character`,
-          ),
-          text: validateString(d, "text", `${path}.dialogue.text`),
-          emotion: d.emotion
-            ? validateString(d, "emotion", `${path}.dialogue.emotion`)
-            : undefined,
-        };
-      })()
-    : undefined;
-
-  const marks = data.marks
-    ? (() => {
-        const m = data.marks;
-        if (!isObject(m)) {
-          throw new Error(`${path}.marks must be an object`);
-        }
-        return {
-          positions: validatePositionArray(
-            m,
-            "positions",
-            `${path}.marks.positions`,
-          ),
-          markType: validateEnum(
-            m,
-            "markType",
-            ["circle", "cross", "arrow"],
-            `${path}.marks.markType`,
-          ),
-        };
-      })()
-    : undefined;
-
-  return { level, dialogue, marks };
-}
-
 /**
  * フィードバックをバリデーション
  */

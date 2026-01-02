@@ -82,7 +82,6 @@ interface ProblemSection extends BaseSection {
   initialBoard: string[];
   description: string;
   successConditions: SuccessCondition[];
-  hints?: Hint[];
   feedback: ProblemFeedback;
 }
 
@@ -107,19 +106,6 @@ interface SequenceCondition {
   type: "sequence";
   moves: (Position & { color: "black" | "white" })[];
   strict: boolean;
-}
-
-interface Hint {
-  level: number;
-  dialogue?: {
-    character: string;
-    text: string;
-    emotion?: string;
-  };
-  marks?: {
-    positions: Position[];
-    markType: "circle" | "cross" | "arrow";
-  };
 }
 
 interface ProblemFeedback {
@@ -183,7 +169,6 @@ export type {
   PositionCondition,
   PatternCondition,
   SequenceCondition,
-  Hint,
   ProblemFeedback,
   DialogueLine,
   Scenario,

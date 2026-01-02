@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
 import { useElementSize } from "@vueuse/core";
 
 import CharacterDialog from "@/components/character/CharacterDialog.vue";
@@ -11,9 +11,19 @@ import { useGameStore } from "@/stores/gameStore";
 import { useProgressStore } from "@/stores/progressStore";
 import scenariosIndex from "@/data/scenarios/index.json";
 
-import type { Scenario, Section } from "@/types/scenario";
-import type { DialogMessage, CharacterType, Emotion } from "@/types/character";
-import type { Position } from "@/types/game";
+import type {
+  Scenario,
+  Section,
+  DemoSection,
+  ProblemSection,
+  SuccessCondition,
+  PositionCondition,
+  PatternCondition,
+  SequenceCondition,
+  BoardAction,
+} from "@/types/scenario";
+import type { DialogMessage, CharacterType } from "@/types/character";
+import type { Position, BoardState } from "@/types/game";
 
 // Props
 interface Props {
@@ -31,8 +41,10 @@ const progressStore = useProgressStore();
 // State
 const scenario = ref<Scenario | null>(null);
 const currentSectionIndex = ref(0);
+const currentDialogueIndex = ref(0);
 const isSectionCompleted = ref(false);
 const showHint = ref(false);
+const cursorPosition = ref<Position>({ row: 7, col: 7 });
 
 // 盤フレームサイズ計測用
 const boardFrameRef = ref<HTMLElement | null>(null);
@@ -83,6 +95,37 @@ const boardSize = computed(() => {
   return calculatedSize;
 });
 
+// Keyboard handler for debug
+const handleKeyDown = (event: KeyboardEvent): void => {
+  const { key } = event;
+
+  switch (key.toLowerCase()) {
+    case "w":
+      event.preventDefault();
+      cursorPosition.value.row = Math.max(0, cursorPosition.value.row - 1);
+      break;
+    case "s":
+      event.preventDefault();
+      cursorPosition.value.row = Math.min(14, cursorPosition.value.row + 1);
+      break;
+    case "a":
+      event.preventDefault();
+      cursorPosition.value.col = Math.max(0, cursorPosition.value.col - 1);
+      break;
+    case "d":
+      event.preventDefault();
+      cursorPosition.value.col = Math.min(14, cursorPosition.value.col + 1);
+      break;
+    case " ":
+    case "enter":
+      event.preventDefault();
+      handlePlaceStone(cursorPosition.value);
+      break;
+    default:
+      break;
+  }
+};
+
 // Methods
 const loadScenario = async (): Promise<void> => {
   try {
@@ -117,23 +160,31 @@ const loadScenario = async (): Promise<void> => {
       );
       gameStore.setBoard(boardState);
     }
+
+    // デモセクションなら最初のダイアログを表示
+    showIntroDialog();
   } catch (error) {
     console.error("Failed to load scenario:", props.scenarioId, error);
   }
 };
 
 const showIntroDialog = (): void => {
-  // 新しい構造では、デモセクションのダイアログから取得
+  // デモセクションの最初のダイアログを表示
   const firstSection = scenario.value?.sections[0];
   if (firstSection && firstSection.type === "demo") {
+    currentDialogueIndex.value = 0;
     const [firstDialogue] = firstSection.dialogues;
     if (firstDialogue) {
       dialogStore.showMessage({
         id: firstDialogue.id,
         character: firstDialogue.character as CharacterType,
         text: firstDialogue.text,
-        emotion: "normal" as Emotion,
+        emotion: firstDialogue.emotion,
       } as DialogMessage);
+      // ダイアログ表示時に盤面操作を実行
+      if (firstDialogue.boardAction) {
+        applyBoardAction(firstDialogue.boardAction);
+      }
     }
   }
 };
@@ -148,33 +199,47 @@ const handlePlaceStone = (position: Position): void => {
     return;
   }
 
-  const result = gameStore.placeStone(position);
-
-  if (!result.success) {
-    // 禁じ手の場合は特別なフィードバック
-    if (result.message?.includes("禁じ手")) {
-      showForbiddenFeedback();
-    }
+  // すでに石が置かれている場合はスキップ
+  if (gameStore.board[position.row][position.col] !== null) {
+    console.warn("[handlePlaceStone] Cell already occupied");
     return;
   }
 
-  // 成功条件の判定ロジックは今後の実装対象
-  handleIncorrectMove();
+  // 問題セクションでは常に黒石を配置（色を親で制御）
+  const newBoard = gameStore.board.map((row) => [...row]);
+  newBoard[position.row][position.col] = "black";
+  gameStore.setBoard(newBoard);
+
+  console.warn(
+    `[handlePlaceStone] Placed black stone at (${position.row}, ${position.col})`,
+  );
+
+  // 成功条件をチェック
+  const problemSection = currentSection.value as ProblemSection;
+  if (checkAllConditions(problemSection.successConditions)) {
+    handleCorrectMove();
+  }
 };
 
 const handleCorrectMove = (): void => {
+  console.warn("[handleCorrectMove] Called");
   isSectionCompleted.value = true;
   showHint.value = false;
 
   // 正解のフィードバックを表示
   if (currentSection.value && currentSection.value.type === "problem") {
+    console.warn(
+      "[handleCorrectMove] Problem section found, feedback count:",
+      currentSection.value.feedback.success.length,
+    );
     if (currentSection.value.feedback.success.length > 0) {
       const [msg] = currentSection.value.feedback.success;
+      console.warn("[handleCorrectMove] Showing success feedback:", msg.text);
       dialogStore.showMessage({
         id: `feedback-success-${msg.character}`,
         character: msg.character as CharacterType,
         text: msg.text,
-        emotion: "normal" as Emotion,
+        emotion: msg.emotion,
       } as DialogMessage);
     }
   }
@@ -189,32 +254,129 @@ const handleCorrectMove = (): void => {
   }
 };
 
-const handleIncorrectMove = (): void => {
-  // 不正解のフィードバックを表示
-  if (currentSection.value && currentSection.value.type === "problem") {
-    if (currentSection.value.feedback.failure.length > 0) {
-      const [msg] = currentSection.value.feedback.failure;
-      dialogStore.showMessage({
-        id: `feedback-failure-${msg.character}`,
-        character: msg.character as CharacterType,
-        text: msg.text,
-        emotion: "normal" as Emotion,
-      } as DialogMessage);
-    }
-  }
-
-  // 盤面をリセット
-  if (currentSection.value) {
-    const boardState = boardStringToBoardState(
-      currentSection.value.initialBoard,
-    );
-    gameStore.setBoard(boardState);
-  }
-};
-
 const showForbiddenFeedback = (): void => {
   // 禁じ手のフィードバック（新構造では未実装）
   // 禁じ手の応答はシナリオ拡張時に追加予定
+};
+
+const applyBoardAction = (action: BoardAction): void => {
+  if (action.type === "place") {
+    gameStore.placeStone(action.position);
+  } else if (action.type === "remove") {
+    // 石を削除（盤面状態を直接操作）
+    const newBoard = gameStore.board.map((row) => [...row]);
+    newBoard[action.position.row][action.position.col] = null;
+    gameStore.setBoard(newBoard);
+  } else if (action.type === "setBoard") {
+    const boardState = boardStringToBoardState(action.board);
+    gameStore.setBoard(boardState);
+  }
+  // Mark, lineアクションは盤面表示の拡張時に実装
+};
+
+const checkSuccessCondition = (
+  condition: SuccessCondition,
+  board: BoardState,
+): boolean => {
+  if (condition.type === "position") {
+    const posCondition = condition;
+    const result = posCondition.positions.some((pos) => {
+      const cell = board[pos.row][pos.col];
+      const matches = cell === posCondition.color;
+      console.warn(
+        `[checkSuccessCondition] pos(${pos.row},${pos.col}): cell=${cell}, expected=${posCondition.color}, matches=${matches}`,
+      );
+      return matches;
+    });
+    console.warn(
+      `[checkSuccessCondition] position condition result: ${result}`,
+    );
+    return result;
+  }
+
+  if (condition.type === "pattern") {
+    // パターン判定は今後実装
+    return false;
+  }
+
+  if (condition.type === "sequence") {
+    // シーケンス判定は今後実装
+    return false;
+  }
+
+  return false;
+};
+
+const checkAllConditions = (conditions: SuccessCondition[]): boolean => {
+  const result = conditions.some((condition) =>
+    checkSuccessCondition(condition, gameStore.board),
+  );
+  console.warn(`[checkAllConditions] All conditions check result: ${result}`);
+  return result;
+};
+
+const nextDialogue = (): void => {
+  const demoSection = currentSection.value as DemoSection;
+  if (!demoSection || demoSection.type !== "demo") {
+    return;
+  }
+
+  // 次のダイアログに進む
+  currentDialogueIndex.value += 1;
+
+  if (currentDialogueIndex.value >= demoSection.dialogues.length) {
+    // デモセクション完了 → 問題セクションへ自動遷移
+    isSectionCompleted.value = true; // CanProceedがtrueになるようにセット
+    nextSection();
+    return;
+  }
+
+  // 次のダイアログを表示
+  const nextDialogueData = demoSection.dialogues[currentDialogueIndex.value];
+  dialogStore.showMessage({
+    id: nextDialogueData.id,
+    character: nextDialogueData.character as CharacterType,
+    text: nextDialogueData.text,
+    emotion: nextDialogueData.emotion,
+  } as DialogMessage);
+  // ダイアログ表示時に盤面操作を実行
+  if (nextDialogueData.boardAction) {
+    applyBoardAction(nextDialogueData.boardAction);
+  }
+};
+
+const previousDialogue = (): void => {
+  const demoSection = currentSection.value as DemoSection;
+  if (!demoSection || demoSection.type !== "demo") {
+    return;
+  }
+
+  if (currentDialogueIndex.value <= 0) {
+    return;
+  }
+
+  // 前のダイアログに戻す
+  currentDialogueIndex.value -= 1;
+
+  const prevDialogueData = demoSection.dialogues[currentDialogueIndex.value];
+  dialogStore.showMessage({
+    id: prevDialogueData.id,
+    character: prevDialogueData.character as CharacterType,
+    text: prevDialogueData.text,
+    emotion: prevDialogueData.emotion,
+  } as DialogMessage);
+
+  // 初期盤面に戻す
+  const boardState = boardStringToBoardState(demoSection.initialBoard);
+  gameStore.setBoard(boardState);
+
+  // 前のダイアログまでの盤面操作を再実行
+  for (let i = 0; i < currentDialogueIndex.value; i++) {
+    const dialogue = demoSection.dialogues[i];
+    if (dialogue.boardAction) {
+      applyBoardAction(dialogue.boardAction);
+    }
+  }
 };
 
 const toggleHint = (): void => {
@@ -230,6 +392,7 @@ const nextSection = (): void => {
     completeScenario();
   } else {
     currentSectionIndex.value += 1;
+    currentDialogueIndex.value = 0;
     isSectionCompleted.value = false;
     showHint.value = false;
 
@@ -238,6 +401,19 @@ const nextSection = (): void => {
         currentSection.value.initialBoard,
       );
       gameStore.setBoard(boardState);
+
+      // デモセクションなら最初のダイアログを表示
+      if (currentSection.value.type === "demo") {
+        const [firstDialogue] = currentSection.value.dialogues;
+        if (firstDialogue) {
+          dialogStore.showMessage({
+            id: firstDialogue.id,
+            character: firstDialogue.character as CharacterType,
+            text: firstDialogue.text,
+            emotion: firstDialogue.emotion,
+          } as DialogMessage);
+        }
+      }
     }
   }
 };
@@ -254,12 +430,17 @@ const handleBack = (): void => {
 // Lifecycle
 onMounted(async () => {
   loadScenario();
+  window.addEventListener("keydown", handleKeyDown);
 
   await nextTick();
   console.warn("[ScenarioPlayer] Initial size:", {
     width: boardFrameWidth.value,
     height: boardFrameHeight.value,
   });
+});
+
+onUnmounted(() => {
+  window.removeEventListener("keydown", handleKeyDown);
 });
 </script>
 
@@ -292,26 +473,30 @@ onMounted(async () => {
       class="board-section"
     >
       <div class="board-wrapper">
+        <!-- Keyboard control UI -->
+        <div class="keyboard-control-info">
+          <div class="control-title">キーボード操作</div>
+          <div class="control-keys">
+            <span class="key">W/A/S/D</span>: カーソル移動
+          </div>
+          <div class="control-keys">
+            <span class="key">Space/Enter</span>: 配置
+          </div>
+          <div class="cursor-position">
+            位置: ({{ cursorPosition.row }}, {{ cursorPosition.col }})
+          </div>
+        </div>
         <RenjuBoard
           :board-state="gameStore.board"
           :disabled="isSectionCompleted"
           :stage-size="boardSize"
+          :cursor-position="cursorPosition"
           @place-stone="handlePlaceStone"
         />
       </div>
 
       <!-- ヒント表示 -->
-      <div
-        v-if="
-          showHint &&
-            currentSection?.type === 'problem' &&
-            currentSection.hints &&
-            currentSection.hints.length > 0
-        "
-        class="hint-box"
-      >
-        💡 {{ currentSection.hints[0] }}
-      </div>
+      <!-- Note: ヒント機能は廃止されました。問題セクションで直接ヒント表示を追加する場合は別途実装予定 -->
     </div>
 
     <!-- 説明・コントロール部（右側 5×9）-->
@@ -350,6 +535,9 @@ onMounted(async () => {
         :message="dialogStore.currentMessage"
         :position="
           dialogStore.currentMessage?.character === 'fubuki' ? 'left' : 'right'
+        "
+        @dialog-clicked="
+          currentSection?.type === 'demo' ? nextDialogue() : undefined
         "
       />
     </div>
@@ -394,6 +582,7 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: var(--size-16);
   min-height: 0; /* flex itemの最小サイズをリセット */
 }
 
@@ -502,5 +691,49 @@ onMounted(async () => {
 .next-button:hover {
   background: #5e3f7a;
   transform: translateY(-2px);
+}
+
+.keyboard-control-info {
+  background: rgba(255, 255, 255, 0.95);
+  border: 2px solid var(--color-fubuki-primary);
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 7px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  flex-shrink: 0;
+  min-width: 150px;
+}
+
+.control-title {
+  font-weight: 500;
+  color: var(--color-fubuki-primary);
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.control-keys {
+  margin-bottom: 4px;
+  color: #666;
+}
+
+.key {
+  display: inline-block;
+  padding: 2px 6px;
+  background: #f0f0f0;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  font-family: monospace;
+  font-size: 11px;
+  font-weight: 500;
+  margin-right: 4px;
+}
+
+.cursor-position {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #e0e0e0;
+  font-family: monospace;
+  color: #333;
+  font-weight: 500;
 }
 </style>

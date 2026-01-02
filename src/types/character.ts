@@ -101,23 +101,12 @@ const EMOTION_COORDS = {
   39: { imageSet: 5, spriteIndex: 7, x: "-432px", y: "-144px" },
 } as const satisfies Record<EmotionId, EmotionCoord>;
 
-// キャラクターの表情（従来の型、互換性維持）
-type Emotion = "normal" | "happy" | "thinking" | "surprised" | "explaining";
-
-// キャラクター情報
-interface Character {
-  type: CharacterType;
-  name: string;
-  emotion: Emotion;
-  avatarUrl: string;
-}
-
 // 対話メッセージ
 interface DialogMessage {
   id: string;
   character: CharacterType;
   text: string;
-  emotion: Emotion;
+  emotion: EmotionId;
   choices?: DialogChoice[];
 }
 
@@ -138,9 +127,7 @@ interface DialogState {
 export type {
   CharacterType,
   EmotionId,
-  Emotion,
   EmotionCoord,
-  Character,
   DialogMessage,
   DialogChoice,
   DialogState,

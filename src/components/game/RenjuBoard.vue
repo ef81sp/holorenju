@@ -13,6 +13,7 @@ interface Props {
   disabled?: boolean;
   stageSize?: number;
   allowOverwrite?: boolean;
+  cursorPosition?: Position;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -21,6 +22,7 @@ const props = withDefaults(defineProps<Props>(), {
   disabled: false,
   stageSize: 640,
   allowOverwrite: false,
+  cursorPosition: undefined,
 });
 
 // Emits
@@ -284,6 +286,90 @@ const handleStageMouseLeave = (): void => {
   hoveredPosition.value = null;
   emit("hoverCell", null);
 };
+
+// カーソルの四隅を描画
+const generateCursorCorners = (): {
+  points: number[];
+  stroke: string;
+  strokeWidth: number;
+}[] => {
+  if (!props.cursorPosition) {
+    return [];
+  }
+
+  const { row, col } = props.cursorPosition;
+  const { x, y } = positionToPixels(row, col);
+  const cornerLength = CELL_SIZE.value * 0.25; // セルサイズの25%
+  const cornerWidth = 2;
+  const color = "#FF6B6B"; // 赤色
+
+  // 左上コーナー
+  const topLeft1 = [
+    x - cornerLength,
+    y - STONE_RADIUS.value,
+    x,
+    y - STONE_RADIUS.value,
+  ];
+  const topLeft2 = [
+    x - STONE_RADIUS.value,
+    y - cornerLength,
+    x - STONE_RADIUS.value,
+    y,
+  ];
+
+  // 右上コーナー
+  const topRight1 = [
+    x + STONE_RADIUS.value,
+    y - STONE_RADIUS.value,
+    x + cornerLength,
+    y - STONE_RADIUS.value,
+  ];
+  const topRight2 = [
+    x + STONE_RADIUS.value,
+    y - cornerLength,
+    x + STONE_RADIUS.value,
+    y,
+  ];
+
+  // 左下コーナー
+  const bottomLeft1 = [
+    x - cornerLength,
+    y + STONE_RADIUS.value,
+    x,
+    y + STONE_RADIUS.value,
+  ];
+  const bottomLeft2 = [
+    x - STONE_RADIUS.value,
+    y,
+    x - STONE_RADIUS.value,
+    y + cornerLength,
+  ];
+
+  // 右下コーナー
+  const bottomRight1 = [
+    x + STONE_RADIUS.value,
+    y + STONE_RADIUS.value,
+    x + cornerLength,
+    y + STONE_RADIUS.value,
+  ];
+  const bottomRight2 = [
+    x + STONE_RADIUS.value,
+    y,
+    x + STONE_RADIUS.value,
+    y + cornerLength,
+  ];
+
+  return [
+    { points: topLeft1, stroke: color, strokeWidth: cornerWidth },
+    { points: topLeft2, stroke: color, strokeWidth: cornerWidth },
+    { points: topRight1, stroke: color, strokeWidth: cornerWidth },
+    { points: topRight2, stroke: color, strokeWidth: cornerWidth },
+    { points: bottomLeft1, stroke: color, strokeWidth: cornerWidth },
+    { points: bottomLeft2, stroke: color, strokeWidth: cornerWidth },
+    { points: bottomRight1, stroke: color, strokeWidth: cornerWidth },
+    { points: bottomRight2, stroke: color, strokeWidth: cornerWidth },
+  ];
+};
 </script>
 
 <template>
@@ -369,6 +455,13 @@ const handleStageMouseLeave = (): void => {
             strokeWidth: 3,
             opacity: 0.7,
           }"
+        />
+
+        <!-- キーボードカーソル表示 -->
+        <v-line
+          v-for="(line, index) in generateCursorCorners()"
+          :key="`cursor-corner-${index}`"
+          :config="line"
         />
       </v-layer>
     </v-stage>

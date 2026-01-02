@@ -28,16 +28,16 @@
       ],
       "dialogues": [
         {
-          "id": "d-1767276711722",
+          "id": "dialogue_1",
           "character": "fubuki",
           "text": "こんこんきーつね！",
           "emotion": 0
         },
         {
-          "id": "d-1767276725871",
+          "id": "dialogue_2",
           "character": "fubuki",
           "text": "石を置いちゃうよ",
-          "emotion": 0,
+          "emotion": 1,
           "boardAction": {
             "type": "place",
             "position": {
@@ -46,6 +46,12 @@
             },
             "color": "black"
           }
+        },
+        {
+          "id": "dialogue_3",
+          "character": "miko",
+          "text": "ぐえー",
+          "emotion": 23
         }
       ]
     },
@@ -92,14 +98,14 @@
           {
             "character": "fubuki",
             "text": "ないすー！",
-            "emotion": "normal"
+            "emotion": 0
           }
         ],
         "failure": [
           {
             "character": "miko",
             "text": "お゙お゙お゙……",
-            "emotion": "surprised"
+            "emotion": 0
           }
         ]
       }

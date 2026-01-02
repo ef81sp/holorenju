@@ -21,6 +21,7 @@ const props = withDefaults(defineProps<Props>(), {
 // Emits
 const emit = defineEmits<{
   choiceSelected: [choiceId: string];
+  dialogClicked: [];
 }>();
 
 // キャラクター情報
@@ -63,7 +64,7 @@ const handleChoiceClick = (choiceId: string): void => {
     >
       <CharacterSprite
         :character="message.character as CharacterType"
-        :emotion-id="0"
+        :emotion-id="message.emotion"
         :width="80"
         :height="80"
       />
@@ -73,6 +74,7 @@ const handleChoiceClick = (choiceId: string): void => {
     <div
       class="dialog-bubble"
       :style="{ borderColor: characterInfo?.color }"
+      @click="() => emit('dialogClicked')"
     >
       <div
         class="character-name"
