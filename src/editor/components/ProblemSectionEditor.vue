@@ -11,7 +11,9 @@ import type {
   DialogueLine,
 } from "@/types/scenario";
 import type { Position } from "@/types/game";
-import type { CharacterType } from "@/types/character";
+import type { CharacterType, EmotionId } from "@/types/character";
+import type { TextNode } from "@/types/text";
+import { parseDialogueText } from "@/logic/textParser";
 
 const editorStore = useEditorStore();
 
@@ -321,7 +323,7 @@ const updateFeedbackLines = (key: FeedbackKey, lines: DialogueLine[]): void => {
 
 const addFeedbackLine = (key: FeedbackKey): void => {
   const lines = getFeedbackLines(key);
-  updateFeedbackLines(key, [...lines, { character: "", text: "", emotion: 0 }]);
+  updateFeedbackLines(key, [...lines, { character: "fubuki", text: [], emotion: 0 }]);
 };
 
 const updateFeedbackLine = (
@@ -342,6 +344,23 @@ const removeFeedbackLine = (key: FeedbackKey, index: number): void => {
   const lines = getFeedbackLines(key).filter((_, i) => i !== index);
   updateFeedbackLines(key, lines);
 };
+
+// AST から記法テキストに逆変換
+const astToText = (nodes: TextNode[]): string =>
+  nodes
+    .map((node) => {
+      if (node.type === "text") {
+        return node.content;
+      }
+      if (node.type === "ruby") {
+        return `{${node.base}|${node.ruby}}`;
+      }
+      if (node.type === "emphasis") {
+        return `**${node.content}**`;
+      }
+      return "";
+    })
+    .join("");
 </script>
 
 <template>
@@ -746,21 +765,21 @@ const removeFeedbackLine = (key: FeedbackKey, index: number): void => {
                                   (e.target as HTMLInputElement).value,
                                 ) || 0,
                               ),
-                            ) as any,
+                            ) as EmotionId,
                           })
                       "
                     />
                   </div>
                   <div class="feedback-text-row">
                     <textarea
-                      :value="line.text"
+                      :value="astToText(line.text)"
                       class="form-textarea"
                       rows="2"
                       placeholder="テキスト"
                       @input="
                         (e) =>
                           updateFeedbackLine('success', index, {
-                            text: (e.target as HTMLTextAreaElement).value,
+                            text: parseDialogueText((e.target as HTMLTextAreaElement).value),
                           })
                       "
                     />
@@ -841,21 +860,21 @@ const removeFeedbackLine = (key: FeedbackKey, index: number): void => {
                                   (e.target as HTMLInputElement).value,
                                 ) || 0,
                               ),
-                            ) as any,
+                            ) as EmotionId,
                           })
                       "
                     />
                   </div>
                   <div class="feedback-text-row">
                     <textarea
-                      :value="line.text"
+                      :value="astToText(line.text)"
                       class="form-textarea"
                       rows="2"
                       placeholder="テキスト"
                       @input="
                         (e) =>
                           updateFeedbackLine('failure', index, {
-                            text: (e.target as HTMLTextAreaElement).value,
+                            text: parseDialogueText((e.target as HTMLTextAreaElement).value),
                           })
                       "
                     />
@@ -936,21 +955,21 @@ const removeFeedbackLine = (key: FeedbackKey, index: number): void => {
                                   (e.target as HTMLInputElement).value,
                                 ) || 0,
                               ),
-                            ) as any,
+                            ) as EmotionId,
                           })
                       "
                     />
                   </div>
                   <div class="feedback-text-row">
                     <textarea
-                      :value="line.text"
+                      :value="astToText(line.text)"
                       class="form-textarea"
                       rows="2"
                       placeholder="テキスト"
                       @input="
                         (e) =>
                           updateFeedbackLine('progress', index, {
-                            text: (e.target as HTMLTextAreaElement).value,
+                            text: parseDialogueText((e.target as HTMLTextAreaElement).value),
                           })
                       "
                     />

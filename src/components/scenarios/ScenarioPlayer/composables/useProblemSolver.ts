@@ -1,4 +1,4 @@
-import type { DialogMessage, CharacterType } from "@/types/character";
+import type { CharacterType } from "@/types/character";
 import type { Position, BoardState } from "@/types/game";
 import type {
   ProblemSection,
@@ -86,7 +86,7 @@ export const useProblemSolver = (
         character: msg.character as CharacterType,
         text: msg.text,
         emotion: msg.emotion,
-      } as DialogMessage);
+      });
     }
 
     // 進度を記録

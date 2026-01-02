@@ -1,10 +1,10 @@
 import { computed, ref, type ComputedRef, type Ref } from "vue";
 
-import type { DialogMessage } from "@/types/character";
 import type { Scenario, Section, BoardAction } from "@/types/scenario";
 
 import scenariosIndex from "@/data/scenarios/index.json";
 import { boardStringToBoardState } from "@/logic/scenarioFileHandler";
+import { parseScenario } from "@/logic/scenarioParser";
 import { useAppStore } from "@/stores/appStore";
 import { useDialogStore } from "@/stores/dialogStore";
 import { useGameStore } from "@/stores/gameStore";
@@ -86,9 +86,10 @@ export const useScenarioNavigation = (
       }
 
       const scenarioModule = await import(
-        /* @vite-ignore */ `../../../../data/scenarios/${scenarioPath}`
+        `../../../../data/scenarios/${scenarioPath}`
       );
-      const scenarioData = scenarioModule.default as Scenario;
+      const rawScenarioData = scenarioModule.default;
+      const scenarioData = parseScenario(rawScenarioData);
 
       scenario.value = scenarioData;
       progressStore.startScenario(scenarioId);
@@ -122,7 +123,7 @@ export const useScenarioNavigation = (
           character: firstDialogue.character,
           text: firstDialogue.text,
           emotion: firstDialogue.emotion,
-        } as DialogMessage);
+        });
         if (firstDialogue.boardAction) {
           applyBoardAction(firstDialogue.boardAction);
         }
@@ -155,7 +156,7 @@ export const useScenarioNavigation = (
       character: nextDialogueData.character,
       text: nextDialogueData.text,
       emotion: nextDialogueData.emotion,
-    } as DialogMessage);
+    });
     if (nextDialogueData.boardAction) {
       applyBoardAction(nextDialogueData.boardAction);
     }
@@ -182,7 +183,7 @@ export const useScenarioNavigation = (
       character: prevDialogueData.character,
       text: prevDialogueData.text,
       emotion: prevDialogueData.emotion,
-    } as DialogMessage);
+    });
 
     // 初期盤面に戻す
     const boardState = boardStringToBoardState(demoSection.initialBoard);
@@ -227,7 +228,7 @@ export const useScenarioNavigation = (
               character: firstDialogue.character,
               text: firstDialogue.text,
               emotion: firstDialogue.emotion,
-            } as DialogMessage);
+            });
           }
         }
       }

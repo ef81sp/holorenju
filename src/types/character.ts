@@ -2,6 +2,8 @@
  * キャラクター関連の型定義
  */
 
+import type { TextNode } from "./text";
+
 // キャラクターの種類
 type CharacterType = "fubuki" | "miko" | "narration";
 
@@ -105,7 +107,7 @@ const EMOTION_COORDS = {
 interface DialogMessage {
   id: string;
   character: CharacterType;
-  text: string;
+  text: TextNode[];
   emotion: EmotionId;
   choices?: DialogChoice[];
 }

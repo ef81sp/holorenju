@@ -7,7 +7,9 @@ import CharacterSprite from "@/components/character/CharacterSprite.vue";
 import type { DemoSection, DemoDialogue, BoardAction } from "@/types/scenario";
 import type { Position } from "@/types/game";
 import type { CharacterType, EmotionId } from "@/types/character";
+import type { TextNode } from "@/types/text";
 import { generateDialogueId } from "@/logic/scenarioFileHandler";
+import { parseDialogueText } from "@/logic/textParser";
 
 const editorStore = useEditorStore();
 
@@ -56,8 +58,8 @@ const addDialogue = (): void => {
     const newDialogues = [...currentSection.value.dialogues];
     const newDialogue: DemoDialogue = {
       id: generateDialogueId(newDialogues),
-      character: "",
-      text: "",
+      character: "fubuki",
+      text: [],
       emotion: 0,
     };
     newDialogues.push(newDialogue);
@@ -67,6 +69,23 @@ const addDialogue = (): void => {
     });
   }
 };
+
+// AST から記法テキストに逆変換
+const astToText = (nodes: TextNode[]): string =>
+  nodes
+    .map((node) => {
+      if (node.type === "text") {
+        return node.content;
+      }
+      if (node.type === "ruby") {
+        return `{${node.base}|${node.ruby}}`;
+      }
+      if (node.type === "emphasis") {
+        return `**${node.content}**`;
+      }
+      return "";
+    })
+    .join("");
 
 const removeDialogue = (index: number): void => {
   if (currentSection.value) {
@@ -453,14 +472,14 @@ const updateBoardActionLine = (
                 </div>
               </div>
               <textarea
-                :value="dialogue.text"
+                :value="astToText(dialogue.text)"
                 class="form-textarea"
                 placeholder="台詞を入力"
                 rows="3"
                 @input="
                   (e) =>
                     updateDialogue(index, {
-                      text: (e.target as HTMLTextAreaElement).value,
+                      text: parseDialogueText((e.target as HTMLTextAreaElement).value),
                     })
                 "
               />

@@ -193,8 +193,8 @@ export function createEmptyProblemSection(): ProblemSection {
       },
     ],
     feedback: {
-      success: [{ character: "", text: "", emotion: 0 }],
-      failure: [{ character: "", text: "", emotion: 0 }],
+      success: [{ character: "fubuki", text: [], emotion: 0 }],
+      failure: [{ character: "fubuki", text: [], emotion: 0 }],
     },
   };
 }

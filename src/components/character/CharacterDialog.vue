@@ -7,6 +7,7 @@ import type {
   EmotionId,
 } from "@/types/character";
 import CharacterSprite from "./CharacterSprite.vue";
+import DialogText from "@/components/common/DialogText.vue";
 
 // Props
 interface Props {
@@ -80,9 +81,7 @@ const handleChoiceClick = (choiceId: string): void => {
       >
         {{ characterInfo?.name }}
       </div>
-      <div class="dialog-text">
-        {{ message.text }}
-      </div>
+      <DialogText :nodes="message.text" />
 
       <!-- 選択肢 -->
       <div

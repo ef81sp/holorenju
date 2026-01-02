@@ -19,6 +19,7 @@ import type {
   ProblemFeedback,
   DialogueLine,
 } from "../types/scenario";
+import type { TextNode } from "../types/text";
 
 // ===== パース・バリデーション =====
 
@@ -183,8 +184,13 @@ function validateDialogue(data: unknown, path: string): DemoDialogue {
   }
 
   const id = validateString(data, "id", `${path}.id`);
-  const character = validateString(data, "character", `${path}.character`);
-  const text = validateString(data, "text", `${path}.text`);
+  const character = validateEnum(
+    data,
+    "character",
+    ["fubuki", "miko", "narration"],
+    `${path}.character`,
+  );
+  const text = validateTextNodeArray(data, "text", `${path}.text`);
   // Emotionは0-39の数値、デフォルトは0
   const emotion =
     typeof data.emotion === "number"
@@ -449,6 +455,7 @@ function validateDialogueLineArray(
       throw new Error(`${path}[${index}] must be an object`);
     }
 
+    const text = validateTextNodeArray(item, "text", `${path}[${index}].text`);
     // Emotionは0-39の数値、デフォルトは0
     const emotion =
       typeof item.emotion === "number"
@@ -456,12 +463,13 @@ function validateDialogueLineArray(
         : 0;
 
     return {
-      character: validateString(
+      character: validateEnum(
         item,
         "character",
+        ["fubuki", "miko", "narration"],
         `${path}[${index}].character`,
       ),
-      text: validateString(item, "text", `${path}[${index}].text`),
+      text,
       emotion: emotion as unknown as EmotionId,
     };
   });
@@ -509,6 +517,53 @@ export function validateBoardState(board: unknown[]): string[] {
   });
 
   return errors;
+}
+
+/**
+ * TextNodeArray をバリデーション
+ */
+function validateTextNodeArray(
+  data: Record<string, unknown>,
+  key: string,
+  path: string,
+): TextNode[] {
+  const value = data[key];
+
+  if (!Array.isArray(value)) {
+    throw new Error(`${path} must be an array`);
+  }
+
+  return value.map((item, index) => {
+    if (!isObject(item)) {
+      throw new Error(`${path}[${index}] must be an object`);
+    }
+
+    const type = validateEnum(
+      item,
+      "type",
+      ["text", "ruby", "emphasis"],
+      `${path}[${index}].type`,
+    );
+
+    if (type === "text") {
+      const content = validateString(
+        item,
+        "content",
+        `${path}[${index}].content`,
+      );
+      return { type: "text", content } as TextNode;
+    } else if (type === "ruby") {
+      const base = validateString(item, "base", `${path}[${index}].base`);
+      const ruby = validateString(item, "ruby", `${path}[${index}].ruby`);
+      return { type: "ruby", base, ruby } as TextNode;
+    }
+    const content = validateString(
+      item,
+      "content",
+      `${path}[${index}].content`,
+    );
+    return { type: "emphasis", content } as TextNode;
+  });
 }
 
 // ===== ヘルパー関数 =====

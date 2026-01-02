@@ -2,8 +2,9 @@
  * シナリオ関連の型定義
  */
 
-import type { EmotionId } from "./character";
+import type { CharacterType, EmotionId } from "./character";
 import type { Position } from "./game";
+import type { TextNode } from "./text";
 
 // シナリオの難易度
 type ScenarioDifficulty = "beginner" | "intermediate" | "advanced";
@@ -28,8 +29,8 @@ interface DemoSection extends BaseSection {
 
 interface DemoDialogue {
   id: string;
-  character: string;
-  text: string;
+  character: CharacterType;
+  text: TextNode[];
   emotion: EmotionId; // 0-39の連番ID
   boardAction?: BoardAction;
 }
@@ -115,8 +116,8 @@ interface ProblemFeedback {
 }
 
 interface DialogueLine {
-  character: string;
-  text: string;
+  character: CharacterType;
+  text: TextNode[];
   emotion: EmotionId; // 0-39の連番ID
 }
 

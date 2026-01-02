@@ -166,6 +166,29 @@ a:hover {
   color: #2b7fe6;
 }
 
+ruby {
+  ruby-align: center;
+  ruby-position: over;
+}
+
+rt {
+  font-size: var(--size-2);
+  font-weight: 300;
+}
+
+strong {
+  font-weight: 500;
+  background: linear-gradient(
+    to bottom,
+    transparent 60%,
+    rgba(255, 235, 59, 0.4) 60%
+  );
+  text-decoration: underline;
+  text-decoration-color: rgba(255, 235, 59, 0.6);
+  text-decoration-thickness: 3px;
+  text-underline-offset: 2px;
+}
+
 body {
   margin: 0;
   display: flex;

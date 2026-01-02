@@ -3,6 +3,7 @@ import { computed, ref } from "vue";
 import { useEditorStore } from "@/editor/stores/editorStore";
 import RenjuBoard from "@/components/game/RenjuBoard.vue";
 import CharacterSprite from "@/components/character/CharacterSprite.vue";
+import DialogText from "@/components/common/DialogText.vue";
 import type {
   DemoSection,
   ProblemSection,
@@ -194,15 +195,15 @@ const currentBoard = computed(() => {
                 <CharacterSprite
                   :character="currentDialogue.character as CharacterType"
                   :emotion-id="(currentDialogue.emotion as EmotionId) || 0"
-                  :width="80"
-                  :height="80"
                 />
               </div>
               <div class="dialogue-text-area">
                 <span class="character-name">{{
                   currentDialogue.character
                 }}</span>
-                <span class="dialogue-content">{{ currentDialogue.text }}</span>
+                <span class="dialogue-content">
+                  <DialogText :nodes="currentDialogue.text" />
+                </span>
               </div>
             </div>
           </div>
@@ -343,6 +344,7 @@ const currentBoard = computed(() => {
   display: flex;
   align-items: center;
   justify-content: center;
+  width: var(--size-56);
 }
 
 .dialogue-text-area {
