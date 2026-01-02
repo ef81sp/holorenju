@@ -25,9 +25,7 @@ const emits = defineEmits<{
     <CharacterDialog
       :message="message"
       :position="message?.character === 'fubuki' ? 'left' : 'right'"
-      @dialog-clicked="
-        isDemo ? emits('dialogClicked') : undefined
-      "
+      @dialog-clicked="isDemo ? emits('dialogClicked') : undefined"
     />
   </div>
 </template>

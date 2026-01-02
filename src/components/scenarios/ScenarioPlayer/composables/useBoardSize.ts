@@ -1,5 +1,7 @@
-import { computed, ref } from "vue";
+import type { Ref } from "vue";
+
 import { useElementSize } from "@vueuse/core";
+import { computed } from "vue";
 
 /**
  * ボードフレームのサイズを計測し、ボードサイズを計算するComposable
@@ -8,7 +10,7 @@ import { useElementSize } from "@vueuse/core";
  * 利用可能な幅と高さから最適なボードサイズを計算します。
  * 初期化時に値が0の場合のフォールバック処理を含みます。
  */
-export const useBoardSize = (boardFrameRef: ReturnType<typeof ref>) => {
+export const useBoardSize = (boardFrameRef: Ref<HTMLElement | null>) => {
   const { width: boardFrameWidth, height: boardFrameHeight } = useElementSize(
     boardFrameRef,
     {
@@ -28,7 +30,8 @@ export const useBoardSize = (boardFrameRef: ReturnType<typeof ref>) => {
       return 400; // 最小デフォルトサイズ
     }
 
-    const calculatedSize = Math.min(availableWidth, availableHeight);
+    // 高さ優先で計算（グリッド行の7frに合わせる）
+    const calculatedSize = availableHeight;
 
     console.warn("[useBoardSize] computed:", {
       availableWidth,

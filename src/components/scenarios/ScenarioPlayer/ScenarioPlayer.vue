@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
 
-import ScenarioHeader from "./ScenarioHeader.vue";
+import BackButton from "./BackButton.vue";
+import KeyboardControlInfo from "./KeyboardControlInfo.vue";
 import ScenarioInfoPanel from "./ScenarioInfoPanel.vue";
 import BoardSection from "./BoardSection.vue";
+import RenjuBoard from "@/components/game/RenjuBoard.vue";
 import DialogSection from "./DialogSection.vue";
 import { useScenarioNavigation } from "./composables/useScenarioNavigation";
 import { useKeyboardNavigation } from "./composables/useKeyboardNavigation";
@@ -39,7 +41,10 @@ const onSectionComplete = (): void => {
 const problemSolver = useProblemSolver(props.scenarioId, onSectionComplete);
 
 const keyboardNav = useKeyboardNavigation((position) => {
-  if (!scenarioNav.currentSection.value || scenarioNav.currentSection.value.type !== "problem") {
+  if (
+    !scenarioNav.currentSection.value ||
+    scenarioNav.currentSection.value.type !== "problem"
+  ) {
     return;
   }
 
@@ -87,23 +92,20 @@ const handleNextDialogue = (): void => {
     v-if="scenarioNav.scenario.value"
     class="scenario-player"
   >
-    <!-- ヘッダー -->
-    <div class="header-slot">
-      <ScenarioHeader
-        :scenario-title="scenarioNav.scenario.value.title"
-        :current-section-title="scenarioNav.currentSection.value?.title || ''"
-        :section-index="scenarioNav.currentSectionIndex.value"
-        :total-sections="scenarioNav.scenario.value.sections.length"
-        @back="scenarioNav.goBack"
+    <!-- 操作セクション（左上 4×7）-->
+    <div class="control-section-slot">
+      <BackButton @back="scenarioNav.goBack" />
+      <KeyboardControlInfo
+        :cursor-position="keyboardNav.cursorPosition.value"
       />
     </div>
 
-    <!-- 盤面フレーム（左上 11×6）-->
+    <!-- 連珠盤セクション（中央 7×7）-->
     <div
       ref="boardFrameRef"
       class="board-section-wrapper"
     >
-      <BoardSection
+      <RenjuBoard
         :board-state="gameStore.board"
         :disabled="scenarioNav.isSectionCompleted.value"
         :stage-size="boardSize"
@@ -115,8 +117,13 @@ const handleNextDialogue = (): void => {
     <!-- 説明・コントロール部（右側 5×9）-->
     <div class="info-section-slot">
       <ScenarioInfoPanel
-        :title="scenarioNav.currentSection.value?.id || ''"
-        :description="(scenarioNav.currentSection.value?.type === 'problem' ? scenarioNav.currentSection.value?.description : '') || ''"
+        :scenario-title="scenarioNav.scenario.value.title"
+        :section-title="scenarioNav.currentSection.value?.id || ''"
+        :description="
+          (scenarioNav.currentSection.value?.type === 'problem'
+            ? scenarioNav.currentSection.value?.description
+            : '') || ''
+        "
         :section-index="scenarioNav.currentSectionIndex.value"
         :total-sections="scenarioNav.scenario.value.sections.length"
         :can-proceed="scenarioNav.canProceed.value"
@@ -133,9 +140,19 @@ const handleNextDialogue = (): void => {
         :message="dialogStore.currentMessage"
         :is-demo="scenarioNav.currentSection.value?.type === 'demo'"
         :dialog-index="scenarioNav.currentDialogueIndex.value"
-        :total-dialogues="(scenarioNav.currentSection.value?.type === 'demo' ? scenarioNav.currentSection.value.dialogues.length : 0)"
+        :total-dialogues="
+          scenarioNav.currentSection.value?.type === 'demo'
+            ? scenarioNav.currentSection.value.dialogues.length
+            : 0
+        "
         :can-navigate-previous="scenarioNav.currentDialogueIndex.value > 0"
-        :can-navigate-next="scenarioNav.currentDialogueIndex.value < ((scenarioNav.currentSection.value?.type === 'demo' ? scenarioNav.currentSection.value.dialogues.length : 0) - 1)"
+        :can-navigate-next="
+          scenarioNav.currentDialogueIndex.value <
+            (scenarioNav.currentSection.value?.type === 'demo'
+              ? scenarioNav.currentSection.value.dialogues.length
+              : 0) -
+            1
+        "
         @dialog-clicked="handleNextDialogue"
         @next-dialogue="scenarioNav.nextDialogue"
         @previous-dialogue="scenarioNav.previousDialogue"
@@ -149,39 +166,43 @@ const handleNextDialogue = (): void => {
   width: 100%;
   height: 100%;
   display: grid;
-  grid-template-columns: 11fr 5fr;
-  grid-template-rows: 1fr 6fr 2fr;
+  grid-template-columns: 4fr 7fr 5fr;
+  grid-template-rows: 7fr 2fr;
   padding: var(--size-14);
   gap: var(--size-10);
   box-sizing: border-box;
+  position: relative;
 }
 
-.header-slot {
+.control-section-slot {
   grid-column: 1;
   grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-12);
+  overflow: hidden;
 }
 
 .board-section-wrapper {
-  grid-column: 1;
-  grid-row: 2;
+  grid-column: 2;
+  grid-row: 1;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: var(--size-12);
   overflow: hidden;
   min-height: 0;
 }
 
 .info-section-slot {
-  grid-column: 2;
-  grid-row: 1 / 4;
+  grid-column: 3;
+  grid-row: 1 / 3;
   overflow-y: auto;
+  padding-inline: var(--size-14);
 }
 
 .dialog-section-slot {
-  grid-column: 1;
-  grid-row: 3;
+  grid-column: 1 / 3;
+  grid-row: 2;
   overflow-y: auto;
 }
 </style>

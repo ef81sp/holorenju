@@ -1,13 +1,14 @@
 import { computed, ref, type ComputedRef, type Ref } from "vue";
+
+import type { DialogMessage } from "@/types/character";
+import type { Scenario, Section, BoardAction } from "@/types/scenario";
+
+import scenariosIndex from "@/data/scenarios/index.json";
+import { boardStringToBoardState } from "@/logic/scenarioFileHandler";
 import { useAppStore } from "@/stores/appStore";
 import { useDialogStore } from "@/stores/dialogStore";
 import { useGameStore } from "@/stores/gameStore";
 import { useProgressStore } from "@/stores/progressStore";
-import { boardStringToBoardState } from "@/logic/scenarioFileHandler";
-import scenariosIndex from "@/data/scenarios/index.json";
-
-import type { Scenario, Section, BoardAction } from "@/types/scenario";
-import type { DialogMessage } from "@/types/character";
 
 /**
  * シナリオ・ダイアログナビゲーションを管理するComposable
@@ -15,7 +16,9 @@ import type { DialogMessage } from "@/types/character";
  * シナリオの読み込み、セクション・ダイアログ間の遷移、初期化を担当します。
  * 複数のストア（appStore, gameStore, dialogStore, progressStore）と連携します。
  */
-export const useScenarioNavigation = (scenarioId: string): {
+export const useScenarioNavigation = (
+  scenarioId: string,
+): {
   scenario: Ref<Scenario | null>;
   currentSectionIndex: Ref<number>;
   currentDialogueIndex: Ref<number>;

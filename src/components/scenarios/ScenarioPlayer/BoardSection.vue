@@ -41,7 +41,7 @@ const emits = defineEmits<{
   justify-content: center;
   gap: var(--size-12);
   overflow: hidden;
-  min-height: 0; /* grid itemの最小サイズをリセット */
+  min-height: 0;
   width: 100%;
   height: 100%;
 }
@@ -52,7 +52,10 @@ const emits = defineEmits<{
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: var(--size-16);
-  min-height: 0; /* flex itemの最小サイズをリセット */
+  gap: var(--size-12);
+  min-height: 0;
+  max-width: 100%;
+  max-height: 100%;
+  overflow: hidden;
 }
 </style>

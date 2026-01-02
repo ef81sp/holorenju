@@ -1,14 +1,14 @@
-import { useDialogStore } from "@/stores/dialogStore";
-import { useGameStore } from "@/stores/gameStore";
-import { useProgressStore } from "@/stores/progressStore";
-
+import type { DialogMessage, CharacterType } from "@/types/character";
+import type { Position, BoardState } from "@/types/game";
 import type {
   ProblemSection,
   SuccessCondition,
   BoardAction,
 } from "@/types/scenario";
-import type { DialogMessage, CharacterType } from "@/types/character";
-import type { Position, BoardState } from "@/types/game";
+
+import { useDialogStore } from "@/stores/dialogStore";
+import { useGameStore } from "@/stores/gameStore";
+import { useProgressStore } from "@/stores/progressStore";
 
 /**
  * 問題セクション固有のロジックを管理するComposable
@@ -26,7 +26,10 @@ export const useProblemSolver = (
   ) => void;
   handleCorrectMove: (problemSection: ProblemSection) => void;
   checkAllConditions: (conditions: SuccessCondition[]) => boolean;
-  checkSuccessCondition: (condition: SuccessCondition, board: BoardState) => boolean;
+  checkSuccessCondition: (
+    condition: SuccessCondition,
+    board: BoardState,
+  ) => boolean;
   showForbiddenFeedback: () => void;
   applyBoardAction: (action: BoardAction) => void;
 } => {

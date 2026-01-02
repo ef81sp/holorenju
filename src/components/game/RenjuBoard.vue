@@ -470,11 +470,15 @@ const generateCursorCorners = (): {
 
 <style scoped>
 .renju-board {
-  display: inline-block;
+  display: flex;
   aspect-ratio: 1;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
   overflow: hidden;
   cursor: pointer;
+  max-width: 100%;
+  max-height: 100%;
+  width: 100%;
+  height: 100%;
 }
 
 .renju-board.disabled {

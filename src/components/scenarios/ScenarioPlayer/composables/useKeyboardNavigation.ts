@@ -1,4 +1,5 @@
 import { ref, type Ref } from "vue";
+
 import type { Position } from "@/types/game";
 
 /**

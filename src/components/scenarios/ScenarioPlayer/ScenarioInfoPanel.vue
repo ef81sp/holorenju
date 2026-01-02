@@ -1,9 +1,10 @@
 <script setup lang="ts">
 interface Props {
-  title: string;
-  description: string;
+  scenarioTitle: string;
+  sectionTitle: string;
   sectionIndex: number;
   totalSections: number;
+  description: string;
   canProceed: boolean;
   isLastSection: boolean;
   showHint: boolean;
@@ -19,55 +20,87 @@ const emits = defineEmits<{
 
 <template>
   <div class="info-section">
-    <!-- 説明 -->
-    <div class="step-description">
-      <h3>{{ title }}</h3>
-      <p>{{ description }}</p>
+    <!-- タイトルブロック -->
+    <div class="title-block">
+      <h2>{{ scenarioTitle }}</h2>
+      <p class="section-info">
+        {{ sectionTitle }} ({{ sectionIndex + 1 }}/{{ totalSections }})
+      </p>
     </div>
 
-    <!-- コントロール -->
-    <div class="controls">
-      <button
-        class="hint-button"
-        @click="emits('toggleHint')"
-      >
-        {{ showHint ? "ヒントを隠す" : "ヒントを見る" }}
-      </button>
+    <!-- 説明・コントロールブロック -->
+    <div class="content-block">
+      <div class="step-description">
+        <p>{{ description }}</p>
+      </div>
 
-      <button
-        v-if="canProceed"
-        class="next-button"
-        @click="emits('nextSection')"
-      >
-        {{ isLastSection ? "シナリオ完了" : "次のセクションへ" }}
-      </button>
+      <!-- コントロール -->
+      <div class="controls">
+        <button
+          class="hint-button"
+          @click="emits('toggleHint')"
+        >
+          {{ showHint ? "ヒントを隠す" : "ヒントを見る" }}
+        </button>
+
+        <button
+          v-if="canProceed"
+          class="next-button"
+          @click="emits('nextSection')"
+        >
+          {{ isLastSection ? "シナリオ完了" : "次のセクションへ" }}
+        </button>
+      </div>
     </div>
   </div>
 </template>
 
 <style scoped>
 .info-section {
+  display: grid;
+  grid-template-rows: 1fr 8fr;
+  gap: var(--size-20);
+  height: 100%;
+}
+
+.title-block {
+  padding: var(--size-16);
+  background: linear-gradient(135deg, #f5f5f5 0%, #e8e8e8 100%);
+  border-radius: 8px;
+  border-left: 4px solid var(--color-holo-purple);
+}
+
+.title-block h2 {
+  margin: 0 0 var(--size-8);
+  color: #333;
+  font-size: var(--size-20);
+}
+
+.section-info {
+  margin: 0;
+  color: #666;
+  font-size: var(--size-14);
+}
+
+.content-block {
   display: flex;
   flex-direction: column;
-  gap: var(--size-20);
+  gap: var(--size-16);
+  overflow-y: auto;
 }
 
 .step-description {
-  padding: var(--size-20);
+  padding: var(--size-16);
   background: white;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.step-description h3 {
-  margin: 0 0 var(--size-10);
-  color: #333;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .step-description p {
   margin: 0;
-  color: #666;
+  color: #555;
   line-height: 1.6;
+  font-size: var(--size-14);
 }
 
 .controls {
@@ -78,10 +111,10 @@ const emits = defineEmits<{
 
 .hint-button,
 .next-button {
-  padding: var(--size-12) var(--size-24);
+  padding: var(--size-12) var(--size-20);
   border: none;
   border-radius: 8px;
-  font-size: var(--size-16);
+  font-size: var(--size-14);
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
