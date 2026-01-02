@@ -49,37 +49,38 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 
-  /* 960px基準の相対値変数 (960px = 100vw) */
-  --size-2: 0.208vw; /* 2px */
-  --size-5: 0.521vw; /* 5px */
-  --size-6: 0.625vw; /* 6px */
-  --size-8: 0.833vw; /* 8px */
-  --size-10: 1.042vw; /* 10px */
-  --size-12: 1.25vw; /* 12px */
-  --size-14: 1.458vw; /* 14px */
-  --size-16: 1.667vw; /* 16px */
-  --size-20: 2.083vw; /* 20px */
-  --size-24: 2.5vw; /* 24px */
-  --size-28: 2.917vw; /* 28px */
-  --size-30: 3.125vw; /* 30px */
-  --size-32: 3.333vw; /* 32px */
-  --size-40: 4.167vw; /* 40px */
-  --size-48: 5vw; /* 48px */
-  --size-56: 5.833vw; /* 56px */
-  --size-60: 6.25vw; /* 60px */
-  --size-64: 6.667vw; /* 64px */
-  --size-80: 8.333vw; /* 80px */
-  --size-100: 10.417vw; /* 100px */
-  --size-120: 12.5vw; /* 120px */
-  --size-150: 15.625vw; /* 150px */
-  --size-180: 18.75vw; /* 180px */
-  --size-200: 20.833vw; /* 200px */
-  --size-250: 26.042vw; /* 250px */
-  --size-300: 31.25vw; /* 300px */
-  --size-350: 36.458vw; /* 350px */
-  --size-500: 52.083vw; /* 500px */
-  --size-600: 62.5vw; /* 600px */
-  --size-1200: 125vw; /* 1200px */
+  /* 960px基準の相対値変数 (960px = 100vw) - clamp()で最小値・最大値を設定 */
+  --size-2: clamp(1.5px, 0.208vw, 3px); /* 2px */
+  --size-4: clamp(3px, 0.417vw, 5px); /* 4px */
+  --size-5: clamp(3px, 0.521vw, 7px); /* 5px */
+  --size-6: clamp(4px, 0.625vw, 8px); /* 6px */
+  --size-8: clamp(5px, 0.833vw, 11px); /* 8px */
+  --size-10: clamp(7px, 1.042vw, 14px); /* 10px */
+  --size-12: clamp(8px, 1.25vw, 16px); /* 12px */
+  --size-14: clamp(10px, 1.458vw, 18px); /* 14px */
+  --size-16: clamp(11px, 1.667vw, 21px); /* 16px */
+  --size-20: clamp(14px, 2.083vw, 26px); /* 20px */
+  --size-24: clamp(16px, 2.5vw, 32px); /* 24px */
+  --size-28: clamp(19px, 2.917vw, 37px); /* 28px */
+  --size-30: clamp(20px, 3.125vw, 40px); /* 30px */
+  --size-32: clamp(22px, 3.333vw, 42px); /* 32px */
+  --size-40: clamp(28px, 4.167vw, 53px); /* 40px */
+  --size-48: clamp(33px, 5vw, 64px); /* 48px */
+  --size-56: clamp(39px, 5.833vw, 74px); /* 56px */
+  --size-60: clamp(42px, 6.25vw, 80px); /* 60px */
+  --size-64: clamp(44px, 6.667vw, 88px); /* 64px */
+  --size-80: clamp(56px, 8.333vw, 106px); /* 80px */
+  --size-100: clamp(70px, 10.417vw, 133px); /* 100px */
+  --size-120: clamp(84px, 12.5vw, 160px); /* 120px */
+  --size-150: clamp(105px, 15.625vw, 200px); /* 150px */
+  --size-180: clamp(126px, 18.75vw, 240px); /* 180px */
+  --size-200: clamp(140px, 20.833vw, 266px); /* 200px */
+  --size-250: clamp(175px, 26.042vw, 333px); /* 250px */
+  --size-300: clamp(210px, 31.25vw, 400px); /* 300px */
+  --size-350: clamp(245px, 36.458vw, 466px); /* 350px */
+  --size-500: clamp(350px, 52.083vw, 666px); /* 500px */
+  --size-600: clamp(420px, 62.5vw, 800px); /* 600px */
+  --size-1200: clamp(840px, 125vw, 1600px); /* 1200px */
 }
 
 /* UA スタイルシートをリセット */
