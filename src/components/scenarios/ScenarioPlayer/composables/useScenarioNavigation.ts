@@ -11,8 +11,8 @@ import scenariosIndex from "@/data/scenarios/index.json";
 import { boardStringToBoardState } from "@/logic/scenarioFileHandler";
 import { parseScenario } from "@/logic/scenarioParser";
 import { useAppStore } from "@/stores/appStore";
+import { useBoardStore } from "@/stores/boardStore";
 import { useDialogStore } from "@/stores/dialogStore";
-import { useGameStore } from "@/stores/gameStore";
 import { useProgressStore } from "@/stores/progressStore";
 
 /**
@@ -54,7 +54,7 @@ export const useScenarioNavigation = (
 } => {
   // Stores
   const appStore = useAppStore();
-  const gameStore = useGameStore();
+  const boardStore = useBoardStore();
   const dialogStore = useDialogStore();
   const progressStore = useProgressStore();
 
@@ -146,7 +146,7 @@ export const useScenarioNavigation = (
         const boardState = boardStringToBoardState(
           currentSection.value.initialBoard,
         );
-        gameStore.setBoard(boardState);
+        boardStore.setBoard(boardState);
       }
 
       // デモセクションなら最初のダイアログを表示
@@ -184,7 +184,7 @@ export const useScenarioNavigation = (
         const newSection = scenario.value?.sections[mapping.sectionIndex];
         if (newSection) {
           const boardState = boardStringToBoardState(newSection.initialBoard);
-          gameStore.setBoard(boardState);
+          boardStore.setBoard(boardState);
           currentSectionIndex.value = mapping.sectionIndex;
 
           // 新しいセクション内の前のダイアログまでのボードアクションを適用
@@ -215,7 +215,7 @@ export const useScenarioNavigation = (
         const newSection = scenario.value?.sections[mapping.sectionIndex];
         if (newSection) {
           const boardState = boardStringToBoardState(newSection.initialBoard);
-          gameStore.setBoard(boardState);
+          boardStore.setBoard(boardState);
           currentSectionIndex.value = mapping.sectionIndex;
 
           // 前のセクション内の前のダイアログまでのボードアクションを適用
@@ -231,7 +231,7 @@ export const useScenarioNavigation = (
         const section = scenario.value?.sections[mapping.sectionIndex];
         if (section) {
           const boardState = boardStringToBoardState(section.initialBoard);
-          gameStore.setBoard(boardState);
+          boardStore.setBoard(boardState);
 
           // 前のダイアログまでのボードアクションを再実行
           for (let i = 0; i < mapping.sectionDialogueIndex; i++) {
@@ -281,7 +281,7 @@ export const useScenarioNavigation = (
         const boardState = boardStringToBoardState(
           currentSection.value.initialBoard,
         );
-        gameStore.setBoard(boardState);
+        boardStore.setBoard(boardState);
 
         // ダイアログがあるセクションなら最初のダイアログを表示
         const section = currentSection.value;
@@ -313,14 +313,12 @@ export const useScenarioNavigation = (
    */
   const applyBoardAction = (action: BoardAction): void => {
     if (action.type === "place") {
-      gameStore.placeStone(action.position);
+      boardStore.placeStone(action.position, action.color);
     } else if (action.type === "remove") {
-      const newBoard = gameStore.board.map((row) => [...row]);
-      newBoard[action.position.row][action.position.col] = null;
-      gameStore.setBoard(newBoard);
+      boardStore.removeStone(action.position);
     } else if (action.type === "setBoard") {
       const boardState = boardStringToBoardState(action.board);
-      gameStore.setBoard(boardState);
+      boardStore.setBoard(boardState);
     }
     // Mark, lineアクションは盤面表示の拡張時に実装
   };

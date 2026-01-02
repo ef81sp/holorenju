@@ -1,5 +1,8 @@
 /**
  * ゲーム状態管理ストア
+ *
+ * 対戦（CPU対戦など）時のゲーム状態を管理。
+ * 盤面情報はbordStoreに委譲。
  */
 
 import { defineStore } from "pinia";
@@ -7,21 +10,22 @@ import { computed, ref } from "vue";
 
 import type { BoardState, GameState, Position, StoneColor } from "@/types/game";
 
-import {
-  checkForbiddenMove,
-  checkWin,
-  createEmptyBoard,
-} from "@/logic/renjuRules";
+import { checkForbiddenMove, checkWin } from "@/logic/renjuRules";
+
+import { useBoardStore } from "./boardStore";
 
 export const useGameStore = defineStore("game", () => {
+  const boardStore = useBoardStore();
+
   // State
-  const board = ref<BoardState>(createEmptyBoard());
   const currentTurn = ref<StoneColor>("black");
   const moveHistory = ref<Position[]>([]);
   const isGameOver = ref(false);
   const winner = ref<StoneColor>(null);
 
   // Getters
+  const board = computed(() => boardStore.board);
+
   const gameState = computed<GameState>(() => ({
     board: board.value,
     currentTurn: currentTurn.value,
@@ -68,11 +72,12 @@ export const useGameStore = defineStore("game", () => {
       }
     }
 
-    // 石を配置
-    const row = board.value[position.row];
-    if (row) {
-      row[position.col] = currentTurn.value;
+    // BoardStoreを使って石を配置
+    const result = boardStore.placeStone(position, currentTurn.value);
+    if (!result.success) {
+      return result;
     }
+
     moveHistory.value.push(position);
 
     // 勝利判定
@@ -92,7 +97,7 @@ export const useGameStore = defineStore("game", () => {
   }
 
   function resetBoard(): void {
-    board.value = createEmptyBoard();
+    boardStore.resetBoard();
     currentTurn.value = "black";
     moveHistory.value = [];
     isGameOver.value = false;
@@ -100,7 +105,7 @@ export const useGameStore = defineStore("game", () => {
   }
 
   function setBoard(newBoard: BoardState): void {
-    board.value = newBoard.map((row: StoneColor[]) => [...row]);
+    boardStore.setBoard(newBoard);
   }
 
   function undoMove(): boolean {
@@ -112,10 +117,7 @@ export const useGameStore = defineStore("game", () => {
     if (!lastMove) {
       return false;
     }
-    const row = board.value[lastMove.row];
-    if (row) {
-      row[lastMove.col] = null;
-    }
+    boardStore.removeStone(lastMove);
     currentTurn.value = currentTurn.value === "black" ? "white" : "black";
     isGameOver.value = false;
     winner.value = null;

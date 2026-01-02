@@ -79,7 +79,13 @@ const messageCharacterInfo = computed(() => {
     >
       <div
         class="avatar"
-        :style="{ backgroundColor: leftCharacter.isActive ? (leftCharacter.character === 'fubuki' ? '#77DFFF' : '#FF9CB4') : '#CCCCCC' }"
+        :style="{
+          backgroundColor: leftCharacter.isActive
+            ? leftCharacter.character === 'fubuki'
+              ? '#77DFFF'
+              : '#FF9CB4'
+            : '#CCCCCC',
+        }"
       >
         <CharacterSprite
           :character="leftCharacter.character"
@@ -149,7 +155,13 @@ const messageCharacterInfo = computed(() => {
     >
       <div
         class="avatar"
-        :style="{ backgroundColor: rightCharacter.isActive ? (rightCharacter.character === 'fubuki' ? '#77DFFF' : '#FF9CB4') : '#CCCCCC' }"
+        :style="{
+          backgroundColor: rightCharacter.isActive
+            ? rightCharacter.character === 'fubuki'
+              ? '#77DFFF'
+              : '#FF9CB4'
+            : '#CCCCCC',
+        }"
       >
         <CharacterSprite
           :character="rightCharacter.character"

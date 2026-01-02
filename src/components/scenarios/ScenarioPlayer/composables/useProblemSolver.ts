@@ -6,8 +6,8 @@ import type {
   BoardAction,
 } from "@/types/scenario";
 
+import { useBoardStore } from "@/stores/boardStore";
 import { useDialogStore } from "@/stores/dialogStore";
-import { useGameStore } from "@/stores/gameStore";
 import { useProgressStore } from "@/stores/progressStore";
 
 /**
@@ -33,7 +33,7 @@ export const useProblemSolver = (
   showForbiddenFeedback: () => void;
   applyBoardAction: (action: BoardAction) => void;
 } => {
-  const gameStore = useGameStore();
+  const boardStore = useBoardStore();
   const dialogStore = useDialogStore();
   const progressStore = useProgressStore();
 
@@ -50,15 +50,15 @@ export const useProblemSolver = (
     }
 
     // すでに石が置かれている場合はスキップ
-    if (gameStore.board[position.row][position.col] !== null) {
+    if (boardStore.board[position.row][position.col] !== null) {
       console.warn("[handlePlaceStone] Cell already occupied");
       return;
     }
 
     // 問題セクションでは常に黒石を配置
-    const newBoard = gameStore.board.map((row) => [...row]);
+    const newBoard = boardStore.board.map((row) => [...row]);
     newBoard[position.row][position.col] = "black";
-    gameStore.setBoard(newBoard);
+    boardStore.setBoard(newBoard);
 
     console.warn(
       `[handlePlaceStone] Placed black stone at (${position.row}, ${position.col})`,
@@ -98,7 +98,7 @@ export const useProblemSolver = (
    */
   const checkAllConditions = (conditions: SuccessCondition[]): boolean => {
     const result = conditions.some((condition) =>
-      checkSuccessCondition(condition, gameStore.board),
+      checkSuccessCondition(condition, boardStore.board),
     );
     console.warn(`[checkAllConditions] All conditions check result: ${result}`);
     return result;
@@ -152,11 +152,9 @@ export const useProblemSolver = (
    */
   const applyBoardAction = (action: BoardAction): void => {
     if (action.type === "place") {
-      gameStore.placeStone(action.position);
+      boardStore.placeStone(action.position, action.color);
     } else if (action.type === "remove") {
-      const newBoard = gameStore.board.map((row) => [...row]);
-      newBoard[action.position.row][action.position.col] = null;
-      gameStore.setBoard(newBoard);
+      boardStore.removeStone(action.position);
     } else if (action.type === "setBoard") {
       // 別ファイルからboardStringToBoardStateをインポート後使用
       console.warn("[applyBoardAction] setBoard action not fully implemented");

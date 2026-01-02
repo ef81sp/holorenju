@@ -27,13 +27,17 @@ const emits = defineEmits<{
 // 左右キャラクター情報を生成
 const leftCharacter = computed(() => ({
   character: "fubuki" as const,
-  emotion: props.message?.character === "fubuki" ? props.message.emotion : (0 as const),
+  emotion:
+    props.message?.character === "fubuki"
+      ? props.message.emotion
+      : (0 as const),
   isActive: props.message?.character === "fubuki",
 }));
 
 const rightCharacter = computed(() => ({
   character: "miko" as const,
-  emotion: props.message?.character === "miko" ? props.message.emotion : (0 as const),
+  emotion:
+    props.message?.character === "miko" ? props.message.emotion : (0 as const),
   isActive: props.message?.character === "miko",
 }));
 </script>
