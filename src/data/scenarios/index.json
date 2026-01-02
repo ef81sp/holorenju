@@ -1,13 +1,19 @@
 {
   "difficulties": {
     "beginner": {
-      "label": "入門",
+      "label": "beginner",
       "scenarios": [
         {
           "id": "scenario_mjviwg6m_jv8xm",
           "title": "連珠って？",
           "description": "五目並べとの違い",
           "path": "beginner/scenario_mjviwg6m_jv8xm.json"
+        },
+        {
+          "id": "scenario_mjx746jb_0azj3",
+          "title": "問題テスト",
+          "description": "テスト用問題です",
+          "path": "beginner/scenario_mjx746jb_0azj3.json"
         }
       ]
     },

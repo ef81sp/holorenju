@@ -77,6 +77,12 @@ const updateDescription = (description: string): void => {
   }
 };
 
+const updateSuccessOperator = (operator: "or" | "and"): void => {
+  if (currentSection.value) {
+    editorStore.updateCurrentSection({ successOperator: operator });
+  }
+};
+
 // ダイアログ関連メソッド
 const addDialogue = (): void => {
   if (currentSection.value) {
@@ -624,6 +630,23 @@ const removeFeedbackLine = (key: FeedbackKey, index: number): void => {
               + 条件を追加
             </button>
           </summary>
+
+          <div class="field-row">
+            <label>判定方法</label>
+            <select
+              :value="currentSection.successOperator || 'or'"
+              class="form-input form-input-small"
+              @change="
+                (e) =>
+                  updateSuccessOperator(
+                    (e.target as HTMLSelectElement).value as 'or' | 'and',
+                  )
+              "
+            >
+              <option value="or">OR (いずれかを満たせば正解)</option>
+              <option value="and">AND (すべて満たしたら正解)</option>
+            </select>
+          </div>
 
           <div
             v-if="currentSection.successConditions.length === 0"

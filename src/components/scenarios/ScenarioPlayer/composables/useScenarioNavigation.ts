@@ -186,7 +186,9 @@ export const useScenarioNavigation = (
           const boardState = boardStringToBoardState(newSection.initialBoard);
           boardStore.setBoard(boardState);
           currentSectionIndex.value = mapping.sectionIndex;
+          isSectionCompleted.value = false;
 
+          isSectionCompleted.value = false;
           // 新しいセクション内の前のダイアログまでのボードアクションを適用
           for (let i = 0; i < mapping.sectionDialogueIndex; i++) {
             const dialogue = newSection.dialogues[i];
@@ -232,6 +234,7 @@ export const useScenarioNavigation = (
           const boardState = boardStringToBoardState(newSection.initialBoard);
           boardStore.setBoard(boardState);
           currentSectionIndex.value = mapping.sectionIndex;
+          isSectionCompleted.value = false;
 
           // 前のセクション内の前のダイアログまでのボードアクションを適用
           for (let i = 0; i < mapping.sectionDialogueIndex; i++) {

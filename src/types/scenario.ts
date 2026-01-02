@@ -19,6 +19,9 @@ interface BaseSection {
 
 type Section = DemoSection | ProblemSection;
 
+// 成功条件の評価方法
+type SuccessOperator = "or" | "and";
+
 // ===== デモセクション =====
 
 interface DemoSection extends BaseSection {
@@ -83,6 +86,7 @@ interface ProblemSection extends BaseSection {
   initialBoard: string[];
   description: string;
   dialogues: DemoDialogue[];
+  successOperator?: SuccessOperator;
   successConditions: SuccessCondition[];
   feedback: ProblemFeedback;
 }
@@ -178,4 +182,5 @@ export type {
   LearningProgress,
   BaseSection,
   Position,
+  SuccessOperator,
 };

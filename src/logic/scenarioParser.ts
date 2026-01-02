@@ -138,6 +138,10 @@ function validateProblemSection(
     "description",
     `${path}.description`,
   );
+  const successOperator =
+    data.successOperator === "and" || data.successOperator === "or"
+      ? data.successOperator
+      : "or";
   const successConditions = validateSuccessConditionArray(
     data,
     "successConditions",
@@ -156,6 +160,7 @@ function validateProblemSection(
     initialBoard,
     description,
     dialogues,
+    successOperator,
     successConditions,
     feedback,
   };

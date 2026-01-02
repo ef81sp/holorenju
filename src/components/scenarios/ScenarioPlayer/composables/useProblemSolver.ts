@@ -4,7 +4,13 @@ import type {
   ProblemSection,
   SuccessCondition,
   BoardAction,
+  SuccessOperator,
 } from "@/types/scenario";
+
+import {
+  evaluateAllConditions,
+  evaluateCondition,
+} from "./problemConditions";
 
 import { useBoardStore } from "@/stores/boardStore";
 import { useDialogStore } from "@/stores/dialogStore";
@@ -24,11 +30,19 @@ export const useProblemSolver = (
     problemSection: ProblemSection,
     isSectionCompleted: boolean,
   ) => void;
+  submitAnswer: (
+    problemSection: ProblemSection,
+    isSectionCompleted: boolean,
+  ) => void;
   handleCorrectMove: (problemSection: ProblemSection) => void;
-  checkAllConditions: (conditions: SuccessCondition[]) => boolean;
+  checkAllConditions: (
+    conditions: SuccessCondition[],
+    operator?: SuccessOperator,
+  ) => boolean;
   checkSuccessCondition: (
     condition: SuccessCondition,
     board: BoardState,
+    operator?: SuccessOperator,
   ) => boolean;
   showForbiddenFeedback: () => void;
   applyBoardAction: (action: BoardAction) => void;
@@ -36,6 +50,43 @@ export const useProblemSolver = (
   const boardStore = useBoardStore();
   const dialogStore = useDialogStore();
   const progressStore = useProgressStore();
+
+  let attemptBaseBoard: BoardState | null = null;
+
+  const cloneBoard = (board: BoardState): BoardState =>
+    board.map((row) => [...row]);
+
+  const ensureAttemptBaseBoard = (): void => {
+    if (!attemptBaseBoard) {
+      attemptBaseBoard = cloneBoard(boardStore.board);
+    }
+  };
+
+  const resetAttemptBaseBoard = (): void => {
+    attemptBaseBoard = null;
+  };
+
+  const restoreAttemptBoard = (): void => {
+    if (attemptBaseBoard) {
+      boardStore.setBoard(cloneBoard(attemptBaseBoard));
+    }
+  };
+
+  const handleIncorrectMove = (problemSection: ProblemSection): void => {
+    console.warn("[handleIncorrectMove] Called");
+    restoreAttemptBoard();
+    resetAttemptBaseBoard();
+
+    const [msg] = problemSection.feedback.failure || [];
+    if (msg) {
+      dialogStore.showMessage({
+        id: `feedback-failure-${msg.character}`,
+        character: msg.character as CharacterType,
+        text: msg.text,
+        emotion: msg.emotion,
+      });
+    }
+  };
 
   /**
    * 石を配置し、成功条件をチェック
@@ -55,8 +106,10 @@ export const useProblemSolver = (
       return;
     }
 
+    ensureAttemptBaseBoard();
+
     // 問題セクションでは常に黒石を配置
-    const newBoard = boardStore.board.map((row) => [...row]);
+    const newBoard = cloneBoard(boardStore.board);
     newBoard[position.row][position.col] = "black";
     boardStore.setBoard(newBoard);
 
@@ -65,8 +118,36 @@ export const useProblemSolver = (
     );
 
     // 成功条件をチェック
-    if (checkAllConditions(problemSection.successConditions)) {
+    const operator = problemSection.successOperator ?? "or";
+    if (operator === "or") {
+      if (checkAllConditions(problemSection.successConditions, operator)) {
+        resetAttemptBaseBoard();
+        handleCorrectMove(problemSection);
+      } else {
+        handleIncorrectMove(problemSection);
+      }
+    }
+  };
+
+  /**
+   * 回答ボタンからの判定（AND想定）
+   */
+  const submitAnswer = (
+    problemSection: ProblemSection,
+    isSectionCompleted: boolean,
+  ): void => {
+    if (isSectionCompleted) {
+      return;
+    }
+
+    const operator = problemSection.successOperator ?? "or";
+    ensureAttemptBaseBoard();
+
+    if (checkAllConditions(problemSection.successConditions, operator)) {
+      resetAttemptBaseBoard();
       handleCorrectMove(problemSection);
+    } else {
+      handleIncorrectMove(problemSection);
     }
   };
 
@@ -96,11 +177,18 @@ export const useProblemSolver = (
   /**
    * 成功条件をチェック
    */
-  const checkAllConditions = (conditions: SuccessCondition[]): boolean => {
-    const result = conditions.some((condition) =>
-      checkSuccessCondition(condition, boardStore.board),
+  const checkAllConditions = (
+    conditions: SuccessCondition[],
+    operator: SuccessOperator = "or",
+  ): boolean => {
+    const result = evaluateAllConditions(
+      conditions,
+      boardStore.board,
+      operator,
     );
-    console.warn(`[checkAllConditions] All conditions check result: ${result}`);
+    console.warn(
+      `[checkAllConditions] All conditions check result: ${result} (operator=${operator})`,
+    );
     return result;
   };
 
@@ -110,34 +198,8 @@ export const useProblemSolver = (
   const checkSuccessCondition = (
     condition: SuccessCondition,
     board: BoardState,
-  ): boolean => {
-    if (condition.type === "position") {
-      const result = condition.positions.some((pos) => {
-        const cell = board[pos.row][pos.col];
-        const matches = cell === condition.color;
-        console.warn(
-          `[checkSuccessCondition] pos(${pos.row},${pos.col}): cell=${cell}, expected=${condition.color}, matches=${matches}`,
-        );
-        return matches;
-      });
-      console.warn(
-        `[checkSuccessCondition] position condition result: ${result}`,
-      );
-      return result;
-    }
-
-    if (condition.type === "pattern") {
-      // パターン判定は今後実装
-      return false;
-    }
-
-    if (condition.type === "sequence") {
-      // シーケンス判定は今後実装
-      return false;
-    }
-
-    return false;
-  };
+    operator: SuccessOperator = "or",
+  ): boolean => evaluateCondition(condition, board, operator);
 
   /**
    * 禁じ手のフィードバック（将来実装用）
@@ -163,6 +225,7 @@ export const useProblemSolver = (
 
   return {
     handlePlaceStone,
+    submitAnswer,
     handleCorrectMove,
     checkAllConditions,
     checkSuccessCondition,

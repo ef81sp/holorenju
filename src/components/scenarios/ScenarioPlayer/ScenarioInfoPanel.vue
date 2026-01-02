@@ -7,12 +7,15 @@ interface Props {
   description: string;
   canProceed: boolean;
   isLastSection: boolean;
+  showAnswerButton?: boolean;
+  answerDisabled?: boolean;
 }
 
 defineProps<Props>();
 
 const emits = defineEmits<{
   nextSection: [];
+  submitAnswer: [];
 }>();
 </script>
 
@@ -34,6 +37,14 @@ const emits = defineEmits<{
 
       <!-- コントロール -->
       <div class="controls">
+        <button
+          v-if="showAnswerButton"
+          class="answer-button"
+          :disabled="answerDisabled"
+          @click="emits('submitAnswer')"
+        >
+          回答
+        </button>
         <button
           v-if="canProceed"
           class="next-button"
@@ -98,6 +109,29 @@ const emits = defineEmits<{
   display: flex;
   flex-direction: column;
   gap: var(--size-12);
+}
+
+.answer-button {
+  padding: var(--size-12) var(--size-20);
+  border: none;
+  border-radius: 8px;
+  font-size: var(--size-14);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+  background: var(--color-holo-blue);
+  color: var(--color-text-primary);
+}
+
+.answer-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.answer-button:not(:disabled):hover {
+  background: #3b6eb3;
+  transform: translateY(-2px);
 }
 
 .next-button {

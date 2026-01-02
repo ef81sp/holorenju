@@ -186,6 +186,7 @@ export function createEmptyProblemSection(): ProblemSection {
     initialBoard: Array(15).fill("-".repeat(15)),
     description: "",
     dialogues: [],
+    successOperator: "or",
     successConditions: [
       {
         type: "position" as const,

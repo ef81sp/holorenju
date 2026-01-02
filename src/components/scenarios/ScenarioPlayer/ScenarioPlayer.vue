@@ -89,6 +89,32 @@ const handlePlaceStone = (position?: Position): void => {
   );
 };
 
+const requiresAnswerButton = computed(() => {
+  if (
+    !scenarioNav.currentSection.value ||
+    scenarioNav.currentSection.value.type !== "problem"
+  ) {
+    return false;
+  }
+  const operator =
+    scenarioNav.currentSection.value.successOperator ?? "or";
+  return operator === "and" && !scenarioNav.isSectionCompleted.value;
+});
+
+const handleSubmitAnswer = (): void => {
+  if (
+    !scenarioNav.currentSection.value ||
+    scenarioNav.currentSection.value.type !== "problem"
+  ) {
+    return;
+  }
+
+  problemSolver.submitAnswer(
+    scenarioNav.currentSection.value as ProblemSection,
+    scenarioNav.isSectionCompleted.value,
+  );
+};
+
 const handleNextDialogue = (): void => {
   scenarioNav.nextDialogue();
 };
@@ -136,7 +162,10 @@ const handleNextDialogue = (): void => {
         :total-sections="scenarioNav.scenario.value.sections.length"
         :can-proceed="scenarioNav.canProceed.value"
         :is-last-section="scenarioNav.isLastSection.value"
+        :show-answer-button="requiresAnswerButton"
+        :answer-disabled="scenarioNav.isSectionCompleted.value"
         @next-section="scenarioNav.nextSection"
+        @submit-answer="handleSubmitAnswer"
       />
     </div>
 
