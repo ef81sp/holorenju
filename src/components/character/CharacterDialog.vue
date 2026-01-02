@@ -63,10 +63,8 @@ const handleChoiceClick = (choiceId: string): void => {
       :style="{ backgroundColor: characterInfo?.avatarBg }"
     >
       <CharacterSprite
-        :character="message.character as CharacterType"
+        :character="message.character"
         :emotion-id="message.emotion"
-        :width="80"
-        :height="80"
       />
     </div>
 
@@ -131,9 +129,9 @@ const handleChoiceClick = (choiceId: string): void => {
 
 .avatar {
   flex-shrink: 0;
-  width: var(--size-56);
-  height: var(--size-56);
-  border-radius: 50%;
+  max-height: var(--size-100);
+  aspect-ratio: 1;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
