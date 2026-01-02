@@ -246,12 +246,11 @@ const handleSave = (): void => {
   );
 
   if (!result.isValid) {
+    const errorMessage = `バリデーションエラーがあります:\n\n${result.errors
+      .map((e) => `[${e.type}] ${e.path}: ${e.message}`)
+      .join("\n")}`;
     console.warn("バリデーションエラーを検出しました");
-    alert(
-      `バリデーションエラーがあります:\n\n${result.errors
-        .map((e) => `[${e.type}] ${e.path}: ${e.message}`)
-        .join("\n")}`,
-    );
+    console.error(errorMessage);
     return;
   }
 

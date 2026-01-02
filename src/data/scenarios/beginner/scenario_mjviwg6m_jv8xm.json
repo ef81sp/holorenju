@@ -31,13 +31,13 @@
           "id": "d-1767276711722",
           "character": "fubuki",
           "text": "こんこんきーつね！",
-          "emotion": "normal"
+          "emotion": 0
         },
         {
           "id": "d-1767276725871",
           "character": "fubuki",
           "text": "石を置いちゃうよ",
-          "emotion": "normal",
+          "emotion": 0,
           "boardAction": {
             "type": "place",
             "position": {

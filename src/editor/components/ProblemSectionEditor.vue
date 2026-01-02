@@ -442,10 +442,7 @@ const updateFeedbackLines = (key: FeedbackKey, lines: DialogueLine[]): void => {
 
 const addFeedbackLine = (key: FeedbackKey): void => {
   const lines = getFeedbackLines(key);
-  updateFeedbackLines(key, [
-    ...lines,
-    { character: "", text: "", emotion: "" },
-  ]);
+  updateFeedbackLines(key, [...lines, { character: "", text: "", emotion: 0 }]);
 };
 
 const updateFeedbackLine = (
@@ -1029,26 +1026,28 @@ const removeFeedbackLine = (key: FeedbackKey, index: number): void => {
                       </option>
                     </select>
                     <span class="field-label">感情</span>
-                    <select
-                      :value="line.emotion || ''"
+                    <!-- emotionはEmotionId型（0-39）で固定値0を使用 -->
+                    <input
+                      type="number"
+                      :value="line.emotion"
                       class="form-input form-input-small"
-                      @change="
+                      min="0"
+                      max="39"
+                      @input="
                         (e) =>
                           updateFeedbackLine('success', index, {
-                            emotion: (e.target as HTMLSelectElement)
-                              .value as Emotion,
+                            emotion: Math.min(
+                              39,
+                              Math.max(
+                                0,
+                                parseInt(
+                                  (e.target as HTMLInputElement).value,
+                                ) || 0,
+                              ),
+                            ) as any,
                           })
                       "
                     >
-                      <option value="">感情選択</option>
-                      <option
-                        v-for="emotion in EMOTIONS"
-                        :key="emotion"
-                        :value="emotion"
-                      >
-                        {{ emotion }}
-                      </option>
-                    </select>
                   </div>
                   <div class="feedback-text-row">
                     <textarea
@@ -1122,26 +1121,28 @@ const removeFeedbackLine = (key: FeedbackKey, index: number): void => {
                       </option>
                     </select>
                     <span class="field-label">感情</span>
-                    <select
-                      :value="line.emotion || ''"
+                    <!-- emotionはEmotionId型（0-39）で固定値0を使用 -->
+                    <input
+                      type="number"
+                      :value="line.emotion"
                       class="form-input form-input-small"
-                      @change="
+                      min="0"
+                      max="39"
+                      @input="
                         (e) =>
                           updateFeedbackLine('failure', index, {
-                            emotion: (e.target as HTMLSelectElement)
-                              .value as Emotion,
+                            emotion: Math.min(
+                              39,
+                              Math.max(
+                                0,
+                                parseInt(
+                                  (e.target as HTMLInputElement).value,
+                                ) || 0,
+                              ),
+                            ) as any,
                           })
                       "
                     >
-                      <option value="">感情選択</option>
-                      <option
-                        v-for="emotion in EMOTIONS"
-                        :key="emotion"
-                        :value="emotion"
-                      >
-                        {{ emotion }}
-                      </option>
-                    </select>
                   </div>
                   <div class="feedback-text-row">
                     <textarea
@@ -1215,26 +1216,28 @@ const removeFeedbackLine = (key: FeedbackKey, index: number): void => {
                       </option>
                     </select>
                     <span class="field-label">感情</span>
-                    <select
-                      :value="line.emotion || ''"
+                    <!-- emotionはEmotionId型（0-39）で固定値0を使用 -->
+                    <input
+                      type="number"
+                      :value="line.emotion"
                       class="form-input form-input-small"
-                      @change="
+                      min="0"
+                      max="39"
+                      @input="
                         (e) =>
                           updateFeedbackLine('progress', index, {
-                            emotion: (e.target as HTMLSelectElement)
-                              .value as Emotion,
+                            emotion: Math.min(
+                              39,
+                              Math.max(
+                                0,
+                                parseInt(
+                                  (e.target as HTMLInputElement).value,
+                                ) || 0,
+                              ),
+                            ) as any,
                           })
                       "
                     >
-                      <option value="">感情選択</option>
-                      <option
-                        v-for="emotion in EMOTIONS"
-                        :key="emotion"
-                        :value="emotion"
-                      >
-                        {{ emotion }}
-                      </option>
-                    </select>
                   </div>
                   <div class="feedback-text-row">
                     <textarea

@@ -1,7 +1,12 @@
 <script setup lang="ts">
 import { computed } from "vue";
 
-import type { DialogMessage } from "@/types/character";
+import type {
+  DialogMessage,
+  CharacterType,
+  EmotionId,
+} from "@/types/character";
+import CharacterSprite from "./CharacterSprite.vue";
 
 // Props
 interface Props {
@@ -56,9 +61,12 @@ const handleChoiceClick = (choiceId: string): void => {
       class="avatar"
       :style="{ backgroundColor: characterInfo?.avatarBg }"
     >
-      <div class="avatar-icon">
-        {{ message.character === "fubuki" ? "🦊" : "🌸" }}
-      </div>
+      <CharacterSprite
+        :character="message.character as CharacterType"
+        :emotion-id="0"
+        :width="80"
+        :height="80"
+      />
     </div>
 
     <!-- 吹き出し -->

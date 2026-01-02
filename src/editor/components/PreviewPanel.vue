@@ -2,12 +2,14 @@
 import { computed, ref } from "vue";
 import { useEditorStore } from "@/editor/stores/editorStore";
 import RenjuBoard from "@/components/game/RenjuBoard.vue";
+import CharacterSprite from "@/components/character/CharacterSprite.vue";
 import type {
   DemoSection,
   ProblemSection,
   BoardAction,
 } from "@/types/scenario";
 import type { BoardState, StoneColor } from "@/types/game";
+import type { CharacterType, EmotionId } from "@/types/character";
 
 const editorStore = useEditorStore();
 const dialoguePageIndex = ref(0);
@@ -186,8 +188,20 @@ const currentBoard = computed(() => {
               v-if="currentDialogue"
               class="dialogue-item"
             >
-              <span class="character-name">{{ currentDialogue.character }}:</span>
-              <span class="dialogue-content">{{ currentDialogue.text }}</span>
+              <div class="dialogue-avatar">
+                <CharacterSprite
+                  :character="currentDialogue.character as CharacterType"
+                  :emotion-id="(currentDialogue.emotion as EmotionId) || 0"
+                  :width="80"
+                  :height="80"
+                />
+              </div>
+              <div class="dialogue-text-area">
+                <span class="character-name">{{
+                  currentDialogue.character
+                }}</span>
+                <span class="dialogue-content">{{ currentDialogue.text }}</span>
+              </div>
             </div>
           </div>
           <p
@@ -315,19 +329,37 @@ const currentBoard = computed(() => {
 
 .dialogue-item {
   display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.dialogue-avatar {
+  flex-shrink: 0;
+  border-radius: 4px;
+  overflow: hidden;
+  background-color: #f5f5f5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dialogue-text-area {
+  display: flex;
   flex-direction: column;
   gap: 0.25rem;
+  flex: 1;
 }
 
 .character-name {
-  font-weight: bold;
+  font-weight: 500;
   color: var(--color-text);
+  font-size: 0.95rem;
 }
 
 .dialogue-content {
-  font-style: italic;
   color: var(--color-text-secondary, #555);
   line-height: 1.4;
+  font-size: 0.9rem;
 }
 
 .dialogue-controls {

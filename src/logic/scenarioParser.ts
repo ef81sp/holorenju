@@ -6,6 +6,7 @@
  * 2. validateBoardState: 盤面の妥当性を検証する（JSON編集時用）
  */
 
+import type { EmotionId } from "../types/character";
 import type {
   Scenario,
   DemoSection,
@@ -191,9 +192,11 @@ function validateDialogue(data: unknown, path: string): DemoDialogue {
   const id = validateString(data, "id", `${path}.id`);
   const character = validateString(data, "character", `${path}.character`);
   const text = validateString(data, "text", `${path}.text`);
-  const emotion = data.emotion
-    ? validateString(data, "emotion", `${path}.emotion`)
-    : undefined;
+  // Emotionは0-39の数値、デフォルトは0
+  const emotion =
+    typeof data.emotion === "number"
+      ? Math.min(39, Math.max(0, data.emotion))
+      : 0;
   const boardAction = data.boardAction
     ? validateBoardAction(data.boardAction, `${path}.boardAction`)
     : undefined;
@@ -202,7 +205,7 @@ function validateDialogue(data: unknown, path: string): DemoDialogue {
     id,
     character,
     text,
-    emotion,
+    emotion: emotion as unknown as EmotionId,
     boardAction,
   };
 }
@@ -522,6 +525,12 @@ function validateDialogueLineArray(
       throw new Error(`${path}[${index}] must be an object`);
     }
 
+    // Emotionは0-39の数値、デフォルトは0
+    const emotion =
+      typeof item.emotion === "number"
+        ? Math.min(39, Math.max(0, item.emotion))
+        : 0;
+
     return {
       character: validateString(
         item,
@@ -529,9 +538,7 @@ function validateDialogueLineArray(
         `${path}[${index}].character`,
       ),
       text: validateString(item, "text", `${path}[${index}].text`),
-      emotion: item.emotion
-        ? validateString(item, "emotion", `${path}[${index}].emotion`)
-        : undefined,
+      emotion: emotion as unknown as EmotionId,
     };
   });
 }

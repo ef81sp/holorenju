@@ -1,23 +1,24 @@
 <script setup lang="ts">
-import { computed, type PropType } from "vue";
+import { computed, ref, type PropType } from "vue";
 import { useEditorStore } from "@/editor/stores/editorStore";
 import BoardVisualEditor from "./BoardVisualEditor.vue";
+import EmotionPickerDialog from "./EmotionPickerDialog.vue";
+import CharacterSprite from "@/components/character/CharacterSprite.vue";
 import type { DemoSection, DemoDialogue, BoardAction } from "@/types/scenario";
 import type { Position } from "@/types/game";
-import type { CharacterType, Emotion } from "@/types/character";
+import type { CharacterType, EmotionId } from "@/types/character";
 import { generateDialogueId } from "@/logic/scenarioFileHandler";
 
 const editorStore = useEditorStore();
 
-// キャラクター・感情の選択肢
+// キャラクターの選択肢
 const CHARACTERS: CharacterType[] = ["fubuki", "miko", "narration"];
-const EMOTIONS: Emotion[] = [
-  "normal",
-  "happy",
-  "thinking",
-  "surprised",
-  "explaining",
-];
+
+// 表情ピッカーの参照
+const emotionPickerRefs = ref<Record<number, unknown>>({});
+
+// 表情ピッカーで選択中のダイアログインデックス
+const selectedDialogueIndex = ref<number | null>(null);
 
 const props = defineProps({
   view: {
@@ -57,6 +58,7 @@ const addDialogue = (): void => {
       id: generateDialogueId(newDialogues),
       character: "",
       text: "",
+      emotion: 0,
     };
     newDialogues.push(newDialogue);
     editorStore.updateCurrentSection({
@@ -93,6 +95,20 @@ const updateDialogue = (
       ...currentSection.value,
       dialogues: newDialogues,
     });
+  }
+};
+
+// 表情ピッカーを開く
+const openEmotionPicker = (index: number): void => {
+  selectedDialogueIndex.value = index;
+  const pickerRef = emotionPickerRefs.value[index] as HTMLDialogElement;
+  pickerRef?.showModal();
+};
+
+// 表情を選択
+const handleEmotionSelect = (emotionId: EmotionId): void => {
+  if (selectedDialogueIndex.value !== null) {
+    updateDialogue(selectedDialogueIndex.value, { emotion: emotionId });
   }
 };
 
@@ -390,26 +406,25 @@ const updateBoardActionLine = (
                     {{ char }}
                   </option>
                 </select>
-                <select
-                  :value="dialogue.emotion || ''"
-                  class="form-input form-input-small"
-                  @change="
-                    (e) =>
-                      updateDialogue(index, {
-                        emotion: (e.target as HTMLSelectElement)
-                          .value as Emotion,
-                      })
-                  "
+                <!-- 表情選択ボタン -->
+                <button
+                  type="button"
+                  class="emotion-selector-button"
+                  :title="`表情ID: ${dialogue.emotion}`"
+                  @click="openEmotionPicker(index)"
                 >
-                  <option value="">感情選択</option>
-                  <option
-                    v-for="emotion in EMOTIONS"
-                    :key="emotion"
-                    :value="emotion"
-                  >
-                    {{ emotion }}
-                  </option>
-                </select>
+                  <CharacterSprite
+                    v-if="dialogue.character"
+                    :character="dialogue.character as CharacterType"
+                    :emotion-id="dialogue.emotion"
+                    :width="32"
+                    :height="32"
+                  />
+                  <span
+                    v-else
+                    class="placeholder"
+                  >表情選択</span>
+                </button>
                 <div class="dialogue-actions-buttons">
                   <button
                     type="button"
@@ -845,6 +860,21 @@ const updateBoardActionLine = (
         </details>
       </div>
     </div>
+
+    <!-- 表情ピッカーダイアログ -->
+    <template v-if="currentSection">
+      <EmotionPickerDialog
+        v-for="(dialogue, index) in currentSection.dialogues"
+        :key="`emotion-picker-${dialogue.id}`"
+        :ref="
+          (el: any) => {
+            if (el) emotionPickerRefs[index] = el;
+          }
+        "
+        :character="dialogue.character as CharacterType"
+        @select="handleEmotionSelect"
+      />
+    </template>
   </div>
 </template>
 
@@ -1028,6 +1058,31 @@ const updateBoardActionLine = (
 
 .btn-remove-small:hover {
   opacity: 0.8;
+}
+
+.emotion-selector-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 50px;
+  height: 36px;
+  padding: 4px;
+  background-color: var(--color-background-soft);
+  border: 1px solid var(--color-border);
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: var(--size-10);
+  transition: all 0.2s;
+}
+
+.emotion-selector-button:hover {
+  border-color: var(--color-primary);
+  background-color: var(--color-background-hover);
+}
+
+.emotion-selector-button .placeholder {
+  font-size: var(--size-9);
+  color: var(--color-text-secondary);
 }
 
 .form-textarea {

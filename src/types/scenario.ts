@@ -2,6 +2,7 @@
  * シナリオ関連の型定義
  */
 
+import type { EmotionId } from "./character";
 import type { Position } from "./game";
 
 // シナリオの難易度
@@ -29,7 +30,7 @@ interface DemoDialogue {
   id: string;
   character: string;
   text: string;
-  emotion?: string;
+  emotion: EmotionId; // 0-39の連番ID
   boardAction?: BoardAction;
 }
 
@@ -130,7 +131,7 @@ interface ProblemFeedback {
 interface DialogueLine {
   character: string;
   text: string;
-  emotion?: string;
+  emotion: EmotionId; // 0-39の連番ID
 }
 
 // ===== シナリオ全体 =====

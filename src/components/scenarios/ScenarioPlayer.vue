@@ -12,7 +12,7 @@ import { useProgressStore } from "@/stores/progressStore";
 import scenariosIndex from "@/data/scenarios/index.json";
 
 import type { Scenario, Section } from "@/types/scenario";
-import type { DialogMessage } from "@/types/character";
+import type { DialogMessage, CharacterType, Emotion } from "@/types/character";
 import type { Position } from "@/types/game";
 
 // Props
@@ -129,9 +129,10 @@ const showIntroDialog = (): void => {
     const [firstDialogue] = firstSection.dialogues;
     if (firstDialogue) {
       dialogStore.showMessage({
-        character: firstDialogue.character,
+        id: firstDialogue.id,
+        character: firstDialogue.character as CharacterType,
         text: firstDialogue.text,
-        emotion: firstDialogue.emotion,
+        emotion: "normal" as Emotion,
       } as DialogMessage);
     }
   }
@@ -170,9 +171,10 @@ const handleCorrectMove = (): void => {
     if (currentSection.value.feedback.success.length > 0) {
       const [msg] = currentSection.value.feedback.success;
       dialogStore.showMessage({
-        character: msg.character,
+        id: `feedback-success-${msg.character}`,
+        character: msg.character as CharacterType,
         text: msg.text,
-        emotion: msg.emotion,
+        emotion: "normal" as Emotion,
       } as DialogMessage);
     }
   }
@@ -193,9 +195,10 @@ const handleIncorrectMove = (): void => {
     if (currentSection.value.feedback.failure.length > 0) {
       const [msg] = currentSection.value.feedback.failure;
       dialogStore.showMessage({
-        character: msg.character,
+        id: `feedback-failure-${msg.character}`,
+        character: msg.character as CharacterType,
         text: msg.text,
-        emotion: msg.emotion,
+        emotion: "normal" as Emotion,
       } as DialogMessage);
     }
   }
