@@ -14,11 +14,7 @@ withDefaults(defineProps<Props>(), {
 <template>
   <div class="keyboard-control-info">
     <div class="control-title">キーボード操作</div>
-    <div
-      class="control-keys"
-    >
-      <span class="key">←/→</span>: セリフ移動
-    </div>
+    <div class="control-keys"><span class="key">←/→</span>: セリフ移動</div>
     <template v-if="sectionType === 'problem'">
       <div class="control-keys">
         <span class="key">W/A/S/D</span>: カーソル移動

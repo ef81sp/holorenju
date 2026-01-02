@@ -1,9 +1,12 @@
 <script setup lang="ts">
-import { computed, type PropType } from "vue";
+import { computed, ref, type PropType } from "vue";
 import { useEditorStore } from "@/editor/stores/editorStore";
 import BoardVisualEditor from "./BoardVisualEditor.vue";
+import EmotionPickerDialog from "./EmotionPickerDialog.vue";
+import CharacterSprite from "@/components/character/CharacterSprite.vue";
 import type {
   ProblemSection,
+  DemoDialogue,
   SuccessCondition,
   PositionCondition,
   PatternCondition,
@@ -13,11 +16,18 @@ import type {
 import type { Position } from "@/types/game";
 import type { CharacterType, EmotionId } from "@/types/character";
 import type { TextNode } from "@/types/text";
+import { generateDialogueId } from "@/logic/scenarioFileHandler";
 import { parseDialogueText } from "@/logic/textParser";
 
 const editorStore = useEditorStore();
 
 const CHARACTERS: CharacterType[] = ["fubuki", "miko", "narration"];
+
+// 表情ピッカーの参照
+const emotionPickerRefs = ref<Record<number, unknown>>({});
+
+// 表情ピッカーで選択中のダイアログインデックス
+const selectedDialogueIndex = ref<number | null>(null);
 
 const props = defineProps({
   view: {
@@ -64,6 +74,82 @@ const updateDescription = (description: string): void => {
     editorStore.updateCurrentSection({
       description,
     });
+  }
+};
+
+// ダイアログ関連メソッド
+const addDialogue = (): void => {
+  if (currentSection.value) {
+    const newDialogues = [...currentSection.value.dialogues];
+    const newDialogue: DemoDialogue = {
+      id: generateDialogueId(newDialogues),
+      character: "fubuki",
+      text: [],
+      emotion: 0,
+    };
+    newDialogues.push(newDialogue);
+    editorStore.updateCurrentSection({
+      dialogues: newDialogues,
+    });
+  }
+};
+
+// AST から記法テキストに逆変換
+const astToText = (nodes: TextNode[]): string =>
+  nodes
+    .map((node) => {
+      if (node.type === "text") {
+        return node.content;
+      }
+      if (node.type === "ruby") {
+        return `{${node.base}|${node.ruby}}`;
+      }
+      if (node.type === "emphasis") {
+        return `**${node.content}**`;
+      }
+      return "";
+    })
+    .join("");
+
+const removeDialogue = (index: number): void => {
+  if (currentSection.value) {
+    const newDialogues = currentSection.value.dialogues.filter(
+      (_, i) => i !== index,
+    );
+    // 削除後に残りのダイアログのIDを再採番
+    newDialogues.forEach((dialogue, idx) => {
+      dialogue.id = `dialogue_${idx + 1}`;
+    });
+    editorStore.updateCurrentSection({
+      dialogues: newDialogues,
+    });
+  }
+};
+
+const updateDialogue = (
+  index: number,
+  updates: Partial<DemoDialogue>,
+): void => {
+  if (currentSection.value) {
+    const newDialogues = [...currentSection.value.dialogues];
+    newDialogues[index] = { ...newDialogues[index], ...updates };
+    editorStore.updateCurrentSection({
+      dialogues: newDialogues,
+    });
+  }
+};
+
+// 表情ピッカーを開く
+const openEmotionPicker = (index: number): void => {
+  selectedDialogueIndex.value = index;
+  const pickerRef = emotionPickerRefs.value[index] as HTMLDialogElement;
+  pickerRef?.showModal();
+};
+
+// 表情を選択
+const handleEmotionSelect = (emotionId: EmotionId): void => {
+  if (selectedDialogueIndex.value !== null) {
+    updateDialogue(selectedDialogueIndex.value, { emotion: emotionId });
   }
 };
 
@@ -347,23 +433,6 @@ const removeFeedbackLine = (key: FeedbackKey, index: number): void => {
   const lines = getFeedbackLines(key).filter((_, i) => i !== index);
   updateFeedbackLines(key, lines);
 };
-
-// AST から記法テキストに逆変換
-const astToText = (nodes: TextNode[]): string =>
-  nodes
-    .map((node) => {
-      if (node.type === "text") {
-        return node.content;
-      }
-      if (node.type === "ruby") {
-        return `{${node.base}|${node.ruby}}`;
-      }
-      if (node.type === "emphasis") {
-        return `**${node.content}**`;
-      }
-      return "";
-    })
-    .join("");
 </script>
 
 <template>
@@ -419,6 +488,126 @@ const astToText = (nodes: TextNode[]): string =>
             :board="currentSection.initialBoard"
             @update:board="updateBoard"
           />
+        </details>
+
+        <!-- ダイアログ -->
+        <details
+          class="dialogues-section"
+          open
+        >
+          <summary class="dialogues-header">
+            <span>ダイアログ</span>
+            <button
+              type="button"
+              class="btn-add-small"
+              @click.stop.prevent="addDialogue"
+            >
+              + ダイアログを追加
+            </button>
+          </summary>
+
+          <div
+            v-if="currentSection.dialogues.length === 0"
+            class="empty-state"
+          >
+            ダイアログがありません
+          </div>
+
+          <div
+            v-else
+            class="dialogues-list"
+          >
+            <div
+              v-for="(dialogue, index) in currentSection.dialogues"
+              :key="dialogue.id"
+              class="dialogue-item"
+            >
+              <div class="dialogue-header">
+                <input
+                  type="text"
+                  :value="dialogue.id"
+                  class="form-input form-input-small"
+                  placeholder="ID"
+                  readonly
+                  disabled
+                  title="ダイアログIDは自動採番されます（読み取り専用）"
+                />
+                <select
+                  :value="dialogue.character"
+                  class="form-input form-input-small"
+                  @change="
+                    (e) =>
+                      updateDialogue(index, {
+                        character: (e.target as HTMLSelectElement)
+                          .value as CharacterType,
+                      })
+                  "
+                >
+                  <option value="">キャラクター選択</option>
+                  <option
+                    v-for="char in CHARACTERS"
+                    :key="char"
+                    :value="char"
+                  >
+                    {{ char }}
+                  </option>
+                </select>
+                <!-- 表情選択ボタン -->
+                <button
+                  type="button"
+                  class="emotion-selector-button"
+                  :title="`表情ID: ${dialogue.emotion}`"
+                  @click="openEmotionPicker(index)"
+                >
+                  <CharacterSprite
+                    v-if="dialogue.character"
+                    :character="dialogue.character as CharacterType"
+                    :emotion-id="dialogue.emotion"
+                    :width="32"
+                    :height="32"
+                  />
+                  <span
+                    v-else
+                    class="placeholder"
+                    >表情選択</span>
+                </button>
+                <div class="dialogue-actions-buttons">
+                  <button
+                    type="button"
+                    class="btn-remove-small"
+                    @click.prevent="removeDialogue(index)"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+              <textarea
+                :value="astToText(dialogue.text)"
+                class="form-textarea"
+                placeholder="台詞を入力"
+                rows="3"
+                @input="
+                  (e) =>
+                    updateDialogue(index, {
+                      text: parseDialogueText(
+                        (e.target as HTMLTextAreaElement).value,
+                      ),
+                    })
+                "
+              />
+              <!-- 表情ピッカーダイアログ -->
+              <EmotionPickerDialog
+                v-if="dialogue.character"
+                :ref="
+                  (el) => {
+                    if (el) emotionPickerRefs[index] = el;
+                  }
+                "
+                :character="dialogue.character as CharacterType"
+                @select="handleEmotionSelect"
+              />
+            </div>
+          </div>
         </details>
 
         <!-- 成功条件 -->
@@ -1070,16 +1259,14 @@ const astToText = (nodes: TextNode[]): string =>
   color: #4a90e2;
 }
 
-.conditions-section,
-.feedback-section {
+.dialogues-section {
   padding: var(--size-6);
   background-color: var(--color-bg-gray);
   border-radius: 3px;
   border: 1px solid var(--color-border);
 }
 
-.conditions-section summary,
-.feedback-section summary {
+.dialogues-section summary {
   cursor: pointer;
   font-weight: 600;
   font-size: var(--size-12);
@@ -1087,8 +1274,97 @@ const astToText = (nodes: TextNode[]): string =>
   user-select: none;
 }
 
-.conditions-section summary:hover,
-.feedback-section summary:hover {
+.dialogues-section summary:hover {
+  color: #4a90e2;
+}
+
+.dialogues-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.dialogues-header span {
+  flex: 1;
+}
+
+.dialogues-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-6);
+}
+
+.dialogue-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-5);
+  padding: var(--size-6);
+  background-color: white;
+  border-radius: 3px;
+  border: 1px solid var(--color-border);
+}
+
+.dialogue-header {
+  display: flex;
+  gap: var(--size-2);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.emotion-selector-button {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 3px;
+  cursor: pointer;
+  background-color: var(--color-bg-gray);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--size-10);
+}
+
+.emotion-selector-button:hover {
+  background-color: #f0f0f0;
+}
+
+.emotion-selector-button .placeholder {
+  color: var(--color-text-secondary);
+}
+
+.dialogue-actions-buttons {
+  display: flex;
+  gap: var(--size-2);
+  margin-left: auto;
+}
+
+.btn-move {
+  padding: var(--size-2) var(--size-5);
+  background-color: var(--color-bg-gray);
+  border: 1px solid var(--color-border);
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: var(--size-10);
+}
+
+.btn-move:hover:not(:disabled) {
+  background-color: #f0f0f0;
+}
+
+.btn-move:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.conditions-section {
+  padding: var(--size-6);
+  background-color: var(--color-bg-gray);
+  border-radius: 3px;
+  border: 1px solid var(--color-border);
+}
+
+.conditions-section summary:hover {
   color: #4a90e2;
 }
 

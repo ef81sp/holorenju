@@ -1,6 +1,11 @@
 import { computed, ref, type ComputedRef, type Ref } from "vue";
 
-import type { Scenario, Section, BoardAction } from "@/types/scenario";
+import type {
+  Scenario,
+  Section,
+  BoardAction,
+  DemoDialogue,
+} from "@/types/scenario";
 
 import scenariosIndex from "@/data/scenarios/index.json";
 import { boardStringToBoardState } from "@/logic/scenarioFileHandler";
@@ -11,10 +16,19 @@ import { useGameStore } from "@/stores/gameStore";
 import { useProgressStore } from "@/stores/progressStore";
 
 /**
+ * ダイアログと所属セクション、セクション内インデックスをマッピング
+ */
+interface DialogueMapping {
+  dialogue: DemoDialogue;
+  sectionIndex: number;
+  sectionDialogueIndex: number;
+}
+
+/**
  * シナリオ・ダイアログナビゲーションを管理するComposable
  *
- * シナリオの読み込み、セクション・ダイアログ間の遷移、初期化を担当します。
- * 複数のストア（appStore, gameStore, dialogStore, progressStore）と連携します。
+ * シナリオのすべてのセクションのダイアログを統合管理し、
+ * グローバルなダイアログインデックスでセクションをまたぐナビゲーションを実現します。
  */
 export const useScenarioNavigation = (
   scenarioId: string,
@@ -26,6 +40,9 @@ export const useScenarioNavigation = (
   currentSection: ComputedRef<Section | null>;
   isLastSection: ComputedRef<boolean>;
   canProceed: ComputedRef<boolean>;
+  canNavigatePrevious: ComputedRef<boolean>;
+  canNavigateNext: ComputedRef<boolean>;
+  allDialogues: Ref<DialogueMapping[]>;
   loadScenario: () => Promise<void>;
   showIntroDialog: () => void;
   nextDialogue: () => void;
@@ -46,6 +63,7 @@ export const useScenarioNavigation = (
   const currentSectionIndex = ref(0);
   const currentDialogueIndex = ref(0);
   const isSectionCompleted = ref(false);
+  const allDialogues = ref<DialogueMapping[]>([]);
 
   // Computed
   const currentSection = computed<Section | null>(() => {
@@ -63,6 +81,12 @@ export const useScenarioNavigation = (
   });
 
   const canProceed = computed(() => isSectionCompleted.value);
+
+  const canNavigatePrevious = computed(() => currentDialogueIndex.value > 0);
+
+  const canNavigateNext = computed(
+    () => currentDialogueIndex.value < allDialogues.value.length - 1,
+  );
 
   /**
    * シナリオを読み込み初期化
@@ -92,6 +116,21 @@ export const useScenarioNavigation = (
       const scenarioData = parseScenario(rawScenarioData);
 
       scenario.value = scenarioData;
+      
+      // すべてのセクションのダイアログを統合
+      const dialogueMappings: DialogueMapping[] = [];
+      for (let sectionIndex = 0; sectionIndex < scenarioData.sections.length; sectionIndex++) {
+        const section = scenarioData.sections[sectionIndex];
+        for (let dialogueIndex = 0; dialogueIndex < section.dialogues.length; dialogueIndex++) {
+          dialogueMappings.push({
+            dialogue: section.dialogues[dialogueIndex],
+            sectionIndex,
+            sectionDialogueIndex: dialogueIndex,
+          });
+        }
+      }
+      allDialogues.value = dialogueMappings;
+      
       progressStore.startScenario(scenarioId);
 
       // 初期盤面をセット
@@ -113,88 +152,105 @@ export const useScenarioNavigation = (
    * イントロダイアログ（最初のダイアログ）を表示
    */
   const showIntroDialog = (): void => {
-    const firstSection = scenario.value?.sections[0];
-    if (firstSection && firstSection.type === "demo") {
-      currentDialogueIndex.value = 0;
-      const [firstDialogue] = firstSection.dialogues;
-      if (firstDialogue) {
-        dialogStore.showMessage({
-          id: firstDialogue.id,
-          character: firstDialogue.character,
-          text: firstDialogue.text,
-          emotion: firstDialogue.emotion,
-        });
-        if (firstDialogue.boardAction) {
-          applyBoardAction(firstDialogue.boardAction);
-        }
-      }
+    if (allDialogues.value.length === 0) {
+      return;
     }
+
+    currentDialogueIndex.value = 0;
+    const mapping = allDialogues.value[0];
+    currentSectionIndex.value = mapping.sectionIndex;
+    showDialogueWithAction(mapping.dialogue);
   };
 
   /**
-   * 次のダイアログへ進む（デモセクション用）
+   * 次のダイアログへ進む
    */
   const nextDialogue = (): void => {
-    const demoSection = currentSection.value;
-    if (!demoSection || demoSection.type !== "demo") {
-      return;
-    }
-
-    currentDialogueIndex.value += 1;
-
-    if (currentDialogueIndex.value >= demoSection.dialogues.length) {
-      // デモセクション完了 → 問題セクションへ自動遷移
-      isSectionCompleted.value = true;
-      nextSection();
-      return;
-    }
-
-    // 次のダイアログを表示
-    const nextDialogueData = demoSection.dialogues[currentDialogueIndex.value];
-    dialogStore.showMessage({
-      id: nextDialogueData.id,
-      character: nextDialogueData.character,
-      text: nextDialogueData.text,
-      emotion: nextDialogueData.emotion,
-    });
-    if (nextDialogueData.boardAction) {
-      applyBoardAction(nextDialogueData.boardAction);
+    if (currentDialogueIndex.value < allDialogues.value.length - 1) {
+      currentDialogueIndex.value += 1;
+      const mapping = allDialogues.value[currentDialogueIndex.value];
+      const prevMapping = allDialogues.value[currentDialogueIndex.value - 1];
+      
+      // セクションが変わった場合、盤面を初期化
+      if (mapping.sectionIndex !== prevMapping.sectionIndex) {
+        const newSection = scenario.value?.sections[mapping.sectionIndex];
+        if (newSection) {
+          const boardState = boardStringToBoardState(newSection.initialBoard);
+          gameStore.setBoard(boardState);
+          currentSectionIndex.value = mapping.sectionIndex;
+          
+          // 新しいセクション内の前のダイアログまでのボードアクションを適用
+          for (let i = 0; i < mapping.sectionDialogueIndex; i++) {
+            const dialogue = newSection.dialogues[i];
+            if (dialogue.boardAction) {
+              applyBoardAction(dialogue.boardAction);
+            }
+          }
+        }
+      }
+      
+      showDialogueWithAction(mapping.dialogue);
     }
   };
 
   /**
-   * 前のダイアログへ戻す（デモセクション用）
+   * 前のダイアログへ戻す
    */
   const previousDialogue = (): void => {
-    const demoSection = currentSection.value;
-    if (!demoSection || demoSection.type !== "demo") {
-      return;
-    }
-
-    if (currentDialogueIndex.value <= 0) {
-      return;
-    }
-
-    currentDialogueIndex.value -= 1;
-
-    const prevDialogueData = demoSection.dialogues[currentDialogueIndex.value];
-    dialogStore.showMessage({
-      id: prevDialogueData.id,
-      character: prevDialogueData.character,
-      text: prevDialogueData.text,
-      emotion: prevDialogueData.emotion,
-    });
-
-    // 初期盤面に戻す
-    const boardState = boardStringToBoardState(demoSection.initialBoard);
-    gameStore.setBoard(boardState);
-
-    // 前のダイアログまでの盤面操作を再実行
-    for (let i = 0; i < currentDialogueIndex.value; i++) {
-      const dialogue = demoSection.dialogues[i];
-      if (dialogue.boardAction) {
-        applyBoardAction(dialogue.boardAction);
+    if (currentDialogueIndex.value > 0) {
+      currentDialogueIndex.value -= 1;
+      const mapping = allDialogues.value[currentDialogueIndex.value];
+      const nextMapping = allDialogues.value[currentDialogueIndex.value + 1];
+      
+      // セクションが変わった場合、盤面を初期化
+      if (mapping.sectionIndex !== nextMapping.sectionIndex) {
+        const newSection = scenario.value?.sections[mapping.sectionIndex];
+        if (newSection) {
+          const boardState = boardStringToBoardState(newSection.initialBoard);
+          gameStore.setBoard(boardState);
+          currentSectionIndex.value = mapping.sectionIndex;
+          
+          // 前のセクション内の前のダイアログまでのボードアクションを適用
+          for (let i = 0; i < mapping.sectionDialogueIndex; i++) {
+            const dialogue = newSection.dialogues[i];
+            if (dialogue.boardAction) {
+              applyBoardAction(dialogue.boardAction);
+            }
+          }
+        }
+      } else {
+        // 同じセクション内での移動の場合
+        const section = scenario.value?.sections[mapping.sectionIndex];
+        if (section) {
+          const boardState = boardStringToBoardState(section.initialBoard);
+          gameStore.setBoard(boardState);
+          
+          // 前のダイアログまでのボードアクションを再実行
+          for (let i = 0; i < mapping.sectionDialogueIndex; i++) {
+            const dialogue = section.dialogues[i];
+            if (dialogue.boardAction) {
+              applyBoardAction(dialogue.boardAction);
+            }
+          }
+        }
       }
+      
+      showDialogueWithAction(mapping.dialogue);
+    }
+  };
+
+  /**
+   * ダイアログを表示して盤面操作を適用
+   */
+  const showDialogueWithAction = (dialogue: DemoDialogue): void => {
+    dialogStore.showMessage({
+      id: dialogue.id,
+      character: dialogue.character,
+      text: dialogue.text,
+      emotion: dialogue.emotion,
+    });
+    if (dialogue.boardAction) {
+      applyBoardAction(dialogue.boardAction);
     }
   };
 
@@ -219,16 +275,17 @@ export const useScenarioNavigation = (
         );
         gameStore.setBoard(boardState);
 
-        // デモセクションなら最初のダイアログを表示
-        if (currentSection.value.type === "demo") {
-          const [firstDialogue] = currentSection.value.dialogues;
+        // ダイアログがあるセクションなら最初のダイアログを表示
+        const section = currentSection.value;
+        if (section.type === "demo") {
+          const [firstDialogue] = section.dialogues;
           if (firstDialogue) {
-            dialogStore.showMessage({
-              id: firstDialogue.id,
-              character: firstDialogue.character,
-              text: firstDialogue.text,
-              emotion: firstDialogue.emotion,
-            });
+            showDialogueWithAction(firstDialogue);
+          }
+        } else if (section.type === "problem") {
+          const [firstDialogue] = section.dialogues;
+          if (firstDialogue) {
+            showDialogueWithAction(firstDialogue);
           }
         }
       }
@@ -273,10 +330,13 @@ export const useScenarioNavigation = (
     currentSectionIndex,
     currentDialogueIndex,
     isSectionCompleted,
+    allDialogues,
     // Computed
     currentSection,
     isLastSection,
     canProceed,
+    canNavigatePrevious,
+    canNavigateNext,
     // Methods
     loadScenario,
     showIntroDialog,

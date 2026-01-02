@@ -82,6 +82,7 @@ interface ProblemSection extends BaseSection {
   type: "problem";
   initialBoard: string[];
   description: string;
+  dialogues: DemoDialogue[];
   successConditions: SuccessCondition[];
   feedback: ProblemFeedback;
 }

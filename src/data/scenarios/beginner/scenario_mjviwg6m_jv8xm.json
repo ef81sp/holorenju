@@ -105,6 +105,41 @@
         "---------------"
       ],
       "description": "棒四を作ってみましょう",
+      "dialogues": [
+        {
+          "id": "dialogue_1",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "とけるかなー？"
+            }
+          ],
+          "emotion": 0
+        },
+        {
+          "id": "dialogue_2",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "頑張ります！"
+            }
+          ],
+          "emotion": 1
+        },
+        {
+          "id": "dialogue_3",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "応援してるよ"
+            }
+          ],
+          "emotion": 2
+        }
+      ],
       "successConditions": [
         {
           "type": "position",

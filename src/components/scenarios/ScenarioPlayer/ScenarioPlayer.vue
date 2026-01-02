@@ -55,10 +55,7 @@ const keyboardNav = useKeyboardNavigation(
     );
   },
   (direction) => {
-    if (
-      !scenarioNav.currentSection.value ||
-      scenarioNav.currentSection.value.type !== "demo"
-    ) {
+    if (!scenarioNav.currentSection.value) {
       return;
     }
 
@@ -142,19 +139,15 @@ const handleNextDialogue = (): void => {
     </div>
 
     <!-- セリフ部（左下 11×2）-->
-     <!-- FIXME: can-navigate-nextは問題セクションにdialogueプロパティを追加したら直す -->
+    <!-- セリフ部（左下 11×2）-->
     <div class="dialog-section-slot">
       <DialogSection
         :message="dialogStore.currentMessage"
         :is-demo="scenarioNav.currentSection.value?.type === 'demo'"
         :dialog-index="scenarioNav.currentDialogueIndex.value"
-        :total-dialogues="
-          scenarioNav.currentSection.value?.type === 'demo'
-            ? scenarioNav.currentSection.value.dialogues.length
-            : 0
-        "
-        :can-navigate-previous="scenarioNav.currentDialogueIndex.value > 0"
-        :can-navigate-next="true"
+        :total-dialogues="scenarioNav.allDialogues.value.length"
+        :can-navigate-previous="scenarioNav.canNavigatePrevious.value"
+        :can-navigate-next="scenarioNav.canNavigateNext.value"
         @dialog-clicked="handleNextDialogue"
         @next-dialogue="scenarioNav.nextDialogue"
         @previous-dialogue="scenarioNav.previousDialogue"

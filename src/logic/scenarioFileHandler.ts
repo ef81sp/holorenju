@@ -185,6 +185,7 @@ export function createEmptyProblemSection(): ProblemSection {
     title: "問題セクション",
     initialBoard: Array(15).fill("-".repeat(15)),
     description: "",
+    dialogues: [],
     successConditions: [
       {
         type: "position" as const,
