@@ -49,7 +49,7 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 
-  /* 960px基準の相対値変数 (960px = 100vw) - clamp()で最小値・最大値を設定 */
+  /* 960px基準の相対値変数 (960px = 100vw, 540px = 100svh) - clamp()で最小値・最大値を設定 */
   --size-2: clamp(1.5px, 0.208vw, 3px); /* 2px */
   --size-4: clamp(3px, 0.417vw, 5px); /* 4px */
   --size-5: clamp(3px, 0.521vw, 7px); /* 5px */
@@ -196,7 +196,7 @@ body {
   align-items: center;
   min-width: 320px;
   width: 100vw;
-  height: 100vh;
+  height: 100svh;
   overflow: hidden;
   background-color: var(--color-bg-white);
 }
@@ -208,9 +208,9 @@ h1 {
 
 #app {
   width: 100vw;
-  max-width: calc(100vh * 16 / 9);
+  max-width: calc(100svh * 16 / 9);
   aspect-ratio: 16 / 9;
-  max-height: 100vh;
+  max-height: 100svh;
   margin: 0;
   padding: 0;
   overflow: hidden;

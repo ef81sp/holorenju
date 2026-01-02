@@ -323,7 +323,10 @@ const updateFeedbackLines = (key: FeedbackKey, lines: DialogueLine[]): void => {
 
 const addFeedbackLine = (key: FeedbackKey): void => {
   const lines = getFeedbackLines(key);
-  updateFeedbackLines(key, [...lines, { character: "fubuki", text: [], emotion: 0 }]);
+  updateFeedbackLines(key, [
+    ...lines,
+    { character: "fubuki", text: [], emotion: 0 },
+  ]);
 };
 
 const updateFeedbackLine = (
@@ -779,7 +782,9 @@ const astToText = (nodes: TextNode[]): string =>
                       @input="
                         (e) =>
                           updateFeedbackLine('success', index, {
-                            text: parseDialogueText((e.target as HTMLTextAreaElement).value),
+                            text: parseDialogueText(
+                              (e.target as HTMLTextAreaElement).value,
+                            ),
                           })
                       "
                     />
@@ -874,7 +879,9 @@ const astToText = (nodes: TextNode[]): string =>
                       @input="
                         (e) =>
                           updateFeedbackLine('failure', index, {
-                            text: parseDialogueText((e.target as HTMLTextAreaElement).value),
+                            text: parseDialogueText(
+                              (e.target as HTMLTextAreaElement).value,
+                            ),
                           })
                       "
                     />
@@ -969,7 +976,9 @@ const astToText = (nodes: TextNode[]): string =>
                       @input="
                         (e) =>
                           updateFeedbackLine('progress', index, {
-                            text: parseDialogueText((e.target as HTMLTextAreaElement).value),
+                            text: parseDialogueText(
+                              (e.target as HTMLTextAreaElement).value,
+                            ),
                           })
                       "
                     />

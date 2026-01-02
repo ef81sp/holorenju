@@ -442,8 +442,7 @@ const updateBoardActionLine = (
                   <span
                     v-else
                     class="placeholder"
-                    >表情選択</span
-                  >
+                    >表情選択</span>
                 </button>
                 <div class="dialogue-actions-buttons">
                   <button
@@ -479,7 +478,9 @@ const updateBoardActionLine = (
                 @input="
                   (e) =>
                     updateDialogue(index, {
-                      text: parseDialogueText((e.target as HTMLTextAreaElement).value),
+                      text: parseDialogueText(
+                        (e.target as HTMLTextAreaElement).value,
+                      ),
                     })
                 "
               />

@@ -148,10 +148,8 @@ const handleHover = (position: Position | null): void => {
         <div class="board-info">
           <small>
             クリックで石を置く（黒→白→空のサイクル）
-            <span v-if="hoveredPosition"
-              >| 座標: ({{ hoveredPosition.row }},
-              {{ hoveredPosition.col }})</span
-            >
+            <span v-if="hoveredPosition">| 座標: ({{ hoveredPosition.row }},
+              {{ hoveredPosition.col }})</span>
           </small>
         </div>
       </div>

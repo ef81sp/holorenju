@@ -27,6 +27,7 @@
         "allowHigherOrderFunctions": true
       }
     ],
+    "typescript/consistent-type-imports": "off",
     "no-magic-numbers": "off",
     "id-length": "off",
     "max-statements": "off",
