@@ -73,6 +73,7 @@ const emits = defineEmits<{
   margin: 0 0 var(--size-8);
   color: #333;
   font-size: var(--size-20);
+  font-weight: var(--font-weight-bold);
 }
 
 .section-info {
