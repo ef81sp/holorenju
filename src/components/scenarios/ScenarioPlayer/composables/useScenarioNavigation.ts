@@ -214,7 +214,7 @@ export const useScenarioNavigation = (
       // セクションが変わった場合、盤面を初期化
       if (mapping.sectionIndex !== prevMapping.sectionIndex) {
         const newSection = scenario.value?.sections[mapping.sectionIndex];
-        if (newSection && newSection.type === "demo") {
+        if (newSection) {
           const boardState = boardStringToBoardState(newSection.initialBoard);
           boardStore.setBoard(boardState);
           currentSectionIndex.value = mapping.sectionIndex;
@@ -244,7 +244,7 @@ export const useScenarioNavigation = (
       if (mapping.sectionIndex === nextMapping.sectionIndex) {
         // 同じセクション内での移動の場合
         const section = scenario.value?.sections[mapping.sectionIndex];
-        if (section && section.type === "demo") {
+        if (section) {
           const boardState = boardStringToBoardState(section.initialBoard);
           boardStore.setBoard(boardState);
           // 前のダイアログまでのボードアクションを順次実行
@@ -255,7 +255,7 @@ export const useScenarioNavigation = (
         }
       } else {
         const newSection = scenario.value?.sections[mapping.sectionIndex];
-        if (newSection && newSection.type === "demo") {
+        if (newSection) {
           const boardState = boardStringToBoardState(newSection.initialBoard);
           boardStore.setBoard(boardState);
           currentSectionIndex.value = mapping.sectionIndex;
