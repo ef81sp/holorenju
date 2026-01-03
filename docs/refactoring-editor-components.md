@@ -19,12 +19,12 @@
 
 ### フェーズ3: DemoSectionEditorのリファクタリング
 
-- [ ] `useBoardActions.ts` を作成（BoardActions関連の全ロジック）
-- [ ] `BoardActionEditor.vue` を作成（単一アクションの編集UI）
-- [ ] `BoardActionsList.vue` を作成（アクションリストの表示）
-- [ ] `DialogueItemWithActions.vue` を作成（ダイアログ1行のUI）
-- [ ] `DemoSectionEditor.vue` をリファクタリング（子コンポーネント使用）
-- [ ] 動作確認とバグ修正
+- [x] `useBoardActions.ts` を作成（BoardActions関連の全ロジック）
+- [x] `BoardActionEditor.vue` を作成（単一アクションの編集UI）
+- [x] `BoardActionsList.vue` を作成（アクションリストの表示）
+- [x] `DialogueItemWithActions.vue` を作成（ダイアログ1行のUI）
+- [x] `DemoSectionEditor.vue` をリファクタリング（子コンポーネント使用）
+- [x] 動作確認とバグ修正
 
 ### フェーズ4: 共通コンポーネントの検討（オプション）
 
