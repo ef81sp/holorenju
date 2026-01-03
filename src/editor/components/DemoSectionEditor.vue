@@ -10,6 +10,7 @@ import type { CharacterType, EmotionId } from "@/types/character";
 import type { TextNode } from "@/types/text";
 import { generateDialogueId } from "@/logic/scenarioFileHandler";
 import { parseDialogueText } from "@/logic/textParser";
+import { astToText } from "@/editor/logic/textUtils";
 
 const editorStore = useEditorStore();
 
@@ -70,23 +71,6 @@ const addDialogue = (): void => {
     });
   }
 };
-
-// AST から記法テキストに逆変換
-const astToText = (nodes: TextNode[]): string =>
-  nodes
-    .map((node) => {
-      if (node.type === "text") {
-        return node.content;
-      }
-      if (node.type === "ruby") {
-        return `{${node.base}|${node.ruby}}`;
-      }
-      if (node.type === "emphasis") {
-        return `**${node.content}**`;
-      }
-      return "";
-    })
-    .join("");
 
 const removeDialogue = (index: number): void => {
   if (currentSection.value) {
