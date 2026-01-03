@@ -15,7 +15,7 @@
 - [x] `useFeedbackEditor.ts` を作成（フィードバック関連のロジック）
 - [x] `FeedbackEditor.vue` と `FeedbackLineItem.vue` を作成
 - [x] `ProblemSectionEditor.vue` をリファクタリング（子コンポーネント使用）
-- [ ] 動作確認とバグ修正
+- [x] 動作確認とバグ修正
 
 ### フェーズ3: DemoSectionEditorのリファクタリング
 
