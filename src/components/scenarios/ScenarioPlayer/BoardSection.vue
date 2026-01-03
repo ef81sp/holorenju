@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import RenjuBoard from "@/components/game/RenjuBoard.vue";
+import RenjuBoard from "@/components/game/RenjuBoard/RenjuBoard.vue";
 import ControlInfo from "./ControlInfo.vue";
 import type { BoardState, Position } from "@/types/game";
 

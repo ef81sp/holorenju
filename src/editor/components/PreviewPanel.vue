@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { useEditorStore } from "@/editor/stores/editorStore";
-import RenjuBoard from "@/components/game/RenjuBoard.vue";
+import RenjuBoard from "@/components/game/RenjuBoard/RenjuBoard.vue";
 import CharacterSprite from "@/components/character/CharacterSprite.vue";
 import DialogText from "@/components/common/DialogText.vue";
 import type {

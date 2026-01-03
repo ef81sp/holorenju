@@ -4,7 +4,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
 import BackButton from "./BackButton.vue";
 import ControlInfo from "./ControlInfo.vue";
 import ScenarioInfoPanel from "./ScenarioInfoPanel.vue";
-import RenjuBoard from "@/components/game/RenjuBoard.vue";
+import RenjuBoard from "@/components/game/RenjuBoard/RenjuBoard.vue";
 import DialogSection from "./DialogSection.vue";
 import { useScenarioNavigation } from "./composables/useScenarioNavigation";
 import { useKeyboardNavigation } from "./composables/useKeyboardNavigation";

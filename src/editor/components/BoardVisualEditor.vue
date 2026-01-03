@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
-import RenjuBoard from "@/components/game/RenjuBoard.vue";
+import RenjuBoard from "@/components/game/RenjuBoard/RenjuBoard.vue";
 import { cycleBoardCell, boardToASCII } from "@/logic/scenarioFileHandler";
 import type { Position, BoardState } from "@/types/game";
 
