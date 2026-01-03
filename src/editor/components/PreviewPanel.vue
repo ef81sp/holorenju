@@ -113,6 +113,9 @@ const currentBoard = computed(() => {
   // 現在のダイアログインデックスまでのアクションを適用（現在のダイアログを含む）
   for (let i = 0; i <= dialoguePageIndex.value; i++) {
     const dialogue = dialogues[i];
+    if (!dialogue) {
+      break;
+    }
     // BoardActions 配列をループして各アクションを順次適用
     for (const action of dialogue.boardActions) {
       if (action.type === "place") {

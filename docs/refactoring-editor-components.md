@@ -28,9 +28,10 @@
 
 ### フェーズ4: 共通コンポーネントの検討（オプション）
 
-- [ ] `useDialogueEditor.ts` を作成して共通化
-- [ ] `SectionMetaEditor.vue` を作成して共通化
-- [ ] 必要に応じて他の共通化も検討
+- [x] `useDialogueEditor.ts` を作成して共通化
+- [x] `SectionMetaEditor.vue` を作成して共通化
+- [x] 必要に応じて他の共通化も検討
+- [x] 動作確認とバグ修正
 
 ---
 

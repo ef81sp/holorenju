@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed, type PropType } from "vue";
+import SectionMetaEditor from "./SectionMetaEditor.vue";
 import BoardVisualEditor from "./BoardVisualEditor.vue";
 import DialogueItemWithActions from "./DemoSectionEditor/DialogueItemWithActions.vue";
 import { useEditorStore } from "@/editor/stores/editorStore";
-import type { DemoSection, DemoDialogue } from "@/types/scenario";
-import { generateDialogueId } from "@/logic/scenarioFileHandler";
+import { useDialogueEditor } from "@/editor/composables/useDialogueEditor";
+import type { DemoSection } from "@/types/scenario";
 
 const props = defineProps({
   view: {
@@ -21,74 +22,23 @@ const currentSection = computed<DemoSection | null>(() => {
 });
 
 const getCurrentSection = (): DemoSection | null => currentSection.value;
+const updateSection = (updates: Partial<DemoSection>): void => {
+  editorStore.updateCurrentSection(updates);
+};
+
+// ダイアログ管理
+const { addDialogue, removeDialogue, updateDialogue } =
+  useDialogueEditor(getCurrentSection);
 
 const updateBoard = (newBoard: string[]): void => {
-  if (!currentSection.value) {
-    return;
-  }
-  editorStore.updateCurrentSection({
-    ...currentSection.value,
+  updateSection({
     initialBoard: newBoard,
   });
 };
 
 const updateSectionTitle = (title: string): void => {
-  if (!currentSection.value) {
-    return;
-  }
-  editorStore.updateCurrentSection({
-    ...currentSection.value,
+  updateSection({
     title,
-  });
-};
-
-const addDialogue = (): void => {
-  if (!currentSection.value) {
-    return;
-  }
-  const newDialogues = [...currentSection.value.dialogues];
-  const newDialogue: DemoDialogue = {
-    id: generateDialogueId(newDialogues),
-    character: "fubuki",
-    text: [],
-    emotion: 0,
-    boardActions: [],
-  };
-  newDialogues.push(newDialogue);
-  editorStore.updateCurrentSection({
-    ...currentSection.value,
-    dialogues: newDialogues,
-  });
-};
-
-const removeDialogue = (index: number): void => {
-  if (!currentSection.value) {
-    return;
-  }
-  const newDialogues = currentSection.value.dialogues.filter(
-    (_, i) => i !== index,
-  );
-  newDialogues.forEach((dialogue, idx) => {
-    dialogue.id = `dialogue_${idx + 1}`;
-  });
-  editorStore.updateCurrentSection({
-    ...currentSection.value,
-    dialogues: newDialogues,
-  });
-};
-
-const updateDialogue = (
-  index: number,
-  updates: Partial<DemoDialogue>,
-): void => {
-  if (!currentSection.value) {
-    return;
-  }
-  const newDialogues = [...currentSection.value.dialogues];
-  newDialogues[index] = { ...newDialogues[index], ...updates };
-  editorStore.updateCurrentSection({
-    ...currentSection.value,
-    dialogues: newDialogues,
   });
 };
 </script>
@@ -103,18 +53,11 @@ const updateDialogue = (
         v-if="props.view !== 'content'"
         class="detail-left"
       >
-        <div class="form-group">
-          <label for="demo-title">セクションタイトル</label>
-          <input
-            id="demo-title"
-            type="text"
-            :value="currentSection.title"
-            class="form-input"
-            @input="
-              (e) => updateSectionTitle((e.target as HTMLInputElement).value)
-            "
-          />
-        </div>
+        <SectionMetaEditor
+          :title="currentSection.title"
+          :with-description="false"
+          @update:title="updateSectionTitle"
+        />
       </div>
 
       <div

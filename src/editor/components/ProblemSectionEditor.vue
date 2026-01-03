@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { computed, ref, type PropType } from "vue";
+import { computed, type PropType } from "vue";
 import { useEditorStore } from "@/editor/stores/editorStore";
+import SectionMetaEditor from "./SectionMetaEditor.vue";
 import BoardVisualEditor from "./BoardVisualEditor.vue";
 import SuccessConditionsEditor from "./ProblemSectionEditor/SuccessConditionsEditor.vue";
 import FeedbackEditor from "./ProblemSectionEditor/FeedbackEditor.vue";
 import DialogueListEditor from "./ProblemSectionEditor/DialogueListEditor.vue";
-import type { ProblemSection, DemoDialogue } from "@/types/scenario";
-import { generateDialogueId } from "@/logic/scenarioFileHandler";
+import { useDialogueEditor } from "@/editor/composables/useDialogueEditor";
+import type { ProblemSection } from "@/types/scenario";
 
 const editorStore = useEditorStore();
 
@@ -24,86 +25,37 @@ const currentSection = computed<ProblemSection | null>(() => {
     : null;
 });
 
+const getCurrentSection = (): ProblemSection | null => currentSection.value;
+const updateSection = (updates: Partial<ProblemSection>): void => {
+  editorStore.updateCurrentSection(updates);
+};
+
+// ダイアログ管理
+const { addDialogue, removeDialogue, updateDialogue } =
+  useDialogueEditor(getCurrentSection);
+
 const updateBoard = (newBoard: string[]): void => {
   if (currentSection.value) {
-    editorStore.updateCurrentSection({
+    updateSection({
       initialBoard: newBoard,
     });
   }
 };
 
 const updateSectionTitle = (title: string): void => {
-  if (currentSection.value) {
-    editorStore.updateCurrentSection({
-      title,
-    });
-  }
+  updateSection({
+    title,
+  });
 };
 
 const updateDescription = (description: string): void => {
-  if (currentSection.value) {
-    editorStore.updateCurrentSection({
-      description,
-    });
-  }
+  updateSection({
+    description,
+  });
 };
 
 const updateSuccessOperator = (operator: "or" | "and"): void => {
-  if (currentSection.value) {
-    editorStore.updateCurrentSection({ successOperator: operator });
-  }
-};
-
-// ダイアログ関連メソッド
-const addDialogue = (): void => {
-  if (currentSection.value) {
-    const newDialogues = [...currentSection.value.dialogues];
-    const newDialogue: DemoDialogue = {
-      id: generateDialogueId(newDialogues),
-      character: "fubuki",
-      text: [],
-      emotion: 0,
-      boardActions: [],
-    };
-    newDialogues.push(newDialogue);
-    editorStore.updateCurrentSection({
-      dialogues: newDialogues,
-    });
-  }
-};
-
-const removeDialogue = (index: number): void => {
-  if (currentSection.value) {
-    const newDialogues = currentSection.value.dialogues.filter(
-      (_, i) => i !== index,
-    );
-    // 削除後に残りのダイアログのIDを再採番
-    newDialogues.forEach((dialogue, idx) => {
-      dialogue.id = `dialogue_${idx + 1}`;
-    });
-    editorStore.updateCurrentSection({
-      dialogues: newDialogues,
-    });
-  }
-};
-
-const updateDialogue = (
-  index: number,
-  updates: Partial<DemoDialogue>,
-): void => {
-  if (currentSection.value) {
-    const newDialogues = [...currentSection.value.dialogues];
-    newDialogues[index] = { ...newDialogues[index], ...updates };
-    editorStore.updateCurrentSection({
-      dialogues: newDialogues,
-    });
-  }
-};
-
-// セクション更新用のヘルパー関数（子コンポーネントに渡す）
-const getCurrentSection = (): ProblemSection | null => currentSection.value;
-const updateSection = (updates: Partial<ProblemSection>): void => {
-  editorStore.updateCurrentSection(updates);
+  updateSection({ successOperator: operator });
 };
 </script>
 
@@ -118,32 +70,13 @@ const updateSection = (updates: Partial<ProblemSection>): void => {
         class="detail-left"
       >
         <!-- セクション情報 -->
-        <div class="form-group">
-          <label for="problem-title">セクションタイトル</label>
-          <input
-            id="problem-title"
-            type="text"
-            :value="currentSection.title"
-            class="form-input"
-            @input="
-              (e) => updateSectionTitle((e.target as HTMLInputElement).value)
-            "
-          />
-        </div>
-
-        <!-- 説明 -->
-        <div class="form-group">
-          <label for="problem-description">説明</label>
-          <textarea
-            id="problem-description"
-            :value="currentSection.description"
-            class="form-textarea"
-            rows="4"
-            @input="
-              (e) => updateDescription((e.target as HTMLTextAreaElement).value)
-            "
-          />
-        </div>
+        <SectionMetaEditor
+          :title="currentSection.title"
+          :description="currentSection.description"
+          with-description
+          @update:title="updateSectionTitle"
+          @update:description="updateDescription"
+        />
       </div>
 
       <div
