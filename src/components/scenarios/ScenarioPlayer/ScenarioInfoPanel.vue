@@ -29,30 +29,26 @@ const emits = defineEmits<{
       </p>
     </div>
 
-    <!-- 説明・コントロールブロック -->
-    <div class="content-block">
-      <div class="step-description">
-        <p>{{ description }}</p>
-      </div>
+    <!-- 説明 -->
+    <p class="description">{{ description }}</p>
 
-      <!-- コントロール -->
-      <div class="controls">
-        <button
-          v-if="showAnswerButton"
-          class="answer-button"
-          :disabled="answerDisabled"
-          @click="emits('submitAnswer')"
-        >
-          回答
-        </button>
-        <button
-          v-if="canProceed"
-          class="next-button"
-          @click="emits('nextSection')"
-        >
-          {{ isLastSection ? "シナリオ完了" : "次のセクションへ" }}
-        </button>
-      </div>
+    <!-- コントロール -->
+    <div class="controls">
+      <button
+        v-if="showAnswerButton"
+        class="answer-button"
+        :disabled="answerDisabled"
+        @click="emits('submitAnswer')"
+      >
+        回答
+      </button>
+      <button
+        v-if="canProceed"
+        class="next-button"
+        @click="emits('nextSection')"
+      >
+        {{ isLastSection ? "シナリオ完了" : "次のセクションへ" }}
+      </button>
     </div>
   </div>
 </template>
@@ -60,13 +56,14 @@ const emits = defineEmits<{
 <style scoped>
 .info-section {
   display: grid;
-  grid-template-rows: 1fr 8fr;
-  gap: var(--size-20);
+  grid-template-rows: 1fr 6fr 2fr;
+  gap: 0;
   height: 100%;
 }
 
 .title-block {
   padding: var(--size-16);
+  margin-bottom: var(--size-20);
   background: linear-gradient(135deg, #f5f5f5 0%, #e8e8e8 100%);
   border-radius: 8px;
   border-left: 4px solid var(--color-holo-blue);
@@ -84,31 +81,28 @@ const emits = defineEmits<{
   font-size: var(--size-14);
 }
 
-.content-block {
-  display: flex;
-  flex-direction: column;
-  gap: var(--size-16);
-  overflow-y: auto;
+.content-container {
+  display: none;
 }
 
-.step-description {
+.description {
+  margin: 0;
   padding: var(--size-16);
   background: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-}
-
-.step-description p {
-  margin: 0;
-  color: #555;
-  line-height: 1.6;
-  font-size: var(--size-14);
+  border-radius: 8px 8px 0 0;
+  overflow-y: auto;
+  box-shadow: none;
 }
 
 .controls {
   display: flex;
   flex-direction: column;
+  justify-content: center;
   gap: var(--size-12);
+  padding: var(--size-16);
+  background: white;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
+  border-radius: 0 0 8px 8px;
 }
 
 .answer-button {
