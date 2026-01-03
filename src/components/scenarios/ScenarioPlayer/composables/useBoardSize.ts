@@ -1,7 +1,5 @@
-import type { Ref } from "vue";
-
 import { useElementSize } from "@vueuse/core";
-import { computed } from "vue";
+import { type Ref, computed } from "vue";
 
 /**
  * ボードフレームのサイズを計測し、ボードサイズを計算するComposable
