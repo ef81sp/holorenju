@@ -1,4 +1,4 @@
-import { ref, type Ref } from "vue";
+import { ref, type Ref, type ComputedRef } from "vue";
 
 import type { Position } from "@/types/game";
 
@@ -12,6 +12,7 @@ import type { Position } from "@/types/game";
 export const useKeyboardNavigation = (
   onPlaceStone: () => void,
   onDialogueNavigate?: (direction: "next" | "previous") => void,
+  isDisabled?: Ref<boolean> | ComputedRef<boolean>,
 ): {
   cursorPosition: Ref<Position>;
   handleKeyDown: (event: KeyboardEvent) => void;
@@ -27,39 +28,43 @@ export const useKeyboardNavigation = (
    */
   const handleKeyDown = (event: KeyboardEvent): void => {
     const { key } = event;
+    const isDisabledValue = isDisabled && isDisabled.value;
 
     switch (key.toLowerCase()) {
       case "w":
-        event.preventDefault();
-        moveCursor("up");
-        break;
       case "s":
-        event.preventDefault();
-        moveCursor("down");
-        break;
       case "a":
-        event.preventDefault();
-        moveCursor("left");
-        break;
       case "d":
-        event.preventDefault();
-        moveCursor("right");
+        // カーソル移動キーは disabled 時は無効
+        if (!isDisabledValue) {
+          event.preventDefault();
+          if (key.toLowerCase() === "w") {
+            moveCursor("up");
+          } else if (key.toLowerCase() === "s") {
+            moveCursor("down");
+          } else if (key.toLowerCase() === "a") {
+            moveCursor("left");
+          } else if (key.toLowerCase() === "d") {
+            moveCursor("right");
+          }
+        }
         break;
       case " ":
       case "enter":
-        event.preventDefault();
-        placeStoneAtCursor();
-        break;
-      case "arrowleft":
-        event.preventDefault();
-        if (onDialogueNavigate) {
-          onDialogueNavigate("previous");
+        // 石配置キーは disabled 時は無効
+        if (!isDisabledValue) {
+          event.preventDefault();
+          placeStoneAtCursor();
         }
         break;
+      case "arrowleft":
       case "arrowright":
+        // 矢印キーでの会話送りは常に有効
         event.preventDefault();
         if (onDialogueNavigate) {
-          onDialogueNavigate("next");
+          onDialogueNavigate(
+            key.toLowerCase() === "arrowleft" ? "previous" : "next",
+          );
         }
         break;
       default:

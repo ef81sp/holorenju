@@ -104,12 +104,14 @@ const gridLines = computed(() =>
 );
 
 const cursorCorners = computed(() =>
-  generateCursorCorners(
-    props.cursorPosition,
-    layout.positionToPixels,
-    layout.CELL_SIZE.value,
-    layout.STONE_RADIUS.value,
-  ),
+  props.disabled
+    ? null
+    : generateCursorCorners(
+        props.cursorPosition,
+        layout.positionToPixels,
+        layout.CELL_SIZE.value,
+        layout.STONE_RADIUS.value,
+      ),
 );
 
 // ライフサイクル

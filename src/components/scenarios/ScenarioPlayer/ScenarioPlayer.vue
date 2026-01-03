@@ -40,6 +40,10 @@ const onSectionComplete = (): void => {
 
 const problemSolver = useProblemSolver(props.scenarioId, onSectionComplete);
 
+const isDemoSection = computed(
+  () => scenarioNav.currentSection.value?.type === "demo",
+);
+
 const keyboardNav = useKeyboardNavigation(
   () => handlePlaceStone(),
   (direction) => {
@@ -53,6 +57,7 @@ const keyboardNav = useKeyboardNavigation(
       scenarioNav.previousDialogue();
     }
   },
+  isDemoSection,
 );
 
 // Lifecycle
@@ -140,7 +145,10 @@ const handleNextDialogue = (): void => {
     >
       <RenjuBoard
         :board-state="gameStore.board"
-        :disabled="scenarioNav.isSectionCompleted.value"
+        :disabled="
+          scenarioNav.currentSection.value?.type === 'demo' ||
+          scenarioNav.isSectionCompleted.value
+        "
         :stage-size="boardSize"
         :cursor-position="keyboardNav.cursorPosition.value"
         @place-stone="handlePlaceStone"
