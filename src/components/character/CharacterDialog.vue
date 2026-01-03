@@ -127,22 +127,32 @@ const messageCharacterInfo = computed(() => {
             </button>
           </div>
         </div>
-        <DialogText :nodes="message.text" />
-
-        <!-- 選択肢 -->
-        <div
-          v-if="message.choices && message.choices.length > 0"
-          class="choices"
+        <Transition
+          name="dialog-slide"
+          mode="out-in"
         >
-          <button
-            v-for="choice in message.choices"
-            :key="choice.id"
-            class="choice-button"
-            @click="handleChoiceClick(choice.id)"
+          <div
+            :key="message.id"
+            class="dialog-text-wrapper"
           >
-            {{ choice.text }}
-          </button>
-        </div>
+            <DialogText :nodes="message.text" />
+
+            <!-- 選択肢 -->
+            <div
+              v-if="message.choices && message.choices.length > 0"
+              class="choices"
+            >
+              <button
+                v-for="choice in message.choices"
+                :key="choice.id"
+                class="choice-button"
+                @click="handleChoiceClick(choice.id)"
+              >
+                {{ choice.text }}
+              </button>
+            </div>
+          </div>
+        </Transition>
       </div>
     </div>
 
@@ -250,7 +260,32 @@ const messageCharacterInfo = computed(() => {
   border: var(--size-2) solid;
   box-shadow: 0 var(--size-5) var(--size-8) rgba(0, 0, 0, 0.1);
   position: relative;
-  animation: fadeIn 0.3s ease-in;
+}
+
+/* トランジション: 下から上へせり上がり */
+.dialog-slide-enter-active,
+.dialog-slide-leave-active {
+  transition: all 0.15s ease-out;
+}
+
+.dialog-slide-enter-from {
+  opacity: 0;
+  transform: translateY(var(--size-4));
+}
+
+.dialog-slide-enter-to {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.dialog-slide-leave-from {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.dialog-slide-leave-to {
+  opacity: 0;
+  transform: translateY(calc(var(--size-4) * -1));
 }
 
 .character-name-container {
