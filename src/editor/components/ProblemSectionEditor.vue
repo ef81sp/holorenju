@@ -92,6 +92,7 @@ const addDialogue = (): void => {
       character: "fubuki",
       text: [],
       emotion: 0,
+      boardActions: [],
     };
     newDialogues.push(newDialogue);
     editorStore.updateCurrentSection({

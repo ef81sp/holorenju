@@ -35,7 +35,7 @@ interface DemoDialogue {
   character: CharacterType;
   text: TextNode[];
   emotion: EmotionId; // 0-39の連番ID
-  boardAction?: BoardAction;
+  boardActions: BoardAction[];
 }
 
 // ===== 盤面操作 =====

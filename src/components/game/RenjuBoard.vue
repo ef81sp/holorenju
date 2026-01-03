@@ -130,7 +130,6 @@ const placedStones = computed<PlacedStone[]>(() => {
   return stones;
 });
 
-
 // 盤面のグリッド線を生成
 const generateGridLines = (): {
   points: number[];
@@ -381,50 +380,58 @@ const generateCursorCorners = (): {
   ];
 };
 
-// 最後に配置された石をアニメーション（上から降ってくるパターン）
-const animateLastPlacedStone = (stoneKey: string, position?: Position): void => {
-  nextTick(() => {
-    const nodeRef = stoneRefs[stoneKey];
-    if (!nodeRef) {
-      return;
-    }
+const animateLastPlacedStone = (
+  stoneKey: string,
+  position?: Position,
+): Promise<void> =>
+  new Promise((resolve) => {
+    nextTick(() => {
+      const nodeRef = stoneRefs[stoneKey];
+      if (!nodeRef) {
+        resolve();
+        return;
+      }
 
-    // @ts-expect-error: Vue template ref methods
-    const konvaNode = nodeRef.getNode?.();
-    if (!konvaNode || !position) {
-      return;
-    }
+      // @ts-expect-error: Vue template ref methods
+      const konvaNode = nodeRef.getNode?.();
+      if (!konvaNode || !position) {
+        resolve();
+        return;
+      }
 
-    // 現在のy位置を取得
-    const targetY = positionToPixels(position.row, position.col).y;
-    const startY = targetY - CELL_SIZE.value * 0.25;
+      // 現在のy位置を取得
+      const targetY = positionToPixels(position.row, position.col).y;
+      const startY = targetY - CELL_SIZE.value * 0.25;
 
-    // 初期状態を設定
-    konvaNode.y(startY);
-    konvaNode.opacity(0.5);
-    konvaNode.scaleX(0.8);
-    konvaNode.scaleY(0.8);
+      // 初期状態を設定
+      konvaNode.y(startY);
+      konvaNode.opacity(0.5);
+      konvaNode.scaleX(0.8);
+      konvaNode.scaleY(0.8);
 
-    // アニメーション実行
-    const tween = new Konva.Tween({
-      node: konvaNode,
-      duration: 0.2,
-      y: targetY,
-      opacity: 1,
-      scaleX: 1,
-      scaleY: 1,
-      easing: Konva.Easings.EaseOut,
+      // アニメーション実行
+      const tween = new Konva.Tween({
+        node: konvaNode,
+        duration: 0.2,
+        y: targetY,
+        opacity: 1,
+        scaleX: 1,
+        scaleY: 1,
+        easing: Konva.Easings.EaseOut,
+        onFinish: () => {
+          resolve();
+        },
+      });
+
+      tween.play();
     });
-
-    tween.play();
   });
-};
 
 // BoardStoreのコールバック登録
 onMounted(() => {
-  boardStore.setOnStonePlacedCallback((position: Position) => {
+  boardStore.setOnStonePlacedCallback(async (position: Position) => {
     const stoneKey = `${position.row}-${position.col}`;
-    animateLastPlacedStone(stoneKey, position);
+    await animateLastPlacedStone(stoneKey, position);
   });
 });
 
@@ -477,12 +484,14 @@ onBeforeUnmount(() => {
         <v-circle
           v-for="stone in placedStones"
           :key="`stone-${stone.row}-${stone.col}`"
-          :ref="(el: unknown) => {
-            const stoneKey = `${stone.row}-${stone.col}`;
-            if (el) {
-              stoneRefs[stoneKey] = el;
+          :ref="
+            (el: unknown) => {
+              const stoneKey = `${stone.row}-${stone.col}`;
+              if (el) {
+                stoneRefs[stoneKey] = el;
+              }
             }
-          }"
+          "
           :config="{
             x: positionToPixels(stone.row, stone.col).x,
             y: positionToPixels(stone.row, stone.col).y,

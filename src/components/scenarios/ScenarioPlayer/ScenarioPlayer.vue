@@ -96,8 +96,7 @@ const requiresAnswerButton = computed(() => {
   ) {
     return false;
   }
-  const operator =
-    scenarioNav.currentSection.value.successOperator ?? "or";
+  const operator = scenarioNav.currentSection.value.successOperator ?? "or";
   return operator === "and" && !scenarioNav.isSectionCompleted.value;
 });
 

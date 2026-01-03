@@ -113,14 +113,14 @@ const currentBoard = computed(() => {
   // 現在のダイアログインデックスまでのアクションを適用（現在のダイアログを含む）
   for (let i = 0; i <= dialoguePageIndex.value; i++) {
     const dialogue = dialogues[i];
-    if (dialogue.boardAction) {
-      const action = dialogue.boardAction as BoardAction;
+    // BoardActions 配列をループして各アクションを順次適用
+    for (const action of dialogue.boardActions) {
       if (action.type === "place") {
-        const placeAction = action as Extract<BoardAction, { type: "place" }>;
+        const placeAction = action;
         const { row, col } = placeAction.position;
         board[row][col] = placeAction.color;
       } else if (action.type === "remove") {
-        const removeAction = action as Extract<BoardAction, { type: "remove" }>;
+        const removeAction = action;
         const { row, col } = removeAction.position;
         board[row][col] = null;
       }

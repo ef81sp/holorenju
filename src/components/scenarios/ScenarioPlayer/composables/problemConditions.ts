@@ -1,8 +1,5 @@
 import type { BoardState } from "@/types/game";
-import type {
-  SuccessCondition,
-  SuccessOperator,
-} from "@/types/scenario";
+import type { SuccessCondition, SuccessOperator } from "@/types/scenario";
 
 export const evaluateCondition = (
   condition: SuccessCondition,

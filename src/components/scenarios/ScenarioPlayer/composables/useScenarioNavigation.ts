@@ -16,6 +16,12 @@ import { useDialogStore } from "@/stores/dialogStore";
 import { useProgressStore } from "@/stores/progressStore";
 
 /**
+ * ボードアクションのアニメーション待機時間（ミリ秒）
+ * RenjuBoard.vueのアニメーション時間（200ms）+ マージン
+ */
+const BOARD_ACTION_ANIMATION_DURATION = 250;
+
+/**
  * ダイアログと所属セクション、セクション内インデックスをマッピング
  */
 interface DialogueMapping {
@@ -49,7 +55,7 @@ export const useScenarioNavigation = (
   previousDialogue: () => void;
   nextSection: () => void;
   completeScenario: () => void;
-  applyBoardAction: (action: BoardAction) => void;
+  applyBoardAction: (action: BoardAction) => Promise<void>;
   goBack: () => void;
 } => {
   // Stores
@@ -171,9 +177,35 @@ export const useScenarioNavigation = (
   };
 
   /**
+   * 複数のボードアクションを順次実行するヘルパー
+   */
+  const applyBoardActionsSequentially = async (
+    actions: BoardAction[],
+  ): Promise<void> => {
+    await actions.reduce(async (promise, action) => {
+      await promise;
+      await applyBoardAction(action);
+    }, Promise.resolve());
+  };
+
+  /**
+   * 複数のダイアログまでのボードアクションを順次実行
+   */
+  const applyActionsUntilDialogueIndex = async (
+    dialogues: DemoDialogue[],
+    untilIndex: number,
+  ): Promise<void> => {
+    const relevantDialogues = dialogues.slice(0, untilIndex);
+    await relevantDialogues.reduce(async (promise, dialogue) => {
+      await promise;
+      await applyBoardActionsSequentially(dialogue.boardActions);
+    }, Promise.resolve());
+  };
+
+  /**
    * 次のダイアログへ進む
    */
-  const nextDialogue = (): void => {
+  const nextDialogue = async (): Promise<void> => {
     if (currentDialogueIndex.value < allDialogues.value.length - 1) {
       currentDialogueIndex.value += 1;
       const mapping = allDialogues.value[currentDialogueIndex.value];
@@ -182,31 +214,27 @@ export const useScenarioNavigation = (
       // セクションが変わった場合、盤面を初期化
       if (mapping.sectionIndex !== prevMapping.sectionIndex) {
         const newSection = scenario.value?.sections[mapping.sectionIndex];
-        if (newSection) {
+        if (newSection && newSection.type === "demo") {
           const boardState = boardStringToBoardState(newSection.initialBoard);
           boardStore.setBoard(boardState);
           currentSectionIndex.value = mapping.sectionIndex;
           isSectionCompleted.value = false;
-
-          isSectionCompleted.value = false;
-          // 新しいセクション内の前のダイアログまでのボードアクションを適用
-          for (let i = 0; i < mapping.sectionDialogueIndex; i++) {
-            const dialogue = newSection.dialogues[i];
-            if (dialogue.boardAction) {
-              applyBoardAction(dialogue.boardAction);
-            }
-          }
+          // 新しいセクション内の前のダイアログまでのボードアクションを順次実行
+          await applyActionsUntilDialogueIndex(
+            newSection.dialogues,
+            mapping.sectionDialogueIndex,
+          );
         }
       }
 
-      showDialogueWithAction(mapping.dialogue);
+      await showDialogueWithAction(mapping.dialogue);
     }
   };
 
   /**
    * 前のダイアログへ戻す
    */
-  const previousDialogue = (): void => {
+  const previousDialogue = async (): Promise<void> => {
     if (currentDialogueIndex.value > 0) {
       currentDialogueIndex.value -= 1;
       const mapping = allDialogues.value[currentDialogueIndex.value];
@@ -216,53 +244,51 @@ export const useScenarioNavigation = (
       if (mapping.sectionIndex === nextMapping.sectionIndex) {
         // 同じセクション内での移動の場合
         const section = scenario.value?.sections[mapping.sectionIndex];
-        if (section) {
+        if (section && section.type === "demo") {
           const boardState = boardStringToBoardState(section.initialBoard);
           boardStore.setBoard(boardState);
-
-          // 前のダイアログまでのボードアクションを再実行
-          for (let i = 0; i < mapping.sectionDialogueIndex; i++) {
-            const dialogue = section.dialogues[i];
-            if (dialogue.boardAction) {
-              applyBoardAction(dialogue.boardAction);
-            }
-          }
+          // 前のダイアログまでのボードアクションを順次実行
+          await applyActionsUntilDialogueIndex(
+            section.dialogues,
+            mapping.sectionDialogueIndex,
+          );
         }
       } else {
         const newSection = scenario.value?.sections[mapping.sectionIndex];
-        if (newSection) {
+        if (newSection && newSection.type === "demo") {
           const boardState = boardStringToBoardState(newSection.initialBoard);
           boardStore.setBoard(boardState);
           currentSectionIndex.value = mapping.sectionIndex;
           isSectionCompleted.value = false;
-
-          // 前のセクション内の前のダイアログまでのボードアクションを適用
-          for (let i = 0; i < mapping.sectionDialogueIndex; i++) {
-            const dialogue = newSection.dialogues[i];
-            if (dialogue.boardAction) {
-              applyBoardAction(dialogue.boardAction);
-            }
-          }
+          // 前のセクション内の前のダイアログまでのボードアクションを順次実行
+          await applyActionsUntilDialogueIndex(
+            newSection.dialogues,
+            mapping.sectionDialogueIndex,
+          );
         }
       }
 
-      showDialogueWithAction(mapping.dialogue);
+      await showDialogueWithAction(mapping.dialogue);
     }
   };
 
   /**
    * ダイアログを表示して盤面操作を適用
    */
-  const showDialogueWithAction = (dialogue: DemoDialogue): void => {
+  const showDialogueWithAction = async (
+    dialogue: DemoDialogue,
+  ): Promise<void> => {
     dialogStore.showMessage({
       id: dialogue.id,
       character: dialogue.character,
       text: dialogue.text,
       emotion: dialogue.emotion,
     });
-    if (dialogue.boardAction) {
-      applyBoardAction(dialogue.boardAction);
-    }
+    // BoardActions 配列を順次実行
+    await dialogue.boardActions.reduce(async (promise, action) => {
+      await promise;
+      await applyBoardAction(action);
+    }, Promise.resolve());
   };
 
   /**
@@ -314,11 +340,19 @@ export const useScenarioNavigation = (
   /**
    * 盤面操作を適用（デモセクションのダイアログに含まれるアクション）
    */
-  const applyBoardAction = (action: BoardAction): void => {
+  const applyBoardAction = async (action: BoardAction): Promise<void> => {
     if (action.type === "place") {
       boardStore.placeStone(action.position, action.color);
+      // アニメーション完了を待つ
+      await new Promise((resolve) => {
+        setTimeout(resolve, BOARD_ACTION_ANIMATION_DURATION);
+      });
     } else if (action.type === "remove") {
       boardStore.removeStone(action.position);
+      // アニメーション完了を待つ
+      await new Promise((resolve) => {
+        setTimeout(resolve, BOARD_ACTION_ANIMATION_DURATION);
+      });
     } else if (action.type === "setBoard") {
       const boardState = boardStringToBoardState(action.board);
       boardStore.setBoard(boardState);

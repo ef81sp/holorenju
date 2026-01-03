@@ -10,7 +10,13 @@ import { computed } from "vue";
  * 利用可能な幅と高さから最適なボードサイズを計算します。
  * 初期化時に値が0の場合のフォールバック処理を含みます。
  */
-export const useBoardSize = (boardFrameRef: Ref<HTMLElement | null>) => {
+export const useBoardSize = (
+  boardFrameRef: Ref<HTMLElement | null>,
+): {
+  boardFrameWidth: Ref<number>;
+  boardFrameHeight: Ref<number>;
+  boardSize: Ref<number>;
+} => {
   const { width: boardFrameWidth, height: boardFrameHeight } = useElementSize(
     boardFrameRef,
     {

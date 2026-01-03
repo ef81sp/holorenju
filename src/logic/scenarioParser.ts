@@ -206,16 +206,18 @@ function validateDialogue(data: unknown, path: string): DemoDialogue {
     typeof data.emotion === "number"
       ? Math.min(39, Math.max(0, data.emotion))
       : 0;
-  const boardAction = data.boardAction
-    ? validateBoardAction(data.boardAction, `${path}.boardAction`)
-    : undefined;
+  const boardActions = Array.isArray(data.boardActions)
+    ? data.boardActions.map((action, idx) =>
+        validateBoardAction(action, `${path}.boardActions[${idx}]`),
+      )
+    : [];
 
   return {
     id,
     character,
     text,
     emotion: emotion as unknown as EmotionId,
-    boardAction,
+    boardActions,
   };
 }
 

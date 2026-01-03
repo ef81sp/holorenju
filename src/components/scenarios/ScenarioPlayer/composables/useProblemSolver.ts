@@ -3,18 +3,14 @@ import type { Position, BoardState } from "@/types/game";
 import type {
   ProblemSection,
   SuccessCondition,
-  BoardAction,
   SuccessOperator,
 } from "@/types/scenario";
-
-import {
-  evaluateAllConditions,
-  evaluateCondition,
-} from "./problemConditions";
 
 import { useBoardStore } from "@/stores/boardStore";
 import { useDialogStore } from "@/stores/dialogStore";
 import { useProgressStore } from "@/stores/progressStore";
+
+import { evaluateAllConditions, evaluateCondition } from "./problemConditions";
 
 /**
  * 問題セクション固有のロジックを管理するComposable
@@ -45,7 +41,6 @@ export const useProblemSolver = (
     operator?: SuccessOperator,
   ) => boolean;
   showForbiddenFeedback: () => void;
-  applyBoardAction: (action: BoardAction) => void;
 } => {
   const boardStore = useBoardStore();
   const dialogStore = useDialogStore();
@@ -209,20 +204,6 @@ export const useProblemSolver = (
     // 禁じ手の応答はシナリオ拡張時に追加予定
   };
 
-  /**
-   * 盤面操作を適用（ダイアログに含まれるアクション）
-   */
-  const applyBoardAction = (action: BoardAction): void => {
-    if (action.type === "place") {
-      boardStore.placeStone(action.position, action.color);
-    } else if (action.type === "remove") {
-      boardStore.removeStone(action.position);
-    } else if (action.type === "setBoard") {
-      // 別ファイルからboardStringToBoardStateをインポート後使用
-      console.warn("[applyBoardAction] setBoard action not fully implemented");
-    }
-  };
-
   return {
     handlePlaceStone,
     submitAnswer,
@@ -230,6 +211,5 @@ export const useProblemSolver = (
     checkAllConditions,
     checkSuccessCondition,
     showForbiddenFeedback,
-    applyBoardAction,
   };
 };

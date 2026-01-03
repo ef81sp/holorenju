@@ -61,6 +61,7 @@ const addDialogue = (): void => {
       character: "fubuki",
       text: [],
       emotion: 0,
+      boardActions: [],
     };
     newDialogues.push(newDialogue);
     editorStore.updateCurrentSection({
@@ -173,40 +174,87 @@ const createBoardAction = (type: BoardAction["type"]): BoardAction => {
   }
 };
 
-const setBoardAction = (index: number, action?: BoardAction): void => {
-  updateDialogue(index, { boardAction: action });
+// BoardActions 配列操作関数
+const addBoardAction = (index: number): void => {
+  const dialogue = currentSection.value?.dialogues[index];
+  if (!dialogue) {
+    return;
+  }
+  const newBoardActions = [
+    ...dialogue.boardActions,
+    createBoardAction("place"),
+  ];
+  updateDialogue(index, { boardActions: newBoardActions });
 };
 
-const changeBoardActionType = (
-  index: number,
-  type: BoardAction["type"],
+const removeBoardAction = (
+  dialogueIndex: number,
+  actionIndex: number,
 ): void => {
-  setBoardAction(index, createBoardAction(type));
+  const dialogue = currentSection.value?.dialogues[dialogueIndex];
+  if (!dialogue) {
+    return;
+  }
+  const newBoardActions = dialogue.boardActions.filter(
+    (_, i) => i !== actionIndex,
+  );
+  updateDialogue(dialogueIndex, { boardActions: newBoardActions });
 };
 
-const clearBoardAction = (index: number): void => {
-  setBoardAction(index, undefined);
+const moveBoardAction = (
+  dialogueIndex: number,
+  fromIndex: number,
+  toIndex: number,
+): void => {
+  const dialogue = currentSection.value?.dialogues[dialogueIndex];
+  if (!dialogue) {
+    return;
+  }
+  const newBoardActions = [...dialogue.boardActions];
+  const [movedAction] = newBoardActions.splice(fromIndex, 1);
+  newBoardActions.splice(toIndex, 0, movedAction);
+  updateDialogue(dialogueIndex, { boardActions: newBoardActions });
+};
+
+const updateBoardActionInArray = (
+  dialogueIndex: number,
+  actionIndex: number,
+  updates: Partial<BoardAction>,
+): void => {
+  const dialogue = currentSection.value?.dialogues[dialogueIndex];
+  if (!dialogue || !dialogue.boardActions[actionIndex]) {
+    return;
+  }
+  const newBoardActions = [...dialogue.boardActions];
+  newBoardActions[actionIndex] = {
+    ...newBoardActions[actionIndex],
+    ...updates,
+  } as BoardAction;
+  updateDialogue(dialogueIndex, { boardActions: newBoardActions });
 };
 
 const updateBoardActionPosition = (
-  index: number,
+  dialogueIndex: number,
+  actionIndex: number,
   key: "position" | "fromPosition" | "toPosition",
   field: "row" | "col",
   value: number,
 ): void => {
-  const dialogue = currentSection.value?.dialogues[index];
-  if (!dialogue?.boardAction) {
+  const dialogue = currentSection.value?.dialogues[dialogueIndex];
+  if (!dialogue || !dialogue.boardActions[actionIndex]) {
     return;
   }
   const nextValue = Math.max(0, Math.min(14, value));
-  const action = dialogue.boardAction;
+  const action = dialogue.boardActions[actionIndex];
 
   if (
     (action.type === "place" || action.type === "remove") &&
     key === "position"
   ) {
     const updatedPos: Position = { ...action.position, [field]: nextValue };
-    setBoardAction(index, { ...action, position: updatedPos });
+    updateBoardActionInArray(dialogueIndex, actionIndex, {
+      position: updatedPos,
+    });
     return;
   }
 
@@ -216,109 +264,148 @@ const updateBoardActionPosition = (
         ...action.fromPosition,
         [field]: nextValue,
       };
-      setBoardAction(index, { ...action, fromPosition: updatedPos });
+      updateBoardActionInArray(dialogueIndex, actionIndex, {
+        fromPosition: updatedPos,
+      });
       return;
     }
     if (key === "toPosition") {
       const updatedPos: Position = { ...action.toPosition, [field]: nextValue };
-      setBoardAction(index, { ...action, toPosition: updatedPos });
+      updateBoardActionInArray(dialogueIndex, actionIndex, {
+        toPosition: updatedPos,
+      });
     }
   }
 };
 
 const updateBoardActionColor = (
-  index: number,
+  dialogueIndex: number,
+  actionIndex: number,
   color: "black" | "white",
 ): void => {
-  const dialogue = currentSection.value?.dialogues[index];
-  if (!dialogue?.boardAction || dialogue.boardAction.type !== "place") {
+  const dialogue = currentSection.value?.dialogues[dialogueIndex];
+  if (!dialogue || !dialogue.boardActions[actionIndex]) {
     return;
   }
-  setBoardAction(index, { ...dialogue.boardAction, color });
+  const action = dialogue.boardActions[actionIndex];
+  if (action.type !== "place") {
+    return;
+  }
+  updateBoardActionInArray(dialogueIndex, actionIndex, { color });
 };
 
 const updateBoardActionHighlight = (
-  index: number,
+  dialogueIndex: number,
+  actionIndex: number,
   highlight: boolean,
 ): void => {
-  const dialogue = currentSection.value?.dialogues[index];
-  if (!dialogue?.boardAction || dialogue.boardAction.type !== "place") {
+  const dialogue = currentSection.value?.dialogues[dialogueIndex];
+  if (!dialogue || !dialogue.boardActions[actionIndex]) {
     return;
   }
-  setBoardAction(index, { ...dialogue.boardAction, highlight });
+  const action = dialogue.boardActions[actionIndex];
+  if (action.type !== "place") {
+    return;
+  }
+  updateBoardActionInArray(dialogueIndex, actionIndex, { highlight });
 };
 
-const updateBoardActionBoard = (index: number, text: string): void => {
-  const dialogue = currentSection.value?.dialogues[index];
-  if (!dialogue?.boardAction || dialogue.boardAction.type !== "setBoard") {
+const updateBoardActionBoard = (
+  dialogueIndex: number,
+  actionIndex: number,
+  text: string,
+): void => {
+  const dialogue = currentSection.value?.dialogues[dialogueIndex];
+  if (!dialogue || !dialogue.boardActions[actionIndex]) {
+    return;
+  }
+  const action = dialogue.boardActions[actionIndex];
+  if (action.type !== "setBoard") {
     return;
   }
   const lines = text.split("\n").map((line) => line.trim());
-  setBoardAction(index, { ...dialogue.boardAction, board: lines });
+  updateBoardActionInArray(dialogueIndex, actionIndex, { board: lines });
 };
 
-const addBoardActionMarkPosition = (index: number): void => {
-  const dialogue = currentSection.value?.dialogues[index];
-  if (!dialogue?.boardAction || dialogue.boardAction.type !== "mark") {
+const addBoardActionMarkPosition = (
+  dialogueIndex: number,
+  actionIndex: number,
+): void => {
+  const dialogue = currentSection.value?.dialogues[dialogueIndex];
+  if (!dialogue || !dialogue.boardActions[actionIndex]) {
     return;
   }
-  const positions = [...dialogue.boardAction.positions, { row: 0, col: 0 }];
-  setBoardAction(index, { ...dialogue.boardAction, positions });
+  const action = dialogue.boardActions[actionIndex];
+  if (action.type !== "mark") {
+    return;
+  }
+  const positions = [...action.positions, { row: 0, col: 0 }];
+  updateBoardActionInArray(dialogueIndex, actionIndex, { positions });
 };
 
 const updateBoardActionMarkPosition = (
-  index: number,
+  dialogueIndex: number,
+  actionIndex: number,
   posIndex: number,
   field: "row" | "col",
   value: number,
 ): void => {
-  const dialogue = currentSection.value?.dialogues[index];
-  if (!dialogue?.boardAction || dialogue.boardAction.type !== "mark") {
+  const dialogue = currentSection.value?.dialogues[dialogueIndex];
+  if (!dialogue || !dialogue.boardActions[actionIndex]) {
     return;
   }
-  const positions = [...dialogue.boardAction.positions];
+  const action = dialogue.boardActions[actionIndex];
+  if (action.type !== "mark") {
+    return;
+  }
+  const positions = [...action.positions];
   const nextValue = Math.max(0, Math.min(14, value));
   positions[posIndex] = {
     ...positions[posIndex],
     [field]: nextValue,
   } as Position;
-  setBoardAction(index, { ...dialogue.boardAction, positions });
+  updateBoardActionInArray(dialogueIndex, actionIndex, { positions });
 };
 
 const removeBoardActionMarkPosition = (
-  index: number,
+  dialogueIndex: number,
+  actionIndex: number,
   posIndex: number,
 ): void => {
-  const dialogue = currentSection.value?.dialogues[index];
-  if (!dialogue?.boardAction || dialogue.boardAction.type !== "mark") {
+  const dialogue = currentSection.value?.dialogues[dialogueIndex];
+  if (!dialogue || !dialogue.boardActions[actionIndex]) {
     return;
   }
-  const positions = dialogue.boardAction.positions.filter(
-    (_, i) => i !== posIndex,
-  );
-  setBoardAction(index, { ...dialogue.boardAction, positions });
+  const action = dialogue.boardActions[actionIndex];
+  if (action.type !== "mark") {
+    return;
+  }
+  const positions = action.positions.filter((_, i) => i !== posIndex);
+  updateBoardActionInArray(dialogueIndex, actionIndex, { positions });
 };
 
 const updateBoardActionMarkMeta = (
-  index: number,
+  dialogueIndex: number,
+  actionIndex: number,
   updates: Partial<Extract<BoardAction, { type: "mark" }>>,
 ): void => {
-  const dialogue = currentSection.value?.dialogues[index];
-  if (!dialogue?.boardAction || dialogue.boardAction.type !== "mark") {
+  const dialogue = currentSection.value?.dialogues[dialogueIndex];
+  if (!dialogue || !dialogue.boardActions[actionIndex]) {
     return;
   }
-  setBoardAction(index, { ...dialogue.boardAction, ...updates });
+  updateBoardActionInArray(dialogueIndex, actionIndex, updates);
 };
 
 const updateBoardActionLine = (
-  index: number,
+  dialogueIndex: number,
+  actionIndex: number,
   updates: Partial<Extract<BoardAction, { type: "line" }>>,
 ): void => {
-  const dialogue = currentSection.value?.dialogues[index];
-  if (!dialogue?.boardAction || dialogue.boardAction.type !== "line") {
+  const dialogue = currentSection.value?.dialogues[dialogueIndex];
+  if (!dialogue || !dialogue.boardActions[actionIndex]) {
     return;
   }
-  setBoardAction(index, { ...dialogue.boardAction, ...updates });
+  updateBoardActionInArray(dialogueIndex, actionIndex, updates);
 };
 </script>
 
@@ -486,392 +573,460 @@ const updateBoardActionLine = (
               />
               <div class="board-action-block">
                 <div class="board-action-header">
-                  <span>Board Action</span>
+                  <span>Board Actions</span>
                   <button
-                    v-if="dialogue.boardAction"
-                    type="button"
-                    class="btn-inline"
-                    @click.prevent="clearBoardAction(index)"
-                  >
-                    クリア
-                  </button>
-                  <button
-                    v-else
                     type="button"
                     class="btn-add-small btn-inline"
-                    @click.prevent="changeBoardActionType(index, 'place')"
+                    @click.prevent="addBoardAction(index)"
                   >
                     + 追加
                   </button>
                 </div>
 
                 <div
-                  v-if="dialogue.boardAction"
-                  class="board-action-body"
+                  v-if="dialogue.boardActions.length === 0"
+                  class="empty-state"
                 >
-                  <div class="field-row">
-                    <label>タイプ</label>
-                    <select
-                      :value="dialogue.boardAction.type"
-                      class="form-input form-input-small"
-                      @change="
-                        (e) =>
-                          changeBoardActionType(
-                            index,
-                            (e.target as HTMLSelectElement)
-                              .value as BoardAction['type'],
-                          )
-                      "
-                    >
-                      <option value="place">place</option>
-                      <option value="remove">remove</option>
-                      <option value="setBoard">setBoard</option>
-                      <option value="mark">mark</option>
-                      <option value="line">line</option>
-                    </select>
-                  </div>
+                  アクションがありません
+                </div>
 
+                <div
+                  v-else
+                  class="board-actions-list"
+                >
                   <div
-                    v-if="dialogue.boardAction.type === 'place'"
-                    class="board-action-section"
+                    v-for="(action, actionIndex) in dialogue.boardActions"
+                    :key="`action-${actionIndex}`"
+                    class="board-action-item"
                   >
-                    <div class="field-row">
-                      <label>行</label>
-                      <input
-                        type="number"
-                        min="0"
-                        max="14"
-                        :value="dialogue.boardAction.position.row"
-                        class="form-input form-input-small"
-                        @input="
-                          (e) =>
-                            updateBoardActionPosition(
-                              index,
-                              'position',
-                              'row',
-                              Number((e.target as HTMLInputElement).value),
-                            )
-                        "
-                      />
-                      <label>列</label>
-                      <input
-                        type="number"
-                        min="0"
-                        max="14"
-                        :value="dialogue.boardAction.position.col"
-                        class="form-input form-input-small"
-                        @input="
-                          (e) =>
-                            updateBoardActionPosition(
-                              index,
-                              'position',
-                              'col',
-                              Number((e.target as HTMLInputElement).value),
-                            )
-                        "
-                      />
-                    </div>
-                    <div class="field-row">
-                      <label>色</label>
-                      <select
-                        :value="dialogue.boardAction.color"
-                        class="form-input form-input-small"
-                        @change="
-                          (e) =>
-                            updateBoardActionColor(
-                              index,
-                              (e.target as HTMLSelectElement).value as
-                                | 'black'
-                                | 'white',
-                            )
-                        "
-                      >
-                        <option value="black">黒</option>
-                        <option value="white">白</option>
-                      </select>
-                      <label class="checkbox-inline">
-                        <input
-                          type="checkbox"
-                          :checked="dialogue.boardAction.highlight"
-                          @change="
-                            (e) =>
-                              updateBoardActionHighlight(
-                                index,
-                                (e.target as HTMLInputElement).checked,
-                              )
-                          "
-                        />
-                        ハイライト
-                      </label>
-                    </div>
-                  </div>
-
-                  <div
-                    v-else-if="dialogue.boardAction.type === 'remove'"
-                    class="board-action-section"
-                  >
-                    <div class="field-row">
-                      <label>行</label>
-                      <input
-                        type="number"
-                        min="0"
-                        max="14"
-                        :value="dialogue.boardAction.position.row"
-                        class="form-input form-input-small"
-                        @input="
-                          (e) =>
-                            updateBoardActionPosition(
-                              index,
-                              'position',
-                              'row',
-                              Number((e.target as HTMLInputElement).value),
-                            )
-                        "
-                      />
-                      <label>列</label>
-                      <input
-                        type="number"
-                        min="0"
-                        max="14"
-                        :value="dialogue.boardAction.position.col"
-                        class="form-input form-input-small"
-                        @input="
-                          (e) =>
-                            updateBoardActionPosition(
-                              index,
-                              'position',
-                              'col',
-                              Number((e.target as HTMLInputElement).value),
-                            )
-                        "
-                      />
-                    </div>
-                  </div>
-
-                  <div
-                    v-else-if="dialogue.boardAction.type === 'setBoard'"
-                    class="board-action-section"
-                  >
-                    <label>盤面データ (15行)</label>
-                    <textarea
-                      :value="dialogue.boardAction.board.join('\n')"
-                      class="form-textarea"
-                      rows="6"
-                      placeholder="eで空白、x=黒、o=白"
-                      @input="
-                        (e) =>
-                          updateBoardActionBoard(
-                            index,
-                            (e.target as HTMLTextAreaElement).value,
-                          )
-                      "
-                    />
-                  </div>
-
-                  <div
-                    v-else-if="dialogue.boardAction.type === 'mark'"
-                    class="board-action-section"
-                  >
-                    <div class="field-row">
-                      <label>マーク</label>
-                      <select
-                        :value="dialogue.boardAction.markType"
-                        class="form-input form-input-small"
-                        @change="
-                          (e) =>
-                            updateBoardActionMarkMeta(index, {
-                              markType: (e.target as HTMLSelectElement)
-                                .value as 'circle' | 'cross' | 'arrow',
-                            })
-                        "
-                      >
-                        <option value="circle">Circle</option>
-                        <option value="cross">Cross</option>
-                        <option value="arrow">Arrow</option>
-                      </select>
-                      <input
-                        type="text"
-                        :value="dialogue.boardAction.label || ''"
-                        class="form-input form-input-small"
-                        placeholder="ラベル (任意)"
-                        @input="
-                          (e) =>
-                            updateBoardActionMarkMeta(index, {
-                              label: (e.target as HTMLInputElement).value,
-                            })
-                        "
-                      />
-                    </div>
-                    <div class="positions-list">
-                      <div
-                        v-for="(pos, posIndex) in dialogue.boardAction
-                          .positions"
-                        :key="`mark-${posIndex}`"
-                        class="position-row"
-                      >
-                        <label>行</label>
-                        <input
-                          type="number"
-                          min="0"
-                          max="14"
-                          :value="pos.row"
-                          class="form-input form-input-small"
-                          @input="
-                            (e) =>
-                              updateBoardActionMarkPosition(
-                                index,
-                                posIndex,
-                                'row',
-                                Number((e.target as HTMLInputElement).value),
-                              )
-                          "
-                        />
-                        <label>列</label>
-                        <input
-                          type="number"
-                          min="0"
-                          max="14"
-                          :value="pos.col"
-                          class="form-input form-input-small"
-                          @input="
-                            (e) =>
-                              updateBoardActionMarkPosition(
-                                index,
-                                posIndex,
-                                'col',
-                                Number((e.target as HTMLInputElement).value),
-                              )
-                          "
-                        />
+                    <div class="action-header">
+                      <span class="action-index">アクション {{ actionIndex + 1 }}</span>
+                      <div class="action-buttons">
                         <button
                           type="button"
-                          class="btn-inline"
+                          class="btn-move"
+                          :disabled="actionIndex === 0"
                           @click.prevent="
-                            removeBoardActionMarkPosition(index, posIndex)
+                            moveBoardAction(index, actionIndex, actionIndex - 1)
                           "
                         >
-                          削除
+                          ▲
+                        </button>
+                        <button
+                          type="button"
+                          class="btn-move"
+                          :disabled="
+                            actionIndex === dialogue.boardActions.length - 1
+                          "
+                          @click.prevent="
+                            moveBoardAction(index, actionIndex, actionIndex + 1)
+                          "
+                        >
+                          ▼
+                        </button>
+                        <button
+                          type="button"
+                          class="btn-remove-small"
+                          @click.prevent="removeBoardAction(index, actionIndex)"
+                        >
+                          ✕
                         </button>
                       </div>
-                      <button
-                        type="button"
-                        class="btn-add-small btn-inline"
-                        @click.prevent="addBoardActionMarkPosition(index)"
-                      >
-                        + 座標追加
-                      </button>
                     </div>
-                  </div>
 
-                  <div
-                    v-else
-                    class="board-action-section"
-                  >
-                    <div class="positions-list">
-                      <div class="position-row">
-                        <label>開始 行/列</label>
-                        <input
-                          type="number"
-                          min="0"
-                          max="14"
-                          :value="dialogue.boardAction.fromPosition.row"
+                    <div class="board-action-body">
+                      <div class="field-row">
+                        <label>タイプ</label>
+                        <select
+                          :value="action.type"
                           class="form-input form-input-small"
-                          @input="
+                          @change="
                             (e) =>
-                              updateBoardActionPosition(
-                                index,
-                                'fromPosition',
-                                'row',
-                                Number((e.target as HTMLInputElement).value),
-                              )
+                              updateBoardActionInArray(index, actionIndex, {
+                                type: (e.target as HTMLSelectElement)
+                                  .value as BoardAction['type'],
+                              })
                           "
-                        />
-                        <input
-                          type="number"
-                          min="0"
-                          max="14"
-                          :value="dialogue.boardAction.fromPosition.col"
-                          class="form-input form-input-small"
+                        >
+                          <option value="place">place</option>
+                          <option value="remove">remove</option>
+                          <option value="setBoard">setBoard</option>
+                          <option value="mark">mark</option>
+                          <option value="line">line</option>
+                        </select>
+                      </div>
+
+                      <div
+                        v-if="action.type === 'place'"
+                        class="board-action-section"
+                      >
+                        <div class="field-row">
+                          <label>行</label>
+                          <input
+                            type="number"
+                            min="0"
+                            max="14"
+                            :value="action.position.row"
+                            class="form-input form-input-small"
+                            @input="
+                              (e) =>
+                                updateBoardActionPosition(
+                                  index,
+                                  actionIndex,
+                                  'position',
+                                  'row',
+                                  Number((e.target as HTMLInputElement).value),
+                                )
+                            "
+                          />
+                          <label>列</label>
+                          <input
+                            type="number"
+                            min="0"
+                            max="14"
+                            :value="action.position.col"
+                            class="form-input form-input-small"
+                            @input="
+                              (e) =>
+                                updateBoardActionPosition(
+                                  index,
+                                  actionIndex,
+                                  'position',
+                                  'col',
+                                  Number((e.target as HTMLInputElement).value),
+                                )
+                            "
+                          />
+                        </div>
+                        <div class="field-row">
+                          <label>色</label>
+                          <select
+                            :value="action.color"
+                            class="form-input form-input-small"
+                            @change="
+                              (e) =>
+                                updateBoardActionColor(
+                                  index,
+                                  actionIndex,
+                                  (e.target as HTMLSelectElement).value as
+                                    | 'black'
+                                    | 'white',
+                                )
+                            "
+                          >
+                            <option value="black">黒</option>
+                            <option value="white">白</option>
+                          </select>
+                          <label class="checkbox-inline">
+                            <input
+                              type="checkbox"
+                              :checked="action.highlight"
+                              @change="
+                                (e) =>
+                                  updateBoardActionHighlight(
+                                    index,
+                                    actionIndex,
+                                    (e.target as HTMLInputElement).checked,
+                                  )
+                              "
+                            />
+                            ハイライト
+                          </label>
+                        </div>
+                      </div>
+
+                      <div
+                        v-else-if="action.type === 'remove'"
+                        class="board-action-section"
+                      >
+                        <div class="field-row">
+                          <label>行</label>
+                          <input
+                            type="number"
+                            min="0"
+                            max="14"
+                            :value="action.position.row"
+                            class="form-input form-input-small"
+                            @input="
+                              (e) =>
+                                updateBoardActionPosition(
+                                  index,
+                                  actionIndex,
+                                  'position',
+                                  'row',
+                                  Number((e.target as HTMLInputElement).value),
+                                )
+                            "
+                          />
+                          <label>列</label>
+                          <input
+                            type="number"
+                            min="0"
+                            max="14"
+                            :value="action.position.col"
+                            class="form-input form-input-small"
+                            @input="
+                              (e) =>
+                                updateBoardActionPosition(
+                                  index,
+                                  actionIndex,
+                                  'position',
+                                  'col',
+                                  Number((e.target as HTMLInputElement).value),
+                                )
+                            "
+                          />
+                        </div>
+                      </div>
+
+                      <div
+                        v-else-if="action.type === 'setBoard'"
+                        class="board-action-section"
+                      >
+                        <label>盤面データ (15行)</label>
+                        <textarea
+                          :value="action.board.join('\n')"
+                          class="form-textarea"
+                          rows="6"
+                          placeholder="eで空白、x=黒、o=白"
                           @input="
                             (e) =>
-                              updateBoardActionPosition(
+                              updateBoardActionBoard(
                                 index,
-                                'fromPosition',
-                                'col',
-                                Number((e.target as HTMLInputElement).value),
+                                actionIndex,
+                                (e.target as HTMLTextAreaElement).value,
                               )
                           "
                         />
                       </div>
-                      <div class="position-row">
-                        <label>終了 行/列</label>
-                        <input
-                          type="number"
-                          min="0"
-                          max="14"
-                          :value="dialogue.boardAction.toPosition.row"
-                          class="form-input form-input-small"
-                          @input="
-                            (e) =>
-                              updateBoardActionPosition(
-                                index,
-                                'toPosition',
-                                'row',
-                                Number((e.target as HTMLInputElement).value),
-                              )
-                          "
-                        />
-                        <input
-                          type="number"
-                          min="0"
-                          max="14"
-                          :value="dialogue.boardAction.toPosition.col"
-                          class="form-input form-input-small"
-                          @input="
-                            (e) =>
-                              updateBoardActionPosition(
-                                index,
-                                'toPosition',
-                                'col',
-                                Number((e.target as HTMLInputElement).value),
-                              )
-                          "
-                        />
+
+                      <div
+                        v-else-if="action.type === 'mark'"
+                        class="board-action-section"
+                      >
+                        <div class="field-row">
+                          <label>マーク</label>
+                          <select
+                            :value="action.markType"
+                            class="form-input form-input-small"
+                            @change="
+                              (e) =>
+                                updateBoardActionMarkMeta(index, actionIndex, {
+                                  markType: (e.target as HTMLSelectElement)
+                                    .value as 'circle' | 'cross' | 'arrow',
+                                })
+                            "
+                          >
+                            <option value="circle">Circle</option>
+                            <option value="cross">Cross</option>
+                            <option value="arrow">Arrow</option>
+                          </select>
+                          <input
+                            type="text"
+                            :value="action.label || ''"
+                            class="form-input form-input-small"
+                            placeholder="ラベル (任意)"
+                            @input="
+                              (e) =>
+                                updateBoardActionMarkMeta(index, actionIndex, {
+                                  label: (e.target as HTMLInputElement).value,
+                                })
+                            "
+                          />
+                        </div>
+                        <div class="positions-list">
+                          <div
+                            v-for="(pos, posIndex) in action.positions"
+                            :key="`mark-${posIndex}`"
+                            class="position-row"
+                          >
+                            <label>行</label>
+                            <input
+                              type="number"
+                              min="0"
+                              max="14"
+                              :value="pos.row"
+                              class="form-input form-input-small"
+                              @input="
+                                (e) =>
+                                  updateBoardActionMarkPosition(
+                                    index,
+                                    actionIndex,
+                                    posIndex,
+                                    'row',
+                                    Number(
+                                      (e.target as HTMLInputElement).value,
+                                    ),
+                                  )
+                              "
+                            />
+                            <label>列</label>
+                            <input
+                              type="number"
+                              min="0"
+                              max="14"
+                              :value="pos.col"
+                              class="form-input form-input-small"
+                              @input="
+                                (e) =>
+                                  updateBoardActionMarkPosition(
+                                    index,
+                                    actionIndex,
+                                    posIndex,
+                                    'col',
+                                    Number(
+                                      (e.target as HTMLInputElement).value,
+                                    ),
+                                  )
+                              "
+                            />
+                            <button
+                              type="button"
+                              class="btn-inline"
+                              @click.prevent="
+                                removeBoardActionMarkPosition(
+                                  index,
+                                  actionIndex,
+                                  posIndex,
+                                )
+                              "
+                            >
+                              削除
+                            </button>
+                          </div>
+                          <button
+                            type="button"
+                            class="btn-add-small btn-inline"
+                            @click.prevent="
+                              addBoardActionMarkPosition(index, actionIndex)
+                            "
+                          >
+                            + 座標追加
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                    <div class="field-row">
-                      <label>アクション</label>
-                      <select
-                        :value="dialogue.boardAction.action"
-                        class="form-input form-input-small"
-                        @change="
-                          (e) =>
-                            updateBoardActionLine(index, {
-                              action: (e.target as HTMLSelectElement).value as
-                                | 'draw'
-                                | 'remove',
-                            })
-                        "
+
+                      <div
+                        v-else
+                        class="board-action-section"
                       >
-                        <option value="draw">draw</option>
-                        <option value="remove">remove</option>
-                      </select>
-                      <label>線の種類</label>
-                      <select
-                        :value="dialogue.boardAction.style || 'solid'"
-                        class="form-input form-input-small"
-                        @change="
-                          (e) =>
-                            updateBoardActionLine(index, {
-                              style: (e.target as HTMLSelectElement).value as
-                                | 'solid'
-                                | 'dashed',
-                            })
-                        "
-                      >
-                        <option value="solid">solid</option>
-                        <option value="dashed">dashed</option>
-                      </select>
+                        <div class="positions-list">
+                          <div class="position-row">
+                            <label>開始 行/列</label>
+                            <input
+                              type="number"
+                              min="0"
+                              max="14"
+                              :value="action.fromPosition.row"
+                              class="form-input form-input-small"
+                              @input="
+                                (e) =>
+                                  updateBoardActionPosition(
+                                    index,
+                                    actionIndex,
+                                    'fromPosition',
+                                    'row',
+                                    Number(
+                                      (e.target as HTMLInputElement).value,
+                                    ),
+                                  )
+                              "
+                            />
+                            <input
+                              type="number"
+                              min="0"
+                              max="14"
+                              :value="action.fromPosition.col"
+                              class="form-input form-input-small"
+                              @input="
+                                (e) =>
+                                  updateBoardActionPosition(
+                                    index,
+                                    actionIndex,
+                                    'fromPosition',
+                                    'col',
+                                    Number(
+                                      (e.target as HTMLInputElement).value,
+                                    ),
+                                  )
+                              "
+                            />
+                          </div>
+                          <div class="position-row">
+                            <label>終了 行/列</label>
+                            <input
+                              type="number"
+                              min="0"
+                              max="14"
+                              :value="action.toPosition.row"
+                              class="form-input form-input-small"
+                              @input="
+                                (e) =>
+                                  updateBoardActionPosition(
+                                    index,
+                                    actionIndex,
+                                    'toPosition',
+                                    'row',
+                                    Number(
+                                      (e.target as HTMLInputElement).value,
+                                    ),
+                                  )
+                              "
+                            />
+                            <input
+                              type="number"
+                              min="0"
+                              max="14"
+                              :value="action.toPosition.col"
+                              class="form-input form-input-small"
+                              @input="
+                                (e) =>
+                                  updateBoardActionPosition(
+                                    index,
+                                    actionIndex,
+                                    'toPosition',
+                                    'col',
+                                    Number(
+                                      (e.target as HTMLInputElement).value,
+                                    ),
+                                  )
+                              "
+                            />
+                          </div>
+                        </div>
+                        <div class="field-row">
+                          <label>アクション</label>
+                          <select
+                            :value="action.action"
+                            class="form-input form-input-small"
+                            @change="
+                              (e) =>
+                                updateBoardActionLine(index, actionIndex, {
+                                  action: (e.target as HTMLSelectElement)
+                                    .value as 'draw' | 'remove',
+                                })
+                            "
+                          >
+                            <option value="draw">draw</option>
+                            <option value="remove">remove</option>
+                          </select>
+                          <label>線の種類</label>
+                          <select
+                            :value="action.style || 'solid'"
+                            class="form-input form-input-small"
+                            @change="
+                              (e) =>
+                                updateBoardActionLine(index, actionIndex, {
+                                  style: (e.target as HTMLSelectElement)
+                                    .value as 'solid' | 'dashed',
+                                })
+                            "
+                          >
+                            <option value="solid">solid</option>
+                            <option value="dashed">dashed</option>
+                          </select>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1140,6 +1295,39 @@ const updateBoardActionLine = (
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.board-actions-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-5);
+}
+
+.board-action-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-5);
+  padding: var(--size-5);
+  background-color: white;
+  border: 1px solid var(--color-border);
+  border-radius: 3px;
+}
+
+.action-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--size-5);
+}
+
+.action-index {
+  font-weight: 600;
+  font-size: var(--size-11);
+}
+
+.action-buttons {
+  display: flex;
+  gap: var(--size-2);
 }
 
 .board-action-body {

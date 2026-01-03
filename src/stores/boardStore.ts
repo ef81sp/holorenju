@@ -21,7 +21,10 @@ export const useBoardStore = defineStore("board", () => {
   } | null>(null);
 
   // Callbacks
-  type OnStonePlacedCallback = (position: Position, color: StoneColor) => void;
+  type OnStonePlacedCallback = (
+    position: Position,
+    color: StoneColor,
+  ) => Promise<void>;
   let onStonePlacedCallback: OnStonePlacedCallback | null = null;
 
   // Actions
@@ -46,9 +49,11 @@ export const useBoardStore = defineStore("board", () => {
     // 最後に配置された石の情報を記録
     lastPlacedStone.value = { position, color };
 
-    // コールバック実行
+    // コールバック実行（非同期対応）
     if (onStonePlacedCallback) {
-      onStonePlacedCallback(position, color);
+      onStonePlacedCallback(position, color).catch(() => {
+        // アニメーション完了エラーは無視
+      });
     }
 
     return { success: true };
@@ -78,7 +83,9 @@ export const useBoardStore = defineStore("board", () => {
   }
 
   // コールバック設定関数
-  function setOnStonePlacedCallback(callback: OnStonePlacedCallback | null): void {
+  function setOnStonePlacedCallback(
+    callback: OnStonePlacedCallback | null,
+  ): void {
     onStonePlacedCallback = callback;
   }
 

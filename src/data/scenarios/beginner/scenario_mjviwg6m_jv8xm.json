@@ -36,7 +36,8 @@
               "content": "フブさん……れんたまってなに……"
             }
           ],
-          "emotion": 23
+          "emotion": 23,
+          "boardActions": []
         },
         {
           "id": "dialogue_2",
@@ -52,7 +53,8 @@
               "content": "だよ。危ないイントネーションやめてね"
             }
           ],
-          "emotion": 0
+          "emotion": 0,
+          "boardActions": []
         },
         {
           "id": "dialogue_3",
@@ -63,7 +65,8 @@
               "content": "基本的には五目並べと一緒なんだけど、五目並べには致命的な欠点がある！"
             }
           ],
-          "emotion": 0
+          "emotion": 0,
+          "boardActions": []
         },
         {
           "id": "dialogue_4",
@@ -74,7 +77,8 @@
               "content": "おお……"
             }
           ],
-          "emotion": 0
+          "emotion": 0,
+          "boardActions": []
         },
         {
           "id": "dialogue_5",
@@ -93,7 +97,8 @@
               "content": "なんだ。たとえば……"
             }
           ],
-          "emotion": 0
+          "emotion": 0,
+          "boardActions": []
         },
         {
           "id": "dialogue_6",
@@ -105,15 +110,24 @@
             }
           ],
           "emotion": 0,
-          "boardAction": {
-            "type": "place",
-            "position": {
-              "row": 7,
-              "col": 7
+          "boardActions": [
+            {
+              "type": "place",
+              "position": {
+                "row": 7,
+                "col": 5
+              },
+              "color": "black"
             },
-            "color": "black",
-            "highlight": false
-          }
+            {
+              "type": "place",
+              "position": {
+                "row": 8,
+                "col": 5
+              },
+              "color": "white"
+            }
+          ]
         }
       ]
     },
@@ -149,7 +163,8 @@
               "content": "とけるかなー？"
             }
           ],
-          "emotion": 0
+          "emotion": 0,
+          "boardActions": []
         },
         {
           "id": "dialogue_2",
@@ -160,7 +175,8 @@
               "content": "頑張ります！"
             }
           ],
-          "emotion": 1
+          "emotion": 1,
+          "boardActions": []
         },
         {
           "id": "dialogue_3",
@@ -171,9 +187,11 @@
               "content": "応援してるよ"
             }
           ],
-          "emotion": 2
+          "emotion": 2,
+          "boardActions": []
         }
       ],
+      "successOperator": "or",
       "successConditions": [
         {
           "type": "position",
