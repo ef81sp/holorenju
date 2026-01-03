@@ -47,12 +47,11 @@ export const STAR_POINTS: Position[] = [
   { col: 11, row: 11 },
 ];
 
-// カーソルの四隅を描画
+// カーソルの四隅を描画（括弧型フレーム）
 export function generateCursorCorners(
   cursorPosition: Position | undefined,
   positionToPixels: (row: number, col: number) => { x: number; y: number },
   CELL_SIZE: number,
-  STONE_RADIUS: number,
 ): { points: number[]; stroke: string; strokeWidth: number }[] {
   if (!cursorPosition) {
     return [];
@@ -60,40 +59,35 @@ export function generateCursorCorners(
 
   const { row, col } = cursorPosition;
   const { x, y } = positionToPixels(row, col);
-  const cornerLength = CELL_SIZE * 0.25; // セルサイズの25%
-  const cornerWidth = 2;
-  const color = "#FF6B6B"; // 赤色
+  
+  // セルの四隅を基準に、括弧型フレームを描画
+  const halfCell = CELL_SIZE / 2;
+  const cornerPadding = CELL_SIZE * 0.1; // セルの四隅からのpadding
+  const cornerLength = CELL_SIZE * 0.35; // コーナー線の長さ
+  const cornerWidth = 3;
+  const color = "#37abdf";
 
-  // 左上コーナー
-  const topLeft1 = [x - cornerLength, y - STONE_RADIUS, x, y - STONE_RADIUS];
-  const topLeft2 = [x - STONE_RADIUS, y - cornerLength, x - STONE_RADIUS, y];
+  // セルの四隅座標（paddingを適用）
+  const left = x - halfCell - cornerPadding;
+  const right = x + halfCell + cornerPadding;
+  const top = y - halfCell - cornerPadding;
+  const bottom = y + halfCell + cornerPadding;
 
-  // 右上コーナー
-  const topRight1 = [
-    x + STONE_RADIUS,
-    y - STONE_RADIUS,
-    x + cornerLength,
-    y - STONE_RADIUS,
-  ];
-  const topRight2 = [x + STONE_RADIUS, y - cornerLength, x + STONE_RADIUS, y];
+  // 左上コーナー（┌）
+  const topLeft1 = [left, top, left + cornerLength, top]; // 水平線
+  const topLeft2 = [left, top, left, top + cornerLength]; // 垂直線
 
-  // 左下コーナー
-  const bottomLeft1 = [x - cornerLength, y + STONE_RADIUS, x, y + STONE_RADIUS];
-  const bottomLeft2 = [x - STONE_RADIUS, y, x - STONE_RADIUS, y + cornerLength];
+  // 右上コーナー（┐）
+  const topRight1 = [right - cornerLength, top, right, top]; // 水平線
+  const topRight2 = [right, top, right, top + cornerLength]; // 垂直線
 
-  // 右下コーナー
-  const bottomRight1 = [
-    x + STONE_RADIUS,
-    y + STONE_RADIUS,
-    x + cornerLength,
-    y + STONE_RADIUS,
-  ];
-  const bottomRight2 = [
-    x + STONE_RADIUS,
-    y,
-    x + STONE_RADIUS,
-    y + cornerLength,
-  ];
+  // 左下コーナー（└）
+  const bottomLeft1 = [left, bottom, left + cornerLength, bottom]; // 水平線
+  const bottomLeft2 = [left, bottom - cornerLength, left, bottom]; // 垂直線
+
+  // 右下コーナー（┘）
+  const bottomRight1 = [right - cornerLength, bottom, right, bottom]; // 水平線
+  const bottomRight2 = [right, bottom - cornerLength, right, bottom]; // 垂直線
 
   return [
     { points: topLeft1, stroke: color, strokeWidth: cornerWidth },
