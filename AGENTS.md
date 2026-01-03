@@ -10,7 +10,7 @@
 
 - 最新の 3.x を使用。記法に注意。公式ドキュメント参照。
 - script setup lang="ts" を使用。
-  - definePropsではTSの型定義を使用。
+  - definePropsではTypeScriptの型定義(ジェネリクスのやつ)を使用。
 - 単一責任の原則に従い、コンポーネントを細分化。
 
 ### CSS

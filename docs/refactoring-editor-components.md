@@ -6,15 +6,15 @@
 
 - [x] `textUtils.ts` を作成し、`astToText`を移動
 - [x] 両ファイルで`textUtils`をimportして使用
-- [ ] 動作確認
+- [x] 動作確認
 
 ### フェーズ2: ProblemSectionEditorのリファクタリング
 
-- [ ] `useSuccessConditions.ts` を作成（成功条件関連のロジック）
-- [ ] `SuccessConditionsEditor.vue` を作成（成功条件セクションUI）
-- [ ] `useFeedbackEditor.ts` を作成（フィードバック関連のロジック）
-- [ ] `FeedbackEditor.vue` と `FeedbackLineItem.vue` を作成
-- [ ] `ProblemSectionEditor.vue` をリファクタリング（子コンポーネント使用）
+- [x] `useSuccessConditions.ts` を作成（成功条件関連のロジック）
+- [x] `SuccessConditionsEditor.vue` を作成（成功条件セクションUI）
+- [x] `useFeedbackEditor.ts` を作成（フィードバック関連のロジック）
+- [x] `FeedbackEditor.vue` と `FeedbackLineItem.vue` を作成
+- [x] `ProblemSectionEditor.vue` をリファクタリング（子コンポーネント使用）
 - [ ] 動作確認とバグ修正
 
 ### フェーズ3: DemoSectionEditorのリファクタリング
