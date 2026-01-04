@@ -6,10 +6,12 @@ import ControlInfo from "./ControlInfo.vue";
 import ScenarioInfoPanel from "./ScenarioInfoPanel.vue";
 import RenjuBoard from "@/components/game/RenjuBoard/RenjuBoard.vue";
 import DialogSection from "./DialogSection.vue";
+import CutinOverlay from "@/components/common/CutinOverlay.vue";
 import { useScenarioNavigation } from "./composables/useScenarioNavigation";
 import { useKeyboardNavigation } from "./composables/useKeyboardNavigation";
 import { useBoardSize } from "./composables/useBoardSize";
 import { useProblemSolver } from "./composables/useProblemSolver";
+import { useCutinDisplay } from "./composables/useCutinDisplay";
 import { useGameStore } from "@/stores/gameStore";
 import { useDialogStore } from "@/stores/dialogStore";
 
@@ -33,15 +35,41 @@ const boardFrameRef = ref<HTMLElement | null>(null);
 const { boardSize: boardSizeValue } = useBoardSize(boardFrameRef);
 const boardSize = computed(() => boardSizeValue.value);
 
+// カットイン
+const cutinRef = ref<InstanceType<typeof CutinOverlay> | null>(null);
+const cutinType = ref<"correct" | "wrong">("correct");
+const { isCutinVisible, showCutin } = useCutinDisplay(cutinRef);
+
 // ターナリー条件：セクションの完了時コールバック
 const onSectionComplete = (): void => {
   scenarioNav.isSectionCompleted.value = true;
 };
 
-const problemSolver = useProblemSolver(props.scenarioId, onSectionComplete);
+// カットイン表示用コールバック
+const showCorrectCutin = (): void => {
+  cutinType.value = "correct";
+  showCutin("correct");
+};
+
+const showIncorrectCutin = (): void => {
+  cutinType.value = "wrong";
+  showCutin("wrong");
+};
+
+const problemSolver = useProblemSolver(
+  props.scenarioId,
+  onSectionComplete,
+  showCorrectCutin,
+  showIncorrectCutin,
+);
 
 const isDemoSection = computed(
   () => scenarioNav.currentSection.value?.type === "demo",
+);
+
+// カットイン表示中はキーボード操作を無効化
+const isKeyboardDisabled = computed(
+  () => isDemoSection.value || isCutinVisible.value,
 );
 
 const keyboardNav = useKeyboardNavigation(
@@ -57,7 +85,7 @@ const keyboardNav = useKeyboardNavigation(
       scenarioNav.previousDialogue();
     }
   },
-  isDemoSection,
+  isKeyboardDisabled,
 );
 
 // Lifecycle
@@ -122,6 +150,10 @@ const handleSubmitAnswer = (): void => {
 const handleNextDialogue = (): void => {
   scenarioNav.nextDialogue();
 };
+
+const handleGoToList = (): void => {
+  scenarioNav.completeScenario();
+};
 </script>
 
 <template>
@@ -140,8 +172,10 @@ const handleNextDialogue = (): void => {
 
     <!-- 連珠盤セクション（中央 7×7）-->
     <div
+      id="board-anchor"
       ref="boardFrameRef"
       class="board-section-wrapper"
+      style="anchor-name: --board-area"
     >
       <RenjuBoard
         :board-state="gameStore.board"
@@ -152,6 +186,11 @@ const handleNextDialogue = (): void => {
         :stage-size="boardSize"
         :cursor-position="keyboardNav.cursorPosition.value"
         @place-stone="handlePlaceStone"
+      />
+      <CutinOverlay
+        ref="cutinRef"
+        :type="cutinType"
+        :anchor="'board-anchor'"
       />
     </div>
 
@@ -173,6 +212,7 @@ const handleNextDialogue = (): void => {
         :answer-disabled="scenarioNav.isSectionCompleted.value"
         @next-section="scenarioNav.nextSection"
         @submit-answer="handleSubmitAnswer"
+        @complete-scenario="handleGoToList"
       />
     </div>
 
@@ -225,6 +265,7 @@ const handleNextDialogue = (): void => {
   justify-content: center;
   overflow: hidden;
   min-height: 0;
+  position: relative;
 }
 
 .info-section-slot {

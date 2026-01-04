@@ -20,6 +20,8 @@ import { evaluateAllConditions, evaluateCondition } from "./problemConditions";
 export const useProblemSolver = (
   scenarioId: string,
   onSectionComplete: () => void,
+  onShowCorrectCutin?: () => void,
+  onShowIncorrectCutin?: () => void,
 ): {
   handlePlaceStone: (
     position: Position,
@@ -71,6 +73,9 @@ export const useProblemSolver = (
     console.warn("[handleIncorrectMove] Called");
     restoreAttemptBoard();
     resetAttemptBaseBoard();
+
+    // ×カットインを表示
+    onShowIncorrectCutin?.();
 
     const [msg] = problemSection.feedback.failure || [];
     if (msg) {
@@ -152,6 +157,9 @@ export const useProblemSolver = (
   const handleCorrectMove = (problemSection: ProblemSection): void => {
     console.warn("[handleCorrectMove] Called");
     onSectionComplete();
+
+    // ○カットインを表示
+    onShowCorrectCutin?.();
 
     // 正解のフィードバックを表示
     if (problemSection.feedback.success.length > 0) {

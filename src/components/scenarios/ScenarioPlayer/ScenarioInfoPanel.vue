@@ -11,12 +11,21 @@ interface Props {
   answerDisabled?: boolean;
 }
 
-defineProps<Props>();
+const props = defineProps<Props>();
 
 const emits = defineEmits<{
   nextSection: [];
   submitAnswer: [];
+  completeScenario: [];
 }>();
+
+const handleNextOrComplete = (): void => {
+  if (props.isLastSection) {
+    emits("completeScenario");
+  } else {
+    emits("nextSection");
+  }
+};
 </script>
 
 <template>
@@ -45,7 +54,7 @@ const emits = defineEmits<{
       <button
         v-if="canProceed"
         class="next-button"
-        @click="emits('nextSection')"
+        @click="handleNextOrComplete"
       >
         {{ isLastSection ? "シナリオ完了" : "次のセクションへ" }}
       </button>

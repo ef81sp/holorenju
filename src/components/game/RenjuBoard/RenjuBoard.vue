@@ -110,7 +110,6 @@ const cursorCorners = computed(() =>
         props.cursorPosition,
         layout.positionToPixels,
         layout.CELL_SIZE.value,
-        layout.STONE_RADIUS.value,
       ),
 );
 

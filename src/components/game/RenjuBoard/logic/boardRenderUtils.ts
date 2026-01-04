@@ -59,7 +59,7 @@ export function generateCursorCorners(
 
   const { row, col } = cursorPosition;
   const { x, y } = positionToPixels(row, col);
-  
+
   // セルの四隅を基準に、括弧型フレームを描画
   const halfCell = CELL_SIZE / 2;
   const cornerPadding = CELL_SIZE * 0.1; // セルの四隅からのpadding
