@@ -336,6 +336,7 @@ const currentLines = computed(() => {
             :stage-size="300"
             :marks="currentMarks"
             :lines="currentLines"
+            :dialogue-index="dialoguePageIndex"
           />
         </div>
       </div>

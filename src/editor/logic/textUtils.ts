@@ -27,9 +27,15 @@ export function astToText(nodes: TextNode[]): string {
           .map((item) => {
             const content = item
               .map((n) => {
-                if (n.type === "text") {return n.content;}
-                if (n.type === "ruby") {return `{${n.base}|${n.ruby}}`;}
-                if (n.type === "emphasis") {return `**${n.content}**`;}
+                if (n.type === "text") {
+                  return n.content;
+                }
+                if (n.type === "ruby") {
+                  return `{${n.base}|${n.ruby}}`;
+                }
+                if (n.type === "emphasis") {
+                  return `**${n.content}**`;
+                }
                 return "";
               })
               .join("");

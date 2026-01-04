@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { BoardState, Position, StoneColor } from "@/types/game";
-import { computed, onMounted, onBeforeUnmount } from "vue";
+import { computed, onMounted, onBeforeUnmount, watch, nextTick } from "vue";
 import { useBoardStore } from "@/stores/boardStore";
 import { useRenjuBoardLayout } from "./composables/useRenjuBoardLayout";
 import { useRenjuBoardInteraction } from "./composables/useRenjuBoardInteraction";
@@ -33,6 +33,7 @@ interface Props {
   cursorPosition?: Position;
   marks?: BoardMark[];
   lines?: BoardLine[];
+  dialogueIndex?: number; // ダイアログインデックス（アニメーション用）
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -44,6 +45,7 @@ const props = withDefaults(defineProps<Props>(), {
   cursorPosition: undefined,
   marks: () => [],
   lines: () => [],
+  dialogueIndex: 0,
 });
 
 // Emits
@@ -141,6 +143,39 @@ onMounted(() => {
 onBeforeUnmount(() => {
   boardStore.setOnStonePlacedCallback(null);
 });
+
+// 前回の mark/line キーを保存
+let prevMarkKeys = new Set<string>();
+let prevLineKeys = new Set<string>();
+
+// Mark/Line の変更を監視してアニメーション実行
+watch(
+  () => props.marks,
+  async () => {
+    await nextTick(); // テンプレート更新を待つ
+    const currentMarkKeys = new Set(Object.keys(animation.markRefs));
+    const newMarkKeys = Array.from(currentMarkKeys).filter(
+      (key) => !prevMarkKeys.has(key),
+    );
+    prevMarkKeys = currentMarkKeys;
+    await animation.animateLastAddedMarks(newMarkKeys);
+  },
+  { deep: true },
+);
+
+watch(
+  () => props.lines,
+  async () => {
+    await nextTick(); // テンプレート更新を待つ
+    const currentLineKeys = new Set(Object.keys(animation.lineRefs));
+    const newLineKeys = Array.from(currentLineKeys).filter(
+      (key) => !prevLineKeys.has(key),
+    );
+    prevLineKeys = currentLineKeys;
+    await animation.animateLastAddedLines(newLineKeys);
+  },
+  { deep: true },
+);
 </script>
 
 <template>
@@ -257,7 +292,13 @@ onBeforeUnmount(() => {
         <!-- Lines -->
         <v-line
           v-for="(line, index) in props.lines"
-          :key="`line-${index}`"
+          :key="`line-${props.dialogueIndex}-${index}`"
+          :ref="
+            (el: unknown) => {
+              if (el)
+                animation.lineRefs[`line-${props.dialogueIndex}-${index}`] = el;
+            }
+          "
           :config="{
             points: [
               layout.positionToPixels(
@@ -291,6 +332,14 @@ onBeforeUnmount(() => {
             <!-- Circle mark -->
             <v-circle
               v-if="mark.markType === 'circle'"
+              :ref="
+                (el: unknown) => {
+                  if (el)
+                    animation.markRefs[
+                      `mark-${props.dialogueIndex}-${markIndex}-${posIndex}`
+                    ] = el;
+                }
+              "
               :config="{
                 x: layout.positionToPixels(pos.row, pos.col).x,
                 y: layout.positionToPixels(pos.row, pos.col).y,
@@ -302,6 +351,14 @@ onBeforeUnmount(() => {
             <!-- Cross mark -->
             <template v-else-if="mark.markType === 'cross'">
               <v-line
+                :ref="
+                  (el: unknown) => {
+                    if (el)
+                      animation.markRefs[
+                        `mark-${props.dialogueIndex}-${markIndex}-${posIndex}-1`
+                      ] = el;
+                  }
+                "
                 :config="{
                   points: [
                     layout.positionToPixels(pos.row, pos.col).x -
@@ -318,6 +375,14 @@ onBeforeUnmount(() => {
                 }"
               />
               <v-line
+                :ref="
+                  (el: unknown) => {
+                    if (el)
+                      animation.markRefs[
+                        `mark-${props.dialogueIndex}-${markIndex}-${posIndex}-2`
+                      ] = el;
+                  }
+                "
                 :config="{
                   points: [
                     layout.positionToPixels(pos.row, pos.col).x +
@@ -337,6 +402,14 @@ onBeforeUnmount(() => {
             <!-- Arrow mark -->
             <v-line
               v-else-if="mark.markType === 'arrow'"
+              :ref="
+                (el: unknown) => {
+                  if (el)
+                    animation.markRefs[
+                      `mark-${props.dialogueIndex}-${markIndex}-${posIndex}`
+                    ] = el;
+                }
+              "
               :config="{
                 points: [
                   layout.positionToPixels(pos.row, pos.col).x,

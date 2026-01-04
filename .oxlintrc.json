@@ -41,7 +41,9 @@
     "no-plusplus": "off",
     "no-continue": "off",
     "sort-imports": "off",
-    "no-undefined": "off"
+    "no-undefined": "off",
+    "capitalized-comments": "off",
+    "no-warning-comments": "off"
   },
   "overrides": [
     {
