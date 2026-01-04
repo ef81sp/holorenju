@@ -136,6 +136,69 @@ const currentBoard = computed(() => {
 
   return board;
 });
+
+// 現在のダイアログまでのmark/lineアクションを収集
+const currentMarks = computed(() => {
+  if (!previewContent.value || previewContent.value.type !== "demo") {
+    return [];
+  }
+
+  const marks: {
+    positions: { row: number; col: number }[];
+    markType: "circle" | "cross" | "arrow";
+    label?: string;
+  }[] = [];
+  const { dialogues } = previewContent.value;
+
+  for (let i = 0; i <= dialoguePageIndex.value; i++) {
+    const dialogue = dialogues[i];
+    if (!dialogue) {
+      break;
+    }
+    for (const action of dialogue.boardActions) {
+      if (action.type === "mark") {
+        marks.push({
+          positions: action.positions,
+          markType: action.markType,
+          label: action.label,
+        });
+      }
+    }
+  }
+
+  return marks;
+});
+
+const currentLines = computed(() => {
+  if (!previewContent.value || previewContent.value.type !== "demo") {
+    return [];
+  }
+
+  const lines: {
+    fromPosition: { row: number; col: number };
+    toPosition: { row: number; col: number };
+    style?: "solid" | "dashed";
+  }[] = [];
+  const { dialogues } = previewContent.value;
+
+  for (let i = 0; i <= dialoguePageIndex.value; i++) {
+    const dialogue = dialogues[i];
+    if (!dialogue) {
+      break;
+    }
+    for (const action of dialogue.boardActions) {
+      if (action.type === "line" && action.action === "draw") {
+        lines.push({
+          fromPosition: action.fromPosition,
+          toPosition: action.toPosition,
+          style: action.style,
+        });
+      }
+    }
+  }
+
+  return lines;
+});
 </script>
 
 <template>
@@ -262,6 +325,8 @@ const currentBoard = computed(() => {
             :board-state="currentBoard"
             :disabled="true"
             :stage-size="300"
+            :marks="currentMarks"
+            :lines="currentLines"
           />
         </div>
       </div>

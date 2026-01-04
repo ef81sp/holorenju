@@ -142,7 +142,7 @@
           "emotion": 34,
           "description": {
             "text": [],
-            "type": "continue"
+            "type": "new"
           },
           "boardActions": []
         },
@@ -169,19 +169,98 @@
               {
                 "type": "text",
                 "content": "三: とめなければ四になって負けてしまう"
+              },
+              {
+                "type": "lineBreak"
+              },
+              {
+                "type": "text",
+                "content": "同時に作られると防ぎようがない"
               }
             ],
             "type": "continue"
           },
           "boardActions": [
             {
-              "type": "place",
+              "type": "setBoard",
               "position": {
                 "row": 0,
                 "col": 0
               },
               "color": "black",
-              "highlight": false
+              "board": [
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "-----xx--------",
+                "-------x-------",
+                "-------x-------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------"
+              ],
+              "positions": [
+                {
+                  "row": 7,
+                  "col": 7
+                }
+              ],
+              "markType": "circle"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_7",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "あるところに置くと三が2つできるよ。わかるかな？"
+            }
+          ],
+          "emotion": 0,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_8",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "ばかにすんな！ここだろ！"
+            }
+          ],
+          "emotion": 19,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
+          "boardActions": [
+            {
+              "type": "mark",
+              "position": {
+                "row": 0,
+                "col": 0
+              },
+              "color": "black",
+              "highlight": false,
+              "positions": [
+                {
+                  "row": 7,
+                  "col": 7
+                }
+              ],
+              "markType": "circle"
             }
           ]
         }

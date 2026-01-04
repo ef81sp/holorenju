@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { BoardState, Position, StoneColor } from "@/types/game";
-import { computed, onMounted, onBeforeUnmount } from "vue";
+import { computed, onMounted, onBeforeUnmount, watch } from "vue";
 import { useBoardStore } from "@/stores/boardStore";
 import { useRenjuBoardLayout } from "./composables/useRenjuBoardLayout";
 import { useRenjuBoardInteraction } from "./composables/useRenjuBoardInteraction";
@@ -11,6 +11,19 @@ import {
   STAR_POINTS,
 } from "./logic/boardRenderUtils";
 
+// Mark/Line types
+interface BoardMark {
+  positions: Position[];
+  markType: "circle" | "cross" | "arrow";
+  label?: string;
+}
+
+interface BoardLine {
+  fromPosition: Position;
+  toPosition: Position;
+  style?: "solid" | "dashed";
+}
+
 // Props
 interface Props {
   boardState?: BoardState;
@@ -18,6 +31,8 @@ interface Props {
   stageSize?: number;
   allowOverwrite?: boolean;
   cursorPosition?: Position;
+  marks?: BoardMark[];
+  lines?: BoardLine[];
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -27,6 +42,8 @@ const props = withDefaults(defineProps<Props>(), {
   stageSize: 640,
   allowOverwrite: false,
   cursorPosition: undefined,
+  marks: () => [],
+  lines: () => [],
 });
 
 // Emits
@@ -124,6 +141,23 @@ onMounted(() => {
 onBeforeUnmount(() => {
   boardStore.setOnStonePlacedCallback(null);
 });
+
+// Debug: watch marks and lines
+watch(
+  () => props.marks,
+  (newMarks) => {
+    console.log("[RenjuBoard] marks updated:", newMarks);
+  },
+  { deep: true, immediate: true },
+);
+
+watch(
+  () => props.lines,
+  (newLines) => {
+    console.log("[RenjuBoard] lines updated:", newLines);
+  },
+  { deep: true, immediate: true },
+);
 </script>
 
 <template>
@@ -236,6 +270,109 @@ onBeforeUnmount(() => {
           :key="`cursor-corner-${index}`"
           :config="line"
         />
+
+        <!-- Lines -->
+        <v-line
+          v-for="(line, index) in props.lines"
+          :key="`line-${index}`"
+          :config="{
+            points: [
+              layout.positionToPixels(
+                line.fromPosition.row,
+                line.fromPosition.col,
+              ).x,
+              layout.positionToPixels(
+                line.fromPosition.row,
+                line.fromPosition.col,
+              ).y,
+              layout.positionToPixels(line.toPosition.row, line.toPosition.col)
+                .x,
+              layout.positionToPixels(line.toPosition.row, line.toPosition.col)
+                .y,
+            ],
+            stroke: '#FF0000',
+            strokeWidth: 3,
+            dash: line.style === 'dashed' ? [10, 5] : undefined,
+          }"
+        />
+
+        <!-- Marks -->
+        <template
+          v-for="(mark, markIndex) in props.marks"
+          :key="`mark-${markIndex}`"
+        >
+          <template
+            v-for="(pos, posIndex) in mark.positions"
+            :key="`mark-${markIndex}-pos-${posIndex}`"
+          >
+            <!-- Circle mark -->
+            <v-circle
+              v-if="mark.markType === 'circle'"
+              :config="{
+                x: layout.positionToPixels(pos.row, pos.col).x,
+                y: layout.positionToPixels(pos.row, pos.col).y,
+                radius: layout.STONE_RADIUS.value * 0.7,
+                stroke: '#FF0000',
+                strokeWidth: 3,
+              }"
+            />
+            <!-- Cross mark -->
+            <template v-else-if="mark.markType === 'cross'">
+              <v-line
+                :config="{
+                  points: [
+                    layout.positionToPixels(pos.row, pos.col).x -
+                      layout.STONE_RADIUS.value * 0.5,
+                    layout.positionToPixels(pos.row, pos.col).y -
+                      layout.STONE_RADIUS.value * 0.5,
+                    layout.positionToPixels(pos.row, pos.col).x +
+                      layout.STONE_RADIUS.value * 0.5,
+                    layout.positionToPixels(pos.row, pos.col).y +
+                      layout.STONE_RADIUS.value * 0.5,
+                  ],
+                  stroke: '#FF0000',
+                  strokeWidth: 3,
+                }"
+              />
+              <v-line
+                :config="{
+                  points: [
+                    layout.positionToPixels(pos.row, pos.col).x +
+                      layout.STONE_RADIUS.value * 0.5,
+                    layout.positionToPixels(pos.row, pos.col).y -
+                      layout.STONE_RADIUS.value * 0.5,
+                    layout.positionToPixels(pos.row, pos.col).x -
+                      layout.STONE_RADIUS.value * 0.5,
+                    layout.positionToPixels(pos.row, pos.col).y +
+                      layout.STONE_RADIUS.value * 0.5,
+                  ],
+                  stroke: '#FF0000',
+                  strokeWidth: 3,
+                }"
+              />
+            </template>
+            <!-- Arrow mark -->
+            <v-line
+              v-else-if="mark.markType === 'arrow'"
+              :config="{
+                points: [
+                  layout.positionToPixels(pos.row, pos.col).x,
+                  layout.positionToPixels(pos.row, pos.col).y -
+                    layout.STONE_RADIUS.value * 0.8,
+                  layout.positionToPixels(pos.row, pos.col).x,
+                  layout.positionToPixels(pos.row, pos.col).y +
+                    layout.STONE_RADIUS.value * 0.8,
+                ],
+                stroke: '#FF0000',
+                strokeWidth: 3,
+                pointerLength: 10,
+                pointerWidth: 10,
+                pointerAtBeginning: false,
+                pointerAtEnding: true,
+              }"
+            />
+          </template>
+        </template>
       </v-layer>
     </v-stage>
   </div>
