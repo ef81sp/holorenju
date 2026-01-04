@@ -84,7 +84,7 @@ interface LineAction {
 interface ProblemSection extends BaseSection {
   type: "problem";
   initialBoard: string[];
-  description: string;
+  description: TextNode[];
   dialogues: DemoDialogue[];
   successOperator?: SuccessOperator;
   successConditions: SuccessCondition[];

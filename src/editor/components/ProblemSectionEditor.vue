@@ -7,6 +7,7 @@ import SuccessConditionsEditor from "./ProblemSectionEditor/SuccessConditionsEdi
 import FeedbackEditor from "./ProblemSectionEditor/FeedbackEditor.vue";
 import DialogueListEditor from "./ProblemSectionEditor/DialogueListEditor.vue";
 import { useDialogueEditor } from "@/editor/composables/useDialogueEditor";
+import { parseText, stringifyText } from "@/logic/textParser";
 import type { ProblemSection } from "@/types/scenario";
 
 const editorStore = useEditorStore();
@@ -24,6 +25,10 @@ const currentSection = computed<ProblemSection | null>(() => {
     ? (section as ProblemSection)
     : null;
 });
+
+const descriptionText = computed(() =>
+  stringifyText(currentSection.value?.description || []),
+);
 
 const getCurrentSection = (): ProblemSection | null => currentSection.value;
 const updateSection = (updates: Partial<ProblemSection>): void => {
@@ -50,7 +55,7 @@ const updateSectionTitle = (title: string): void => {
 
 const updateDescription = (description: string): void => {
   updateSection({
-    description,
+    description: parseText(description),
   });
 };
 
@@ -72,7 +77,7 @@ const updateSuccessOperator = (operator: "or" | "and"): void => {
         <!-- セクション情報 -->
         <SectionMetaEditor
           :title="currentSection.title"
-          :description="currentSection.description"
+          :description="descriptionText"
           with-description
           @update:title="updateSectionTitle"
           @update:description="updateDescription"

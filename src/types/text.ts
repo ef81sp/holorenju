@@ -2,8 +2,11 @@
  * リッチテキスト関連の型定義
  */
 
-// テキストノードの基本型
-type TextNode = TextSegment | RubyNode | EmphasisNode;
+// インラインノード（行内要素）
+type InlineTextNode = TextSegment | RubyNode | EmphasisNode;
+
+// 行・ブロックも含めた統一テキストノード
+type TextNode = InlineTextNode | LineBreakNode | BulletListNode;
 
 // プレーンなテキスト
 interface TextSegment {
@@ -24,4 +27,23 @@ interface EmphasisNode {
   content: string;
 }
 
-export type { TextNode, TextSegment, RubyNode, EmphasisNode };
+// 改行
+interface LineBreakNode {
+  type: "lineBreak";
+}
+
+// 箇条書き（単階層）
+interface BulletListNode {
+  type: "list";
+  items: InlineTextNode[][];
+}
+
+export type {
+  InlineTextNode,
+  TextNode,
+  TextSegment,
+  RubyNode,
+  EmphasisNode,
+  LineBreakNode,
+  BulletListNode,
+};

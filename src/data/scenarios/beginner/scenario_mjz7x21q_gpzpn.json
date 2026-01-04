@@ -1,0 +1,168 @@
+{
+  "id": "scenario_mjz7x21q_gpzpn",
+  "title": "新しいシナリオ",
+  "difficulty": "beginner",
+  "description": "レンダリングテスト",
+  "objectives": [],
+  "sections": [
+    {
+      "id": "section_1",
+      "type": "problem",
+      "title": "問題セクション",
+      "initialBoard": [
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------"
+      ],
+      "description": [
+        {
+          "type": "text",
+          "content": "通常"
+        },
+        {
+          "type": "lineBreak"
+        },
+        {
+          "type": "emphasis",
+          "content": "太字"
+        },
+        {
+          "type": "lineBreak"
+        },
+        {
+          "type": "ruby",
+          "base": "連珠",
+          "ruby": "れんじゅ"
+        },
+        {
+          "type": "lineBreak"
+        },
+        {
+          "type": "lineBreak"
+        },
+        {
+          "type": "list",
+          "items": [
+            [
+              {
+                "type": "text",
+                "content": "ほげ"
+              }
+            ],
+            [
+              {
+                "type": "text",
+                "content": "ふが"
+              }
+            ],
+            [
+              {
+                "type": "text",
+                "content": "ぴよ"
+              }
+            ]
+          ]
+        }
+      ],
+      "dialogues": [
+        {
+          "id": "dialogue_1",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "これはテスト"
+            },
+            {
+              "type": "emphasis",
+              "content": "テスト"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        }
+      ],
+      "successOperator": "or",
+      "successConditions": [
+        {
+          "type": "position",
+          "positions": [
+            {
+              "row": 0,
+              "col": 0
+            }
+          ],
+          "color": "black"
+        }
+      ],
+      "feedback": {
+        "success": [
+          {
+            "character": "fubuki",
+            "text": [],
+            "emotion": 0
+          }
+        ],
+        "failure": [
+          {
+            "character": "fubuki",
+            "text": [],
+            "emotion": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "section_2",
+      "type": "demo",
+      "title": "デモセクション",
+      "initialBoard": [
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------"
+      ],
+      "dialogues": [
+        {
+          "id": "dialogue_1",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "これはテスト"
+            },
+            {
+              "type": "emphasis",
+              "content": "テスト"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        }
+      ]
+    }
+  ]
+}

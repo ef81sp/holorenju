@@ -184,7 +184,7 @@ export function createEmptyProblemSection(): ProblemSection {
     type: "problem" as const,
     title: "問題セクション",
     initialBoard: Array(15).fill("-".repeat(15)),
-    description: "",
+    description: [],
     dialogues: [],
     successOperator: "or",
     successConditions: [

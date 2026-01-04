@@ -1,10 +1,13 @@
 <script setup lang="ts">
+import RichText from "@/components/common/RichText.vue";
+import type { TextNode } from "@/types/text";
+
 interface Props {
   scenarioTitle: string;
   sectionTitle: string;
   sectionIndex: number;
   totalSections: number;
-  description: string;
+  description: TextNode[];
   canProceed: boolean;
   isLastSection: boolean;
   showAnswerButton?: boolean;
@@ -39,7 +42,9 @@ const handleNextOrComplete = (): void => {
     </div>
 
     <!-- 説明 -->
-    <p class="description">{{ description }}</p>
+    <div class="description">
+      <RichText :nodes="description" />
+    </div>
 
     <!-- コントロール -->
     <div class="controls">

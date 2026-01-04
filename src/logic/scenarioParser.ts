@@ -20,6 +20,7 @@ import type {
   DialogueLine,
 } from "../types/scenario";
 import type { TextNode } from "../types/text";
+import { parseText } from "./textParser";
 
 // ===== パース・バリデーション =====
 
@@ -110,6 +111,10 @@ function validateDemoSection(
     `${path}.dialogues`,
   );
 
+  if (dialogues.length === 0) {
+    throw new Error(`${path}.dialogues must not be empty`);
+  }
+
   return {
     id,
     type: "demo",
@@ -133,7 +138,7 @@ function validateProblemSection(
     "initialBoard",
     `${path}.initialBoard`,
   );
-  const description = validateString(
+  const description = validateTextContent(
     data,
     "description",
     `${path}.description`,
@@ -152,6 +157,10 @@ function validateProblemSection(
     data.dialogues === undefined
       ? []
       : validateDialogueArray(data, "dialogues", `${path}.dialogues`);
+
+  if (dialogues.length === 0) {
+    throw new Error(`${path}.dialogues must not be empty`);
+  }
 
   return {
     id,
@@ -545,37 +554,96 @@ function validateTextNodeArray(
     throw new Error(`${path} must be an array`);
   }
 
-  return value.map((item, index) => {
-    if (!isObject(item)) {
-      throw new Error(`${path}[${index}] must be an object`);
-    }
+  return value.map((item, index) => validateTextNode(item, `${path}[${index}]`));
+}
 
-    const type = validateEnum(
-      item,
-      "type",
-      ["text", "ruby", "emphasis"],
-      `${path}[${index}].type`,
-    );
+function validateTextNode(item: unknown, path: string): TextNode {
+  if (!isObject(item)) {
+    throw new Error(`${path} must be an object`);
+  }
 
-    if (type === "text") {
-      const content = validateString(
-        item,
-        "content",
-        `${path}[${index}].content`,
-      );
-      return { type: "text", content } as TextNode;
-    } else if (type === "ruby") {
-      const base = validateString(item, "base", `${path}[${index}].base`);
-      const ruby = validateString(item, "ruby", `${path}[${index}].ruby`);
-      return { type: "ruby", base, ruby } as TextNode;
-    }
-    const content = validateString(
-      item,
-      "content",
-      `${path}[${index}].content`,
-    );
+  const type = validateEnum(
+    item,
+    "type",
+    ["text", "ruby", "emphasis", "lineBreak", "list"],
+    `${path}.type`,
+  );
+
+  if (type === "text") {
+    const content = validateString(item, "content", `${path}.content`, true);
+    return { type: "text", content } as TextNode;
+  }
+
+  if (type === "ruby") {
+    const base = validateString(item, "base", `${path}.base`, true);
+    const ruby = validateString(item, "ruby", `${path}.ruby`, true);
+    return { type: "ruby", base, ruby } as TextNode;
+  }
+
+  if (type === "emphasis") {
+    const content = validateString(item, "content", `${path}.content`, true);
     return { type: "emphasis", content } as TextNode;
+  }
+
+  if (type === "lineBreak") {
+    return { type: "lineBreak" } as TextNode;
+  }
+
+  // list
+  const itemsRaw = item.items;
+  if (!Array.isArray(itemsRaw)) {
+    throw new Error(`${path}.items must be an array`);
+  }
+  const items = itemsRaw.map((child, childIndex) => {
+    if (!Array.isArray(child)) {
+      throw new Error(`${path}.items[${childIndex}] must be an array`);
+    }
+    return child.map((grand, grandIndex) =>
+      validateInlineNode(grand, `${path}.items[${childIndex}][${grandIndex}]`),
+    );
   });
+  return { type: "list", items } as TextNode;
+}
+
+function validateInlineNode(item: unknown, path: string): TextNode {
+  if (!isObject(item)) {
+    throw new Error(`${path} must be an object`);
+  }
+  const type = validateEnum(
+    item,
+    "type",
+    ["text", "ruby", "emphasis"],
+    `${path}.type`,
+  );
+  if (type === "text") {
+    const content = validateString(item, "content", `${path}.content`, true);
+    return { type: "text", content } as TextNode;
+  }
+  if (type === "ruby") {
+    const base = validateString(item, "base", `${path}.base`, true);
+    const ruby = validateString(item, "ruby", `${path}.ruby`, true);
+    return { type: "ruby", base, ruby } as TextNode;
+  }
+  const content = validateString(item, "content", `${path}.content`, true);
+  return { type: "emphasis", content } as TextNode;
+}
+
+function validateTextContent(
+  data: Record<string, unknown>,
+  key: string,
+  path: string,
+): TextNode[] {
+  const value = data[key];
+
+  if (typeof value === "string") {
+    return parseText(value);
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item, index) => validateTextNode(item, `${path}[${index}]`));
+  }
+
+  throw new Error(`${path} must be string or TextNode[]`);
 }
 
 // ===== ヘルパー関数 =====
@@ -588,6 +656,7 @@ function validateString(
   data: Record<string, unknown>,
   key: string,
   path: string,
+  allowEmpty = false,
 ): string {
   const value = data[key];
 
@@ -595,7 +664,7 @@ function validateString(
     throw new Error(`${path} must be a string, got ${typeof value}`);
   }
 
-  if (value.length === 0) {
+  if (!allowEmpty && value.length === 0) {
     throw new Error(`${path} must not be empty`);
   }
 

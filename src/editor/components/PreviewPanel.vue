@@ -4,6 +4,7 @@ import { useEditorStore } from "@/editor/stores/editorStore";
 import RenjuBoard from "@/components/game/RenjuBoard/RenjuBoard.vue";
 import CharacterSprite from "@/components/character/CharacterSprite.vue";
 import DialogText from "@/components/common/DialogText.vue";
+import RichText from "@/components/common/RichText.vue";
 import type {
   DemoSection,
   ProblemSection,
@@ -226,9 +227,13 @@ const currentBoard = computed(() => {
         <h4>{{ editorStore.currentSection?.title }}</h4>
         <div class="preview-info">
           <p><strong>説明:</strong></p>
-          <p class="description-preview">
-            {{ previewContent.description || "(説明なし)" }}
-          </p>
+          <div class="description-preview">
+            <RichText
+              v-if="previewContent.description && previewContent.description.length > 0"
+              :nodes="previewContent.description"
+            />
+            <p v-else style="margin: 0">(説明なし)</p>
+          </div>
           <p>
             <strong>成功条件数:</strong> {{ previewContent.conditionCount }}
           </p>
@@ -427,6 +432,7 @@ const currentBoard = computed(() => {
   border-left: 3px solid #2196f3;
   font-size: 0.85rem;
   line-height: 1.4;
+  margin-bottom: 0.5rem;
 }
 
 .preview-board {

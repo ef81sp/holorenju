@@ -17,6 +17,7 @@ import { useDialogStore } from "@/stores/dialogStore";
 
 import type { ProblemSection } from "@/types/scenario";
 import type { Position } from "@/types/game";
+import type { TextNode } from "@/types/text";
 
 // Props
 interface Props {
@@ -133,6 +134,14 @@ const requiresAnswerButton = computed(() => {
   return operator === "and" && !scenarioNav.isSectionCompleted.value;
 });
 
+const descriptionNodes = computed<TextNode[]>(() => {
+  const section = scenarioNav.currentSection.value;
+  if (!section || section.type !== "problem") {
+    return [];
+  }
+  return section.description || [];
+});
+
 const handleSubmitAnswer = (): void => {
   if (
     !scenarioNav.currentSection.value ||
@@ -199,11 +208,7 @@ const handleGoToList = (): void => {
       <ScenarioInfoPanel
         :scenario-title="scenarioNav.scenario.value.title"
         :section-title="scenarioNav.currentSection.value?.id || ''"
-        :description="
-          (scenarioNav.currentSection.value?.type === 'problem'
-            ? scenarioNav.currentSection.value?.description
-            : '') || ''
-        "
+        :description="descriptionNodes"
         :section-index="scenarioNav.currentSectionIndex.value"
         :total-sections="scenarioNav.scenario.value.sections.length"
         :can-proceed="scenarioNav.canProceed.value"
