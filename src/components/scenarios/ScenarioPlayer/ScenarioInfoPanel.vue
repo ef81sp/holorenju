@@ -131,11 +131,17 @@ const handleNextOrComplete = (): void => {
 .answer-button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 .answer-button:not(:disabled):hover {
-  background: var(--color-holo-blue);
-  color: white;
+  transform: scale(1.02);
+  box-shadow: 0 var(--size-5) var(--size-12) rgba(102, 126, 234, 0.4);
+}
+
+.answer-button:not(:disabled):active {
+  transform: scale(0.98);
 }
 
 .next-button {
@@ -154,12 +160,19 @@ const handleNextOrComplete = (): void => {
 }
 
 .next-button:hover {
-  background: var(--color-holo-blue);
-  color: white;
+  transform: scale(1.02);
+  box-shadow: 0 var(--size-5) var(--size-12) rgba(102, 126, 234, 0.4);
+  animation: none;
+}
+
+.next-button:active {
+  transform: scale(0.98);
+  animation: none;
 }
 
 @keyframes shimmer {
-  0%, 100% {
+  0%,
+  100% {
     border-color: transparent;
     box-shadow: 0 0 0 0 rgba(95, 222, 236, 0.7);
   }
