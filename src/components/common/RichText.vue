@@ -1,11 +1,16 @@
 <script setup lang="ts">
-import type { TextNode } from "@/types/text";
+import type { TextNode, InlineTextNode } from "@/types/text";
 
 interface Props {
   nodes: TextNode[];
 }
 
 const props = defineProps<Props>();
+
+// インラインノードをレンダリング（再帰対応）
+function renderInlineNodes(nodes: InlineTextNode[]): InlineTextNode[] {
+  return nodes;
+}
 </script>
 
 <template>
@@ -22,7 +27,16 @@ const props = defineProps<Props>();
       </ruby>
 
       <strong v-else-if="node.type === 'emphasis'">
-        {{ node.content }}
+        <template
+          v-for="(child, childIndex) in node.content"
+          :key="childIndex"
+        >
+          <span v-if="child.type === 'text'">{{ child.content }}</span>
+          <ruby v-else-if="child.type === 'ruby'">
+            {{ child.base }}
+            <rt>{{ child.ruby }}</rt>
+          </ruby>
+        </template>
       </strong>
 
       <br v-else-if="node.type === 'lineBreak'" />
@@ -45,7 +59,18 @@ const props = defineProps<Props>();
               <rt>{{ child.ruby }}</rt>
             </ruby>
             <strong v-else-if="child.type === 'emphasis'">
-              {{ child.content }}
+              <template
+                v-for="(grandchild, grandchildIndex) in child.content"
+                :key="grandchildIndex"
+              >
+                <span v-if="grandchild.type === 'text'">{{
+                  grandchild.content
+                }}</span>
+                <ruby v-else-if="grandchild.type === 'ruby'">
+                  {{ grandchild.base }}
+                  <rt>{{ grandchild.ruby }}</rt>
+                </ruby>
+              </template>
             </strong>
           </template>
         </li>

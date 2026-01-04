@@ -90,7 +90,12 @@
             },
             {
               "type": "emphasis",
-              "content": "めちゃんこ有利"
+              "content": [
+                {
+                  "type": "text",
+                  "content": "めちゃんこ有利"
+                }
+              ]
             },
             {
               "type": "text",
@@ -227,7 +232,12 @@
             },
             {
               "type": "emphasis",
-              "content": "黒が絶対勝つ"
+              "content": [
+                {
+                  "type": "text",
+                  "content": "黒が絶対勝つ"
+                }
+              ]
             },
             {
               "type": "text",

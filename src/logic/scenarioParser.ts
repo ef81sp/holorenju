@@ -19,9 +19,9 @@ import type {
   ProblemFeedback,
   DialogueLine,
 } from "../types/scenario";
-import type { TextNode } from "../types/text";
+import type { TextNode, InlineTextNode } from "../types/text";
 
-import { parseText } from "./textParser";
+import { parseText, parseInlineTextFromString } from "./textParser";
 
 // ===== パース・バリデーション =====
 
@@ -611,7 +611,21 @@ function validateTextNode(item: unknown, path: string): TextNode {
   }
 
   if (type === "emphasis") {
-    const content = validateString(item, "content", `${path}.content`, true);
+    const contentRaw = item.content;
+    let content: InlineTextNode[];
+
+    if (typeof contentRaw === "string") {
+      // 旧形式: string
+      content = parseInlineTextFromString(contentRaw);
+    } else if (Array.isArray(contentRaw)) {
+      // 新形式: InlineTextNode[]
+      content = contentRaw.map((node, nodeIndex) =>
+        validateInlineNode(node, `${path}.content[${nodeIndex}]`),
+      );
+    } else {
+      throw new Error(`${path}.content must be string or array`);
+    }
+
     return { type: "emphasis", content } as TextNode;
   }
 
@@ -635,7 +649,7 @@ function validateTextNode(item: unknown, path: string): TextNode {
   return { type: "list", items } as TextNode;
 }
 
-function validateInlineNode(item: unknown, path: string): TextNode {
+function validateInlineNode(item: unknown, path: string): InlineTextNode {
   if (!isObject(item)) {
     throw new Error(`${path} must be an object`);
   }
@@ -647,15 +661,29 @@ function validateInlineNode(item: unknown, path: string): TextNode {
   );
   if (type === "text") {
     const content = validateString(item, "content", `${path}.content`, true);
-    return { type: "text", content } as TextNode;
+    return { type: "text", content } as InlineTextNode;
   }
   if (type === "ruby") {
     const base = validateString(item, "base", `${path}.base`, true);
     const ruby = validateString(item, "ruby", `${path}.ruby`, true);
-    return { type: "ruby", base, ruby } as TextNode;
+    return { type: "ruby", base, ruby } as InlineTextNode;
   }
-  const content = validateString(item, "content", `${path}.content`, true);
-  return { type: "emphasis", content } as TextNode;
+  const contentRaw = item.content;
+  let content: InlineTextNode[];
+
+  if (typeof contentRaw === "string") {
+    // 旧形式: string
+    content = parseInlineTextFromString(contentRaw);
+  } else if (Array.isArray(contentRaw)) {
+    // 新形式: InlineTextNode[]
+    content = contentRaw.map((node, nodeIndex) =>
+      validateInlineNode(node, `${path}.content[${nodeIndex}]`),
+    );
+  } else {
+    throw new Error(`${path}.content must be string or array`);
+  }
+
+  return { type: "emphasis", content } as InlineTextNode;
 }
 
 function validateTextContent(

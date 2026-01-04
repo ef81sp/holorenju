@@ -10,12 +10,32 @@
 import type { InlineTextNode, TextNode } from "@/types/text";
 
 // インライン要素をパース
-function parseInlineText(raw: string): InlineTextNode[] {
+export function parseInlineTextFromString(raw: string): InlineTextNode[] {
   const nodes: InlineTextNode[] = [];
   let buffer = "";
   let i = 0;
 
   while (i < raw.length) {
+    // 強調検出: **text**
+    if (raw[i] === "*" && raw[i + 1] === "*") {
+      if (buffer) {
+        nodes.push({ type: "text", content: buffer });
+        buffer = "";
+      }
+
+      const emphasisMatch = raw
+        .slice(i)
+        .match(/^\*\*([^*]*?(?:\*(?!\*)[^*]*?)*)\*\*/);
+      if (emphasisMatch) {
+        // 強調の内側を再帰的にパース
+        const [, innerContent] = emphasisMatch;
+        const innerNodes = parseInlineTextFromString(innerContent);
+        nodes.push({ type: "emphasis", content: innerNodes });
+        i += emphasisMatch[0].length;
+        continue;
+      }
+    }
+
     // ルビ検出: {base|ruby}
     if (raw[i] === "{") {
       if (buffer) {
@@ -31,21 +51,6 @@ function parseInlineText(raw: string): InlineTextNode[] {
       }
     }
 
-    // 強調検出: **text**
-    if (raw[i] === "*" && raw[i + 1] === "*") {
-      if (buffer) {
-        nodes.push({ type: "text", content: buffer });
-        buffer = "";
-      }
-
-      const emphasisMatch = raw.slice(i).match(/^\*\*([^*]+)\*\*/);
-      if (emphasisMatch) {
-        nodes.push({ type: "emphasis", content: emphasisMatch[1] });
-        i += emphasisMatch[0].length;
-        continue;
-      }
-    }
-
     buffer += raw[i];
     i++;
   }
@@ -55,6 +60,11 @@ function parseInlineText(raw: string): InlineTextNode[] {
   }
 
   return nodes;
+}
+
+// 内部用：parseInlineTextFromStringのエイリアス
+function parseInlineText(raw: string): InlineTextNode[] {
+  return parseInlineTextFromString(raw);
 }
 
 /**
@@ -163,7 +173,8 @@ function stringifyInline(nodes: InlineTextNode[]): string {
         return node.content;
       }
       if (node.type === "emphasis") {
-        return `**${node.content}**`;
+        const content = stringifyInline(node.content);
+        return `**${content}**`;
       }
       if (node.type === "ruby") {
         return `{${node.base}|${node.ruby}}`;

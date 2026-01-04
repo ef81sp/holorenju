@@ -81,7 +81,7 @@ export function useRenjuBoardAnimation(layout: LayoutType): {
   // 最後に追加されたMark のアニメーション
   // FIXME: アニメーションされたりされなかったりする。再計画が必要。
   function animateLastAddedMarks(_markKeysToAnimate: string[]): Promise<void> {
-    return new Promise(()=>{})
+    return new Promise(() => {});
     // return new Promise((resolve) => {
     //   nextTick(() => {
     //     if (markKeysToAnimate.length === 0) {
@@ -133,7 +133,7 @@ export function useRenjuBoardAnimation(layout: LayoutType): {
   // 最後に追加されたLine のアニメーション
   // FIXME: アニメーションされたりされなかったりする。再計画が必要。
   function animateLastAddedLines(_lineKeysToAnimate: string[]): Promise<void> {
-    return new Promise(()=>{})
+    return new Promise(() => {});
     // return new Promise((resolve) => {
     //   nextTick(() => {
     //     if (lineKeysToAnimate.length === 0) {

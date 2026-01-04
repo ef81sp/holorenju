@@ -33,22 +33,20 @@
           "text": [
             {
               "type": "text",
-              "content": "黒の制限について学んでいくよ。"
-            },
-            {
-              "type": "lineBreak"
-            },
-            {
-              "type": "text",
-              "content": "この前の"
+              "content": "黒の制限について学んでいくよ。この前の"
             },
             {
               "type": "emphasis",
-              "content": "五目並べ最強王"
+              "content": [
+                {
+                  "type": "text",
+                  "content": "五目並べ最強王"
+                }
+              ]
             },
             {
               "type": "text",
-              "content": "でも採用されていたから、そこまで難しくないよ。"
+              "content": "でも採用されていたよ。"
             }
           ],
           "emotion": 0,
@@ -68,7 +66,13 @@
             },
             {
               "type": "emphasis",
-              "content": "{三三禁|さんさんきん}"
+              "content": [
+                {
+                  "type": "ruby",
+                  "base": "三三禁",
+                  "ruby": "さんさんきん"
+                }
+              ]
             },
             {
               "type": "text",
@@ -76,7 +80,13 @@
             },
             {
               "type": "emphasis",
-              "content": "{四四禁|ししきん}"
+              "content": [
+                {
+                  "type": "ruby",
+                  "base": "四四禁",
+                  "ruby": "ししきん"
+                }
+              ]
             },
             {
               "type": "text",
@@ -84,7 +94,13 @@
             },
             {
               "type": "emphasis",
-              "content": "{長連|ちょうれん}"
+              "content": [
+                {
+                  "type": "ruby",
+                  "base": "長連",
+                  "ruby": "ちょうれん"
+                }
+              ]
             },
             {
               "type": "text",
@@ -156,7 +172,13 @@
             },
             {
               "type": "emphasis",
-              "content": "{三三禁|さんさんきん}"
+              "content": [
+                {
+                  "type": "ruby",
+                  "base": "三三禁",
+                  "ruby": "さんさんきん"
+                }
+              ]
             },
             {
               "type": "text",
@@ -470,23 +492,11 @@
           "text": [
             {
               "type": "text",
-              "content": "細かい例外があったりするけど、いったんこれくらいで大丈夫かな"
-            },
-            {
-              "type": "lineBreak"
+              "content": "細かい例外があったりするけど、いったんこれくらいで大丈夫かな。"
             },
             {
               "type": "text",
               "content": "また詳しく説明するよ"
-            },
-            {
-              "type": "lineBreak"
-            },
-            {
-              "type": "lineBreak"
-            },
-            {
-              "type": "lineBreak"
             }
           ],
           "emotion": 0,
@@ -512,6 +522,91 @@
           "boardActions": []
         }
       ]
+    },
+    {
+      "id": "section_2",
+      "type": "problem",
+      "title": "問題セクション",
+      "initialBoard": [
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "-------ox------",
+        "-----oxxo------",
+        "-----o---------",
+        "---------------",
+        "------x--------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------"
+      ],
+      "description": [
+        {
+          "type": "text",
+          "content": "三三禁に該当するのはどこでしょう"
+        }
+      ],
+      "dialogues": [
+        {
+          "id": "dialogue_1",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "とけるかなー？"
+            }
+          ],
+          "emotion": 0,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
+          "boardActions": []
+        }
+      ],
+      "successOperator": "or",
+      "successConditions": [
+        {
+          "type": "position",
+          "positions": [
+            {
+              "row": 8,
+              "col": 6
+            }
+          ],
+          "color": "black"
+        }
+      ],
+      "feedback": {
+        "success": [
+          {
+            "character": "fubuki",
+            "text": [
+              {
+                "type": "text",
+                "content": "ないすー！！"
+              }
+            ],
+            "emotion": 37
+          }
+        ],
+        "failure": [
+          {
+            "character": "miko",
+            "text": [
+              {
+                "type": "text",
+                "content": "おおお……"
+              }
+            ],
+            "emotion": 34
+          }
+        ]
+      }
     }
   ]
 }

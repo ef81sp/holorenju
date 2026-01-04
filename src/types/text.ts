@@ -24,7 +24,7 @@ interface RubyNode {
 // 強調（例：**重要**）
 interface EmphasisNode {
   type: "emphasis";
-  content: string;
+  content: InlineTextNode[];
 }
 
 // 改行

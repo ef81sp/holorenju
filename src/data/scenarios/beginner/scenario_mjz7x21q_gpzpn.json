@@ -36,7 +36,12 @@
         },
         {
           "type": "emphasis",
-          "content": "太字"
+          "content": [
+            {
+              "type": "text",
+              "content": "太字"
+            }
+          ]
         },
         {
           "type": "lineBreak"
@@ -87,7 +92,12 @@
             },
             {
               "type": "emphasis",
-              "content": "テスト"
+              "content": [
+                {
+                  "type": "text",
+                  "content": "テスト"
+                }
+              ]
             }
           ],
           "emotion": 0,
@@ -156,7 +166,12 @@
             },
             {
               "type": "emphasis",
-              "content": "テスト"
+              "content": [
+                {
+                  "type": "text",
+                  "content": "テスト"
+                }
+              ]
             }
           ],
           "emotion": 0,
@@ -171,7 +186,12 @@
               },
               {
                 "type": "emphasis",
-                "content": "太字説明"
+                "content": [
+                  {
+                    "type": "text",
+                    "content": "太字説明"
+                  }
+                ]
               }
             ],
             "type": "new"
