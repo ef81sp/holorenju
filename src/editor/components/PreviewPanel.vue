@@ -130,6 +130,9 @@ const currentBoard = computed(() => {
       } else if (action.type === "setBoard") {
         const setBoardAction = action;
         board = stringBoardToBoardState(setBoardAction.board);
+      } else if (action.type === "resetAll") {
+        // 盤面をリセット（初期盤面に戻す）
+        board = stringBoardToBoardState(initialBoard);
       }
     }
   }
@@ -156,7 +159,10 @@ const currentMarks = computed(() => {
       break;
     }
     for (const action of dialogue.boardActions) {
-      if (action.type === "mark") {
+      if (action.type === "resetAll") {
+        // ResetAllでマークをリセット
+        marks.length = 0;
+      } else if (action.type === "mark") {
         marks.push({
           positions: action.positions,
           markType: action.markType,
@@ -187,7 +193,10 @@ const currentLines = computed(() => {
       break;
     }
     for (const action of dialogue.boardActions) {
-      if (action.type === "line" && action.action === "draw") {
+      if (action.type === "resetAll") {
+        // ResetAllでラインをリセット
+        lines.length = 0;
+      } else if (action.type === "line" && action.action === "draw") {
         lines.push({
           fromPosition: action.fromPosition,
           toPosition: action.toPosition,

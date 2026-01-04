@@ -41,6 +41,7 @@ const isRemoveAction = computed(() => props.action.type === "remove");
 const isSetBoardAction = computed(() => props.action.type === "setBoard");
 const isMarkAction = computed(() => props.action.type === "mark");
 const isLineAction = computed(() => props.action.type === "line");
+const isResetAllAction = computed(() => props.action.type === "resetAll");
 
 // ===== アクションタイプ選択 =====
 const actionType = computed({
@@ -221,6 +222,7 @@ const handleLinePositionChange = (
         <option value="setBoard">SetBoard</option>
         <option value="mark">Mark</option>
         <option value="line">Line</option>
+        <option value="resetAll">ResetAll</option>
       </select>
       <button
         type="button"
@@ -510,6 +512,15 @@ const handleLinePositionChange = (
         </label>
       </div>
     </template>
+
+    <!-- ResetAll Action -->
+    <template v-else-if="isResetAllAction">
+      <div class="action-form">
+        <p class="reset-all-message">
+          盤面上のすべての石・マーク・ラインを初期化します
+        </p>
+      </div>
+    </template>
   </div>
 </template>
 
@@ -706,5 +717,16 @@ textarea {
 .action-form.board-editor-form {
   flex-direction: column;
   padding: var(--size-4);
+}
+
+.reset-all-message {
+  margin: 0;
+  padding: var(--size-6);
+  background: var(--color-holo-cyan-light, rgba(0, 255, 255, 0.1));
+  border-left: 3px solid var(--color-holo-cyan);
+  border-radius: 3px;
+  font-size: var(--size-11);
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-normal);
 }
 </style>

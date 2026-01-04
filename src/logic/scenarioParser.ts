@@ -264,7 +264,7 @@ function validateBoardAction(data: unknown, path: string): BoardAction {
   const type = validateEnum(
     data,
     "type",
-    ["place", "remove", "setBoard", "mark", "line"],
+    ["place", "remove", "setBoard", "mark", "line", "resetAll"],
     path,
   );
 
@@ -329,6 +329,11 @@ function validateBoardAction(data: unknown, path: string): BoardAction {
         : undefined;
       return { type: "line", fromPosition, toPosition, action, style };
     }
+
+    case "resetAll": {
+      return { type: "resetAll" };
+    }
+
     default:
       throw new Error(`Unknown board action type: ${type}`);
   }

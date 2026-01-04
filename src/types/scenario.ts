@@ -49,7 +49,8 @@ type BoardAction =
   | RemoveMoveAction
   | SetBoardAction
   | MarkAction
-  | LineAction;
+  | LineAction
+  | ResetAllAction;
 
 interface PlaceMoveAction {
   type: "place";
@@ -81,6 +82,10 @@ interface LineAction {
   toPosition: Position;
   action: "draw" | "remove";
   style?: "solid" | "dashed";
+}
+
+interface ResetAllAction {
+  type: "resetAll";
 }
 
 // ===== 問題セクション =====

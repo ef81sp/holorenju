@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { BoardState, Position, StoneColor } from "@/types/game";
-import { computed, onMounted, onBeforeUnmount, watch } from "vue";
+import { computed, onMounted, onBeforeUnmount } from "vue";
 import { useBoardStore } from "@/stores/boardStore";
 import { useRenjuBoardLayout } from "./composables/useRenjuBoardLayout";
 import { useRenjuBoardInteraction } from "./composables/useRenjuBoardInteraction";
@@ -141,23 +141,6 @@ onMounted(() => {
 onBeforeUnmount(() => {
   boardStore.setOnStonePlacedCallback(null);
 });
-
-// Debug: watch marks and lines
-watch(
-  () => props.marks,
-  (newMarks) => {
-    console.log("[RenjuBoard] marks updated:", newMarks);
-  },
-  { deep: true, immediate: true },
-);
-
-watch(
-  () => props.lines,
-  (newLines) => {
-    console.log("[RenjuBoard] lines updated:", newLines);
-  },
-  { deep: true, immediate: true },
-);
 </script>
 
 <template>

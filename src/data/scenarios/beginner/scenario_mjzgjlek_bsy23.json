@@ -1,6 +1,6 @@
 {
   "id": "scenario_mjzgjlek_bsy23",
-  "title": "黒の制限",
+  "title": "黒の制限1: 三三禁",
   "difficulty": "beginner",
   "description": "三三禁、四四禁、長連について",
   "objectives": [],
@@ -263,6 +263,317 @@
               "markType": "circle"
             }
           ]
+        },
+        {
+          "id": "dialogue_9",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "すーばーらーしーい！やるねぇみこさん"
+            }
+          ],
+          "emotion": 0,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
+          "boardActions": [
+            {
+              "type": "line",
+              "position": {
+                "row": 0,
+                "col": 0
+              },
+              "color": "black",
+              "highlight": false,
+              "fromPosition": {
+                "row": 7,
+                "col": 5
+              },
+              "toPosition": {
+                "row": 7,
+                "col": 7
+              },
+              "action": "draw",
+              "style": "solid"
+            },
+            {
+              "type": "line",
+              "position": {
+                "row": 0,
+                "col": 0
+              },
+              "color": "black",
+              "highlight": false,
+              "fromPosition": {
+                "row": 7,
+                "col": 7
+              },
+              "toPosition": {
+                "row": 9,
+                "col": 7
+              },
+              "action": "draw",
+              "style": "solid"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_10",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "じゃあこれは？"
+            }
+          ],
+          "emotion": 0,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
+          "boardActions": [
+            {
+              "type": "resetAll",
+              "position": {
+                "row": 0,
+                "col": 0
+              },
+              "color": "black",
+              "highlight": false,
+              "board": [
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------"
+              ]
+            },
+            {
+              "type": "setBoard",
+              "position": {
+                "row": 0,
+                "col": 0
+              },
+              "color": "black",
+              "highlight": false,
+              "board": [
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "-----x---------",
+                "------x--------",
+                "---------------",
+                "-----xx--------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "dialogue_11",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "えっ……"
+            }
+          ],
+          "emotion": 9,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_12",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "……わがんない"
+            }
+          ],
+          "emotion": 15,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_13",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "ちょーっと難しいよねぇ"
+            }
+          ],
+          "emotion": 35,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_14",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "正解はここ。繋がってるとは限らないんだ"
+            }
+          ],
+          "emotion": 0,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
+          "boardActions": [
+            {
+              "type": "mark",
+              "position": {
+                "row": 0,
+                "col": 0
+              },
+              "color": "black",
+              "highlight": false,
+              "positions": [
+                {
+                  "row": 8,
+                  "col": 8
+                }
+              ],
+              "markType": "circle"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_15",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "ここと"
+            }
+          ],
+          "emotion": 0,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
+          "boardActions": [
+            {
+              "type": "line",
+              "position": {
+                "row": 0,
+                "col": 0
+              },
+              "color": "black",
+              "highlight": false,
+              "fromPosition": {
+                "row": 5,
+                "col": 5
+              },
+              "toPosition": {
+                "row": 8,
+                "col": 8
+              },
+              "action": "draw",
+              "style": "solid"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_16",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "ここですな"
+            }
+          ],
+          "emotion": 0,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
+          "boardActions": [
+            {
+              "type": "line",
+              "position": {
+                "row": 0,
+                "col": 0
+              },
+              "color": "black",
+              "highlight": false,
+              "fromPosition": {
+                "row": 8,
+                "col": 5
+              },
+              "toPosition": {
+                "row": 8,
+                "col": 8
+              },
+              "action": "draw",
+              "style": "solid"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_17",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "細かい例外があったりするけど、いったんこれくらいで大丈夫かな"
+            },
+            {
+              "type": "lineBreak"
+            },
+            {
+              "type": "text",
+              "content": "また詳しく説明するよ"
+            }
+          ],
+          "emotion": 0,
+          "description": {
+            "text": [
+              {
+                "type": "text",
+                "content": "三とは「次手で棒四にできる」ものなので、それに該当しないケースでは三三禁の対象にならない"
+              },
+              {
+                "type": "lineBreak"
+              },
+              {
+                "type": "lineBreak"
+              }
+            ],
+            "type": "continue"
+          },
+          "boardActions": []
         }
       ]
     }

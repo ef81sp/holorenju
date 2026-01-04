@@ -110,6 +110,10 @@ export function useBoardActions(
           action: "draw",
           style: "solid",
         };
+      case "resetAll":
+        return {
+          type: "resetAll",
+        };
       default:
         return {
           type: "place",
