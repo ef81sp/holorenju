@@ -2,6 +2,7 @@
 import type { Position } from "@/types/game";
 import type { BoardAction } from "@/types/scenario";
 import { computed } from "vue";
+import BoardVisualEditor from "../BoardVisualEditor.vue";
 
 const props = defineProps<{
   action: BoardAction;
@@ -18,7 +19,7 @@ const emit = defineEmits<{
   ];
   "update-color": [color: "black" | "white"];
   "update-highlight": [highlight: boolean];
-  "update-board": [text: string];
+  "update-board": [board: string[]];
   "add-mark-position": [];
   "update-mark-position": [
     posIndex: number,
@@ -30,6 +31,7 @@ const emit = defineEmits<{
     updates: Partial<Extract<BoardAction, { type: "mark" }>>,
   ];
   "update-line": [updates: Partial<Extract<BoardAction, { type: "line" }>>];
+  "update-type": [newType: BoardAction["type"]];
   remove: [];
 }>();
 
@@ -39,6 +41,14 @@ const isRemoveAction = computed(() => props.action.type === "remove");
 const isSetBoardAction = computed(() => props.action.type === "setBoard");
 const isMarkAction = computed(() => props.action.type === "mark");
 const isLineAction = computed(() => props.action.type === "line");
+
+// ===== アクションタイプ選択 =====
+const actionType = computed({
+  get: (): string => props.action.type,
+  set: (value: string) => {
+    emit("update-type", value as BoardAction["type"]);
+  },
+});
 
 // ===== Place アクション =====
 const placePosition = computed(() => {
@@ -97,19 +107,16 @@ const handleRemovePositionChange = (
 };
 
 // ===== SetBoard アクション =====
-const setBoardContent = computed({
-  get: (): string => {
-    if (!isSetBoardAction.value) {
-      return "";
-    }
-    return (
-      props.action as Extract<BoardAction, { type: "setBoard" }>
-    ).board.join("\n");
-  },
-  set: (value: string) => {
-    emit("update-board", value);
-  },
+const setBoardData = computed(() => {
+  if (!isSetBoardAction.value) {
+    return [];
+  }
+  return (props.action as Extract<BoardAction, { type: "setBoard" }>).board;
 });
+
+const handleSetBoardUpdate = (newBoard: string[]): void => {
+  emit("update-board", newBoard);
+};
 
 // ===== Mark アクション =====
 const markPositions = computed(() => {
@@ -204,7 +211,17 @@ const handleLinePositionChange = (
 <template>
   <div class="board-action-editor">
     <div class="action-header">
-      <h4>アクション #{{ actionIndex + 1 }} ({{ action.type }})</h4>
+      <h4>アクション #{{ actionIndex + 1 }}</h4>
+      <select
+        v-model="actionType"
+        class="type-select"
+      >
+        <option value="place">Place</option>
+        <option value="remove">Remove</option>
+        <option value="setBoard">SetBoard</option>
+        <option value="mark">Mark</option>
+        <option value="line">Line</option>
+      </select>
       <button
         type="button"
         class="remove-button"
@@ -314,15 +331,12 @@ const handleLinePositionChange = (
 
     <!-- SetBoard Action -->
     <template v-else-if="isSetBoardAction">
-      <div class="action-form">
-        <label class="field full-width">
-          <span>盤面（テキスト）</span>
-          <textarea
-            v-model="setBoardContent"
-            placeholder="e = 空, b = 黒, w = 白"
-            rows="4"
-          />
-        </label>
+      <div class="action-form board-editor-form">
+        <BoardVisualEditor
+          :board="setBoardData"
+          :stage-size="250"
+          @update:board="handleSetBoardUpdate"
+        />
       </div>
     </template>
 
@@ -514,6 +528,7 @@ const handleLinePositionChange = (
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: var(--size-4);
   padding-bottom: var(--size-4);
   border-bottom: 1px solid var(--color-border);
 }
@@ -523,6 +538,23 @@ const handleLinePositionChange = (
   font-weight: var(--font-weight-bold);
   font-size: var(--size-12);
   color: var(--color-text-primary);
+  flex: 0 0 auto;
+}
+
+.type-select {
+  padding: var(--size-3) var(--size-5);
+  border: 1px solid var(--color-border);
+  border-radius: 3px;
+  font-family: inherit;
+  font-size: var(--size-12);
+  color: var(--color-text-primary);
+  background: var(--color-bg-white);
+  flex: 0 0 auto;
+}
+
+.type-select:focus {
+  outline: none;
+  border-color: var(--color-holo-blue);
 }
 
 .remove-button {
@@ -669,5 +701,10 @@ textarea {
 .add-position-button:hover,
 .remove-button:hover {
   opacity: 0.9;
+}
+
+.action-form.board-editor-form {
+  flex-direction: column;
+  padding: var(--size-4);
 }
 </style>

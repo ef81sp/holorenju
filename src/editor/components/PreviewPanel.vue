@@ -127,6 +127,9 @@ const currentBoard = computed(() => {
         const removeAction = action;
         const { row, col } = removeAction.position;
         board[row][col] = null;
+      } else if (action.type === "setBoard") {
+        const setBoardAction = action;
+        board = stringBoardToBoardState(setBoardAction.board);
       }
     }
   }

@@ -1,0 +1,191 @@
+{
+  "id": "scenario_mjzgjlek_bsy23",
+  "title": "黒の制限",
+  "difficulty": "beginner",
+  "description": "三三禁、四四禁、長連について",
+  "objectives": [],
+  "sections": [
+    {
+      "id": "section_1",
+      "type": "demo",
+      "title": "デモセクション",
+      "initialBoard": [
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------"
+      ],
+      "dialogues": [
+        {
+          "id": "dialogue_1",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "黒の制限について学んでいくよ。"
+            },
+            {
+              "type": "lineBreak"
+            },
+            {
+              "type": "text",
+              "content": "この前の"
+            },
+            {
+              "type": "emphasis",
+              "content": "五目並べ最強王"
+            },
+            {
+              "type": "text",
+              "content": "でも採用されていたから、そこまで難しくないよ。"
+            }
+          ],
+          "emotion": 0,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_2",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "紹介するのは3つ。"
+            },
+            {
+              "type": "emphasis",
+              "content": "{三三禁|さんさんきん}"
+            },
+            {
+              "type": "text",
+              "content": "、"
+            },
+            {
+              "type": "emphasis",
+              "content": "{四四禁|ししきん}"
+            },
+            {
+              "type": "text",
+              "content": "、"
+            },
+            {
+              "type": "emphasis",
+              "content": "{長連|ちょうれん}"
+            },
+            {
+              "type": "text",
+              "content": "だよ。"
+            }
+          ],
+          "emotion": 0,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_3",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "フブさんおぼえらんない"
+            }
+          ],
+          "emotion": 14,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_4",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "気合を入れろー！"
+            }
+          ],
+          "emotion": 32,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_5",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "おうおうおう……"
+            }
+          ],
+          "emotion": 34,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_6",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "まずは"
+            },
+            {
+              "type": "emphasis",
+              "content": "{三三禁|さんさんきん}"
+            },
+            {
+              "type": "text",
+              "content": "。三を同時に作っちゃいけない、というルールだよ。"
+            }
+          ],
+          "emotion": 0,
+          "description": {
+            "text": [
+              {
+                "type": "text",
+                "content": "三: とめなければ四になって負けてしまう"
+              }
+            ],
+            "type": "continue"
+          },
+          "boardActions": [
+            {
+              "type": "place",
+              "position": {
+                "row": 0,
+                "col": 0
+              },
+              "color": "black",
+              "highlight": false
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

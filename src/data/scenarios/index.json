@@ -4,12 +4,6 @@
       "label": "beginner",
       "scenarios": [
         {
-          "id": "scenario_mjviwg6m_jv8xm",
-          "title": "連珠って？",
-          "description": "五目並べとの違い",
-          "path": "beginner/scenario_mjviwg6m_jv8xm.json"
-        },
-        {
           "id": "scenario_mjx746jb_0azj3",
           "title": "問題テスト",
           "description": "テスト用問題です",
@@ -20,6 +14,18 @@
           "title": "新しいシナリオ",
           "description": "レンダリングテスト",
           "path": "beginner/scenario_mjz7x21q_gpzpn.json"
+        },
+        {
+          "id": "scenario_mjzgjlek_bsy23",
+          "title": "黒の制限",
+          "description": "三三禁、四四禁、長連について",
+          "path": "beginner/scenario_mjzgjlek_bsy23.json"
+        },
+        {
+          "id": "scenario_mjviwg6m_jv8xm",
+          "title": "連珠って？",
+          "description": "五目並べとの違い",
+          "path": "beginner/scenario_mjviwg6m_jv8xm.json"
         }
       ]
     },

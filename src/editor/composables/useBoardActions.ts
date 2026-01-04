@@ -42,7 +42,7 @@ export function useBoardActions(
   updateBoardActionBoard: (
     dialogueIndex: number,
     actionIndex: number,
-    text: string,
+    board: string[],
   ) => void;
   addBoardActionMarkPosition: (
     dialogueIndex: number,
@@ -70,6 +70,11 @@ export function useBoardActions(
     actionIndex: number,
     updates: Partial<Extract<BoardAction, { type: "line" }>>,
   ) => void;
+  updateBoardActionType: (
+    dialogueIndex: number,
+    actionIndex: number,
+    newType: BoardAction["type"],
+  ) => void;
 } {
   // ===== アクション作成 =====
   const createBoardAction = (type: BoardAction["type"]): BoardAction => {
@@ -89,7 +94,7 @@ export function useBoardActions(
       case "setBoard":
         return {
           type: "setBoard",
-          board: Array(15).fill("e".repeat(15)),
+          board: Array(15).fill("-".repeat(15)),
         };
       case "mark":
         return {
@@ -303,7 +308,7 @@ export function useBoardActions(
   const updateBoardActionBoard = (
     dialogueIndex: number,
     actionIndex: number,
-    text: string,
+    board: string[],
   ): void => {
     const section = getCurrentSection();
     if (!section) {
@@ -320,8 +325,7 @@ export function useBoardActions(
       return;
     }
 
-    const lines = text.split("\n").map((line) => line.trim());
-    updateBoardActionInArray(dialogueIndex, actionIndex, { board: lines });
+    updateBoardActionInArray(dialogueIndex, actionIndex, { board });
   };
 
   // ===== Mark アクション用 =====
@@ -440,6 +444,16 @@ export function useBoardActions(
     updateBoardActionInArray(dialogueIndex, actionIndex, updates);
   };
 
+  // ===== タイプ変更 =====
+  const updateBoardActionType = (
+    dialogueIndex: number,
+    actionIndex: number,
+    newType: BoardAction["type"],
+  ): void => {
+    const newAction = createBoardAction(newType);
+    updateBoardActionInArray(dialogueIndex, actionIndex, newAction);
+  };
+
   return {
     createBoardAction,
     addBoardAction,
@@ -455,5 +469,6 @@ export function useBoardActions(
     removeBoardActionMarkPosition,
     updateBoardActionMarkMeta,
     updateBoardActionLine,
+    updateBoardActionType,
   };
 }

@@ -24,6 +24,7 @@ const {
   removeBoardActionMarkPosition,
   updateBoardActionMarkMeta,
   updateBoardActionLine,
+  updateBoardActionType,
 } = useBoardActions(props.getCurrentSection, props.updateDialogue);
 
 const handleAddAction = (): void => {
@@ -74,8 +75,8 @@ const handleUpdateHighlight = (
   updateBoardActionHighlight(props.dialogueIndex, actionIndex, highlight);
 };
 
-const handleUpdateBoard = (actionIndex: number, text: string): void => {
-  updateBoardActionBoard(props.dialogueIndex, actionIndex, text);
+const handleUpdateBoard = (actionIndex: number, board: string[]): void => {
+  updateBoardActionBoard(props.dialogueIndex, actionIndex, board);
 };
 
 const handleAddMarkPosition = (actionIndex: number): void => {
@@ -116,6 +117,13 @@ const handleUpdateLine = (
   updates: Partial<Extract<BoardAction, { type: "line" }>>,
 ): void => {
   updateBoardActionLine(props.dialogueIndex, actionIndex, updates);
+};
+
+const handleUpdateType = (
+  actionIndex: number,
+  newType: BoardAction["type"],
+): void => {
+  updateBoardActionType(props.dialogueIndex, actionIndex, newType);
 };
 </script>
 
@@ -178,7 +186,7 @@ const handleUpdateLine = (
             @update-highlight="
               (highlight) => handleUpdateHighlight(actionIndex, highlight)
             "
-            @update-board="(text) => handleUpdateBoard(actionIndex, text)"
+            @update-board="(board) => handleUpdateBoard(actionIndex, board)"
             @add-mark-position="() => handleAddMarkPosition(actionIndex)"
             @update-mark-position="
               (posIndex, field, value) =>
@@ -191,6 +199,7 @@ const handleUpdateLine = (
               (updates) => handleUpdateMarkMeta(actionIndex, updates)
             "
             @update-line="(updates) => handleUpdateLine(actionIndex, updates)"
+            @update-type="(newType) => handleUpdateType(actionIndex, newType)"
             @remove="() => handleRemove(actionIndex)"
           />
         </div>
