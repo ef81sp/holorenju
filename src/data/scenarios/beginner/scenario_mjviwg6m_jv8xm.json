@@ -33,7 +33,7 @@
           "text": [
             {
               "type": "text",
-              "content": "フブさん……れんたまってなに……"
+              "content": "フブさん……れん……なんてよむの……"
             }
           ],
           "emotion": 23,
@@ -98,6 +98,15 @@
             }
           ],
           "emotion": 1,
+          "description": {
+            "text": [
+              {
+                "type": "text",
+                "content": "五目並べでは、常に黒が先手、白が後手"
+              }
+            ],
+            "type": "continue"
+          },
           "boardActions": []
         },
         {
@@ -109,7 +118,7 @@
               "content": "5つ並べた時点で完成だから、妨害せずに並べていったら絶対に先手の黒が勝つし"
             }
           ],
-          "emotion": 0,
+          "emotion": 3,
           "boardActions": [
             {
               "type": "place",
@@ -126,118 +135,222 @@
                 "col": 5
               },
               "color": "white"
+            },
+            {
+              "type": "place",
+              "position": {
+                "row": 7,
+                "col": 6
+              },
+              "color": "black",
+              "highlight": false
+            },
+            {
+              "type": "place",
+              "position": {
+                "row": 8,
+                "col": 6
+              },
+              "color": "white",
+              "highlight": false
+            },
+            {
+              "type": "place",
+              "position": {
+                "row": 7,
+                "col": 7
+              },
+              "color": "black",
+              "highlight": false
+            },
+            {
+              "type": "place",
+              "position": {
+                "row": 8,
+                "col": 7
+              },
+              "color": "white",
+              "highlight": false
+            },
+            {
+              "type": "place",
+              "position": {
+                "row": 7,
+                "col": 8
+              },
+              "color": "black",
+              "highlight": false
+            },
+            {
+              "type": "place",
+              "position": {
+                "row": 8,
+                "col": 8
+              },
+              "color": "white",
+              "highlight": false
+            },
+            {
+              "type": "place",
+              "position": {
+                "row": 7,
+                "col": 9
+              },
+              "color": "black",
+              "highlight": true
             }
           ]
-        }
-      ]
-    },
-    {
-      "id": "section_2",
-      "type": "problem",
-      "title": "問題セクション",
-      "initialBoard": [
-        "---------------",
-        "---------------",
-        "---------------",
-        "---------------",
-        "---------------",
-        "---------------",
-        "--------x------",
-        "-------x-------",
-        "------x--------",
-        "---------------",
-        "---------------",
-        "---------------",
-        "---------------",
-        "---------------",
-        "---------------"
-      ],
-      "description": "棒四を作ってみましょう",
-      "dialogues": [
+        },
         {
-          "id": "dialogue_1",
+          "id": "dialogue_7",
           "character": "fubuki",
           "text": [
             {
               "type": "text",
-              "content": "とけるかなー？"
+              "content": "白は守りに回されて、その間に黒に有利な形を組まれてしまう"
             }
           ],
-          "emotion": 0,
+          "emotion": 9,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
           "boardActions": []
         },
         {
-          "id": "dialogue_2",
+          "id": "dialogue_8",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "というか、制限がなければ"
+            },
+            {
+              "type": "emphasis",
+              "content": "黒が絶対勝つ"
+            },
+            {
+              "type": "text",
+              "content": "んだ"
+            }
+          ],
+          "emotion": 19,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_9",
           "character": "miko",
           "text": [
             {
               "type": "text",
-              "content": "頑張ります！"
+              "content": "あらまー"
             }
           ],
-          "emotion": 1,
+          "emotion": 15,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
           "boardActions": []
         },
         {
-          "id": "dialogue_3",
+          "id": "dialogue_10",
           "character": "fubuki",
           "text": [
             {
               "type": "text",
-              "content": "応援してるよ"
+              "content": "ということで、黒に制限を加えて、平等に戦えるようにしたのが連珠なんだ。"
             }
           ],
-          "emotion": 2,
+          "emotion": 0,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
           "boardActions": []
-        }
-      ],
-      "successOperator": "or",
-      "successConditions": [
+        },
         {
-          "type": "position",
-          "positions": [
+          "id": "dialogue_11",
+          "character": "fubuki",
+          "text": [
             {
-              "row": 5,
-              "col": 9
-            },
-            {
-              "row": 9,
-              "col": 5
+              "type": "text",
+              "content": "先攻はなにかと強いんだ。いろんなゲームで制限があるよね。一緒だよ"
             }
           ],
-          "color": "black"
-        }
-      ],
-      "feedback": {
-        "success": [
-          {
-            "character": "fubuki",
+          "emotion": 0,
+          "description": {
             "text": [
               {
-                "type": "emphasis",
-                "content": "ないすー"
+                "type": "text",
+                "content": "囲碁"
+              },
+              {
+                "type": "lineBreak"
               },
               {
                 "type": "text",
-                "content": "！"
-              }
-            ],
-            "emotion": 37
-          }
-        ],
-        "failure": [
-          {
-            "character": "miko",
-            "text": [
+                "content": "最終計算時に後手にポイント追加(6.5目のコミ)"
+              },
+              {
+                "type": "lineBreak"
+              },
+              {
+                "type": "lineBreak"
+              },
               {
                 "type": "text",
-                "content": "お゙お゙お゙……"
+                "content": "ポケモンカード・遊戯王等のTCG"
+              },
+              {
+                "type": "lineBreak"
+              },
+              {
+                "type": "text",
+                "content": "先攻番は攻撃不可"
               }
             ],
-            "emotion": 14
-          }
-        ]
-      }
+            "type": "continue"
+          },
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_12",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "次の章でどんな制限があるか見ていこう！"
+            }
+          ],
+          "emotion": 0,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_13",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "っしゃおらぁ！"
+            }
+          ],
+          "emotion": 32,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
+          "boardActions": []
+        }
+      ]
     }
   ]
 }

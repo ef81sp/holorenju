@@ -114,6 +114,13 @@ const updateSectionTitle = (title: string): void => {
               @remove="removeDialogue(index)"
             />
           </div>
+          <button
+            type="button"
+            class="btn-add-small"
+            @click.stop.prevent="addDialogue"
+          >
+            + ダイアログを追加
+          </button>
         </details>
       </div>
     </div>
@@ -234,5 +241,7 @@ const updateSectionTitle = (title: string): void => {
   display: flex;
   flex-direction: column;
   gap: var(--size-6);
+  max-height: var(--size-500);
+  overflow-y: auto;
 }
 </style>

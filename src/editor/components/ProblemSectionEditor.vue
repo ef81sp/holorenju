@@ -234,6 +234,8 @@ const updateSuccessOperator = (operator: "or" | "and"): void => {
   display: flex;
   flex-direction: column;
   gap: var(--size-6);
+  max-height: var(--size-500);
+  overflow-y: auto;
 }
 
 .dialogue-item {

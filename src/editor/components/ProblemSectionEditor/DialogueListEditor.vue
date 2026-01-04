@@ -156,6 +156,13 @@ const handleEmotionSelect = (emotionId: EmotionId): void => {
           @select="handleEmotionSelect"
         />
       </div>
+      <button
+        type="button"
+        class="btn-add-small"
+        @click.stop.prevent="emit('add')"
+      >
+        + ダイアログを追加
+      </button>
     </div>
   </details>
 </template>
@@ -217,6 +224,8 @@ const handleEmotionSelect = (emotionId: EmotionId): void => {
   display: flex;
   flex-direction: column;
   gap: var(--size-6);
+  max-height: var(--size-500);
+  overflow-y: auto;
 }
 
 .dialogue-item {

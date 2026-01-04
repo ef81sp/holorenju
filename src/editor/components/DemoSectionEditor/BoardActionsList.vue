@@ -139,59 +139,61 @@ const handleUpdateLine = (
     </template>
 
     <template v-else>
-      <div
-        v-for="(action, actionIndex) in boardActions"
-        :key="`board-action-${actionIndex}`"
-        class="action-item"
-      >
-        <div class="action-item-controls">
-          <button
-            type="button"
-            class="move-button"
-            :disabled="actionIndex === 0"
-            @click="handleMove(actionIndex, actionIndex - 1)"
-          >
-            ▲
-          </button>
+      <div class="actions-list">
+        <div
+          v-for="(action, actionIndex) in boardActions"
+          :key="`board-action-${actionIndex}`"
+          class="action-item"
+        >
+          <div class="action-item-controls">
+            <button
+              type="button"
+              class="move-button"
+              :disabled="actionIndex === 0"
+              @click="handleMove(actionIndex, actionIndex - 1)"
+            >
+              ▲
+            </button>
 
-          <button
-            type="button"
-            class="move-button"
-            :disabled="actionIndex === boardActions.length - 1"
-            @click="handleMove(actionIndex, actionIndex + 1)"
-          >
-            ▼
-          </button>
+            <button
+              type="button"
+              class="move-button"
+              :disabled="actionIndex === boardActions.length - 1"
+              @click="handleMove(actionIndex, actionIndex + 1)"
+            >
+              ▼
+            </button>
+          </div>
+
+          <BoardActionEditor
+            :action="action"
+            :dialogue-index="props.dialogueIndex"
+            :action-index="actionIndex"
+            @update="(updates) => handleUpdate(actionIndex, updates)"
+            @update-position="
+              (key, field, value) =>
+                handleUpdatePosition(actionIndex, key, field, value)
+            "
+            @update-color="(color) => handleUpdateColor(actionIndex, color)"
+            @update-highlight="
+              (highlight) => handleUpdateHighlight(actionIndex, highlight)
+            "
+            @update-board="(text) => handleUpdateBoard(actionIndex, text)"
+            @add-mark-position="() => handleAddMarkPosition(actionIndex)"
+            @update-mark-position="
+              (posIndex, field, value) =>
+                handleUpdateMarkPosition(actionIndex, posIndex, field, value)
+            "
+            @remove-mark-position="
+              (posIndex) => handleRemoveMarkPosition(actionIndex, posIndex)
+            "
+            @update-mark-meta="
+              (updates) => handleUpdateMarkMeta(actionIndex, updates)
+            "
+            @update-line="(updates) => handleUpdateLine(actionIndex, updates)"
+            @remove="() => handleRemove(actionIndex)"
+          />
         </div>
-
-        <BoardActionEditor
-          :action="action"
-          :dialogue-index="props.dialogueIndex"
-          :action-index="actionIndex"
-          @update="(updates) => handleUpdate(actionIndex, updates)"
-          @update-position="
-            (key, field, value) =>
-              handleUpdatePosition(actionIndex, key, field, value)
-          "
-          @update-color="(color) => handleUpdateColor(actionIndex, color)"
-          @update-highlight="
-            (highlight) => handleUpdateHighlight(actionIndex, highlight)
-          "
-          @update-board="(text) => handleUpdateBoard(actionIndex, text)"
-          @add-mark-position="() => handleAddMarkPosition(actionIndex)"
-          @update-mark-position="
-            (posIndex, field, value) =>
-              handleUpdateMarkPosition(actionIndex, posIndex, field, value)
-          "
-          @remove-mark-position="
-            (posIndex) => handleRemoveMarkPosition(actionIndex, posIndex)
-          "
-          @update-mark-meta="
-            (updates) => handleUpdateMarkMeta(actionIndex, updates)
-          "
-          @update-line="(updates) => handleUpdateLine(actionIndex, updates)"
-          @remove="() => handleRemove(actionIndex)"
-        />
       </div>
     </template>
   </div>
@@ -234,6 +236,11 @@ const handleUpdateLine = (
   padding: var(--size-8) var(--size-6);
   border: 1px dashed var(--color-border);
   border-radius: 3px;
+}
+
+.actions-list {
+  max-height: var(--size-200);
+  overflow-y: auto;
 }
 
 .action-item {
