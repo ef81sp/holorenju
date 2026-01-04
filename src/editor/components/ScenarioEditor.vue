@@ -18,6 +18,7 @@ import ScenarioEditorForm from "./ScenarioEditorForm.vue";
 import SectionEditor from "./SectionEditor.vue";
 import ValidationPanel from "./ValidationPanel.vue";
 import PreviewPanel from "./PreviewPanel.vue";
+import FileListDialog from "./FileListDialog.vue";
 
 // File System Access API の型定義
 declare global {
@@ -33,6 +34,7 @@ const jsonInput = ref("");
 const showJsonInput = ref(false);
 const selectedFile = ref<File | null>(null);
 const scenarioDir = ref<FileSystemDirectoryHandle | null>(null);
+const fileListDialogRef = ref<InstanceType<typeof FileListDialog> | null>(null);
 let validationTimer: number | null = null;
 
 // マウント時にIndexedDBから保存されたディレクトリハンドルを復元
@@ -116,96 +118,41 @@ const handleFileSelect = (event: Event): void => {
   reader.readAsText(file);
 };
 
-const handleSelectFileFromDirectory = async (): Promise<void> => {
+const handleFileSelectFromDialog = async (path: string): Promise<void> => {
   if (!scenarioDir.value) {
     console.warn("先にディレクトリを選択してください");
     return;
   }
 
-  const rootDir = scenarioDir.value as FileSystemDirectoryHandle & {
-    entries?: () => AsyncIterable<[string, FileSystemHandle]>;
-  };
-
-  if (!rootDir.entries) {
-    console.warn("entries() がサポートされていないディレクトリハンドルです");
-    return;
-  }
-
   try {
-    console.warn("📂 ディレクトリ内のファイル一覧を取得中...");
-    // 選択済みディレクトリ内のJSONファイル一覧を取得（サブディレクトリも含む）
-    const entries: [string, FileSystemFileHandle, string][] = []; // [相対パス, handle, ファイル名]
+    console.warn(`📄 ファイル読み込み開始: ${path}`);
+    const pathParts = path.split("/");
+    const fileName = pathParts.pop();
+    const difficultyName = pathParts[0] || "beginner";
 
-    // ルートディレクトリのJSONファイルを取得
-    for await (const [name, handle] of rootDir.entries()) {
-      if (name.endsWith(".json") && handle.kind === "file") {
-        entries.push([name, handle as FileSystemFileHandle, name]);
-      }
+    let fileHandle: FileSystemFileHandle;
+
+    if (pathParts.length > 0) {
+      // サブディレクトリに含まれるファイル
+      const difficultyDir = await scenarioDir.value.getDirectoryHandle(
+        difficultyName,
+        { create: false },
+      );
+      fileHandle = (await difficultyDir.getFileHandle(fileName || "", {
+        create: false,
+      })) as FileSystemFileHandle;
+    } else {
+      // ルートディレクトリのファイル
+      fileHandle = (await scenarioDir.value.getFileHandle(fileName || "", {
+        create: false,
+      })) as FileSystemFileHandle;
     }
 
-    // 難易度サブディレクトリ（beginner/intermediate/advanced）を検索
-    const difficultyDirs = ["beginner", "intermediate", "advanced"];
-    const subDirPromises = difficultyDirs.map(async (difficultyName) => {
-      try {
-        if (!scenarioDir.value) {
-          return [];
-        }
-        const difficultyDir = await scenarioDir.value.getDirectoryHandle(
-          difficultyName,
-          {
-            create: false,
-          },
-        );
-        const typedDifficultyDir =
-          difficultyDir as FileSystemDirectoryHandle & {
-            entries?: () => AsyncIterable<[string, FileSystemHandle]>;
-          };
-        if (!typedDifficultyDir.entries) {
-          return [];
-        }
-        const subEntries: [string, FileSystemFileHandle, string][] = [];
-        for await (const [name, handle] of typedDifficultyDir.entries()) {
-          if (name.endsWith(".json") && handle.kind === "file") {
-            const relativePath = `${difficultyName}/${name}`;
-            subEntries.push([
-              relativePath,
-              handle as FileSystemFileHandle,
-              name,
-            ]);
-          }
-        }
-        return subEntries;
-      } catch {
-        return [];
-      }
-    });
-
-    const subResults = await Promise.all(subDirPromises);
-    subResults.forEach((subEntries) => {
-      entries.push(...subEntries);
-    });
-
-    console.warn(
-      `📂 ${entries.length} 個のJSONファイルが見つかりました:`,
-      entries.map(([relativePath]) => relativePath),
-    );
-
-    if (entries.length === 0) {
-      console.warn("ディレクトリ内にJSONファイルがありません");
-      return;
-    }
-
-    // 複数ファイルがある場合は先頭を採用（UIでの選択実装は別途対応）
-    const [firstEntry] = entries;
-    if (!firstEntry) {
-      return;
-    }
-    const [relativePath, fileHandle, fileName] = firstEntry;
-    console.warn(`📄 ${relativePath} を読み込み中...`);
     const file = await fileHandle.getFile();
     const text = await file.text();
     console.warn("✅ ファイル読み込み成功");
     console.warn("📄 JSON文字列:", `${text.substring(0, 200)}...`);
+
     const data = JSON.parse(text);
     console.warn("✅ JSON パース成功:", data);
 
@@ -220,7 +167,8 @@ const handleSelectFileFromDirectory = async (): Promise<void> => {
       editorStore.loadScenario(scenario);
       editorStore.clearValidationErrors();
       jsonInput.value = text;
-      console.warn(`✅ ${relativePath} を読み込みました`);
+      fileListDialogRef.value?.close();
+      console.warn(`✅ ${path} を読み込みました`);
     } else {
       console.warn("❌ JSONにエラーがあります:");
       result.errors.forEach((error) => {
@@ -237,6 +185,14 @@ const handleSelectFileFromDirectory = async (): Promise<void> => {
       console.error("スタックトレース:", error.stack);
     }
   }
+};
+
+const handleOpenFileListDialog = (): void => {
+  if (!scenarioDir.value) {
+    console.warn("先にディレクトリを選択してください");
+    return;
+  }
+  fileListDialogRef.value?.showModal();
 };
 
 const handleSave = (): void => {
@@ -531,15 +487,14 @@ const handleGenerateIndex = async (): Promise<void> => {
         >
           {{ scenarioDir ? "📁 (選択済み)" : "📁 ディレクトリ" }}
         </button>
-        <label class="file-input-label">
-          <input
-            type="file"
-            accept=".json"
-            style="display: none"
-            @change="handleFileSelect"
-          />
+        <button
+          class="btn-secondary"
+          :disabled="!scenarioDir"
+          title="シナリオを選択して開く"
+          @click="handleOpenFileListDialog"
+        >
           📄 ファイル選択
-        </label>
+        </button>
         <button
           class="btn-primary"
           :disabled="!scenarioDir"
@@ -548,14 +503,7 @@ const handleGenerateIndex = async (): Promise<void> => {
         >
           💾 保存
         </button>
-        <button
-          class="btn-secondary"
-          :disabled="!scenarioDir"
-          title="ディレクトリから最初のJSONファイルを読み込み"
-          @click="handleLoadFromDirectory"
-        >
-          📂 読込
-        </button>
+
         <button
           class="btn-secondary"
           :disabled="!scenarioDir"
@@ -641,6 +589,11 @@ const handleGenerateIndex = async (): Promise<void> => {
         </section>
       </div>
     </div>
+
+    <FileListDialog
+      ref="fileListDialogRef"
+      @selected="handleFileSelectFromDialog"
+    />
   </div>
 </template>
 
