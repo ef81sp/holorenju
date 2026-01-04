@@ -1,0 +1,129 @@
+{
+  "id": "scenario_mjzr29tu_hh97s",
+  "title": "五を作るには",
+  "difficulty": "beginner",
+  "description": "勝利条件である五の一歩手前の状態を学びます。",
+  "objectives": [],
+  "sections": [
+    {
+      "id": "section_1",
+      "type": "demo",
+      "title": "五を作るには",
+      "initialBoard": [
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------"
+      ],
+      "dialogues": [
+        {
+          "id": "dialogue_1",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "みこさん、五目並べで勝つにはどうすればいい？"
+            }
+          ],
+          "emotion": 0,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_2",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "五を作る"
+            }
+          ],
+          "emotion": 1,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_3",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "すばらしい"
+            }
+          ],
+          "emotion": 8,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_4",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "おいばかにすんな！"
+            }
+          ],
+          "emotion": 32,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_5",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "あはは"
+            }
+          ],
+          "emotion": 28,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_6",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "じゃあ、五を作るには何を作ればいい？"
+            }
+          ],
+          "emotion": 0,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
+          "boardActions": []
+        }
+      ]
+    }
+  ]
+}

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onMounted } from "vue";
+import { ref, watch, onMounted, nextTick } from "vue";
 import { useEditorStore } from "@/editor/stores/editorStore";
 import {
   validateScenarioCompletely,
@@ -13,12 +13,15 @@ import {
   loadDirectoryHandle,
   removeDirectoryHandle,
 } from "@/editor/logic/directionHandleStorage";
-import { regenerateScenarioIndex } from "@/editor/logic/indexFileHandler";
+import {
+  regenerateScenarioIndexWithOrder,
+} from "@/editor/logic/indexFileHandler";
 import ScenarioEditorForm from "./ScenarioEditorForm.vue";
 import SectionEditor from "./SectionEditor.vue";
 import ValidationPanel from "./ValidationPanel.vue";
 import PreviewPanel from "./PreviewPanel.vue";
 import FileListDialog from "./FileListDialog.vue";
+import ScenarioReorderDialog from "./ScenarioReorderDialog.vue";
 
 // File System Access API の型定義
 declare global {
@@ -35,6 +38,23 @@ const showJsonInput = ref(false);
 const selectedFile = ref<File | null>(null);
 const scenarioDir = ref<FileSystemDirectoryHandle | null>(null);
 const fileListDialogRef = ref<InstanceType<typeof FileListDialog> | null>(null);
+const reorderDialogRef = ref<InstanceType<typeof ScenarioReorderDialog> | null>(
+  null,
+);
+const currentIndexData = ref<{
+  difficulties: Record<
+    string,
+    {
+      label: string;
+      scenarios: {
+        id: string;
+        title: string;
+        description: string;
+        path: string;
+      }[];
+    }
+  >;
+} | null>(null);
 let validationTimer: number | null = null;
 
 // マウント時にIndexedDBから保存されたディレクトリハンドルを復元
@@ -130,7 +150,8 @@ const handleFileSelectFromDialog = async (path: string): Promise<void> => {
     const fileName = pathParts.pop();
     const difficultyName = pathParts[0] || "beginner";
 
-    let fileHandle: FileSystemFileHandle;
+    let fileHandle: FileSystemFileHandle =
+      null as unknown as FileSystemFileHandle;
 
     if (pathParts.length > 0) {
       // サブディレクトリに含まれるファイル
@@ -448,8 +469,44 @@ const handleGenerateIndex = async (): Promise<void> => {
   }
 
   try {
+    // 現在のindex.jsonを読み込む
+    const indexHandle = await scenarioDir.value.getFileHandle("index.json", {
+      create: false,
+    });
+    const indexFile = await indexHandle.getFile();
+    const indexText = await indexFile.text();
+    currentIndexData.value = JSON.parse(indexText);
+  } catch {
+    // index.json が存在しない場合は空の状態で開始
+    currentIndexData.value = {
+      difficulties: {
+        beginner: { label: "入門", scenarios: [] },
+        intermediate: { label: "初級", scenarios: [] },
+        advanced: { label: "中級", scenarios: [] },
+      },
+    };
+  }
+
+  // DOMの更新を待ってからダイアログを開く
+  await nextTick();
+  reorderDialogRef.value?.showModal();
+};
+
+const handleReorderConfirm = async (
+  reorderedData: Record<string, string[]>,
+): Promise<void> => {
+  if (!scenarioDir.value || !currentIndexData.value) {
+    console.error("Invalid state");
+    return;
+  }
+
+  try {
     console.warn("🔄 index.json を再生成中...");
-    await regenerateScenarioIndex(scenarioDir.value, null);
+    await regenerateScenarioIndexWithOrder(
+      scenarioDir.value,
+      currentIndexData.value,
+      reorderedData,
+    );
     console.warn("✅ index.json を再生成しました");
   } catch (error) {
     console.error("❌ index.json の生成に失敗しました:", error);
@@ -593,6 +650,14 @@ const handleGenerateIndex = async (): Promise<void> => {
     <FileListDialog
       ref="fileListDialogRef"
       @selected="handleFileSelectFromDialog"
+    />
+    <ScenarioReorderDialog
+      v-if="currentIndexData && scenarioDir"
+      ref="reorderDialogRef"
+      :current-data="currentIndexData"
+      :dir-handle="scenarioDir"
+      @confirm="handleReorderConfirm"
+      @cancel="() => {}"
     />
   </div>
 </template>

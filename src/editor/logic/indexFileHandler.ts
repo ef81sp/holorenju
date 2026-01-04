@@ -84,6 +84,64 @@ const scanDifficultyDirectory = async (
   return scenarios;
 };
 
+/**
+ * 指定された順序でシナリオを並び替えたindex.jsonを生成
+ * 既存の順序を保持し、新規ファイルは末尾に追加、削除されたものは除去
+ */
+export const regenerateScenarioIndexWithOrder = async (
+  dirHandle: FileSystemDirectoryHandle,
+  currentIndexData: IndexData,
+  reorderedData: Record<string, string[]>, // { "beginner": ["id1", "id2", ...], ... }
+): Promise<void> => {
+  const indexData = cloneDefaultIndex();
+  const difficulties = ["beginner", "intermediate", "advanced"] as const;
+
+  // eslint-disable-next-line no-await-in-loop
+  for (const difficulty of difficulties) {
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      const diffDir = await dirHandle.getDirectoryHandle(difficulty, {
+        create: false,
+      });
+      // eslint-disable-next-line no-await-in-loop
+      const allScenarios = await scanDifficultyDirectory(diffDir, difficulty);
+
+      // reorderedDataの順序に従ってソート
+      const orderedIds = reorderedData[difficulty] ?? [];
+      const scenarioMap = new Map(allScenarios.map((s) => [s.id, s]));
+
+      // 指定された順序でシナリオを配置
+      const orderedScenarios: IndexScenarioEntry[] = [];
+      for (const id of orderedIds) {
+        const scenario = scenarioMap.get(id);
+        if (scenario) {
+          orderedScenarios.push(scenario);
+        }
+      }
+
+      // ファイルシステムに新規存在するがindex.jsonに載っていないものを末尾に追加
+      for (const scenario of allScenarios) {
+        if (!orderedIds.includes(scenario.id)) {
+          orderedScenarios.push(scenario);
+        }
+      }
+
+      if (orderedScenarios.length > 0) {
+        indexData.difficulties[difficulty] = {
+          label: currentIndexData.difficulties[difficulty]?.label ?? difficulty,
+          scenarios: orderedScenarios,
+        };
+      }
+    } catch {
+      // ディレクトリが存在しない場合はスキップ
+      console.warn(`難易度ディレクトリ '${difficulty}' が見つかりません`);
+    }
+  }
+
+  await saveIndexJson(dirHandle, indexData);
+  console.warn("✅ index.json を再生成しました");
+};
+
 export const regenerateScenarioIndex = async (
   dirHandle: FileSystemDirectoryHandle,
   scenario: Scenario | null,
