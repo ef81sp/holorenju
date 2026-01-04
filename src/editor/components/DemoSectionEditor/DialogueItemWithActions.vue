@@ -20,6 +20,7 @@ const emit = defineEmits<{
   remove: [];
   "move-up": [];
   "move-down": [];
+  "add-after": [];
 }>();
 
 const props = defineProps<{
@@ -93,6 +94,10 @@ const handleMoveDown = (): void => {
 
 const handleRemove = (): void => {
   emit("remove");
+};
+
+const handleAddAfter = (): void => {
+  emit("add-after");
 };
 </script>
 
@@ -237,6 +242,16 @@ const handleRemove = (): void => {
         :get-current-section="getCurrentSection"
         :update-dialogue="updateDialogue"
       />
+    </div>
+
+    <div class="action-buttons">
+      <button
+        type="button"
+        class="btn-add-after"
+        @click="handleAddAfter"
+      >
+        + 直後に追加
+      </button>
     </div>
   </div>
 </template>
@@ -419,5 +434,27 @@ textarea {
 .description-section select,
 .description-section textarea {
   min-width: 100%;
+}
+
+.action-buttons {
+  display: flex;
+  gap: var(--size-4);
+  justify-content: flex-end;
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--size-6);
+}
+
+.btn-add-after {
+  padding: var(--size-3) var(--size-6);
+  background-color: var(--color-holo-blue);
+  color: white;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: var(--size-11);
+}
+
+.btn-add-after:hover {
+  opacity: 0.9;
 }
 </style>

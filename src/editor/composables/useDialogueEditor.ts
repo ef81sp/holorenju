@@ -14,6 +14,7 @@ export type DialogueSection = DemoSection | ProblemSection;
 interface UseDialogueEditorReturn {
   dialogues: ComputedRef<DemoDialogue[]>;
   addDialogue: () => void;
+  insertDialogueAfter: (index: number) => void;
   removeDialogue: (index: number) => void;
   updateDialogue: (index: number, updates: Partial<DemoDialogue>) => void;
   moveDialogueUp: (index: number) => void;
@@ -49,6 +50,35 @@ export function useDialogueEditor(
       boardActions: [],
     };
     newDialogues.push(newDialogue);
+
+    editorStore.updateCurrentSection({
+      dialogues: newDialogues,
+    });
+  };
+
+  const insertDialogueAfter = (index: number): void => {
+    const section = getCurrentSection();
+    if (!section || index < 0 || index >= section.dialogues.length) {
+      return;
+    }
+
+    const newDialogues = [...section.dialogues];
+    const newDialogue: DemoDialogue = {
+      id: generateDialogueId(newDialogues),
+      character: "fubuki",
+      text: [],
+      emotion: 0,
+      description: {
+        text: [],
+        type: "continue",
+      },
+      boardActions: [],
+    };
+    newDialogues.splice(index + 1, 0, newDialogue);
+    // 挿入下次以降のIDを再採番
+    newDialogues.forEach((dialogue, idx) => {
+      dialogue.id = `dialogue_${idx + 1}`;
+    });
 
     editorStore.updateCurrentSection({
       dialogues: newDialogues,
@@ -130,6 +160,7 @@ export function useDialogueEditor(
   return {
     dialogues,
     addDialogue,
+    insertDialogueAfter,
     removeDialogue,
     updateDialogue,
     moveDialogueUp,

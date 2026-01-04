@@ -27,7 +27,7 @@ const updateSection = (updates: Partial<DemoSection>): void => {
 };
 
 // ダイアログ管理
-const { addDialogue, removeDialogue, updateDialogue } =
+const { addDialogue, insertDialogueAfter, removeDialogue, updateDialogue } =
   useDialogueEditor(getCurrentSection);
 
 const updateBoard = (newBoard: string[]): void => {
@@ -112,6 +112,7 @@ const updateSectionTitle = (title: string): void => {
               @move-up="editorStore.moveDialogueUp(index)"
               @move-down="editorStore.moveDialogueDown(index)"
               @remove="removeDialogue(index)"
+              @add-after="insertDialogueAfter(index)"
             />
           </div>
           <button

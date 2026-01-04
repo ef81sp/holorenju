@@ -36,7 +36,7 @@ const updateSection = (updates: Partial<ProblemSection>): void => {
 };
 
 // ダイアログ管理
-const { addDialogue, removeDialogue, updateDialogue } =
+const { addDialogue, insertDialogueAfter, removeDialogue, updateDialogue } =
   useDialogueEditor(getCurrentSection);
 
 const updateBoard = (newBoard: string[]): void => {
@@ -104,6 +104,7 @@ const updateSuccessOperator = (operator: "or" | "and"): void => {
         <DialogueListEditor
           :dialogues="currentSection.dialogues"
           @add="addDialogue"
+          @add-after="insertDialogueAfter"
           @update="updateDialogue"
           @remove="removeDialogue"
         />

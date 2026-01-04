@@ -33,20 +33,7 @@
           "text": [
             {
               "type": "text",
-              "content": "黒の制限について学んでいくよ。この前の"
-            },
-            {
-              "type": "emphasis",
-              "content": [
-                {
-                  "type": "text",
-                  "content": "五目並べ最強王"
-                }
-              ]
-            },
-            {
-              "type": "text",
-              "content": "でも採用されていたよ。"
+              "content": "黒の制限について学んでいくよ。"
             }
           ],
           "emotion": 0,
@@ -62,7 +49,45 @@
           "text": [
             {
               "type": "text",
-              "content": "紹介するのは3つ。"
+              "content": "この前の"
+            },
+            {
+              "type": "emphasis",
+              "content": [
+                {
+                  "type": "text",
+                  "content": "五目並べ最強王"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "content": "でも採用されていたものだから、肩の力を抜いていこう。"
+            }
+          ],
+          "emotion": 0,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_3",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "黒の"
+            },
+            {
+              "type": "ruby",
+              "base": "禁手",
+              "ruby": "きんて"
+            },
+            {
+              "type": "text",
+              "content": "は3つあるんだけど、そのうちのひとつ、"
             },
             {
               "type": "emphasis",
@@ -76,7 +101,23 @@
             },
             {
               "type": "text",
-              "content": "、"
+              "content": "を学ぶよ。"
+            }
+          ],
+          "emotion": 0,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_4",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "ほかに"
             },
             {
               "type": "emphasis",
@@ -104,18 +145,43 @@
             },
             {
               "type": "text",
-              "content": "だよ。"
+              "content": "があるよ。"
             }
           ],
           "emotion": 0,
           "description": {
-            "text": [],
+            "text": [
+              {
+                "type": "text",
+                "content": "三三禁: 三を同時に2つ以上作ってはいけない"
+              },
+              {
+                "type": "lineBreak"
+              },
+              {
+                "type": "lineBreak"
+              },
+              {
+                "type": "text",
+                "content": "四四禁: 四を同時に2つ以上作ってはいけない"
+              },
+              {
+                "type": "lineBreak"
+              },
+              {
+                "type": "lineBreak"
+              },
+              {
+                "type": "text",
+                "content": "長連: 6つ以上石をつなげてはいけない"
+              }
+            ],
             "type": "continue"
           },
           "boardActions": []
         },
         {
-          "id": "dialogue_3",
+          "id": "dialogue_5",
           "character": "miko",
           "text": [
             {
@@ -131,7 +197,7 @@
           "boardActions": []
         },
         {
-          "id": "dialogue_4",
+          "id": "dialogue_6",
           "character": "fubuki",
           "text": [
             {
@@ -147,7 +213,7 @@
           "boardActions": []
         },
         {
-          "id": "dialogue_5",
+          "id": "dialogue_7",
           "character": "miko",
           "text": [
             {
@@ -163,13 +229,9 @@
           "boardActions": []
         },
         {
-          "id": "dialogue_6",
+          "id": "dialogue_8",
           "character": "fubuki",
           "text": [
-            {
-              "type": "text",
-              "content": "まずは"
-            },
             {
               "type": "emphasis",
               "content": [
@@ -226,7 +288,7 @@
           ]
         },
         {
-          "id": "dialogue_7",
+          "id": "dialogue_9",
           "character": "fubuki",
           "text": [
             {
@@ -242,7 +304,7 @@
           "boardActions": []
         },
         {
-          "id": "dialogue_8",
+          "id": "dialogue_10",
           "character": "miko",
           "text": [
             {
@@ -269,7 +331,7 @@
           ]
         },
         {
-          "id": "dialogue_9",
+          "id": "dialogue_11",
           "character": "fubuki",
           "text": [
             {
@@ -312,7 +374,7 @@
           ]
         },
         {
-          "id": "dialogue_10",
+          "id": "dialogue_12",
           "character": "fubuki",
           "text": [
             {
@@ -352,7 +414,7 @@
           ]
         },
         {
-          "id": "dialogue_11",
+          "id": "dialogue_13",
           "character": "miko",
           "text": [
             {
@@ -368,7 +430,7 @@
           "boardActions": []
         },
         {
-          "id": "dialogue_12",
+          "id": "dialogue_14",
           "character": "miko",
           "text": [
             {
@@ -384,7 +446,7 @@
           "boardActions": []
         },
         {
-          "id": "dialogue_13",
+          "id": "dialogue_15",
           "character": "fubuki",
           "text": [
             {
@@ -400,7 +462,7 @@
           "boardActions": []
         },
         {
-          "id": "dialogue_14",
+          "id": "dialogue_16",
           "character": "fubuki",
           "text": [
             {
@@ -427,7 +489,7 @@
           ]
         },
         {
-          "id": "dialogue_15",
+          "id": "dialogue_17",
           "character": "fubuki",
           "text": [
             {
@@ -457,7 +519,7 @@
           ]
         },
         {
-          "id": "dialogue_16",
+          "id": "dialogue_18",
           "character": "fubuki",
           "text": [
             {
@@ -487,16 +549,12 @@
           ]
         },
         {
-          "id": "dialogue_17",
+          "id": "dialogue_19",
           "character": "fubuki",
           "text": [
             {
               "type": "text",
-              "content": "細かい例外があったりするけど、いったんこれくらいで大丈夫かな。"
-            },
-            {
-              "type": "text",
-              "content": "また詳しく説明するよ"
+              "content": "細かい例外があったりするけど、いったんこれくらいで大丈夫かな。また詳しく説明するよ。"
             }
           ],
           "emotion": 0,

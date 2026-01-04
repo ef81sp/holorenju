@@ -20,6 +20,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   add: [];
+  "add-after": [index: number];
   update: [index: number, updates: Partial<DemoDialogue>];
   remove: [index: number];
 }>();
@@ -121,6 +122,14 @@ const handleEmotionSelect = (emotionId: EmotionId): void => {
               >表情選択</span>
           </button>
           <div class="dialogue-actions-buttons">
+            <button
+              type="button"
+              class="btn-add-after"
+              title="このダイアログの直後に新しいダイアログを追加"
+              @click.prevent="emit('add-after', index)"
+            >
+              + 直後
+            </button>
             <button
               type="button"
               class="btn-remove-small"
@@ -334,6 +343,21 @@ const handleEmotionSelect = (emotionId: EmotionId): void => {
 
 .btn-remove-small:hover {
   opacity: 0.8;
+}
+
+.btn-add-after {
+  padding: var(--size-2) var(--size-5);
+  background-color: var(--color-holo-blue);
+  color: white;
+  border: none;
+  cursor: pointer;
+  font-size: var(--size-9);
+  border-radius: 3px;
+  transition: opacity 0.2s;
+}
+
+.btn-add-after:hover {
+  opacity: 0.9;
 }
 
 .field-label {
