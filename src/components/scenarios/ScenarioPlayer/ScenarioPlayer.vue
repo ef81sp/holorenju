@@ -272,7 +272,6 @@ const handleGoToList = (): void => {
   grid-column: 3;
   grid-row: 1 / 3;
   overflow-y: auto;
-  padding-inline: var(--size-14);
 }
 
 .dialog-section-slot {
