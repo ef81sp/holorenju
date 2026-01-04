@@ -19,6 +19,24 @@ export function astToText(nodes: TextNode[]): string {
       if (node.type === "emphasis") {
         return `**${node.content}**`;
       }
+      if (node.type === "lineBreak") {
+        return "\n";
+      }
+      if (node.type === "list") {
+        return node.items
+          .map((item) => {
+            const content = item
+              .map((n) => {
+                if (n.type === "text") {return n.content;}
+                if (n.type === "ruby") {return `{${n.base}|${n.ruby}}`;}
+                if (n.type === "emphasis") {return `**${n.content}**`;}
+                return "";
+              })
+              .join("");
+            return `- ${content}`;
+          })
+          .join("\n");
+      }
       return "";
     })
     .join("");

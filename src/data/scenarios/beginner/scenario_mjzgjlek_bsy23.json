@@ -183,11 +183,6 @@
           "boardActions": [
             {
               "type": "setBoard",
-              "position": {
-                "row": 0,
-                "col": 0
-              },
-              "color": "black",
               "board": [
                 "---------------",
                 "---------------",
@@ -204,14 +199,7 @@
                 "---------------",
                 "---------------",
                 "---------------"
-              ],
-              "positions": [
-                {
-                  "row": 7,
-                  "col": 7
-                }
-              ],
-              "markType": "circle"
+              ]
             }
           ]
         },
@@ -248,12 +236,6 @@
           "boardActions": [
             {
               "type": "mark",
-              "position": {
-                "row": 0,
-                "col": 0
-              },
-              "color": "black",
-              "highlight": false,
               "positions": [
                 {
                   "row": 7,
@@ -281,12 +263,6 @@
           "boardActions": [
             {
               "type": "line",
-              "position": {
-                "row": 0,
-                "col": 0
-              },
-              "color": "black",
-              "highlight": false,
               "fromPosition": {
                 "row": 7,
                 "col": 5
@@ -300,12 +276,6 @@
             },
             {
               "type": "line",
-              "position": {
-                "row": 0,
-                "col": 0
-              },
-              "color": "black",
-              "highlight": false,
               "fromPosition": {
                 "row": 7,
                 "col": 7
@@ -335,39 +305,10 @@
           },
           "boardActions": [
             {
-              "type": "resetAll",
-              "position": {
-                "row": 0,
-                "col": 0
-              },
-              "color": "black",
-              "highlight": false,
-              "board": [
-                "---------------",
-                "---------------",
-                "---------------",
-                "---------------",
-                "---------------",
-                "---------------",
-                "---------------",
-                "---------------",
-                "---------------",
-                "---------------",
-                "---------------",
-                "---------------",
-                "---------------",
-                "---------------",
-                "---------------"
-              ]
+              "type": "resetAll"
             },
             {
               "type": "setBoard",
-              "position": {
-                "row": 0,
-                "col": 0
-              },
-              "color": "black",
-              "highlight": false,
               "board": [
                 "---------------",
                 "---------------",
@@ -453,12 +394,6 @@
           "boardActions": [
             {
               "type": "mark",
-              "position": {
-                "row": 0,
-                "col": 0
-              },
-              "color": "black",
-              "highlight": false,
               "positions": [
                 {
                   "row": 8,
@@ -486,12 +421,6 @@
           "boardActions": [
             {
               "type": "line",
-              "position": {
-                "row": 0,
-                "col": 0
-              },
-              "color": "black",
-              "highlight": false,
               "fromPosition": {
                 "row": 5,
                 "col": 5
@@ -522,12 +451,6 @@
           "boardActions": [
             {
               "type": "line",
-              "position": {
-                "row": 0,
-                "col": 0
-              },
-              "color": "black",
-              "highlight": false,
               "fromPosition": {
                 "row": 8,
                 "col": 5
@@ -555,6 +478,15 @@
             {
               "type": "text",
               "content": "また詳しく説明するよ"
+            },
+            {
+              "type": "lineBreak"
+            },
+            {
+              "type": "lineBreak"
+            },
+            {
+              "type": "lineBreak"
             }
           ],
           "emotion": 0,
@@ -569,9 +501,13 @@
               },
               {
                 "type": "lineBreak"
+              },
+              {
+                "type": "text",
+                "content": "同時に五ができる場合は三三禁の対象にならない"
               }
             ],
-            "type": "continue"
+            "type": "new"
           },
           "boardActions": []
         }
