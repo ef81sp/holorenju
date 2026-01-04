@@ -56,7 +56,7 @@ const handleNextOrComplete = (): void => {
         class="next-button"
         @click="handleNextOrComplete"
       >
-        {{ isLastSection ? "シナリオ完了" : "次のセクションへ" }}
+        {{ isLastSection ? "シナリオ完了！" : "次に進む" }}
       </button>
     </div>
   </div>
@@ -124,7 +124,7 @@ const handleNextOrComplete = (): void => {
   cursor: pointer;
   transition: all 0.2s;
   text-align: center;
-  background: var(--color-holo-blue);
+  background: var(--color-holo-cyan);
   color: var(--color-text-primary);
 }
 
@@ -134,25 +134,38 @@ const handleNextOrComplete = (): void => {
 }
 
 .answer-button:not(:disabled):hover {
-  background: #3b6eb3;
-  transform: translateY(-2px);
+  background: var(--color-holo-blue);
+  color: white;
 }
 
 .next-button {
   padding: var(--size-12) var(--size-20);
-  border: none;
+  border: 2px solid transparent;
   border-radius: 8px;
   font-size: var(--size-14);
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
   text-align: center;
-  background: var(--color-holo-purple);
+  background: var(--color-holo-cyan);
   color: var(--color-text-primary);
+  animation: shimmer 2s ease-in-out infinite;
+  box-shadow: 0 0 0 0 rgba(95, 222, 236, 0.7);
 }
 
 .next-button:hover {
-  background: #5e3f7a;
-  transform: translateY(-2px);
+  background: var(--color-holo-blue);
+  color: white;
+}
+
+@keyframes shimmer {
+  0%, 100% {
+    border-color: transparent;
+    box-shadow: 0 0 0 0 rgba(95, 222, 236, 0.7);
+  }
+  50% {
+    border-color: var(--color-holo-blue);
+    box-shadow: 0 0 var(--size-16) 0 rgba(95, 222, 236, 0.7);
+  }
 }
 </style>
