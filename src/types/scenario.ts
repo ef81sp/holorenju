@@ -35,6 +35,10 @@ interface DemoDialogue {
   character: CharacterType;
   text: TextNode[];
   emotion: EmotionId; // 0-39の連番ID
+  description?: {
+    text: TextNode[];
+    type: "new" | "continue";
+  };
   boardActions: BoardAction[];
 }
 

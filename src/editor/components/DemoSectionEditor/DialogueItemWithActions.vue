@@ -6,7 +6,11 @@ import CharacterSprite from "@/components/character/CharacterSprite.vue";
 import EmotionPickerDialog from "../EmotionPickerDialog.vue";
 import BoardActionsList from "./BoardActionsList.vue";
 import { astToText } from "@/editor/logic/textUtils";
-import { parseDialogueText } from "@/logic/textParser";
+import {
+  parseDialogueText,
+  stringifyText,
+  parseText,
+} from "@/logic/textParser";
 
 const CHARACTERS: CharacterType[] = ["fubuki", "miko", "narration"];
 
@@ -27,6 +31,20 @@ const props = defineProps<{
 }>();
 
 const dialogueText = ref<string>(astToText(props.dialogue.text));
+
+const descriptionText = computed(() =>
+  stringifyText(props.dialogue.description?.text || []),
+);
+
+const handleDescriptionChange = (e: Event): void => {
+  const text = (e.target as HTMLTextAreaElement).value;
+  props.updateDialogue(props.dialogueIndex, {
+    description: {
+      text: parseText(text),
+      type: props.dialogue.description?.type || "continue",
+    },
+  });
+};
 
 watch(
   () => props.dialogue.text,
@@ -175,6 +193,41 @@ const handleRemove = (): void => {
           </label>
         </div>
       </div>
+    </div>
+
+    <div class="description-section">
+      <label class="field">
+        <span>説明</span>
+        <select
+          :value="dialogue.description?.type || 'continue'"
+          @change="
+            (e) => {
+              const type = (e.target as HTMLSelectElement).value as
+                | 'new'
+                | 'continue';
+              props.updateDialogue(props.dialogueIndex, {
+                description: {
+                  ...dialogue.description,
+                  text: dialogue.description?.text || [],
+                  type,
+                },
+              });
+            }
+          "
+        >
+          <option value="new">新規表示（前の説明をクリア）</option>
+          <option value="continue">継続表示（前の説明を保持）</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>説明テキスト</span>
+        <textarea
+          :value="descriptionText"
+          placeholder="説明を入力（ルビ: {漢字|かんじ}, 強調: **太字**, リスト: - 項目, 改行: \\n）"
+          rows="3"
+          @change="handleDescriptionChange"
+        />
+      </label>
     </div>
 
     <div class="board-actions-section">
@@ -346,5 +399,25 @@ textarea {
 
 .emotion-selector-button:hover {
   opacity: 0.9;
+}
+
+.description-section {
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--size-12);
+  margin-top: var(--size-12);
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-8);
+}
+
+.description-section .field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-4);
+}
+
+.description-section select,
+.description-section textarea {
+  min-width: 100%;
 }
 </style>

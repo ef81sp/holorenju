@@ -120,7 +120,7 @@ export function stringifyText(nodes: TextNode[]): string {
   const lines: string[] = [];
   let currentLine = "";
 
-  const flushLine = () => {
+  const flushLine = (): void => {
     lines.push(currentLine);
     currentLine = "";
   };
@@ -142,7 +142,7 @@ export function stringifyText(nodes: TextNode[]): string {
       return;
     }
 
-    // inline node
+    // Inline node
     currentLine += stringifyInline([node]);
   });
 
@@ -159,9 +159,15 @@ export function stringifyText(nodes: TextNode[]): string {
 function stringifyInline(nodes: InlineTextNode[]): string {
   return nodes
     .map((node) => {
-      if (node.type === "text") return node.content;
-      if (node.type === "emphasis") return `**${node.content}**`;
-      if (node.type === "ruby") return `{${node.base}|${node.ruby}}`;
+      if (node.type === "text") {
+        return node.content;
+      }
+      if (node.type === "emphasis") {
+        return `**${node.content}**`;
+      }
+      if (node.type === "ruby") {
+        return `{${node.base}|${node.ruby}}`;
+      }
       return "";
     })
     .join("");

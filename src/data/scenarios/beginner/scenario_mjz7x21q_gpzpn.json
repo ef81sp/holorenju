@@ -160,6 +160,22 @@
             }
           ],
           "emotion": 0,
+          "description": {
+            "text": [
+              {
+                "type": "text",
+                "content": "説明"
+              },
+              {
+                "type": "lineBreak"
+              },
+              {
+                "type": "emphasis",
+                "content": "太字説明"
+              }
+            ],
+            "type": "new"
+          },
           "boardActions": []
         }
       ]

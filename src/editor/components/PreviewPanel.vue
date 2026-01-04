@@ -229,10 +229,18 @@ const currentBoard = computed(() => {
           <p><strong>説明:</strong></p>
           <div class="description-preview">
             <RichText
-              v-if="previewContent.description && previewContent.description.length > 0"
+              v-if="
+                previewContent.description &&
+                previewContent.description.length > 0
+              "
               :nodes="previewContent.description"
             />
-            <p v-else style="margin: 0">(説明なし)</p>
+            <p
+              v-else
+              style="margin: 0"
+            >
+              (説明なし)
+            </p>
           </div>
           <p>
             <strong>成功条件数:</strong> {{ previewContent.conditionCount }}

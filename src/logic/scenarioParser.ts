@@ -20,6 +20,7 @@ import type {
   DialogueLine,
 } from "../types/scenario";
 import type { TextNode } from "../types/text";
+
 import { parseText } from "./textParser";
 
 // ===== パース・バリデーション =====
@@ -221,11 +222,33 @@ function validateDialogue(data: unknown, path: string): DemoDialogue {
       )
     : [];
 
+  // Description: オプショナル、type未指定時は"continue"
+  let description: DemoDialogue["description"] | undefined = undefined;
+  if (data.description !== undefined) {
+    if (!isObject(data.description)) {
+      throw new Error(`${path}.description must be an object`);
+    }
+    const descriptionText = validateTextNodeArray(
+      data.description,
+      "text",
+      `${path}.description.text`,
+    );
+    const descriptionType =
+      data.description.type === "new" || data.description.type === "continue"
+        ? data.description.type
+        : "continue";
+    description = {
+      text: descriptionText,
+      type: descriptionType,
+    };
+  }
+
   return {
     id,
     character,
     text,
     emotion: emotion as unknown as EmotionId,
+    description,
     boardActions,
   };
 }
@@ -554,7 +577,9 @@ function validateTextNodeArray(
     throw new Error(`${path} must be an array`);
   }
 
-  return value.map((item, index) => validateTextNode(item, `${path}[${index}]`));
+  return value.map((item, index) =>
+    validateTextNode(item, `${path}[${index}]`),
+  );
 }
 
 function validateTextNode(item: unknown, path: string): TextNode {
@@ -589,7 +614,7 @@ function validateTextNode(item: unknown, path: string): TextNode {
     return { type: "lineBreak" } as TextNode;
   }
 
-  // list
+  // List
   const itemsRaw = item.items;
   if (!Array.isArray(itemsRaw)) {
     throw new Error(`${path}.items must be an array`);
@@ -640,7 +665,9 @@ function validateTextContent(
   }
 
   if (Array.isArray(value)) {
-    return value.map((item, index) => validateTextNode(item, `${path}[${index}]`));
+    return value.map((item, index) =>
+      validateTextNode(item, `${path}[${index}]`),
+    );
   }
 
   throw new Error(`${path} must be string or TextNode[]`);
