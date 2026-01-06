@@ -10,6 +10,12 @@
           "path": "beginner/scenario_mjviwg6m_jv8xm.json"
         },
         {
+          "id": "scenario_mjzr29tu_hh97s",
+          "title": "五を作るには",
+          "description": "勝利条件である五の一歩手前の状態を学びます。",
+          "path": "beginner/scenario_mjzr29tu_hh97s.json"
+        },
+        {
           "id": "scenario_mjx746jb_0azj3",
           "title": "問題テスト",
           "description": "テスト用問題です",

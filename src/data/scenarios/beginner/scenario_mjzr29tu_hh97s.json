@@ -122,8 +122,1053 @@
             "type": "continue"
           },
           "boardActions": []
+        },
+        {
+          "id": "dialogue_7",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "おう……？"
+            }
+          ],
+          "emotion": 4,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_8",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "四を作ればいいよね"
+            }
+          ],
+          "emotion": 0,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_9",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "なんだそんなことか"
+            }
+          ],
+          "emotion": 10,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_10",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "いや大事なことなんだって。"
+            },
+            {
+              "type": "lineBreak"
+            },
+            {
+              "type": "text",
+              "content": "じゃあ四を作るには？"
+            }
+          ],
+          "emotion": 0,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_11",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "三を作る"
+            }
+          ],
+          "emotion": 0,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_12",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "そうだね。"
+            },
+            {
+              "type": "lineBreak"
+            },
+            {
+              "type": "text",
+              "content": "ところで、この流れを相手が妨害してくるわけだ。"
+            }
+          ],
+          "emotion": 0,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_13",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "うん。三は止めないと負けるって習った。"
+            },
+            {
+              "type": "lineBreak"
+            },
+            {
+              "type": "text",
+              "content": "みこ知ってゆよ"
+            }
+          ],
+          "emotion": 0,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_14",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "そう、自由には作らせてもらえないんだ。"
+            },
+            {
+              "type": "lineBreak"
+            },
+            {
+              "type": "text",
+              "content": "そこで、"
+            },
+            {
+              "type": "emphasis",
+              "content": [
+                {
+                  "type": "text",
+                  "content": "五を絶対に作れる状況"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "content": "を目指すわけだ。"
+            }
+          ],
+          "emotion": 0,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_15",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "そんなことが……？"
+            }
+          ],
+          "emotion": 5,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
+          "boardActions": []
         }
       ]
+    },
+    {
+      "id": "section_2",
+      "type": "demo",
+      "title": "棒四を作る",
+      "initialBoard": [
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "-----xxxx------",
+        "---------------",
+        "----oxxxx------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------"
+      ],
+      "dialogues": [
+        {
+          "id": "dialogue_1",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "四には2種類ある。"
+            },
+            {
+              "type": "lineBreak"
+            },
+            {
+              "type": "text",
+              "content": "両端が空いている四と、片方が止められている四。"
+            }
+          ],
+          "emotion": 0,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_2",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "特に、両端が空いている四のことを"
+            },
+            {
+              "type": "emphasis",
+              "content": [
+                {
+                  "type": "ruby",
+                  "base": "棒四",
+                  "ruby": "ぼうし"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "content": "と呼ぶよ。"
+            }
+          ],
+          "emotion": 0,
+          "description": {
+            "text": [
+              {
+                "type": "text",
+                "content": "棒四: 両端が空いている四。"
+              },
+              {
+                "type": "ruby",
+                "base": "達四",
+                "ruby": "たっし"
+              },
+              {
+                "type": "text",
+                "content": "と呼ぶこともある"
+              }
+            ],
+            "type": "continue"
+          },
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_3",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "ぼうし"
+            }
+          ],
+          "emotion": 4,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_4",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "三を止めないと負ける。それは棒四ができちゃうから。"
+            },
+            {
+              "type": "lineBreak"
+            },
+            {
+              "type": "text",
+              "content": "棒四は"
+            },
+            {
+              "type": "emphasis",
+              "content": [
+                {
+                  "type": "text",
+                  "content": "絶対に止められない"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "content": "んだ。"
+            }
+          ],
+          "emotion": 0,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
+          "boardActions": [
+            {
+              "type": "resetAll"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_5",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "ここに三があるじゃろ"
+            }
+          ],
+          "emotion": 0,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
+          "boardActions": [
+            {
+              "type": "setBoard",
+              "board": [
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "------xxx------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "dialogue_6",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "あい"
+            }
+          ],
+          "emotion": 2,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_7",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "見逃すとそのまま負けちゃうわけだけど、きちんと止められる場合を考えよう。"
+            }
+          ],
+          "emotion": 0,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
+          "boardActions": [
+            {
+              "type": "place",
+              "position": {
+                "row": 7,
+                "col": 5
+              },
+              "color": "white"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_8",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "三を止められると、次"
+            },
+            {
+              "type": "ruby",
+              "base": "四伸び",
+              "ruby": "しのび"
+            },
+            {
+              "type": "text",
+              "content": "しても棒四にはならない。"
+            },
+            {
+              "type": "lineBreak"
+            },
+            {
+              "type": "text",
+              "content": "止められて、五にはならないよね。"
+            }
+          ],
+          "emotion": 0,
+          "description": {
+            "text": [
+              {
+                "type": "ruby",
+                "base": "四伸び",
+                "ruby": "しのび"
+              },
+              {
+                "type": "text",
+                "content": ": 三に石を追加して四を作ることを特別にこう言う"
+              }
+            ],
+            "type": "new"
+          },
+          "boardActions": [
+            {
+              "type": "place",
+              "position": {
+                "row": 7,
+                "col": 9
+              },
+              "color": "black"
+            },
+            {
+              "type": "place",
+              "position": {
+                "row": 7,
+                "col": 10
+              },
+              "color": "white"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_9",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "じゃあ五はつくれないじゃん！"
+            }
+          ],
+          "emotion": 9,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_10",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "そうなんだ。"
+            },
+            {
+              "type": "lineBreak"
+            },
+            {
+              "type": "text",
+              "content": "だから、"
+            },
+            {
+              "type": "emphasis",
+              "content": [
+                {
+                  "type": "text",
+                  "content": "三を見逃してもらう状況"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "content": "を作らないといけないんだ。"
+            }
+          ],
+          "emotion": 0,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_11",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "こんがらがってきた……"
+            }
+          ],
+          "emotion": 13,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
+          "boardActions": []
+        }
+      ]
+    },
+    {
+      "id": "section_3",
+      "type": "demo",
+      "title": "四三を作る",
+      "initialBoard": [
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------"
+      ],
+      "dialogues": [
+        {
+          "id": "dialogue_1",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "そんなこといったってどうすんのさ！"
+            }
+          ],
+          "emotion": 18,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_2",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "ふっふっふ。ズバリ"
+            },
+            {
+              "type": "emphasis",
+              "content": [
+                {
+                  "type": "ruby",
+                  "base": "四三",
+                  "ruby": "しさん"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "content": "を作ればいいのさ。"
+            }
+          ],
+          "emotion": 0,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_3",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "しさん？"
+            }
+          ],
+          "emotion": 0,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_4",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "そう。四と三を同時に作る。"
+            },
+            {
+              "type": "lineBreak"
+            },
+            {
+              "type": "text",
+              "content": "じゃあこんな盤面があるとしよう。みこさん白だ。どうする？"
+            }
+          ],
+          "emotion": 0,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
+          "boardActions": [
+            {
+              "type": "setBoard",
+              "board": [
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "-------x-------",
+                "----xxx--------",
+                "-------x-------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "dialogue_5",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "三をとめます"
+            }
+          ],
+          "emotion": 1,
+          "description": {
+            "text": [
+              {
+                "type": "text",
+                "content": "実際にこの局面があった場合、反対を止めないと負けてしまう。"
+              },
+              {
+                "type": "lineBreak"
+              },
+              {
+                "type": "text",
+                "content": "今回は説明のためにあえて打っている"
+              }
+            ],
+            "type": "continue"
+          },
+          "boardActions": [
+            {
+              "type": "place",
+              "position": {
+                "row": 7,
+                "col": 3
+              },
+              "color": "white"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_6",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "うんうん、いいねぇ。"
+            },
+            {
+              "type": "lineBreak"
+            },
+            {
+              "type": "text",
+              "content": "じゃあここに打つよ。みこさんどうする？"
+            }
+          ],
+          "emotion": 0,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
+          "boardActions": [
+            {
+              "type": "place",
+              "position": {
+                "row": 7,
+                "col": 7
+              },
+              "color": "black"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_7",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "四を止める！"
+            }
+          ],
+          "emotion": 17,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
+          "boardActions": [
+            {
+              "type": "place",
+              "position": {
+                "row": 7,
+                "col": 8
+              },
+              "color": "white"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_8",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "そうだね。"
+            },
+            {
+              "type": "lineBreak"
+            },
+            {
+              "type": "text",
+              "content": "ところで、さっきの黒番で、四と三を同時に作っていたんだ。"
+            }
+          ],
+          "emotion": 1,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
+          "boardActions": [
+            {
+              "type": "mark",
+              "positions": [
+                {
+                  "row": 7,
+                  "col": 7
+                }
+              ],
+              "markType": "circle"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_9",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "白は四を止めないと即座に負けちゃうから、"
+            },
+            {
+              "type": "lineBreak"
+            },
+            {
+              "type": "emphasis",
+              "content": [
+                {
+                  "type": "text",
+                  "content": "三を見逃さないといけない"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "content": "んだ"
+            }
+          ],
+          "emotion": 0,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_10",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "うええ"
+            }
+          ],
+          "emotion": 30,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_11",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "次の黒番は棒四を作れる。これで白は止めても間に合わないから、黒の勝ち。"
+            }
+          ],
+          "emotion": 0,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
+          "boardActions": [
+            {
+              "type": "place",
+              "position": {
+                "row": 5,
+                "col": 7
+              },
+              "color": "black"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_12",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "五目並べは、この"
+            },
+            {
+              "type": "emphasis",
+              "content": [
+                {
+                  "type": "text",
+                  "content": "四三"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "content": "が作れれば勝ちが確定するんだ。"
+            }
+          ],
+          "emotion": 0,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
+          "boardActions": [
+            {
+              "type": "resetAll"
+            },
+            {
+              "type": "setBoard",
+              "board": [
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "-------x-------",
+                "---oxxxx-------",
+                "-------x-------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "dialogue_13",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "なるほどー"
+            }
+          ],
+          "emotion": 4,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_14",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "じゃあ四三を作るにはどうすればいいの？"
+            },
+            {
+              "type": "lineBreak"
+            },
+            {
+              "type": "text",
+              "content": "っていうのは、別のセクションでやっていくよ。"
+            }
+          ],
+          "emotion": 0,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
+          "boardActions": []
+        }
+      ]
+    },
+    {
+      "id": "section_4",
+      "type": "problem",
+      "title": "練習問題1",
+      "initialBoard": [
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "------ox-------",
+        "-----oxx-x-----",
+        "----xooox------",
+        "-----o-o-------",
+        "--------x------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------"
+      ],
+      "description": [
+        {
+          "type": "text",
+          "content": "黒番です。四三を作りましょう。"
+        }
+      ],
+      "dialogues": [
+        {
+          "id": "dialogue_1",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "とけるかなー？"
+            }
+          ],
+          "emotion": 0,
+          "description": {
+            "text": [],
+            "type": "continue"
+          },
+          "boardActions": []
+        }
+      ],
+      "successOperator": "or",
+      "successConditions": [
+        {
+          "type": "position",
+          "positions": [
+            {
+              "row": 7,
+              "col": 8
+            }
+          ],
+          "color": "black"
+        }
+      ],
+      "feedback": {
+        "success": [
+          {
+            "character": "fubuki",
+            "text": [
+              {
+                "type": "text",
+                "content": "ないすー！！"
+              }
+            ],
+            "emotion": 37
+          }
+        ],
+        "failure": [
+          {
+            "character": "miko",
+            "text": [
+              {
+                "type": "text",
+                "content": "おおお……"
+              }
+            ],
+            "emotion": 15
+          }
+        ]
+      }
     }
   ]
 }
