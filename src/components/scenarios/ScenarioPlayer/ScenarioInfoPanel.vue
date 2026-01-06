@@ -107,6 +107,8 @@ const handleNextOrComplete = (): void => {
   border-radius: 8px 8px 0 0;
   overflow-y: auto;
   box-shadow: none;
+  font-size: var(--size-16);
+  word-break: auto-phrase;
 }
 
 .controls {
