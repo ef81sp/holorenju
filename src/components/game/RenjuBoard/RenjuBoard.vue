@@ -326,7 +326,7 @@ onBeforeUnmount(() => {
               layout.positionToPixels(line.toPosition.row, line.toPosition.col)
                 .y,
             ],
-            stroke: '#FF0000',
+            stroke: '#37abdf',
             strokeWidth: 3,
             dash: line.style === 'dashed' ? [10, 5] : undefined,
             opacity: line.shouldAnimate ? 0 : 1,
@@ -364,8 +364,9 @@ onBeforeUnmount(() => {
               :config="{
                 x: layout.positionToPixels(pos.row, pos.col).x,
                 y: layout.positionToPixels(pos.row, pos.col).y,
-                radius: layout.STONE_RADIUS.value * 0.7,
-                stroke: '#FF0000',
+                radius: layout.STONE_RADIUS.value,
+                stroke: '#37abdf',
+                fill: 'rgba(95, 222, 236, 0.3)',
                 strokeWidth: 3,
               }"
             />
@@ -383,7 +384,7 @@ onBeforeUnmount(() => {
                     layout.positionToPixels(pos.row, pos.col).y +
                       layout.STONE_RADIUS.value * 0.5,
                   ],
-                  stroke: '#FF0000',
+                  stroke: '#37abdf',
                   strokeWidth: 3,
                 }"
               />
@@ -399,7 +400,7 @@ onBeforeUnmount(() => {
                     layout.positionToPixels(pos.row, pos.col).y +
                       layout.STONE_RADIUS.value * 0.5,
                   ],
-                  stroke: '#FF0000',
+                  stroke: '#37abdf',
                   strokeWidth: 3,
                 }"
               />
@@ -416,7 +417,7 @@ onBeforeUnmount(() => {
                   layout.positionToPixels(pos.row, pos.col).y +
                     layout.STONE_RADIUS.value * 0.8,
                 ],
-                stroke: '#FF0000',
+                stroke: '#37abdf',
                 strokeWidth: 3,
                 pointerLength: 10,
                 pointerWidth: 10,
