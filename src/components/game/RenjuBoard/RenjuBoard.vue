@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { BoardState, Position, StoneColor } from "@/types/game";
 import { computed, onMounted, onBeforeUnmount } from "vue";
-import { useBoardStore } from "@/stores/boardStore";
+import { useBoardStore, type Mark, type Line } from "@/stores/boardStore";
 import { useRenjuBoardLayout } from "./composables/useRenjuBoardLayout";
 import { useRenjuBoardInteraction } from "./composables/useRenjuBoardInteraction";
 import { useRenjuBoardAnimation } from "./composables/useRenjuBoardAnimation";
@@ -11,19 +11,6 @@ import {
   STAR_POINTS,
 } from "./logic/boardRenderUtils";
 
-// Mark/Line types
-interface BoardMark {
-  positions: Position[];
-  markType: "circle" | "cross" | "arrow";
-  label?: string;
-}
-
-interface BoardLine {
-  fromPosition: Position;
-  toPosition: Position;
-  style?: "solid" | "dashed";
-}
-
 // Props
 interface Props {
   boardState?: BoardState;
@@ -31,9 +18,6 @@ interface Props {
   stageSize?: number;
   allowOverwrite?: boolean;
   cursorPosition?: Position;
-  marks?: BoardMark[];
-  lines?: BoardLine[];
-  dialogueIndex?: number; // ダイアログインデックス（Mark/Line表示用）
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -43,9 +27,6 @@ const props = withDefaults(defineProps<Props>(), {
   stageSize: 640,
   allowOverwrite: false,
   cursorPosition: undefined,
-  marks: () => [],
-  lines: () => [],
-  dialogueIndex: 0,
 });
 
 // Emits
@@ -109,6 +90,29 @@ const placedStones = computed<PlacedStone[]>(() => {
 // シナリオ用の石（boardStore.stonesから）
 const scenarioStones = computed(() => boardStore.stones);
 
+// シナリオ用のマーク・ライン（boardStoreから）
+const scenarioMarks = computed(() => boardStore.marks);
+const scenarioLines = computed(() => boardStore.lines);
+
+// マークの中心位置を計算（スケールアニメーションの原点として使用）
+const getMarkCenter = (mark: Mark): { x: number; y: number } => {
+  if (mark.positions.length === 0) {
+    return { x: 0, y: 0 };
+  }
+  const sumX = mark.positions.reduce(
+    (sum, pos) => sum + layout.positionToPixels(pos.row, pos.col).x,
+    0,
+  );
+  const sumY = mark.positions.reduce(
+    (sum, pos) => sum + layout.positionToPixels(pos.row, pos.col).y,
+    0,
+  );
+  return {
+    x: sumX / mark.positions.length,
+    y: sumY / mark.positions.length,
+  };
+};
+
 // Stage configuration
 const stageConfig = computed(() => ({
   width: layout.STAGE_WIDTH.value,
@@ -142,6 +146,16 @@ onMounted(() => {
     await animation.animateStone(position);
   });
 
+  // シナリオ用: マーク追加時のアニメーションコールバック
+  boardStore.setOnMarkAddedCallback(async (mark: Mark) => {
+    await animation.animateMark(mark);
+  });
+
+  // シナリオ用: ライン追加時のアニメーションコールバック
+  boardStore.setOnLineAddedCallback(async (line: Line) => {
+    await animation.animateLine(line);
+  });
+
   // アニメーションキャンセルコールバック
   boardStore.setOnAnimationCancelCallback(() => {
     animation.finishAllAnimations();
@@ -150,6 +164,8 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   boardStore.setOnStoneAddedCallback(null);
+  boardStore.setOnMarkAddedCallback(null);
+  boardStore.setOnLineAddedCallback(null);
   boardStore.setOnAnimationCancelCallback(null);
 });
 </script>
@@ -286,8 +302,15 @@ onBeforeUnmount(() => {
 
         <!-- Lines -->
         <v-line
-          v-for="(line, index) in props.lines"
-          :key="`line-${props.dialogueIndex}-${index}`"
+          v-for="line in scenarioLines"
+          :key="line.id"
+          :ref="
+            (el: unknown) => {
+              if (el) {
+                animation.lineRefs[line.id] = el;
+              }
+            }
+          "
           :config="{
             points: [
               layout.positionToPixels(
@@ -306,17 +329,34 @@ onBeforeUnmount(() => {
             stroke: '#FF0000',
             strokeWidth: 3,
             dash: line.style === 'dashed' ? [10, 5] : undefined,
+            opacity: line.shouldAnimate ? 0 : 1,
           }"
         />
 
         <!-- Marks -->
-        <template
-          v-for="(mark, markIndex) in props.marks"
-          :key="`mark-${markIndex}`"
+        <v-group
+          v-for="mark in scenarioMarks"
+          :key="mark.id"
+          :ref="
+            (el: unknown) => {
+              if (el) {
+                animation.markRefs[mark.id] = el;
+              }
+            }
+          "
+          :config="{
+            x: getMarkCenter(mark).x,
+            y: getMarkCenter(mark).y,
+            offsetX: getMarkCenter(mark).x,
+            offsetY: getMarkCenter(mark).y,
+            opacity: mark.shouldAnimate ? 0 : 1,
+            scaleX: mark.shouldAnimate ? 0.6 : 1,
+            scaleY: mark.shouldAnimate ? 0.6 : 1,
+          }"
         >
           <template
             v-for="(pos, posIndex) in mark.positions"
-            :key="`mark-${markIndex}-pos-${posIndex}`"
+            :key="`mark-${mark.id}-pos-${posIndex}`"
           >
             <!-- Circle mark -->
             <v-circle
@@ -385,7 +425,7 @@ onBeforeUnmount(() => {
               }"
             />
           </template>
-        </template>
+        </v-group>
       </v-layer>
     </v-stage>
   </div>

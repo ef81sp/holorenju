@@ -15,7 +15,7 @@ import { useCutinDisplay } from "./composables/useCutinDisplay";
 import { useGameStore } from "@/stores/gameStore";
 import { useDialogStore } from "@/stores/dialogStore";
 
-import type { ProblemSection, DemoSection } from "@/types/scenario";
+import type { ProblemSection } from "@/types/scenario";
 import type { Position } from "@/types/game";
 import type { TextNode } from "@/types/text";
 
@@ -217,89 +217,6 @@ const handleNextDialogue = (): void => {
 const handleGoToList = (): void => {
   scenarioNav.completeScenario();
 };
-
-// Mark/Line アクション表示用
-const currentMarks = computed(() => {
-  const section = scenarioNav.currentSection.value;
-  if (!section || section.type !== "demo") {
-    return [];
-  }
-
-  const marks: {
-    positions: { row: number; col: number }[];
-    markType: "circle" | "cross" | "arrow";
-    label?: string;
-  }[] = [];
-
-  const demoSection = section as DemoSection;
-  const sectionStartIndex = scenarioNav.allDialogues.value.findIndex(
-    (mapping) => mapping.sectionIndex === scenarioNav.currentSectionIndex.value,
-  );
-  const dialogueIndexInSection =
-    scenarioNav.currentDialogueIndex.value - sectionStartIndex;
-
-  // 現在のダイアログまでのアクションを適用
-  for (let i = 0; i <= dialogueIndexInSection; i++) {
-    const dialogue = demoSection.dialogues[i];
-    if (!dialogue) {
-      break;
-    }
-    for (const action of dialogue.boardActions) {
-      if (action.type === "resetAll") {
-        marks.length = 0;
-      } else if (action.type === "mark") {
-        marks.push({
-          positions: action.positions,
-          markType: action.markType,
-          label: action.label,
-        });
-      }
-    }
-  }
-
-  return marks;
-});
-
-const currentLines = computed(() => {
-  const section = scenarioNav.currentSection.value;
-  if (!section || section.type !== "demo") {
-    return [];
-  }
-
-  const lines: {
-    fromPosition: { row: number; col: number };
-    toPosition: { row: number; col: number };
-    style?: "solid" | "dashed";
-  }[] = [];
-
-  const demoSection = section as DemoSection;
-  const sectionStartIndex = scenarioNav.allDialogues.value.findIndex(
-    (mapping) => mapping.sectionIndex === scenarioNav.currentSectionIndex.value,
-  );
-  const dialogueIndexInSection =
-    scenarioNav.currentDialogueIndex.value - sectionStartIndex;
-
-  // 現在のダイアログまでのアクションを適用
-  for (let i = 0; i <= dialogueIndexInSection; i++) {
-    const dialogue = demoSection.dialogues[i];
-    if (!dialogue) {
-      break;
-    }
-    for (const action of dialogue.boardActions) {
-      if (action.type === "resetAll") {
-        lines.length = 0;
-      } else if (action.type === "line" && action.action === "draw") {
-        lines.push({
-          fromPosition: action.fromPosition,
-          toPosition: action.toPosition,
-          style: action.style,
-        });
-      }
-    }
-  }
-
-  return lines;
-});
 </script>
 
 <template>
@@ -331,9 +248,6 @@ const currentLines = computed(() => {
         "
         :stage-size="boardSize"
         :cursor-position="keyboardNav.cursorPosition.value"
-        :marks="currentMarks"
-        :lines="currentLines"
-        :dialogue-index="scenarioNav.currentDialogueIndex.value"
         @place-stone="handlePlaceStone"
       />
       <CutinOverlay

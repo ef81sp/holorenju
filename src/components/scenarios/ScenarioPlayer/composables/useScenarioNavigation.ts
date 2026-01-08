@@ -1,13 +1,23 @@
 import { computed, ref, type ComputedRef, type Ref } from "vue";
 
 import type { BoardState } from "@/types/game";
-import type { Scenario, Section, DemoDialogue } from "@/types/scenario";
+import type {
+  Scenario,
+  Section,
+  DemoDialogue,
+  LineAction,
+} from "@/types/scenario";
 
 import scenariosIndex from "@/data/scenarios/index.json";
 import { boardStringToBoardState } from "@/logic/scenarioFileHandler";
 import { parseScenario } from "@/logic/scenarioParser";
 import { useAppStore } from "@/stores/appStore";
-import { useBoardStore, type Stone } from "@/stores/boardStore";
+import {
+  useBoardStore,
+  type Stone,
+  type Mark,
+  type Line,
+} from "@/stores/boardStore";
 import { useDialogStore } from "@/stores/dialogStore";
 import { useProgressStore } from "@/stores/progressStore";
 
@@ -26,6 +36,8 @@ interface DialogueMapping {
 interface BoardSnapshot {
   board: BoardState;
   stones: Stone[];
+  marks: Mark[];
+  lines: Line[];
 }
 
 /**
@@ -156,6 +168,8 @@ export const useScenarioNavigation = (
         );
         boardStore.setBoard(boardState);
         boardStore.clearStones();
+        boardStore.clearMarks();
+        boardStore.clearLines();
       }
 
       // デモセクションなら最初のダイアログを表示
@@ -201,6 +215,8 @@ export const useScenarioNavigation = (
           const boardState = boardStringToBoardState(newSection.initialBoard);
           boardStore.setBoard(boardState);
           boardStore.clearStones();
+          boardStore.clearMarks();
+          boardStore.clearLines();
           currentSectionIndex.value = mapping.sectionIndex;
           isSectionCompleted.value = false;
 
@@ -251,6 +267,8 @@ export const useScenarioNavigation = (
       const boardState = boardStringToBoardState(section.initialBoard);
       boardStore.setBoard(boardState);
       boardStore.clearStones();
+      boardStore.clearMarks();
+      boardStore.clearLines();
 
       if (mapping.sectionIndex !== currentMapping.sectionIndex) {
         currentSectionIndex.value = mapping.sectionIndex;
@@ -282,7 +300,7 @@ export const useScenarioNavigation = (
   };
 
   /**
-   * ダイアログを表示して石を追加
+   * ダイアログを表示して石・マーク・ラインを追加
    */
   const showDialogueWithAction = async (
     dialogue: DemoDialogue,
@@ -305,11 +323,40 @@ export const useScenarioNavigation = (
       );
     }
 
+    // markアクションの追加
+    const markActions = dialogue.boardActions.filter((a) => a.type === "mark");
+    if (markActions.length > 0) {
+      await boardStore.addMarks(
+        markActions.map((a) => ({
+          positions: a.positions,
+          markType: a.markType,
+          label: a.label,
+        })),
+        currentDialogueIndex.value,
+        { animate },
+      );
+    }
+
+    // lineアクション（draw）の追加
+    const lineDrawActions = dialogue.boardActions.filter(
+      (a): a is LineAction => a.type === "line" && a.action === "draw",
+    );
+    if (lineDrawActions.length > 0) {
+      await boardStore.addLines(
+        lineDrawActions.map((a) => ({
+          fromPosition: a.fromPosition,
+          toPosition: a.toPosition,
+          style: a.style,
+        })),
+        currentDialogueIndex.value,
+        { animate },
+      );
+    }
+
     // resetAll, setBoard等の他のアクションも処理
     for (const action of dialogue.boardActions) {
       if (action.type === "resetAll") {
-        boardStore.clearStones();
-        boardStore.resetBoard();
+        boardStore.resetAll();
       } else if (action.type === "setBoard") {
         const boardState = boardStringToBoardState(action.board);
         boardStore.setBoard(boardState);
@@ -319,7 +366,7 @@ export const useScenarioNavigation = (
 
   /**
    * 指定インデックスまでのダイアログのアクションを適用（アニメーションなし）
-   * resetAll, setBoard, place を順次処理
+   * resetAll, setBoard, place, mark, line を順次処理
    */
   const applyActionsUntilDialogueIndex = async (
     dialogues: DemoDialogue[],
@@ -327,17 +374,43 @@ export const useScenarioNavigation = (
   ): Promise<void> => {
     for (let i = 0; i < untilIndex && i < dialogues.length; i++) {
       const dialogue = dialogues[i];
+      const globalIndex = findGlobalDialogueIndex(dialogue);
+
       for (const action of dialogue.boardActions) {
         if (action.type === "resetAll") {
-          boardStore.clearStones();
-          boardStore.resetBoard();
+          boardStore.resetAll();
         } else if (action.type === "setBoard") {
           boardStore.setBoard(boardStringToBoardState(action.board));
         } else if (action.type === "place") {
-          const globalIndex = findGlobalDialogueIndex(dialogue);
           // oxlint-disable-next-line no-await-in-loop -- 順次石追加のため意図的
           await boardStore.addStones(
             [{ position: action.position, color: action.color }],
+            globalIndex,
+            { animate: false },
+          );
+        } else if (action.type === "mark") {
+          // oxlint-disable-next-line no-await-in-loop -- 順次マーク追加のため意図的
+          await boardStore.addMarks(
+            [
+              {
+                positions: action.positions,
+                markType: action.markType,
+                label: action.label,
+              },
+            ],
+            globalIndex,
+            { animate: false },
+          );
+        } else if (action.type === "line" && action.action === "draw") {
+          // oxlint-disable-next-line no-await-in-loop -- 順次ライン追加のため意図的
+          await boardStore.addLines(
+            [
+              {
+                fromPosition: action.fromPosition,
+                toPosition: action.toPosition,
+                style: action.style,
+              },
+            ],
             globalIndex,
             { animate: false },
           );
@@ -371,6 +444,11 @@ export const useScenarioNavigation = (
     boardCache.value.get(sectionIndex)?.set(dialogueIndex, {
       board: boardStore.board.map((row) => [...row]),
       stones: boardStore.stones.map((s) => ({ ...s })),
+      marks: boardStore.marks.map((m) => ({
+        ...m,
+        positions: [...m.positions],
+      })),
+      lines: boardStore.lines.map((l) => ({ ...l })),
     });
   };
 
@@ -392,6 +470,16 @@ export const useScenarioNavigation = (
       0,
       boardStore.stones.length,
       ...snapshot.stones.map((s) => ({ ...s })),
+    );
+    boardStore.marks.splice(
+      0,
+      boardStore.marks.length,
+      ...snapshot.marks.map((m) => ({ ...m, positions: [...m.positions] })),
+    );
+    boardStore.lines.splice(
+      0,
+      boardStore.lines.length,
+      ...snapshot.lines.map((l) => ({ ...l })),
     );
     return true;
   };
@@ -424,6 +512,8 @@ export const useScenarioNavigation = (
         );
         boardStore.setBoard(boardState);
         boardStore.clearStones();
+        boardStore.clearMarks();
+        boardStore.clearLines();
 
         // ダイアログがあるセクションなら最初のダイアログを表示
         const section = currentSection.value;

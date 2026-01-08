@@ -24,6 +24,30 @@ export interface Stone {
   shouldAnimate: boolean;
 }
 
+/**
+ * シナリオ用のマークオブジェクト
+ */
+export interface Mark {
+  id: string;
+  positions: Position[];
+  markType: "circle" | "cross" | "arrow";
+  label?: string;
+  placedAtDialogueIndex: number;
+  shouldAnimate: boolean;
+}
+
+/**
+ * シナリオ用のラインオブジェクト
+ */
+export interface Line {
+  id: string;
+  fromPosition: Position;
+  toPosition: Position;
+  style: "solid" | "dashed";
+  placedAtDialogueIndex: number;
+  shouldAnimate: boolean;
+}
+
 export const useBoardStore = defineStore("board", () => {
   // State
   const board = ref<BoardState>(createEmptyBoard());
@@ -34,6 +58,10 @@ export const useBoardStore = defineStore("board", () => {
 
   // シナリオ用の石配列（ダイアログインデックス追跡付き）
   const stones = ref<Stone[]>([]);
+
+  // シナリオ用のマーク・ライン配列
+  const marks = ref<Mark[]>([]);
+  const lines = ref<Line[]>([]);
 
   // Callbacks
   type OnStonePlacedCallback = (
@@ -48,9 +76,19 @@ export const useBoardStore = defineStore("board", () => {
   type OnAnimationCancelCallback = () => void;
   let onAnimationCancelCallback: OnAnimationCancelCallback | null = null;
 
+  type OnMarkAddedCallback = (mark: Mark) => Promise<void>;
+  let onMarkAddedCallback: OnMarkAddedCallback | null = null;
+
+  type OnLineAddedCallback = (line: Line) => Promise<void>;
+  let onLineAddedCallback: OnLineAddedCallback | null = null;
+
   // 呼び出しID管理（レースコンディション対策）
   let currentAddStonesId: number | null = null;
   let addStonesIdCounter = 0;
+  let currentAddMarksId: number | null = null;
+  let addMarksIdCounter = 0;
+  let currentAddLinesId: number | null = null;
+  let addLinesIdCounter = 0;
 
   // Actions
   function placeStone(
@@ -182,6 +220,125 @@ export const useBoardStore = defineStore("board", () => {
     stones.value = [];
   }
 
+  // --- マーク管理 ---
+
+  /**
+   * マークを追加（シナリオ用）
+   */
+  async function addMarks(
+    newMarks: {
+      positions: Position[];
+      markType: "circle" | "cross" | "arrow";
+      label?: string;
+    }[],
+    dialogueIndex: number,
+    options?: { animate?: boolean },
+  ): Promise<void> {
+    const callId = ++addMarksIdCounter;
+    currentAddMarksId = callId;
+    let shouldAnimate = options?.animate !== false;
+
+    for (let i = 0; i < newMarks.length; i++) {
+      if (currentAddMarksId !== callId) {
+        shouldAnimate = false;
+      }
+
+      const markData = newMarks[i];
+      const id = `${dialogueIndex}-mark-${i}`;
+      const newMark: Mark = {
+        id,
+        positions: markData.positions,
+        markType: markData.markType,
+        label: markData.label,
+        placedAtDialogueIndex: dialogueIndex,
+        shouldAnimate,
+      };
+      marks.value.push(newMark);
+
+      if (shouldAnimate && onMarkAddedCallback) {
+        // oxlint-disable-next-line no-await-in-loop -- 順次アニメーション実行のため意図的
+        await onMarkAddedCallback(newMark);
+        if (currentAddMarksId !== callId) {
+          shouldAnimate = false;
+        }
+        newMark.shouldAnimate = false;
+      }
+    }
+  }
+
+  /**
+   * マークをクリア
+   */
+  function clearMarks(): void {
+    currentAddMarksId = null;
+    marks.value = [];
+  }
+
+  // --- ライン管理 ---
+
+  /**
+   * ラインを追加（シナリオ用）
+   */
+  async function addLines(
+    newLines: {
+      fromPosition: Position;
+      toPosition: Position;
+      style?: "solid" | "dashed";
+    }[],
+    dialogueIndex: number,
+    options?: { animate?: boolean },
+  ): Promise<void> {
+    const callId = ++addLinesIdCounter;
+    currentAddLinesId = callId;
+    let shouldAnimate = options?.animate !== false;
+
+    for (let i = 0; i < newLines.length; i++) {
+      if (currentAddLinesId !== callId) {
+        shouldAnimate = false;
+      }
+
+      const lineData = newLines[i];
+      const id = `${dialogueIndex}-line-${i}`;
+      const newLine: Line = {
+        id,
+        fromPosition: lineData.fromPosition,
+        toPosition: lineData.toPosition,
+        style: lineData.style ?? "solid",
+        placedAtDialogueIndex: dialogueIndex,
+        shouldAnimate,
+      };
+      lines.value.push(newLine);
+
+      if (shouldAnimate && onLineAddedCallback) {
+        // oxlint-disable-next-line no-await-in-loop -- 順次アニメーション実行のため意図的
+        await onLineAddedCallback(newLine);
+        if (currentAddLinesId !== callId) {
+          shouldAnimate = false;
+        }
+        newLine.shouldAnimate = false;
+      }
+    }
+  }
+
+  /**
+   * ラインをクリア
+   */
+  function clearLines(): void {
+    currentAddLinesId = null;
+    lines.value = [];
+  }
+
+  /**
+   * 石・マーク・ライン全てをリセット
+   */
+  function resetAll(): void {
+    cancelOngoingAnimations();
+    stones.value = [];
+    marks.value = [];
+    lines.value = [];
+    resetBoard();
+  }
+
   function setOnStoneAddedCallback(
     callback: OnStoneAddedCallback | null,
   ): void {
@@ -194,13 +351,23 @@ export const useBoardStore = defineStore("board", () => {
     onAnimationCancelCallback = callback;
   }
 
+  function setOnMarkAddedCallback(callback: OnMarkAddedCallback | null): void {
+    onMarkAddedCallback = callback;
+  }
+
+  function setOnLineAddedCallback(callback: OnLineAddedCallback | null): void {
+    onLineAddedCallback = callback;
+  }
+
   /**
    * 進行中のアニメーションをキャンセル
    * 連打時に呼び出され、全てのTweenを即座に完了させる
    */
   function cancelOngoingAnimations(): void {
-    // 現在の呼び出しIDを無効化（進行中のaddStonesをキャンセル）
+    // 現在の呼び出しIDを無効化（進行中のaddStones/addMarks/addLinesをキャンセル）
     currentAddStonesId = null;
+    currentAddMarksId = null;
+    currentAddLinesId = null;
 
     // 進行中のTweenを即座に完了
     if (onAnimationCancelCallback) {
@@ -213,6 +380,16 @@ export const useBoardStore = defineStore("board", () => {
         stone.shouldAnimate = false;
       }
     }
+    for (const mark of marks.value) {
+      if (mark.shouldAnimate) {
+        mark.shouldAnimate = false;
+      }
+    }
+    for (const line of lines.value) {
+      if (line.shouldAnimate) {
+        line.shouldAnimate = false;
+      }
+    }
   }
 
   return {
@@ -220,6 +397,8 @@ export const useBoardStore = defineStore("board", () => {
     board,
     lastPlacedStone,
     stones,
+    marks,
+    lines,
     // Actions
     placeStone,
     removeStone,
@@ -233,5 +412,13 @@ export const useBoardStore = defineStore("board", () => {
     setOnStoneAddedCallback,
     setOnAnimationCancelCallback,
     cancelOngoingAnimations,
+    // マーク・ライン
+    addMarks,
+    clearMarks,
+    addLines,
+    clearLines,
+    resetAll,
+    setOnMarkAddedCallback,
+    setOnLineAddedCallback,
   };
 });
