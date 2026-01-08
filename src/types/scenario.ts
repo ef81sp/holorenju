@@ -37,7 +37,7 @@ interface DemoDialogue {
   emotion: EmotionId; // 0-39の連番ID
   description?: {
     text: TextNode[];
-    type: "new" | "continue";
+    clear?: boolean; // trueの場合、説明をクリア（textが空の時のみ有効）
   };
   boardActions: BoardAction[];
 }

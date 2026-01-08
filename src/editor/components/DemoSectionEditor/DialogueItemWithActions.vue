@@ -37,12 +37,35 @@ const descriptionText = computed(() =>
   stringifyText(props.dialogue.description?.text || []),
 );
 
+const hasDescriptionText = computed(
+  () => (props.dialogue.description?.text.length ?? 0) > 0,
+);
+
 const handleDescriptionChange = (e: Event): void => {
   const text = (e.target as HTMLTextAreaElement).value;
+  const parsedText = parseText(text);
+  // テキストがあれば clear フラグは不要
+  if (parsedText.length > 0) {
+    props.updateDialogue(props.dialogueIndex, {
+      description: { text: parsedText },
+    });
+  } else {
+    // テキストが空の場合、既存の clear フラグを維持
+    props.updateDialogue(props.dialogueIndex, {
+      description: {
+        text: parsedText,
+        clear: props.dialogue.description?.clear,
+      },
+    });
+  }
+};
+
+const handleClearChange = (e: Event): void => {
+  const {checked} = (e.target as HTMLInputElement);
   props.updateDialogue(props.dialogueIndex, {
     description: {
-      text: parseText(text),
-      type: props.dialogue.description?.type || "continue",
+      text: props.dialogue.description?.text || [],
+      clear: checked || undefined,
     },
   });
 };
@@ -202,29 +225,6 @@ const handleAddAfter = (): void => {
 
     <div class="description-section">
       <label class="field">
-        <span>説明</span>
-        <select
-          :value="dialogue.description?.type || 'continue'"
-          @change="
-            (e) => {
-              const type = (e.target as HTMLSelectElement).value as
-                | 'new'
-                | 'continue';
-              props.updateDialogue(props.dialogueIndex, {
-                description: {
-                  ...dialogue.description,
-                  text: dialogue.description?.text || [],
-                  type,
-                },
-              });
-            }
-          "
-        >
-          <option value="new">新規表示（前の説明をクリア）</option>
-          <option value="continue">継続表示（前の説明を保持）</option>
-        </select>
-      </label>
-      <label class="field">
         <span>説明テキスト</span>
         <textarea
           :value="descriptionText"
@@ -232,6 +232,17 @@ const handleAddAfter = (): void => {
           rows="3"
           @change="handleDescriptionChange"
         />
+      </label>
+      <label
+        v-if="!hasDescriptionText"
+        class="field checkbox"
+      >
+        <input
+          type="checkbox"
+          :checked="dialogue.description?.clear === true"
+          @change="handleClearChange"
+        />
+        <span>説明をクリア</span>
       </label>
     </div>
 
@@ -431,7 +442,12 @@ textarea {
   gap: var(--size-4);
 }
 
-.description-section select,
+.description-section .field.checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--size-6);
+}
+
 .description-section textarea {
   min-width: 100%;
 }

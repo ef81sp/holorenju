@@ -7,6 +7,7 @@ import type {
   DemoDialogue,
   LineAction,
 } from "@/types/scenario";
+import type { TextNode } from "@/types/text";
 
 import scenariosIndex from "@/data/scenarios/index.json";
 import { boardStringToBoardState } from "@/logic/scenarioFileHandler";
@@ -38,6 +39,7 @@ interface BoardSnapshot {
   stones: Stone[];
   marks: Mark[];
   lines: Line[];
+  descriptionNodes: TextNode[];
 }
 
 /**
@@ -59,6 +61,7 @@ export const useScenarioNavigation = (
   canNavigatePrevious: ComputedRef<boolean>;
   canNavigateNext: ComputedRef<boolean>;
   allDialogues: Ref<DialogueMapping[]>;
+  demoDescriptionNodes: Ref<TextNode[]>;
   loadScenario: () => Promise<void>;
   showIntroDialog: () => Promise<void>;
   nextDialogue: () => Promise<void>;
@@ -79,6 +82,7 @@ export const useScenarioNavigation = (
   const currentDialogueIndex = ref(0);
   const isSectionCompleted = ref(false);
   const allDialogues = ref<DialogueMapping[]>([]);
+  const demoDescriptionNodes = ref<TextNode[]>([]);
   // 盤面キャッシュ: セクションインデックス → ダイアログインデックス → スナップショット
   const boardCache = ref<Map<number, Map<number, BoardSnapshot>>>(new Map());
 
@@ -300,6 +304,30 @@ export const useScenarioNavigation = (
   };
 
   /**
+   * ダイアログの説明を更新
+   * - description がなければ前の状態を維持
+   * - text があれば新規表示
+   * - text が空で clear: true ならクリア
+   */
+  const updateDescriptionForDialogue = (dialogue: DemoDialogue): void => {
+    if (!dialogue.description) {
+      // undefinedなら前の状態を維持（何もしない）
+      return;
+    }
+
+    const { text, clear } = dialogue.description;
+
+    if (text.length > 0) {
+      // テキストがあれば新規表示
+      demoDescriptionNodes.value = [...text];
+    } else if (clear) {
+      // テキストなし + clear: true → クリア
+      demoDescriptionNodes.value = [];
+    }
+    // テキストなし + clear なし → 前の状態を維持（何もしない）
+  };
+
+  /**
    * ダイアログを表示して石・マーク・ラインを追加
    */
   const showDialogueWithAction = async (
@@ -307,6 +335,7 @@ export const useScenarioNavigation = (
     animate: boolean,
   ): Promise<void> => {
     showDialogueMessage(dialogue);
+    updateDescriptionForDialogue(dialogue);
 
     // placeアクションの石を追加
     const placeActions = dialogue.boardActions.filter(
@@ -449,6 +478,7 @@ export const useScenarioNavigation = (
         positions: [...m.positions],
       })),
       lines: boardStore.lines.map((l) => ({ ...l })),
+      descriptionNodes: [...demoDescriptionNodes.value],
     });
   };
 
@@ -481,6 +511,7 @@ export const useScenarioNavigation = (
       boardStore.lines.length,
       ...snapshot.lines.map((l) => ({ ...l })),
     );
+    demoDescriptionNodes.value = [...snapshot.descriptionNodes];
     return true;
   };
 
@@ -555,6 +586,7 @@ export const useScenarioNavigation = (
     currentDialogueIndex,
     isSectionCompleted,
     allDialogues,
+    demoDescriptionNodes,
     // Computed
     currentSection,
     isLastSection,

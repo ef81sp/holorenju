@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
 
 import BackButton from "./BackButton.vue";
 import ControlInfo from "./ControlInfo.vue";
@@ -99,22 +99,11 @@ onMounted(async () => {
     width: boardFrameRef.value?.clientWidth,
     height: boardFrameRef.value?.clientHeight,
   });
-
-  // デモセクション説明の初期化
-  updateDemoDescription();
 });
 
 onUnmounted(() => {
   keyboardNav.detachKeyListener();
 });
-
-// デモセクション説明の更新を監視
-watch(
-  () => scenarioNav.currentDialogueIndex.value,
-  () => {
-    updateDemoDescription();
-  },
-);
 
 const handlePlaceStone = (position?: Position): void => {
   if (
@@ -152,49 +141,6 @@ const descriptionNodes = computed<TextNode[]>(() => {
   }
   return section.description || [];
 });
-
-// デモセクション用の説明管理
-const demoDescriptionNodes = ref<TextNode[]>([]);
-
-const updateDemoDescription = (): void => {
-  const section = scenarioNav.currentSection.value;
-  if (!section || section.type !== "demo") {
-    demoDescriptionNodes.value = [];
-    return;
-  }
-
-  // セクション内のダイアログインデックスを計算
-  // AllDialoguesのどこからこのセクションが始まるかを見つける
-  const sectionStartIndex = scenarioNav.allDialogues.value.findIndex(
-    (mapping) => mapping.sectionIndex === scenarioNav.currentSectionIndex.value,
-  );
-
-  const dialogueIndexInSection =
-    scenarioNav.currentDialogueIndex.value - sectionStartIndex;
-
-  const dialogue = section.dialogues[dialogueIndexInSection];
-
-  if (!dialogue || !dialogue.description) {
-    // 説明がなければクリア（typeが"continue"の場合も、description自体がないなら何も変わらない）
-    if (!dialogue || dialogue.description?.type === "new") {
-      demoDescriptionNodes.value = [];
-    }
-    // Typeが"continue"で説明がないなら前の状態を保持
-    return;
-  }
-
-  // 説明がある場合
-  if (dialogue.description.type === "new") {
-    // "new": 説明を更新
-    demoDescriptionNodes.value = dialogue.description.text;
-  } else {
-    // "continue": 説明を追加（マージ）
-    demoDescriptionNodes.value = [
-      ...demoDescriptionNodes.value,
-      ...dialogue.description.text,
-    ];
-  }
-};
 
 const handleSubmitAnswer = (): void => {
   if (
@@ -264,7 +210,7 @@ const handleGoToList = (): void => {
         :section-title="scenarioNav.currentSection.value?.id || ''"
         :description="
           scenarioNav.currentSection.value?.type === 'demo'
-            ? demoDescriptionNodes
+            ? scenarioNav.demoDescriptionNodes.value
             : descriptionNodes
         "
         :section-index="scenarioNav.currentSectionIndex.value"

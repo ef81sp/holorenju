@@ -43,10 +43,6 @@ export function useDialogueEditor(
       character: "fubuki",
       text: [],
       emotion: 0,
-      description: {
-        text: [],
-        type: "continue",
-      },
       boardActions: [],
     };
     newDialogues.push(newDialogue);
@@ -68,10 +64,6 @@ export function useDialogueEditor(
       character: "fubuki",
       text: [],
       emotion: 0,
-      description: {
-        text: [],
-        type: "continue",
-      },
       boardActions: [],
     };
     newDialogues.splice(index + 1, 0, newDialogue);

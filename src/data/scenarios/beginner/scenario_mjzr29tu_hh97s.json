@@ -37,10 +37,6 @@
             }
           ],
           "emotion": 0,
-          "description": {
-            "text": [],
-            "type": "continue"
-          },
           "boardActions": []
         },
         {
@@ -53,10 +49,6 @@
             }
           ],
           "emotion": 1,
-          "description": {
-            "text": [],
-            "type": "continue"
-          },
           "boardActions": []
         },
         {
@@ -69,10 +61,6 @@
             }
           ],
           "emotion": 8,
-          "description": {
-            "text": [],
-            "type": "continue"
-          },
           "boardActions": []
         },
         {
@@ -85,10 +73,6 @@
             }
           ],
           "emotion": 32,
-          "description": {
-            "text": [],
-            "type": "continue"
-          },
           "boardActions": []
         },
         {
@@ -101,10 +85,6 @@
             }
           ],
           "emotion": 28,
-          "description": {
-            "text": [],
-            "type": "continue"
-          },
           "boardActions": []
         },
         {
@@ -117,10 +97,6 @@
             }
           ],
           "emotion": 0,
-          "description": {
-            "text": [],
-            "type": "continue"
-          },
           "boardActions": []
         },
         {
@@ -133,10 +109,6 @@
             }
           ],
           "emotion": 4,
-          "description": {
-            "text": [],
-            "type": "continue"
-          },
           "boardActions": []
         },
         {
@@ -149,10 +121,6 @@
             }
           ],
           "emotion": 0,
-          "description": {
-            "text": [],
-            "type": "continue"
-          },
           "boardActions": []
         },
         {
@@ -165,10 +133,6 @@
             }
           ],
           "emotion": 10,
-          "description": {
-            "text": [],
-            "type": "continue"
-          },
           "boardActions": []
         },
         {
@@ -188,10 +152,6 @@
             }
           ],
           "emotion": 0,
-          "description": {
-            "text": [],
-            "type": "continue"
-          },
           "boardActions": []
         },
         {
@@ -204,10 +164,6 @@
             }
           ],
           "emotion": 0,
-          "description": {
-            "text": [],
-            "type": "continue"
-          },
           "boardActions": []
         },
         {
@@ -227,10 +183,6 @@
             }
           ],
           "emotion": 0,
-          "description": {
-            "text": [],
-            "type": "continue"
-          },
           "boardActions": []
         },
         {
@@ -250,10 +202,6 @@
             }
           ],
           "emotion": 0,
-          "description": {
-            "text": [],
-            "type": "continue"
-          },
           "boardActions": []
         },
         {
@@ -286,10 +234,6 @@
             }
           ],
           "emotion": 0,
-          "description": {
-            "text": [],
-            "type": "continue"
-          },
           "boardActions": []
         },
         {
@@ -302,10 +246,6 @@
             }
           ],
           "emotion": 5,
-          "description": {
-            "text": [],
-            "type": "continue"
-          },
           "boardActions": []
         }
       ]
@@ -349,10 +289,6 @@
             }
           ],
           "emotion": 0,
-          "description": {
-            "text": [],
-            "type": "continue"
-          },
           "boardActions": []
         },
         {
@@ -394,8 +330,7 @@
                 "type": "text",
                 "content": "と呼ぶこともある"
               }
-            ],
-            "type": "continue"
+            ]
           },
           "boardActions": []
         },
@@ -409,10 +344,6 @@
             }
           ],
           "emotion": 4,
-          "description": {
-            "text": [],
-            "type": "continue"
-          },
           "boardActions": []
         },
         {
@@ -445,10 +376,6 @@
             }
           ],
           "emotion": 0,
-          "description": {
-            "text": [],
-            "type": "continue"
-          },
           "boardActions": [
             {
               "type": "resetAll"
@@ -465,10 +392,6 @@
             }
           ],
           "emotion": 0,
-          "description": {
-            "text": [],
-            "type": "continue"
-          },
           "boardActions": [
             {
               "type": "setBoard",
@@ -502,10 +425,6 @@
             }
           ],
           "emotion": 2,
-          "description": {
-            "text": [],
-            "type": "continue"
-          },
           "boardActions": []
         },
         {
@@ -518,10 +437,6 @@
             }
           ],
           "emotion": 0,
-          "description": {
-            "text": [],
-            "type": "continue"
-          },
           "boardActions": [
             {
               "type": "place",
@@ -570,8 +485,7 @@
                 "type": "text",
                 "content": ": 三に石を追加して四を作ることを特別にこう言う"
               }
-            ],
-            "type": "new"
+            ]
           },
           "boardActions": [
             {
@@ -602,10 +516,6 @@
             }
           ],
           "emotion": 9,
-          "description": {
-            "text": [],
-            "type": "continue"
-          },
           "boardActions": []
         },
         {
@@ -638,10 +548,6 @@
             }
           ],
           "emotion": 0,
-          "description": {
-            "text": [],
-            "type": "continue"
-          },
           "boardActions": []
         },
         {
@@ -654,10 +560,6 @@
             }
           ],
           "emotion": 13,
-          "description": {
-            "text": [],
-            "type": "continue"
-          },
           "boardActions": []
         }
       ]
@@ -694,10 +596,6 @@
             }
           ],
           "emotion": 18,
-          "description": {
-            "text": [],
-            "type": "continue"
-          },
           "boardActions": []
         },
         {
@@ -724,10 +622,6 @@
             }
           ],
           "emotion": 0,
-          "description": {
-            "text": [],
-            "type": "continue"
-          },
           "boardActions": []
         },
         {
@@ -740,10 +634,6 @@
             }
           ],
           "emotion": 0,
-          "description": {
-            "text": [],
-            "type": "continue"
-          },
           "boardActions": []
         },
         {
@@ -763,10 +653,6 @@
             }
           ],
           "emotion": 0,
-          "description": {
-            "text": [],
-            "type": "continue"
-          },
           "boardActions": [
             {
               "type": "setBoard",
@@ -813,8 +699,7 @@
                 "type": "text",
                 "content": "今回は説明のためにあえて打っている"
               }
-            ],
-            "type": "continue"
+            ]
           },
           "boardActions": [
             {
@@ -844,10 +729,6 @@
             }
           ],
           "emotion": 0,
-          "description": {
-            "text": [],
-            "type": "continue"
-          },
           "boardActions": [
             {
               "type": "place",
@@ -869,10 +750,6 @@
             }
           ],
           "emotion": 17,
-          "description": {
-            "text": [],
-            "type": "continue"
-          },
           "boardActions": [
             {
               "type": "place",
@@ -901,10 +778,6 @@
             }
           ],
           "emotion": 1,
-          "description": {
-            "text": [],
-            "type": "continue"
-          },
           "boardActions": [
             {
               "type": "mark",
@@ -944,10 +817,6 @@
             }
           ],
           "emotion": 0,
-          "description": {
-            "text": [],
-            "type": "continue"
-          },
           "boardActions": []
         },
         {
@@ -960,10 +829,6 @@
             }
           ],
           "emotion": 30,
-          "description": {
-            "text": [],
-            "type": "continue"
-          },
           "boardActions": []
         },
         {
@@ -976,10 +841,6 @@
             }
           ],
           "emotion": 0,
-          "description": {
-            "text": [],
-            "type": "continue"
-          },
           "boardActions": [
             {
               "type": "place",
@@ -1014,10 +875,6 @@
             }
           ],
           "emotion": 0,
-          "description": {
-            "text": [],
-            "type": "continue"
-          },
           "boardActions": [
             {
               "type": "resetAll"
@@ -1054,10 +911,6 @@
             }
           ],
           "emotion": 4,
-          "description": {
-            "text": [],
-            "type": "continue"
-          },
           "boardActions": []
         },
         {
@@ -1077,10 +930,6 @@
             }
           ],
           "emotion": 0,
-          "description": {
-            "text": [],
-            "type": "continue"
-          },
           "boardActions": []
         }
       ]
@@ -1123,10 +972,6 @@
             }
           ],
           "emotion": 0,
-          "description": {
-            "text": [],
-            "type": "continue"
-          },
           "boardActions": []
         }
       ],

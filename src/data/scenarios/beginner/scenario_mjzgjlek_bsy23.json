@@ -37,10 +37,6 @@
             }
           ],
           "emotion": 0,
-          "description": {
-            "text": [],
-            "type": "continue"
-          },
           "boardActions": []
         },
         {
@@ -66,10 +62,6 @@
             }
           ],
           "emotion": 0,
-          "description": {
-            "text": [],
-            "type": "continue"
-          },
           "boardActions": []
         },
         {
@@ -105,10 +97,6 @@
             }
           ],
           "emotion": 0,
-          "description": {
-            "text": [],
-            "type": "continue"
-          },
           "boardActions": []
         },
         {
@@ -175,8 +163,7 @@
                 "type": "text",
                 "content": "長連: 6つ以上石をつなげてはいけない"
               }
-            ],
-            "type": "continue"
+            ]
           },
           "boardActions": []
         },
@@ -190,10 +177,6 @@
             }
           ],
           "emotion": 14,
-          "description": {
-            "text": [],
-            "type": "continue"
-          },
           "boardActions": []
         },
         {
@@ -206,10 +189,6 @@
             }
           ],
           "emotion": 32,
-          "description": {
-            "text": [],
-            "type": "continue"
-          },
           "boardActions": []
         },
         {
@@ -224,7 +203,7 @@
           "emotion": 34,
           "description": {
             "text": [],
-            "type": "new"
+            "clear": true
           },
           "boardActions": []
         },
@@ -261,8 +240,7 @@
                 "type": "text",
                 "content": "同時に作られると防ぎようがない"
               }
-            ],
-            "type": "continue"
+            ]
           },
           "boardActions": [
             {
@@ -297,10 +275,6 @@
             }
           ],
           "emotion": 0,
-          "description": {
-            "text": [],
-            "type": "continue"
-          },
           "boardActions": []
         },
         {
@@ -313,10 +287,6 @@
             }
           ],
           "emotion": 19,
-          "description": {
-            "text": [],
-            "type": "continue"
-          },
           "boardActions": [
             {
               "type": "mark",
@@ -340,10 +310,6 @@
             }
           ],
           "emotion": 0,
-          "description": {
-            "text": [],
-            "type": "continue"
-          },
           "boardActions": [
             {
               "type": "line",
@@ -383,10 +349,6 @@
             }
           ],
           "emotion": 0,
-          "description": {
-            "text": [],
-            "type": "continue"
-          },
           "boardActions": [
             {
               "type": "resetAll"
@@ -423,10 +385,6 @@
             }
           ],
           "emotion": 9,
-          "description": {
-            "text": [],
-            "type": "continue"
-          },
           "boardActions": []
         },
         {
@@ -439,10 +397,6 @@
             }
           ],
           "emotion": 15,
-          "description": {
-            "text": [],
-            "type": "continue"
-          },
           "boardActions": []
         },
         {
@@ -455,10 +409,6 @@
             }
           ],
           "emotion": 35,
-          "description": {
-            "text": [],
-            "type": "continue"
-          },
           "boardActions": []
         },
         {
@@ -471,10 +421,6 @@
             }
           ],
           "emotion": 0,
-          "description": {
-            "text": [],
-            "type": "continue"
-          },
           "boardActions": [
             {
               "type": "mark",
@@ -498,10 +444,6 @@
             }
           ],
           "emotion": 0,
-          "description": {
-            "text": [],
-            "type": "continue"
-          },
           "boardActions": [
             {
               "type": "line",
@@ -528,10 +470,6 @@
             }
           ],
           "emotion": 0,
-          "description": {
-            "text": [],
-            "type": "continue"
-          },
           "boardActions": [
             {
               "type": "line",
@@ -574,8 +512,7 @@
                 "type": "text",
                 "content": "同時に五ができる場合は三三禁の対象にならない"
               }
-            ],
-            "type": "new"
+            ]
           },
           "boardActions": []
         }
@@ -619,10 +556,6 @@
             }
           ],
           "emotion": 0,
-          "description": {
-            "text": [],
-            "type": "continue"
-          },
           "boardActions": []
         }
       ],

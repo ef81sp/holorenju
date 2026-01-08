@@ -233,13 +233,10 @@ function validateDialogue(data: unknown, path: string): DemoDialogue {
       "text",
       `${path}.description.text`,
     );
-    const descriptionType =
-      data.description.type === "new" || data.description.type === "continue"
-        ? data.description.type
-        : "continue";
+    const clear = data.description.clear === true ? true : undefined;
     description = {
       text: descriptionText,
-      type: descriptionType,
+      clear,
     };
   }
 

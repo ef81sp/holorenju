@@ -109,8 +109,7 @@
                 "type": "text",
                 "content": "五目並べでは、常に黒が先手、白が後手"
               }
-            ],
-            "type": "continue"
+            ]
           },
           "boardActions": []
         },
@@ -216,10 +215,6 @@
             }
           ],
           "emotion": 9,
-          "description": {
-            "text": [],
-            "type": "continue"
-          },
           "boardActions": []
         },
         {
@@ -245,10 +240,6 @@
             }
           ],
           "emotion": 19,
-          "description": {
-            "text": [],
-            "type": "continue"
-          },
           "boardActions": []
         },
         {
@@ -261,10 +252,6 @@
             }
           ],
           "emotion": 15,
-          "description": {
-            "text": [],
-            "type": "continue"
-          },
           "boardActions": []
         },
         {
@@ -277,10 +264,6 @@
             }
           ],
           "emotion": 0,
-          "description": {
-            "text": [],
-            "type": "continue"
-          },
           "boardActions": []
         },
         {
@@ -323,8 +306,7 @@
                 "type": "text",
                 "content": "先攻番は攻撃不可"
               }
-            ],
-            "type": "continue"
+            ]
           },
           "boardActions": []
         },
@@ -338,10 +320,6 @@
             }
           ],
           "emotion": 0,
-          "description": {
-            "text": [],
-            "type": "continue"
-          },
           "boardActions": []
         },
         {
@@ -354,10 +332,6 @@
             }
           ],
           "emotion": 32,
-          "description": {
-            "text": [],
-            "type": "continue"
-          },
           "boardActions": []
         }
       ]
