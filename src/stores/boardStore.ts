@@ -12,6 +12,18 @@ import type { BoardState, Position, StoneColor } from "@/types/game";
 
 import { createEmptyBoard } from "@/logic/renjuRules";
 
+/**
+ * シナリオ用の石オブジェクト
+ * どのダイアログで配置されたかを追跡し、アニメーション制御に使用
+ */
+export interface Stone {
+  id: string;
+  position: Position;
+  color: StoneColor;
+  placedAtDialogueIndex: number;
+  shouldAnimate: boolean;
+}
+
 export const useBoardStore = defineStore("board", () => {
   // State
   const board = ref<BoardState>(createEmptyBoard());
@@ -20,6 +32,9 @@ export const useBoardStore = defineStore("board", () => {
     color: StoneColor;
   } | null>(null);
 
+  // シナリオ用の石配列（ダイアログインデックス追跡付き）
+  const stones = ref<Stone[]>([]);
+
   // Callbacks
   type OnStonePlacedCallback = (
     position: Position,
@@ -27,10 +42,21 @@ export const useBoardStore = defineStore("board", () => {
   ) => Promise<void>;
   let onStonePlacedCallback: OnStonePlacedCallback | null = null;
 
+  type OnStoneAddedCallback = (position: Position) => Promise<void>;
+  let onStoneAddedCallback: OnStoneAddedCallback | null = null;
+
+  type OnAnimationCancelCallback = () => void;
+  let onAnimationCancelCallback: OnAnimationCancelCallback | null = null;
+
+  // 呼び出しID管理（レースコンディション対策）
+  let currentAddStonesId: number | null = null;
+  let addStonesIdCounter = 0;
+
   // Actions
   function placeStone(
     position: Position,
     color: StoneColor,
+    options?: { animate?: boolean },
   ): {
     success: boolean;
     message?: string;
@@ -50,7 +76,8 @@ export const useBoardStore = defineStore("board", () => {
     lastPlacedStone.value = { position, color };
 
     // コールバック実行（非同期対応）
-    if (onStonePlacedCallback) {
+    // animate: falseの場合はコールバックをスキップ
+    if (options?.animate !== false && onStonePlacedCallback) {
       onStonePlacedCallback(position, color).catch(() => {
         // アニメーション完了エラーは無視
       });
@@ -89,15 +116,122 @@ export const useBoardStore = defineStore("board", () => {
     onStonePlacedCallback = callback;
   }
 
+  // --- シナリオ用の石管理 ---
+
+  /**
+   * 石を追加（シナリオ用）
+   * アニメーションありの場合、shouldAnimate: trueで追加し、完了後にfalseに変更
+   * キャンセル時はアニメーションをスキップして即時配置
+   */
+  async function addStones(
+    newStones: { position: Position; color: StoneColor }[],
+    dialogueIndex: number,
+    options?: { animate?: boolean },
+  ): Promise<void> {
+    // ユニークなIDを発行（レースコンディション対策）
+    const callId = ++addStonesIdCounter;
+    currentAddStonesId = callId;
+
+    let shouldAnimate = options?.animate !== false;
+
+    // 石を順次追加・アニメーション（順序保証のためループ内await）
+    for (const stone of newStones) {
+      // 自分の呼び出しがキャンセルされたか確認
+      if (currentAddStonesId !== callId) {
+        shouldAnimate = false;
+      }
+
+      const id = `${dialogueIndex}-${stone.position.row}-${stone.position.col}`;
+      const newStone: Stone = {
+        id,
+        position: stone.position,
+        color: stone.color,
+        placedAtDialogueIndex: dialogueIndex,
+        shouldAnimate,
+      };
+      stones.value.push(newStone);
+
+      if (shouldAnimate && onStoneAddedCallback) {
+        // oxlint-disable-next-line no-await-in-loop -- 順次アニメーション実行のため意図的
+        await onStoneAddedCallback(stone.position);
+
+        // await後も再チェック（アニメーション中にキャンセルされた可能性）
+        if (currentAddStonesId !== callId) {
+          shouldAnimate = false;
+        }
+        newStone.shouldAnimate = false;
+      }
+    }
+  }
+
+  /**
+   * 指定ダイアログインデックスの石を削除
+   */
+  function removeStonesByDialogueIndex(dialogueIndex: number): void {
+    stones.value = stones.value.filter(
+      (s) => s.placedAtDialogueIndex !== dialogueIndex,
+    );
+  }
+
+  /**
+   * 全ての石をクリア（セクション切り替え時など）
+   * 進行中のアニメーションもキャンセルする
+   */
+  function clearStones(): void {
+    cancelOngoingAnimations();
+    stones.value = [];
+  }
+
+  function setOnStoneAddedCallback(
+    callback: OnStoneAddedCallback | null,
+  ): void {
+    onStoneAddedCallback = callback;
+  }
+
+  function setOnAnimationCancelCallback(
+    callback: OnAnimationCancelCallback | null,
+  ): void {
+    onAnimationCancelCallback = callback;
+  }
+
+  /**
+   * 進行中のアニメーションをキャンセル
+   * 連打時に呼び出され、全てのTweenを即座に完了させる
+   */
+  function cancelOngoingAnimations(): void {
+    // 現在の呼び出しIDを無効化（進行中のaddStonesをキャンセル）
+    currentAddStonesId = null;
+
+    // 進行中のTweenを即座に完了
+    if (onAnimationCancelCallback) {
+      onAnimationCancelCallback();
+    }
+
+    // shouldAnimateフラグも即座にfalseに
+    for (const stone of stones.value) {
+      if (stone.shouldAnimate) {
+        stone.shouldAnimate = false;
+      }
+    }
+  }
+
   return {
     // State
     board,
     lastPlacedStone,
+    stones,
     // Actions
     placeStone,
     removeStone,
     setBoard,
     resetBoard,
     setOnStonePlacedCallback,
+    // シナリオ用
+    addStones,
+    removeStonesByDialogueIndex,
+    clearStones,
+    setOnStoneAddedCallback,
+    setOnAnimationCancelCallback,
+    cancelOngoingAnimations,
   };
 });

@@ -1,25 +1,15 @@
 import { computed, ref, type ComputedRef, type Ref } from "vue";
 
-import type {
-  Scenario,
-  Section,
-  BoardAction,
-  DemoDialogue,
-} from "@/types/scenario";
+import type { BoardState } from "@/types/game";
+import type { Scenario, Section, DemoDialogue } from "@/types/scenario";
 
 import scenariosIndex from "@/data/scenarios/index.json";
 import { boardStringToBoardState } from "@/logic/scenarioFileHandler";
 import { parseScenario } from "@/logic/scenarioParser";
 import { useAppStore } from "@/stores/appStore";
-import { useBoardStore } from "@/stores/boardStore";
+import { useBoardStore, type Stone } from "@/stores/boardStore";
 import { useDialogStore } from "@/stores/dialogStore";
 import { useProgressStore } from "@/stores/progressStore";
-
-/**
- * ボードアクションのアニメーション待機時間（ミリ秒）
- * RenjuBoard.vueのアニメーション時間（200ms）+ マージン
- */
-const BOARD_ACTION_ANIMATION_DURATION = 250;
 
 /**
  * ダイアログと所属セクション、セクション内インデックスをマッピング
@@ -28,6 +18,14 @@ interface DialogueMapping {
   dialogue: DemoDialogue;
   sectionIndex: number;
   sectionDialogueIndex: number;
+}
+
+/**
+ * 盤面スナップショット（キャッシュ用）
+ */
+interface BoardSnapshot {
+  board: BoardState;
+  stones: Stone[];
 }
 
 /**
@@ -50,12 +48,11 @@ export const useScenarioNavigation = (
   canNavigateNext: ComputedRef<boolean>;
   allDialogues: Ref<DialogueMapping[]>;
   loadScenario: () => Promise<void>;
-  showIntroDialog: () => void;
-  nextDialogue: () => void;
+  showIntroDialog: () => Promise<void>;
+  nextDialogue: () => Promise<void>;
   previousDialogue: () => void;
-  nextSection: () => void;
+  nextSection: () => Promise<void>;
   completeScenario: () => void;
-  applyBoardAction: (action: BoardAction) => Promise<void>;
   goBack: () => void;
 } => {
   // Stores
@@ -70,6 +67,8 @@ export const useScenarioNavigation = (
   const currentDialogueIndex = ref(0);
   const isSectionCompleted = ref(false);
   const allDialogues = ref<DialogueMapping[]>([]);
+  // 盤面キャッシュ: セクションインデックス → ダイアログインデックス → スナップショット
+  const boardCache = ref<Map<number, Map<number, BoardSnapshot>>>(new Map());
 
   // Computed
   const currentSection = computed<Section | null>(() => {
@@ -99,6 +98,9 @@ export const useScenarioNavigation = (
    */
   const loadScenario = async (): Promise<void> => {
     try {
+      // キャッシュクリア
+      clearBoardCache();
+
       // Index.jsonからシナリオパスを取得
       let scenarioPath = "";
       for (const [, difficultyData] of Object.entries(
@@ -153,10 +155,11 @@ export const useScenarioNavigation = (
           currentSection.value.initialBoard,
         );
         boardStore.setBoard(boardState);
+        boardStore.clearStones();
       }
 
       // デモセクションなら最初のダイアログを表示
-      showIntroDialog();
+      await showIntroDialog();
     } catch (error) {
       console.error("Failed to load scenario:", scenarioId, error);
     }
@@ -165,7 +168,7 @@ export const useScenarioNavigation = (
   /**
    * イントロダイアログ（最初のダイアログ）を表示
    */
-  const showIntroDialog = (): void => {
+  const showIntroDialog = async (): Promise<void> => {
     if (allDialogues.value.length === 0) {
       return;
     }
@@ -173,53 +176,35 @@ export const useScenarioNavigation = (
     currentDialogueIndex.value = 0;
     const [mapping] = allDialogues.value;
     currentSectionIndex.value = mapping.sectionIndex;
-    showDialogueWithAction(mapping.dialogue);
-  };
+    await showDialogueWithAction(mapping.dialogue, true);
 
-  /**
-   * 複数のボードアクションを順次実行するヘルパー
-   */
-  const applyBoardActionsSequentially = async (
-    actions: BoardAction[],
-  ): Promise<void> => {
-    await actions.reduce(async (promise, action) => {
-      await promise;
-      await applyBoardAction(action);
-    }, Promise.resolve());
-  };
-
-  /**
-   * 複数のダイアログまでのボードアクションを順次実行
-   */
-  const applyActionsUntilDialogueIndex = async (
-    dialogues: DemoDialogue[],
-    untilIndex: number,
-  ): Promise<void> => {
-    const relevantDialogues = dialogues.slice(0, untilIndex);
-    await relevantDialogues.reduce(async (promise, dialogue) => {
-      await promise;
-      await applyBoardActionsSequentially(dialogue.boardActions);
-    }, Promise.resolve());
+    // 初期状態をキャッシュ
+    saveBoardSnapshot(mapping.sectionIndex, currentDialogueIndex.value);
   };
 
   /**
    * 次のダイアログへ進む
    */
   const nextDialogue = async (): Promise<void> => {
+    // 進行中のアニメーションをキャンセル（連打対応）
+    boardStore.cancelOngoingAnimations();
+
     if (currentDialogueIndex.value < allDialogues.value.length - 1) {
       currentDialogueIndex.value += 1;
       const mapping = allDialogues.value[currentDialogueIndex.value];
       const prevMapping = allDialogues.value[currentDialogueIndex.value - 1];
 
-      // セクションが変わった場合、盤面を初期化
+      // セクションが変わった場合
       if (mapping.sectionIndex !== prevMapping.sectionIndex) {
         const newSection = scenario.value?.sections[mapping.sectionIndex];
         if (newSection) {
           const boardState = boardStringToBoardState(newSection.initialBoard);
           boardStore.setBoard(boardState);
+          boardStore.clearStones();
           currentSectionIndex.value = mapping.sectionIndex;
           isSectionCompleted.value = false;
-          // 新しいセクション内の前のダイアログまでのボードアクションを順次実行
+
+          // 新しいセクション内の前のダイアログまでのアクションを適用（アニメーションなし）
           await applyActionsUntilDialogueIndex(
             newSection.dialogues,
             mapping.sectionDialogueIndex,
@@ -227,74 +212,201 @@ export const useScenarioNavigation = (
         }
       }
 
-      await showDialogueWithAction(mapping.dialogue);
+      await showDialogueWithAction(mapping.dialogue, true);
+
+      // キャッシュ保存
+      saveBoardSnapshot(mapping.sectionIndex, currentDialogueIndex.value);
     }
   };
 
   /**
    * 前のダイアログへ戻す
    */
-  const previousDialogue = async (): Promise<void> => {
-    if (currentDialogueIndex.value > 0) {
-      currentDialogueIndex.value -= 1;
-      const mapping = allDialogues.value[currentDialogueIndex.value];
-      const nextMapping = allDialogues.value[currentDialogueIndex.value + 1];
+  const previousDialogue = (): void => {
+    if (currentDialogueIndex.value <= 0) {
+      return;
+    }
 
-      // セクションが変わった場合、盤面を初期化
-      if (mapping.sectionIndex === nextMapping.sectionIndex) {
-        // 同じセクション内での移動の場合
-        const section = scenario.value?.sections[mapping.sectionIndex];
-        if (section) {
-          const boardState = boardStringToBoardState(section.initialBoard);
-          boardStore.setBoard(boardState);
-          // 前のダイアログまでのボードアクションを順次実行
-          await applyActionsUntilDialogueIndex(
-            section.dialogues,
-            mapping.sectionDialogueIndex,
-          );
-        }
-      } else {
-        const newSection = scenario.value?.sections[mapping.sectionIndex];
-        if (newSection) {
-          const boardState = boardStringToBoardState(newSection.initialBoard);
-          boardStore.setBoard(boardState);
-          currentSectionIndex.value = mapping.sectionIndex;
-          isSectionCompleted.value = false;
-          // 前のセクション内の前のダイアログまでのボードアクションを順次実行
-          await applyActionsUntilDialogueIndex(
-            newSection.dialogues,
-            mapping.sectionDialogueIndex,
-          );
-        }
+    const mapping = allDialogues.value[currentDialogueIndex.value - 1];
+    const currentMapping = allDialogues.value[currentDialogueIndex.value];
+
+    currentDialogueIndex.value -= 1;
+
+    // キャッシュから復元を試みる
+    if (
+      restoreBoardSnapshot(mapping.sectionIndex, currentDialogueIndex.value)
+    ) {
+      // 復元成功
+      if (mapping.sectionIndex !== currentMapping.sectionIndex) {
+        currentSectionIndex.value = mapping.sectionIndex;
+        isSectionCompleted.value = false;
+      }
+      showDialogueMessage(mapping.dialogue);
+      return;
+    }
+
+    // キャッシュがない場合は再構築
+    const section = scenario.value?.sections[mapping.sectionIndex];
+    if (section) {
+      const boardState = boardStringToBoardState(section.initialBoard);
+      boardStore.setBoard(boardState);
+      boardStore.clearStones();
+
+      if (mapping.sectionIndex !== currentMapping.sectionIndex) {
+        currentSectionIndex.value = mapping.sectionIndex;
+        isSectionCompleted.value = false;
       }
 
-      await showDialogueWithAction(mapping.dialogue);
+      applyActionsUntilDialogueIndex(
+        section.dialogues,
+        mapping.sectionDialogueIndex + 1,
+      );
+
+      // 再構築結果をキャッシュ
+      saveBoardSnapshot(mapping.sectionIndex, currentDialogueIndex.value);
     }
+
+    showDialogueMessage(mapping.dialogue);
   };
 
   /**
-   * ダイアログを表示して盤面操作を適用
+   * ダイアログメッセージのみ表示（石の追加なし）
    */
-  const showDialogueWithAction = async (
-    dialogue: DemoDialogue,
-  ): Promise<void> => {
+  const showDialogueMessage = (dialogue: DemoDialogue): void => {
     dialogStore.showMessage({
       id: dialogue.id,
       character: dialogue.character,
       text: dialogue.text,
       emotion: dialogue.emotion,
     });
-    // BoardActions 配列を順次実行
-    await dialogue.boardActions.reduce(async (promise, action) => {
-      await promise;
-      await applyBoardAction(action);
-    }, Promise.resolve());
+  };
+
+  /**
+   * ダイアログを表示して石を追加
+   */
+  const showDialogueWithAction = async (
+    dialogue: DemoDialogue,
+    animate: boolean,
+  ): Promise<void> => {
+    showDialogueMessage(dialogue);
+
+    // placeアクションの石を追加
+    const placeActions = dialogue.boardActions.filter(
+      (a) => a.type === "place",
+    );
+    if (placeActions.length > 0) {
+      await boardStore.addStones(
+        placeActions.map((a) => ({
+          position: a.position,
+          color: a.color,
+        })),
+        currentDialogueIndex.value,
+        { animate },
+      );
+    }
+
+    // resetAll, setBoard等の他のアクションも処理
+    for (const action of dialogue.boardActions) {
+      if (action.type === "resetAll") {
+        boardStore.clearStones();
+        boardStore.resetBoard();
+      } else if (action.type === "setBoard") {
+        const boardState = boardStringToBoardState(action.board);
+        boardStore.setBoard(boardState);
+      }
+    }
+  };
+
+  /**
+   * 指定インデックスまでのダイアログのアクションを適用（アニメーションなし）
+   * resetAll, setBoard, place を順次処理
+   */
+  const applyActionsUntilDialogueIndex = async (
+    dialogues: DemoDialogue[],
+    untilIndex: number,
+  ): Promise<void> => {
+    for (let i = 0; i < untilIndex && i < dialogues.length; i++) {
+      const dialogue = dialogues[i];
+      for (const action of dialogue.boardActions) {
+        if (action.type === "resetAll") {
+          boardStore.clearStones();
+          boardStore.resetBoard();
+        } else if (action.type === "setBoard") {
+          boardStore.setBoard(boardStringToBoardState(action.board));
+        } else if (action.type === "place") {
+          const globalIndex = findGlobalDialogueIndex(dialogue);
+          // oxlint-disable-next-line no-await-in-loop -- 順次石追加のため意図的
+          await boardStore.addStones(
+            [{ position: action.position, color: action.color }],
+            globalIndex,
+            { animate: false },
+          );
+        }
+      }
+    }
+  };
+
+  /**
+   * ダイアログのグローバルインデックスを検索
+   */
+  const findGlobalDialogueIndex = (dialogue: DemoDialogue): number => {
+    const index = allDialogues.value.findIndex(
+      (m) => m.dialogue.id === dialogue.id,
+    );
+    return index >= 0 ? index : 0;
+  };
+
+  // --- 盤面キャッシュ操作 ---
+
+  /**
+   * 盤面スナップショットを保存
+   */
+  const saveBoardSnapshot = (
+    sectionIndex: number,
+    dialogueIndex: number,
+  ): void => {
+    if (!boardCache.value.has(sectionIndex)) {
+      boardCache.value.set(sectionIndex, new Map());
+    }
+    boardCache.value.get(sectionIndex)?.set(dialogueIndex, {
+      board: boardStore.board.map((row) => [...row]),
+      stones: boardStore.stones.map((s) => ({ ...s })),
+    });
+  };
+
+  /**
+   * 盤面スナップショットを復元
+   * @returns 復元成功したかどうか
+   */
+  const restoreBoardSnapshot = (
+    sectionIndex: number,
+    dialogueIndex: number,
+  ): boolean => {
+    const snapshot = boardCache.value.get(sectionIndex)?.get(dialogueIndex);
+    if (!snapshot) {
+      return false;
+    }
+
+    boardStore.setBoard(snapshot.board);
+    boardStore.stones.splice(
+      0,
+      boardStore.stones.length,
+      ...snapshot.stones.map((s) => ({ ...s })),
+    );
+    return true;
+  };
+
+  /**
+   * 盤面キャッシュをクリア
+   */
+  const clearBoardCache = (): void => {
+    boardCache.value.clear();
   };
 
   /**
    * 次のセクションへ進む
    */
-  const nextSection = (): void => {
+  const nextSection = async (): Promise<void> => {
     if (!canProceed.value) {
       return;
     }
@@ -311,18 +423,20 @@ export const useScenarioNavigation = (
           currentSection.value.initialBoard,
         );
         boardStore.setBoard(boardState);
+        boardStore.clearStones();
 
         // ダイアログがあるセクションなら最初のダイアログを表示
         const section = currentSection.value;
-        if (section.type === "demo") {
+        if (section.type === "demo" || section.type === "problem") {
           const [firstDialogue] = section.dialogues;
           if (firstDialogue) {
-            showDialogueWithAction(firstDialogue);
-          }
-        } else if (section.type === "problem") {
-          const [firstDialogue] = section.dialogues;
-          if (firstDialogue) {
-            showDialogueWithAction(firstDialogue);
+            await showDialogueWithAction(firstDialogue, true);
+
+            // 新セクションの初期状態をキャッシュ
+            saveBoardSnapshot(
+              currentSectionIndex.value,
+              currentDialogueIndex.value,
+            );
           }
         }
       }
@@ -335,29 +449,6 @@ export const useScenarioNavigation = (
   const completeScenario = (): void => {
     progressStore.completeScenario(scenarioId);
     appStore.goToScenarioList();
-  };
-
-  /**
-   * 盤面操作を適用（デモセクションのダイアログに含まれるアクション）
-   */
-  const applyBoardAction = async (action: BoardAction): Promise<void> => {
-    if (action.type === "place") {
-      boardStore.placeStone(action.position, action.color);
-      // アニメーション完了を待つ
-      await new Promise((resolve) => {
-        setTimeout(resolve, BOARD_ACTION_ANIMATION_DURATION);
-      });
-    } else if (action.type === "remove") {
-      boardStore.removeStone(action.position);
-      // アニメーション完了を待つ
-      await new Promise((resolve) => {
-        setTimeout(resolve, BOARD_ACTION_ANIMATION_DURATION);
-      });
-    } else if (action.type === "setBoard") {
-      const boardState = boardStringToBoardState(action.board);
-      boardStore.setBoard(boardState);
-    }
-    // Mark, lineアクションは盤面表示の拡張時に実装
   };
 
   /**
@@ -387,7 +478,6 @@ export const useScenarioNavigation = (
     previousDialogue,
     nextSection,
     completeScenario,
-    applyBoardAction,
     goBack,
   };
 };

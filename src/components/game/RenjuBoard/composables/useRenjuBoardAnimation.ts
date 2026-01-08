@@ -9,25 +9,20 @@ type LayoutType = ReturnType<typeof useRenjuBoardLayout>;
 
 export function useRenjuBoardAnimation(layout: LayoutType): {
   stoneRefs: Record<string, unknown>;
-  markRefs: Record<string, unknown>;
-  lineRefs: Record<string, unknown>;
-  animateLastPlacedStone: (
-    stoneKey: string,
-    position?: Position,
-  ) => Promise<void>;
-  animateLastAddedMarks: (markKeys: string[]) => Promise<void>;
-  animateLastAddedLines: (lineKeys: string[]) => Promise<void>;
+  animateStone: (position: Position) => Promise<void>;
+  finishAllAnimations: () => void;
 } {
   const stoneRefs: Record<string, unknown> = {};
-  const markRefs: Record<string, unknown> = {};
-  const lineRefs: Record<string, unknown> = {};
+  const activeTweens = new Map<string, Konva.Tween>();
 
-  const animateLastPlacedStone = (
-    stoneKey: string,
-    position?: Position,
-  ): Promise<void> =>
+  /**
+   * 指定座標の石をアニメーション
+   * 初期状態（opacity 0.5, scale 0.8）から最終状態（opacity 1, scale 1）へ
+   */
+  const animateStone = (position: Position): Promise<void> =>
     new Promise((resolve) => {
       nextTick(() => {
+        const stoneKey = `${position.row}-${position.col}`;
         const nodeRef = stoneRefs[stoneKey];
         if (!nodeRef) {
           resolve();
@@ -36,7 +31,7 @@ export function useRenjuBoardAnimation(layout: LayoutType): {
 
         // @ts-expect-error: Vue template ref methods
         const konvaNode = nodeRef.getNode?.();
-        if (!konvaNode || !position) {
+        if (!konvaNode) {
           resolve();
           return;
         }
@@ -45,11 +40,8 @@ export function useRenjuBoardAnimation(layout: LayoutType): {
         const targetY = layout.positionToPixels(position.row, position.col).y;
         const startY = targetY - layout.CELL_SIZE.value * 0.25;
 
-        // 初期状態を設定
+        // 初期状態を設定（configで設定済みだが、y位置のみ変更）
         konvaNode.y(startY);
-        konvaNode.opacity(0.5);
-        konvaNode.scaleX(0.8);
-        konvaNode.scaleY(0.8);
 
         // アニメーション実行
         const tween = new Konva.Tween({
@@ -61,124 +53,30 @@ export function useRenjuBoardAnimation(layout: LayoutType): {
           scaleY: 1,
           easing: Konva.Easings.EaseOut,
           onFinish: () => {
+            activeTweens.delete(stoneKey);
             resolve();
           },
         });
 
+        activeTweens.set(stoneKey, tween);
         tween.play();
       });
     });
 
-  return {
-    stoneRefs,
-    markRefs,
-    lineRefs,
-    animateLastPlacedStone,
-    animateLastAddedMarks,
-    animateLastAddedLines,
+  /**
+   * 全てのアニメーションを即座に完了
+   * 連打時に呼び出され、Tweenを最終状態にジャンプさせる
+   */
+  const finishAllAnimations = (): void => {
+    for (const [, tween] of activeTweens.entries()) {
+      tween.finish(); // 最終状態へジャンプ、onFinish実行
+    }
+    activeTweens.clear();
   };
 
-  // 最後に追加されたMark のアニメーション
-  // FIXME: アニメーションされたりされなかったりする。再計画が必要。
-  function animateLastAddedMarks(_markKeysToAnimate: string[]): Promise<void> {
-    return new Promise(() => {});
-    // return new Promise((resolve) => {
-    //   nextTick(() => {
-    //     if (markKeysToAnimate.length === 0) {
-    //       resolve();
-    //       return;
-    //     }
-
-    //     let completedCount = 0;
-
-    //     markKeysToAnimate.forEach((key) => {
-    //       const nodeRef = markRefs[key];
-    //       if (!nodeRef) {
-    //         completedCount++;
-    //         return;
-    //       }
-
-    //       // @ts-expect-error: Vue template ref methods
-    //       const konvaNode = nodeRef.getNode?.();
-    //       if (!konvaNode || !konvaNode.getParent()) {
-    //         completedCount++;
-    //         return;
-    //       }
-
-    //       konvaNode.opacity(0);
-    //       konvaNode.scaleX(0.6);
-    //       konvaNode.scaleY(0.6);
-
-    //       const tween = new Konva.Tween({
-    //         node: konvaNode,
-    //         duration: 0.2,
-    //         opacity: 1,
-    //         scaleX: 1,
-    //         scaleY: 1,
-    //         easing: Konva.Easings.EaseOut,
-    //         onFinish: () => {
-    //           completedCount++;
-    //           if (completedCount === markKeysToAnimate.length) {
-    //             resolve();
-    //           }
-    //         },
-    //       });
-
-    //       tween.play();
-    //     });
-    //   });
-    // });
-  }
-
-  // 最後に追加されたLine のアニメーション
-  // FIXME: アニメーションされたりされなかったりする。再計画が必要。
-  function animateLastAddedLines(_lineKeysToAnimate: string[]): Promise<void> {
-    return new Promise(() => {});
-    // return new Promise((resolve) => {
-    //   nextTick(() => {
-    //     if (lineKeysToAnimate.length === 0) {
-    //       resolve();
-    //       return;
-    //     }
-
-    //     let completedCount = 0;
-
-    //     lineKeysToAnimate.forEach((key) => {
-    //       const nodeRef = lineRefs[key];
-    //       if (!nodeRef) {
-    //         completedCount++;
-    //         return;
-    //       }
-
-    //       // @ts-expect-error: Vue template ref methods
-    //       const konvaNode = nodeRef.getNode?.();
-    //       if (!konvaNode || !konvaNode.getParent()) {
-    //         completedCount++;
-    //         return;
-    //       }
-
-    //       konvaNode.opacity(0);
-    //       konvaNode.scaleX(0.6);
-    //       konvaNode.scaleY(0.6);
-
-    //       const tween = new Konva.Tween({
-    //         node: konvaNode,
-    //         duration: 0.2,
-    //         opacity: 1,
-    //         scaleX: 1,
-    //         scaleY: 1,
-    //         easing: Konva.Easings.EaseOut,
-    //         onFinish: () => {
-    //           completedCount++;
-    //           if (completedCount === lineKeysToAnimate.length) {
-    //             resolve();
-    //           }
-    //         },
-    //       });
-
-    //       tween.play();
-    //     });
-    //   });
-    // });
-  }
+  return {
+    stoneRefs,
+    animateStone,
+    finishAllAnimations,
+  };
 }
