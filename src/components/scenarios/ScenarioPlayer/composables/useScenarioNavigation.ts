@@ -56,8 +56,8 @@ export const useScenarioNavigation = (
   currentDialogueIndex: Ref<number>;
   isSectionCompleted: Ref<boolean>;
   currentSection: ComputedRef<Section | null>;
-  isLastSection: ComputedRef<boolean>;
-  canProceed: ComputedRef<boolean>;
+  showNextSectionButton: ComputedRef<boolean>;
+  isScenarioDone: ComputedRef<boolean>;
   canNavigatePrevious: ComputedRef<boolean>;
   canNavigateNext: ComputedRef<boolean>;
   allDialogues: Ref<DialogueMapping[]>;
@@ -101,7 +101,26 @@ export const useScenarioNavigation = (
     return currentSectionIndex.value >= scenario.value.sections.length - 1;
   });
 
-  const canProceed = computed(() => isSectionCompleted.value);
+  // 「次に進む」ボタン表示: 問題セクション完了後、かつ次のセクションがある
+  const showNextSectionButton = computed(
+    () =>
+      currentSection.value?.type === "problem" &&
+      isSectionCompleted.value &&
+      !isLastSection.value,
+  );
+
+  // シナリオ完了状態か（= 「シナリオ完了」ボタン表示条件）
+  const isScenarioDone = computed(() => {
+    if (!isLastSection.value) {
+      return false;
+    }
+    // デモセクション: 最後のダイアログに到達
+    if (currentSection.value?.type === "demo") {
+      return currentDialogueIndex.value >= allDialogues.value.length - 1;
+    }
+    // 問題セクション: 正解済み
+    return isSectionCompleted.value;
+  });
 
   const canNavigatePrevious = computed(() => currentDialogueIndex.value > 0);
 
@@ -526,39 +545,35 @@ export const useScenarioNavigation = (
    * 次のセクションへ進む
    */
   const nextSection = async (): Promise<void> => {
-    if (!canProceed.value) {
+    if (!showNextSectionButton.value) {
       return;
     }
 
-    if (isLastSection.value) {
-      completeScenario();
-    } else {
-      currentSectionIndex.value += 1;
-      currentDialogueIndex.value = 0;
-      isSectionCompleted.value = false;
+    currentSectionIndex.value += 1;
+    currentDialogueIndex.value = 0;
+    isSectionCompleted.value = false;
 
-      if (currentSection.value) {
-        const boardState = boardStringToBoardState(
-          currentSection.value.initialBoard,
-        );
-        boardStore.setBoard(boardState);
-        boardStore.clearStones();
-        boardStore.clearMarks();
-        boardStore.clearLines();
+    if (currentSection.value) {
+      const boardState = boardStringToBoardState(
+        currentSection.value.initialBoard,
+      );
+      boardStore.setBoard(boardState);
+      boardStore.clearStones();
+      boardStore.clearMarks();
+      boardStore.clearLines();
 
-        // ダイアログがあるセクションなら最初のダイアログを表示
-        const section = currentSection.value;
-        if (section.type === "demo" || section.type === "problem") {
-          const [firstDialogue] = section.dialogues;
-          if (firstDialogue) {
-            await showDialogueWithAction(firstDialogue, true);
+      // ダイアログがあるセクションなら最初のダイアログを表示
+      const section = currentSection.value;
+      if (section.type === "demo" || section.type === "problem") {
+        const [firstDialogue] = section.dialogues;
+        if (firstDialogue) {
+          await showDialogueWithAction(firstDialogue, true);
 
-            // 新セクションの初期状態をキャッシュ
-            saveBoardSnapshot(
-              currentSectionIndex.value,
-              currentDialogueIndex.value,
-            );
-          }
+          // 新セクションの初期状態をキャッシュ
+          saveBoardSnapshot(
+            currentSectionIndex.value,
+            currentDialogueIndex.value,
+          );
         }
       }
     }
@@ -589,8 +604,8 @@ export const useScenarioNavigation = (
     demoDescriptionNodes,
     // Computed
     currentSection,
-    isLastSection,
-    canProceed,
+    showNextSectionButton,
+    isScenarioDone,
     canNavigatePrevious,
     canNavigateNext,
     // Methods

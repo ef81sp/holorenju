@@ -8,27 +8,19 @@ interface Props {
   sectionIndex: number;
   totalSections: number;
   description: TextNode[];
-  canProceed: boolean;
-  isLastSection: boolean;
+  showNextSectionButton: boolean;
+  showCompleteButton: boolean;
   showAnswerButton?: boolean;
   answerDisabled?: boolean;
 }
 
-const props = defineProps<Props>();
+defineProps<Props>();
 
 const emits = defineEmits<{
   nextSection: [];
   submitAnswer: [];
   completeScenario: [];
 }>();
-
-const handleNextOrComplete = (): void => {
-  if (props.isLastSection) {
-    emits("completeScenario");
-  } else {
-    emits("nextSection");
-  }
-};
 </script>
 
 <template>
@@ -57,11 +49,18 @@ const handleNextOrComplete = (): void => {
         回答
       </button>
       <button
-        v-if="canProceed"
+        v-if="showNextSectionButton"
         class="next-button"
-        @click="handleNextOrComplete"
+        @click="emits('nextSection')"
       >
-        {{ isLastSection ? "シナリオ完了！" : "次に進む" }}
+        次に進む
+      </button>
+      <button
+        v-if="showCompleteButton"
+        class="next-button"
+        @click="emits('completeScenario')"
+      >
+        シナリオ完了！
       </button>
     </div>
   </div>

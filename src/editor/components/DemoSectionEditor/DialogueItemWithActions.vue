@@ -61,7 +61,7 @@ const handleDescriptionChange = (e: Event): void => {
 };
 
 const handleClearChange = (e: Event): void => {
-  const {checked} = (e.target as HTMLInputElement);
+  const { checked } = e.target as HTMLInputElement;
   props.updateDialogue(props.dialogueIndex, {
     description: {
       text: props.dialogue.description?.text || [],
