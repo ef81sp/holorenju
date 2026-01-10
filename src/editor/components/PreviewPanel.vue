@@ -7,7 +7,7 @@ import DialogText from "@/components/common/DialogText.vue";
 import RichText from "@/components/common/RichText.vue";
 import type {
   DemoSection,
-  ProblemSection,
+  QuestionSection,
   BoardAction,
 } from "@/types/scenario";
 import type { BoardState, StoneColor } from "@/types/game";
@@ -46,12 +46,12 @@ const previewContent = computed(() => {
       firstDialogue: demoSection.dialogues[0],
     };
   }
-  const problemSection = section as ProblemSection;
+  const questionSection = section as QuestionSection;
   return {
-    type: "problem" as const,
-    board: problemSection.initialBoard,
-    description: problemSection.description,
-    conditionCount: problemSection.successConditions.length,
+    type: "question" as const,
+    board: questionSection.initialBoard,
+    description: questionSection.description,
+    conditionCount: questionSection.successConditions.length,
   };
 });
 
@@ -104,7 +104,7 @@ const currentBoard = computed(() => {
     return null;
   }
 
-  if (previewContent.value.type === "problem") {
+  if (previewContent.value.type === "question") {
     return stringBoardToBoardState(previewContent.value.board);
   }
 
@@ -297,7 +297,7 @@ const currentLines = computed(() => {
 
       <div
         v-else
-        class="preview-problem"
+        class="preview-question"
       >
         <h4>{{ editorStore.currentSection?.title }}</h4>
         <div class="preview-info">
@@ -377,7 +377,7 @@ const currentLines = computed(() => {
 }
 
 .preview-demo,
-.preview-problem {
+.preview-question {
   padding: var(--size-6);
   background-color: var(--color-bg-gray);
   border-radius: 4px;
@@ -385,7 +385,7 @@ const currentLines = computed(() => {
 }
 
 .preview-demo h4,
-.preview-problem h4 {
+.preview-question h4 {
   margin-top: 0;
   margin-bottom: var(--size-5);
   font-size: var(--size-12);

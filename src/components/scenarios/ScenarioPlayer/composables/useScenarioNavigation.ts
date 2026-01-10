@@ -104,7 +104,7 @@ export const useScenarioNavigation = (
   // 「次に進む」ボタン表示: 問題セクション完了後、かつ次のセクションがある
   const showNextSectionButton = computed(
     () =>
-      currentSection.value?.type === "problem" &&
+      currentSection.value?.type === "question" &&
       isSectionCompleted.value &&
       !isLastSection.value,
   );
@@ -564,7 +564,7 @@ export const useScenarioNavigation = (
 
       // ダイアログがあるセクションなら最初のダイアログを表示
       const section = currentSection.value;
-      if (section.type === "demo" || section.type === "problem") {
+      if (section.type === "demo" || section.type === "question") {
         const [firstDialogue] = section.dialogues;
         if (firstDialogue) {
           await showDialogueWithAction(firstDialogue, true);

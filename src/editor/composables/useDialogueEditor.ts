@@ -3,13 +3,13 @@ import { computed, type ComputedRef } from "vue";
 import type {
   DemoSection,
   DemoDialogue,
-  ProblemSection,
+  QuestionSection,
 } from "@/types/scenario";
 
 import { useEditorStore } from "@/editor/stores/editorStore";
 import { generateDialogueId } from "@/logic/scenarioFileHandler";
 
-export type DialogueSection = DemoSection | ProblemSection;
+export type DialogueSection = DemoSection | QuestionSection;
 
 interface UseDialogueEditorReturn {
   dialogues: ComputedRef<DemoDialogue[]>;

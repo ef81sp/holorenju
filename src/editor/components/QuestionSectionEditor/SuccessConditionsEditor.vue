@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import type { SuccessCondition, ProblemSection } from "@/types/scenario";
+import type { SuccessCondition, QuestionSection } from "@/types/scenario";
 import { useSuccessConditions } from "@/editor/composables/useSuccessConditions";
 
 const props = defineProps<{
   conditions: SuccessCondition[];
   operator: "or" | "and";
-  getCurrentSection: () => ProblemSection | null;
-  updateSection: (updates: Partial<ProblemSection>) => void;
+  getCurrentSection: () => QuestionSection | null;
+  updateSection: (updates: Partial<QuestionSection>) => void;
   updateSuccessOperator: (operator: "or" | "and") => void;
 }>();
 

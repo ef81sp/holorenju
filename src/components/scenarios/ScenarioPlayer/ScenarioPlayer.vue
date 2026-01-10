@@ -10,12 +10,12 @@ import CutinOverlay from "@/components/common/CutinOverlay.vue";
 import { useScenarioNavigation } from "./composables/useScenarioNavigation";
 import { useKeyboardNavigation } from "./composables/useKeyboardNavigation";
 import { useBoardSize } from "./composables/useBoardSize";
-import { useProblemSolver } from "./composables/useProblemSolver";
+import { useQuestionSolver } from "./composables/useQuestionSolver";
 import { useCutinDisplay } from "./composables/useCutinDisplay";
 import { useGameStore } from "@/stores/gameStore";
 import { useDialogStore } from "@/stores/dialogStore";
 
-import type { ProblemSection } from "@/types/scenario";
+import type { QuestionSection } from "@/types/scenario";
 import type { Position } from "@/types/game";
 import type { TextNode } from "@/types/text";
 
@@ -57,7 +57,7 @@ const showIncorrectCutin = (): void => {
   showCutin("wrong");
 };
 
-const problemSolver = useProblemSolver(
+const questionSolver = useQuestionSolver(
   props.scenarioId,
   onSectionComplete,
   showCorrectCutin,
@@ -108,7 +108,7 @@ onUnmounted(() => {
 const handlePlaceStone = (position?: Position): void => {
   if (
     !scenarioNav.currentSection.value ||
-    scenarioNav.currentSection.value.type !== "problem"
+    scenarioNav.currentSection.value.type !== "question"
   ) {
     return;
   }
@@ -116,9 +116,9 @@ const handlePlaceStone = (position?: Position): void => {
   // Position が指定されていればそれを使用、なければカーソル位置
   const targetPosition = position || keyboardNav.cursorPosition.value;
 
-  problemSolver.handlePlaceStone(
+  questionSolver.handlePlaceStone(
     targetPosition,
-    scenarioNav.currentSection.value as ProblemSection,
+    scenarioNav.currentSection.value as QuestionSection,
     scenarioNav.isSectionCompleted.value,
   );
 };
@@ -126,7 +126,7 @@ const handlePlaceStone = (position?: Position): void => {
 const requiresAnswerButton = computed(() => {
   if (
     !scenarioNav.currentSection.value ||
-    scenarioNav.currentSection.value.type !== "problem"
+    scenarioNav.currentSection.value.type !== "question"
   ) {
     return false;
   }
@@ -136,7 +136,7 @@ const requiresAnswerButton = computed(() => {
 
 const descriptionNodes = computed<TextNode[]>(() => {
   const section = scenarioNav.currentSection.value;
-  if (!section || section.type !== "problem") {
+  if (!section || section.type !== "question") {
     return [];
   }
   return section.description || [];
@@ -145,13 +145,13 @@ const descriptionNodes = computed<TextNode[]>(() => {
 const handleSubmitAnswer = (): void => {
   if (
     !scenarioNav.currentSection.value ||
-    scenarioNav.currentSection.value.type !== "problem"
+    scenarioNav.currentSection.value.type !== "question"
   ) {
     return;
   }
 
-  problemSolver.submitAnswer(
-    scenarioNav.currentSection.value as ProblemSection,
+  questionSolver.submitAnswer(
+    scenarioNav.currentSection.value as QuestionSection,
     scenarioNav.isSectionCompleted.value,
   );
 };

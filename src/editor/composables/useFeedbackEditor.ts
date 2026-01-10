@@ -1,12 +1,12 @@
-import type { ProblemSection, DialogueLine } from "@/types/scenario";
+import type { QuestionSection, DialogueLine } from "@/types/scenario";
 
 /**
  * フィードバックメッセージの編集ロジックを提供するComposable
  * success/failure/progressの3種類のフィードバックを管理する
  */
 export function useFeedbackEditor(
-  getCurrentSection: () => ProblemSection | null,
-  updateSection: (updates: Partial<ProblemSection>) => void,
+  getCurrentSection: () => QuestionSection | null,
+  updateSection: (updates: Partial<QuestionSection>) => void,
 ): {
   getFeedbackLines: (key: "success" | "failure" | "progress") => DialogueLine[];
   addFeedbackLine: (key: "success" | "failure" | "progress") => void;

@@ -3,12 +3,12 @@ import { computed, type PropType } from "vue";
 import { useEditorStore } from "@/editor/stores/editorStore";
 import SectionMetaEditor from "./SectionMetaEditor.vue";
 import BoardVisualEditor from "./BoardVisualEditor.vue";
-import SuccessConditionsEditor from "./ProblemSectionEditor/SuccessConditionsEditor.vue";
-import FeedbackEditor from "./ProblemSectionEditor/FeedbackEditor.vue";
-import DialogueListEditor from "./ProblemSectionEditor/DialogueListEditor.vue";
+import SuccessConditionsEditor from "./QuestionSectionEditor/SuccessConditionsEditor.vue";
+import FeedbackEditor from "./QuestionSectionEditor/FeedbackEditor.vue";
+import DialogueListEditor from "./QuestionSectionEditor/DialogueListEditor.vue";
 import { useDialogueEditor } from "@/editor/composables/useDialogueEditor";
 import { parseText, stringifyText } from "@/logic/textParser";
-import type { ProblemSection } from "@/types/scenario";
+import type { QuestionSection } from "@/types/scenario";
 
 const editorStore = useEditorStore();
 
@@ -19,10 +19,10 @@ const props = defineProps({
   },
 });
 
-const currentSection = computed<ProblemSection | null>(() => {
+const currentSection = computed<QuestionSection | null>(() => {
   const section = editorStore.currentSection;
-  return section && section.type === "problem"
-    ? (section as ProblemSection)
+  return section && section.type === "question"
+    ? (section as QuestionSection)
     : null;
 });
 
@@ -30,8 +30,8 @@ const descriptionText = computed(() =>
   stringifyText(currentSection.value?.description || []),
 );
 
-const getCurrentSection = (): ProblemSection | null => currentSection.value;
-const updateSection = (updates: Partial<ProblemSection>): void => {
+const getCurrentSection = (): QuestionSection | null => currentSection.value;
+const updateSection = (updates: Partial<QuestionSection>): void => {
   editorStore.updateCurrentSection(updates);
 };
 
@@ -67,7 +67,7 @@ const updateSuccessOperator = (operator: "or" | "and"): void => {
 <template>
   <div
     v-if="currentSection"
-    class="problem-section-editor"
+    class="question-section-editor"
   >
     <div class="detail-grid">
       <div
@@ -132,7 +132,7 @@ const updateSuccessOperator = (operator: "or" | "and"): void => {
 </template>
 
 <style scoped>
-.problem-section-editor {
+.question-section-editor {
   display: flex;
   flex-direction: column;
   gap: var(--size-8);

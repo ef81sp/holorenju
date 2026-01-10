@@ -7,7 +7,7 @@
   "sections": [
     {
       "id": "section_1",
-      "type": "problem",
+      "type": "question",
       "title": "ORテスト",
       "initialBoard": [
         "---------------",
@@ -86,7 +86,7 @@
     },
     {
       "id": "section_2",
-      "type": "problem",
+      "type": "question",
       "title": "ANDテスト",
       "initialBoard": [
         "---------------",

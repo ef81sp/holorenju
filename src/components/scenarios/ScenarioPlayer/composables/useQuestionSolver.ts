@@ -1,7 +1,7 @@
 import type { CharacterType } from "@/types/character";
 import type { Position, BoardState } from "@/types/game";
 import type {
-  ProblemSection,
+  QuestionSection,
   SuccessCondition,
   SuccessOperator,
 } from "@/types/scenario";
@@ -17,7 +17,7 @@ import { evaluateAllConditions, evaluateCondition } from "./problemConditions";
  *
  * 石の配置、成功条件のチェック、フィードバック表示を担当します。
  */
-export const useProblemSolver = (
+export const useQuestionSolver = (
   scenarioId: string,
   onSectionComplete: () => void,
   onShowCorrectCutin?: () => void,
@@ -25,14 +25,14 @@ export const useProblemSolver = (
 ): {
   handlePlaceStone: (
     position: Position,
-    problemSection: ProblemSection,
+    questionSection: QuestionSection,
     isSectionCompleted: boolean,
   ) => void;
   submitAnswer: (
-    problemSection: ProblemSection,
+    questionSection: QuestionSection,
     isSectionCompleted: boolean,
   ) => void;
-  handleCorrectMove: (problemSection: ProblemSection) => void;
+  handleCorrectMove: (questionSection: QuestionSection) => void;
   checkAllConditions: (
     conditions: SuccessCondition[],
     operator?: SuccessOperator,
@@ -69,7 +69,7 @@ export const useProblemSolver = (
     }
   };
 
-  const handleIncorrectMove = (problemSection: ProblemSection): void => {
+  const handleIncorrectMove = (questionSection: QuestionSection): void => {
     console.warn("[handleIncorrectMove] Called");
     restoreAttemptBoard();
     resetAttemptBaseBoard();
@@ -77,7 +77,7 @@ export const useProblemSolver = (
     // ×カットインを表示
     onShowIncorrectCutin?.();
 
-    const [msg] = problemSection.feedback.failure || [];
+    const [msg] = questionSection.feedback.failure || [];
     if (msg) {
       dialogStore.showMessage({
         id: `feedback-failure-${msg.character}`,
@@ -93,7 +93,7 @@ export const useProblemSolver = (
    */
   const handlePlaceStone = (
     position: Position,
-    problemSection: ProblemSection,
+    questionSection: QuestionSection,
     isSectionCompleted: boolean,
   ): void => {
     if (isSectionCompleted) {
@@ -118,13 +118,13 @@ export const useProblemSolver = (
     );
 
     // 成功条件をチェック
-    const operator = problemSection.successOperator ?? "or";
+    const operator = questionSection.successOperator ?? "or";
     if (operator === "or") {
-      if (checkAllConditions(problemSection.successConditions, operator)) {
+      if (checkAllConditions(questionSection.successConditions, operator)) {
         resetAttemptBaseBoard();
-        handleCorrectMove(problemSection);
+        handleCorrectMove(questionSection);
       } else {
-        handleIncorrectMove(problemSection);
+        handleIncorrectMove(questionSection);
       }
     }
   };
@@ -133,28 +133,28 @@ export const useProblemSolver = (
    * 回答ボタンからの判定（AND想定）
    */
   const submitAnswer = (
-    problemSection: ProblemSection,
+    questionSection: QuestionSection,
     isSectionCompleted: boolean,
   ): void => {
     if (isSectionCompleted) {
       return;
     }
 
-    const operator = problemSection.successOperator ?? "or";
+    const operator = questionSection.successOperator ?? "or";
     ensureAttemptBaseBoard();
 
-    if (checkAllConditions(problemSection.successConditions, operator)) {
+    if (checkAllConditions(questionSection.successConditions, operator)) {
       resetAttemptBaseBoard();
-      handleCorrectMove(problemSection);
+      handleCorrectMove(questionSection);
     } else {
-      handleIncorrectMove(problemSection);
+      handleIncorrectMove(questionSection);
     }
   };
 
   /**
    * 成功時の処理
    */
-  const handleCorrectMove = (problemSection: ProblemSection): void => {
+  const handleCorrectMove = (questionSection: QuestionSection): void => {
     console.warn("[handleCorrectMove] Called");
     onSectionComplete();
 
@@ -162,8 +162,8 @@ export const useProblemSolver = (
     onShowCorrectCutin?.();
 
     // 正解のフィードバックを表示
-    if (problemSection.feedback.success.length > 0) {
-      const [msg] = problemSection.feedback.success;
+    if (questionSection.feedback.success.length > 0) {
+      const [msg] = questionSection.feedback.success;
       console.warn("[handleCorrectMove] Showing success feedback:", msg.text);
       dialogStore.showMessage({
         id: `feedback-success-${msg.character}`,
@@ -174,7 +174,7 @@ export const useProblemSolver = (
     }
 
     // 進度を記録
-    progressStore.completeSection(scenarioId, problemSection.id, 100);
+    progressStore.completeSection(scenarioId, questionSection.id, 100);
   };
 
   /**

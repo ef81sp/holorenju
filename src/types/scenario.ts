@@ -13,11 +13,11 @@ type ScenarioDifficulty = "beginner" | "intermediate" | "advanced";
 
 interface BaseSection {
   id: string;
-  type: "demo" | "problem";
+  type: "demo" | "question";
   title: string;
 }
 
-type Section = DemoSection | ProblemSection;
+type Section = DemoSection | QuestionSection;
 
 // 成功条件の評価方法
 type SuccessOperator = "or" | "and";
@@ -90,14 +90,14 @@ interface ResetAllAction {
 
 // ===== 問題セクション =====
 
-interface ProblemSection extends BaseSection {
-  type: "problem";
+interface QuestionSection extends BaseSection {
+  type: "question";
   initialBoard: string[];
   description: TextNode[];
   dialogues: DemoDialogue[];
   successOperator?: SuccessOperator;
   successConditions: SuccessCondition[];
-  feedback: ProblemFeedback;
+  feedback: QuestionFeedback;
 }
 
 type SuccessCondition =
@@ -123,7 +123,7 @@ interface SequenceCondition {
   strict: boolean;
 }
 
-interface ProblemFeedback {
+interface QuestionFeedback {
   success: DialogueLine[];
   failure: DialogueLine[];
   progress?: DialogueLine[];
@@ -179,12 +179,12 @@ export type {
   SetBoardAction,
   MarkAction,
   LineAction,
-  ProblemSection,
+  QuestionSection,
   SuccessCondition,
   PositionCondition,
   PatternCondition,
   SequenceCondition,
-  ProblemFeedback,
+  QuestionFeedback,
   DialogueLine,
   Scenario,
   ScenarioProgress,

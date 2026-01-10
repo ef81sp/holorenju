@@ -520,7 +520,7 @@
     },
     {
       "id": "section_2",
-      "type": "problem",
+      "type": "question",
       "title": "問題セクション",
       "initialBoard": [
         "---------------",

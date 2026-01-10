@@ -1,14 +1,14 @@
 <script setup lang="ts">
-import type { ProblemSection } from "@/types/scenario";
+import type { QuestionSection } from "@/types/scenario";
 import { useFeedbackEditor } from "@/editor/composables/useFeedbackEditor";
 import FeedbackLineItem from "./FeedbackLineItem.vue";
 
 type FeedbackKey = "success" | "failure" | "progress";
 
 const props = defineProps<{
-  feedback: ProblemSection["feedback"];
-  getCurrentSection: () => ProblemSection | null;
-  updateSection: (updates: Partial<ProblemSection>) => void;
+  feedback: QuestionSection["feedback"];
+  getCurrentSection: () => QuestionSection | null;
+  updateSection: (updates: Partial<QuestionSection>) => void;
 }>();
 
 const {

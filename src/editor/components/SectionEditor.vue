@@ -2,7 +2,7 @@
 import type { PropType } from "vue";
 import { useEditorStore } from "@/editor/stores/editorStore";
 import DemoSectionEditor from "./DemoSectionEditor.vue";
-import ProblemSectionEditor from "./ProblemSectionEditor.vue";
+import QuestionSectionEditor from "./QuestionSectionEditor.vue";
 
 const editorStore = useEditorStore();
 
@@ -18,7 +18,7 @@ const props = defineProps({
 });
 
 // Methods
-const handleAddSection = (type: "demo" | "problem"): void => {
+const handleAddSection = (type: "demo" | "question"): void => {
   editorStore.addSection(type);
 };
 
@@ -38,7 +38,7 @@ const handleSelectSection = (index: number): void => {
   editorStore.selectSection(index);
 };
 
-const handleTypeChange = (type: "demo" | "problem"): void => {
+const handleTypeChange = (type: "demo" | "question"): void => {
   editorStore.changeCurrentSectionType(type);
 };
 </script>
@@ -59,7 +59,7 @@ const handleTypeChange = (type: "demo" | "problem"): void => {
         </button>
         <button
           class="btn-add"
-          @click="() => handleAddSection('problem')"
+          @click="() => handleAddSection('question')"
         >
           ➕ 問題
         </button>
@@ -155,12 +155,14 @@ const handleTypeChange = (type: "demo" | "problem"): void => {
               @change="
                 (e) =>
                   handleTypeChange(
-                    (e.target as HTMLSelectElement).value as 'demo' | 'problem',
+                    (e.target as HTMLSelectElement).value as
+                      | 'demo'
+                      | 'question',
                   )
               "
             >
               <option value="demo">デモ</option>
-              <option value="problem">問題</option>
+              <option value="question">問題</option>
             </select>
           </div>
         </div>
@@ -169,8 +171,8 @@ const handleTypeChange = (type: "demo" | "problem"): void => {
           v-if="editorStore.currentSection.type === 'demo'"
           :view="props.detailPart"
         />
-        <ProblemSectionEditor
-          v-else-if="editorStore.currentSection.type === 'problem'"
+        <QuestionSectionEditor
+          v-else-if="editorStore.currentSection.type === 'question'"
           :view="props.detailPart"
         />
       </div>

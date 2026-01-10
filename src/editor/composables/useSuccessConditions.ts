@@ -1,6 +1,6 @@
 import type { Position } from "@/types/game";
 import type {
-  ProblemSection,
+  QuestionSection,
   SuccessCondition,
   PositionCondition,
   PatternCondition,
@@ -12,8 +12,8 @@ import type {
  * Position、Pattern、Sequenceの3種類の成功条件を管理する
  */
 export function useSuccessConditions(
-  getCurrentSection: () => ProblemSection | null,
-  updateSection: (updates: Partial<ProblemSection>) => void,
+  getCurrentSection: () => QuestionSection | null,
+  updateSection: (updates: Partial<QuestionSection>) => void,
 ): {
   isPositionCondition: (
     condition: SuccessCondition,

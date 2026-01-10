@@ -11,12 +11,12 @@ import type {
   Scenario,
   DemoSection,
   DemoDialogue,
-  ProblemSection,
+  QuestionSection,
   Section,
   BoardAction,
   SuccessCondition,
   Position,
-  ProblemFeedback,
+  QuestionFeedback,
   DialogueLine,
 } from "../types/scenario";
 import type { TextNode, InlineTextNode } from "../types/text";
@@ -84,12 +84,12 @@ function validateSection(data: unknown, path: string): Section {
     throw new Error(`${path} must be an object`);
   }
 
-  const type = validateEnum(data, "type", ["demo", "problem"], path);
+  const type = validateEnum(data, "type", ["demo", "question"], path);
 
   if (type === "demo") {
     return validateDemoSection(data, path);
   }
-  return validateProblemSection(data, path);
+  return validateQuestionSection(data, path);
 }
 
 /**
@@ -128,10 +128,10 @@ function validateDemoSection(
 /**
  * 問題セクションをバリデーション
  */
-function validateProblemSection(
+function validateQuestionSection(
   data: Record<string, unknown>,
   path: string,
-): ProblemSection {
+): QuestionSection {
   const id = validateString(data, "id", `${path}.id`);
   const title = validateString(data, "title", `${path}.title`);
   const initialBoard = validateBoardArray(
@@ -165,7 +165,7 @@ function validateProblemSection(
 
   return {
     id,
-    type: "problem",
+    type: "question",
     title,
     initialBoard,
     description,
@@ -458,7 +458,7 @@ function validateFeedback(
   data: Record<string, unknown>,
   key: string,
   path: string,
-): ProblemFeedback {
+): QuestionFeedback {
   const value = data[key];
 
   if (!isObject(value)) {

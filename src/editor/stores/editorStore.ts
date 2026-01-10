@@ -10,7 +10,7 @@ import type { Scenario, Section } from "@/types/scenario";
 import {
   createEmptyScenario,
   createEmptyDemoSection,
-  createEmptyProblemSection,
+  createEmptyQuestionSection,
   generateSectionId,
 } from "@/logic/scenarioFileHandler";
 
@@ -57,11 +57,11 @@ export const useEditorStore = defineStore("editor", () => {
     }
   };
 
-  const addSection = (type: "demo" | "problem"): void => {
+  const addSection = (type: "demo" | "question"): void => {
     const newSection: Section =
       type === "demo"
         ? (createEmptyDemoSection() as Section)
-        : (createEmptyProblemSection() as Section);
+        : (createEmptyQuestionSection() as Section);
     // 自動採番IDを設定
     newSection.id = generateSectionId(scenario.value.sections);
 
@@ -181,7 +181,7 @@ export const useEditorStore = defineStore("editor", () => {
     }
   };
 
-  const changeCurrentSectionType = (type: "demo" | "problem"): void => {
+  const changeCurrentSectionType = (type: "demo" | "question"): void => {
     if (selectedSectionIndex.value === null) {
       return;
     }
@@ -193,7 +193,7 @@ export const useEditorStore = defineStore("editor", () => {
     const base =
       type === "demo"
         ? (createEmptyDemoSection() as Section)
-        : (createEmptyProblemSection() as Section);
+        : (createEmptyQuestionSection() as Section);
 
     const updated: Section = {
       ...base,

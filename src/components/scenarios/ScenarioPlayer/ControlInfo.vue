@@ -3,7 +3,7 @@ import type { Position } from "@/types/game";
 
 interface Props {
   cursorPosition: Position;
-  sectionType?: "demo" | "problem" | null;
+  sectionType?: "demo" | "question" | null;
 }
 
 withDefaults(defineProps<Props>(), {
@@ -19,7 +19,7 @@ withDefaults(defineProps<Props>(), {
       <h4 class="section-title">マウス</h4>
       <div class="control-keys">会話をクリック: 会話を進める</div>
       <div
-        v-if="sectionType === 'problem'"
+        v-if="sectionType === 'question'"
         class="control-keys"
       >
         2回クリック: 石を置く
@@ -29,7 +29,7 @@ withDefaults(defineProps<Props>(), {
     <div class="control-section">
       <h4 class="section-title">キーボード</h4>
       <div class="control-keys"><span class="key">←/→</span>: 会話を進める</div>
-      <template v-if="sectionType === 'problem'">
+      <template v-if="sectionType === 'question'">
         <div class="control-keys">
           <span class="key">W/A/S/D</span>: カーソル移動
         </div>
@@ -40,7 +40,7 @@ withDefaults(defineProps<Props>(), {
     </div>
 
     <div
-      v-if="sectionType === 'problem'"
+      v-if="sectionType === 'question'"
       class="cursor-position"
     >
       位置: ({{ cursorPosition.row }}, {{ cursorPosition.col }})

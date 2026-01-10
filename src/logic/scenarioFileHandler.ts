@@ -4,7 +4,7 @@
  * JSONファイルの読み込み・保存・バリデーション
  */
 
-import type { Scenario, DemoSection, ProblemSection } from "../types/scenario";
+import type { Scenario, DemoSection, QuestionSection } from "../types/scenario";
 
 import { parseScenario, validateBoardState } from "./scenarioParser";
 
@@ -178,10 +178,10 @@ export function createEmptyDemoSection(): DemoSection {
 /**
  * 空の問題セクションテンプレート
  */
-export function createEmptyProblemSection(): ProblemSection {
+export function createEmptyQuestionSection(): QuestionSection {
   return {
-    id: "problem_section",
-    type: "problem" as const,
+    id: "question_section",
+    type: "question" as const,
     title: "問題セクション",
     initialBoard: Array(15).fill("-".repeat(15)),
     description: [],
