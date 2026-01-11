@@ -133,13 +133,7 @@ const isCompleted = (scenarioId: string): boolean =>
       title="シナリオ選択"
       show-back
       @back="handleBack"
-    >
-      <template #right>
-        <div class="page-indicator">
-          {{ currentPage + 1 }} / {{ totalPages }}
-        </div>
-      </template>
-    </PageHeader>
+    />
 
     <div class="content">
       <button
@@ -177,6 +171,8 @@ const isCompleted = (scenarioId: string): boolean =>
         →
       </button>
     </div>
+
+    <div class="page-indicator">{{ currentPage + 1 }} / {{ totalPages }}</div>
   </div>
 </template>
 
@@ -185,6 +181,7 @@ const isCompleted = (scenarioId: string): boolean =>
   --slide-duration: 0.2s;
   --slide-easing: ease-in-out;
 
+  position: relative;
   display: flex;
   flex-direction: column;
   width: 100%;
@@ -194,13 +191,15 @@ const isCompleted = (scenarioId: string): boolean =>
 }
 
 .page-indicator {
-  font-size: var(--size-20);
+  position: absolute;
+  bottom: var(--size-20);
+  right: var(--size-20);
+  font-size: var(--size-16);
   color: #666;
   background: rgba(255, 255, 255, 0.8);
   padding: var(--size-8) var(--size-16);
   border-radius: var(--size-8);
   font-weight: 500;
-  width: var(--size-80);
   text-align: center;
 }
 

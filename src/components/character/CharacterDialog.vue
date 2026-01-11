@@ -327,13 +327,6 @@ const messageCharacterInfo = computed(() => {
   cursor: not-allowed;
 }
 
-.dialog-text {
-  color: var(--color-text-primary);
-  line-height: 1.6;
-  font-size: var(--size-16);
-  white-space: pre-wrap;
-}
-
 .choices {
   display: flex;
   flex-direction: column;

@@ -7,6 +7,7 @@ import ScenarioInfoPanel from "./ScenarioInfoPanel.vue";
 import RenjuBoard from "@/components/game/RenjuBoard/RenjuBoard.vue";
 import DialogSection from "./DialogSection.vue";
 import CutinOverlay from "@/components/common/CutinOverlay.vue";
+import SettingsControl from "@/components/common/SettingsControl.vue";
 import { useScenarioNavigation } from "./composables/useScenarioNavigation";
 import { useKeyboardNavigation } from "./composables/useKeyboardNavigation";
 import { useBoardSize } from "./composables/useBoardSize";
@@ -172,7 +173,10 @@ const handleGoToList = (): void => {
   >
     <!-- 操作セクション（左上 4×7）-->
     <div class="control-section-slot">
-      <BackButton @back="scenarioNav.goBack" />
+      <div class="control-header">
+        <BackButton @back="scenarioNav.goBack" />
+        <SettingsControl />
+      </div>
       <ControlInfo
         :cursor-position="keyboardNav.cursorPosition.value"
         :section-type="scenarioNav.currentSection.value?.type"
@@ -264,6 +268,12 @@ const handleGoToList = (): void => {
   justify-content: space-between;
   gap: var(--size-12);
   overflow: hidden;
+}
+
+.control-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
 }
 
 .board-section-wrapper {

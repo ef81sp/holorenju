@@ -95,10 +95,6 @@ const emits = defineEmits<{
   font-size: var(--size-14);
 }
 
-.content-container {
-  display: none;
-}
-
 .description {
   margin: 0;
   padding: var(--size-16);
@@ -106,7 +102,7 @@ const emits = defineEmits<{
   border-radius: 8px 8px 0 0;
   overflow-y: auto;
   box-shadow: none;
-  font-size: var(--size-16);
+  font-size: calc(var(--size-16) * var(--text-size-multiplier));
   word-break: auto-phrase;
 }
 

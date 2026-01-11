@@ -4,6 +4,8 @@ import { nextTick } from "vue";
 import type { Mark, Line } from "@/stores/boardStore";
 import type { Position } from "@/types/game";
 
+import { usePreferencesStore } from "@/stores/preferencesStore";
+
 import type { useRenjuBoardLayout } from "./useRenjuBoardLayout";
 
 type LayoutType = ReturnType<typeof useRenjuBoardLayout>;
@@ -17,6 +19,7 @@ export function useRenjuBoardAnimation(layout: LayoutType): {
   animateLine: (line: Line) => Promise<void>;
   finishAllAnimations: () => void;
 } {
+  const preferencesStore = usePreferencesStore();
   const stoneRefs: Record<string, unknown> = {};
   const markRefs: Record<string, unknown> = {};
   const lineRefs: Record<string, unknown> = {};
@@ -28,6 +31,14 @@ export function useRenjuBoardAnimation(layout: LayoutType): {
    */
   const animateStone = (position: Position): Promise<void> =>
     new Promise((resolve) => {
+      const duration = preferencesStore.stoneAnimationDuration;
+
+      // アニメーション無効時は即座に解決
+      if (duration === 0) {
+        resolve();
+        return;
+      }
+
       nextTick(() => {
         const stoneKey = `${position.row}-${position.col}`;
         const nodeRef = stoneRefs[stoneKey];
@@ -53,7 +64,7 @@ export function useRenjuBoardAnimation(layout: LayoutType): {
         // アニメーション実行
         const tween = new Konva.Tween({
           node: konvaNode,
-          duration: 0.2,
+          duration,
           y: targetY,
           opacity: 1,
           scaleX: 1,
@@ -76,6 +87,14 @@ export function useRenjuBoardAnimation(layout: LayoutType): {
    */
   const animateMark = (mark: Mark): Promise<void> =>
     new Promise((resolve) => {
+      const duration = preferencesStore.markAnimationDuration;
+
+      // アニメーション無効時は即座に解決
+      if (duration === 0) {
+        resolve();
+        return;
+      }
+
       nextTick(() => {
         const markKey = mark.id;
         const nodeRef = markRefs[markKey];
@@ -93,7 +112,7 @@ export function useRenjuBoardAnimation(layout: LayoutType): {
 
         const tween = new Konva.Tween({
           node: konvaNode,
-          duration: 0.25,
+          duration,
           opacity: 1,
           scaleX: 1,
           scaleY: 1,
@@ -115,6 +134,14 @@ export function useRenjuBoardAnimation(layout: LayoutType): {
    */
   const animateLine = (line: Line): Promise<void> =>
     new Promise((resolve) => {
+      const duration = preferencesStore.lineAnimationDuration;
+
+      // アニメーション無効時は即座に解決
+      if (duration === 0) {
+        resolve();
+        return;
+      }
+
       nextTick(() => {
         const lineKey = line.id;
         const nodeRef = lineRefs[lineKey];
@@ -132,7 +159,7 @@ export function useRenjuBoardAnimation(layout: LayoutType): {
 
         const tween = new Konva.Tween({
           node: konvaNode,
-          duration: 0.2,
+          duration,
           opacity: 1,
           easing: Konva.Easings.EaseOut,
           onFinish: () => {

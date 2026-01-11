@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useAppStore } from "@/stores/appStore";
 import PageHeader from "@/components/common/PageHeader.vue";
+
 const appStore = useAppStore();
 
 const handleSelectTraining = (): void => {

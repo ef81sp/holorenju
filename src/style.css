@@ -42,6 +42,9 @@
   --gradient-main: linear-gradient(135deg, #5fdeec 0%, #46c0ef 100%);
   --gradient-accent: linear-gradient(90deg, #4caf50, #8bc34a);
 
+  /* テキストサイズ倍率 */
+  --text-size-multiplier: 1;
+
   color-scheme: light;
   color: var(--color-text-primary);
   background-color: var(--color-bg-white);
@@ -216,4 +219,13 @@ h1 {
   margin: 0;
   padding: 0;
   overflow: hidden;
+}
+
+/* テキストサイズ設定 */
+:root[data-text-size="small"] {
+  --text-size-multiplier: 0.85;
+}
+
+:root[data-text-size="large"] {
+  --text-size-multiplier: 1.15;
 }

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import SettingsControl from "./SettingsControl.vue";
+
 defineProps<{
   title: string;
   showBack?: boolean;
@@ -20,6 +22,7 @@ defineEmits<{
     </button>
     <h1>{{ title }}</h1>
     <slot name="right" />
+    <SettingsControl />
   </div>
 </template>
 
