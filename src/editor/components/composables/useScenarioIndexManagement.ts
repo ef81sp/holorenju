@@ -41,21 +41,24 @@ export function useScenarioIndexManagement(): UseScenarioIndexManagementReturn {
   const currentIndexData: Ref<IndexData | null> = ref<IndexData | null>(null);
 
   const createEmptyIndexData = (): IndexData => ({
-    difficulties: DIFFICULTIES.reduce((acc, difficulty) => {
-      acc[difficulty] = {
-        label: DIFFICULTY_LABELS[difficulty],
-        scenarios: [],
-      };
-      return acc;
-    }, {} as IndexData["difficulties"]),
+    difficulties: DIFFICULTIES.reduce(
+      (acc, difficulty) => {
+        acc[difficulty] = {
+          label: DIFFICULTY_LABELS[difficulty],
+          scenarios: [],
+        };
+        return acc;
+      },
+      {} as IndexData["difficulties"],
+    ),
   });
 
   const mergeIndexData = (data: IndexData): IndexData => {
     const empty = createEmptyIndexData();
     for (const [difficulty, value] of Object.entries(data.difficulties)) {
-      if (!value) continue;
+      if (!value) {continue;}
       const key = difficulty as ScenarioDifficulty;
-      empty[key] = {
+      empty.difficulties[key] = {
         label: value.label ?? DIFFICULTY_LABELS[key],
         scenarios: value.scenarios ?? [],
       };
