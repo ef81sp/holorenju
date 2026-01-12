@@ -7,6 +7,7 @@ import {
   createEmptyScenario,
 } from "@/logic/scenarioFileHandler";
 import { parseScenario } from "@/logic/scenarioParser";
+import { DIFFICULTIES } from "@/types/scenario";
 
 interface UseScenarioFileOperationsReturn {
   selectedFile: ReturnType<typeof ref<File | null>>;
@@ -96,7 +97,7 @@ export function useScenarioFileOperations(): UseScenarioFileOperationsReturn {
       console.warn(`📄 ファイル読み込み開始: ${path}`);
       const pathParts = path.split("/");
       const fileName = pathParts.pop();
-      const difficultyName = pathParts[0] || "beginner";
+      const difficultyName = pathParts[0] || DIFFICULTIES[0];
 
       let fileHandle: FileSystemFileHandle =
         null as unknown as FileSystemFileHandle;

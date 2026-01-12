@@ -1,5 +1,7 @@
 import { defineStore } from "pinia";
 
+import type { ScenarioDifficulty } from "@/types/scenario";
+
 export type Scene =
   | "menu"
   | "difficulty"
@@ -7,13 +9,13 @@ export type Scene =
   | "scenarioPlay"
   | "editor";
 export type Mode = "training" | "cpu";
-export type Difficulty = "beginner" | "intermediate" | "advanced";
+export type Difficulty = ScenarioDifficulty;
 export type TransitionDirection = "forward" | "back";
 
 export interface AppState {
   scene: Scene;
   selectedMode: Mode | null;
-  selectedDifficulty: Difficulty | null;
+  selectedDifficulty: ScenarioDifficulty | null;
   currentPage: number;
   selectedScenarioId: string | null;
 }
@@ -44,7 +46,7 @@ export const useAppStore = defineStore("app", {
       this.pushHistory();
     },
 
-    selectDifficulty(difficulty: Difficulty) {
+    selectDifficulty(difficulty: ScenarioDifficulty) {
       if (!this.selectedMode) {
         console.error("Mode not selected");
         return;

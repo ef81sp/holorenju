@@ -1,7 +1,7 @@
 {
   "id": "scenario_mjzr29tu_hh97s",
   "title": "五を作るには",
-  "difficulty": "beginner",
+  "difficulty": "gomoku_beginner",
   "description": "勝利条件である五の一歩手前の状態を学びます。",
   "objectives": [],
   "sections": [

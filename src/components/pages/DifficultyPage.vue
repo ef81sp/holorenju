@@ -1,31 +1,89 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { useAppStore, type Difficulty } from "@/stores/appStore";
-import { useProgressStore } from "@/stores/progressStore";
+
 import PageHeader from "@/components/common/PageHeader.vue";
+import { useAppStore } from "@/stores/appStore";
+import { useProgressStore } from "@/stores/progressStore";
+import { type ScenarioDifficulty } from "@/types/scenario";
 import scenariosIndex from "@/data/scenarios/index.json";
 
 const appStore = useAppStore();
 const progressStore = useProgressStore();
 
-// 各難易度の進捗計算
-const getProgress = (
-  difficulty: Difficulty,
-): { completed: number; total: number; rate: number } => {
+type ProgressInfo = { completed: number; total: number; rate: number };
+
+interface DifficultyCard {
+  key: ScenarioDifficulty;
+  label: string;
+  icon: string;
+  gradient: string;
+  description: string;
+}
+
+const difficultyCards: DifficultyCard[] = [
+  {
+    key: "gomoku_beginner",
+    label: "五目並べ:入門",
+    icon: "🌱",
+    gradient: "linear-gradient(135deg, #d2f6c5 0%, #f9f7d9 100%)",
+    description: "五目並べの遊び方と連珠との違いからスタート",
+  },
+  {
+    key: "gomoku_intermediate",
+    label: "五目並べ:初級",
+    icon: "⭐",
+    gradient: "linear-gradient(135deg, #ffecd2 0%, #f6d365 100%)",
+    description: "五目並べの基本戦術をひと通り固めるステップ",
+  },
+  {
+    key: "renju_beginner",
+    label: "連珠:入門",
+    icon: "🎋",
+    gradient: "linear-gradient(135deg, #cfd9df 0%, #e2ebf0 100%)",
+    description: "禁手ルールや連珠ならではの基礎を確認",
+  },
+  {
+    key: "renju_intermediate",
+    label: "連珠:初級",
+    icon: "🧭",
+    gradient: "linear-gradient(135deg, #ffd3a5 0%, #fd6585 100%)",
+    description: "基本形の活用や攻守の組み立てを学ぶ",
+  },
+  {
+    key: "renju_advanced",
+    label: "連珠:中級",
+    icon: "🔥",
+    gradient: "linear-gradient(135deg, #d4fc79 0%, #96e6a1 100%)",
+    description: "実戦を意識した応用手筋と読みの強化",
+  },
+  {
+    key: "renju_expert",
+    label: "連珠:上級",
+    icon: "👑",
+    gradient: "linear-gradient(135deg, #89f7fe 0%, #66a6ff 100%)",
+    description: "終盤力と緻密な布石運びで頂点を目指す",
+  },
+];
+
+const getProgress = (difficulty: ScenarioDifficulty): ProgressInfo => {
   const difficultyData = scenariosIndex.difficulties[difficulty];
-  const total = difficultyData.scenarios.length;
-  const completed = difficultyData.scenarios.filter((scenario) =>
-    progressStore.completedScenarios.includes(scenario.id),
-  ).length;
+  const total = difficultyData?.scenarios.length ?? 0;
+  const completed =
+    difficultyData?.scenarios.filter((scenario) =>
+      progressStore.completedScenarios.includes(scenario.id),
+    ).length ?? 0;
   const rate = total > 0 ? Math.round((completed / total) * 100) : 0;
   return { completed, total, rate };
 };
 
-const beginnerProgress = computed(() => getProgress("beginner"));
-const intermediateProgress = computed(() => getProgress("intermediate"));
-const advancedProgress = computed(() => getProgress("advanced"));
+const progressByDifficulty = computed(() =>
+  difficultyCards.reduce((acc, card) => {
+    acc[card.key] = getProgress(card.key);
+    return acc;
+  }, {} as Record<ScenarioDifficulty, ProgressInfo>),
+);
 
-const handleSelectDifficulty = (difficulty: Difficulty): void => {
+const handleSelectDifficulty = (difficulty: ScenarioDifficulty): void => {
   appStore.selectDifficulty(difficulty);
 };
 
@@ -42,75 +100,28 @@ const handleBack = (): void => {
       @back="handleBack"
     />
     <div class="content">
-      <div class="difficulty-buttons">
+      <div class="difficulty-grid">
         <button
-          class="difficulty-button"
-          :style="{
-            background: 'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)',
-          }"
-          @click="handleSelectDifficulty('beginner')"
+          v-for="(card, index) in difficultyCards"
+          :key="card.key"
+          class="difficulty-card"
+          :style="{ background: card.gradient }"
+          @click="handleSelectDifficulty(card.key)"
         >
-          <div class="button-icon">🌱</div>
-          <div class="button-text-area">
-            <div class="button-text">入門</div>
-            <p class="button-description">
-              五目並べとの違いや、基本的なルールを学びます
-            </p>
+          <div class="card-header">
+            <span class="card-ordinal">{{ index + 1 }}</span>
+            <span class="card-icon">{{ card.icon }}</span>
+            <span class="card-label">{{ card.label }}</span>
           </div>
+          <p class="card-description">{{ card.description }}</p>
           <div class="progress-info">
             <span class="progress-text">
-              {{ beginnerProgress.completed }} / {{ beginnerProgress.total }}
+              {{ progressByDifficulty[card.key]?.completed ?? 0 }} /
+              {{ progressByDifficulty[card.key]?.total ?? 0 }}
             </span>
             <progress
               class="progress-bar"
-              :value="beginnerProgress.rate"
-              max="100"
-            />
-          </div>
-        </button>
-        <button
-          class="difficulty-button"
-          :style="{
-            background: 'linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)',
-          }"
-          @click="handleSelectDifficulty('intermediate')"
-        >
-          <div class="button-icon">⭐</div>
-          <div class="button-text-area">
-            <div class="button-text">初級</div>
-            <p class="button-description">基本的な戦術や考え方を学びます</p>
-          </div>
-          <div class="progress-info">
-            <span class="progress-text">
-              {{ intermediateProgress.completed }} /
-              {{ intermediateProgress.total }}
-            </span>
-            <progress
-              class="progress-bar"
-              :value="intermediateProgress.rate"
-              max="100"
-            />
-          </div>
-        </button>
-        <button
-          class="difficulty-button"
-          :style="{
-            background: 'linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)',
-          }"
-          @click="handleSelectDifficulty('advanced')"
-        >
-          <div class="button-icon">🔥</div>
-          <div class="button-text-area">
-            <div class="button-text">中級</div>
-            <p class="button-description">実戦的な高度なテクニックを学びます</p>
-          </div>
-          <div class="progress-info">
-            <span class="progress-text">
-              {{ advancedProgress.completed }} / {{ advancedProgress.total }}
-            </span>
-            <progress
-              class="progress-bar"
-              :value="advancedProgress.rate"
+              :value="progressByDifficulty[card.key]?.rate ?? 0"
               max="100"
             />
           </div>
@@ -138,121 +149,128 @@ const handleBack = (): void => {
   justify-content: center;
 }
 
-.difficulty-buttons {
-  display: flex;
-  flex-direction: row;
-  gap: var(--size-30);
+.difficulty-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+  gap: var(--size-20);
   width: 100%;
-  justify-content: center;
+  max-width: 1200px;
+  align-content: center;
 }
 
-.difficulty-button {
-  flex: 1;
-  min-width: var(--size-150);
+.difficulty-card {
   padding: var(--size-20);
   border: var(--size-2) solid var(--color-border-heavy);
   border-radius: var(--size-16);
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
   box-shadow: 0 var(--size-5) var(--size-16) rgba(0, 0, 0, 0.1);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
   gap: var(--size-12);
-  position: relative;
+  align-items: start;
+  text-align: left;
 }
 
-.difficulty-button:hover:not(:disabled) {
+.difficulty-card:hover {
   transform: translateY(calc(-1 * var(--size-5)));
-  box-shadow: 0 var(--size-8) var(--size-20) rgba(0, 0, 0, 0.2);
+  box-shadow: 0 var(--size-10) var(--size-24) rgba(0, 0, 0, 0.2);
 }
 
-.difficulty-button:active:not(:disabled) {
+.difficulty-card:active {
   transform: translateY(calc(-1 * var(--size-2)));
 }
 
-.difficulty-button.disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  background: linear-gradient(135deg, #ddd 0%, #bbb 100%) !important;
-}
-
-.button-icon {
-  font-size: var(--size-32);
-}
-
-.button-text-area {
+.card-header {
   display: flex;
-  flex-direction: column;
-  gap: var(--size-5);
-  text-align: center;
+  align-items: center;
+  gap: var(--size-10);
+  font-weight: 700;
+  font-size: var(--size-18);
+  color: #1f2937;
 }
 
-.button-text {
-  font-size: var(--size-32);
-  font-weight: bold;
-  color: #333;
+.card-ordinal {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--size-28);
+  height: var(--size-28);
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.15);
+  color: rgba(0, 0, 0, 0.7);
+  font-size: var(--size-14);
+  font-weight: 700;
+  flex-shrink: 0;
 }
 
-.button-description {
-  font-size: var(--size-12);
-  color: #666;
+.card-icon {
+  font-size: var(--size-28);
+}
+
+.card-label {
+  line-height: 1.3;
+  flex: 1;
+}
+
+.card-description {
   margin: 0;
-  padding: 0;
-  line-height: 1.4;
-  word-break: auto-phrase;
+  color: #374151;
+  line-height: 1.5;
+  font-size: var(--size-13);
 }
 
 .progress-info {
   display: flex;
   flex-direction: column;
   gap: var(--size-5);
-  width: 100%;
-  margin-top: var(--size-8);
 }
 
 .progress-text {
   font-size: var(--size-12);
-  color: #666;
-  text-align: center;
+  color: #111827;
   font-weight: 600;
 }
 
 .progress-bar {
   width: 100%;
   height: var(--size-8);
-  border-radius: var(--size-4);
+  border-radius: var(--size-6);
   overflow: hidden;
   appearance: none;
   -webkit-appearance: none;
+  background: rgba(0, 0, 0, 0.1);
 }
 
 .progress-bar::-webkit-progress-bar {
-  background: rgba(0, 0, 0, 0.1);
-  border-radius: var(--size-4);
+  background: rgba(255, 255, 255, 0.35);
+  border-radius: var(--size-6);
 }
 
 .progress-bar::-webkit-progress-value {
-  background: var(--gradient-accent);
-  border-radius: var(--size-4);
+  background: rgba(17, 24, 39, 0.7);
+  border-radius: var(--size-6);
   transition: width 0.3s ease;
 }
 
 .progress-bar::-moz-progress-bar {
-  background: var(--gradient-accent);
-  border-radius: var(--size-4);
+  background: rgba(17, 24, 39, 0.7);
+  border-radius: var(--size-6);
   transition: width 0.3s ease;
 }
 
-.badge {
-  position: absolute;
-  right: var(--size-8);
-  top: var(--size-8);
-  background: #ff6b6b;
-  color: white;
-  font-size: var(--size-12);
-  padding: var(--size-5) var(--size-8);
-  border-radius: var(--size-8);
-  font-weight: bold;
+@media (max-width: 1000px) {
+  .difficulty-grid {
+    grid-template-columns: repeat(2, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .difficulty-grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto;
+  }
 }
 </style>

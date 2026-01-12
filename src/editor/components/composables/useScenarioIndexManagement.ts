@@ -1,10 +1,14 @@
 import { ref, nextTick, type Ref } from "vue";
 
-import { regenerateScenarioIndexWithOrder } from "@/editor/logic/indexFileHandler";
+import {
+  DIFFICULTY_LABELS,
+  regenerateScenarioIndexWithOrder,
+} from "@/editor/logic/indexFileHandler";
+import { DIFFICULTIES, type ScenarioDifficulty } from "@/types/scenario";
 
 interface IndexData {
   difficulties: Record<
-    string,
+    ScenarioDifficulty,
     {
       label: string;
       scenarios: {
@@ -28,13 +32,36 @@ interface UseScenarioIndexManagementReturn {
     reorderDialogRef: DialogRefType | null,
   ) => Promise<void>;
   handleReorderConfirm: (
-    reorderedData: Record<string, string[]>,
+    reorderedData: Partial<Record<ScenarioDifficulty, string[]>>,
     scenarioDir: FileSystemDirectoryHandle | null,
   ) => Promise<void>;
 }
 
 export function useScenarioIndexManagement(): UseScenarioIndexManagementReturn {
   const currentIndexData: Ref<IndexData | null> = ref<IndexData | null>(null);
+
+  const createEmptyIndexData = (): IndexData => ({
+    difficulties: DIFFICULTIES.reduce((acc, difficulty) => {
+      acc[difficulty] = {
+        label: DIFFICULTY_LABELS[difficulty],
+        scenarios: [],
+      };
+      return acc;
+    }, {} as IndexData["difficulties"]),
+  });
+
+  const mergeIndexData = (data: IndexData): IndexData => {
+    const empty = createEmptyIndexData();
+    for (const [difficulty, value] of Object.entries(data.difficulties)) {
+      if (!value) continue;
+      const key = difficulty as ScenarioDifficulty;
+      empty[key] = {
+        label: value.label ?? DIFFICULTY_LABELS[key],
+        scenarios: value.scenarios ?? [],
+      };
+    }
+    return empty;
+  };
 
   /**
    * Index 生成ダイアログを開く（index.json を読み込んで表示）
@@ -55,16 +82,12 @@ export function useScenarioIndexManagement(): UseScenarioIndexManagementReturn {
       });
       const indexFile = await indexHandle.getFile();
       const indexText = await indexFile.text();
-      currentIndexData.value = JSON.parse(indexText);
+      currentIndexData.value = mergeIndexData(
+        JSON.parse(indexText) as IndexData,
+      );
     } catch {
       // index.json が存在しない場合は空の状態で開始
-      currentIndexData.value = {
-        difficulties: {
-          beginner: { label: "入門", scenarios: [] },
-          intermediate: { label: "初級", scenarios: [] },
-          advanced: { label: "中級", scenarios: [] },
-        },
-      };
+      currentIndexData.value = createEmptyIndexData();
     }
 
     // DOMの更新を待ってからダイアログを開く

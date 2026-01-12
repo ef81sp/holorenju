@@ -6,8 +6,17 @@ import type { CharacterType, EmotionId } from "./character";
 import type { Position } from "./game";
 import type { TextNode } from "./text";
 
-// シナリオの難易度
-type ScenarioDifficulty = "beginner" | "intermediate" | "advanced";
+// シナリオの難易度一覧（UIやバリデーションで共通利用）
+const DIFFICULTIES = [
+  "gomoku_beginner",
+  "gomoku_intermediate",
+  "renju_beginner",
+  "renju_intermediate",
+  "renju_advanced",
+  "renju_expert",
+] as const;
+
+type ScenarioDifficulty = (typeof DIFFICULTIES)[number];
 
 // ===== ベースセクション =====
 
@@ -169,7 +178,6 @@ interface LearningProgress {
 }
 
 export type {
-  ScenarioDifficulty,
   Section,
   DemoSection,
   DemoDialogue,
@@ -192,4 +200,7 @@ export type {
   BaseSection,
   Position,
   SuccessOperator,
+  ScenarioDifficulty,
 };
+
+export { DIFFICULTIES };

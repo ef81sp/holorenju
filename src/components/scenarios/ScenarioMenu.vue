@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import type { Scenario } from "@/types/scenario";
 import { computed } from "vue";
 
 import scenariosIndex from "@/data/scenarios/index.json";
+import { DIFFICULTY_LABELS } from "@/editor/logic/indexFileHandler";
 import { useProgressStore } from "@/stores/progressStore";
+import type { Scenario, ScenarioDifficulty } from "@/types/scenario";
 import ProgressSummary from "./ProgressSummary.vue";
 
 // Emits
@@ -36,28 +37,26 @@ const handleSelectScenario = (scenarioId: string): void => {
   emit("selectScenario", scenarioId);
 };
 
-const getDifficultyColor = (difficulty: string): string => {
-  const colors = {
-    advanced:
-      "linear-gradient(135deg, var(--color-miko-primary), var(--color-holo-purple))",
-    beginner:
-      "linear-gradient(135deg, var(--color-fubuki-primary), var(--color-fubuki-bg))",
-    intermediate:
-      "linear-gradient(135deg, var(--color-holo-cyan), var(--color-fubuki-primary))",
-  };
-  return (
-    colors[difficulty as keyof typeof colors] || "var(--color-text-secondary)"
-  );
+const DIFFICULTY_COLORS: Record<ScenarioDifficulty, string> = {
+  gomoku_beginner:
+    "linear-gradient(135deg, var(--color-fubuki-primary), var(--color-fubuki-bg))",
+  gomoku_intermediate:
+    "linear-gradient(135deg, #f9c449, var(--color-holo-cyan))",
+  renju_beginner:
+    "linear-gradient(135deg, #b7becd, #e6edf5)",
+  renju_intermediate:
+    "linear-gradient(135deg, #ff9f7f, #ffd3a5)",
+  renju_advanced:
+    "linear-gradient(135deg, #6fd3a7, #3fbfb9)",
+  renju_expert:
+    "linear-gradient(135deg, var(--color-miko-primary), var(--color-holo-purple))",
 };
 
-const getDifficultyLabel = (difficulty: string): string => {
-  const labels = {
-    advanced: "上級",
-    beginner: "初級",
-    intermediate: "中級",
-  };
-  return labels[difficulty as keyof typeof labels] || difficulty;
-};
+const getDifficultyColor = (difficulty: ScenarioDifficulty): string =>
+  DIFFICULTY_COLORS[difficulty] ?? "var(--color-text-secondary)";
+
+const getDifficultyLabel = (difficulty: ScenarioDifficulty): string =>
+  DIFFICULTY_LABELS[difficulty] ?? difficulty;
 </script>
 
 <template>

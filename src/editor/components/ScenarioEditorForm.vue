@@ -1,7 +1,14 @@
 <script setup lang="ts">
+import { DIFFICULTY_LABELS } from "@/editor/logic/indexFileHandler";
 import { useEditorStore } from "@/editor/stores/editorStore";
+import { DIFFICULTIES } from "@/types/scenario";
 
 const editorStore = useEditorStore();
+
+const difficultyOptions = DIFFICULTIES.map((difficulty) => ({
+  value: difficulty,
+  label: DIFFICULTY_LABELS[difficulty],
+}));
 
 // Methods
 const updateScenarioInfo = (key: string, value: unknown): void => {
@@ -74,9 +81,13 @@ const updateObjective = (index: number, value: string): void => {
             )
         "
       >
-        <option value="beginner">Beginner</option>
-        <option value="intermediate">Intermediate</option>
-        <option value="advanced">Advanced</option>
+        <option
+          v-for="option in difficultyOptions"
+          :key="option.value"
+          :value="option.value"
+        >
+          {{ option.label }}
+        </option>
       </select>
     </div>
 

@@ -1,52 +1,73 @@
-## プロジェクト概要
+# CLAUDE.md
 
-- 連珠学習用ゲーム
-- シナリオ内にデモモードと問題モードを持つ
-- デモモードではキャラクターが会話しながら連珠の打ち方を解説
-- 問題モードではプレイヤーが実際に連珠を打ちながら学習
-- シナリオエディタを内蔵
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## パッケージマネージャ
+## Project Overview
 
-- pnpm
+A Renju (五目並べ/Gomoku) learning game featuring:
+- **Demo mode**: Characters (VTubers Fubuki & Miko) explain Renju strategies through dialogue
+- **Question mode**: Players practice moves with immediate feedback
+- **Scenario editor**: Built-in editor for creating learning scenarios
 
-## Vue / TypeScript
+## Commands
 
-- 最新の 3.x を使用。記法に注意。公式ドキュメント参照。
-- script setup lang="ts" を使用。
-  - definePropsではTypeScriptの型定義(ジェネリクスのやつ)を使用。
-- 単一責任の原則に従い、コンポーネントを細分化。
-- 同じデータ構造（例：character + emotion + text）を持つコンポーネントはUIパターンも統一する
-- コンポーネント参照の型定義時は、実際に expose されているメソッド名を確認する。オプショナルチェーン（?.）で安全にメソッド呼び出しを行う
-- ダイアログの実装はdialog要素で。既存のコンポーネントを参考に。
-- Oxlint / Oxfmt を使っている。Vueプラグインだけeslintを使っている。
+```bash
+pnpm check-fix     # Type-check + format + lint (use this, not individual commands)
+pnpm dev           # Dev server (usually already running)
+pnpm build         # Production build
+```
+
+## Architecture
+
+### State Management (Pinia stores in `src/stores/`)
+- **appStore**: Navigation state (scenes: menu → difficulty → scenarioList → scenarioPlay/editor)
+- **gameStore**: Game logic, turn management, win detection (delegates board state to boardStore)
+- **boardStore**: Board state, stones, marks, lines with animation callbacks
+- **dialogStore**: Character dialogue display state
+- **progressStore**: Learning progress tracking
+- **preferencesStore**: User settings (text size, etc.)
+
+### Core Game Logic (`src/logic/`)
+- **renjuRules.ts**: Renju rules including forbidden moves (double-three, double-four, overline) for black stones
+- **boardParser.ts**: Parse board state from string notation
+- **scenarioParser.ts**: Parse scenario JSON files
+
+### Component Structure
+- **ScenarioPlayer** (`src/components/scenarios/ScenarioPlayer/`): Main gameplay component with composables for navigation, keyboard input, question solving, cutin display
+- **RenjuBoard** (`src/components/game/RenjuBoard/`): Vue Konva-based board with composables for layout, interaction, animation
+- **Editor** (`src/editor/`): Full scenario editing suite with File System Access API integration
+
+### Type System (`src/types/`)
+- **scenario.ts**: Core types - Scenario, DemoSection, QuestionSection, BoardAction, SuccessCondition
+- **game.ts**: BoardState (15x15 grid), Position, StoneColor
+- **character.ts**: CharacterType, EmotionId
+- **text.ts**: TextNode for rich text with ruby annotations
+
+## Development Guidelines
+
+### Vue/TypeScript
+- Use `<script setup lang="ts">` with generic-style defineProps
+- Use `<dialog>` element for modals (see existing components)
+- When referencing component methods via refs, use optional chaining (`ref?.method()`)
+- Keep SFCs under ~400 lines; extract composables or split components
 
 ### CSS
+- **Fixed 960×540 viewport**: Use CSS variables from `style.css` (e.g., `--size-16`, `--size-24`)
+- **Never use rem/px** for layout - use `--size-*` variables with clamp()
+- Colors: Use `:root` variables (e.g., `--color-fubuki-primary`, `--color-text-primary`)
+- Font weights: normal=300, bold=500
+- Scoped styles don't inherit across component boundaries; put utilities in `style.css`
+- Never set `display` directly on `<dialog>` or popover elements
 
-- 画面サイズは固定のため、レイアウトには相対値を使用。style.cssにsize変数あり、これを必ず使用。rem/px等禁止。
-- カラーパレットは:rootに定義。必ず変数を使用。
-- 疑似クラスには入れ子セレクタを使用
-- フォントの都合上、太字はfont-weight: 500を使用。通常は300
-- scoped style はコンポーネント境界を越えて継承されない。ユーティリティクラスはグローバルスタイル（style.css）に定義する
-- dialog要素やpopoverの要素に直接display属性を指定してはいけない。標準動作を妨げる。必要の場合は子要素にラッパーをもたせること
+### Konva
+- Use Vue Konva components (`v-stage`, `v-layer`, `v-circle`, etc.)
+- Board rendering uses composables for layout calculations and animations
 
-## Konva
+### Testing
+- Playwright MCP available for E2E testing
+- Browser viewport: 960×540 (fixed)
+- Minimize screenshots during testing (context limit)
 
-- Vue Konva を使用。公式ドキュメント参照。
-
-## 開発手順
-
-- docs 配下の markdown に計画と TODO があり、それに従う
-- 開発サーバーは常に起動している（起動不要）
-- pnpm check-fix を使用。一括実行可能のため、lint/check/fixは使わなくて良い
-- 多くとも1ファイル400行程度に留めるのが望ましい。特にSFCは肥大化しやすい。意味の単位で分割を検討する
-  - コンポーネントの分割
-  - composablesの作成
-- 指摘された内容は、一般化してAGENTS.mdに追記。トンマナ揃えること
-
-## 動作確認
-
-- 指示された場合のみ行う
-- Playwright MCPが使える
-- コンテキスト削減のため、ウィンドウサイズはh540\*w960に固定
-- スクショは可能な限り取らない(コンテキストが埋まって詰む)
+## Task Planning
+- Check `docs/` for implementation plans and TODOs
+- Generalize learnings to AGENTS.md

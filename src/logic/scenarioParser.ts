@@ -7,17 +7,19 @@
  */
 
 import type { EmotionId } from "../types/character";
-import type {
-  Scenario,
-  DemoSection,
-  DemoDialogue,
-  QuestionSection,
-  Section,
-  BoardAction,
-  SuccessCondition,
-  Position,
-  QuestionFeedback,
-  DialogueLine,
+import {
+  DIFFICULTIES,
+  type Scenario,
+  type ScenarioDifficulty,
+  type DemoSection,
+  type DemoDialogue,
+  type QuestionSection,
+  type Section,
+  type BoardAction,
+  type SuccessCondition,
+  type Position,
+  type QuestionFeedback,
+  type DialogueLine,
 } from "../types/scenario";
 import type { TextNode, InlineTextNode } from "../types/text";
 
@@ -765,7 +767,7 @@ function validateStringArray(
 function validateEnum<T extends string>(
   data: Record<string, unknown>,
   key: string,
-  allowedValues: T[],
+  allowedValues: readonly T[],
   path: string,
 ): T {
   const value = data[key];
@@ -786,13 +788,8 @@ function validateEnum<T extends string>(
 function validateDifficulty(
   data: Record<string, unknown>,
   key: string,
-): "beginner" | "intermediate" | "advanced" {
-  return validateEnum(
-    data,
-    key,
-    ["beginner", "intermediate", "advanced"],
-    `Scenario.${key}`,
-  );
+): ScenarioDifficulty {
+  return validateEnum(data, key, DIFFICULTIES, `Scenario.${key}`);
 }
 
 function validatePosition(data: unknown, path: string): Position {

@@ -1,7 +1,7 @@
 {
   "id": "scenario_mjx746jb_0azj3",
   "title": "問題テスト",
-  "difficulty": "beginner",
+  "difficulty": "gomoku_beginner",
   "description": "テスト用問題です",
   "objectives": [],
   "sections": [

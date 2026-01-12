@@ -4,7 +4,12 @@
  * JSONファイルの読み込み・保存・バリデーション
  */
 
-import type { Scenario, DemoSection, QuestionSection } from "../types/scenario";
+import {
+  DIFFICULTIES,
+  type Scenario,
+  type DemoSection,
+  type QuestionSection,
+} from "../types/scenario";
 
 import { parseScenario, validateBoardState } from "./scenarioParser";
 
@@ -155,7 +160,7 @@ export function createEmptyScenario(): Scenario {
   return {
     id: generateScenarioId(),
     title: "新しいシナリオ",
-    difficulty: "beginner",
+    difficulty: DIFFICULTIES[0],
     description: "",
     objectives: [],
     sections: [],

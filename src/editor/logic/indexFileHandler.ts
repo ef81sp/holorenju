@@ -1,7 +1,7 @@
 /**
  * Index.json の読み書きユーティリティ
  */
-import type { Scenario } from "@/types/scenario";
+import { DIFFICULTIES, type Scenario, type ScenarioDifficulty } from "@/types/scenario";
 
 interface IndexScenarioEntry {
   id: string;
@@ -12,7 +12,7 @@ interface IndexScenarioEntry {
 
 interface IndexData {
   difficulties: Record<
-    string,
+    ScenarioDifficulty,
     {
       label: string;
       scenarios: IndexScenarioEntry[];
@@ -20,22 +20,26 @@ interface IndexData {
   >;
 }
 
-const DEFAULT_INDEX_DATA: IndexData = {
-  difficulties: {
-    beginner: {
-      label: "入門",
-      scenarios: [],
-    },
-    intermediate: {
-      label: "初級",
-      scenarios: [],
-    },
-    advanced: {
-      label: "中級",
-      scenarios: [],
-    },
-  },
+export const DIFFICULTY_LABELS: Record<ScenarioDifficulty, string> = {
+  gomoku_beginner: "五目並べ:入門",
+  gomoku_intermediate: "五目並べ:初級",
+  renju_beginner: "連珠:入門",
+  renju_intermediate: "連珠:初級",
+  renju_advanced: "連珠:中級",
+  renju_expert: "連珠:上級",
 };
+
+const createDefaultIndexData = (): IndexData => ({
+  difficulties: DIFFICULTIES.reduce((acc, difficulty) => {
+    acc[difficulty] = {
+      label: DIFFICULTY_LABELS[difficulty],
+      scenarios: [],
+    };
+    return acc;
+  }, {} as IndexData["difficulties"]),
+});
+
+const DEFAULT_INDEX_DATA: IndexData = createDefaultIndexData();
 
 const cloneDefaultIndex = (): IndexData =>
   JSON.parse(JSON.stringify(DEFAULT_INDEX_DATA)) as IndexData;
@@ -56,7 +60,7 @@ const saveIndexJson = async (
 
 const scanDifficultyDirectory = async (
   diffDir: FileSystemDirectoryHandle,
-  difficulty: string,
+  difficulty: ScenarioDifficulty,
 ): Promise<IndexScenarioEntry[]> => {
   const scenarios: IndexScenarioEntry[] = [];
 
@@ -91,10 +95,10 @@ const scanDifficultyDirectory = async (
 export const regenerateScenarioIndexWithOrder = async (
   dirHandle: FileSystemDirectoryHandle,
   currentIndexData: IndexData,
-  reorderedData: Record<string, string[]>, // { "beginner": ["id1", "id2", ...], ... }
+  reorderedData: Partial<Record<ScenarioDifficulty, string[]>>,
 ): Promise<void> => {
   const indexData = cloneDefaultIndex();
-  const difficulties = ["beginner", "intermediate", "advanced"] as const;
+  const difficulties = DIFFICULTIES;
 
   // eslint-disable-next-line no-await-in-loop
   for (const difficulty of difficulties) {
@@ -128,7 +132,9 @@ export const regenerateScenarioIndexWithOrder = async (
 
       if (orderedScenarios.length > 0) {
         indexData.difficulties[difficulty] = {
-          label: currentIndexData.difficulties[difficulty]?.label ?? difficulty,
+          label:
+            currentIndexData.difficulties[difficulty]?.label ??
+            DIFFICULTY_LABELS[difficulty],
           scenarios: orderedScenarios,
         };
       }
@@ -160,14 +166,14 @@ export const regenerateScenarioIndex = async (
 
     indexData.difficulties[difficultyKey] = {
       ...(indexData.difficulties[difficultyKey] ?? {
-        label: difficultyKey,
+        label: DIFFICULTY_LABELS[difficultyKey] ?? difficultyKey,
         scenarios: [],
       }),
       scenarios: [entry],
     };
   } else {
     // すべての難易度ディレクトリをスキャンしてindex.jsonを再生成
-    const difficulties = ["beginner", "intermediate", "advanced"] as const;
+    const difficulties = DIFFICULTIES;
 
     // eslint-disable-next-line no-await-in-loop
     for (const difficulty of difficulties) {
@@ -181,7 +187,7 @@ export const regenerateScenarioIndex = async (
 
         if (scenarios.length > 0) {
           indexData.difficulties[difficulty] = {
-            label: difficulty,
+            label: DIFFICULTY_LABELS[difficulty],
             scenarios,
           };
         }

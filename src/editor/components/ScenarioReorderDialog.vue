@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { ref, computed } from "vue";
 
+import { DIFFICULTY_LABELS } from "@/editor/logic/indexFileHandler";
+import { DIFFICULTIES, type ScenarioDifficulty } from "@/types/scenario";
+
 interface ScenarioItem {
   id: string;
   title: string;
@@ -8,12 +11,12 @@ interface ScenarioItem {
   path: string;
 }
 
-type ReorderState = Record<string, ScenarioItem[]>;
+type ReorderState = Partial<Record<ScenarioDifficulty, ScenarioItem[]>>;
 
 interface Props {
   currentData: {
     difficulties: Record<
-      string,
+      ScenarioDifficulty,
       {
         label: string;
         scenarios: ScenarioItem[];
@@ -25,27 +28,25 @@ interface Props {
 
 const props = defineProps<Props>();
 const emit = defineEmits<{
-  confirm: [data: Record<string, string[]>];
+  confirm: [data: Record<ScenarioDifficulty, string[]>];
   cancel: [];
 }>();
 
 const dialogRef = ref<HTMLDialogElement | null>(null);
 const state = ref<ReorderState>({});
-const draggedItem = ref<{ difficulty: string; index: number } | null>(null);
+const draggedItem =
+  ref<{ difficulty: ScenarioDifficulty; index: number } | null>(null);
+const difficulties = DIFFICULTIES;
 
 // Props から初期状態を計算
 const initializeState = async (): Promise<void> => {
-  const newState: ReorderState = {};
-
-  // 現在のindex.json内のシナリオで初期化
-  for (const [difficulty, data] of Object.entries(
-    props.currentData.difficulties,
-  )) {
-    newState[difficulty] = [...data.scenarios];
-  }
+  const newState: ReorderState = difficulties.reduce((acc, difficulty) => {
+    const scenarios = props.currentData.difficulties[difficulty]?.scenarios;
+    acc[difficulty] = scenarios ? [...scenarios] : [];
+    return acc;
+  }, {} as ReorderState);
 
   // ファイルシステムから新規シナリオを検出して末尾に追加
-  const difficulties = ["beginner", "intermediate", "advanced"] as const;
   await Promise.all(
     difficulties.map(async (difficulty) => {
       try {
@@ -85,7 +86,7 @@ const initializeState = async (): Promise<void> => {
             if (!newState[difficulty]) {
               newState[difficulty] = [];
             }
-            newState[difficulty].push({
+            newState[difficulty]?.push({
               id: data.id,
               title: data.title,
               description: data.description,
@@ -96,7 +97,7 @@ const initializeState = async (): Promise<void> => {
 
         // ファイルが削除されたシナリオを除去
         if (newState[difficulty]) {
-          newState[difficulty] = newState[difficulty].filter((s) =>
+          newState[difficulty] = newState[difficulty]?.filter((s) =>
             fileIds.has(s.id),
           );
         }
@@ -111,21 +112,17 @@ const initializeState = async (): Promise<void> => {
 };
 
 // 新規追加されたシナリオを検出
-const hasNewScenarios = computed(() => {
-  for (const [difficulty, scenarios] of Object.entries(state.value)) {
+const hasNewScenarios = computed(() =>
+  difficulties.some((difficulty) => {
+    const scenarios = state.value[difficulty] ?? [];
     const currentIds =
       props.currentData.difficulties[difficulty]?.scenarios.map((s) => s.id) ??
       [];
-    for (const scenario of scenarios) {
-      if (!currentIds.includes(scenario.id)) {
-        return true;
-      }
-    }
-  }
-  return false;
-});
+    return scenarios.some((scenario) => !currentIds.includes(scenario.id));
+  }),
+);
 
-const onDragStart = (difficulty: string, index: number): void => {
+const onDragStart = (difficulty: ScenarioDifficulty, index: number): void => {
   draggedItem.value = { difficulty, index };
 };
 
@@ -133,7 +130,7 @@ const onDragOver = (e: DragEvent): void => {
   e.preventDefault();
 };
 
-const onDrop = (difficulty: string, targetIndex: number): void => {
+const onDrop = (difficulty: ScenarioDifficulty, targetIndex: number): void => {
   if (!draggedItem.value) {
     return;
   }
@@ -142,7 +139,7 @@ const onDrop = (difficulty: string, targetIndex: number): void => {
 
   // 同じ難易度内での並び替え
   if (srcDifficulty === difficulty) {
-    const items = [...state.value[difficulty]];
+    const items = [...(state.value[difficulty] ?? [])];
     const [item] = items.splice(srcIndex, 1);
     items.splice(targetIndex, 0, item);
     state.value[difficulty] = items;
@@ -151,17 +148,17 @@ const onDrop = (difficulty: string, targetIndex: number): void => {
   draggedItem.value = null;
 };
 
-const moveUp = (difficulty: string, index: number): void => {
+const moveUp = (difficulty: ScenarioDifficulty, index: number): void => {
   if (index === 0) {
     return;
   }
-  const items = [...state.value[difficulty]];
+  const items = [...(state.value[difficulty] ?? [])];
   [items[index], items[index - 1]] = [items[index - 1], items[index]];
   state.value[difficulty] = items;
 };
 
-const moveDown = (difficulty: string, index: number): void => {
-  const items = state.value[difficulty];
+const moveDown = (difficulty: ScenarioDifficulty, index: number): void => {
+  const items = state.value[difficulty] ?? [];
   if (index === items.length - 1) {
     return;
   }
@@ -175,10 +172,10 @@ const moveDown = (difficulty: string, index: number): void => {
 
 const handleConfirm = (): void => {
   // 現在のstate から ID の配列を構築
-  const result: Record<string, string[]> = {};
-  for (const [difficulty, scenarios] of Object.entries(state.value)) {
-    result[difficulty] = scenarios.map((s) => s.id);
-  }
+  const result = DIFFICULTIES.reduce((acc, difficulty) => {
+    acc[difficulty] = (state.value[difficulty] ?? []).map((s) => s.id);
+    return acc;
+  }, {} as Record<ScenarioDifficulty, string[]>);
   emit("confirm", result);
   dialogRef.value?.close();
 };
@@ -218,18 +215,19 @@ defineExpose({
 
       <div class="difficulties-container">
         <div
-          v-for="(scenarios, difficulty) in state"
+          v-for="difficulty in difficulties"
           :key="difficulty"
           class="difficulty-section"
         >
           <h3>
             {{
-              props.currentData.difficulties[difficulty]?.label ?? difficulty
+              props.currentData.difficulties[difficulty]?.label ??
+              DIFFICULTY_LABELS[difficulty]
             }}
           </h3>
 
           <div
-            v-if="scenarios.length === 0"
+            v-if="(state[difficulty] ?? []).length === 0"
             class="empty-message"
           >
             シナリオがありません
@@ -240,7 +238,7 @@ defineExpose({
             class="scenarios-list"
           >
             <li
-              v-for="(scenario, index) in scenarios"
+              v-for="(scenario, index) in state[difficulty]"
               :key="scenario.id"
               draggable="true"
               :class="{
@@ -268,7 +266,7 @@ defineExpose({
                     ↑
                   </button>
                   <button
-                    :disabled="index === scenarios.length - 1"
+                    :disabled="index === (state[difficulty] ?? []).length - 1"
                     title="下へ移動"
                     @click="moveDown(difficulty, index)"
                   >
