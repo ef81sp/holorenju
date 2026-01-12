@@ -42,12 +42,9 @@ const DIFFICULTY_COLORS: Record<ScenarioDifficulty, string> = {
     "linear-gradient(135deg, var(--color-fubuki-primary), var(--color-fubuki-bg))",
   gomoku_intermediate:
     "linear-gradient(135deg, #f9c449, var(--color-holo-cyan))",
-  renju_beginner:
-    "linear-gradient(135deg, #b7becd, #e6edf5)",
-  renju_intermediate:
-    "linear-gradient(135deg, #ff9f7f, #ffd3a5)",
-  renju_advanced:
-    "linear-gradient(135deg, #6fd3a7, #3fbfb9)",
+  renju_beginner: "linear-gradient(135deg, #b7becd, #e6edf5)",
+  renju_intermediate: "linear-gradient(135deg, #ff9f7f, #ffd3a5)",
+  renju_advanced: "linear-gradient(135deg, #6fd3a7, #3fbfb9)",
   renju_expert:
     "linear-gradient(135deg, var(--color-miko-primary), var(--color-holo-purple))",
 };

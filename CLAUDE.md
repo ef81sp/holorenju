@@ -5,6 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project Overview
 
 A Renju (五目並べ/Gomoku) learning game featuring:
+
 - **Demo mode**: Characters (VTubers Fubuki & Miko) explain Renju strategies through dialogue
 - **Question mode**: Players practice moves with immediate feedback
 - **Scenario editor**: Built-in editor for creating learning scenarios
@@ -20,6 +21,7 @@ pnpm build         # Production build
 ## Architecture
 
 ### State Management (Pinia stores in `src/stores/`)
+
 - **appStore**: Navigation state (scenes: menu → difficulty → scenarioList → scenarioPlay/editor)
 - **gameStore**: Game logic, turn management, win detection (delegates board state to boardStore)
 - **boardStore**: Board state, stones, marks, lines with animation callbacks
@@ -28,16 +30,19 @@ pnpm build         # Production build
 - **preferencesStore**: User settings (text size, etc.)
 
 ### Core Game Logic (`src/logic/`)
+
 - **renjuRules.ts**: Renju rules including forbidden moves (double-three, double-four, overline) for black stones
 - **boardParser.ts**: Parse board state from string notation
 - **scenarioParser.ts**: Parse scenario JSON files
 
 ### Component Structure
+
 - **ScenarioPlayer** (`src/components/scenarios/ScenarioPlayer/`): Main gameplay component with composables for navigation, keyboard input, question solving, cutin display
 - **RenjuBoard** (`src/components/game/RenjuBoard/`): Vue Konva-based board with composables for layout, interaction, animation
 - **Editor** (`src/editor/`): Full scenario editing suite with File System Access API integration
 
 ### Type System (`src/types/`)
+
 - **scenario.ts**: Core types - Scenario, DemoSection, QuestionSection, BoardAction, SuccessCondition
 - **game.ts**: BoardState (15x15 grid), Position, StoneColor
 - **character.ts**: CharacterType, EmotionId
@@ -46,12 +51,14 @@ pnpm build         # Production build
 ## Development Guidelines
 
 ### Vue/TypeScript
+
 - Use `<script setup lang="ts">` with generic-style defineProps
 - Use `<dialog>` element for modals (see existing components)
 - When referencing component methods via refs, use optional chaining (`ref?.method()`)
 - Keep SFCs under ~400 lines; extract composables or split components
 
 ### CSS
+
 - **Fixed 960×540 viewport**: Use CSS variables from `style.css` (e.g., `--size-16`, `--size-24`)
 - **Never use rem/px** for layout - use `--size-*` variables with clamp()
 - Colors: Use `:root` variables (e.g., `--color-fubuki-primary`, `--color-text-primary`)
@@ -60,14 +67,17 @@ pnpm build         # Production build
 - Never set `display` directly on `<dialog>` or popover elements
 
 ### Konva
+
 - Use Vue Konva components (`v-stage`, `v-layer`, `v-circle`, etc.)
 - Board rendering uses composables for layout calculations and animations
 
 ### Testing
+
 - Playwright MCP available for E2E testing
 - Browser viewport: 960×540 (fixed)
 - Minimize screenshots during testing (context limit)
 
 ## Task Planning
+
 - Check `docs/` for implementation plans and TODOs
 - Generalize learnings to AGENTS.md

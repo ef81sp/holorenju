@@ -10,7 +10,6 @@ import {
   type DemoSection,
   type QuestionSection,
 } from "../types/scenario";
-
 import { parseScenario, validateBoardState } from "./scenarioParser";
 
 // ===== ファイル読み込み =====

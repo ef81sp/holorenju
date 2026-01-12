@@ -56,7 +56,9 @@ export function useScenarioIndexManagement(): UseScenarioIndexManagementReturn {
   const mergeIndexData = (data: IndexData): IndexData => {
     const empty = createEmptyIndexData();
     for (const [difficulty, value] of Object.entries(data.difficulties)) {
-      if (!value) {continue;}
+      if (!value) {
+        continue;
+      }
       const key = difficulty as ScenarioDifficulty;
       empty.difficulties[key] = {
         label: value.label ?? DIFFICULTY_LABELS[key],

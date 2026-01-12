@@ -1,7 +1,11 @@
 /**
  * Index.json の読み書きユーティリティ
  */
-import { DIFFICULTIES, type Scenario, type ScenarioDifficulty } from "@/types/scenario";
+import {
+  DIFFICULTIES,
+  type Scenario,
+  type ScenarioDifficulty,
+} from "@/types/scenario";
 
 interface IndexScenarioEntry {
   id: string;
@@ -30,13 +34,16 @@ export const DIFFICULTY_LABELS: Record<ScenarioDifficulty, string> = {
 };
 
 const createDefaultIndexData = (): IndexData => ({
-  difficulties: DIFFICULTIES.reduce((acc, difficulty) => {
-    acc[difficulty] = {
-      label: DIFFICULTY_LABELS[difficulty],
-      scenarios: [],
-    };
-    return acc;
-  }, {} as IndexData["difficulties"]),
+  difficulties: DIFFICULTIES.reduce(
+    (acc, difficulty) => {
+      acc[difficulty] = {
+        label: DIFFICULTY_LABELS[difficulty],
+        scenarios: [],
+      };
+      return acc;
+    },
+    {} as IndexData["difficulties"],
+  ),
 });
 
 const DEFAULT_INDEX_DATA: IndexData = createDefaultIndexData();

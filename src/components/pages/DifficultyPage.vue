@@ -4,13 +4,17 @@ import { computed } from "vue";
 import PageHeader from "@/components/common/PageHeader.vue";
 import { useAppStore } from "@/stores/appStore";
 import { useProgressStore } from "@/stores/progressStore";
-import { type ScenarioDifficulty } from "@/types/scenario";
+import type { ScenarioDifficulty } from "@/types/scenario";
 import scenariosIndex from "@/data/scenarios/index.json";
 
 const appStore = useAppStore();
 const progressStore = useProgressStore();
 
-type ProgressInfo = { completed: number; total: number; rate: number };
+interface ProgressInfo {
+  completed: number;
+  total: number;
+  rate: number;
+}
 
 interface DifficultyCard {
   key: ScenarioDifficulty;
@@ -77,10 +81,13 @@ const getProgress = (difficulty: ScenarioDifficulty): ProgressInfo => {
 };
 
 const progressByDifficulty = computed(() =>
-  difficultyCards.reduce((acc, card) => {
-    acc[card.key] = getProgress(card.key);
-    return acc;
-  }, {} as Record<ScenarioDifficulty, ProgressInfo>),
+  difficultyCards.reduce(
+    (acc, card) => {
+      acc[card.key] = getProgress(card.key);
+      return acc;
+    },
+    {} as Record<ScenarioDifficulty, ProgressInfo>,
+  ),
 );
 
 const handleSelectDifficulty = (difficulty: ScenarioDifficulty): void => {
@@ -164,7 +171,9 @@ const handleBack = (): void => {
   border: var(--size-2) solid var(--color-border-heavy);
   border-radius: var(--size-16);
   cursor: pointer;
-  transition: transform 0.25s ease, box-shadow 0.25s ease;
+  transition:
+    transform 0.25s ease,
+    box-shadow 0.25s ease;
   box-shadow: 0 var(--size-5) var(--size-16) rgba(0, 0, 0, 0.1);
   display: grid;
   grid-template-rows: auto 1fr auto;

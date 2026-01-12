@@ -34,8 +34,10 @@ const emit = defineEmits<{
 
 const dialogRef = ref<HTMLDialogElement | null>(null);
 const state = ref<ReorderState>({});
-const draggedItem =
-  ref<{ difficulty: ScenarioDifficulty; index: number } | null>(null);
+const draggedItem = ref<{
+  difficulty: ScenarioDifficulty;
+  index: number;
+} | null>(null);
 const difficulties = DIFFICULTIES;
 
 // Props から初期状態を計算
@@ -172,10 +174,13 @@ const moveDown = (difficulty: ScenarioDifficulty, index: number): void => {
 
 const handleConfirm = (): void => {
   // 現在のstate から ID の配列を構築
-  const result = DIFFICULTIES.reduce((acc, difficulty) => {
-    acc[difficulty] = (state.value[difficulty] ?? []).map((s) => s.id);
-    return acc;
-  }, {} as Record<ScenarioDifficulty, string[]>);
+  const result = DIFFICULTIES.reduce(
+    (acc, difficulty) => {
+      acc[difficulty] = (state.value[difficulty] ?? []).map((s) => s.id);
+      return acc;
+    },
+    {} as Record<ScenarioDifficulty, string[]>,
+  );
   emit("confirm", result);
   dialogRef.value?.close();
 };

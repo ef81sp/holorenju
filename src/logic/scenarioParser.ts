@@ -7,6 +7,8 @@
  */
 
 import type { EmotionId } from "../types/character";
+import type { TextNode, InlineTextNode } from "../types/text";
+
 import {
   DIFFICULTIES,
   type Scenario,
@@ -21,8 +23,6 @@ import {
   type QuestionFeedback,
   type DialogueLine,
 } from "../types/scenario";
-import type { TextNode, InlineTextNode } from "../types/text";
-
 import { parseText, parseInlineTextFromString } from "./textParser";
 
 // ===== パース・バリデーション =====
