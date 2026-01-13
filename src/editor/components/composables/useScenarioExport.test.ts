@@ -31,7 +31,10 @@ vi.mock("@/editor/stores/editorStore", () => ({
 
 // scenarioFileHandlerモック - vi.hoistedでホイスティング問題を回避
 const { mockValidationResult, mockDownloadScenarioAsJSON } = vi.hoisted(() => ({
-  mockValidationResult: { isValid: true, errors: [] as { type: string; path: string; message: string }[] },
+  mockValidationResult: {
+    isValid: true,
+    errors: [] as { type: string; path: string; message: string }[],
+  },
   mockDownloadScenarioAsJSON: vi.fn(),
 }));
 
@@ -43,7 +46,10 @@ vi.mock("@/logic/scenarioFileHandler", () => ({
 
 describe("useScenarioExport", () => {
   // eslint-disable-next-line init-declarations
-  let mockClipboard: { writeText: ReturnType<typeof vi.fn>; readText: ReturnType<typeof vi.fn> };
+  let mockClipboard: {
+    writeText: ReturnType<typeof vi.fn>;
+    readText: ReturnType<typeof vi.fn>;
+  };
 
   beforeEach(() => {
     vi.clearAllMocks();

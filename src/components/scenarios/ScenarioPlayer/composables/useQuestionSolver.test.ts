@@ -1,8 +1,8 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
 import { setActivePinia, createPinia } from "pinia";
+import { describe, expect, it, vi, beforeEach } from "vitest";
 
-import type { QuestionSection } from "@/types/scenario";
 import type { BoardState } from "@/types/game";
+import type { QuestionSection } from "@/types/scenario";
 
 import { useQuestionSolver } from "./useQuestionSolver";
 
@@ -37,11 +37,11 @@ vi.mock("@/stores/progressStore", () => ({
 
 describe("useQuestionSolver", () => {
   // eslint-disable-next-line init-declarations
-  let onSectionComplete: ReturnType<typeof vi.fn>;
+  let onSectionComplete: () => void;
   // eslint-disable-next-line init-declarations
-  let onShowCorrectCutin: ReturnType<typeof vi.fn>;
+  let onShowCorrectCutin: () => void;
   // eslint-disable-next-line init-declarations
-  let onShowIncorrectCutin: ReturnType<typeof vi.fn>;
+  let onShowIncorrectCutin: () => void;
 
   const createQuestionSection = (
     overrides: Partial<QuestionSection> = {},

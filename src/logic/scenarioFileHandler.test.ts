@@ -39,8 +39,9 @@ describe("scenarioFileHandler", () => {
           {
             id: "dialogue-1",
             character: "fubuki",
-            emotion: "default",
+            emotion: 0,
             text: [{ type: "text", content: "テスト" }],
+            boardActions: [],
           },
         ],
       },

@@ -77,6 +77,11 @@ pnpm build         # Production build
 - Browser viewport: 960×540 (fixed)
 - Minimize screenshots during testing (context limit)
 
+### Before Committing
+
+- Run `pnpm check-fix` to ensure type-checking, formatting, and linting pass
+- Do `/review` your edits
+
 ## Task Planning
 
 - Check `docs/` for implementation plans and TODOs

@@ -1,10 +1,16 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import { shallowRef, ref } from "vue";
+import { shallowRef, ref, type ShallowRef } from "vue";
+
+import type FullscreenPrompt from "@/components/common/FullscreenPrompt.vue";
 
 import { useFullscreenPrompt } from "./useFullscreenPrompt";
 
+type PromptRef = ShallowRef<InstanceType<typeof FullscreenPrompt> | null>;
+
 // localStorageモック
-const createLocalStorageMock = (): Storage & { store: Record<string, string> } => {
+const createLocalStorageMock = (): Storage & {
+  store: Record<string, string>;
+} => {
   const store: Record<string, string> = {};
   return {
     store,
@@ -41,7 +47,7 @@ describe("useFullscreenPrompt", () => {
   // eslint-disable-next-line init-declarations
   let originalNavigator: Navigator;
   // eslint-disable-next-line init-declarations
-  let mockPromptRef: ReturnType<typeof shallowRef<{ showModal: () => void } | null>>;
+  let mockPromptRef: PromptRef;
 
   beforeEach(() => {
     localStorageMock = createLocalStorageMock();
@@ -52,7 +58,7 @@ describe("useFullscreenPrompt", () => {
 
     mockPromptRef = shallowRef({
       showModal: vi.fn(),
-    });
+    }) as unknown as PromptRef;
   });
 
   afterEach(() => {
@@ -161,7 +167,7 @@ describe("useFullscreenPrompt", () => {
         configurable: true,
       });
       mockIsMobileByMedia.value = true;
-      const nullRef = shallowRef(null);
+      const nullRef = shallowRef(null) as unknown as PromptRef;
 
       const { showFullscreenPrompt } = useFullscreenPrompt(nullRef);
 

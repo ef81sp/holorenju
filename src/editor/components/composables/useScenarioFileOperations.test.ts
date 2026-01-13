@@ -18,7 +18,10 @@ vi.mock("@/editor/stores/editorStore", () => ({
 }));
 
 // scenarioFileHandlerモック
-const mockValidationResult = { isValid: true, errors: [] as { type: string; path: string; message: string }[] };
+const mockValidationResult = {
+  isValid: true,
+  errors: [] as { type: string; path: string; message: string }[],
+};
 const mockEmptyScenario: Scenario = {
   id: "new-scenario",
   title: "新しいシナリオ",
