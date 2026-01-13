@@ -1,0 +1,194 @@
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
+import { shallowRef, ref } from "vue";
+
+import { useFullscreenPrompt } from "./useFullscreenPrompt";
+
+// localStorageモック
+const createLocalStorageMock = (): Storage & { store: Record<string, string> } => {
+  const store: Record<string, string> = {};
+  return {
+    store,
+    getItem: vi.fn((key: string) => store[key] ?? null),
+    setItem: vi.fn((key: string, value: string) => {
+      store[key] = value;
+    }),
+    removeItem: vi.fn((key: string) => {
+      // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+      delete store[key];
+    }),
+    clear: vi.fn(() => {
+      Object.keys(store).forEach((key) => {
+        // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+        delete store[key];
+      });
+    }),
+    get length() {
+      return Object.keys(store).length;
+    },
+    key: vi.fn((index: number) => Object.keys(store)[index] ?? null),
+  };
+};
+
+// useMediaQueryモック
+const mockIsMobileByMedia = ref(false);
+vi.mock("@vueuse/core", () => ({
+  useMediaQuery: vi.fn(() => mockIsMobileByMedia),
+}));
+
+describe("useFullscreenPrompt", () => {
+  // eslint-disable-next-line init-declarations
+  let localStorageMock: ReturnType<typeof createLocalStorageMock>;
+  // eslint-disable-next-line init-declarations
+  let originalNavigator: Navigator;
+  // eslint-disable-next-line init-declarations
+  let mockPromptRef: ReturnType<typeof shallowRef<{ showModal: () => void } | null>>;
+
+  beforeEach(() => {
+    localStorageMock = createLocalStorageMock();
+    vi.stubGlobal("localStorage", localStorageMock);
+
+    originalNavigator = navigator;
+    mockIsMobileByMedia.value = false;
+
+    mockPromptRef = shallowRef({
+      showModal: vi.fn(),
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.clearAllMocks();
+  });
+
+  describe("isMobile", () => {
+    it("タッチポイントありでtrue", () => {
+      Object.defineProperty(navigator, "maxTouchPoints", {
+        value: 5,
+        configurable: true,
+      });
+      mockIsMobileByMedia.value = false;
+
+      const { isMobile } = useFullscreenPrompt(mockPromptRef);
+
+      expect(isMobile.value).toBe(true);
+    });
+
+    it("hover: noneメディアクエリでtrue", () => {
+      Object.defineProperty(navigator, "maxTouchPoints", {
+        value: 0,
+        configurable: true,
+      });
+      mockIsMobileByMedia.value = true;
+
+      const { isMobile } = useFullscreenPrompt(mockPromptRef);
+
+      expect(isMobile.value).toBe(true);
+    });
+
+    it("デスクトップでfalse", () => {
+      Object.defineProperty(navigator, "maxTouchPoints", {
+        value: 0,
+        configurable: true,
+      });
+      mockIsMobileByMedia.value = false;
+
+      const { isMobile } = useFullscreenPrompt(mockPromptRef);
+
+      expect(isMobile.value).toBe(false);
+    });
+  });
+
+  describe("isPromptDisabled", () => {
+    it("localStorageにフラグがなければfalse", () => {
+      const { isPromptDisabled } = useFullscreenPrompt(mockPromptRef);
+
+      expect(isPromptDisabled()).toBe(false);
+    });
+
+    it("localStorageにフラグがあればtrue", () => {
+      localStorageMock.store["holorenju-fullscreen-prompt-disabled"] = "true";
+
+      const { isPromptDisabled } = useFullscreenPrompt(mockPromptRef);
+
+      expect(isPromptDisabled()).toBe(true);
+    });
+  });
+
+  describe("showFullscreenPrompt", () => {
+    it("モバイルで未dismissならshowModalが呼ばれる", () => {
+      Object.defineProperty(navigator, "maxTouchPoints", {
+        value: 5,
+        configurable: true,
+      });
+      mockIsMobileByMedia.value = true;
+
+      const { showFullscreenPrompt } = useFullscreenPrompt(mockPromptRef);
+      showFullscreenPrompt();
+
+      expect(mockPromptRef.value?.showModal).toHaveBeenCalled();
+    });
+
+    it("dismiss済みならshowModalは呼ばれない", () => {
+      Object.defineProperty(navigator, "maxTouchPoints", {
+        value: 5,
+        configurable: true,
+      });
+      mockIsMobileByMedia.value = true;
+      localStorageMock.store["holorenju-fullscreen-prompt-disabled"] = "true";
+
+      const { showFullscreenPrompt } = useFullscreenPrompt(mockPromptRef);
+      showFullscreenPrompt();
+
+      expect(mockPromptRef.value?.showModal).not.toHaveBeenCalled();
+    });
+
+    it("デスクトップならshowModalは呼ばれない", () => {
+      Object.defineProperty(navigator, "maxTouchPoints", {
+        value: 0,
+        configurable: true,
+      });
+      mockIsMobileByMedia.value = false;
+
+      const { showFullscreenPrompt } = useFullscreenPrompt(mockPromptRef);
+      showFullscreenPrompt();
+
+      expect(mockPromptRef.value?.showModal).not.toHaveBeenCalled();
+    });
+
+    it("promptRefがnullの場合は何もしない", () => {
+      Object.defineProperty(navigator, "maxTouchPoints", {
+        value: 5,
+        configurable: true,
+      });
+      mockIsMobileByMedia.value = true;
+      const nullRef = shallowRef(null);
+
+      const { showFullscreenPrompt } = useFullscreenPrompt(nullRef);
+
+      // エラーなく呼び出せることを確認
+      expect(() => showFullscreenPrompt()).not.toThrow();
+    });
+  });
+
+  describe("handleNeverShow", () => {
+    it("localStorageに保存される", () => {
+      const { handleNeverShow } = useFullscreenPrompt(mockPromptRef);
+
+      handleNeverShow();
+
+      expect(localStorageMock.setItem).toHaveBeenCalledWith(
+        "holorenju-fullscreen-prompt-disabled",
+        "true",
+      );
+    });
+
+    it("handleNeverShow後はisPromptDisabledがtrue", () => {
+      const { handleNeverShow, isPromptDisabled } =
+        useFullscreenPrompt(mockPromptRef);
+
+      expect(isPromptDisabled()).toBe(false);
+      handleNeverShow();
+      expect(isPromptDisabled()).toBe(true);
+    });
+  });
+});
