@@ -12,8 +12,11 @@ import { useSuccessConditions } from "./useSuccessConditions";
 
 describe("useSuccessConditions", () => {
   // モックセクション
+  // eslint-disable-next-line init-declarations
   let mockSection: QuestionSection;
+  // eslint-disable-next-line init-declarations
   let getCurrentSection: Mock<() => QuestionSection | null>;
+  // eslint-disable-next-line init-declarations
   let updateSection: Mock<(updates: Partial<QuestionSection>) => void>;
 
   beforeEach(() => {
@@ -223,7 +226,7 @@ describe("useSuccessConditions", () => {
 
         updatePositionCondition(0, { color: "white" });
 
-        const callArgs = updateSection.mock.calls[0][0];
+        const [[callArgs]] = updateSection.mock.calls;
         const condition = callArgs.successConditions[0] as PositionCondition;
         expect(condition.color).toBe("white");
       });
@@ -257,7 +260,7 @@ describe("useSuccessConditions", () => {
 
         addPositionToCondition(0);
 
-        const callArgs = updateSection.mock.calls[0][0];
+        const [[callArgs]] = updateSection.mock.calls;
         const condition = callArgs.successConditions[0] as PositionCondition;
         expect(condition.positions).toHaveLength(1);
         expect(condition.positions[0]).toEqual({
@@ -280,7 +283,7 @@ describe("useSuccessConditions", () => {
 
         updatePositionField(0, 0, "row", 7);
 
-        const callArgs = updateSection.mock.calls[0][0];
+        const [[callArgs]] = updateSection.mock.calls;
         const condition = callArgs.successConditions[0] as PositionCondition;
         expect(condition.positions[0].row).toBe(7);
       });
@@ -297,7 +300,7 @@ describe("useSuccessConditions", () => {
 
         updatePositionField(0, 0, "row", -5);
 
-        const callArgs = updateSection.mock.calls[0][0];
+        const [[callArgs]] = updateSection.mock.calls;
         const condition = callArgs.successConditions[0] as PositionCondition;
         expect(condition.positions[0].row).toBe(0);
       });
@@ -314,7 +317,7 @@ describe("useSuccessConditions", () => {
 
         updatePositionField(0, 0, "col", 99);
 
-        const callArgs = updateSection.mock.calls[0][0];
+        const [[callArgs]] = updateSection.mock.calls;
         const condition = callArgs.successConditions[0] as PositionCondition;
         expect(condition.positions[0].col).toBe(14);
       });
@@ -340,7 +343,7 @@ describe("useSuccessConditions", () => {
 
         removePositionFromCondition(0, 0);
 
-        const callArgs = updateSection.mock.calls[0][0];
+        const [[callArgs]] = updateSection.mock.calls;
         const condition = callArgs.successConditions[0] as PositionCondition;
         expect(condition.positions).toHaveLength(1);
         expect(condition.positions[0]).toEqual({
@@ -365,7 +368,7 @@ describe("useSuccessConditions", () => {
 
         updatePatternCondition(0, { pattern: "xxxxx" });
 
-        const callArgs = updateSection.mock.calls[0][0];
+        const [[callArgs]] = updateSection.mock.calls;
         const condition = callArgs.successConditions[0] as PatternCondition;
         expect(condition.pattern).toBe("xxxxx");
       });
@@ -382,7 +385,7 @@ describe("useSuccessConditions", () => {
 
         updatePatternCondition(0, { color: "white" });
 
-        const callArgs = updateSection.mock.calls[0][0];
+        const [[callArgs]] = updateSection.mock.calls;
         const condition = callArgs.successConditions[0] as PatternCondition;
         expect(condition.color).toBe("white");
       });
@@ -418,7 +421,7 @@ describe("useSuccessConditions", () => {
 
         addSequenceMove(0);
 
-        const callArgs = updateSection.mock.calls[0][0];
+        const [[callArgs]] = updateSection.mock.calls;
         const condition = callArgs.successConditions[0] as SequenceCondition;
         expect(condition.moves).toHaveLength(1);
         expect(condition.moves[0]).toEqual({
@@ -461,7 +464,7 @@ describe("useSuccessConditions", () => {
 
         updateSequenceMove(0, 0, "row", 7);
 
-        const callArgs = updateSection.mock.calls[0][0];
+        const [[callArgs]] = updateSection.mock.calls;
         const condition = callArgs.successConditions[0] as SequenceCondition;
         expect(condition.moves[0].row).toBe(7);
       });
@@ -482,7 +485,7 @@ describe("useSuccessConditions", () => {
 
         updateSequenceMove(0, 0, "col", 10);
 
-        const callArgs = updateSection.mock.calls[0][0];
+        const [[callArgs]] = updateSection.mock.calls;
         const condition = callArgs.successConditions[0] as SequenceCondition;
         expect(condition.moves[0].col).toBe(10);
       });
@@ -503,7 +506,7 @@ describe("useSuccessConditions", () => {
 
         updateSequenceMove(0, 0, "color", "white");
 
-        const callArgs = updateSection.mock.calls[0][0];
+        const [[callArgs]] = updateSection.mock.calls;
         const condition = callArgs.successConditions[0] as SequenceCondition;
         expect(condition.moves[0].color).toBe("white");
       });
@@ -524,7 +527,7 @@ describe("useSuccessConditions", () => {
 
         updateSequenceMove(0, 0, "row", 99);
 
-        const callArgs = updateSection.mock.calls[0][0];
+        const [[callArgs]] = updateSection.mock.calls;
         const condition = callArgs.successConditions[0] as SequenceCondition;
         expect(condition.moves[0].row).toBe(14);
       });
@@ -550,7 +553,7 @@ describe("useSuccessConditions", () => {
 
         removeSequenceMove(0, 0);
 
-        const callArgs = updateSection.mock.calls[0][0];
+        const [[callArgs]] = updateSection.mock.calls;
         const condition = callArgs.successConditions[0] as SequenceCondition;
         expect(condition.moves).toHaveLength(1);
         expect(condition.moves[0]).toEqual({
@@ -574,7 +577,7 @@ describe("useSuccessConditions", () => {
 
         toggleSequenceStrict(0, true);
 
-        const callArgs = updateSection.mock.calls[0][0];
+        const [[callArgs]] = updateSection.mock.calls;
         const condition = callArgs.successConditions[0] as SequenceCondition;
         expect(condition.strict).toBe(true);
       });
@@ -591,7 +594,7 @@ describe("useSuccessConditions", () => {
 
         toggleSequenceStrict(0, false);
 
-        const callArgs = updateSection.mock.calls[0][0];
+        const [[callArgs]] = updateSection.mock.calls;
         const condition = callArgs.successConditions[0] as SequenceCondition;
         expect(condition.strict).toBe(false);
       });

@@ -71,7 +71,9 @@ vi.mock("@/stores/preferencesStore", () => ({
 }));
 
 // モックレイアウト
-function createMockLayout() {
+function createMockLayout(): ReturnType<
+  typeof import("./useRenjuBoardLayout").useRenjuBoardLayout
+> {
   const stageSize = computed(() => 400);
   return {
     BOARD_SIZE: 15,
@@ -94,9 +96,6 @@ async function flushMicrotasks(): Promise<void> {
   await Promise.resolve();
   await Promise.resolve();
 }
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-interface MockNodeRef { getNode: () => any }
 
 describe("useRenjuBoardAnimation", () => {
   beforeEach(() => {

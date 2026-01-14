@@ -215,7 +215,7 @@ describe("useFeedbackEditor", () => {
       updateFeedbackLine("success", 0, { character: "miko", emotion: 5 });
 
       expect(updateSection).toHaveBeenCalled();
-      const callArgs = updateSection.mock.calls[0][0];
+      const [[callArgs]] = updateSection.mock.calls;
       expect(callArgs.feedback?.success?.[0]).toEqual({
         character: "miko",
         text: [],
@@ -234,7 +234,7 @@ describe("useFeedbackEditor", () => {
       });
 
       expect(updateSection).toHaveBeenCalled();
-      const callArgs = updateSection.mock.calls[0][0];
+      const [[callArgs]] = updateSection.mock.calls;
       expect(callArgs.feedback?.success?.[0].text).toEqual([
         { type: "text", content: "テスト" },
       ]);
@@ -298,7 +298,7 @@ describe("useFeedbackEditor", () => {
 
       // filter は範囲外でも呼び出される（配列は変わらない）
       expect(updateSection).toHaveBeenCalled();
-      const callArgs = updateSection.mock.calls[0][0];
+      const [[callArgs]] = updateSection.mock.calls;
       expect(callArgs.feedback?.success).toHaveLength(1);
     });
 

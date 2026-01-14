@@ -611,6 +611,7 @@ function validateTextNode(item: unknown, path: string): TextNode {
 
   if (type === "emphasis") {
     const contentRaw = item.content;
+    // eslint-disable-next-line init-declarations
     let content: InlineTextNode[];
 
     if (typeof contentRaw === "string") {
@@ -668,6 +669,7 @@ function validateInlineNode(item: unknown, path: string): InlineTextNode {
     return { type: "ruby", base, ruby } as InlineTextNode;
   }
   const contentRaw = item.content;
+  // eslint-disable-next-line init-declarations
   let content: InlineTextNode[];
 
   if (typeof contentRaw === "string") {

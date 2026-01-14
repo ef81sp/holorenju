@@ -104,7 +104,7 @@ describe("useScenarioExport", () => {
   });
 
   describe("handleJsonCopy", () => {
-    it("clipboardにJSONがコピーされる", async () => {
+    it("clipboardにJSONがコピーされる", () => {
       const { handleJsonCopy } = useScenarioExport();
 
       handleJsonCopy();

@@ -76,7 +76,7 @@ describe("useDialogueEditor", () => {
           expect.objectContaining({ id: "dialogue_new" }),
         ]),
       });
-      const callArgs = mockUpdateCurrentSection.mock.calls[0][0];
+      const [[callArgs]] = mockUpdateCurrentSection.mock.calls;
       expect(callArgs.dialogues).toHaveLength(4);
     });
 
@@ -85,8 +85,8 @@ describe("useDialogueEditor", () => {
 
       addDialogue();
 
-      const callArgs = mockUpdateCurrentSection.mock.calls[0][0];
-      const newDialogue = callArgs.dialogues[3];
+      const [[callArgs]] = mockUpdateCurrentSection.mock.calls;
+      const [, , , newDialogue] = callArgs.dialogues;
       expect(newDialogue.character).toBe("fubuki");
       expect(newDialogue.text).toEqual([]);
       expect(newDialogue.emotion).toBe(0);
@@ -110,7 +110,7 @@ describe("useDialogueEditor", () => {
       insertDialogueAfter(1);
 
       expect(mockUpdateCurrentSection).toHaveBeenCalled();
-      const callArgs = mockUpdateCurrentSection.mock.calls[0][0];
+      const [[callArgs]] = mockUpdateCurrentSection.mock.calls;
       expect(callArgs.dialogues).toHaveLength(4);
       // IDが再採番される
       expect(callArgs.dialogues[0].id).toBe("dialogue_1");
@@ -125,7 +125,7 @@ describe("useDialogueEditor", () => {
       insertDialogueAfter(0);
 
       expect(mockUpdateCurrentSection).toHaveBeenCalled();
-      const callArgs = mockUpdateCurrentSection.mock.calls[0][0];
+      const [[callArgs]] = mockUpdateCurrentSection.mock.calls;
       expect(callArgs.dialogues).toHaveLength(4);
     });
 
@@ -162,7 +162,7 @@ describe("useDialogueEditor", () => {
       removeDialogue(1);
 
       expect(mockUpdateCurrentSection).toHaveBeenCalled();
-      const callArgs = mockUpdateCurrentSection.mock.calls[0][0];
+      const [[callArgs]] = mockUpdateCurrentSection.mock.calls;
       expect(callArgs.dialogues).toHaveLength(2);
     });
 
@@ -171,7 +171,7 @@ describe("useDialogueEditor", () => {
 
       removeDialogue(0);
 
-      const callArgs = mockUpdateCurrentSection.mock.calls[0][0];
+      const [[callArgs]] = mockUpdateCurrentSection.mock.calls;
       expect(callArgs.dialogues[0].id).toBe("dialogue_1");
       expect(callArgs.dialogues[1].id).toBe("dialogue_2");
     });
@@ -193,7 +193,7 @@ describe("useDialogueEditor", () => {
       updateDialogue(0, { character: "miko", emotion: 5 });
 
       expect(mockUpdateCurrentSection).toHaveBeenCalled();
-      const callArgs = mockUpdateCurrentSection.mock.calls[0][0];
+      const [[callArgs]] = mockUpdateCurrentSection.mock.calls;
       expect(callArgs.dialogues[0].character).toBe("miko");
       expect(callArgs.dialogues[0].emotion).toBe(5);
     });
@@ -203,7 +203,7 @@ describe("useDialogueEditor", () => {
 
       updateDialogue(0, { character: "miko" });
 
-      const callArgs = mockUpdateCurrentSection.mock.calls[0][0];
+      const [[callArgs]] = mockUpdateCurrentSection.mock.calls;
       expect(callArgs.dialogues[0].id).toBe("dialogue_1");
       expect(callArgs.dialogues[0].boardActions).toEqual([]);
     });
@@ -225,7 +225,7 @@ describe("useDialogueEditor", () => {
       moveDialogueUp(1);
 
       expect(mockUpdateCurrentSection).toHaveBeenCalled();
-      const callArgs = mockUpdateCurrentSection.mock.calls[0][0];
+      const [[callArgs]] = mockUpdateCurrentSection.mock.calls;
       expect(callArgs.dialogues[0].id).toBe("dialogue_2");
       expect(callArgs.dialogues[1].id).toBe("dialogue_1");
       expect(callArgs.dialogues[2].id).toBe("dialogue_3");
@@ -264,7 +264,7 @@ describe("useDialogueEditor", () => {
       moveDialogueDown(0);
 
       expect(mockUpdateCurrentSection).toHaveBeenCalled();
-      const callArgs = mockUpdateCurrentSection.mock.calls[0][0];
+      const [[callArgs]] = mockUpdateCurrentSection.mock.calls;
       expect(callArgs.dialogues[0].id).toBe("dialogue_2");
       expect(callArgs.dialogues[1].id).toBe("dialogue_1");
       expect(callArgs.dialogues[2].id).toBe("dialogue_3");

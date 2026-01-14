@@ -5,11 +5,13 @@ import { useKeyboardNavigation } from "./useKeyboardNavigation";
 
 describe("useKeyboardNavigation", () => {
   // モック関数
+  // eslint-disable-next-line init-declarations
   let onPlaceStone: () => void;
+  // eslint-disable-next-line init-declarations
   let onDialogueNavigate: (direction: "next" | "previous") => void;
 
   // キーボードイベントを作成するヘルパー（Node環境用）
-  const createKeyEvent = (key: string) =>
+  const createKeyEvent = (key: string): KeyboardEvent =>
     ({
       key,
       preventDefault: vi.fn(),

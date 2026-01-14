@@ -14,8 +14,11 @@ import { useBoardActions } from "./useBoardActions";
 
 describe("useBoardActions", () => {
   // モックセクションとダイアログ
+  // eslint-disable-next-line init-declarations
   let mockSection: DemoSection;
+  // eslint-disable-next-line init-declarations
   let getCurrentSection: Mock<() => DemoSection | null>;
+  // eslint-disable-next-line init-declarations
   let updateDialogue: Mock<
     (index: number, updates: Partial<DemoDialogue>) => void
   >;
@@ -244,7 +247,7 @@ describe("useBoardActions", () => {
       updateBoardActionPosition(0, 0, "position", "row", 7);
 
       expect(updateDialogue).toHaveBeenCalled();
-      const callArgs = updateDialogue.mock.calls[0][1];
+      const [[, callArgs]] = updateDialogue.mock.calls;
       const action = callArgs.boardActions[0] as PlaceMoveAction;
       expect(action.position.row).toBe(7);
     });
@@ -267,7 +270,7 @@ describe("useBoardActions", () => {
       updateBoardActionPosition(0, 0, "fromPosition", "col", 5);
 
       expect(updateDialogue).toHaveBeenCalled();
-      const callArgs = updateDialogue.mock.calls[0][1];
+      const [[, callArgs]] = updateDialogue.mock.calls;
       const action = callArgs.boardActions[0] as LineAction;
       expect(action.fromPosition.col).toBe(5);
     });
@@ -284,7 +287,7 @@ describe("useBoardActions", () => {
 
       updateBoardActionPosition(0, 0, "position", "row", -5);
 
-      const callArgs = updateDialogue.mock.calls[0][1];
+      const [[, callArgs]] = updateDialogue.mock.calls;
       const action = callArgs.boardActions[0] as PlaceMoveAction;
       expect(action.position.row).toBe(0);
     });
@@ -301,7 +304,7 @@ describe("useBoardActions", () => {
 
       updateBoardActionPosition(0, 0, "position", "col", 20);
 
-      const callArgs = updateDialogue.mock.calls[0][1];
+      const [[, callArgs]] = updateDialogue.mock.calls;
       const action = callArgs.boardActions[0] as PlaceMoveAction;
       expect(action.position.col).toBe(14);
     });
@@ -320,7 +323,7 @@ describe("useBoardActions", () => {
 
       updateBoardActionColor(0, 0, "white");
 
-      const callArgs = updateDialogue.mock.calls[0][1];
+      const [[, callArgs]] = updateDialogue.mock.calls;
       const action = callArgs.boardActions[0] as PlaceMoveAction;
       expect(action.color).toBe("white");
     });
@@ -359,7 +362,7 @@ describe("useBoardActions", () => {
 
       updateBoardActionHighlight(0, 0, true);
 
-      const callArgs = updateDialogue.mock.calls[0][1];
+      const [[, callArgs]] = updateDialogue.mock.calls;
       const action = callArgs.boardActions[0] as PlaceMoveAction;
       expect(action.highlight).toBe(true);
     });
@@ -379,7 +382,7 @@ describe("useBoardActions", () => {
       const newBoard = Array(15).fill("X".repeat(15));
       updateBoardActionBoard(0, 0, newBoard);
 
-      const callArgs = updateDialogue.mock.calls[0][1];
+      const [[, callArgs]] = updateDialogue.mock.calls;
       const action = callArgs.boardActions[0] as SetBoardAction;
       expect(action.board[0]).toBe("X".repeat(15));
     });
@@ -399,7 +402,7 @@ describe("useBoardActions", () => {
 
         addBoardActionMarkPosition(0, 0);
 
-        const callArgs = updateDialogue.mock.calls[0][1];
+        const [[, callArgs]] = updateDialogue.mock.calls;
         const action = callArgs.boardActions[0] as MarkAction;
         expect(action.positions).toHaveLength(1);
         expect(action.positions[0]).toEqual({
@@ -426,7 +429,7 @@ describe("useBoardActions", () => {
 
         updateBoardActionMarkPosition(0, 0, 0, "row", 7);
 
-        const callArgs = updateDialogue.mock.calls[0][1];
+        const [[, callArgs]] = updateDialogue.mock.calls;
         const action = callArgs.boardActions[0] as MarkAction;
         expect(action.positions[0].row).toBe(7);
       });
@@ -447,7 +450,7 @@ describe("useBoardActions", () => {
 
         updateBoardActionMarkPosition(0, 0, 0, "col", 99);
 
-        const callArgs = updateDialogue.mock.calls[0][1];
+        const [[, callArgs]] = updateDialogue.mock.calls;
         const action = callArgs.boardActions[0] as MarkAction;
         expect(action.positions[0].col).toBe(14);
       });
@@ -473,7 +476,7 @@ describe("useBoardActions", () => {
 
         removeBoardActionMarkPosition(0, 0, 0);
 
-        const callArgs = updateDialogue.mock.calls[0][1];
+        const [[, callArgs]] = updateDialogue.mock.calls;
         const action = callArgs.boardActions[0] as MarkAction;
         expect(action.positions).toHaveLength(1);
         expect(action.positions[0]).toEqual({
@@ -496,7 +499,7 @@ describe("useBoardActions", () => {
 
         updateBoardActionMarkMeta(0, 0, { markType: "cross" });
 
-        const callArgs = updateDialogue.mock.calls[0][1];
+        const [[, callArgs]] = updateDialogue.mock.calls;
         const action = callArgs.boardActions[0] as MarkAction;
         expect(action.markType).toBe("cross");
       });
@@ -513,7 +516,7 @@ describe("useBoardActions", () => {
 
         updateBoardActionMarkMeta(0, 0, { label: "A" });
 
-        const callArgs = updateDialogue.mock.calls[0][1];
+        const [[, callArgs]] = updateDialogue.mock.calls;
         const action = callArgs.boardActions[0] as MarkAction;
         expect(action.label).toBe("A");
       });
@@ -538,7 +541,7 @@ describe("useBoardActions", () => {
 
       updateBoardActionLine(0, 0, { action: "remove", style: "dashed" });
 
-      const callArgs = updateDialogue.mock.calls[0][1];
+      const [[, callArgs]] = updateDialogue.mock.calls;
       const action = callArgs.boardActions[0] as LineAction;
       expect(action.action).toBe("remove");
       expect(action.style).toBe("dashed");
@@ -558,7 +561,7 @@ describe("useBoardActions", () => {
 
       updateBoardActionType(0, 0, "mark");
 
-      const callArgs = updateDialogue.mock.calls[0][1];
+      const [[, callArgs]] = updateDialogue.mock.calls;
       const action = callArgs.boardActions[0] as MarkAction;
       expect(action.type).toBe("mark");
       expect(action.positions).toEqual([]);

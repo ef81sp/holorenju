@@ -70,8 +70,7 @@ const handleEmotionSelect = (emotionId: EmotionId): void => {
         <span
           v-else
           class="placeholder"
-          >表情選択</span
-        >
+          >表情選択</span>
       </button>
       <div class="feedback-actions-buttons">
         <button

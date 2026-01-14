@@ -13,7 +13,7 @@ describe("progressStore", () => {
         store[key] = value;
       }),
       removeItem: vi.fn((key: string) => {
-        delete store[key];
+        Reflect.deleteProperty(store, key);
       }),
       clear: vi.fn(() => {
         store = {};

@@ -45,15 +45,12 @@ describe("useFullscreenPrompt", () => {
   // eslint-disable-next-line init-declarations
   let localStorageMock: ReturnType<typeof createLocalStorageMock>;
   // eslint-disable-next-line init-declarations
-  let originalNavigator: Navigator;
-  // eslint-disable-next-line init-declarations
   let mockPromptRef: PromptRef;
 
   beforeEach(() => {
     localStorageMock = createLocalStorageMock();
     vi.stubGlobal("localStorage", localStorageMock);
 
-    originalNavigator = navigator;
     mockIsMobileByMedia.value = false;
 
     mockPromptRef = shallowRef({

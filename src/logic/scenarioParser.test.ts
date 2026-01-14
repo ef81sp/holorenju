@@ -70,7 +70,7 @@ describe("parseScenario", () => {
 
     it("デモセクションを正しくパースできる", () => {
       const result = parseScenario(validScenario);
-      const section = result.sections[0];
+      const [section] = result.sections;
 
       expect(section.type).toBe("demo");
       expect(section.id).toBe("demo1");
@@ -83,7 +83,7 @@ describe("parseScenario", () => {
         sections: [validQuestionSection],
       };
       const result = parseScenario(scenario);
-      const section = result.sections[0];
+      const [section] = result.sections;
 
       expect(section.type).toBe("question");
       if (section.type === "question") {
@@ -157,7 +157,7 @@ describe("parseScenario", () => {
       };
 
       const result = parseScenario(scenario);
-      const section = result.sections[0];
+      const [section] = result.sections;
       if (section.type === "demo") {
         const actions = section.dialogues[0].boardActions;
         expect(actions).toHaveLength(1);
@@ -182,7 +182,7 @@ describe("parseScenario", () => {
       };
 
       const result = parseScenario(scenario);
-      const section = result.sections[0];
+      const [section] = result.sections;
       if (section.type === "demo") {
         const actions = section.dialogues[0].boardActions;
         expect(actions[0].type).toBe("mark");
@@ -207,7 +207,7 @@ describe("parseScenario", () => {
       };
 
       const result = parseScenario(scenario);
-      const section = result.sections[0];
+      const [section] = result.sections;
       if (section.type === "demo") {
         const actions = section.dialogues[0].boardActions;
         expect(actions[0].type).toBe("line");
@@ -238,7 +238,7 @@ describe("parseScenario", () => {
       };
 
       const result = parseScenario(scenario);
-      const section = result.sections[0];
+      const [section] = result.sections;
       if (section.type === "question") {
         expect(section.successConditions[0].type).toBe("position");
       }
@@ -257,7 +257,7 @@ describe("parseScenario", () => {
       };
 
       const result = parseScenario(scenario);
-      const section = result.sections[0];
+      const [section] = result.sections;
       if (section.type === "question") {
         expect(section.successConditions[0].type).toBe("pattern");
       }
@@ -280,7 +280,7 @@ describe("parseScenario", () => {
       };
 
       const result = parseScenario(scenario);
-      const section = result.sections[0];
+      const [section] = result.sections;
       if (section.type === "question") {
         expect(section.successConditions[0].type).toBe("sequence");
       }

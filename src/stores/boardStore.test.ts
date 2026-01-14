@@ -72,7 +72,7 @@ describe("boardStore", () => {
       });
     });
 
-    it("コールバックが設定されていれば呼ばれる", async () => {
+    it("コールバックが設定されていれば呼ばれる", () => {
       const store = useBoardStore();
       const callback = vi.fn(() => Promise.resolve());
       store.setOnStonePlacedCallback(callback);
@@ -498,7 +498,8 @@ describe("boardStore", () => {
   describe("レースコンディション対策", () => {
     it("addStones中にcancelOngoingAnimationsが呼ばれるとアニメーションがスキップされる", async () => {
       const store = useBoardStore();
-      let resolveCallback: () => void;
+      // eslint-disable-next-line init-declarations
+      let resolveCallback: (() => void) | undefined;
       const callback = vi.fn(
         () =>
           new Promise<void>((resolve) => {
@@ -521,7 +522,7 @@ describe("boardStore", () => {
       store.cancelOngoingAnimations();
 
       // 最初のコールバックを解決
-      resolveCallback!();
+      resolveCallback?.();
       await addPromise;
 
       // 2番目の石はコールバックが呼ばれない（キャンセルされたため）

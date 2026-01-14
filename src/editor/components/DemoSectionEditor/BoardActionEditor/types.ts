@@ -13,4 +13,5 @@ export type PositionKey = "position" | "fromPosition" | "toPosition";
 export type PositionField = "row" | "col";
 
 // 位置入力のバリデーション（0-14の範囲に制限）
-export const clampPosition = (value: string): number => Math.max(0, Math.min(14, parseInt(value, 10) || 0));
+export const clampPosition = (value: string): number =>
+  Math.max(0, Math.min(14, parseInt(value, 10) || 0));
