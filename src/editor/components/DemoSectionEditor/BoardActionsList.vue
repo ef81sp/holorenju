@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { BoardAction, DemoSection, DemoDialogue } from "@/types/scenario";
-import BoardActionEditor from "./BoardActionEditor.vue";
+import BoardActionEditor from "./BoardActionEditor/BoardActionEditor.vue";
 import { useBoardActions } from "@/editor/composables/useBoardActions";
 
 const props = defineProps<{
