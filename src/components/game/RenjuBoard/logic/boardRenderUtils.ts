@@ -38,6 +38,59 @@ export function generateGridLines(
   return lines;
 }
 
+// 座標ラベルの型
+export interface CoordinateLabel {
+  x: number;
+  y: number;
+  text: string;
+}
+
+export interface CoordinateLabelConfig {
+  rowLabels: CoordinateLabel[];
+  colLabels: CoordinateLabel[];
+  fontSize: number;
+  textBoxSize: number;
+}
+
+// 座標ラベルの生成（行: 1-15、列: A-O）
+// 連珠標準: 左下が 1,A、右上が 15,O
+export function generateCoordinateLabels(
+  BOARD_SIZE: number,
+  CELL_SIZE: number,
+  PADDING: number,
+): CoordinateLabelConfig {
+  const rowLabels: CoordinateLabel[] = [];
+  const colLabels: CoordinateLabel[] = [];
+
+  // 設定値
+  const labelOffset = CELL_SIZE * 0.6; // 盤面からのオフセット
+  const fontSize = CELL_SIZE * 0.45; // フォントサイズ
+  const textBoxSize = fontSize * 1.5; // テキストボックスのサイズ
+
+  // 行ラベル（1-15）: 盤面左側
+  // row=0 は画面上部なので、表示は 15 から始まる
+  for (let row = 0; row < BOARD_SIZE; row++) {
+    const displayNumber = BOARD_SIZE - row; // 15, 14, ..., 1
+    rowLabels.push({
+      x: PADDING - labelOffset,
+      y: PADDING + row * CELL_SIZE,
+      text: String(displayNumber),
+    });
+  }
+
+  // 列ラベル（A-O）: 盤面下側
+  for (let col = 0; col < BOARD_SIZE; col++) {
+    const letter = String.fromCharCode(65 + col); // A, B, ..., O
+    colLabels.push({
+      x: PADDING + col * CELL_SIZE,
+      y: PADDING + (BOARD_SIZE - 1) * CELL_SIZE + labelOffset,
+      text: letter,
+    });
+  }
+
+  return { rowLabels, colLabels, fontSize, textBoxSize };
+}
+
 // 星（天元・小目）の位置
 export const STAR_POINTS: Position[] = [
   { col: 3, row: 3 },

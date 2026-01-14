@@ -8,6 +8,7 @@ import { useRenjuBoardAnimation } from "./composables/useRenjuBoardAnimation";
 import {
   generateGridLines,
   generateCursorCorners,
+  generateCoordinateLabels,
   STAR_POINTS,
 } from "./logic/boardRenderUtils";
 
@@ -139,6 +140,14 @@ const cursorCorners = computed(() =>
       ),
 );
 
+const coordinateLabels = computed(() =>
+  generateCoordinateLabels(
+    layout.BOARD_SIZE,
+    layout.CELL_SIZE.value,
+    layout.PADDING.value,
+  ),
+);
+
 // ライフサイクル
 onMounted(() => {
   // シナリオ用: 石追加時のアニメーションコールバック
@@ -195,6 +204,42 @@ onBeforeUnmount(() => {
           v-for="(line, index) in gridLines"
           :key="`line-${index}`"
           :config="line"
+        />
+
+        <!-- 座標ラベル（行: 1-15） -->
+        <v-text
+          v-for="(label, index) in coordinateLabels.rowLabels"
+          :key="`row-label-${index}`"
+          :config="{
+            x: label.x - coordinateLabels.textBoxSize / 2,
+            y: label.y - coordinateLabels.textBoxSize / 2,
+            width: coordinateLabels.textBoxSize,
+            height: coordinateLabels.textBoxSize,
+            text: label.text,
+            fontSize: coordinateLabels.fontSize,
+            fontFamily: 'monospace',
+            fill: '#333',
+            align: 'center',
+            verticalAlign: 'middle',
+          }"
+        />
+
+        <!-- 座標ラベル（列: A-O） -->
+        <v-text
+          v-for="(label, index) in coordinateLabels.colLabels"
+          :key="`col-label-${index}`"
+          :config="{
+            x: label.x - coordinateLabels.textBoxSize / 2,
+            y: label.y - coordinateLabels.textBoxSize / 2,
+            width: coordinateLabels.textBoxSize,
+            height: coordinateLabels.textBoxSize,
+            text: label.text,
+            fontSize: coordinateLabels.fontSize,
+            fontFamily: 'monospace',
+            fill: '#333',
+            align: 'center',
+            verticalAlign: 'middle',
+          }"
         />
 
         <!-- 星 -->

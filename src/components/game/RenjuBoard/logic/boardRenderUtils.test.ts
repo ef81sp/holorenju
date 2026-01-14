@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   generateCursorCorners,
   generateGridLines,
+  generateCoordinateLabels,
   STAR_POINTS,
 } from "./boardRenderUtils";
 
@@ -150,6 +151,99 @@ describe("generateCursorCorners", () => {
       expect(x2).toBeLessThan(280);
       expect(y2).toBeGreaterThan(200);
       expect(y2).toBeLessThan(280);
+    });
+  });
+});
+
+describe("generateCoordinateLabels", () => {
+  const BOARD_SIZE = 15;
+  const CELL_SIZE = 30;
+  const PADDING = 30;
+
+  it("generates 15 row labels and 15 column labels", () => {
+    const { rowLabels, colLabels } = generateCoordinateLabels(
+      BOARD_SIZE,
+      CELL_SIZE,
+      PADDING,
+    );
+    expect(rowLabels).toHaveLength(15);
+    expect(colLabels).toHaveLength(15);
+  });
+
+  it("row labels are numbered 15 to 1 (top to bottom)", () => {
+    const { rowLabels } = generateCoordinateLabels(
+      BOARD_SIZE,
+      CELL_SIZE,
+      PADDING,
+    );
+
+    // row=0 (top) should display "15"
+    expect(rowLabels[0].text).toBe("15");
+    // row=14 (bottom) should display "1"
+    expect(rowLabels[14].text).toBe("1");
+  });
+
+  it("column labels are A to O (left to right)", () => {
+    const { colLabels } = generateCoordinateLabels(
+      BOARD_SIZE,
+      CELL_SIZE,
+      PADDING,
+    );
+
+    expect(colLabels[0].text).toBe("A");
+    expect(colLabels[14].text).toBe("O");
+  });
+
+  it("row labels are positioned left of the board", () => {
+    const { rowLabels } = generateCoordinateLabels(
+      BOARD_SIZE,
+      CELL_SIZE,
+      PADDING,
+    );
+
+    // All row labels should be to the left of PADDING
+    rowLabels.forEach((label) => {
+      expect(label.x).toBeLessThan(PADDING);
+    });
+  });
+
+  it("column labels are positioned below the board", () => {
+    const { colLabels } = generateCoordinateLabels(
+      BOARD_SIZE,
+      CELL_SIZE,
+      PADDING,
+    );
+
+    const bottomEdge = PADDING + (BOARD_SIZE - 1) * CELL_SIZE;
+    // All column labels should be below the bottom edge
+    colLabels.forEach((label) => {
+      expect(label.y).toBeGreaterThan(bottomEdge);
+    });
+  });
+
+  it("row labels have correct y positions", () => {
+    const { rowLabels } = generateCoordinateLabels(
+      BOARD_SIZE,
+      CELL_SIZE,
+      PADDING,
+    );
+
+    // Each row label should align with grid intersection
+    rowLabels.forEach((label, index) => {
+      expect(label.y).toBe(PADDING + index * CELL_SIZE);
+    });
+  });
+
+  it("column labels have correct x positions", () => {
+    const { colLabels } = generateCoordinateLabels(
+      BOARD_SIZE,
+      CELL_SIZE,
+      PADDING,
+    );
+
+    // Each column label should align with grid intersection
+    colLabels.forEach((label, index) => {
+      expect(label.x).toBe(PADDING + index * CELL_SIZE);
     });
   });
 });
