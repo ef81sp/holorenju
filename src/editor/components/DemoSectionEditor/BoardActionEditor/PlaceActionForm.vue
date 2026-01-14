@@ -20,7 +20,7 @@ const color = computed({
 });
 
 const highlight = computed({
-  get: (): boolean => props.action.highlight,
+  get: (): boolean => props.action.highlight ?? false,
   set: (value: boolean) => emit("update-highlight", value),
 });
 

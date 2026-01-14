@@ -42,7 +42,7 @@ export const useDialogStore = defineStore("dialog", () => {
 
   function selectChoice(choiceId: string): string | undefined {
     if (!currentMessage.value?.choices) {
-      return null;
+      return undefined;
     }
 
     const choice = currentMessage.value.choices.find(
@@ -50,7 +50,7 @@ export const useDialogStore = defineStore("dialog", () => {
     );
     isWaitingForInput.value = false;
 
-    return choice?.nextDialogId || null;
+    return choice?.nextDialogId ?? undefined;
   }
 
   function clearHistory(): void {

@@ -77,6 +77,10 @@ function getLineLength(
   const dir1 = DIRECTIONS[dirIndex];
   const dir2 = DIRECTIONS[(dirIndex + 4) % 8];
 
+  if (!dir1 || !dir2) {
+    return 0;
+  }
+
   const count1 = countStones(board, row, col, dir1.dr, dir1.dc, color);
   const count2 = countStones(board, row, col, dir2.dr, dir2.dc, color);
 
@@ -99,6 +103,9 @@ export function checkFive(
       continue;
     }
     const [dir1Index] = pair;
+    if (dir1Index === undefined) {
+      continue;
+    }
     const length = getLineLength(board, row, col, dir1Index, color);
     if (length === 5) {
       return true;
@@ -112,7 +119,11 @@ export function checkFive(
  */
 function checkOverline(board: BoardState, row: number, col: number): boolean {
   for (let i = 0; i < 4; i++) {
-    const [dir1Index] = DIRECTION_PAIRS[i];
+    const pair = DIRECTION_PAIRS[i];
+    const dir1Index = pair?.[0];
+    if (dir1Index === undefined) {
+      continue;
+    }
     const length = getLineLength(board, row, col, dir1Index, "black");
     if (length >= 6) {
       return true;
@@ -135,30 +146,37 @@ function checkOpenPattern(
   const dir1 = DIRECTIONS[dirIndex];
   const dir2 = DIRECTIONS[(dirIndex + 4) % 8];
 
+  if (!dir1 || !dir2) {
+    return { open3: false, open4: false, four: false };
+  }
+
   // 仮想的に石を置く
   const testBoard = board.map((r: StoneColor[]) => [...r]);
-  testBoard[row][col] = color;
+  const testRow = testBoard[row];
+  if (testRow) {
+    testRow[col] = color;
+  }
 
   // 両方向の連続数と端の状態をチェック
   let count1 = 0;
   let r1 = row + dir1.dr;
   let c1 = col + dir1.dc;
-  while (isValidPosition(r1, c1) && testBoard[r1][c1] === color) {
+  while (isValidPosition(r1, c1) && testBoard[r1]?.[c1] === color) {
     count1++;
     r1 += dir1.dr;
     c1 += dir1.dc;
   }
-  const end1Open = isValidPosition(r1, c1) && testBoard[r1][c1] === null;
+  const end1Open = isValidPosition(r1, c1) && testBoard[r1]?.[c1] === null;
 
   let count2 = 0;
   let r2 = row + dir2.dr;
   let c2 = col + dir2.dc;
-  while (isValidPosition(r2, c2) && testBoard[r2][c2] === color) {
+  while (isValidPosition(r2, c2) && testBoard[r2]?.[c2] === color) {
     count2++;
     r2 += dir2.dr;
     c2 += dir2.dc;
   }
-  const end2Open = isValidPosition(r2, c2) && testBoard[r2][c2] === null;
+  const end2Open = isValidPosition(r2, c2) && testBoard[r2]?.[c2] === null;
 
   const total = count1 + count2 + 1;
 
@@ -186,7 +204,11 @@ function checkDoubleThree(
   let open3Count = 0;
 
   for (let i = 0; i < 4; i++) {
-    const [dir1Index] = DIRECTION_PAIRS[i];
+    const pair = DIRECTION_PAIRS[i];
+    const dir1Index = pair?.[0];
+    if (dir1Index === undefined) {
+      continue;
+    }
     const pattern = checkOpenPattern(board, row, col, dir1Index, "black");
     if (pattern.open3) {
       open3Count++;
@@ -204,7 +226,11 @@ function checkDoubleFour(board: BoardState, row: number, col: number): boolean {
   let fourCount = 0;
 
   for (let i = 0; i < 4; i++) {
-    const [dir1Index] = DIRECTION_PAIRS[i];
+    const pair = DIRECTION_PAIRS[i];
+    const dir1Index = pair?.[0];
+    if (dir1Index === undefined) {
+      continue;
+    }
     const pattern = checkOpenPattern(board, row, col, dir1Index, "black");
     if (pattern.four) {
       fourCount++;
@@ -295,31 +321,36 @@ export function recognizePattern(
   ] as const;
 
   for (let i = 0; i < 4; i++) {
-    const [dir1Index] = DIRECTION_PAIRS[i];
+    const pair = DIRECTION_PAIRS[i];
+    const dir1Index = pair?.[0];
+    const dirName = directionNames[i];
+    if (dir1Index === undefined || !dirName) {
+      continue;
+    }
     const pattern = checkOpenPattern(board, row, col, dir1Index, color);
     const length = getLineLength(board, row, col, dir1Index, color);
 
     if (length === 5) {
       patterns.push({
-        direction: directionNames[i],
+        direction: dirName,
         positions: [{ col, row }],
         type: "five",
       });
     } else if (length >= 6) {
       patterns.push({
-        direction: directionNames[i],
+        direction: dirName,
         positions: [{ col, row }],
         type: "overline",
       });
     } else if (pattern.open4) {
       patterns.push({
-        direction: directionNames[i],
+        direction: dirName,
         positions: [{ col, row }],
         type: "open-four",
       });
     } else if (pattern.open3) {
       patterns.push({
-        direction: directionNames[i],
+        direction: dirName,
         positions: [{ col, row }],
         type: "open-three",
       });

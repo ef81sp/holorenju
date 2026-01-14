@@ -88,10 +88,12 @@ export const useEditorStore = defineStore("editor", () => {
     }
     // eslint-disable-next-line prefer-destructuring
     const sections = scenario.value.sections;
-    [sections[index - 1], sections[index]] = [
-      sections[index],
-      sections[index - 1],
-    ];
+    const prev = sections[index - 1];
+    const curr = sections[index];
+    if (!prev || !curr) {
+      return;
+    }
+    [sections[index - 1], sections[index]] = [curr, prev];
     // 並べ替え後にIDを再採番
     sections.forEach((section, idx) => {
       section.id = `section_${idx + 1}`;
@@ -111,10 +113,12 @@ export const useEditorStore = defineStore("editor", () => {
     }
     // eslint-disable-next-line prefer-destructuring
     const sections = scenario.value.sections;
-    [sections[index], sections[index + 1]] = [
-      sections[index + 1],
-      sections[index],
-    ];
+    const curr = sections[index];
+    const next = sections[index + 1];
+    if (!curr || !next) {
+      return;
+    }
+    [sections[index], sections[index + 1]] = [next, curr];
     // 並べ替え後にIDを再採番
     sections.forEach((section, idx) => {
       section.id = `section_${idx + 1}`;
@@ -133,14 +137,16 @@ export const useEditorStore = defineStore("editor", () => {
       return;
     }
     const section = scenario.value.sections[selectedSectionIndex.value];
-    if (section.type !== "demo" || dialogueIndex <= 0) {
+    if (!section || section.type !== "demo" || dialogueIndex <= 0) {
       return;
     }
     const { dialogues } = section;
-    [dialogues[dialogueIndex - 1], dialogues[dialogueIndex]] = [
-      dialogues[dialogueIndex],
-      dialogues[dialogueIndex - 1],
-    ];
+    const prev = dialogues[dialogueIndex - 1];
+    const curr = dialogues[dialogueIndex];
+    if (!prev || !curr) {
+      return;
+    }
+    [dialogues[dialogueIndex - 1], dialogues[dialogueIndex]] = [curr, prev];
     // 並べ替え後にIDを再採番
     dialogues.forEach((dialogue, idx) => {
       dialogue.id = `dialogue_${idx + 1}`;
@@ -154,16 +160,19 @@ export const useEditorStore = defineStore("editor", () => {
     }
     const section = scenario.value.sections[selectedSectionIndex.value];
     if (
+      !section ||
       section.type !== "demo" ||
       dialogueIndex >= section.dialogues.length - 1
     ) {
       return;
     }
     const { dialogues } = section;
-    [dialogues[dialogueIndex], dialogues[dialogueIndex + 1]] = [
-      dialogues[dialogueIndex + 1],
-      dialogues[dialogueIndex],
-    ];
+    const curr = dialogues[dialogueIndex];
+    const next = dialogues[dialogueIndex + 1];
+    if (!curr || !next) {
+      return;
+    }
+    [dialogues[dialogueIndex], dialogues[dialogueIndex + 1]] = [next, curr];
     // 並べ替え後にIDを再採番
     dialogues.forEach((dialogue, idx) => {
       dialogue.id = `dialogue_${idx + 1}`;

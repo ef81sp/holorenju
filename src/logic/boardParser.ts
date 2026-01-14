@@ -20,15 +20,15 @@ export function parseInitialBoard(boardLines: string[]): BoardState {
   for (let i = 0; i < 15; i++) {
     const line = boardLines[i];
 
-    if (line.length !== 15) {
+    if (!line || line.length !== 15) {
       throw new Error(
-        `行${i}は15文字である必要があります。受け取った文字数: ${line.length}`,
+        `行${i}は15文字である必要があります。受け取った文字数: ${line?.length ?? 0}`,
       );
     }
 
     const row: StoneColor[] = [];
     for (let j = 0; j < 15; j++) {
-      const char = line[j];
+      const char = line[j] ?? "-";
       let stone: StoneColor = null;
 
       if (char === "-") {

@@ -99,24 +99,14 @@ export function useScenarioFileOperations(): UseScenarioFileOperationsReturn {
       const fileName = pathParts.pop();
       const difficultyName = pathParts[0] || DIFFICULTIES[0];
 
-      let fileHandle: FileSystemFileHandle =
-        null as unknown as FileSystemFileHandle;
-
-      if (pathParts.length > 0) {
-        // サブディレクトリに含まれるファイル
-        const difficultyDir = await scenarioDir.getDirectoryHandle(
-          difficultyName,
-          { create: false },
-        );
-        fileHandle = (await difficultyDir.getFileHandle(fileName || "", {
-          create: false,
-        })) as FileSystemFileHandle;
-      } else {
-        // ルートディレクトリのファイル
-        fileHandle = (await scenarioDir.getFileHandle(fileName || "", {
-          create: false,
-        })) as FileSystemFileHandle;
-      }
+      const fileHandle: FileSystemFileHandle =
+        pathParts.length > 0
+          ? await scenarioDir
+              .getDirectoryHandle(difficultyName, { create: false })
+              .then((dir) =>
+                dir.getFileHandle(fileName || "", { create: false }),
+              )
+          : await scenarioDir.getFileHandle(fileName || "", { create: false });
 
       const file = await fileHandle.getFile();
       const text = await file.text();

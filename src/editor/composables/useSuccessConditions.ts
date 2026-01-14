@@ -283,15 +283,19 @@ export function useSuccessConditions(
     }
 
     const moves = [...condition.moves];
+    const existingMove = moves[moveIndex];
+    if (!existingMove) {
+      return;
+    }
     if (field === "color") {
       moves[moveIndex] = {
-        ...moves[moveIndex],
+        ...existingMove,
         color: value as "black" | "white",
       };
     } else {
       const nextValue = Math.max(0, Math.min(14, value as number));
       moves[moveIndex] = {
-        ...moves[moveIndex],
+        ...existingMove,
         [field]: nextValue,
       } as SequenceCondition["moves"][number];
     }

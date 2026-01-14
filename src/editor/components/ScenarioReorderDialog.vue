@@ -143,7 +143,9 @@ const onDrop = (difficulty: ScenarioDifficulty, targetIndex: number): void => {
   if (srcDifficulty === difficulty) {
     const items = [...(state.value[difficulty] ?? [])];
     const [item] = items.splice(srcIndex, 1);
-    items.splice(targetIndex, 0, item);
+    if (item) {
+      items.splice(targetIndex, 0, item);
+    }
     state.value[difficulty] = items;
   }
 
@@ -155,7 +157,11 @@ const moveUp = (difficulty: ScenarioDifficulty, index: number): void => {
     return;
   }
   const items = [...(state.value[difficulty] ?? [])];
-  [items[index], items[index - 1]] = [items[index - 1], items[index]];
+  const curr = items[index];
+  const prev = items[index - 1];
+  if (curr && prev) {
+    [items[index], items[index - 1]] = [prev, curr];
+  }
   state.value[difficulty] = items;
 };
 
@@ -165,10 +171,11 @@ const moveDown = (difficulty: ScenarioDifficulty, index: number): void => {
     return;
   }
   const itemsCopy = [...items];
-  [itemsCopy[index], itemsCopy[index + 1]] = [
-    itemsCopy[index + 1],
-    itemsCopy[index],
-  ];
+  const curr = itemsCopy[index];
+  const next = itemsCopy[index + 1];
+  if (curr && next) {
+    [itemsCopy[index], itemsCopy[index + 1]] = [next, curr];
+  }
   state.value[difficulty] = itemsCopy;
 };
 

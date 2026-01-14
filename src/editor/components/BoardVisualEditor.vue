@@ -2,7 +2,7 @@
 import { computed, ref } from "vue";
 import RenjuBoard from "@/components/game/RenjuBoard/RenjuBoard.vue";
 import { cycleBoardCell, boardToASCII } from "@/logic/scenarioFileHandler";
-import type { Position, BoardState } from "@/types/game";
+import type { Position, BoardState, StoneColor } from "@/types/game";
 
 // Props
 interface Props {
@@ -24,22 +24,23 @@ const showDebugInfo = ref(false);
 const hoveredPosition = ref<Position | null>(null);
 
 // Convert board string array to BoardState
-const boardState = computed(() => {
-  const state: (string | null)[][] = [];
+const boardState = computed((): BoardState => {
+  const state: BoardState = [];
   for (let row = 0; row < 15; row++) {
-    state[row] = [];
+    const rowState: (StoneColor | null)[] = [];
     for (let col = 0; col < 15; col++) {
       const char = props.board[row]?.[col] ?? "-";
       if (char === "x") {
-        state[row][col] = "black";
+        rowState[col] = "black";
       } else if (char === "o") {
-        state[row][col] = "white";
+        rowState[col] = "white";
       } else {
-        state[row][col] = null;
+        rowState[col] = null;
       }
     }
+    state[row] = rowState as StoneColor[];
   }
-  return state as unknown as BoardState;
+  return state;
 });
 
 // Debug info

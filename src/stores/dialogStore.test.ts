@@ -171,24 +171,24 @@ describe("dialogStore", () => {
 
       const result = store.selectChoice("non-existent");
 
-      expect(result).toBeNull();
+      expect(result).toBeUndefined();
     });
 
-    it("choicesがない場合はnullを返す", () => {
+    it("choicesがない場合はundefinedを返す", () => {
       const store = useDialogStore();
       store.showMessage(createMessage("msg-1"));
 
       const result = store.selectChoice("choice-1");
 
-      expect(result).toBeNull();
+      expect(result).toBeUndefined();
     });
 
-    it("currentMessageがnullの場合はnullを返す", () => {
+    it("currentMessageがnullの場合はundefinedを返す", () => {
       const store = useDialogStore();
 
       const result = store.selectChoice("choice-1");
 
-      expect(result).toBeNull();
+      expect(result).toBeUndefined();
     });
 
     it("isWaitingForInputをfalseにする", () => {
@@ -205,7 +205,7 @@ describe("dialogStore", () => {
       expect(store.isWaitingForInput).toBe(false);
     });
 
-    it("nextDialogIdが未定義の場合もnullを返す", () => {
+    it("nextDialogIdが未定義の場合もundefinedを返す", () => {
       const store = useDialogStore();
       store.showMessage(
         createMessage("msg-1", [
@@ -215,7 +215,7 @@ describe("dialogStore", () => {
 
       const result = store.selectChoice("choice-1");
 
-      expect(result).toBeNull();
+      expect(result).toBeUndefined();
     });
   });
 

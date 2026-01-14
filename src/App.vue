@@ -5,15 +5,12 @@ import FullscreenPrompt from "./components/common/FullscreenPrompt.vue";
 import { useFullscreenPrompt } from "./logic/useFullscreenPrompt";
 import { usePreferencesStore } from "./stores/preferencesStore";
 
-const fullscreenPromptRef = useTemplateRef<typeof FullscreenPrompt>(
-  "fullscreenPromptRef",
-);
+const fullscreenPromptRef = useTemplateRef<
+  InstanceType<typeof FullscreenPrompt>
+>("fullscreenPromptRef");
 
 const { showFullscreenPrompt, handleNeverShow, isPromptDisabled, isMobile } =
-  useFullscreenPrompt(
-    // oxlint-disable-next-line @typescript-eslint/no-explicit-any 解決できないよ〜〜〜
-    fullscreenPromptRef as any,
-  );
+  useFullscreenPrompt(fullscreenPromptRef);
 
 // テキストサイズ設定をDOMに反映
 const preferencesStore = usePreferencesStore();

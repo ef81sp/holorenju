@@ -21,12 +21,12 @@ const iconSrc = computed(() =>
 );
 
 const showPopover = (): void => {
-  popoverRef.value.showPopover();
+  popoverRef.value?.showPopover();
   document.body.inert = true;
 };
 
 const hidePopover = (): void => {
-  popoverRef.value.hidePopover();
+  popoverRef.value?.hidePopover();
   document.body.inert = false;
 };
 

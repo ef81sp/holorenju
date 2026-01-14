@@ -168,16 +168,22 @@ export const useScenarioNavigation = (
         sectionIndex++
       ) {
         const section = scenarioData.sections[sectionIndex];
+        if (!section) {
+          continue;
+        }
         for (
           let dialogueIndex = 0;
           dialogueIndex < section.dialogues.length;
           dialogueIndex++
         ) {
-          dialogueMappings.push({
-            dialogue: section.dialogues[dialogueIndex],
-            sectionIndex,
-            sectionDialogueIndex: dialogueIndex,
-          });
+          const dialogue = section.dialogues[dialogueIndex];
+          if (dialogue) {
+            dialogueMappings.push({
+              dialogue,
+              sectionIndex,
+              sectionDialogueIndex: dialogueIndex,
+            });
+          }
         }
       }
       allDialogues.value = dialogueMappings;
@@ -212,6 +218,9 @@ export const useScenarioNavigation = (
 
     currentDialogueIndex.value = 0;
     const [mapping] = allDialogues.value;
+    if (!mapping) {
+      return;
+    }
     currentSectionIndex.value = mapping.sectionIndex;
     await showDialogueWithAction(mapping.dialogue, true);
 
@@ -230,6 +239,10 @@ export const useScenarioNavigation = (
       currentDialogueIndex.value += 1;
       const mapping = allDialogues.value[currentDialogueIndex.value];
       const prevMapping = allDialogues.value[currentDialogueIndex.value - 1];
+
+      if (!mapping || !prevMapping) {
+        return;
+      }
 
       // セクションが変わった場合
       if (mapping.sectionIndex !== prevMapping.sectionIndex) {
@@ -268,6 +281,10 @@ export const useScenarioNavigation = (
 
     const mapping = allDialogues.value[currentDialogueIndex.value - 1];
     const currentMapping = allDialogues.value[currentDialogueIndex.value];
+
+    if (!mapping || !currentMapping) {
+      return;
+    }
 
     currentDialogueIndex.value -= 1;
 
@@ -422,6 +439,9 @@ export const useScenarioNavigation = (
   ): Promise<void> => {
     for (let i = 0; i < untilIndex && i < dialogues.length; i++) {
       const dialogue = dialogues[i];
+      if (!dialogue) {
+        continue;
+      }
       const globalIndex = findGlobalDialogueIndex(dialogue);
 
       for (const action of dialogue.boardActions) {

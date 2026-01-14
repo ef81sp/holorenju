@@ -9,7 +9,7 @@ export const evaluateCondition = (
   if (condition.type === "position") {
     const matcher = operator === "and" ? "every" : "some";
     return condition.positions[matcher]((pos) => {
-      const cell = board[pos.row][pos.col];
+      const cell = board[pos.row]?.[pos.col];
       return cell === condition.color;
     });
   }

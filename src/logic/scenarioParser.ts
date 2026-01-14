@@ -25,6 +25,18 @@ import {
 } from "../types/scenario";
 import { parseText, parseInlineTextFromString } from "./textParser";
 
+/**
+ * 数値を0-39にクランプしてEmotionIdとして返す
+ */
+function toEmotionId(n: unknown): EmotionId {
+  if (typeof n !== "number") {
+    return 0;
+  }
+  const clamped = Math.min(39, Math.max(0, Math.floor(n)));
+  // 0-39にクランプ済みなのでEmotionIdとして安全
+  return clamped as EmotionId;
+}
+
 // ===== パース・バリデーション =====
 
 /**
@@ -213,11 +225,7 @@ function validateDialogue(data: unknown, path: string): DemoDialogue {
     `${path}.character`,
   );
   const text = validateTextNodeArray(data, "text", `${path}.text`);
-  // Emotionは0-39の数値、デフォルトは0
-  const emotion =
-    typeof data.emotion === "number"
-      ? Math.min(39, Math.max(0, data.emotion))
-      : 0;
+  const emotion = toEmotionId(data.emotion);
   const boardActions = Array.isArray(data.boardActions)
     ? data.boardActions.map((action, idx) =>
         validateBoardAction(action, `${path}.boardActions[${idx}]`),
@@ -246,7 +254,7 @@ function validateDialogue(data: unknown, path: string): DemoDialogue {
     id,
     character,
     text,
-    emotion: emotion as unknown as EmotionId,
+    emotion,
     description,
     boardActions,
   };
@@ -504,11 +512,7 @@ function validateDialogueLineArray(
     }
 
     const text = validateTextNodeArray(item, "text", `${path}[${index}].text`);
-    // Emotionは0-39の数値、デフォルトは0
-    const emotion =
-      typeof item.emotion === "number"
-        ? Math.min(39, Math.max(0, item.emotion))
-        : 0;
+    const emotion = toEmotionId(item.emotion);
 
     return {
       character: validateEnum(
@@ -518,7 +522,7 @@ function validateDialogueLineArray(
         `${path}[${index}].character`,
       ),
       text,
-      emotion: emotion as unknown as EmotionId,
+      emotion,
     };
   });
 }

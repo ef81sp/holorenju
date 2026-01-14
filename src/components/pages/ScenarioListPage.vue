@@ -71,11 +71,11 @@ const touchStartX = ref(0);
 const touchEndX = ref(0);
 
 const handleTouchStart = (e: TouchEvent): void => {
-  touchStartX.value = e.touches[0].clientX;
+  touchStartX.value = e.touches[0]?.clientX ?? 0;
 };
 
 const handleTouchEnd = (e: TouchEvent): void => {
-  touchEndX.value = e.changedTouches[0].clientX;
+  touchEndX.value = e.changedTouches[0]?.clientX ?? 0;
   const diff = touchStartX.value - touchEndX.value;
 
   if (Math.abs(diff) > 50) {

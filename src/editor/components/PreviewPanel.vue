@@ -122,11 +122,17 @@ const currentBoard = computed(() => {
       if (action.type === "place") {
         const placeAction = action;
         const { row, col } = placeAction.position;
-        board[row][col] = placeAction.color;
+        const boardRow = board[row];
+        if (boardRow) {
+          boardRow[col] = placeAction.color;
+        }
       } else if (action.type === "remove") {
         const removeAction = action;
         const { row, col } = removeAction.position;
-        board[row][col] = null;
+        const boardRow = board[row];
+        if (boardRow) {
+          boardRow[col] = null;
+        }
       } else if (action.type === "setBoard") {
         const setBoardAction = action;
         board = stringBoardToBoardState(setBoardAction.board);

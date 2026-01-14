@@ -104,7 +104,10 @@ export function useDialogueEditor(
     }
 
     const newDialogues = [...section.dialogues];
-    newDialogues[index] = { ...newDialogues[index], ...updates };
+    const existingDialogue = newDialogues[index];
+    if (existingDialogue) {
+      newDialogues[index] = { ...existingDialogue, ...updates };
+    }
 
     editorStore.updateCurrentSection({
       dialogues: newDialogues,
@@ -122,10 +125,11 @@ export function useDialogueEditor(
     }
 
     const newDialogues = [...section.dialogues];
-    [newDialogues[index], newDialogues[index - 1]] = [
-      newDialogues[index - 1],
-      newDialogues[index],
-    ];
+    const curr = newDialogues[index];
+    const prev = newDialogues[index - 1];
+    if (curr && prev) {
+      [newDialogues[index], newDialogues[index - 1]] = [prev, curr];
+    }
 
     editorStore.updateCurrentSection({
       dialogues: newDialogues,
@@ -139,10 +143,11 @@ export function useDialogueEditor(
     }
 
     const newDialogues = [...section.dialogues];
-    [newDialogues[index], newDialogues[index + 1]] = [
-      newDialogues[index + 1],
-      newDialogues[index],
-    ];
+    const curr = newDialogues[index];
+    const next = newDialogues[index + 1];
+    if (curr && next) {
+      [newDialogues[index], newDialogues[index + 1]] = [next, curr];
+    }
 
     editorStore.updateCurrentSection({
       dialogues: newDialogues,

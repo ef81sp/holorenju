@@ -179,7 +179,9 @@ export function useBoardActions(
 
     const newBoardActions = [...dialogue.boardActions];
     const [movedAction] = newBoardActions.splice(fromIndex, 1);
-    newBoardActions.splice(toIndex, 0, movedAction);
+    if (movedAction) {
+      newBoardActions.splice(toIndex, 0, movedAction);
+    }
     updateDialogue(dialogueIndex, { boardActions: newBoardActions });
   };
 

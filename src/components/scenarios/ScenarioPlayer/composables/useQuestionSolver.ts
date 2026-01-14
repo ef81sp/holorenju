@@ -101,7 +101,7 @@ export const useQuestionSolver = (
     }
 
     // すでに石が置かれている場合はスキップ
-    if (boardStore.board[position.row][position.col] !== null) {
+    if (boardStore.board[position.row]?.[position.col] !== null) {
       console.warn("[handlePlaceStone] Cell already occupied", position);
       return;
     }
@@ -110,7 +110,10 @@ export const useQuestionSolver = (
 
     // 問題セクションでは常に黒石を配置
     const newBoard = cloneBoard(boardStore.board);
-    newBoard[position.row][position.col] = "black";
+    const row = newBoard[position.row];
+    if (row) {
+      row[position.col] = "black";
+    }
     boardStore.setBoard(newBoard);
 
     console.warn(
@@ -164,13 +167,15 @@ export const useQuestionSolver = (
     // 正解のフィードバックを表示
     if (questionSection.feedback.success.length > 0) {
       const [msg] = questionSection.feedback.success;
-      console.warn("[handleCorrectMove] Showing success feedback:", msg.text);
-      dialogStore.showMessage({
-        id: `feedback-success-${msg.character}`,
-        character: msg.character as CharacterType,
-        text: msg.text,
-        emotion: msg.emotion,
-      });
+      if (msg) {
+        console.warn("[handleCorrectMove] Showing success feedback:", msg.text);
+        dialogStore.showMessage({
+          id: `feedback-success-${msg.character}`,
+          character: msg.character as CharacterType,
+          text: msg.text,
+          emotion: msg.emotion,
+        });
+      }
     }
 
     // 進度を記録

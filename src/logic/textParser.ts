@@ -28,7 +28,7 @@ export function parseInlineTextFromString(raw: string): InlineTextNode[] {
         .match(/^\*\*([^*]*?(?:\*(?!\*)[^*]*?)*)\*\*/);
       if (emphasisMatch) {
         // 強調の内側を再帰的にパース
-        const [, innerContent] = emphasisMatch;
+        const innerContent = emphasisMatch[1] ?? "";
         const innerNodes = parseInlineTextFromString(innerContent);
         nodes.push({ type: "emphasis", content: innerNodes });
         i += emphasisMatch[0].length;
@@ -44,7 +44,7 @@ export function parseInlineTextFromString(raw: string): InlineTextNode[] {
       }
 
       const rubyMatch = raw.slice(i).match(/^\{([^|]+)\|([^}]+)\}/);
-      if (rubyMatch) {
+      if (rubyMatch && rubyMatch[1] && rubyMatch[2]) {
         nodes.push({ type: "ruby", base: rubyMatch[1], ruby: rubyMatch[2] });
         i += rubyMatch[0].length;
         continue;
@@ -83,10 +83,14 @@ export function parseText(raw: string): TextNode[] {
     const line = lines[i];
 
     // 箇条書きブロックをまとめて処理
-    if (/^\s*-\s+/.test(line)) {
+    if (line && /^\s*-\s+/.test(line)) {
       const items: InlineTextNode[][] = [];
-      while (i < lines.length && /^\s*-\s+/.test(lines[i])) {
-        const content = lines[i].replace(/^\s*-\s+/, "");
+      while (i < lines.length) {
+        const currentLine = lines[i];
+        if (!currentLine || !/^\s*-\s+/.test(currentLine)) {
+          break;
+        }
+        const content = currentLine.replace(/^\s*-\s+/, "");
         items.push(parseInlineText(content));
         i++;
       }
@@ -99,7 +103,7 @@ export function parseText(raw: string): TextNode[] {
     }
 
     // 空行は改行ノードにする
-    if (line.trim().length === 0) {
+    if (!line || line.trim().length === 0) {
       nodes.push({ type: "lineBreak" });
       i++;
       continue;

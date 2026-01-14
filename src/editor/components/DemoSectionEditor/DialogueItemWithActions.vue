@@ -14,7 +14,7 @@ import {
 
 const CHARACTERS: CharacterType[] = ["fubuki", "miko", "narration"];
 
-const emotionPickerRef = ref<{ showModal?: () => void }>(null);
+const emotionPickerRef = ref<{ showModal?: () => void } | null>(null);
 
 const emit = defineEmits<{
   remove: [];

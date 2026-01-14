@@ -244,6 +244,9 @@ export const useBoardStore = defineStore("board", () => {
       }
 
       const markData = newMarks[i];
+      if (!markData) {
+        continue;
+      }
       const id = `${dialogueIndex}-mark-${i}`;
       const newMark: Mark = {
         id,
@@ -298,6 +301,9 @@ export const useBoardStore = defineStore("board", () => {
       }
 
       const lineData = newLines[i];
+      if (!lineData) {
+        continue;
+      }
       const id = `${dialogueIndex}-line-${i}`;
       const newLine: Line = {
         id,

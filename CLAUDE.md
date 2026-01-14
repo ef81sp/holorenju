@@ -80,7 +80,7 @@ pnpm build         # Production build
 ### Before Committing
 
 - Run `pnpm check-fix` to ensure type-checking, formatting, and linting pass
-- Do `/review` your edits
+- Do `/review` your edits with subagents
 
 ## Task Planning
 

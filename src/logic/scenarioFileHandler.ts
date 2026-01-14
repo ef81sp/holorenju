@@ -109,6 +109,9 @@ export function validateScenarioCompletely(data: unknown): ValidationResult {
     sectionIndex += 1
   ) {
     const section = scenario.sections[sectionIndex];
+    if (!section) {
+      continue;
+    }
     const boardErrors = validateBoardState(section.initialBoard);
     for (const msg of boardErrors) {
       errors.push({
@@ -292,7 +295,11 @@ export function setBoardCell(
   value: "-" | "x" | "o",
 ): string[] {
   const newBoard = [...board];
-  const row = newBoard[cell.row].split("");
+  const rowStr = newBoard[cell.row];
+  if (!rowStr) {
+    return newBoard;
+  }
+  const row = rowStr.split("");
   row[cell.col] = value;
   newBoard[cell.row] = row.join("");
   return newBoard;

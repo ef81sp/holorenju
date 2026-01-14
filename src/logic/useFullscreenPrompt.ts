@@ -1,12 +1,17 @@
 import { useMediaQuery } from "@vueuse/core";
 import { computed, type ShallowRef, type ComputedRef } from "vue";
 
-import type FullscreenPrompt from "@/components/common/FullscreenPrompt.vue";
-
 const STORAGE_KEY = "holorenju-fullscreen-prompt-disabled";
 
+/**
+ * FullscreenPromptコンポーネントが公開するメソッド
+ */
+interface FullscreenPromptRef {
+  showModal(): void | undefined;
+}
+
 export const useFullscreenPrompt = (
-  promptRef: ShallowRef<InstanceType<typeof FullscreenPrompt> | null>,
+  promptRef: Readonly<ShallowRef<FullscreenPromptRef | null | undefined>>,
 ): {
   isMobile: ComputedRef<boolean>;
   isPromptDisabled: () => boolean;
