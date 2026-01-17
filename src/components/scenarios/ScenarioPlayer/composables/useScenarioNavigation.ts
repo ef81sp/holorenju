@@ -21,6 +21,7 @@ import {
 } from "@/stores/boardStore";
 import { useDialogStore } from "@/stores/dialogStore";
 import { useProgressStore } from "@/stores/progressStore";
+import { useScenarioAnimationStore } from "@/stores/scenarioAnimationStore";
 
 /**
  * ダイアログと所属セクション、セクション内インデックスをマッピング
@@ -75,6 +76,7 @@ export const useScenarioNavigation = (
   const boardStore = useBoardStore();
   const dialogStore = useDialogStore();
   const progressStore = useProgressStore();
+  const animationStore = useScenarioAnimationStore();
 
   // State
   const scenario = ref<Scenario | null>(null);
@@ -233,7 +235,7 @@ export const useScenarioNavigation = (
    */
   const nextDialogue = async (): Promise<void> => {
     // 進行中のアニメーションをキャンセル（連打対応）
-    boardStore.cancelOngoingAnimations();
+    animationStore.cancelOngoingAnimations();
 
     if (currentDialogueIndex.value < allDialogues.value.length - 1) {
       currentDialogueIndex.value += 1;
@@ -257,7 +259,7 @@ export const useScenarioNavigation = (
           isSectionCompleted.value = false;
 
           // 新しいセクション内の前のダイアログまでのアクションを適用（アニメーションなし）
-          await applyActionsUntilDialogueIndex(
+          applyActionsUntilDialogueIndex(
             newSection.dialogues,
             mapping.sectionDialogueIndex,
           );
@@ -378,28 +380,45 @@ export const useScenarioNavigation = (
       (a) => a.type === "place",
     );
     if (placeActions.length > 0) {
-      await boardStore.addStones(
+      // アニメーション対象のIDを先行登録（描画時に半透明になるように）
+      if (animate) {
+        const stoneIds = placeActions.map(
+          (a) =>
+            `${currentDialogueIndex.value}-${a.position.row}-${a.position.col}`,
+        );
+        animationStore.prepareForAnimation(stoneIds);
+      }
+
+      const addedStones = boardStore.addStones(
         placeActions.map((a) => ({
           position: a.position,
           color: a.color,
         })),
         currentDialogueIndex.value,
-        { animate },
       );
+      await animationStore.animateStones(addedStones, { animate });
     }
 
     // markアクションの追加
     const markActions = dialogue.boardActions.filter((a) => a.type === "mark");
     if (markActions.length > 0) {
-      await boardStore.addMarks(
+      // アニメーション対象のIDを先行登録（描画時に半透明になるように）
+      if (animate) {
+        const markIds = markActions.map(
+          (_, i) => `${currentDialogueIndex.value}-mark-${i}`,
+        );
+        animationStore.prepareForAnimation(markIds);
+      }
+
+      const addedMarks = boardStore.addMarks(
         markActions.map((a) => ({
           positions: a.positions,
           markType: a.markType,
           label: a.label,
         })),
         currentDialogueIndex.value,
-        { animate },
       );
+      await animationStore.animateMarks(addedMarks, { animate });
     }
 
     // lineアクション（draw）の追加
@@ -407,15 +426,23 @@ export const useScenarioNavigation = (
       (a): a is LineAction => a.type === "line" && a.action === "draw",
     );
     if (lineDrawActions.length > 0) {
-      await boardStore.addLines(
+      // アニメーション対象のIDを先行登録（描画時に半透明になるように）
+      if (animate) {
+        const lineIds = lineDrawActions.map(
+          (_, i) => `${currentDialogueIndex.value}-line-${i}`,
+        );
+        animationStore.prepareForAnimation(lineIds);
+      }
+
+      const addedLines = boardStore.addLines(
         lineDrawActions.map((a) => ({
           fromPosition: a.fromPosition,
           toPosition: a.toPosition,
           style: a.style,
         })),
         currentDialogueIndex.value,
-        { animate },
       );
+      await animationStore.animateLines(addedLines, { animate });
     }
 
     // resetAll, setBoard等の他のアクションも処理
@@ -433,10 +460,10 @@ export const useScenarioNavigation = (
    * 指定インデックスまでのダイアログのアクションを適用（アニメーションなし）
    * resetAll, setBoard, place, mark, line を順次処理
    */
-  const applyActionsUntilDialogueIndex = async (
+  const applyActionsUntilDialogueIndex = (
     dialogues: DemoDialogue[],
     untilIndex: number,
-  ): Promise<void> => {
+  ): void => {
     for (let i = 0; i < untilIndex && i < dialogues.length; i++) {
       const dialogue = dialogues[i];
       if (!dialogue) {
@@ -450,15 +477,12 @@ export const useScenarioNavigation = (
         } else if (action.type === "setBoard") {
           boardStore.setBoard(boardStringToBoardState(action.board));
         } else if (action.type === "place") {
-          // oxlint-disable-next-line no-await-in-loop -- 順次石追加のため意図的
-          await boardStore.addStones(
+          boardStore.addStones(
             [{ position: action.position, color: action.color }],
             globalIndex,
-            { animate: false },
           );
         } else if (action.type === "mark") {
-          // oxlint-disable-next-line no-await-in-loop -- 順次マーク追加のため意図的
-          await boardStore.addMarks(
+          boardStore.addMarks(
             [
               {
                 positions: action.positions,
@@ -467,11 +491,9 @@ export const useScenarioNavigation = (
               },
             ],
             globalIndex,
-            { animate: false },
           );
         } else if (action.type === "line" && action.action === "draw") {
-          // oxlint-disable-next-line no-await-in-loop -- 順次ライン追加のため意図的
-          await boardStore.addLines(
+          boardStore.addLines(
             [
               {
                 fromPosition: action.fromPosition,
@@ -480,7 +502,6 @@ export const useScenarioNavigation = (
               },
             ],
             globalIndex,
-            { animate: false },
           );
         }
       }

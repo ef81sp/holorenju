@@ -12,10 +12,9 @@ const mockSetBoard = vi.fn();
 const mockClearStones = vi.fn();
 const mockClearMarks = vi.fn();
 const mockClearLines = vi.fn();
-const mockAddStones = vi.fn().mockResolvedValue(undefined);
-const mockAddMarks = vi.fn().mockResolvedValue(undefined);
-const mockAddLines = vi.fn().mockResolvedValue(undefined);
-const mockCancelOngoingAnimations = vi.fn();
+const mockAddStones = vi.fn().mockReturnValue([]);
+const mockAddMarks = vi.fn().mockReturnValue([]);
+const mockAddLines = vi.fn().mockReturnValue([]);
 const mockShowMessage = vi.fn();
 const mockClearMessage = vi.fn();
 const mockStartScenario = vi.fn();
@@ -29,6 +28,11 @@ const mockBoardData = {
   marks: [] as unknown[],
   lines: [] as unknown[],
 };
+// scenarioAnimationStore用のモック
+const mockCancelOngoingAnimations = vi.fn();
+const mockAnimateStones = vi.fn().mockResolvedValue(undefined);
+const mockAnimateMarks = vi.fn().mockResolvedValue(undefined);
+const mockAnimateLines = vi.fn().mockResolvedValue(undefined);
 
 vi.mock("@/stores/appStore", () => ({
   useAppStore: () => ({
@@ -47,7 +51,6 @@ vi.mock("@/stores/boardStore", () => ({
     addStones: mockAddStones,
     addMarks: mockAddMarks,
     addLines: mockAddLines,
-    cancelOngoingAnimations: mockCancelOngoingAnimations,
     get board() {
       return mockBoardData.board;
     },
@@ -60,6 +63,15 @@ vi.mock("@/stores/boardStore", () => ({
     get lines() {
       return mockBoardData.lines;
     },
+  }),
+}));
+
+vi.mock("@/stores/scenarioAnimationStore", () => ({
+  useScenarioAnimationStore: () => ({
+    cancelOngoingAnimations: mockCancelOngoingAnimations,
+    animateStones: mockAnimateStones,
+    animateMarks: mockAnimateMarks,
+    animateLines: mockAnimateLines,
   }),
 }));
 

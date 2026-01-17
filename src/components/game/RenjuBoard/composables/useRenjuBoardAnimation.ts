@@ -27,7 +27,7 @@ export function useRenjuBoardAnimation(layout: LayoutType): {
 
   /**
    * 指定座標の石をアニメーション
-   * 初期状態（opacity 0.5, scale 0.8）から最終状態（opacity 1, scale 1）へ
+   * 初期状態（opacity 0, scale 0.8）から最終状態（opacity 1, scale 1）へ
    */
   const animateStone = (position: Position): Promise<void> =>
     new Promise((resolve) => {

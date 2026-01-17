@@ -251,7 +251,6 @@ describe("useRenjuBoardAnimation", () => {
         positions: [{ row: 7, col: 7 }],
         markType: "circle",
         placedAtDialogueIndex: 0,
-        shouldAnimate: true,
       };
 
       await animateMark(mark);
@@ -271,7 +270,6 @@ describe("useRenjuBoardAnimation", () => {
         positions: [{ row: 7, col: 7 }],
         markType: "circle",
         placedAtDialogueIndex: 0,
-        shouldAnimate: true,
       };
 
       const promise = animateMark(mark);
@@ -293,7 +291,6 @@ describe("useRenjuBoardAnimation", () => {
         positions: [{ row: 7, col: 7 }],
         markType: "circle",
         placedAtDialogueIndex: 0,
-        shouldAnimate: true,
       };
 
       const promise = animateMark(mark);
@@ -312,7 +309,6 @@ describe("useRenjuBoardAnimation", () => {
         positions: [{ row: 7, col: 7 }],
         markType: "circle",
         placedAtDialogueIndex: 0,
-        shouldAnimate: true,
       };
 
       await animateMark(mark);
@@ -335,7 +331,6 @@ describe("useRenjuBoardAnimation", () => {
         toPosition: { row: 4, col: 4 },
         style: "solid",
         placedAtDialogueIndex: 0,
-        shouldAnimate: true,
       };
 
       await animateLine(line);
@@ -356,7 +351,6 @@ describe("useRenjuBoardAnimation", () => {
         toPosition: { row: 4, col: 4 },
         style: "solid",
         placedAtDialogueIndex: 0,
-        shouldAnimate: true,
       };
 
       const promise = animateLine(line);
@@ -379,7 +373,6 @@ describe("useRenjuBoardAnimation", () => {
         toPosition: { row: 4, col: 4 },
         style: "solid",
         placedAtDialogueIndex: 0,
-        shouldAnimate: true,
       };
 
       const promise = animateLine(line);
@@ -399,7 +392,6 @@ describe("useRenjuBoardAnimation", () => {
         toPosition: { row: 4, col: 4 },
         style: "solid",
         placedAtDialogueIndex: 0,
-        shouldAnimate: true,
       };
 
       await animateLine(line);

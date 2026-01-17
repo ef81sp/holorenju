@@ -2,6 +2,7 @@
 import type { BoardState, Position, StoneColor } from "@/types/game";
 import { computed, onMounted, onBeforeUnmount } from "vue";
 import { useBoardStore, type Mark, type Line } from "@/stores/boardStore";
+import { useScenarioAnimationStore } from "@/stores/scenarioAnimationStore";
 import { useRenjuBoardLayout } from "./composables/useRenjuBoardLayout";
 import { useRenjuBoardInteraction } from "./composables/useRenjuBoardInteraction";
 import { useRenjuBoardAnimation } from "./composables/useRenjuBoardAnimation";
@@ -41,6 +42,7 @@ const GRID_STROKE_WIDTH = 1;
 
 // ストア
 const boardStore = useBoardStore();
+const animationStore = useScenarioAnimationStore();
 
 // Composables
 const stageSize = computed(() => props.stageSize || 640);
@@ -150,32 +152,32 @@ const coordinateLabels = computed(() =>
 
 // ライフサイクル
 onMounted(() => {
-  // シナリオ用: 石追加時のアニメーションコールバック
-  boardStore.setOnStoneAddedCallback(async (position: Position) => {
+  // シナリオ用: 石アニメーションコールバック
+  animationStore.setOnStoneAnimateCallback(async (position: Position) => {
     await animation.animateStone(position);
   });
 
-  // シナリオ用: マーク追加時のアニメーションコールバック
-  boardStore.setOnMarkAddedCallback(async (mark: Mark) => {
+  // シナリオ用: マークアニメーションコールバック
+  animationStore.setOnMarkAnimateCallback(async (mark: Mark) => {
     await animation.animateMark(mark);
   });
 
-  // シナリオ用: ライン追加時のアニメーションコールバック
-  boardStore.setOnLineAddedCallback(async (line: Line) => {
+  // シナリオ用: ラインアニメーションコールバック
+  animationStore.setOnLineAnimateCallback(async (line: Line) => {
     await animation.animateLine(line);
   });
 
   // アニメーションキャンセルコールバック
-  boardStore.setOnAnimationCancelCallback(() => {
+  animationStore.setOnAnimationCancelCallback(() => {
     animation.finishAllAnimations();
   });
 });
 
 onBeforeUnmount(() => {
-  boardStore.setOnStoneAddedCallback(null);
-  boardStore.setOnMarkAddedCallback(null);
-  boardStore.setOnLineAddedCallback(null);
-  boardStore.setOnAnimationCancelCallback(null);
+  animationStore.setOnStoneAnimateCallback(null);
+  animationStore.setOnMarkAnimateCallback(null);
+  animationStore.setOnLineAnimateCallback(null);
+  animationStore.setOnAnimationCancelCallback(null);
 });
 </script>
 
@@ -289,9 +291,9 @@ onBeforeUnmount(() => {
             fill: stone.color === 'black' ? '#000' : '#fff',
             stroke: stone.color === 'white' ? '#000' : undefined,
             strokeWidth: stone.color === 'white' ? 1 : 0,
-            opacity: stone.shouldAnimate ? 0.5 : 1,
-            scaleX: stone.shouldAnimate ? 0.8 : 1,
-            scaleY: stone.shouldAnimate ? 0.8 : 1,
+            opacity: animationStore.isAnimating(stone.id) ? 0 : 1,
+            scaleX: animationStore.isAnimating(stone.id) ? 0.8 : 1,
+            scaleY: animationStore.isAnimating(stone.id) ? 0.8 : 1,
           }"
         />
 
@@ -374,7 +376,7 @@ onBeforeUnmount(() => {
             stroke: '#37abdf',
             strokeWidth: 3,
             dash: line.style === 'dashed' ? [10, 5] : undefined,
-            opacity: line.shouldAnimate ? 0 : 1,
+            opacity: animationStore.isAnimating(line.id) ? 0 : 1,
           }"
         />
 
@@ -394,9 +396,9 @@ onBeforeUnmount(() => {
             y: getMarkCenter(mark).y,
             offsetX: getMarkCenter(mark).x,
             offsetY: getMarkCenter(mark).y,
-            opacity: mark.shouldAnimate ? 0 : 1,
-            scaleX: mark.shouldAnimate ? 0.6 : 1,
-            scaleY: mark.shouldAnimate ? 0.6 : 1,
+            opacity: animationStore.isAnimating(mark.id) ? 0 : 1,
+            scaleX: animationStore.isAnimating(mark.id) ? 0.6 : 1,
+            scaleY: animationStore.isAnimating(mark.id) ? 0.6 : 1,
           }"
         >
           <template
