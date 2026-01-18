@@ -85,6 +85,14 @@ const handleReorderConfirm = async (
 ): Promise<void> => {
   await indexOps.handleReorderConfirm(reorderedData, dirOps.scenarioDir.value);
 };
+
+// ファイルが削除された時のハンドラ
+const handleFileDeleted = (deletedScenarioId: string): void => {
+  // 現在編集中のシナリオが削除された場合は新規作成にリセット
+  if (editorStore.scenario.id === deletedScenarioId) {
+    fileOps.handleCreateNew();
+  }
+};
 </script>
 
 <template>
@@ -225,7 +233,9 @@ const handleReorderConfirm = async (
 
     <FileListDialog
       ref="fileListDialogRef"
+      :dir-handle="dirOps.scenarioDir.value"
       @selected="handleFileSelectFromDialog"
+      @deleted="handleFileDeleted"
     />
     <ScenarioReorderDialog
       v-if="indexOps.currentIndexData.value && dirOps.scenarioDir.value"

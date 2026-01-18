@@ -1,7 +1,7 @@
 {
   "id": "scenario_mjzgjlek_bsy23",
   "title": "黒の制限1: 三三禁",
-  "difficulty": "gomoku_beginner",
+  "difficulty": "renju_beginner",
   "description": "三三禁、四四禁、長連について",
   "objectives": [],
   "sections": [

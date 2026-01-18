@@ -1,7 +1,7 @@
 {
   "id": "scenario_mjviwg6m_jv8xm",
   "title": "連珠って？",
-  "difficulty": "gomoku_beginner",
+  "difficulty": "renju_beginner",
   "description": "五目並べとの違い",
   "objectives": [],
   "sections": [
@@ -146,8 +146,7 @@
                 "row": 7,
                 "col": 6
               },
-              "color": "black",
-              "highlight": false
+              "color": "black"
             },
             {
               "type": "place",
@@ -155,8 +154,7 @@
                 "row": 8,
                 "col": 6
               },
-              "color": "white",
-              "highlight": false
+              "color": "white"
             },
             {
               "type": "place",
@@ -164,8 +162,7 @@
                 "row": 7,
                 "col": 7
               },
-              "color": "black",
-              "highlight": false
+              "color": "black"
             },
             {
               "type": "place",
@@ -173,8 +170,7 @@
                 "row": 8,
                 "col": 7
               },
-              "color": "white",
-              "highlight": false
+              "color": "white"
             },
             {
               "type": "place",
@@ -182,8 +178,7 @@
                 "row": 7,
                 "col": 8
               },
-              "color": "black",
-              "highlight": false
+              "color": "black"
             },
             {
               "type": "place",
@@ -191,8 +186,7 @@
                 "row": 8,
                 "col": 8
               },
-              "color": "white",
-              "highlight": false
+              "color": "white"
             },
             {
               "type": "place",

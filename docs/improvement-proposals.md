@@ -8,7 +8,7 @@
 | 大型コンポーネント分割   | 大     | 中     | 400行超ファイル8件の分割（BoardActionEditor 732行等）          | 完了       |
 | 型安全性強化             | 大     | 中     | strictNullChecks有効化、as any/as unknown削除                  | 完了       |
 | composables整理          | 中     | 中     | 散在するcomposablesの統一（src/composables/が空）              | 未着手     |
-| boardStore複雑性         | 中     | 中     | 責務分離（盤面状態とアニメーション管理の分離）                 | 完了     |
+| boardStore複雑性         | 中     | 中     | 責務分離（盤面状態とアニメーション管理の分離）                 | 完了       |
 | エラーハンドリング改善   | 中     | 小     | 構造化エラー型導入、console.error残存削除                      | 未着手     |
 | ドキュメント整備         | 小     | 中     | アーキテクチャドキュメント、状態遷移図の作成                   | 未着手     |
 | CSS変数統一              | 小     | 小     | ハードコード値（border-radius: 8px等）の変数化                 | 未着手     |

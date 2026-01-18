@@ -1,0 +1,685 @@
+{
+  "id": "scenario_mkjnx2v6_uqagf",
+  "title": "プロローグ",
+  "difficulty": "gomoku_beginner",
+  "description": "はじめての人向けのルール概要",
+  "objectives": [],
+  "sections": [
+    {
+      "id": "section_1",
+      "type": "demo",
+      "title": "デモセクション",
+      "initialBoard": [
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------"
+      ],
+      "dialogues": [
+        {
+          "id": "dialogue_1",
+          "character": "narration",
+          "text": [
+            {
+              "type": "text",
+              "content": "〜回想中〜"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_2",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "五目並べとかいっとく？"
+            }
+          ],
+          "emotion": 1,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_3",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "五目並べってどんな感じなん"
+            }
+          ],
+          "emotion": 6,
+          "description": {
+            "text": [
+              {
+                "type": "text",
+                "content": "出典: 2022/12/27"
+              },
+              {
+                "type": "lineBreak"
+              },
+              {
+                "type": "text",
+                "content": "【 重大発表 】アソビ大全でホロメンに勝利して重大告知する！！！！！！！にぇ！！【ホロライブ/さくらみこ】"
+              },
+              {
+                "type": "lineBreak"
+              },
+              {
+                "type": "text",
+                "content": "https://www.youtube.com/live/JHk6PtljK74?si=Ac12ap9JygLlXzCe&t=3192"
+              }
+            ]
+          },
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_4",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "えっと、自分の色の石を縦横斜め5つ繋げられたら勝ち"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_5",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "ふおぉぉ〜"
+            }
+          ],
+          "emotion": 4,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_6",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "そうそうそう"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_7",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "そ……っかぁ"
+            }
+          ],
+          "emotion": 4,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_8",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "み、みこさん、いけますか？"
+            }
+          ],
+          "emotion": 11,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_9",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "さっきあの今リバーシで大敗したところ……"
+            }
+          ],
+          "emotion": 28,
+          "description": {
+            "text": [
+              {
+                "type": "text",
+                "content": "沙花叉クロヱにボコボコにされていた"
+              }
+            ]
+          },
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_10",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "あっはっはリバーシやってたねーさっきねー"
+            }
+          ],
+          "emotion": 37,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_11",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "そーリバーシやってたんでー"
+            }
+          ],
+          "emotion": 9,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_12",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "またちょっと黒と白ですけど"
+            }
+          ],
+          "emotion": 8,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_13",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "また別だもんねリバーシと"
+            }
+          ],
+          "emotion": 19,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_14",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "ぜんぜん別！別！別！"
+            }
+          ],
+          "emotion": 1,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_15",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "ねぇこの、さんさんよんよん……ちょうれん……ゆるすゆるす"
+            }
+          ],
+          "emotion": 4,
+          "description": {
+            "text": [
+              {
+                "type": "text",
+                "content": "「アソビ大全」の設定欄のことを言っています"
+              },
+              {
+                "type": "lineBreak"
+              },
+              {
+                "type": "text",
+                "content": "先手の黒が強すぎるので制限するルールがあります"
+              },
+              {
+                "type": "lineBreak"
+              },
+              {
+                "type": "text",
+                "content": "連珠のセクションで勉強します"
+              }
+            ]
+          },
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_16",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "あっこれゆるすでいいと思う"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_17",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "おっけー"
+            },
+            {
+              "type": "lineBreak"
+            },
+            {
+              "type": "text",
+              "content": "まぁちょっとこれやったこないけどー"
+            }
+          ],
+          "emotion": 1,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_18",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "いけるいけるー"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_19",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "子供の頃とかみんなやってたもんねー"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_20",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "やってるやってるー"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_21",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "これまずねーどこでもいいからいっこおく"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_22",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "じゃあここで"
+            }
+          ],
+          "emotion": 0,
+          "description": {
+            "text": [
+              {
+                "type": "text",
+                "content": "天元に置いてえらい！"
+              }
+            ]
+          },
+          "boardActions": [
+            {
+              "type": "place",
+              "position": {
+                "row": 7,
+                "col": 7
+              },
+              "color": "black"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_23",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "じゃあお隣に"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": [
+            {
+              "type": "place",
+              "position": {
+                "row": 7,
+                "col": 6
+              },
+              "color": "white"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_24",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "あっじゃあみこもお隣に"
+            }
+          ],
+          "emotion": 0,
+          "description": {
+            "text": [
+              {
+                "type": "ruby",
+                "base": "寒星",
+                "ruby": "かんせい"
+              },
+              {
+                "type": "text",
+                "content": "という"
+              },
+              {
+                "type": "ruby",
+                "base": "珠型",
+                "ruby": "しゅけい"
+              }
+            ]
+          },
+          "boardActions": [
+            {
+              "type": "place",
+              "position": {
+                "row": 7,
+                "col": 5
+              },
+              "color": "black"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_25",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "あっお隣にw"
+            },
+            {
+              "type": "lineBreak"
+            },
+            {
+              "type": "text",
+              "content": "じゃあちょっと上に伸ばしちゃおうかな"
+            }
+          ],
+          "emotion": 1,
+          "description": {
+            "text": []
+          },
+          "boardActions": [
+            {
+              "type": "place",
+              "position": {
+                "row": 8,
+                "col": 6
+              },
+              "color": "white"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_26",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "じゃあ横……あっこれあれか"
+            },
+            {
+              "type": "lineBreak"
+            },
+            {
+              "type": "text",
+              "content": "ひっくり返すとかないのか"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": [
+            {
+              "type": "place",
+              "position": {
+                "row": 7,
+                "col": 8
+              },
+              "color": "black"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_27",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "そうそうそう。全部繋げられたらOK"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": [
+            {
+              "type": "place",
+              "position": {
+                "row": 9,
+                "col": 6
+              },
+              "color": "white"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_28",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "なるほどですねーおーん"
+            }
+          ],
+          "emotion": 35,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_29",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "じゃあみこも上にー"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": [
+            {
+              "type": "place",
+              "position": {
+                "row": 6,
+                "col": 8
+              },
+              "color": "black"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_30",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "あーじゃあもう更に上にー"
+            }
+          ],
+          "emotion": 1,
+          "boardActions": [
+            {
+              "type": "place",
+              "position": {
+                "row": 10,
+                "col": 6
+              },
+              "color": "white"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_31",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "じゃあみこ横にー"
+            }
+          ],
+          "emotion": 1,
+          "boardActions": [
+            {
+              "type": "place",
+              "position": {
+                "row": 5,
+                "col": 9
+              },
+              "color": "black"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_32",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "あっ勝ちです……"
+            }
+          ],
+          "emotion": 0,
+          "description": {
+            "text": [
+              {
+                "type": "text",
+                "content": "み俺恥（みこち俺恥ずかしいよ）誕生の瞬間である"
+              }
+            ]
+          },
+          "boardActions": [
+            {
+              "type": "place",
+              "position": {
+                "row": 11,
+                "col": 6
+              },
+              "color": "white"
+            },
+            {
+              "type": "line",
+              "fromPosition": {
+                "row": 7,
+                "col": 6
+              },
+              "toPosition": {
+                "row": 11,
+                "col": 6
+              },
+              "action": "draw",
+              "style": "solid"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_33",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "えっうええええええええ！？"
+            }
+          ],
+          "emotion": 13,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_34",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "みこさん！！ルールわかってないんですか！！"
+            }
+          ],
+          "emotion": 26,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_35",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "びーっくりしたぁ"
+            },
+            {
+              "type": "lineBreak"
+            },
+            {
+              "type": "text",
+              "content": "めんたまでるかとおもったわ"
+            }
+          ],
+          "emotion": 29,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_36",
+          "character": "narration",
+          "text": [
+            {
+              "type": "text",
+              "content": "〜回想終わり〜"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        }
+      ]
+    }
+  ]
+}

@@ -4,34 +4,16 @@
       "label": "五目並べ:入門",
       "scenarios": [
         {
-          "id": "scenario_mjviwg6m_jv8xm",
-          "title": "連珠って？",
-          "description": "五目並べとの違い",
-          "path": "gomoku_beginner/scenario_mjviwg6m_jv8xm.json"
+          "id": "scenario_mkjnx2v6_uqagf",
+          "title": "プロローグ",
+          "description": "はじめての人向けのルール概要",
+          "path": "gomoku_beginner/scenario_mkjnx2v6_uqagf.json"
         },
         {
           "id": "scenario_mjzr29tu_hh97s",
           "title": "五を作るには",
           "description": "勝利条件である五の一歩手前の状態を学びます。",
           "path": "gomoku_beginner/scenario_mjzr29tu_hh97s.json"
-        },
-        {
-          "id": "scenario_mjx746jb_0azj3",
-          "title": "問題テスト",
-          "description": "テスト用問題です",
-          "path": "gomoku_beginner/scenario_mjx746jb_0azj3.json"
-        },
-        {
-          "id": "scenario_mjz7x21q_gpzpn",
-          "title": "新しいシナリオ",
-          "description": "レンダリングテスト",
-          "path": "gomoku_beginner/scenario_mjz7x21q_gpzpn.json"
-        },
-        {
-          "id": "scenario_mjzgjlek_bsy23",
-          "title": "黒の制限1: 三三禁",
-          "description": "三三禁、四四禁、長連について",
-          "path": "gomoku_beginner/scenario_mjzgjlek_bsy23.json"
         }
       ]
     },
@@ -41,7 +23,20 @@
     },
     "renju_beginner": {
       "label": "連珠:入門",
-      "scenarios": []
+      "scenarios": [
+        {
+          "id": "scenario_mjviwg6m_jv8xm",
+          "title": "連珠って？",
+          "description": "五目並べとの違い",
+          "path": "renju_beginner/scenario_mjviwg6m_jv8xm.json"
+        },
+        {
+          "id": "scenario_mjzgjlek_bsy23",
+          "title": "黒の制限1: 三三禁",
+          "description": "三三禁、四四禁、長連について",
+          "path": "renju_beginner/scenario_mjzgjlek_bsy23.json"
+        }
+      ]
     },
     "renju_intermediate": {
       "label": "連珠:初級",
