@@ -50,6 +50,9 @@ export function useDialogueEditor(
     editorStore.updateCurrentSection({
       dialogues: newDialogues,
     });
+
+    // プレビューを最後のダイアログに移動
+    editorStore.goToLastDialogue();
   };
 
   const insertDialogueAfter = (index: number): void => {
@@ -75,6 +78,9 @@ export function useDialogueEditor(
     editorStore.updateCurrentSection({
       dialogues: newDialogues,
     });
+
+    // プレビューを挿入されたダイアログに移動
+    editorStore.goToDialogueIndex(index + 1);
   };
 
   const removeDialogue = (index: number): void => {
@@ -92,6 +98,10 @@ export function useDialogueEditor(
     editorStore.updateCurrentSection({
       dialogues: newDialogues,
     });
+
+    // プレビューを適切な位置に調整（範囲内に収める）
+    const newIndex = Math.min(index, newDialogues.length - 1);
+    editorStore.goToDialogueIndex(Math.max(0, newIndex));
   };
 
   const updateDialogue = (
@@ -112,6 +122,9 @@ export function useDialogueEditor(
     editorStore.updateCurrentSection({
       dialogues: newDialogues,
     });
+
+    // プレビューを編集中のダイアログに移動
+    editorStore.goToDialogueIndex(index);
   };
 
   const moveDialogueUp = (index: number): void => {
@@ -134,6 +147,9 @@ export function useDialogueEditor(
     editorStore.updateCurrentSection({
       dialogues: newDialogues,
     });
+
+    // プレビューを移動先のダイアログに追従
+    editorStore.goToDialogueIndex(index - 1);
   };
 
   const moveDialogueDown = (index: number): void => {
@@ -152,6 +168,9 @@ export function useDialogueEditor(
     editorStore.updateCurrentSection({
       dialogues: newDialogues,
     });
+
+    // プレビューを移動先のダイアログに追従
+    editorStore.goToDialogueIndex(index + 1);
   };
 
   return {
