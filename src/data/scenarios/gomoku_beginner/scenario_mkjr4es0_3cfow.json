@@ -1,0 +1,333 @@
+{
+  "id": "scenario_mkjr4es0_3cfow",
+  "title": "五目並べ概説",
+  "difficulty": "gomoku_beginner",
+  "description": "初めての人向けのルール説明",
+  "objectives": [],
+  "sections": [
+    {
+      "id": "section_1",
+      "type": "demo",
+      "title": "五目並べって？",
+      "initialBoard": [
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------"
+      ],
+      "dialogues": [
+        {
+          "id": "dialogue_1",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "そんなこともありましたなぁ"
+            }
+          ],
+          "emotion": 35,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_2",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "ありましたなぁ"
+            }
+          ],
+          "emotion": 35,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_3",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "みこさんあのとき初めてだったんだよねぇ。"
+            },
+            {
+              "type": "lineBreak"
+            },
+            {
+              "type": "text",
+              "content": "改めてどんなゲームか確認してみましょうか。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_4",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "おねがいします"
+            }
+          ],
+          "emotion": 1,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_5",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "五目並べは、先手の黒と後手の白に分かれて、交互に石を置き、"
+            },
+            {
+              "type": "emphasis",
+              "content": [
+                {
+                  "type": "text",
+                  "content": "先に5つ繋げて並べたら勝ち"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "content": "のゲームだよ。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_6",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "石は、目の交差したところに置くよ。"
+            },
+            {
+              "type": "lineBreak"
+            },
+            {
+              "type": "text",
+              "content": "並べ方は3つあって、縦・横・斜めどれでもOKだ。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": [
+            {
+              "type": "setBoard",
+              "board": [
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "---x-----x-----",
+                "---x------x----",
+                "---x-ooooo-x---",
+                "---x--------x--",
+                "---x---------x-",
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "dialogue_7",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "とりあえず遊ぶにはこれだけわかってればOK。"
+            },
+            {
+              "type": "lineBreak"
+            },
+            {
+              "type": "text",
+              "content": "シンプルなゲームだね。"
+            }
+          ],
+          "emotion": 1,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_8",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "みこでもできそう"
+            }
+          ],
+          "emotion": 11,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_9",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "そうだねぇ"
+            }
+          ],
+          "emotion": 35,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_10",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "囲碁っぽいなって思うかも知れないけど、微妙に違うんだ。"
+            },
+            {
+              "type": "lineBreak"
+            },
+            {
+              "type": "text",
+              "content": "五目並べでは"
+            },
+            {
+              "type": "emphasis",
+              "content": [
+                {
+                  "type": "text",
+                  "content": "15"
+                },
+                {
+                  "type": "ruby",
+                  "base": "路盤",
+                  "ruby": "ろばん"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "content": "を使うよ。囲碁よりちょっと狭いんだ。"
+            }
+          ],
+          "emotion": 0,
+          "description": {
+            "text": [
+              {
+                "type": "text",
+                "content": "囲碁は19路盤。"
+              },
+              {
+                "type": "lineBreak"
+              },
+              {
+                "type": "text",
+                "content": "19路盤で五目並べをやると広すぎて黒が勝つ。"
+              },
+              {
+                "type": "lineBreak"
+              },
+              {
+                "type": "lineBreak"
+              },
+              {
+                "type": "text",
+                "content": "五目並べを本格的にやりたくなったら、15路の「連珠盤」を買おう。"
+              }
+            ]
+          },
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_11",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "さて、五目並べは、みこさんが最初に負けちゃったときみたいに、ちょっと油断するとあっという間に負けちゃうんだ"
+            }
+          ],
+          "emotion": 1,
+          "boardActions": [
+            {
+              "type": "resetAll",
+              "position": {
+                "row": 0,
+                "col": 0
+              },
+              "color": "black",
+              "highlight": false
+            }
+          ],
+          "description": {
+            "text": [],
+            "clear": true
+          }
+        },
+        {
+          "id": "dialogue_12",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "あい"
+            }
+          ],
+          "emotion": 24,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_13",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "ということで、次は"
+            },
+            {
+              "type": "emphasis",
+              "content": [
+                {
+                  "type": "text",
+                  "content": "すぐに負けないコツ"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "content": "を学んでいこうね"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_14",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "あい！"
+            }
+          ],
+          "emotion": 1,
+          "boardActions": []
+        }
+      ]
+    }
+  ]
+}

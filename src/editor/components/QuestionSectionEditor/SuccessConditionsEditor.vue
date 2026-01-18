@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { SuccessCondition, QuestionSection } from "@/types/scenario";
 import { useSuccessConditions } from "@/editor/composables/useSuccessConditions";
+import PositionInput from "@/editor/components/common/PositionInput.vue";
 
 const props = defineProps<{
   conditions: SuccessCondition[];
@@ -135,44 +136,15 @@ const {
               :key="`pos-${posIndex}`"
               class="position-row"
             >
-              <label>
-                行
-                <input
-                  type="number"
-                  min="0"
-                  max="14"
-                  :value="pos.row"
-                  class="form-input form-input-small"
-                  @input="
-                    (e) =>
-                      updatePositionField(
-                        index,
-                        posIndex,
-                        'row',
-                        Number((e.target as HTMLInputElement).value),
-                      )
-                  "
-                />
-              </label>
-              <label>
-                列
-                <input
-                  type="number"
-                  min="0"
-                  max="14"
-                  :value="pos.col"
-                  class="form-input form-input-small"
-                  @input="
-                    (e) =>
-                      updatePositionField(
-                        index,
-                        posIndex,
-                        'col',
-                        Number((e.target as HTMLInputElement).value),
-                      )
-                  "
-                />
-              </label>
+              <label class="position-label">座標</label>
+              <PositionInput
+                :row="pos.row"
+                :col="pos.col"
+                @update-position="
+                  (field, value) =>
+                    updatePositionField(index, posIndex, field, value)
+                "
+              />
               <button
                 class="btn-inline"
                 @click="removePositionFromCondition(index, posIndex)"
@@ -260,44 +232,15 @@ const {
               :key="`move-${moveIndex}`"
               class="move-row"
             >
-              <label>
-                行
-                <input
-                  type="number"
-                  min="0"
-                  max="14"
-                  :value="move.row"
-                  class="form-input form-input-small"
-                  @input="
-                    (e) =>
-                      updateSequenceMove(
-                        index,
-                        moveIndex,
-                        'row',
-                        Number((e.target as HTMLInputElement).value),
-                      )
-                  "
-                />
-              </label>
-              <label>
-                列
-                <input
-                  type="number"
-                  min="0"
-                  max="14"
-                  :value="move.col"
-                  class="form-input form-input-small"
-                  @input="
-                    (e) =>
-                      updateSequenceMove(
-                        index,
-                        moveIndex,
-                        'col',
-                        Number((e.target as HTMLInputElement).value),
-                      )
-                  "
-                />
-              </label>
+              <label class="position-label">座標</label>
+              <PositionInput
+                :row="move.row"
+                :col="move.col"
+                @update-position="
+                  (field, value) =>
+                    updateSequenceMove(index, moveIndex, field, value)
+                "
+              />
               <label>
                 色
                 <select
@@ -487,6 +430,11 @@ const {
   flex-wrap: wrap;
   gap: var(--size-5);
   align-items: center;
+}
+
+.position-label {
+  font-weight: var(--font-weight-bold);
+  font-size: var(--size-11);
 }
 
 .btn-inline {

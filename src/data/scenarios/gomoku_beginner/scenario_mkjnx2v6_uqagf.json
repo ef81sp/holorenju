@@ -2,7 +2,7 @@
   "id": "scenario_mkjnx2v6_uqagf",
   "title": "プロローグ",
   "difficulty": "gomoku_beginner",
-  "description": "はじめての人向けのルール概要",
+  "description": "フブみこさんが五目並べをやるようですが……？",
   "objectives": [],
   "sections": [
     {
@@ -475,6 +475,13 @@
             }
           ],
           "emotion": 0,
+          "description": {
+            "text": [
+              {
+                "type": "lineBreak"
+              }
+            ]
+          },
           "boardActions": [
             {
               "type": "place",
@@ -529,6 +536,14 @@
             }
           ],
           "emotion": 0,
+          "description": {
+            "text": [
+              {
+                "type": "text",
+                "content": "あ"
+              }
+            ]
+          },
           "boardActions": [
             {
               "type": "place",
@@ -571,6 +586,9 @@
             }
           ],
           "emotion": 1,
+          "description": {
+            "text": []
+          },
           "boardActions": [
             {
               "type": "place",

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { clampPosition, type LineAction } from "./types";
+import PositionInput from "@/editor/components/common/PositionInput.vue";
+import type { LineAction } from "./types";
 
 const props = defineProps<{
   action: LineAction;
@@ -33,12 +34,15 @@ const lineStyle = computed({
   },
 });
 
-const handlePositionChange = (
-  key: "fromPosition" | "toPosition",
+const handleFromPositionUpdate = (
   field: "row" | "col",
-  value: string,
+  value: number,
 ): void => {
-  emit("update-position", key, field, clampPosition(value));
+  emit("update-position", "fromPosition", field, value);
+};
+
+const handleToPositionUpdate = (field: "row" | "col", value: number): void => {
+  emit("update-position", "toPosition", field, value);
 };
 </script>
 
@@ -46,76 +50,20 @@ const handlePositionChange = (
   <div class="action-form inline-fields">
     <label class="field">
       <span>開始</span>
-      <div class="position-inputs">
-        <input
-          type="number"
-          placeholder="row"
-          min="0"
-          max="14"
-          :value="fromPosition.row"
-          @change="
-            (e) =>
-              handlePositionChange(
-                'fromPosition',
-                'row',
-                (e.target as HTMLInputElement).value,
-              )
-          "
-        />
-        <span class="separator">×</span>
-        <input
-          type="number"
-          placeholder="col"
-          min="0"
-          max="14"
-          :value="fromPosition.col"
-          @change="
-            (e) =>
-              handlePositionChange(
-                'fromPosition',
-                'col',
-                (e.target as HTMLInputElement).value,
-              )
-          "
-        />
-      </div>
+      <PositionInput
+        :row="fromPosition.row"
+        :col="fromPosition.col"
+        @update-position="handleFromPositionUpdate"
+      />
     </label>
 
     <label class="field">
       <span>終了</span>
-      <div class="position-inputs">
-        <input
-          type="number"
-          placeholder="row"
-          min="0"
-          max="14"
-          :value="toPosition.row"
-          @change="
-            (e) =>
-              handlePositionChange(
-                'toPosition',
-                'row',
-                (e.target as HTMLInputElement).value,
-              )
-          "
-        />
-        <span class="separator">×</span>
-        <input
-          type="number"
-          placeholder="col"
-          min="0"
-          max="14"
-          :value="toPosition.col"
-          @change="
-            (e) =>
-              handlePositionChange(
-                'toPosition',
-                'col',
-                (e.target as HTMLInputElement).value,
-              )
-          "
-        />
-      </div>
+      <PositionInput
+        :row="toPosition.row"
+        :col="toPosition.col"
+        @update-position="handleToPositionUpdate"
+      />
     </label>
 
     <label class="field field-small">
@@ -146,33 +94,6 @@ const handlePositionChange = (
   display: flex;
   gap: var(--size-4);
   flex-wrap: wrap;
-}
-
-.position-inputs {
-  display: flex;
-  align-items: center;
-  gap: var(--size-2);
-}
-
-.position-inputs input[type="number"] {
-  width: var(--size-24);
-  padding: var(--size-3) var(--size-5);
-  border: 1px solid var(--color-border);
-  border-radius: 3px;
-  font-family: inherit;
-  font-size: var(--size-12);
-  color: var(--color-text-primary);
-  background: var(--color-bg-white);
-}
-
-.position-inputs input[type="number"]:focus {
-  outline: none;
-  border-color: var(--color-holo-blue);
-}
-
-.position-inputs .separator {
-  font-weight: var(--font-weight-bold);
-  color: var(--color-text-secondary);
 }
 
 .field {

@@ -6,8 +6,20 @@
         {
           "id": "scenario_mkjnx2v6_uqagf",
           "title": "プロローグ",
-          "description": "はじめての人向けのルール概要",
+          "description": "フブみこさんが五目並べをやるようですが……？",
           "path": "gomoku_beginner/scenario_mkjnx2v6_uqagf.json"
+        },
+        {
+          "id": "scenario_mkjr4es0_3cfow",
+          "title": "五目並べ概説",
+          "description": "初めての人向けのルール説明",
+          "path": "gomoku_beginner/scenario_mkjr4es0_3cfow.json"
+        },
+        {
+          "id": "scenario_mkjs7lp4_kx96z",
+          "title": "負けないために",
+          "description": "相手の攻撃を防ぐ方法を学び、すぐに負けないようになりましょう",
+          "path": "gomoku_beginner/scenario_mkjs7lp4_kx96z.json"
         },
         {
           "id": "scenario_mjzr29tu_hh97s",

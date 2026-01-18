@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { clampPosition, type PlaceAction } from "./types";
+import PositionInput from "@/editor/components/common/PositionInput.vue";
+import type { PlaceAction } from "./types";
 
 const props = defineProps<{
   action: PlaceAction;
@@ -24,8 +25,8 @@ const highlight = computed({
   set: (value: boolean) => emit("update-highlight", value),
 });
 
-const handlePositionChange = (field: "row" | "col", value: string): void => {
-  emit("update-position", field, clampPosition(value));
+const handlePositionUpdate = (field: "row" | "col", value: number): void => {
+  emit("update-position", field, value);
 };
 </script>
 
@@ -33,31 +34,11 @@ const handlePositionChange = (field: "row" | "col", value: string): void => {
   <div class="action-form">
     <label class="field">
       <span>位置</span>
-      <div class="position-inputs">
-        <input
-          type="number"
-          placeholder="row"
-          min="0"
-          max="14"
-          :value="position.row"
-          @change="
-            (e) =>
-              handlePositionChange('row', (e.target as HTMLInputElement).value)
-          "
-        />
-        <span class="separator">×</span>
-        <input
-          type="number"
-          placeholder="col"
-          min="0"
-          max="14"
-          :value="position.col"
-          @change="
-            (e) =>
-              handlePositionChange('col', (e.target as HTMLInputElement).value)
-          "
-        />
-      </div>
+      <PositionInput
+        :row="position.row"
+        :col="position.col"
+        @update-position="handlePositionUpdate"
+      />
     </label>
 
     <label class="field field-small">
@@ -84,33 +65,6 @@ const handlePositionChange = (field: "row" | "col", value: string): void => {
 .action-form {
   display: flex;
   gap: var(--size-4);
-}
-
-.position-inputs {
-  display: flex;
-  align-items: center;
-  gap: var(--size-2);
-}
-
-.position-inputs input[type="number"] {
-  width: var(--size-24);
-  padding: var(--size-3) var(--size-5);
-  border: 1px solid var(--color-border);
-  border-radius: 3px;
-  font-family: inherit;
-  font-size: var(--size-12);
-  color: var(--color-text-primary);
-  background: var(--color-bg-white);
-}
-
-.position-inputs input[type="number"]:focus {
-  outline: none;
-  border-color: var(--color-holo-blue);
-}
-
-.position-inputs .separator {
-  font-weight: var(--font-weight-bold);
-  color: var(--color-text-secondary);
 }
 
 .field {
