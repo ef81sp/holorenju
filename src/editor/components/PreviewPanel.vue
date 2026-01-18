@@ -1,20 +1,17 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed } from "vue";
 import { useEditorStore } from "@/editor/stores/editorStore";
 import RenjuBoard from "@/components/game/RenjuBoard/RenjuBoard.vue";
 import CharacterSprite from "@/components/character/CharacterSprite.vue";
 import DialogText from "@/components/common/DialogText.vue";
 import RichText from "@/components/common/RichText.vue";
-import type {
-  DemoSection,
-  QuestionSection,
-  BoardAction,
-} from "@/types/scenario";
+import type { DemoSection, QuestionSection } from "@/types/scenario";
 import type { BoardState, StoneColor } from "@/types/game";
 import type { CharacterType, EmotionId } from "@/types/character";
+import type { Mark, Line } from "@/stores/boardStore";
 
 const editorStore = useEditorStore();
-const dialoguePageIndex = ref(0);
+const dialoguePageIndex = computed(() => editorStore.previewDialogueIndex);
 
 // ボード文字列を BoardState に変換
 const stringBoardToBoardState = (boardLines: string[]): BoardState =>
@@ -80,7 +77,7 @@ const dialoguePaginationInfo = computed(() => {
 
 const goPreviousDialogue = (): void => {
   if (dialoguePageIndex.value > 0) {
-    dialoguePageIndex.value--;
+    editorStore.setPreviewDialogueIndex(dialoguePageIndex.value - 1);
   }
 };
 
@@ -89,13 +86,8 @@ const goNextDialogue = (): void => {
     return;
   }
   if (dialoguePageIndex.value < previewContent.value.dialogues.length - 1) {
-    dialoguePageIndex.value++;
+    editorStore.setPreviewDialogueIndex(dialoguePageIndex.value + 1);
   }
-};
-
-// セクション切り替え時にページをリセット
-const resetDialoguePage = (): void => {
-  dialoguePageIndex.value = 0;
 };
 
 // 現在のダイアログまで操作を適用した盤面を計算
@@ -147,17 +139,14 @@ const currentBoard = computed(() => {
 });
 
 // 現在のダイアログまでのmark/lineアクションを収集
-const currentMarks = computed(() => {
+const currentMarks = computed<Mark[]>(() => {
   if (!previewContent.value || previewContent.value.type !== "demo") {
     return [];
   }
 
-  const marks: {
-    positions: { row: number; col: number }[];
-    markType: "circle" | "cross" | "arrow";
-    label?: string;
-  }[] = [];
+  const marks: Mark[] = [];
   const { dialogues } = previewContent.value;
+  let markCounter = 0;
 
   for (let i = 0; i <= dialoguePageIndex.value; i++) {
     const dialogue = dialogues[i];
@@ -168,11 +157,14 @@ const currentMarks = computed(() => {
       if (action.type === "resetAll") {
         // ResetAllでマークをリセット
         marks.length = 0;
+        markCounter = 0;
       } else if (action.type === "mark") {
         marks.push({
+          id: `preview-mark-${markCounter++}`,
           positions: action.positions,
           markType: action.markType,
           label: action.label,
+          placedAtDialogueIndex: i,
         });
       }
     }
@@ -181,17 +173,14 @@ const currentMarks = computed(() => {
   return marks;
 });
 
-const currentLines = computed(() => {
+const currentLines = computed<Line[]>(() => {
   if (!previewContent.value || previewContent.value.type !== "demo") {
     return [];
   }
 
-  const lines: {
-    fromPosition: { row: number; col: number };
-    toPosition: { row: number; col: number };
-    style?: "solid" | "dashed";
-  }[] = [];
+  const lines: Line[] = [];
   const { dialogues } = previewContent.value;
+  let lineCounter = 0;
 
   for (let i = 0; i <= dialoguePageIndex.value; i++) {
     const dialogue = dialogues[i];
@@ -202,11 +191,14 @@ const currentLines = computed(() => {
       if (action.type === "resetAll") {
         // ResetAllでラインをリセット
         lines.length = 0;
+        lineCounter = 0;
       } else if (action.type === "line" && action.action === "draw") {
         lines.push({
+          id: `preview-line-${lineCounter++}`,
           fromPosition: action.fromPosition,
           toPosition: action.toPosition,
-          style: action.style,
+          style: action.style ?? "solid",
+          placedAtDialogueIndex: i,
         });
       }
     }

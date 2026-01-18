@@ -20,6 +20,8 @@ interface Props {
   stageSize?: number;
   allowOverwrite?: boolean;
   cursorPosition?: Position;
+  marks?: Mark[];
+  lines?: Line[];
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -29,6 +31,8 @@ const props = withDefaults(defineProps<Props>(), {
   stageSize: 640,
   allowOverwrite: false,
   cursorPosition: undefined,
+  marks: undefined,
+  lines: undefined,
 });
 
 // Emits
@@ -93,9 +97,9 @@ const placedStones = computed<PlacedStone[]>(() => {
 // シナリオ用の石（boardStore.stonesから）
 const scenarioStones = computed(() => boardStore.stones);
 
-// シナリオ用のマーク・ライン（boardStoreから）
-const scenarioMarks = computed(() => boardStore.marks);
-const scenarioLines = computed(() => boardStore.lines);
+// シナリオ用のマーク・ライン（Props優先、なければboardStoreから）
+const scenarioMarks = computed(() => props.marks ?? boardStore.marks);
+const scenarioLines = computed(() => props.lines ?? boardStore.lines);
 
 // マークの中心位置を計算（スケールアニメーションの原点として使用）
 const getMarkCenter = (mark: Mark): { x: number; y: number } => {
