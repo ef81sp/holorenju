@@ -92,34 +92,6 @@
             }
           ],
           "emotion": 0,
-          "boardActions": [
-            {
-              "type": "setBoard",
-              "position": {
-                "row": 0,
-                "col": 0
-              },
-              "color": "black",
-              "highlight": false,
-              "board": [
-                "---------------",
-                "---------------",
-                "---------------",
-                "---------------",
-                "---------------",
-                "---------------",
-                "---------------",
-                "-----xxxx------",
-                "---------------",
-                "---------------",
-                "---------------",
-                "---------------",
-                "---------------",
-                "---------------",
-                "---------------"
-              ]
-            }
-          ],
           "description": {
             "text": [
               {
@@ -153,7 +125,29 @@
                 "content": "五: 勝ち"
               }
             ]
-          }
+          },
+          "boardActions": [
+            {
+              "type": "setBoard",
+              "board": [
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "-----xxxx------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------"
+              ]
+            }
+          ]
         },
         {
           "id": "dialogue_6",
@@ -172,8 +166,7 @@
                 "row": 7,
                 "col": 4
               },
-              "color": "white",
-              "highlight": false
+              "color": "white"
             }
           ]
         },
@@ -200,6 +193,9 @@
             }
           ],
           "emotion": 0,
+          "description": {
+            "text": []
+          },
           "boardActions": [
             {
               "type": "place",
@@ -207,13 +203,9 @@
                 "row": 7,
                 "col": 9
               },
-              "color": "black",
-              "highlight": false
+              "color": "black"
             }
-          ],
-          "description": {
-            "text": []
-          }
+          ]
         },
         {
           "id": "dialogue_8",
@@ -295,12 +287,6 @@
           "boardActions": [
             {
               "type": "setBoard",
-              "position": {
-                "row": 0,
-                "col": 0
-              },
-              "color": "black",
-              "highlight": false,
               "board": [
                 "---------------",
                 "---------------",
@@ -350,8 +336,7 @@
                 "row": 7,
                 "col": 9
               },
-              "color": "white",
-              "highlight": false
+              "color": "white"
             }
           ]
         },
@@ -378,27 +363,17 @@
               "position": {
                 "row": 7,
                 "col": 9
-              },
-              "color": "black",
-              "highlight": false
+              }
             },
             {
               "type": "remove",
               "position": {
                 "row": 7,
                 "col": 8
-              },
-              "color": "black",
-              "highlight": false
+              }
             },
             {
               "type": "mark",
-              "position": {
-                "row": 0,
-                "col": 0
-              },
-              "color": "black",
-              "highlight": false,
               "positions": [
                 {
                   "row": 7,
@@ -434,12 +409,6 @@
           "boardActions": [
             {
               "type": "setBoard",
-              "position": {
-                "row": 0,
-                "col": 0
-              },
-              "color": "black",
-              "highlight": false,
               "board": [
                 "---------------",
                 "---------------",
@@ -473,12 +442,6 @@
           "boardActions": [
             {
               "type": "mark",
-              "position": {
-                "row": 7,
-                "col": 0
-              },
-              "color": "black",
-              "highlight": false,
               "positions": [
                 {
                   "row": 7,
@@ -515,12 +478,6 @@
           "boardActions": [
             {
               "type": "setBoard",
-              "position": {
-                "row": 1,
-                "col": 0
-              },
-              "color": "black",
-              "highlight": false,
               "board": [
                 "---------------",
                 "---------------",
@@ -587,6 +544,9 @@
             }
           ],
           "emotion": 4,
+          "description": {
+            "text": []
+          },
           "boardActions": [
             {
               "type": "place",
@@ -594,13 +554,9 @@
                 "row": 7,
                 "col": 8
               },
-              "color": "white",
-              "highlight": false
+              "color": "white"
             }
-          ],
-          "description": {
-            "text": []
-          }
+          ]
         },
         {
           "id": "dialogue_15",
@@ -619,8 +575,7 @@
                 "row": 7,
                 "col": 4
               },
-              "color": "black",
-              "highlight": false
+              "color": "black"
             }
           ]
         },
@@ -634,6 +589,9 @@
             }
           ],
           "emotion": 19,
+          "description": {
+            "text": []
+          },
           "boardActions": [
             {
               "type": "place",
@@ -641,13 +599,9 @@
                 "row": 7,
                 "col": 3
               },
-              "color": "white",
-              "highlight": false
+              "color": "white"
             }
-          ],
-          "description": {
-            "text": []
-          }
+          ]
         },
         {
           "id": "dialogue_17",
@@ -968,12 +922,6 @@
           "boardActions": [
             {
               "type": "mark",
-              "position": {
-                "row": 1,
-                "col": 4
-              },
-              "color": "black",
-              "highlight": false,
               "positions": [
                 {
                   "row": 1,
@@ -1013,8 +961,27 @@
                 "row": 1,
                 "col": 4
               },
-              "color": "white",
-              "highlight": false
+              "color": "white"
+            },
+            {
+              "type": "mark",
+              "position": {
+                "row": 2,
+                "col": 4
+              },
+              "color": "black",
+              "highlight": false,
+              "positions": [
+                {
+                  "row": 2,
+                  "col": 4
+                },
+                {
+                  "row": 6,
+                  "col": 4
+                }
+              ],
+              "markType": "circle"
             }
           ]
         },
