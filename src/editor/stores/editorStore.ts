@@ -20,6 +20,7 @@ export const useEditorStore = defineStore("editor", () => {
   const selectedSectionIndex = ref<number | null>(null);
   const validationErrors = ref<{ path: string; message: string }[]>([]);
   const isDirty = ref(false);
+  const previewDialogueIndex = ref(0);
 
   // Computed
   const currentSection = computed<Section | null>(() => {
@@ -54,6 +55,7 @@ export const useEditorStore = defineStore("editor", () => {
   const selectSection = (index: number): void => {
     if (index >= 0 && index < scenario.value.sections.length) {
       selectedSectionIndex.value = index;
+      previewDialogueIndex.value = 0;
     }
   };
 
@@ -225,6 +227,25 @@ export const useEditorStore = defineStore("editor", () => {
     validationErrors.value = [];
   };
 
+  const setPreviewDialogueIndex = (index: number): void => {
+    previewDialogueIndex.value = index;
+  };
+
+  const goToLastDialogue = (): void => {
+    const section = currentSection.value;
+    if (section && "dialogues" in section) {
+      previewDialogueIndex.value = Math.max(0, section.dialogues.length - 1);
+    }
+  };
+
+  const goToDialogueIndex = (index: number): void => {
+    const section = currentSection.value;
+    if (section && "dialogues" in section) {
+      const maxIndex = Math.max(0, section.dialogues.length - 1);
+      previewDialogueIndex.value = Math.max(0, Math.min(index, maxIndex));
+    }
+  };
+
   const markClean = (): void => {
     isDirty.value = false;
   };
@@ -234,6 +255,7 @@ export const useEditorStore = defineStore("editor", () => {
     selectedSectionIndex,
     validationErrors,
     isDirty,
+    previewDialogueIndex,
     currentSection,
     hasErrors,
     loadScenario,
@@ -249,6 +271,9 @@ export const useEditorStore = defineStore("editor", () => {
     changeCurrentSectionType,
     setValidationErrors,
     clearValidationErrors,
+    setPreviewDialogueIndex,
+    goToLastDialogue,
+    goToDialogueIndex,
     markClean,
   };
 });
