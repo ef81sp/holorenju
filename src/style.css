@@ -25,6 +25,54 @@
   --color-holo-blue: #37abdf;
   --color-holo-purple: #764ba2;
 
+  /* カラースケール - 白上フブキ (H: 194, S: 78%) */
+  --color-fubuki-100: hsl(194, 78%, 95%);
+  --color-fubuki-200: hsl(194, 78%, 90%);
+  --color-fubuki-300: hsl(194, 78%, 80%);
+  --color-fubuki-400: hsl(194, 78%, 70%);
+  --color-fubuki-500: hsl(194, 78%, 62%);
+  --color-fubuki-600: hsl(194, 78%, 45%);
+  --color-fubuki-700: hsl(194, 78%, 35%);
+  --color-fubuki-800: hsl(194, 78%, 25%);
+  --color-fubuki-900: hsl(194, 78%, 18%);
+  --color-fubuki-1000: hsl(194, 78%, 12%);
+
+  /* カラースケール - さくらみこ (H: 346, S: 99%) */
+  --color-miko-100: hsl(346, 99%, 95%);
+  --color-miko-200: hsl(346, 99%, 90%);
+  --color-miko-300: hsl(346, 99%, 80%);
+  --color-miko-400: hsl(346, 99%, 70%);
+  --color-miko-500: hsl(346, 99%, 65%);
+  --color-miko-600: hsl(346, 99%, 45%);
+  --color-miko-700: hsl(346, 99%, 35%);
+  --color-miko-800: hsl(346, 99%, 25%);
+  --color-miko-900: hsl(346, 99%, 18%);
+  --color-miko-1000: hsl(346, 99%, 12%);
+
+  /* カラースケール - ホロシアン (H: 186, S: 78%) */
+  --color-cyan-100: hsl(186, 78%, 95%);
+  --color-cyan-200: hsl(186, 78%, 90%);
+  --color-cyan-300: hsl(186, 78%, 80%);
+  --color-cyan-400: hsl(186, 78%, 70%);
+  --color-cyan-500: hsl(186, 78%, 65%);
+  --color-cyan-600: hsl(186, 78%, 45%);
+  --color-cyan-700: hsl(186, 78%, 35%);
+  --color-cyan-800: hsl(186, 78%, 25%);
+  --color-cyan-900: hsl(186, 78%, 18%);
+  --color-cyan-1000: hsl(186, 78%, 12%);
+
+  /* カラースケール - ホロブルー (H: 199, S: 72%) */
+  --color-blue-100: hsl(199, 72%, 95%);
+  --color-blue-200: hsl(199, 72%, 90%);
+  --color-blue-300: hsl(199, 72%, 80%);
+  --color-blue-400: hsl(199, 72%, 70%);
+  --color-blue-500: hsl(199, 72%, 55%);
+  --color-blue-600: hsl(199, 72%, 45%);
+  --color-blue-700: hsl(199, 72%, 35%);
+  --color-blue-800: hsl(199, 72%, 25%);
+  --color-blue-900: hsl(199, 72%, 18%);
+  --color-blue-1000: hsl(199, 72%, 12%);
+
   /* ニュートラルカラー */
   --color-text-primary: #333333;
   --color-text-secondary: #666666;
