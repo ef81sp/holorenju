@@ -211,7 +211,7 @@ const handleGoToList = (): void => {
     <div class="info-section-slot">
       <ScenarioInfoPanel
         :scenario-title="scenarioNav.scenario.value.title"
-        :section-title="scenarioNav.currentSection.value?.id || ''"
+        :section-title="scenarioNav.currentSection.value?.title || ''"
         :description="
           scenarioNav.currentSection.value?.type === 'demo'
             ? scenarioNav.demoDescriptionNodes.value
