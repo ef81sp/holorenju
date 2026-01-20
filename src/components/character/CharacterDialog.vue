@@ -327,6 +327,10 @@ const messageCharacterInfo = computed(() => {
   cursor: not-allowed;
 }
 
+.dialog-text-wrapper {
+  font-size: calc(var(--size-20) * var(--text-size-multiplier));
+}
+
 .choices {
   display: flex;
   flex-direction: column;

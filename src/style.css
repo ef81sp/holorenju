@@ -112,6 +112,7 @@
   --size-12: clamp(8px, 1.25vw, 16px); /* 12px */
   --size-14: clamp(10px, 1.458vw, 18px); /* 14px */
   --size-16: clamp(11px, 1.667vw, 21px); /* 16px */
+  --size-18: clamp(13px, 1.875vw, 23px); /* 18px */
   --size-20: clamp(14px, 2.083vw, 26px); /* 20px */
   --size-24: clamp(16px, 2.5vw, 32px); /* 24px */
   --size-28: clamp(19px, 2.917vw, 37px); /* 28px */
