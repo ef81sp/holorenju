@@ -699,7 +699,7 @@
               "col": 9
             }
           ],
-          "color": "black"
+          "color": "white"
         }
       ],
       "feedback": {
@@ -965,12 +965,6 @@
             },
             {
               "type": "mark",
-              "position": {
-                "row": 2,
-                "col": 4
-              },
-              "color": "black",
-              "highlight": false,
               "positions": [
                 {
                   "row": 2,
