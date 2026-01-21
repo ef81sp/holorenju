@@ -1,4 +1,4 @@
-import { computed, ref, type ComputedRef, type Ref } from "vue";
+import { computed, ref, watch, type ComputedRef, type Ref } from "vue";
 
 import type {
   Scenario,
@@ -88,6 +88,8 @@ export const useScenarioNavigation = (
   const demoDescriptionNodes = ref<TextNode[]>([]);
   // 盤面キャッシュ: セクションインデックス → ダイアログインデックス → スナップショット
   const boardCache = ref<Map<number, Map<number, BoardSnapshot>>>(new Map());
+  // 完了した問題セクションのインデックスを記録
+  const completedSectionIndices = ref<Set<number>>(new Set());
 
   // Computed
   const currentSection = computed<Section | null>(() => {
@@ -127,9 +129,57 @@ export const useScenarioNavigation = (
 
   const canNavigatePrevious = computed(() => currentDialogueIndex.value > 0);
 
-  const canNavigateNext = computed(
-    () => currentDialogueIndex.value < allDialogues.value.length - 1,
-  );
+  // 完了した問題セクションを記録するヘルパー関数
+  const markSectionAsCompleted = (sectionIndex: number): void => {
+    completedSectionIndices.value = new Set([
+      ...completedSectionIndices.value,
+      sectionIndex,
+    ]);
+  };
+
+  const isSectionAlreadyCompleted = (sectionIndex: number): boolean =>
+    completedSectionIndices.value.has(sectionIndex);
+
+  /**
+   * 指定セクションから次のセクションへ進行可能かを判定
+   * 問題セクションの場合、完了済み（現在または過去に正解済み）でないと進行不可
+   */
+  const canPassSectionBoundary = (fromSectionIndex: number): boolean => {
+    const section = scenario.value?.sections[fromSectionIndex];
+    if (section?.type !== "question") {
+      return true;
+    }
+    return (
+      isSectionCompleted.value || isSectionAlreadyCompleted(fromSectionIndex)
+    );
+  };
+
+  // 問題セクション完了時に記録（戻って再度進む場合に許可するため）
+  watch(isSectionCompleted, (newValue) => {
+    if (newValue) {
+      markSectionAsCompleted(currentSectionIndex.value);
+    }
+  });
+
+  const canNavigateNext = computed(() => {
+    if (currentDialogueIndex.value >= allDialogues.value.length - 1) {
+      return false;
+    }
+
+    const nextMapping = allDialogues.value[currentDialogueIndex.value + 1];
+    const currentMapping = allDialogues.value[currentDialogueIndex.value];
+
+    if (!nextMapping || !currentMapping) {
+      return false;
+    }
+
+    // セクション境界を越える場合、進行可能かチェック
+    if (nextMapping.sectionIndex !== currentMapping.sectionIndex) {
+      return canPassSectionBoundary(currentMapping.sectionIndex);
+    }
+
+    return true;
+  });
 
   /**
    * シナリオを読み込み初期化
@@ -138,6 +188,7 @@ export const useScenarioNavigation = (
     try {
       // キャッシュクリア
       clearBoardCache();
+      completedSectionIndices.value = new Set();
 
       // Index.jsonからシナリオパスを取得
       let scenarioPath = "";
@@ -239,13 +290,24 @@ export const useScenarioNavigation = (
     animationStore.cancelOngoingAnimations();
 
     if (currentDialogueIndex.value < allDialogues.value.length - 1) {
-      currentDialogueIndex.value += 1;
-      const mapping = allDialogues.value[currentDialogueIndex.value];
-      const prevMapping = allDialogues.value[currentDialogueIndex.value - 1];
+      const nextIndex = currentDialogueIndex.value + 1;
+      const nextMapping = allDialogues.value[nextIndex];
+      const currentMapping = allDialogues.value[currentDialogueIndex.value];
 
-      if (!mapping || !prevMapping) {
+      if (!nextMapping || !currentMapping) {
         return;
       }
+
+      // セクション境界を越える場合のチェック
+      if (nextMapping.sectionIndex !== currentMapping.sectionIndex) {
+        if (!canPassSectionBoundary(currentMapping.sectionIndex)) {
+          return; // 進行をブロック
+        }
+      }
+
+      currentDialogueIndex.value = nextIndex;
+      const mapping = nextMapping;
+      const prevMapping = currentMapping;
 
       // セクションが変わった場合
       if (mapping.sectionIndex !== prevMapping.sectionIndex) {

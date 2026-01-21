@@ -585,4 +585,250 @@ describe("useScenarioNavigation", () => {
       expect(mockGoToScenarioList).toHaveBeenCalled();
     });
   });
+
+  describe("問題セクション連続時の進行制御", () => {
+    // 問題セクションが2つ連続するシナリオを作成
+    function createConsecutiveQuestionsScenario(): Scenario {
+      const questionSection1: QuestionSection = {
+        id: "question-1",
+        type: "question",
+        title: "Question 1",
+        description: [{ type: "text", content: "First question" }],
+        initialBoard: Array(15).fill("-".repeat(15)),
+        dialogues: [
+          {
+            id: "q1-dialogue-1",
+            character: "fubuki",
+            emotion: 0,
+            text: [{ type: "text", content: "Question 1 dialogue" }],
+            boardActions: [],
+          },
+        ],
+        successConditions: [
+          { type: "position", positions: [{ row: 7, col: 7 }], color: "black" },
+        ],
+        feedback: { success: [], failure: [] },
+      };
+
+      const questionSection2: QuestionSection = {
+        id: "question-2",
+        type: "question",
+        title: "Question 2",
+        description: [{ type: "text", content: "Second question" }],
+        initialBoard: Array(15).fill("-".repeat(15)),
+        dialogues: [
+          {
+            id: "q2-dialogue-1",
+            character: "miko",
+            emotion: 0,
+            text: [{ type: "text", content: "Question 2 dialogue" }],
+            boardActions: [],
+          },
+        ],
+        successConditions: [
+          { type: "position", positions: [{ row: 8, col: 8 }], color: "black" },
+        ],
+        feedback: { success: [], failure: [] },
+      };
+
+      return {
+        id: "consecutive-questions",
+        title: "Consecutive Questions",
+        difficulty: "gomoku_beginner",
+        description: "Test scenario with consecutive questions",
+        objectives: ["Test"],
+        sections: [questionSection1, questionSection2],
+      };
+    }
+
+    it("問題セクション未完了時、canNavigateNextはfalse", () => {
+      const nav = useScenarioNavigation("test-scenario");
+      const scenario = createConsecutiveQuestionsScenario();
+
+      nav.scenario.value = scenario;
+      nav.allDialogues.value = [
+        {
+          dialogue: scenario.sections[0].dialogues[0],
+          sectionIndex: 0,
+          sectionDialogueIndex: 0,
+        },
+        {
+          dialogue: scenario.sections[1].dialogues[0],
+          sectionIndex: 1,
+          sectionDialogueIndex: 0,
+        },
+      ];
+      nav.currentDialogueIndex.value = 0;
+      nav.currentSectionIndex.value = 0;
+      nav.isSectionCompleted.value = false;
+
+      expect(nav.canNavigateNext.value).toBe(false);
+    });
+
+    it("問題セクション完了時、canNavigateNextはtrue", () => {
+      const nav = useScenarioNavigation("test-scenario");
+      const scenario = createConsecutiveQuestionsScenario();
+
+      nav.scenario.value = scenario;
+      nav.allDialogues.value = [
+        {
+          dialogue: scenario.sections[0].dialogues[0],
+          sectionIndex: 0,
+          sectionDialogueIndex: 0,
+        },
+        {
+          dialogue: scenario.sections[1].dialogues[0],
+          sectionIndex: 1,
+          sectionDialogueIndex: 0,
+        },
+      ];
+      nav.currentDialogueIndex.value = 0;
+      nav.currentSectionIndex.value = 0;
+      nav.isSectionCompleted.value = true;
+
+      expect(nav.canNavigateNext.value).toBe(true);
+    });
+
+    it("問題セクション未完了時、nextDialogueで次セクションに進めない", async () => {
+      const nav = useScenarioNavigation("test-scenario");
+      const scenario = createConsecutiveQuestionsScenario();
+
+      nav.scenario.value = scenario;
+      nav.allDialogues.value = [
+        {
+          dialogue: scenario.sections[0].dialogues[0],
+          sectionIndex: 0,
+          sectionDialogueIndex: 0,
+        },
+        {
+          dialogue: scenario.sections[1].dialogues[0],
+          sectionIndex: 1,
+          sectionDialogueIndex: 0,
+        },
+      ];
+      nav.currentDialogueIndex.value = 0;
+      nav.currentSectionIndex.value = 0;
+      nav.isSectionCompleted.value = false;
+
+      await nav.nextDialogue();
+
+      // 進行がブロックされることを確認
+      expect(nav.currentDialogueIndex.value).toBe(0);
+      expect(nav.currentSectionIndex.value).toBe(0);
+    });
+
+    it("問題セクション完了時、nextDialogueで次セクションに進める", async () => {
+      const nav = useScenarioNavigation("test-scenario");
+      const scenario = createConsecutiveQuestionsScenario();
+
+      nav.scenario.value = scenario;
+      nav.allDialogues.value = [
+        {
+          dialogue: scenario.sections[0].dialogues[0],
+          sectionIndex: 0,
+          sectionDialogueIndex: 0,
+        },
+        {
+          dialogue: scenario.sections[1].dialogues[0],
+          sectionIndex: 1,
+          sectionDialogueIndex: 0,
+        },
+      ];
+      nav.currentDialogueIndex.value = 0;
+      nav.currentSectionIndex.value = 0;
+      nav.isSectionCompleted.value = true;
+
+      await nav.nextDialogue();
+
+      // 進行が許可されることを確認
+      expect(nav.currentDialogueIndex.value).toBe(1);
+      expect(nav.currentSectionIndex.value).toBe(1);
+    });
+
+    it("デモセクションからは自由に進行できる", async () => {
+      const nav = useScenarioNavigation("test-scenario");
+      const testScenario = createTestScenario();
+
+      nav.scenario.value = testScenario;
+      nav.allDialogues.value = [
+        {
+          dialogue: testScenario.sections[0].dialogues[0],
+          sectionIndex: 0,
+          sectionDialogueIndex: 0,
+        },
+        {
+          dialogue: testScenario.sections[0].dialogues[1],
+          sectionIndex: 0,
+          sectionDialogueIndex: 1,
+        },
+        {
+          dialogue: testScenario.sections[1].dialogues[0],
+          sectionIndex: 1,
+          sectionDialogueIndex: 0,
+        },
+      ];
+      nav.currentDialogueIndex.value = 1; // デモセクションの最後のダイアログ
+      nav.currentSectionIndex.value = 0;
+      nav.isSectionCompleted.value = false;
+
+      // デモセクションなので進行可能
+      expect(nav.canNavigateNext.value).toBe(true);
+
+      await nav.nextDialogue();
+
+      expect(nav.currentDialogueIndex.value).toBe(2);
+      expect(nav.currentSectionIndex.value).toBe(1);
+    });
+
+    it("一度完了したセクションに戻った後、再度進行できる", async () => {
+      const nav = useScenarioNavigation("test-scenario");
+      const scenario = createConsecutiveQuestionsScenario();
+
+      nav.scenario.value = scenario;
+      nav.allDialogues.value = [
+        {
+          dialogue: scenario.sections[0].dialogues[0],
+          sectionIndex: 0,
+          sectionDialogueIndex: 0,
+        },
+        {
+          dialogue: scenario.sections[1].dialogues[0],
+          sectionIndex: 1,
+          sectionDialogueIndex: 0,
+        },
+      ];
+      nav.currentDialogueIndex.value = 0;
+      nav.currentSectionIndex.value = 0;
+
+      // 最初は未完了なので進めない
+      nav.isSectionCompleted.value = false;
+      expect(nav.canNavigateNext.value).toBe(false);
+
+      // セクションを完了する（watchがトリガーされて記録される）
+      nav.isSectionCompleted.value = true;
+      // Vue の watch は同期的にトリガーされるので、次のティックを待つ
+      await vi.waitFor(() => {
+        expect(nav.canNavigateNext.value).toBe(true);
+      });
+
+      // 次のセクションに進む
+      await nav.nextDialogue();
+      expect(nav.currentDialogueIndex.value).toBe(1);
+      expect(nav.currentSectionIndex.value).toBe(1);
+
+      // 前のセクションに戻る
+      nav.previousDialogue();
+      expect(nav.currentDialogueIndex.value).toBe(0);
+      expect(nav.currentSectionIndex.value).toBe(0);
+
+      // 戻ったのでisSectionCompletedはfalseになる
+      nav.isSectionCompleted.value = false;
+
+      // 完了済みとして記録されているので、再度進行可能
+      expect(nav.canNavigateNext.value).toBe(true);
+
+      await nav.nextDialogue();
+      expect(nav.currentDialogueIndex.value).toBe(1);
+    });
+  });
 });
