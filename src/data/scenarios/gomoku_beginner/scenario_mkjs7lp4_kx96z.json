@@ -442,6 +442,23 @@
           "boardActions": [
             {
               "type": "mark",
+              "position": {
+                "row": 0,
+                "col": 0
+              },
+              "color": "black",
+              "highlight": false,
+              "positions": [
+                {
+                  "row": 7,
+                  "col": 8
+                }
+              ],
+              "markType": "circle",
+              "action": "remove"
+            },
+            {
+              "type": "mark",
               "positions": [
                 {
                   "row": 7,
@@ -632,13 +649,6 @@
               "content": "相手の三を見逃さないように気をつけよう。"
             }
           ],
-          "emotion": 0,
-          "boardActions": []
-        },
-        {
-          "id": "dialogue_18",
-          "character": "fubuki",
-          "text": [],
           "emotion": 0,
           "boardActions": []
         }
