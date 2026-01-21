@@ -13,7 +13,6 @@ import { useKeyboardNavigation } from "./composables/useKeyboardNavigation";
 import { useBoardSize } from "./composables/useBoardSize";
 import { useQuestionSolver } from "./composables/useQuestionSolver";
 import { useCutinDisplay } from "./composables/useCutinDisplay";
-import { useGameStore } from "@/stores/gameStore";
 import { useDialogStore } from "@/stores/dialogStore";
 
 import type { QuestionSection } from "@/types/scenario";
@@ -28,7 +27,6 @@ interface Props {
 const props = defineProps<Props>();
 
 // Stores
-const gameStore = useGameStore();
 const dialogStore = useDialogStore();
 
 // Composables
@@ -191,7 +189,6 @@ const handleGoToList = (): void => {
       style="anchor-name: --board-area"
     >
       <RenjuBoard
-        :board-state="gameStore.board"
         :disabled="
           scenarioNav.currentSection.value?.type === 'demo' ||
           scenarioNav.isSectionCompleted.value

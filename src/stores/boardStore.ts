@@ -1,14 +1,14 @@
 /**
  * 盤面状態管理ストア
  *
- * 盤面情報のみを管理し、ターン情報は持たない。
+ * stonesをSSoT（Single Source of Truth）とし、boardはstonesから導出。
  * シナリオプレイヤーなどで盤面を指定された色で操作するのに使用。
  *
  * アニメーション管理はscenarioAnimationStoreに分離済み。
  */
 
 import { defineStore } from "pinia";
-import { ref } from "vue";
+import { computed, ref } from "vue";
 
 import type { BoardState, Position, StoneColor } from "@/types/game";
 
@@ -48,32 +48,73 @@ export interface Line {
 }
 
 export const useBoardStore = defineStore("board", () => {
-  // State
-  const board = ref<BoardState>(createEmptyBoard());
+  // ========== State ==========
+  // stonesがSSoT（Single Source of Truth）
+  const stones = ref<Stone[]>([]);
+  const marks = ref<Mark[]>([]);
+  const lines = ref<Line[]>([]);
   const lastPlacedStone = ref<{
     position: Position;
     color: StoneColor;
   } | null>(null);
 
-  // シナリオ用の石配列（ダイアログインデックス追跡付き）
-  const stones = ref<Stone[]>([]);
+  // ========== Computed ==========
+  // boardはstonesから導出
+  const board = computed<BoardState>(() => {
+    const grid = createEmptyBoard();
+    for (const stone of stones.value) {
+      const row = grid[stone.position.row];
+      if (row) {
+        row[stone.position.col] = stone.color;
+      }
+    }
+    return grid;
+  });
 
-  // シナリオ用のマーク・ライン配列
-  const marks = ref<Mark[]>([]);
-  const lines = ref<Line[]>([]);
-
-  // Callbacks (placeStone用のみ残す)
+  // ========== Callbacks ==========
   type OnStonePlacedCallback = (
     position: Position,
     color: StoneColor,
   ) => Promise<void>;
   let onStonePlacedCallback: OnStonePlacedCallback | null = null;
 
-  // Actions
+  // ========== Actions ==========
+
+  /**
+   * 盤面を一括設定（stonesに変換）
+   * @param newBoard 新しい盤面状態
+   * @param dialogueIndex 配置時のダイアログインデックス（デフォルト: -1）
+   */
+  function setBoard(newBoard: BoardState, dialogueIndex = -1): void {
+    const newStones: Stone[] = [];
+    for (let row = 0; row < newBoard.length; row++) {
+      const rowData = newBoard[row];
+      if (!rowData) {
+        continue;
+      }
+      for (let col = 0; col < rowData.length; col++) {
+        const color = rowData[col];
+        if (color) {
+          newStones.push({
+            id: `${dialogueIndex}-${row}-${col}`,
+            position: { row, col },
+            color,
+            placedAtDialogueIndex: dialogueIndex,
+          });
+        }
+      }
+    }
+    stones.value = newStones;
+    lastPlacedStone.value = null;
+  }
+
+  /**
+   * 石を配置（ゲームモード用）
+   */
   function placeStone(
     position: Position,
     color: StoneColor,
-    options?: { animate?: boolean },
+    options?: { animate?: boolean; dialogueIndex?: number },
   ): {
     success: boolean;
     message?: string;
@@ -83,11 +124,15 @@ export const useBoardStore = defineStore("board", () => {
       return { message: "すでに石が置かれています", success: false };
     }
 
-    // 石を配置
-    const row = board.value[position.row];
-    if (row) {
-      row[position.col] = color;
-    }
+    const index = options?.dialogueIndex ?? -1;
+    const id = `${index}-${position.row}-${position.col}`;
+
+    stones.value.push({
+      id,
+      position,
+      color,
+      placedAtDialogueIndex: index,
+    });
 
     // 最後に配置された石の情報を記録
     lastPlacedStone.value = { position, color };
@@ -103,30 +148,30 @@ export const useBoardStore = defineStore("board", () => {
     return { success: true };
   }
 
+  /**
+   * 石を削除
+   */
   function removeStone(position: Position): {
     success: boolean;
     message?: string;
   } {
-    const row = board.value[position.row];
-    if (row) {
-      row[position.col] = null;
-    }
-
+    stones.value = stones.value.filter(
+      (s) => s.position.row !== position.row || s.position.col !== position.col,
+    );
     return { success: true };
   }
 
-  function setBoard(newBoard: BoardState): void {
-    board.value = newBoard.map((row: StoneColor[]) => [...row]);
-    // SetBoard時はアニメーション対象外にするため、lastPlacedStoneをクリア
-    lastPlacedStone.value = null;
-  }
-
+  /**
+   * 盤面をリセット
+   */
   function resetBoard(): void {
-    board.value = createEmptyBoard();
+    stones.value = [];
     lastPlacedStone.value = null;
   }
 
-  // コールバック設定関数
+  /**
+   * コールバック設定関数
+   */
   function setOnStonePlacedCallback(
     callback: OnStonePlacedCallback | null,
   ): void {
@@ -264,18 +309,18 @@ export const useBoardStore = defineStore("board", () => {
   }
 
   /**
-   * 石・マーク・ライン・盤面全てをリセット
+   * 石・マーク・ライン全てをリセット
    */
   function resetAll(): void {
     stones.value = [];
     marks.value = [];
     lines.value = [];
-    resetBoard();
+    lastPlacedStone.value = null;
   }
 
   return {
     // State
-    board,
+    board, // computed
     lastPlacedStone,
     stones,
     marks,

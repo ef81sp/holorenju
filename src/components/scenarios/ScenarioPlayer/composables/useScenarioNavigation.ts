@@ -194,13 +194,13 @@ export const useScenarioNavigation = (
 
       progressStore.startScenario(scenarioId);
 
-      // 初期盤面をセット
+      // 初期盤面をセット（SSoT: setBoard が stones を設定するので clearStones は不要）
       if (currentSection.value) {
         const boardState = boardStringToBoardState(
           currentSection.value.initialBoard,
         );
-        boardStore.setBoard(boardState);
-        boardStore.clearStones();
+        animationStore.cancelOngoingAnimations();
+        boardStore.setBoard(boardState, -1);
         boardStore.clearMarks();
         boardStore.clearLines();
       }
@@ -253,8 +253,8 @@ export const useScenarioNavigation = (
         const newSection = scenario.value?.sections[mapping.sectionIndex];
         if (newSection) {
           const boardState = boardStringToBoardState(newSection.initialBoard);
-          boardStore.setBoard(boardState);
-          boardStore.clearStones();
+          animationStore.cancelOngoingAnimations();
+          boardStore.setBoard(boardState, -1);
           boardStore.clearMarks();
           boardStore.clearLines();
           currentSectionIndex.value = mapping.sectionIndex;
@@ -309,8 +309,8 @@ export const useScenarioNavigation = (
     const section = scenario.value?.sections[mapping.sectionIndex];
     if (section) {
       const boardState = boardStringToBoardState(section.initialBoard);
-      boardStore.setBoard(boardState);
-      boardStore.clearStones();
+      animationStore.cancelOngoingAnimations();
+      boardStore.setBoard(boardState, -1);
       boardStore.clearMarks();
       boardStore.clearLines();
 
@@ -454,7 +454,10 @@ export const useScenarioNavigation = (
           boardStore.resetAll();
           break;
         case "setBoard":
-          boardStore.setBoard(boardStringToBoardState(action.board));
+          boardStore.setBoard(
+            boardStringToBoardState(action.board),
+            currentDialogueIndex.value,
+          );
           break;
         case "remove":
           boardStore.removeStone(action.position);
@@ -503,7 +506,10 @@ export const useScenarioNavigation = (
         boardStore.resetAll();
         break;
       case "setBoard":
-        boardStore.setBoard(boardStringToBoardState(action.board));
+        boardStore.setBoard(
+          boardStringToBoardState(action.board),
+          dialogueIndex,
+        );
         break;
       case "place":
         boardStore.addStones(
@@ -593,7 +599,7 @@ export const useScenarioNavigation = (
       return false;
     }
 
-    boardStore.setBoard(snapshot.board);
+    // SSoT: stones を直接復元（board は stones から自動計算される）
     boardStore.stones.splice(
       0,
       boardStore.stones.length,
@@ -636,8 +642,8 @@ export const useScenarioNavigation = (
       const boardState = boardStringToBoardState(
         currentSection.value.initialBoard,
       );
-      boardStore.setBoard(boardState);
-      boardStore.clearStones();
+      animationStore.cancelOngoingAnimations();
+      boardStore.setBoard(boardState, -1);
       boardStore.clearMarks();
       boardStore.clearLines();
 
