@@ -39,7 +39,7 @@ export function parseScenarioFromText(text: string): Scenario {
  * ScenarioをJSONファイルとしてダウンロード
  */
 export function downloadScenarioAsJSON(scenario: Scenario): void {
-  const json = JSON.stringify(scenario, null, 2);
+  const json = `${JSON.stringify(scenario, null, 2)}\n`;
   const blob = new Blob([json], { type: "application/json" });
   const url = URL.createObjectURL(blob);
 
@@ -55,7 +55,7 @@ export function downloadScenarioAsJSON(scenario: Scenario): void {
  * ScenarioをJSONテキストに変換
  */
 export function scenarioToJSON(scenario: Scenario): string {
-  return JSON.stringify(scenario, null, 2);
+  return `${JSON.stringify(scenario, null, 2)}\n`;
 }
 
 // ===== バリデーション結果 =====

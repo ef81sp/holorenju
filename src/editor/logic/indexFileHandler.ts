@@ -59,7 +59,7 @@ const saveIndexJson = async (
     create: true,
   });
   const writable = await indexHandle.createWritable();
-  const json = JSON.stringify(data, null, 2);
+  const json = `${JSON.stringify(data, null, 2)}\n`;
   console.warn("📄 index.json 内容:", `${json.substring(0, 200)}...`);
   await writable.write(json);
   await writable.close();
