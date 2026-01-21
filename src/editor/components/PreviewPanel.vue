@@ -5,10 +5,15 @@ import RenjuBoard from "@/components/game/RenjuBoard/RenjuBoard.vue";
 import CharacterSprite from "@/components/character/CharacterSprite.vue";
 import DialogText from "@/components/common/DialogText.vue";
 import RichText from "@/components/common/RichText.vue";
-import type { DemoSection, QuestionSection } from "@/types/scenario";
+import type {
+  DemoSection,
+  QuestionSection,
+  BoardAction,
+} from "@/types/scenario";
 import type { BoardState, StoneColor } from "@/types/game";
 import type { CharacterType, EmotionId } from "@/types/character";
 import type { Mark, Line } from "@/stores/boardStore";
+import { assertNever } from "@/utils/assertNever";
 
 const editorStore = useEditorStore();
 const dialoguePageIndex = computed(() => editorStore.previewDialogueIndex);
@@ -26,6 +31,42 @@ const stringBoardToBoardState = (boardLines: string[]): BoardState =>
       return null;
     }),
   );
+
+// 盤面アクションを適用
+const applyBoardAction = (
+  action: BoardAction,
+  board: BoardState,
+  initialBoard: string[],
+): BoardState => {
+  switch (action.type) {
+    case "place": {
+      const { row, col } = action.position;
+      const boardRow = board[row];
+      if (boardRow) {
+        boardRow[col] = action.color;
+      }
+      return board;
+    }
+    case "remove": {
+      const { row, col } = action.position;
+      const boardRow = board[row];
+      if (boardRow) {
+        boardRow[col] = null;
+      }
+      return board;
+    }
+    case "setBoard":
+      return stringBoardToBoardState(action.board);
+    case "resetAll":
+      return stringBoardToBoardState(initialBoard);
+    case "mark":
+    case "line":
+      // マーク・ラインは盤面に影響しない
+      return board;
+    default:
+      assertNever(action);
+  }
+};
 
 const previewContent = computed(() => {
   const section = editorStore.currentSection;
@@ -111,27 +152,7 @@ const currentBoard = computed(() => {
     }
     // BoardActions 配列をループして各アクションを順次適用
     for (const action of dialogue.boardActions) {
-      if (action.type === "place") {
-        const placeAction = action;
-        const { row, col } = placeAction.position;
-        const boardRow = board[row];
-        if (boardRow) {
-          boardRow[col] = placeAction.color;
-        }
-      } else if (action.type === "remove") {
-        const removeAction = action;
-        const { row, col } = removeAction.position;
-        const boardRow = board[row];
-        if (boardRow) {
-          boardRow[col] = null;
-        }
-      } else if (action.type === "setBoard") {
-        const setBoardAction = action;
-        board = stringBoardToBoardState(setBoardAction.board);
-      } else if (action.type === "resetAll") {
-        // 盤面をリセット（初期盤面に戻す）
-        board = stringBoardToBoardState(initialBoard);
-      }
+      board = applyBoardAction(action, board, initialBoard);
     }
   }
 
@@ -154,18 +175,28 @@ const currentMarks = computed<Mark[]>(() => {
       break;
     }
     for (const action of dialogue.boardActions) {
-      if (action.type === "resetAll") {
-        // ResetAllでマークをリセット
-        marks.length = 0;
-        markCounter = 0;
-      } else if (action.type === "mark") {
-        marks.push({
-          id: `preview-mark-${markCounter++}`,
-          positions: action.positions,
-          markType: action.markType,
-          label: action.label,
-          placedAtDialogueIndex: i,
-        });
+      switch (action.type) {
+        case "resetAll":
+          marks.length = 0;
+          markCounter = 0;
+          break;
+        case "mark":
+          marks.push({
+            id: `preview-mark-${markCounter++}`,
+            positions: action.positions,
+            markType: action.markType,
+            label: action.label,
+            placedAtDialogueIndex: i,
+          });
+          break;
+        case "place":
+        case "remove":
+        case "setBoard":
+        case "line":
+          // マーク以外のアクションは無視
+          break;
+        default:
+          assertNever(action);
       }
     }
   }
@@ -188,18 +219,31 @@ const currentLines = computed<Line[]>(() => {
       break;
     }
     for (const action of dialogue.boardActions) {
-      if (action.type === "resetAll") {
-        // ResetAllでラインをリセット
-        lines.length = 0;
-        lineCounter = 0;
-      } else if (action.type === "line" && action.action === "draw") {
-        lines.push({
-          id: `preview-line-${lineCounter++}`,
-          fromPosition: action.fromPosition,
-          toPosition: action.toPosition,
-          style: action.style ?? "solid",
-          placedAtDialogueIndex: i,
-        });
+      switch (action.type) {
+        case "resetAll":
+          lines.length = 0;
+          lineCounter = 0;
+          break;
+        case "line":
+          if (action.action === "draw") {
+            lines.push({
+              id: `preview-line-${lineCounter++}`,
+              fromPosition: action.fromPosition,
+              toPosition: action.toPosition,
+              style: action.style ?? "solid",
+              placedAtDialogueIndex: i,
+            });
+          }
+          // action === "remove" の場合は現状サポートなし
+          break;
+        case "place":
+        case "remove":
+        case "setBoard":
+        case "mark":
+          // ライン以外のアクションは無視
+          break;
+        default:
+          assertNever(action);
       }
     }
   }

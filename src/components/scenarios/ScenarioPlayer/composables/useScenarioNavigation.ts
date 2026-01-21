@@ -5,6 +5,7 @@ import type {
   Scenario,
   Section,
   DemoDialogue,
+  BoardAction,
   LineAction,
 } from "@/types/scenario";
 import type { TextNode } from "@/types/text";
@@ -22,6 +23,7 @@ import {
 import { useDialogStore } from "@/stores/dialogStore";
 import { useProgressStore } from "@/stores/progressStore";
 import { useScenarioAnimationStore } from "@/stores/scenarioAnimationStore";
+import { assertNever } from "@/utils/assertNever";
 
 /**
  * ダイアログと所属セクション、セクション内インデックスをマッピング
@@ -445,20 +447,32 @@ export const useScenarioNavigation = (
       await animationStore.animateLines(addedLines, { animate });
     }
 
-    // resetAll, setBoard等の他のアクションも処理
+    // resetAll, setBoard, remove等の他のアクションも処理
     for (const action of dialogue.boardActions) {
-      if (action.type === "resetAll") {
-        boardStore.resetAll();
-      } else if (action.type === "setBoard") {
-        const boardState = boardStringToBoardState(action.board);
-        boardStore.setBoard(boardState);
+      switch (action.type) {
+        case "resetAll":
+          boardStore.resetAll();
+          break;
+        case "setBoard":
+          boardStore.setBoard(boardStringToBoardState(action.board));
+          break;
+        case "remove":
+          boardStore.removeStone(action.position);
+          break;
+        case "place":
+        case "mark":
+        case "line":
+          // これらは上で別途処理済み（アニメーション付き）
+          break;
+        default:
+          assertNever(action);
       }
     }
   };
 
   /**
    * 指定インデックスまでのダイアログのアクションを適用（アニメーションなし）
-   * resetAll, setBoard, place, mark, line を順次処理
+   * resetAll, setBoard, place, remove, mark, line を順次処理
    */
   const applyActionsUntilDialogueIndex = (
     dialogues: DemoDialogue[],
@@ -472,27 +486,48 @@ export const useScenarioNavigation = (
       const globalIndex = findGlobalDialogueIndex(dialogue);
 
       for (const action of dialogue.boardActions) {
-        if (action.type === "resetAll") {
-          boardStore.resetAll();
-        } else if (action.type === "setBoard") {
-          boardStore.setBoard(boardStringToBoardState(action.board));
-        } else if (action.type === "place") {
-          boardStore.addStones(
-            [{ position: action.position, color: action.color }],
-            globalIndex,
-          );
-        } else if (action.type === "mark") {
-          boardStore.addMarks(
-            [
-              {
-                positions: action.positions,
-                markType: action.markType,
-                label: action.label,
-              },
-            ],
-            globalIndex,
-          );
-        } else if (action.type === "line" && action.action === "draw") {
+        applyBoardAction(action, globalIndex);
+      }
+    }
+  };
+
+  /**
+   * 単一の盤面アクションを適用（アニメーションなし）
+   */
+  const applyBoardAction = (
+    action: BoardAction,
+    dialogueIndex: number,
+  ): void => {
+    switch (action.type) {
+      case "resetAll":
+        boardStore.resetAll();
+        break;
+      case "setBoard":
+        boardStore.setBoard(boardStringToBoardState(action.board));
+        break;
+      case "place":
+        boardStore.addStones(
+          [{ position: action.position, color: action.color }],
+          dialogueIndex,
+        );
+        break;
+      case "remove":
+        boardStore.removeStone(action.position);
+        break;
+      case "mark":
+        boardStore.addMarks(
+          [
+            {
+              positions: action.positions,
+              markType: action.markType,
+              label: action.label,
+            },
+          ],
+          dialogueIndex,
+        );
+        break;
+      case "line":
+        if (action.action === "draw") {
           boardStore.addLines(
             [
               {
@@ -501,10 +536,13 @@ export const useScenarioNavigation = (
                 style: action.style,
               },
             ],
-            globalIndex,
+            dialogueIndex,
           );
         }
-      }
+        // action === "remove" の場合、現状ではサポートなし
+        break;
+      default:
+        assertNever(action);
     }
   };
 
