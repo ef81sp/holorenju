@@ -22,6 +22,7 @@ interface Props {
   cursorPosition?: Position;
   marks?: Mark[];
   lines?: Line[];
+  playerColor?: "black" | "white";
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -33,6 +34,7 @@ const props = withDefaults(defineProps<Props>(), {
   cursorPosition: undefined,
   marks: undefined,
   lines: undefined,
+  playerColor: "black",
 });
 
 // Emits
@@ -316,8 +318,10 @@ onBeforeUnmount(() => {
               interaction.hoveredPosition.value.col,
             ).y,
             radius: layout.STONE_RADIUS.value,
-            fill: '#000',
-            opacity: 0.2,
+            fill: props.playerColor === 'black' ? '#000' : '#fff',
+            stroke: props.playerColor === 'white' ? '#555' : undefined,
+            strokeWidth: props.playerColor === 'white' ? 2 : 0,
+            opacity: 0.4,
           }"
         />
 

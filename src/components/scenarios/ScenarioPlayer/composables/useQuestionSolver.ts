@@ -13,6 +13,31 @@ import { useProgressStore } from "@/stores/progressStore";
 import { evaluateAllConditions, evaluateCondition } from "./problemConditions";
 
 /**
+ * successConditionsからプレイヤーの石色を推論する
+ *
+ * 推論ロジック:
+ * - PositionConditionまたはPatternConditionのcolorを使用
+ * - SequenceConditionの場合は最初のmoveのcolorを使用
+ * - 条件がない場合は"black"をデフォルトとする
+ */
+const getPlayerColorFromConditions = (
+  conditions: SuccessCondition[],
+): "black" | "white" => {
+  for (const condition of conditions) {
+    if (condition.type === "position" || condition.type === "pattern") {
+      return condition.color;
+    }
+    if (condition.type === "sequence" && condition.moves.length > 0) {
+      const [firstMove] = condition.moves;
+      if (firstMove) {
+        return firstMove.color;
+      }
+    }
+  }
+  return "black";
+};
+
+/**
  * 問題セクション固有のロジックを管理するComposable
  *
  * 石の配置、成功条件のチェック、フィードバック表示を担当します。
@@ -108,16 +133,19 @@ export const useQuestionSolver = (
 
     ensureAttemptBaseBoard();
 
-    // 問題セクションでは常に黒石を配置
+    // successConditionsから石色を推論
+    const playerColor = getPlayerColorFromConditions(
+      questionSection.successConditions,
+    );
     const newBoard = cloneBoard(boardStore.board);
     const row = newBoard[position.row];
     if (row) {
-      row[position.col] = "black";
+      row[position.col] = playerColor;
     }
     boardStore.setBoard(newBoard, "question");
 
     console.warn(
-      `[handlePlaceStone] Placed black stone at (${position.row}, ${position.col})`,
+      `[handlePlaceStone] Placed ${playerColor} stone at (${position.row}, ${position.col})`,
     );
 
     // 成功条件をチェック

@@ -15,7 +15,7 @@ import { useQuestionSolver } from "./composables/useQuestionSolver";
 import { useCutinDisplay } from "./composables/useCutinDisplay";
 import { useDialogStore } from "@/stores/dialogStore";
 
-import type { QuestionSection } from "@/types/scenario";
+import type { QuestionSection, SuccessCondition } from "@/types/scenario";
 import type { Position } from "@/types/game";
 import type { TextNode } from "@/types/text";
 
@@ -141,6 +141,36 @@ const descriptionNodes = computed<TextNode[]>(() => {
   return section.description || [];
 });
 
+/**
+ * successConditionsからプレイヤーの石色を推論する
+ */
+const getPlayerColorFromConditions = (
+  conditions: SuccessCondition[],
+): "black" | "white" => {
+  for (const condition of conditions) {
+    if (condition.type === "position" || condition.type === "pattern") {
+      return condition.color;
+    }
+    if (condition.type === "sequence" && condition.moves.length > 0) {
+      const [firstMove] = condition.moves;
+      if (firstMove) {
+        return firstMove.color;
+      }
+    }
+  }
+  return "black";
+};
+
+const playerColor = computed(() => {
+  const section = scenarioNav.currentSection.value;
+  if (section?.type === "question") {
+    return getPlayerColorFromConditions(
+      (section as QuestionSection).successConditions,
+    );
+  }
+  return "black";
+});
+
 const handleSubmitAnswer = (): void => {
   if (
     !scenarioNav.currentSection.value ||
@@ -195,6 +225,7 @@ const handleGoToList = (): void => {
         "
         :stage-size="boardSize"
         :cursor-position="keyboardNav.cursorPosition.value"
+        :player-color="playerColor"
         @place-stone="handlePlaceStone"
       />
       <CutinOverlay

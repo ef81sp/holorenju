@@ -63,6 +63,7 @@ describe("useRenjuBoardInteraction", () => {
         disabled: false,
         allowOverwrite: false,
         boardState: createEmptyBoard(),
+        playerColor: "black" as const,
       };
 
       const { handleStageClick, previewStone } = useRenjuBoardInteraction(
@@ -89,6 +90,7 @@ describe("useRenjuBoardInteraction", () => {
         disabled: false,
         allowOverwrite: false,
         boardState: createEmptyBoard(),
+        playerColor: "black" as const,
       };
 
       const { handleStageClick, previewStone } = useRenjuBoardInteraction(
@@ -115,6 +117,7 @@ describe("useRenjuBoardInteraction", () => {
         disabled: false,
         allowOverwrite: false,
         boardState,
+        playerColor: "black" as const,
       };
 
       const { handleStageClick } = useRenjuBoardInteraction(
@@ -136,6 +139,7 @@ describe("useRenjuBoardInteraction", () => {
         disabled: false,
         allowOverwrite: true,
         boardState,
+        playerColor: "black" as const,
       };
 
       const { handleStageClick } = useRenjuBoardInteraction(
@@ -154,6 +158,7 @@ describe("useRenjuBoardInteraction", () => {
         disabled: true,
         allowOverwrite: false,
         boardState: createEmptyBoard(),
+        playerColor: "black" as const,
       };
 
       const { handleStageClick, previewStone } = useRenjuBoardInteraction(
@@ -173,6 +178,7 @@ describe("useRenjuBoardInteraction", () => {
         disabled: false,
         allowOverwrite: false,
         boardState: createEmptyBoard(),
+        playerColor: "black" as const,
       };
 
       const { handleStageClick } = useRenjuBoardInteraction(
@@ -199,6 +205,7 @@ describe("useRenjuBoardInteraction", () => {
         disabled: false,
         allowOverwrite: false,
         boardState: createEmptyBoard(),
+        playerColor: "black" as const,
       };
 
       const { handleStageMouseMove, hoveredPosition } =
@@ -222,6 +229,7 @@ describe("useRenjuBoardInteraction", () => {
         disabled: false,
         allowOverwrite: false,
         boardState,
+        playerColor: "black" as const,
       };
 
       const { handleStageMouseMove, hoveredPosition } =
@@ -245,6 +253,7 @@ describe("useRenjuBoardInteraction", () => {
         disabled: false,
         allowOverwrite: true,
         boardState,
+        playerColor: "black" as const,
       };
 
       const { handleStageMouseMove, hoveredPosition } =
@@ -264,6 +273,7 @@ describe("useRenjuBoardInteraction", () => {
         disabled: true,
         allowOverwrite: false,
         boardState: createEmptyBoard(),
+        playerColor: "black" as const,
       };
 
       const { handleStageMouseMove, hoveredPosition } =
@@ -284,6 +294,7 @@ describe("useRenjuBoardInteraction", () => {
         disabled: false,
         allowOverwrite: false,
         boardState: createEmptyBoard(),
+        playerColor: "black" as const,
       };
 
       const { handleStageMouseMove, hoveredPosition } =
@@ -311,6 +322,7 @@ describe("useRenjuBoardInteraction", () => {
         disabled: false,
         allowOverwrite: false,
         boardState: createEmptyBoard(),
+        playerColor: "black" as const,
       };
 
       const { handleStageMouseMove, handleStageMouseLeave, hoveredPosition } =
@@ -338,6 +350,7 @@ describe("useRenjuBoardInteraction", () => {
         disabled: false,
         allowOverwrite: false,
         boardState: createEmptyBoard(),
+        playerColor: "black" as const,
       };
 
       const { handleStageMouseMove, hoveredPosition } =
@@ -361,6 +374,7 @@ describe("useRenjuBoardInteraction", () => {
         disabled: false,
         allowOverwrite: false,
         boardState: createEmptyBoard(),
+        playerColor: "black" as const,
       };
 
       const { handleStageMouseMove, hoveredPosition } =
@@ -382,6 +396,7 @@ describe("useRenjuBoardInteraction", () => {
         disabled: false,
         allowOverwrite: false,
         boardState: createEmptyBoard(),
+        playerColor: "black" as const,
       };
 
       const { handleStageClick, previewStone } = useRenjuBoardInteraction(

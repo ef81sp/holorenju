@@ -11,6 +11,7 @@ export function useRenjuBoardInteraction(
     disabled: boolean;
     allowOverwrite: boolean;
     boardState: BoardState;
+    playerColor: "black" | "white";
   },
   layout: LayoutType,
   emit: (event: string, ...args: unknown[]) => void,
@@ -89,7 +90,7 @@ export function useRenjuBoardInteraction(
     } else {
       // 新しい位置を仮指定
       previewStone.value = {
-        color: "black",
+        color: props.playerColor,
         position,
       };
     }
