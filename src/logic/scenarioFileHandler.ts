@@ -10,7 +10,11 @@ import {
   type DemoSection,
   type QuestionSection,
 } from "../types/scenario";
-import { parseScenario, validateBoardState } from "./scenarioParser";
+import {
+  parseScenario,
+  validateBoardState,
+  DEFAULT_FEEDBACK,
+} from "./scenarioParser";
 
 // ===== ファイル読み込み =====
 
@@ -201,10 +205,7 @@ export function createEmptyQuestionSection(): QuestionSection {
         color: "black" as const,
       },
     ],
-    feedback: {
-      success: [{ character: "fubuki", text: [], emotion: 0 }],
-      failure: [{ character: "fubuki", text: [], emotion: 0 }],
-    },
+    feedback: DEFAULT_FEEDBACK,
   };
 }
 

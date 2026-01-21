@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { parseScenario, validateBoardState } from "./scenarioParser";
+import {
+  parseScenario,
+  validateBoardState,
+  DEFAULT_FEEDBACK,
+} from "./scenarioParser";
 
 // 有効な15x15の空盤面
 const EMPTY_BOARD = Array(15).fill("-".repeat(15));
@@ -400,6 +404,99 @@ describe("parseScenario", () => {
       };
 
       expect(() => parseScenario(scenario)).toThrow("must not be empty");
+    });
+  });
+
+  describe("フィードバックのデフォルト値", () => {
+    it("feedbackが省略された場合はデフォルト値が適用される", () => {
+      const questionWithoutFeedback = {
+        id: "question1",
+        type: "question",
+        title: "問題セクション",
+        initialBoard: EMPTY_BOARD,
+        description: "問題の説明",
+        dialogues: [validDialogue],
+        successConditions: [
+          {
+            type: "position",
+            positions: [{ row: 7, col: 7 }],
+            color: "black",
+          },
+        ],
+        // feedbackを省略
+      };
+      const scenario = {
+        ...validScenario,
+        sections: [questionWithoutFeedback],
+      };
+
+      const result = parseScenario(scenario);
+      const [section] = result.sections;
+      if (section.type === "question") {
+        expect(section.feedback).toEqual(DEFAULT_FEEDBACK);
+      }
+    });
+
+    it("feedback.successが省略された場合はデフォルト値が適用される", () => {
+      const questionWithPartialFeedback = {
+        ...validQuestionSection,
+        feedback: {
+          // successを省略
+          failure: [
+            {
+              character: "miko",
+              text: [{ type: "text", content: "残念…" }],
+              emotion: 10,
+            },
+          ],
+        },
+      };
+      const scenario = {
+        ...validScenario,
+        sections: [questionWithPartialFeedback],
+      };
+
+      const result = parseScenario(scenario);
+      const [section] = result.sections;
+      if (section.type === "question") {
+        expect(section.feedback.success).toEqual(DEFAULT_FEEDBACK.success);
+        expect(section.feedback.failure[0].character).toBe("miko");
+        expect(section.feedback.failure[0].text[0]).toEqual({
+          type: "text",
+          content: "残念…",
+        });
+      }
+    });
+
+    it("feedback.failureが省略された場合はデフォルト値が適用される", () => {
+      const questionWithPartialFeedback = {
+        ...validQuestionSection,
+        feedback: {
+          success: [
+            {
+              character: "fubuki",
+              text: [{ type: "text", content: "やったね！" }],
+              emotion: 5,
+            },
+          ],
+          // failureを省略
+        },
+      };
+      const scenario = {
+        ...validScenario,
+        sections: [questionWithPartialFeedback],
+      };
+
+      const result = parseScenario(scenario);
+      const [section] = result.sections;
+      if (section.type === "question") {
+        expect(section.feedback.success[0].character).toBe("fubuki");
+        expect(section.feedback.success[0].text[0]).toEqual({
+          type: "text",
+          content: "やったね！",
+        });
+        expect(section.feedback.failure).toEqual(DEFAULT_FEEDBACK.failure);
+      }
     });
   });
 

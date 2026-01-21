@@ -26,6 +26,26 @@ import {
 import { parseText, parseInlineTextFromString } from "./textParser";
 
 /**
+ * フィードバックのデフォルト値
+ */
+export const DEFAULT_FEEDBACK: QuestionFeedback = {
+  success: [
+    {
+      character: "fubuki",
+      text: [{ type: "text", content: "ないすー！" }],
+      emotion: 37,
+    },
+  ],
+  failure: [
+    {
+      character: "miko",
+      text: [{ type: "text", content: "おうおうおう……" }],
+      emotion: 34,
+    },
+  ],
+};
+
+/**
  * 数値を0-39にクランプしてEmotionIdとして返す
  */
 function toEmotionId(n: unknown): EmotionId {
@@ -462,10 +482,9 @@ function validateMoveArray(
 }
 
 /**
- * ヒント配列をバリデーション
- */
-/**
  * フィードバックをバリデーション
+ * feedbackが省略された場合、またはsuccess/failureが個別に省略された場合は
+ * デフォルト値を適用する
  */
 function validateFeedback(
   data: Record<string, unknown>,
@@ -474,20 +493,24 @@ function validateFeedback(
 ): QuestionFeedback {
   const value = data[key];
 
+  // feedbackが省略された場合はデフォルト値を返す
+  if (value === undefined) {
+    return DEFAULT_FEEDBACK;
+  }
+
   if (!isObject(value)) {
     throw new Error(`${path} must be an object`);
   }
 
-  const success = validateDialogueLineArray(
-    value,
-    "success",
-    `${path}.success`,
-  );
-  const failure = validateDialogueLineArray(
-    value,
-    "failure",
-    `${path}.failure`,
-  );
+  // success/failureが省略されている場合は個別にデフォルト値を適用
+  const success =
+    value.success === undefined
+      ? DEFAULT_FEEDBACK.success
+      : validateDialogueLineArray(value, "success", `${path}.success`);
+  const failure =
+    value.failure === undefined
+      ? DEFAULT_FEEDBACK.failure
+      : validateDialogueLineArray(value, "failure", `${path}.failure`);
   const progress = value.progress
     ? validateDialogueLineArray(value, "progress", `${path}.progress`)
     : undefined;
