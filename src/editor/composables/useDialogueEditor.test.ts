@@ -6,10 +6,14 @@ import { useDialogueEditor, type DialogueSection } from "./useDialogueEditor";
 
 // editorStoreとscenarioFileHandlerをモック
 const mockUpdateCurrentSection = vi.fn();
+const mockGoToLastDialogue = vi.fn();
+const mockGoToDialogueIndex = vi.fn();
 
 vi.mock("@/editor/stores/editorStore", () => ({
   useEditorStore: () => ({
     updateCurrentSection: mockUpdateCurrentSection,
+    goToLastDialogue: mockGoToLastDialogue,
+    goToDialogueIndex: mockGoToDialogueIndex,
   }),
 }));
 
