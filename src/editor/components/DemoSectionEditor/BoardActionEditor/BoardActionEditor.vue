@@ -91,6 +91,10 @@ const handleMarkTypeUpdate = (markType: "circle" | "cross" | "arrow"): void => {
   emit("update-mark-meta", { markType });
 };
 
+const handleMarkActionUpdate = (action: "draw" | "remove"): void => {
+  emit("update-mark-meta", { action });
+};
+
 const handleMarkPositionUpdate = (
   posIndex: number,
   field: "row" | "col",
@@ -168,6 +172,7 @@ const handleLineStyleUpdate = (style: "solid" | "dashed"): void => {
       @update-position="handleMarkPositionUpdate"
       @remove-position="(posIndex) => emit('remove-mark-position', posIndex)"
       @update-mark-type="handleMarkTypeUpdate"
+      @update-action="handleMarkActionUpdate"
     />
 
     <LineActionForm

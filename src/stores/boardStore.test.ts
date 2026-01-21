@@ -304,6 +304,117 @@ describe("boardStore", () => {
         expect(store.marks).toEqual([]);
       });
     });
+
+    describe("removeMarks", () => {
+      it("位置とmarkTypeが一致するマークを削除", () => {
+        const store = useBoardStore();
+        store.addMarks(
+          [{ positions: [{ row: 7, col: 7 }], markType: "circle" }],
+          0,
+        );
+        expect(store.marks).toHaveLength(1);
+
+        store.removeMarks([
+          { positions: [{ row: 7, col: 7 }], markType: "circle" },
+        ]);
+
+        expect(store.marks).toHaveLength(0);
+      });
+
+      it("markTypeが一致しない場合は削除しない", () => {
+        const store = useBoardStore();
+        store.addMarks(
+          [{ positions: [{ row: 7, col: 7 }], markType: "circle" }],
+          0,
+        );
+
+        store.removeMarks([
+          { positions: [{ row: 7, col: 7 }], markType: "cross" },
+        ]);
+
+        expect(store.marks).toHaveLength(1);
+      });
+
+      it("位置が一致しない場合は削除しない", () => {
+        const store = useBoardStore();
+        store.addMarks(
+          [{ positions: [{ row: 7, col: 7 }], markType: "circle" }],
+          0,
+        );
+
+        store.removeMarks([
+          { positions: [{ row: 8, col: 8 }], markType: "circle" },
+        ]);
+
+        expect(store.marks).toHaveLength(1);
+      });
+
+      it("複数位置のマークを削除できる", () => {
+        const store = useBoardStore();
+        store.addMarks(
+          [
+            {
+              positions: [
+                { row: 7, col: 7 },
+                { row: 7, col: 8 },
+              ],
+              markType: "arrow",
+            },
+          ],
+          0,
+        );
+        expect(store.marks).toHaveLength(1);
+
+        store.removeMarks([
+          {
+            positions: [
+              { row: 7, col: 7 },
+              { row: 7, col: 8 },
+            ],
+            markType: "arrow",
+          },
+        ]);
+
+        expect(store.marks).toHaveLength(0);
+      });
+
+      it("複数のマークを一括削除できる", () => {
+        const store = useBoardStore();
+        store.addMarks(
+          [
+            { positions: [{ row: 7, col: 7 }], markType: "circle" },
+            { positions: [{ row: 8, col: 8 }], markType: "cross" },
+          ],
+          0,
+        );
+        expect(store.marks).toHaveLength(2);
+
+        store.removeMarks([
+          { positions: [{ row: 7, col: 7 }], markType: "circle" },
+          { positions: [{ row: 8, col: 8 }], markType: "cross" },
+        ]);
+
+        expect(store.marks).toHaveLength(0);
+      });
+
+      it("一部のマークのみ削除できる", () => {
+        const store = useBoardStore();
+        store.addMarks(
+          [
+            { positions: [{ row: 7, col: 7 }], markType: "circle" },
+            { positions: [{ row: 8, col: 8 }], markType: "cross" },
+          ],
+          0,
+        );
+
+        store.removeMarks([
+          { positions: [{ row: 7, col: 7 }], markType: "circle" },
+        ]);
+
+        expect(store.marks).toHaveLength(1);
+        expect(store.marks[0].markType).toBe("cross");
+      });
+    });
   });
 
   describe("ライン管理", () => {

@@ -12,6 +12,7 @@ const emit = defineEmits<{
   "update-position": [posIndex: number, field: "row" | "col", value: number];
   "remove-position": [posIndex: number];
   "update-mark-type": [markType: "circle" | "cross" | "arrow"];
+  "update-action": [action: "draw" | "remove"];
 }>();
 
 const positions = computed(() => props.action.positions);
@@ -20,6 +21,13 @@ const markType = computed({
   get: (): string => props.action.markType,
   set: (value: string) => {
     emit("update-mark-type", value as "circle" | "cross" | "arrow");
+  },
+});
+
+const markAction = computed({
+  get: (): string => props.action.action ?? "draw",
+  set: (value: string) => {
+    emit("update-action", value as "draw" | "remove");
   },
 });
 
@@ -43,6 +51,14 @@ const handleRemovePosition = (posIndex: number): void => {
 <template>
   <div class="action-form">
     <div class="inline-fields">
+      <label class="field field-small">
+        <span>動作</span>
+        <select v-model="markAction">
+          <option value="draw">描画</option>
+          <option value="remove">削除</option>
+        </select>
+      </label>
+
       <label class="field field-small">
         <span>マーク</span>
         <select v-model="markType">

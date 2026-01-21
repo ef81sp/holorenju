@@ -45,6 +45,35 @@ export interface Mark {
 }
 
 /**
+ * マークの識別情報（positions と markType）
+ */
+export interface MarkIdentifier {
+  positions: Position[];
+  markType: "circle" | "cross" | "arrow";
+}
+
+/**
+ * マークが識別情報と一致するかを判定
+ */
+export function isMarkMatching(
+  mark: Pick<Mark, "positions" | "markType">,
+  target: MarkIdentifier,
+): boolean {
+  if (mark.markType !== target.markType) {
+    return false;
+  }
+  if (mark.positions.length !== target.positions.length) {
+    return false;
+  }
+  return target.positions.every((targetPos, index) => {
+    const markPos = mark.positions[index];
+    return (
+      markPos && targetPos.row === markPos.row && targetPos.col === markPos.col
+    );
+  });
+}
+
+/**
  * シナリオ用のラインオブジェクト
  */
 export interface Line {
@@ -276,6 +305,19 @@ export const useBoardStore = defineStore("board", () => {
     marks.value = [];
   }
 
+  /**
+   * 指定条件に一致するマークを削除
+   * positions と markType が一致するマークを削除
+   */
+  function removeMarks(targetMarks: MarkIdentifier[]): void {
+    marks.value = marks.value.filter((mark) => {
+      const shouldRemove = targetMarks.some((target) =>
+        isMarkMatching(mark, target),
+      );
+      return !shouldRemove;
+    });
+  }
+
   // --- ライン管理 ---
 
   /**
@@ -349,6 +391,7 @@ export const useBoardStore = defineStore("board", () => {
     // マーク・ライン
     addMarks,
     clearMarks,
+    removeMarks,
     addLines,
     clearLines,
     resetAll,

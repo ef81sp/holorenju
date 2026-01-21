@@ -12,7 +12,7 @@ import type {
 } from "@/types/scenario";
 import type { BoardState, StoneColor } from "@/types/game";
 import type { CharacterType, EmotionId } from "@/types/character";
-import type { Mark, Line } from "@/stores/boardStore";
+import { isMarkMatching, type Mark, type Line } from "@/stores/boardStore";
 import { assertNever } from "@/utils/assertNever";
 
 const editorStore = useEditorStore();
@@ -159,6 +159,20 @@ const currentBoard = computed(() => {
   return board;
 });
 
+// マーク配列から一致するマークを削除
+const removeMatchingMark = (
+  marks: Mark[],
+  target: {
+    positions: { row: number; col: number }[];
+    markType: Mark["markType"];
+  },
+): void => {
+  const removeIndex = marks.findIndex((m) => isMarkMatching(m, target));
+  if (removeIndex >= 0) {
+    marks.splice(removeIndex, 1);
+  }
+};
+
 // 現在のダイアログまでのmark/lineアクションを収集
 const currentMarks = computed<Mark[]>(() => {
   if (!previewContent.value || previewContent.value.type !== "demo") {
@@ -181,17 +195,28 @@ const currentMarks = computed<Mark[]>(() => {
           markCounter = 0;
           break;
         case "mark":
-          marks.push({
-            id: `preview-mark-${markCounter++}`,
-            positions: action.positions,
-            markType: action.markType,
-            label: action.label,
-            placedAtDialogueIndex: i,
-          });
+          if (action.action === "remove") {
+            removeMatchingMark(marks, {
+              positions: action.positions,
+              markType: action.markType,
+            });
+          } else {
+            // draw または undefined（デフォルト）
+            marks.push({
+              id: `preview-mark-${markCounter++}`,
+              positions: action.positions,
+              markType: action.markType,
+              label: action.label,
+              placedAtDialogueIndex: i,
+            });
+          }
+          break;
+        case "setBoard":
+          marks.length = 0;
+          markCounter = 0;
           break;
         case "place":
         case "remove":
-        case "setBoard":
         case "line":
           // マーク以外のアクションは無視
           break;

@@ -313,7 +313,10 @@ function validateBoardAction(data: unknown, path: string): BoardAction {
       const label = data.label
         ? validateString(data, "label", `${path}.label`)
         : undefined;
-      return { type: "mark", positions, markType, label };
+      const action = data.action
+        ? validateEnum(data, "action", ["draw", "remove"], `${path}.action`)
+        : undefined;
+      return { type: "mark", positions, markType, label, action };
     }
 
     case "line": {

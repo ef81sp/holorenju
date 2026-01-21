@@ -101,6 +101,7 @@ export function useBoardActions(
           type: "mark",
           positions: [],
           markType: "circle",
+          action: "draw",
         };
       case "line":
         return {

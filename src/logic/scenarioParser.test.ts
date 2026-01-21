@@ -189,6 +189,109 @@ describe("parseScenario", () => {
       }
     });
 
+    it("mark操作のaction=drawを正しくパースできる", () => {
+      const dialogueWithMark = {
+        ...validDialogue,
+        boardActions: [
+          {
+            type: "mark",
+            positions: [{ row: 7, col: 7 }],
+            markType: "circle",
+            action: "draw",
+          },
+        ],
+      };
+      const scenario = {
+        ...validScenario,
+        sections: [{ ...validDemoSection, dialogues: [dialogueWithMark] }],
+      };
+
+      const result = parseScenario(scenario);
+      const [section] = result.sections;
+      if (section.type === "demo") {
+        const [action] = section.dialogues[0].boardActions;
+        expect(action.type).toBe("mark");
+        if (action.type === "mark") {
+          expect(action.action).toBe("draw");
+        }
+      }
+    });
+
+    it("mark操作のaction=removeを正しくパースできる", () => {
+      const dialogueWithMark = {
+        ...validDialogue,
+        boardActions: [
+          {
+            type: "mark",
+            positions: [{ row: 7, col: 7 }],
+            markType: "circle",
+            action: "remove",
+          },
+        ],
+      };
+      const scenario = {
+        ...validScenario,
+        sections: [{ ...validDemoSection, dialogues: [dialogueWithMark] }],
+      };
+
+      const result = parseScenario(scenario);
+      const [section] = result.sections;
+      if (section.type === "demo") {
+        const [action] = section.dialogues[0].boardActions;
+        expect(action.type).toBe("mark");
+        if (action.type === "mark") {
+          expect(action.action).toBe("remove");
+        }
+      }
+    });
+
+    it("mark操作のaction省略時はundefinedになる", () => {
+      const dialogueWithMark = {
+        ...validDialogue,
+        boardActions: [
+          {
+            type: "mark",
+            positions: [{ row: 7, col: 7 }],
+            markType: "circle",
+          },
+        ],
+      };
+      const scenario = {
+        ...validScenario,
+        sections: [{ ...validDemoSection, dialogues: [dialogueWithMark] }],
+      };
+
+      const result = parseScenario(scenario);
+      const [section] = result.sections;
+      if (section.type === "demo") {
+        const [action] = section.dialogues[0].boardActions;
+        expect(action.type).toBe("mark");
+        if (action.type === "mark") {
+          expect(action.action).toBeUndefined();
+        }
+      }
+    });
+
+    it("mark操作の無効なactionはエラー", () => {
+      const dialogueWithMark = {
+        ...validDialogue,
+        boardActions: [
+          {
+            type: "mark",
+            positions: [{ row: 7, col: 7 }],
+            markType: "circle",
+            action: "invalid",
+          },
+        ],
+      };
+      const scenario = {
+        ...validScenario,
+        sections: [{ ...validDemoSection, dialogues: [dialogueWithMark] }],
+      };
+
+      expect(() => parseScenario(scenario)).toThrow("must be one of");
+    });
+
     it("line操作を正しくパースできる", () => {
       const dialogueWithLine = {
         ...validDialogue,

@@ -6,6 +6,7 @@ import type {
   DemoDialogue,
   BoardAction,
   LineAction,
+  MarkAction,
 } from "@/types/scenario";
 import type { TextNode } from "@/types/text";
 
@@ -462,19 +463,35 @@ export const useScenarioNavigation = (
       await animationStore.animateStones(addedStones, { animate });
     }
 
-    // markアクションの追加
-    const markActions = dialogue.boardActions.filter((a) => a.type === "mark");
-    if (markActions.length > 0) {
+    // markアクション（remove）を先に処理
+    const markRemoveActions = dialogue.boardActions.filter(
+      (a): a is MarkAction => a.type === "mark" && a.action === "remove",
+    );
+    if (markRemoveActions.length > 0) {
+      boardStore.removeMarks(
+        markRemoveActions.map((a) => ({
+          positions: a.positions,
+          markType: a.markType,
+        })),
+      );
+    }
+
+    // markアクション（draw）の追加
+    const markDrawActions = dialogue.boardActions.filter(
+      (a): a is MarkAction =>
+        a.type === "mark" && (a.action === "draw" || a.action === undefined),
+    );
+    if (markDrawActions.length > 0) {
       // アニメーション対象のIDを先行登録（描画時に半透明になるように）
       if (animate) {
-        const markIds = markActions.map(
+        const markIds = markDrawActions.map(
           (_, i) => `${currentDialogueIndex.value}-mark-${i}`,
         );
         animationStore.prepareForAnimation(markIds);
       }
 
       const addedMarks = boardStore.addMarks(
-        markActions.map((a) => ({
+        markDrawActions.map((a) => ({
           positions: a.positions,
           markType: a.markType,
           label: a.label,
@@ -519,6 +536,7 @@ export const useScenarioNavigation = (
             boardStringToBoardState(action.board),
             currentDialogueIndex.value,
           );
+          boardStore.clearMarks();
           break;
         case "remove":
           boardStore.removeStone(action.position);
@@ -571,6 +589,7 @@ export const useScenarioNavigation = (
           boardStringToBoardState(action.board),
           dialogueIndex,
         );
+        boardStore.clearMarks();
         break;
       case "place":
         boardStore.addStones(
@@ -582,16 +601,26 @@ export const useScenarioNavigation = (
         boardStore.removeStone(action.position);
         break;
       case "mark":
-        boardStore.addMarks(
-          [
+        if (action.action === "remove") {
+          boardStore.removeMarks([
             {
               positions: action.positions,
               markType: action.markType,
-              label: action.label,
             },
-          ],
-          dialogueIndex,
-        );
+          ]);
+        } else {
+          // draw または undefined（デフォルト）
+          boardStore.addMarks(
+            [
+              {
+                positions: action.positions,
+                markType: action.markType,
+                label: action.label,
+              },
+            ],
+            dialogueIndex,
+          );
+        }
         break;
       case "line":
         if (action.action === "draw") {

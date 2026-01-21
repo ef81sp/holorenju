@@ -94,7 +94,7 @@ describe("useBoardActions", () => {
       }
     });
 
-    it("mark: 空positions、circle", () => {
+    it("mark: 空positions、circle、action=draw", () => {
       const { createBoardAction } = useBoardActions(
         getCurrentSection,
         updateDialogue,
@@ -106,6 +106,7 @@ describe("useBoardActions", () => {
         type: "mark",
         positions: [],
         markType: "circle",
+        action: "draw",
       });
     });
 

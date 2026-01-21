@@ -83,6 +83,7 @@ interface MarkAction {
   positions: Position[];
   markType: "circle" | "cross" | "arrow";
   label?: string;
+  action?: "draw" | "remove";
 }
 
 interface LineAction {
