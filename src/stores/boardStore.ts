@@ -15,6 +15,14 @@ import type { BoardState, Position, StoneColor } from "@/types/game";
 import { createEmptyBoard } from "@/logic/renjuRules";
 
 /**
+ * ダイアログインデックスの型
+ * - number: デモセクションのダイアログインデックス
+ * - 'initial': 初期盤面
+ * - 'question': 問題セクションでの解答
+ */
+export type DialogueIndex = number | "initial" | "question";
+
+/**
  * シナリオ用の石オブジェクト
  * どのダイアログで配置されたかを追跡
  */
@@ -22,7 +30,7 @@ export interface Stone {
   id: string;
   position: Position;
   color: StoneColor;
-  placedAtDialogueIndex: number;
+  placedAtDialogueIndex: DialogueIndex;
 }
 
 /**
@@ -33,7 +41,7 @@ export interface Mark {
   positions: Position[];
   markType: "circle" | "cross" | "arrow";
   label?: string;
-  placedAtDialogueIndex: number;
+  placedAtDialogueIndex: DialogueIndex;
 }
 
 /**
@@ -44,7 +52,7 @@ export interface Line {
   fromPosition: Position;
   toPosition: Position;
   style: "solid" | "dashed";
-  placedAtDialogueIndex: number;
+  placedAtDialogueIndex: DialogueIndex;
 }
 
 export const useBoardStore = defineStore("board", () => {
@@ -83,9 +91,12 @@ export const useBoardStore = defineStore("board", () => {
   /**
    * 盤面を一括設定（stonesに変換）
    * @param newBoard 新しい盤面状態
-   * @param dialogueIndex 配置時のダイアログインデックス（デフォルト: -1）
+   * @param dialogueIndex 配置時のダイアログインデックス（デフォルト: 'initial'）
    */
-  function setBoard(newBoard: BoardState, dialogueIndex = -1): void {
+  function setBoard(
+    newBoard: BoardState,
+    dialogueIndex: DialogueIndex = "initial",
+  ): void {
     const newStones: Stone[] = [];
     for (let row = 0; row < newBoard.length; row++) {
       const rowData = newBoard[row];
@@ -114,7 +125,7 @@ export const useBoardStore = defineStore("board", () => {
   function placeStone(
     position: Position,
     color: StoneColor,
-    options?: { animate?: boolean; dialogueIndex?: number },
+    options?: { animate?: boolean; dialogueIndex?: DialogueIndex },
   ): {
     success: boolean;
     message?: string;
@@ -124,7 +135,7 @@ export const useBoardStore = defineStore("board", () => {
       return { message: "すでに石が置かれています", success: false };
     }
 
-    const index = options?.dialogueIndex ?? -1;
+    const index = options?.dialogueIndex ?? "initial";
     const id = `${index}-${position.row}-${position.col}`;
 
     stones.value.push({

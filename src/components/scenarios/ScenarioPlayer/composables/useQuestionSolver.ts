@@ -65,7 +65,7 @@ export const useQuestionSolver = (
 
   const restoreAttemptBoard = (): void => {
     if (attemptBaseBoard) {
-      boardStore.setBoard(cloneBoard(attemptBaseBoard));
+      boardStore.setBoard(cloneBoard(attemptBaseBoard), "question");
     }
   };
 
@@ -114,7 +114,7 @@ export const useQuestionSolver = (
     if (row) {
       row[position.col] = "black";
     }
-    boardStore.setBoard(newBoard);
+    boardStore.setBoard(newBoard, "question");
 
     console.warn(
       `[handlePlaceStone] Placed black stone at (${position.row}, ${position.col})`,

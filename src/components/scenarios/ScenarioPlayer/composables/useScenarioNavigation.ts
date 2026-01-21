@@ -1,6 +1,5 @@
 import { computed, ref, type ComputedRef, type Ref } from "vue";
 
-import type { BoardState } from "@/types/game";
 import type {
   Scenario,
   Section,
@@ -36,9 +35,9 @@ interface DialogueMapping {
 
 /**
  * 盤面スナップショット（キャッシュ用）
+ * SSoT: stonesをキャッシュし、boardはstonesから導出
  */
 interface BoardSnapshot {
-  board: BoardState;
   stones: Stone[];
   marks: Mark[];
   lines: Line[];
@@ -200,7 +199,7 @@ export const useScenarioNavigation = (
           currentSection.value.initialBoard,
         );
         animationStore.cancelOngoingAnimations();
-        boardStore.setBoard(boardState, -1);
+        boardStore.setBoard(boardState, "initial");
         boardStore.clearMarks();
         boardStore.clearLines();
       }
@@ -254,7 +253,7 @@ export const useScenarioNavigation = (
         if (newSection) {
           const boardState = boardStringToBoardState(newSection.initialBoard);
           animationStore.cancelOngoingAnimations();
-          boardStore.setBoard(boardState, -1);
+          boardStore.setBoard(boardState, "initial");
           boardStore.clearMarks();
           boardStore.clearLines();
           currentSectionIndex.value = mapping.sectionIndex;
@@ -310,7 +309,7 @@ export const useScenarioNavigation = (
     if (section) {
       const boardState = boardStringToBoardState(section.initialBoard);
       animationStore.cancelOngoingAnimations();
-      boardStore.setBoard(boardState, -1);
+      boardStore.setBoard(boardState, "initial");
       boardStore.clearMarks();
       boardStore.clearLines();
 
@@ -575,7 +574,6 @@ export const useScenarioNavigation = (
       boardCache.value.set(sectionIndex, new Map());
     }
     boardCache.value.get(sectionIndex)?.set(dialogueIndex, {
-      board: boardStore.board.map((row) => [...row]),
       stones: boardStore.stones.map((s) => ({ ...s })),
       marks: boardStore.marks.map((m) => ({
         ...m,
@@ -643,7 +641,7 @@ export const useScenarioNavigation = (
         currentSection.value.initialBoard,
       );
       animationStore.cancelOngoingAnimations();
-      boardStore.setBoard(boardState, -1);
+      boardStore.setBoard(boardState, "initial");
       boardStore.clearMarks();
       boardStore.clearLines();
 
