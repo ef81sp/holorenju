@@ -50,12 +50,19 @@ pnpm build         # Production build
 
 ## Development Guidelines
 
+### package manager / scripts
+
+- Use `pnpm` for package management
+- Don't use `npx`. Run scripts via `pnpm <script>`.
+- Write a README document near any component or module with non-trivial logic.
+
 ### Vue/TypeScript
 
 - Use `<script setup lang="ts">` with generic-style defineProps
 - Use `<dialog>` element for modals (see existing components)
 - When referencing component methods via refs, use optional chaining (`ref?.method()`)
 - Keep SFCs under ~400 lines; extract composables or split components
+- When handling union types, don't use if-else chains; use type guards or switch statements
 
 ### CSS
 
