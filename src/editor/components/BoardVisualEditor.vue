@@ -21,6 +21,8 @@ const emit = defineEmits<{
 
 // State
 const showDebugInfo = ref(false);
+const showPasteInput = ref(false);
+const pasteInputText = ref("");
 const hoveredPosition = ref<Position | null>(null);
 
 // Convert board string array to BoardState
@@ -57,33 +59,55 @@ const handleReset = (): void => {
   emit("update:board", emptyBoard);
 };
 
-const handleLoadFromClipboard = async (): Promise<void> => {
-  try {
-    const text = await navigator.clipboard.readText();
-    const lines = text.split("\n").filter((line) => line.trim());
+// 盤面テキストを検証してパース
+const parseBoardText = (text: string): string[] | null => {
+  const normalizedText = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  const lines = normalizedText
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
 
-    if (lines.length !== 15) {
-      console.warn(`盤面は15行である必要があります。現在: ${lines.length}行`);
-      return;
-    }
-
-    for (const line of lines) {
-      if (line.length !== 15) {
-        console.warn("各行は15文字である必要があります。");
-        return;
-      }
-      if (!/^[-xo]{15}$/.test(line)) {
-        console.warn(
-          "無効な文字が含まれています。-(未指定), x(黒), o(白) のみ使用可能です。",
-        );
-        return;
-      }
-    }
-
-    emit("update:board", lines);
-  } catch (err) {
-    console.error("クリップボードの読み取りに失敗しました", err);
+  if (lines.length !== 15) {
+    alert(`盤面は15行である必要があります。現在: ${lines.length}行`);
+    return null;
   }
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (!line || line.length !== 15) {
+      alert(
+        `行${i + 1}: 各行は15文字である必要があります。現在: ${line?.length ?? 0}文字`,
+      );
+      return null;
+    }
+    if (!/^[-xo]{15}$/.test(line)) {
+      alert(
+        `行${i + 1}: 無効な文字が含まれています。-(未指定), x(黒), o(白) のみ使用可能です。`,
+      );
+      return null;
+    }
+  }
+
+  return lines;
+};
+
+const handleOpenPasteInput = (): void => {
+  pasteInputText.value = "";
+  showPasteInput.value = true;
+};
+
+const handleApplyPasteInput = (): void => {
+  const lines = parseBoardText(pasteInputText.value);
+  if (lines) {
+    emit("update:board", lines);
+    showPasteInput.value = false;
+    pasteInputText.value = "";
+  }
+};
+
+const handleCancelPasteInput = (): void => {
+  showPasteInput.value = false;
+  pasteInputText.value = "";
 };
 
 const handleCopyToClipboard = async (): Promise<void> => {
@@ -107,13 +131,15 @@ const handleHover = (position: Position | null): void => {
       <h3>盤面エディタ</h3>
       <div class="editor-controls">
         <button
+          type="button"
           class="btn-small"
-          title="クリップボードから盤面を読み込み"
-          @click="handleLoadFromClipboard"
+          title="テキストから盤面を読み込み"
+          @click="handleOpenPasteInput"
         >
           📋 読込
         </button>
         <button
+          type="button"
           class="btn-small"
           title="クリップボードに盤面をコピー"
           @click="handleCopyToClipboard"
@@ -121,6 +147,7 @@ const handleHover = (position: Position | null): void => {
           📋 コピー
         </button>
         <button
+          type="button"
           class="btn-small btn-danger"
           title="盤面をリセット"
           @click="handleReset"
@@ -128,6 +155,7 @@ const handleHover = (position: Position | null): void => {
           🔄 リセット
         </button>
         <button
+          type="button"
           class="btn-small"
           title="デバッグ情報の表示/非表示"
           @click="showDebugInfo = !showDebugInfo"
@@ -164,6 +192,42 @@ const handleHover = (position: Position | null): void => {
         <div class="board-code">
           <h5>盤面コード:</h5>
           <pre>{{ JSON.stringify(board, null, 2) }}</pre>
+        </div>
+      </div>
+
+      <div
+        v-if="showPasteInput"
+        class="paste-input-panel"
+      >
+        <h4>盤面テキストを貼り付け</h4>
+        <p class="paste-hint">
+          15行×15文字の盤面をペーストしてください<br />
+          (-, x, o のみ使用可能)
+        </p>
+        <textarea
+          v-model="pasteInputText"
+          class="paste-textarea"
+          placeholder="---------------
+---------------
+---------------
+..."
+          rows="15"
+        />
+        <div class="paste-buttons">
+          <button
+            type="button"
+            class="btn-small"
+            @click="handleApplyPasteInput"
+          >
+            適用
+          </button>
+          <button
+            type="button"
+            class="btn-small"
+            @click="handleCancelPasteInput"
+          >
+            キャンセル
+          </button>
         </div>
       </div>
     </div>
@@ -294,6 +358,44 @@ const handleHover = (position: Position | null): void => {
   margin: 0;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.paste-input-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1rem;
+  background-color: #f5f5f5;
+  border-radius: 4px;
+  border: 1px solid #ddd;
+  min-width: 200px;
+}
+
+.paste-input-panel h4 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.paste-hint {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+.paste-textarea {
+  font-family: monospace;
+  font-size: 0.75rem;
+  padding: 0.5rem;
+  border: 1px solid #ddd;
+  border-radius: 3px;
+  resize: none;
+  min-width: 180px;
+}
+
+.paste-buttons {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
 }
 
 @media (max-width: 768px) {

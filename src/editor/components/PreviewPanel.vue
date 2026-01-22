@@ -58,7 +58,8 @@ const applyBoardAction = (
     case "setBoard":
       return stringBoardToBoardState(action.board);
     case "resetAll":
-      return stringBoardToBoardState(initialBoard);
+      // 石を全て消して空の盤面にする（初期盤面に戻すのではない）
+      return stringBoardToBoardState(Array(15).fill("-".repeat(15)));
     case "mark":
     case "line":
       // マーク・ラインは盤面に影響しない
