@@ -716,40 +716,13 @@ export const useScenarioNavigation = (
 
   /**
    * 次のセクションへ進む
+   * nextDialogueがセクション境界を越える処理を持っているので委譲する
    */
   const nextSection = async (): Promise<void> => {
     if (!showNextSectionButton.value) {
       return;
     }
-
-    currentSectionIndex.value += 1;
-    currentDialogueIndex.value = 0;
-    isSectionCompleted.value = false;
-
-    if (currentSection.value) {
-      const boardState = boardStringToBoardState(
-        currentSection.value.initialBoard,
-      );
-      animationStore.cancelOngoingAnimations();
-      boardStore.setBoard(boardState, "initial");
-      boardStore.clearMarks();
-      boardStore.clearLines();
-
-      // ダイアログがあるセクションなら最初のダイアログを表示
-      const section = currentSection.value;
-      if (section.type === "demo" || section.type === "question") {
-        const [firstDialogue] = section.dialogues;
-        if (firstDialogue) {
-          await showDialogueWithAction(firstDialogue, true);
-
-          // 新セクションの初期状態をキャッシュ
-          saveBoardSnapshot(
-            currentSectionIndex.value,
-            currentDialogueIndex.value,
-          );
-        }
-      }
-    }
+    await nextDialogue();
   };
 
   /**
