@@ -121,6 +121,32 @@ export function useScenarioDirectory(): UseScenarioDirReturn {
 
       await writable.write(json);
       await writable.close();
+
+      // 難易度が変更された場合、古いファイルを削除
+      const originalDiff = editorStore.originalDifficulty;
+      const currentDiff = editorStore.scenario.difficulty;
+      if (originalDiff !== null && originalDiff !== currentDiff) {
+        try {
+          const oldDir = await scenarioDir.value.getDirectoryHandle(
+            originalDiff,
+            { create: false },
+          );
+          await oldDir.removeEntry(fileName);
+          console.warn(
+            `🗑️ 古いファイル ${originalDiff}/${fileName} を削除しました`,
+          );
+        } catch (error) {
+          // NotFoundError は無視（ファイルが既に存在しない場合）
+          if (
+            !(error instanceof DOMException && error.name === "NotFoundError")
+          ) {
+            console.warn("古いファイルの削除に失敗しました:", error);
+          }
+        }
+      }
+
+      // 保存成功後、元の難易度を更新
+      editorStore.updateOriginalDifficulty(currentDiff);
       editorStore.markClean();
       console.warn(
         `✅ ${editorStore.scenario.difficulty}/${fileName} を保存しました`,

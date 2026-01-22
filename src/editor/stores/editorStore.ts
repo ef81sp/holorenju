@@ -5,7 +5,7 @@
 import { defineStore } from "pinia";
 import { ref, computed } from "vue";
 
-import type { Scenario, Section } from "@/types/scenario";
+import type { Scenario, Section, ScenarioDifficulty } from "@/types/scenario";
 
 import {
   createEmptyScenario,
@@ -23,6 +23,8 @@ export const useEditorStore = defineStore("editor", () => {
   const previewDialogueIndex = ref(0);
   // File System Access API で開いたファイルのハンドル（再読み込み用）
   const currentFileHandle = ref<FileSystemFileHandle | null>(null);
+  // 読み込み時の元の難易度（難易度変更時の古いファイル削除用）
+  const originalDifficulty = ref<ScenarioDifficulty | null>(null);
 
   // Computed
   const currentSection = computed<Section | null>(() => {
@@ -37,6 +39,7 @@ export const useEditorStore = defineStore("editor", () => {
   // Methods
   const loadScenario = (newScenario: Scenario): void => {
     scenario.value = newScenario;
+    originalDifficulty.value = newScenario.difficulty;
     selectedSectionIndex.value = null;
     isDirty.value = false;
     validationErrors.value = [];
@@ -260,6 +263,14 @@ export const useEditorStore = defineStore("editor", () => {
     currentFileHandle.value = null;
   };
 
+  const updateOriginalDifficulty = (difficulty: ScenarioDifficulty): void => {
+    originalDifficulty.value = difficulty;
+  };
+
+  const clearOriginalDifficulty = (): void => {
+    originalDifficulty.value = null;
+  };
+
   return {
     scenario,
     selectedSectionIndex,
@@ -288,5 +299,8 @@ export const useEditorStore = defineStore("editor", () => {
     currentFileHandle,
     setCurrentFileHandle,
     clearCurrentFileHandle,
+    originalDifficulty,
+    updateOriginalDifficulty,
+    clearOriginalDifficulty,
   };
 });

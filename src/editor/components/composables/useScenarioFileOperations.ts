@@ -166,6 +166,7 @@ export function useScenarioFileOperations(): UseScenarioFileOperationsReturn {
     jsonInput.value = scenarioToJSON(fresh);
     selectedFile.value = null;
     editorStore.clearCurrentFileHandle();
+    editorStore.clearOriginalDifficulty(); // 新規作成時は元の難易度をクリア
     showJsonInput.value = false;
   };
 
