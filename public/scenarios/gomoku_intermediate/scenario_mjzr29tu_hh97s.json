@@ -1,7 +1,7 @@
 {
   "id": "scenario_mjzr29tu_hh97s",
   "title": "五を作るには",
-  "difficulty": "gomoku_beginner",
+  "difficulty": "gomoku_intermediate",
   "description": "勝利条件である五の一歩手前の状態を学びます。",
   "objectives": [],
   "sections": [
@@ -247,6 +247,25 @@
           ],
           "emotion": 5,
           "boardActions": []
+        },
+        {
+          "id": "dialogue_16",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "勝ち方は、負けない方法の裏返しだ。"
+            },
+            {
+              "type": "lineBreak"
+            },
+            {
+              "type": "text",
+              "content": "復習もしながら進めていくよ。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
         }
       ]
     },
@@ -293,11 +312,30 @@
         },
         {
           "id": "dialogue_2",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "さっきやった"
+            }
+          ],
+          "emotion": 4,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_3",
           "character": "fubuki",
           "text": [
             {
               "type": "text",
-              "content": "特に、両端が空いている四のことを"
+              "content": "そうだね。"
+            },
+            {
+              "type": "lineBreak"
+            },
+            {
+              "type": "text",
+              "content": "で、特に、両端が空いている四のことを"
             },
             {
               "type": "emphasis",
@@ -335,7 +373,7 @@
           "boardActions": []
         },
         {
-          "id": "dialogue_3",
+          "id": "dialogue_4",
           "character": "miko",
           "text": [
             {
@@ -347,7 +385,7 @@
           "boardActions": []
         },
         {
-          "id": "dialogue_4",
+          "id": "dialogue_5",
           "character": "fubuki",
           "text": [
             {
@@ -372,7 +410,7 @@
             },
             {
               "type": "text",
-              "content": "んだ。"
+              "content": "んだったよね。"
             }
           ],
           "emotion": 0,
@@ -383,7 +421,7 @@
           ]
         },
         {
-          "id": "dialogue_5",
+          "id": "dialogue_6",
           "character": "fubuki",
           "text": [
             {
@@ -416,7 +454,7 @@
           ]
         },
         {
-          "id": "dialogue_6",
+          "id": "dialogue_7",
           "character": "miko",
           "text": [
             {
@@ -428,7 +466,7 @@
           "boardActions": []
         },
         {
-          "id": "dialogue_7",
+          "id": "dialogue_8",
           "character": "fubuki",
           "text": [
             {
@@ -449,7 +487,7 @@
           ]
         },
         {
-          "id": "dialogue_8",
+          "id": "dialogue_9",
           "character": "fubuki",
           "text": [
             {
@@ -507,7 +545,7 @@
           ]
         },
         {
-          "id": "dialogue_9",
+          "id": "dialogue_10",
           "character": "miko",
           "text": [
             {
@@ -519,7 +557,7 @@
           "boardActions": []
         },
         {
-          "id": "dialogue_10",
+          "id": "dialogue_11",
           "character": "fubuki",
           "text": [
             {
@@ -551,7 +589,7 @@
           "boardActions": []
         },
         {
-          "id": "dialogue_11",
+          "id": "dialogue_12",
           "character": "miko",
           "text": [
             {
@@ -596,6 +634,10 @@
             }
           ],
           "emotion": 18,
+          "description": {
+            "text": [],
+            "clear": true
+          },
           "boardActions": []
         },
         {
@@ -621,7 +663,7 @@
               "content": "を作ればいいのさ。"
             }
           ],
-          "emotion": 0,
+          "emotion": 11,
           "boardActions": []
         },
         {
@@ -633,7 +675,7 @@
               "content": "しさん？"
             }
           ],
-          "emotion": 0,
+          "emotion": 6,
           "boardActions": []
         },
         {
@@ -931,6 +973,18 @@
           ],
           "emotion": 0,
           "boardActions": []
+        },
+        {
+          "id": "dialogue_15",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "この形ができそうなところを探しながら対局するだけでも、ひとつレベルアップするよ。がんばろう。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
         }
       ]
     },
@@ -1011,6 +1065,168 @@
               }
             ],
             "emotion": 15
+          }
+        ]
+      }
+    },
+    {
+      "id": "section_5",
+      "type": "question",
+      "title": "練習問題2",
+      "initialBoard": [
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "-----o-x-------",
+        "------xoo------",
+        "-----x-xxo-----",
+        "----o--o-------",
+        "------x--------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------"
+      ],
+      "description": [
+        {
+          "type": "text",
+          "content": "黒番です。四三を作りましょう。"
+        }
+      ],
+      "dialogues": [
+        {
+          "id": "dialogue_1",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "いろんなかたちに慣れよう"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        }
+      ],
+      "successOperator": "or",
+      "successConditions": [
+        {
+          "type": "position",
+          "positions": [
+            {
+              "row": 7,
+              "col": 6
+            }
+          ],
+          "color": "black"
+        }
+      ],
+      "feedback": {
+        "success": [
+          {
+            "character": "fubuki",
+            "text": [
+              {
+                "type": "text",
+                "content": "ないすー！"
+              }
+            ],
+            "emotion": 37
+          }
+        ],
+        "failure": [
+          {
+            "character": "miko",
+            "text": [
+              {
+                "type": "text",
+                "content": "おうおうおう……"
+              }
+            ],
+            "emotion": 34
+          }
+        ]
+      }
+    },
+    {
+      "id": "section_6",
+      "type": "question",
+      "title": "練習問題3",
+      "initialBoard": [
+        "---------------",
+        "--------x------",
+        "---------o-----",
+        "-------ox-o----",
+        "------oxoxoo---",
+        "-----oxxxxo----",
+        "----xxxoxox----",
+        "----oxoxxxo----",
+        "-----ooxoo-----",
+        "----x----------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------"
+      ],
+      "description": [
+        {
+          "type": "text",
+          "content": "白番です。四三を作りましょう。"
+        }
+      ],
+      "dialogues": [
+        {
+          "id": "dialogue_1",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "白番だよ！"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        }
+      ],
+      "successOperator": "or",
+      "successConditions": [
+        {
+          "type": "position",
+          "positions": [
+            {
+              "row": 5,
+              "col": 12
+            }
+          ],
+          "color": "white"
+        }
+      ],
+      "feedback": {
+        "success": [
+          {
+            "character": "fubuki",
+            "text": [
+              {
+                "type": "text",
+                "content": "ないすー！"
+              }
+            ],
+            "emotion": 37
+          }
+        ],
+        "failure": [
+          {
+            "character": "miko",
+            "text": [
+              {
+                "type": "text",
+                "content": "おうおうおう……"
+              }
+            ],
+            "emotion": 34
           }
         ]
       }

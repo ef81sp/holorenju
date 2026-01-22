@@ -64,7 +64,7 @@
             },
             {
               "type": "text",
-              "content": "改めてどんなゲームか確認してみましょうか。"
+              "content": "改めてどんなゲームか確認してみようかねぇ。"
             }
           ],
           "emotion": 0,
@@ -262,21 +262,15 @@
             }
           ],
           "emotion": 1,
-          "boardActions": [
-            {
-              "type": "resetAll",
-              "position": {
-                "row": 0,
-                "col": 0
-              },
-              "color": "black",
-              "highlight": false
-            }
-          ],
           "description": {
             "text": [],
             "clear": true
-          }
+          },
+          "boardActions": [
+            {
+              "type": "resetAll"
+            }
+          ]
         },
         {
           "id": "dialogue_12",

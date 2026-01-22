@@ -20,18 +20,19 @@
           "title": "負けないために",
           "description": "相手の攻撃を防ぐ方法を学び、すぐに負けないようになりましょう",
           "path": "gomoku_beginner/scenario_mkjs7lp4_kx96z.json"
-        },
-        {
-          "id": "scenario_mjzr29tu_hh97s",
-          "title": "五を作るには",
-          "description": "勝利条件である五の一歩手前の状態を学びます。",
-          "path": "gomoku_beginner/scenario_mjzr29tu_hh97s.json"
         }
       ]
     },
     "gomoku_intermediate": {
       "label": "五目並べ:初級",
-      "scenarios": []
+      "scenarios": [
+        {
+          "id": "scenario_mjzr29tu_hh97s",
+          "title": "五を作るには",
+          "description": "勝利条件である五の一歩手前の状態を学びます。",
+          "path": "gomoku_intermediate/scenario_mjzr29tu_hh97s.json"
+        }
+      ]
     },
     "renju_beginner": {
       "label": "連珠:入門",

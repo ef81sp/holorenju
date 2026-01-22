@@ -799,15 +799,25 @@
         "success": [
           {
             "character": "fubuki",
-            "text": [],
-            "emotion": 0
+            "text": [
+              {
+                "type": "text",
+                "content": "ないすー！"
+              }
+            ],
+            "emotion": 37
           }
         ],
         "failure": [
           {
-            "character": "fubuki",
-            "text": [],
-            "emotion": 0
+            "character": "miko",
+            "text": [
+              {
+                "type": "text",
+                "content": "おうおうおう……"
+              }
+            ],
+            "emotion": 34
           }
         ]
       }
@@ -878,15 +888,25 @@
         "success": [
           {
             "character": "fubuki",
-            "text": [],
-            "emotion": 0
+            "text": [
+              {
+                "type": "text",
+                "content": "ないすー！"
+              }
+            ],
+            "emotion": 37
           }
         ],
         "failure": [
           {
-            "character": "fubuki",
-            "text": [],
-            "emotion": 0
+            "character": "miko",
+            "text": [
+              {
+                "type": "text",
+                "content": "おうおうおう……"
+              }
+            ],
+            "emotion": 34
           }
         ]
       }
@@ -923,6 +943,10 @@
             }
           ],
           "emotion": 0,
+          "description": {
+            "text": [],
+            "clear": true
+          },
           "boardActions": [
             {
               "type": "mark",
@@ -959,6 +983,23 @@
           ],
           "emotion": 0,
           "boardActions": [
+            {
+              "type": "mark",
+              "position": {
+                "row": 0,
+                "col": 0
+              },
+              "color": "black",
+              "highlight": false,
+              "positions": [
+                {
+                  "row": 1,
+                  "col": 4
+                }
+              ],
+              "markType": "circle",
+              "action": "remove"
+            },
             {
               "type": "place",
               "position": {
