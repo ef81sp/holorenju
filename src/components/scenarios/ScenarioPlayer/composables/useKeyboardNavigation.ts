@@ -15,13 +15,16 @@ export const useKeyboardNavigation = (
   isDisabled?: Ref<boolean> | ComputedRef<boolean>,
 ): {
   cursorPosition: Ref<Position>;
+  isCursorActivated: Ref<boolean>;
   handleKeyDown: (event: KeyboardEvent) => void;
   moveCursor: (direction: "up" | "down" | "left" | "right") => void;
   placeStoneAtCursor: () => void;
   attachKeyListener: () => void;
   detachKeyListener: () => void;
+  resetCursorActivation: () => void;
 } => {
   const cursorPosition = ref<Position>({ row: 7, col: 7 });
+  const isCursorActivated = ref(false);
 
   /**
    * キーボードイベントハンドラー
@@ -76,6 +79,7 @@ export const useKeyboardNavigation = (
    * カーソルを指定方向に移動
    */
   const moveCursor = (direction: "up" | "down" | "left" | "right"): void => {
+    isCursorActivated.value = true;
     switch (direction) {
       case "up":
         cursorPosition.value.row = Math.max(0, cursorPosition.value.row - 1);
@@ -115,12 +119,21 @@ export const useKeyboardNavigation = (
     window.removeEventListener("keydown", handleKeyDown);
   };
 
+  /**
+   * カーソルアクティベーションをリセット
+   */
+  const resetCursorActivation = (): void => {
+    isCursorActivated.value = false;
+  };
+
   return {
     cursorPosition,
+    isCursorActivated,
     handleKeyDown,
     moveCursor,
     placeStoneAtCursor,
     attachKeyListener,
     detachKeyListener,
+    resetCursorActivation,
   };
 };

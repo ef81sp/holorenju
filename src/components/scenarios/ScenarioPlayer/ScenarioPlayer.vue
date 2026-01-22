@@ -1,5 +1,13 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, provide, ref } from "vue";
+import {
+  computed,
+  nextTick,
+  onMounted,
+  onUnmounted,
+  provide,
+  ref,
+  watch,
+} from "vue";
 
 import BackButton from "./BackButton.vue";
 import ControlInfo from "./ControlInfo.vue";
@@ -96,6 +104,27 @@ const keyboardNav = useKeyboardNavigation(
   isKeyboardDisabled,
 );
 
+// セクション変更時にカーソルアクティベーションをリセット
+watch(
+  () => scenarioNav.currentSectionIndex.value,
+  () => {
+    keyboardNav.resetCursorActivation();
+  },
+);
+
+// カーソル非表示条件
+const isBoardDisabled = computed(() => {
+  // デモセクションまたはセクション完了時は無効化（現行動作）
+  if (
+    scenarioNav.currentSection.value?.type === "demo" ||
+    scenarioNav.isSectionCompleted.value
+  ) {
+    return true;
+  }
+  // 問題セクションでWASDキーを押していない場合はカーソル非表示
+  return !keyboardNav.isCursorActivated.value;
+});
+
 // Lifecycle
 onMounted(async () => {
   await scenarioNav.loadScenario();
@@ -118,6 +147,11 @@ const handlePlaceStone = (position?: Position): void => {
     scenarioNav.currentSection.value.type !== "question"
   ) {
     return;
+  }
+
+  // マウスクリックの場合（positionが渡される）はカーソルを非表示に
+  if (position) {
+    keyboardNav.resetCursorActivation();
   }
 
   // Position が指定されていればそれを使用、なければカーソル位置
@@ -230,10 +264,7 @@ const handleGoToList = (): void => {
       style="anchor-name: --board-area"
     >
       <RenjuBoard
-        :disabled="
-          scenarioNav.currentSection.value?.type === 'demo' ||
-          scenarioNav.isSectionCompleted.value
-        "
+        :disabled="isBoardDisabled"
         :stage-size="boardSize"
         :cursor-position="keyboardNav.cursorPosition.value"
         :player-color="playerColor"
