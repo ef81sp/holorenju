@@ -21,6 +21,8 @@ export const useEditorStore = defineStore("editor", () => {
   const validationErrors = ref<{ path: string; message: string }[]>([]);
   const isDirty = ref(false);
   const previewDialogueIndex = ref(0);
+  // File System Access API で開いたファイルのハンドル（再読み込み用）
+  const currentFileHandle = ref<FileSystemFileHandle | null>(null);
 
   // Computed
   const currentSection = computed<Section | null>(() => {
@@ -250,6 +252,14 @@ export const useEditorStore = defineStore("editor", () => {
     isDirty.value = false;
   };
 
+  const setCurrentFileHandle = (handle: FileSystemFileHandle | null): void => {
+    currentFileHandle.value = handle;
+  };
+
+  const clearCurrentFileHandle = (): void => {
+    currentFileHandle.value = null;
+  };
+
   return {
     scenario,
     selectedSectionIndex,
@@ -275,5 +285,8 @@ export const useEditorStore = defineStore("editor", () => {
     goToLastDialogue,
     goToDialogueIndex,
     markClean,
+    currentFileHandle,
+    setCurrentFileHandle,
+    clearCurrentFileHandle,
   };
 });

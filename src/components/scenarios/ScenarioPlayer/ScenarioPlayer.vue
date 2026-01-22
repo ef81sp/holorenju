@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, provide, ref } from "vue";
 
 import BackButton from "./BackButton.vue";
 import ControlInfo from "./ControlInfo.vue";
@@ -8,11 +8,13 @@ import RenjuBoard from "@/components/game/RenjuBoard/RenjuBoard.vue";
 import DialogSection from "./DialogSection.vue";
 import CutinOverlay from "@/components/common/CutinOverlay.vue";
 import SettingsControl from "@/components/common/SettingsControl.vue";
+import DebugReloadButton from "./DebugReloadButton.vue";
 import { useScenarioNavigation } from "./composables/useScenarioNavigation";
 import { useKeyboardNavigation } from "./composables/useKeyboardNavigation";
 import { useBoardSize } from "./composables/useBoardSize";
 import { useQuestionSolver } from "./composables/useQuestionSolver";
 import { useCutinDisplay } from "./composables/useCutinDisplay";
+import { scenarioNavKey } from "./composables/useScenarioNavProvide";
 import { useDialogStore } from "@/stores/dialogStore";
 
 import type { QuestionSection, SuccessCondition } from "@/types/scenario";
@@ -31,6 +33,12 @@ const dialogStore = useDialogStore();
 
 // Composables
 const scenarioNav = useScenarioNavigation(props.scenarioId);
+
+// DebugReloadButton 用に loadScenario を provide
+provide(scenarioNavKey, {
+  loadScenario: scenarioNav.loadScenario,
+});
+
 const boardFrameRef = ref<HTMLElement | null>(null);
 const { boardSize: boardSizeValue } = useBoardSize(boardFrameRef);
 const boardSize = computed(() => boardSizeValue.value);
@@ -203,7 +211,10 @@ const handleGoToList = (): void => {
     <div class="control-section-slot">
       <div class="control-header">
         <BackButton @back="scenarioNav.goBack" />
-        <SettingsControl />
+        <div class="header-controls">
+          <DebugReloadButton />
+          <SettingsControl />
+        </div>
       </div>
       <ControlInfo
         :cursor-position="keyboardNav.cursorPosition.value"
@@ -302,6 +313,12 @@ const handleGoToList = (): void => {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
+}
+
+.header-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--size-8);
 }
 
 .board-section-wrapper {

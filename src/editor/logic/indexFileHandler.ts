@@ -3,35 +3,23 @@
  */
 import {
   DIFFICULTIES,
+  DIFFICULTY_LABELS,
   type Scenario,
   type ScenarioDifficulty,
+  type ScenarioMeta,
 } from "@/types/scenario";
 
-interface IndexScenarioEntry {
-  id: string;
-  title: string;
-  description: string;
-  path: string;
-}
+export { DIFFICULTY_LABELS };
 
 interface IndexData {
   difficulties: Record<
     ScenarioDifficulty,
     {
       label: string;
-      scenarios: IndexScenarioEntry[];
+      scenarios: ScenarioMeta[];
     }
   >;
 }
-
-export const DIFFICULTY_LABELS: Record<ScenarioDifficulty, string> = {
-  gomoku_beginner: "五目並べ:入門",
-  gomoku_intermediate: "五目並べ:初級",
-  renju_beginner: "連珠:入門",
-  renju_intermediate: "連珠:初級",
-  renju_advanced: "連珠:中級",
-  renju_expert: "連珠:上級",
-};
 
 const createDefaultIndexData = (): IndexData => ({
   difficulties: DIFFICULTIES.reduce(
@@ -68,8 +56,8 @@ const saveIndexJson = async (
 const scanDifficultyDirectory = async (
   diffDir: FileSystemDirectoryHandle,
   difficulty: ScenarioDifficulty,
-): Promise<IndexScenarioEntry[]> => {
-  const scenarios: IndexScenarioEntry[] = [];
+): Promise<ScenarioMeta[]> => {
+  const scenarios: ScenarioMeta[] = [];
 
   // @ts-expect-error entriesは存在するはず
   for await (const [name, handle] of diffDir.entries()) {
@@ -122,7 +110,7 @@ export const regenerateScenarioIndexWithOrder = async (
       const scenarioMap = new Map(allScenarios.map((s) => [s.id, s]));
 
       // 指定された順序でシナリオを配置
-      const orderedScenarios: IndexScenarioEntry[] = [];
+      const orderedScenarios: ScenarioMeta[] = [];
       for (const id of orderedIds) {
         const scenario = scenarioMap.get(id);
         if (scenario) {
@@ -164,7 +152,7 @@ export const regenerateScenarioIndex = async (
   if (scenario) {
     // 特定のシナリオだけを更新
     const difficultyKey = scenario.difficulty;
-    const entry: IndexScenarioEntry = {
+    const entry: ScenarioMeta = {
       id: scenario.id,
       title: scenario.title,
       description: scenario.description,

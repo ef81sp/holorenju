@@ -1,11 +1,18 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, onMounted } from "vue";
 
-import scenariosIndex from "@/data/scenarios/index.json";
-import { DIFFICULTY_LABELS } from "@/editor/logic/indexFileHandler";
 import { useProgressStore } from "@/stores/progressStore";
-import type { Scenario, ScenarioDifficulty } from "@/types/scenario";
+import { useScenarioIndexStore } from "@/stores/scenarioIndexStore";
+import {
+  DIFFICULTY_LABELS,
+  type ScenarioDifficulty,
+  type ScenarioMeta,
+} from "@/types/scenario";
 import ProgressSummary from "./ProgressSummary.vue";
+
+interface ScenarioWithDifficulty extends ScenarioMeta {
+  difficulty: ScenarioDifficulty;
+}
 
 // Emits
 const emit = defineEmits<{
@@ -14,13 +21,27 @@ const emit = defineEmits<{
 
 // Store
 const progressStore = useProgressStore();
+const indexStore = useScenarioIndexStore();
+
+onMounted(async () => {
+  await indexStore.loadIndex();
+});
 
 // Computed
 const scenarios = computed(() => {
-  const allScenarios: Scenario[] = [];
-  Object.values(scenariosIndex.difficulties).forEach((diff) => {
-    allScenarios.push(...(diff.scenarios as Scenario[]));
-  });
+  const allScenarios: ScenarioWithDifficulty[] = [];
+  if (indexStore.index?.difficulties) {
+    Object.entries(indexStore.index.difficulties).forEach(
+      ([difficulty, diff]) => {
+        diff.scenarios.forEach((scenario) => {
+          allScenarios.push({
+            ...scenario,
+            difficulty: difficulty as ScenarioDifficulty,
+          });
+        });
+      },
+    );
+  }
   return allScenarios;
 });
 
@@ -66,8 +87,27 @@ const getDifficultyLabel = (difficulty: ScenarioDifficulty): string =>
       <ProgressSummary :total-scenarios="scenarios.length" />
     </div>
 
+    <!-- ローディング表示 -->
+    <div
+      v-if="indexStore.isLoading"
+      class="loading"
+    >
+      読み込み中...
+    </div>
+
+    <!-- エラー表示 -->
+    <div
+      v-else-if="indexStore.error"
+      class="error"
+    >
+      {{ indexStore.error }}
+    </div>
+
     <!-- シナリオリスト -->
-    <div class="scenario-list">
+    <div
+      v-else
+      class="scenario-list"
+    >
       <div
         v-for="scenario in scenarioProgress"
         :key="scenario.id"
@@ -90,18 +130,6 @@ const getDifficultyLabel = (difficulty: ScenarioDifficulty): string =>
         <p class="description">
           {{ scenario.description }}
         </p>
-
-        <div class="objectives">
-          <h4>学習目標:</h4>
-          <ul>
-            <li
-              v-for="(objective, index) in scenario.objectives"
-              :key="index"
-            >
-              {{ objective }}
-            </li>
-          </ul>
-        </div>
 
         <div class="card-footer">
           <span
@@ -133,6 +161,18 @@ const getDifficultyLabel = (difficulty: ScenarioDifficulty): string =>
   padding: var(--size-40) var(--size-20);
   overflow-y: auto;
   box-sizing: border-box;
+}
+
+.loading,
+.error {
+  font-size: var(--size-20);
+  color: var(--color-text-secondary);
+  text-align: center;
+  padding: var(--size-40);
+}
+
+.error {
+  color: #dc2626;
 }
 
 .header {
@@ -214,22 +254,6 @@ const getDifficultyLabel = (difficulty: ScenarioDifficulty): string =>
   color: var(--color-text-secondary);
   line-height: 1.6;
   margin-bottom: var(--size-20);
-}
-
-.objectives h4 {
-  margin: 0 0 var(--size-10);
-  color: var(--color-text-primary);
-  font-size: var(--size-16);
-}
-
-.objectives ul {
-  margin: 0;
-  padding-left: var(--size-20);
-  color: var(--color-text-secondary);
-}
-
-.objectives li {
-  margin-bottom: 0.625vw; /* 6px */
 }
 
 .card-footer {

@@ -102,15 +102,26 @@ vi.mock("@/logic/scenarioParser", () => ({
   parseScenario: vi.fn((data: unknown) => data),
 }));
 
-// scenarios/index.json のモック
-vi.mock("@/data/scenarios/index.json", () => ({
-  default: {
-    difficulties: {
-      gomoku_beginner: {
-        scenarios: [{ id: "test-scenario", path: "gomoku_beginner/test.json" }],
+// scenarioIndexStore のモック
+const mockLoadIndex = vi.fn().mockResolvedValue(undefined);
+const mockFindScenarioPath = vi
+  .fn()
+  .mockReturnValue("gomoku_beginner/test.json");
+
+vi.mock("@/stores/scenarioIndexStore", () => ({
+  useScenarioIndexStore: () => ({
+    index: {
+      difficulties: {
+        gomoku_beginner: {
+          scenarios: [
+            { id: "test-scenario", path: "gomoku_beginner/test.json" },
+          ],
+        },
       },
     },
-  },
+    loadIndex: mockLoadIndex,
+    findScenarioPath: mockFindScenarioPath,
+  }),
 }));
 
 // テスト用シナリオデータ

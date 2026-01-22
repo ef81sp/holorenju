@@ -6,6 +6,24 @@
 
 ## 現状の実装
 
+### メッセージ
+
+```
+12:24:53 AM [vite] (client) warning: invalid import "../../../../data/scenarios/${scenarioPath}". A file extension must be included in the static part of the import. For example: import(`./foo/${bar}.js`).
+  Plugin: vite:dynamic-import-vars
+  File: /Users/rikegami/Development/holorenju/src/components/scenarios/ScenarioPlayer/composables/useScenarioNavigation.ts
+12:24:53 AM [vite] (client) warning:
+/Users/rikegami/Development/holorenju/src/components/scenarios/ScenarioPlayer/composables/useScenarioNavigation.ts
+118 |                           throw new Error(`Scenario not found: ${scenarioId}`);
+119 |                   }
+120 |                   const scenarioModule = await import(`../../../../data/scenarios/${scenarioPath}`);
+    |                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+121 |                   const rawScenarioData = scenarioModule.default;
+122 |                   const scenarioData = parseScenario(rawScenarioData);
+The above dynamic import cannot be analyzed by Vite.
+See https://github.com/rollup/plugins/tree/master/packages/dynamic-import-vars#limitations for supported dynamic import formats. If this is intended to be left as-is, you can use the /* @vite-ignore */ comment inside the import() call to suppress this warning.
+```
+
 ### File System Access API の制約
 
 File System Access API には変更監視用のイベント（`watch` や `onchange`）が存在しない。ファイルの変更を検知するには、アプリケーション側でポーリングを実装する必要がある。

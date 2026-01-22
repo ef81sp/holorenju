@@ -93,6 +93,11 @@ const handleFileDeleted = (deletedScenarioId: string): void => {
     fileOps.handleCreateNew();
   }
 };
+
+// ファイル再読み込みハンドラ
+const handleReloadFile = async (): Promise<void> => {
+  await fileOps.reloadCurrentFile();
+};
 </script>
 
 <template>
@@ -141,6 +146,14 @@ const handleFileDeleted = (deletedScenarioId: string): void => {
           @click="dirOps.handleSaveToDirectory"
         >
           💾 保存
+        </button>
+        <button
+          v-if="fileOps.currentFileHandle.value"
+          class="btn-secondary"
+          title="ファイルを再読み込み（表示位置を維持）"
+          @click="handleReloadFile"
+        >
+          🔃 再読み込み
         </button>
 
         <button

@@ -10,7 +10,6 @@ import type {
 } from "@/types/scenario";
 import type { TextNode } from "@/types/text";
 
-import scenariosIndex from "@/data/scenarios/index.json";
 import { boardStringToBoardState } from "@/logic/scenarioFileHandler";
 import { parseScenario } from "@/logic/scenarioParser";
 import { useAppStore } from "@/stores/appStore";
@@ -23,6 +22,7 @@ import {
 import { useDialogStore } from "@/stores/dialogStore";
 import { useProgressStore } from "@/stores/progressStore";
 import { useScenarioAnimationStore } from "@/stores/scenarioAnimationStore";
+import { useScenarioIndexStore } from "@/stores/scenarioIndexStore";
 import { assertNever } from "@/utils/assertNever";
 
 /**
@@ -192,25 +192,24 @@ export const useScenarioNavigation = (
       completedSectionIndices.value = new Set();
 
       // Index.jsonからシナリオパスを取得
-      let scenarioPath = "";
-      for (const [, difficultyData] of Object.entries(
-        scenariosIndex.difficulties,
-      )) {
-        const found = difficultyData.scenarios.find((s) => s.id === scenarioId);
-        if (found) {
-          scenarioPath = found.path;
-          break;
-        }
-      }
+      const indexStore = useScenarioIndexStore();
+      await indexStore.loadIndex();
+      const scenarioPath = indexStore.findScenarioPath(scenarioId);
 
       if (!scenarioPath) {
         throw new Error(`Scenario not found: ${scenarioId}`);
       }
 
-      const scenarioModule = await import(
-        `../../../../data/scenarios/${scenarioPath}`
-      );
-      const rawScenarioData = scenarioModule.default;
+      // fetch を使用してシナリオを読み込む
+      // 開発環境のみキャッシュバスティング（ホットリロード対応）
+      const scenarioUrl = import.meta.env.DEV
+        ? `/scenarios/${scenarioPath}?t=${Date.now()}`
+        : `/scenarios/${scenarioPath}`;
+      const scenarioRes = await fetch(scenarioUrl);
+      if (!scenarioRes.ok) {
+        throw new Error(`HTTP error: ${scenarioRes.status}`);
+      }
+      const rawScenarioData = await scenarioRes.json();
       const scenarioData = parseScenario(rawScenarioData);
 
       scenario.value = scenarioData;

@@ -2,19 +2,20 @@
 import { computed, onMounted, onUnmounted, ref, TransitionGroup } from "vue";
 import { useAppStore } from "@/stores/appStore";
 import { useProgressStore } from "@/stores/progressStore";
+import { useScenarioIndexStore } from "@/stores/scenarioIndexStore";
 import ScenarioCard from "./ScenarioCard.vue";
 import PageHeader from "@/components/common/PageHeader.vue";
-import scenariosIndex from "@/data/scenarios/index.json";
 
 const appStore = useAppStore();
 const progressStore = useProgressStore();
+const indexStore = useScenarioIndexStore();
 
 // シナリオ一覧を取得
 const scenarios = computed(() => {
-  if (!appStore.selectedDifficulty) {
+  if (!appStore.selectedDifficulty || !indexStore.index) {
     return [];
   }
-  const diffData = scenariosIndex.difficulties[appStore.selectedDifficulty];
+  const diffData = indexStore.index.difficulties[appStore.selectedDifficulty];
   return diffData?.scenarios || [];
 });
 
@@ -99,7 +100,8 @@ const handleWheel = (e: WheelEvent): void => {
   }
 };
 
-onMounted(() => {
+onMounted(async () => {
+  await indexStore.loadIndex();
   window.addEventListener("keydown", handleKeyDown);
 });
 
@@ -136,40 +138,59 @@ const isCompleted = (scenarioId: string): boolean =>
     />
 
     <div class="content">
-      <button
-        class="page-button page-button-left"
-        :disabled="currentPage === 0"
-        :aria-label="`前へ（ページ${currentPage}/${totalPages}）`"
-        @click="prevPage"
+      <!-- ローディング表示 -->
+      <div
+        v-if="indexStore.isLoading"
+        class="loading"
       >
-        ←
-      </button>
+        読み込み中...
+      </div>
 
-      <TransitionGroup
-        :name="`slide-${direction}`"
-        tag="div"
-        class="scenarios-grid"
+      <!-- エラー表示 -->
+      <div
+        v-else-if="indexStore.error"
+        class="error"
       >
-        <ScenarioCard
-          v-for="scenario in displayedScenarios"
-          :id="scenario.id"
-          :key="scenario.absoluteIndex"
-          :title="scenario.title"
-          :description="scenario.description"
-          :is-completed="isCompleted(scenario.id)"
-          :scenario-index="scenario.absoluteIndex"
-          @select="handleSelectScenario"
-        />
-      </TransitionGroup>
+        {{ indexStore.error }}
+      </div>
 
-      <button
-        class="page-button page-button-right"
-        :disabled="currentPage === totalPages - 1"
-        :aria-label="`次へ（ページ${currentPage + 2}/${totalPages}）`"
-        @click="nextPage"
-      >
-        →
-      </button>
+      <!-- 通常コンテンツ -->
+      <template v-else>
+        <button
+          class="page-button page-button-left"
+          :disabled="currentPage === 0"
+          :aria-label="`前へ（ページ${currentPage}/${totalPages}）`"
+          @click="prevPage"
+        >
+          ←
+        </button>
+
+        <TransitionGroup
+          :name="`slide-${direction}`"
+          tag="div"
+          class="scenarios-grid"
+        >
+          <ScenarioCard
+            v-for="scenario in displayedScenarios"
+            :id="scenario.id"
+            :key="scenario.absoluteIndex"
+            :title="scenario.title"
+            :description="scenario.description"
+            :is-completed="isCompleted(scenario.id)"
+            :scenario-index="scenario.absoluteIndex"
+            @select="handleSelectScenario"
+          />
+        </TransitionGroup>
+
+        <button
+          class="page-button page-button-right"
+          :disabled="currentPage === totalPages - 1"
+          :aria-label="`次へ（ページ${currentPage + 2}/${totalPages}）`"
+          @click="nextPage"
+        >
+          →
+        </button>
+      </template>
     </div>
 
     <div class="page-indicator">{{ currentPage + 1 }} / {{ totalPages }}</div>
@@ -210,6 +231,18 @@ const isCompleted = (scenarioId: string): boolean =>
   gap: var(--size-20);
   align-items: center;
   padding-block: var(--size-16);
+}
+
+.loading,
+.error {
+  grid-column: 1 / -1;
+  font-size: var(--size-20);
+  color: var(--color-text-secondary);
+  text-align: center;
+}
+
+.error {
+  color: #dc2626;
 }
 
 .scenarios-grid {

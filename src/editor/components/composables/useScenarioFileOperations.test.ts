@@ -8,12 +8,17 @@ import { useScenarioFileOperations } from "./useScenarioFileOperations";
 const mockLoadScenario = vi.fn();
 const mockSetValidationErrors = vi.fn();
 const mockClearValidationErrors = vi.fn();
+const mockClearCurrentFileHandle = vi.fn();
+const mockSetCurrentFileHandle = vi.fn();
 
 vi.mock("@/editor/stores/editorStore", () => ({
   useEditorStore: () => ({
     loadScenario: mockLoadScenario,
     setValidationErrors: mockSetValidationErrors,
     clearValidationErrors: mockClearValidationErrors,
+    clearCurrentFileHandle: mockClearCurrentFileHandle,
+    setCurrentFileHandle: mockSetCurrentFileHandle,
+    currentFileHandle: null as FileSystemFileHandle | null,
   }),
 }));
 

@@ -5,45 +5,77 @@ import VueKonva from "vue-konva";
 
 import ScenarioPlayer from "./ScenarioPlayer.vue";
 
-// シナリオのモック
-vi.mock("@/data/scenarios/index.json", () => ({
-  default: {
-    gomoku_beginner: [
-      {
-        id: "test-scenario",
-        title: "テストシナリオ",
-        file: "test.json",
-      },
-    ],
+// テスト用シナリオデータ
+const mockScenarioData = {
+  id: "test-scenario",
+  title: "テストシナリオ",
+  difficulty: "gomoku_beginner",
+  description: "テスト用",
+  objectives: ["テスト"],
+  sections: [
+    {
+      id: "demo1",
+      type: "demo",
+      title: "デモ",
+      initialBoard: Array(15).fill("-".repeat(15)),
+      dialogues: [
+        {
+          id: "d1",
+          character: "fubuki",
+          text: [{ type: "text", content: "テストメッセージ" }],
+          emotion: 0,
+        },
+      ],
+    },
+  ],
+};
+
+const mockIndexData = {
+  difficulties: {
+    gomoku_beginner: {
+      label: "五目並べ:入門",
+      scenarios: [
+        {
+          id: "test-scenario",
+          title: "テストシナリオ",
+          description: "テスト用",
+          path: "gomoku_beginner/test.json",
+        },
+      ],
+    },
   },
+};
+
+// scenarioIndexStore のモック
+vi.mock("@/stores/scenarioIndexStore", () => ({
+  useScenarioIndexStore: () => ({
+    index: mockIndexData,
+    isLoading: false,
+    error: null as string | null,
+    loadIndex: vi.fn().mockResolvedValue(undefined),
+    findScenarioPath: vi.fn().mockReturnValue("gomoku_beginner/test.json"),
+  }),
 }));
 
-// 動的インポートのモック
-vi.mock("@/data/scenarios/gomoku_beginner/test.json", () => ({
-  default: {
-    id: "test-scenario",
-    title: "テストシナリオ",
-    difficulty: "gomoku_beginner",
-    description: "テスト用",
-    objectives: ["テスト"],
-    sections: [
-      {
-        id: "demo1",
-        type: "demo",
-        title: "デモ",
-        initialBoard: Array(15).fill("-".repeat(15)),
-        dialogues: [
-          {
-            id: "d1",
-            character: "fubuki",
-            text: [{ type: "text", content: "テストメッセージ" }],
-            emotion: 0,
-          },
-        ],
-      },
-    ],
-  },
-}));
+// fetch のモック
+vi.stubGlobal(
+  "fetch",
+  vi.fn((url: string) => {
+    if (url.includes("/scenarios/index.json")) {
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve(mockIndexData),
+      });
+    }
+    if (url.includes("/scenarios/gomoku_beginner/test.json")) {
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve(mockScenarioData),
+      });
+    }
+    return Promise.reject(new Error(`Unknown URL: ${url}`));
+  }),
+);
 
 describe("ScenarioPlayer", () => {
   beforeEach(() => {

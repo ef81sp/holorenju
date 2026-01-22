@@ -1,14 +1,19 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, onMounted } from "vue";
 
 import PageHeader from "@/components/common/PageHeader.vue";
 import { useAppStore } from "@/stores/appStore";
 import { useProgressStore } from "@/stores/progressStore";
+import { useScenarioIndexStore } from "@/stores/scenarioIndexStore";
 import type { ScenarioDifficulty } from "@/types/scenario";
-import scenariosIndex from "@/data/scenarios/index.json";
 
 const appStore = useAppStore();
 const progressStore = useProgressStore();
+const indexStore = useScenarioIndexStore();
+
+onMounted(async () => {
+  await indexStore.loadIndex();
+});
 
 interface ProgressInfo {
   completed: number;
@@ -70,7 +75,7 @@ const difficultyCards: DifficultyCard[] = [
 ];
 
 const getProgress = (difficulty: ScenarioDifficulty): ProgressInfo => {
-  const difficultyData = scenariosIndex.difficulties[difficulty];
+  const difficultyData = indexStore.index?.difficulties[difficulty];
   const total = difficultyData?.scenarios.length ?? 0;
   const completed =
     difficultyData?.scenarios.filter((scenario) =>
@@ -107,7 +112,26 @@ const handleBack = (): void => {
       @back="handleBack"
     />
     <div class="content">
-      <div class="difficulty-grid">
+      <!-- ローディング表示 -->
+      <div
+        v-if="indexStore.isLoading"
+        class="loading"
+      >
+        読み込み中...
+      </div>
+
+      <!-- エラー表示 -->
+      <div
+        v-else-if="indexStore.error"
+        class="error"
+      >
+        {{ indexStore.error }}
+      </div>
+
+      <div
+        v-else
+        class="difficulty-grid"
+      >
         <button
           v-for="(card, index) in difficultyCards"
           :key="card.key"
@@ -154,6 +178,17 @@ const handleBack = (): void => {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.loading,
+.error {
+  font-size: var(--size-20);
+  color: var(--color-text-secondary);
+  text-align: center;
+}
+
+.error {
+  color: #dc2626;
 }
 
 .difficulty-grid {

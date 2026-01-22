@@ -18,6 +18,35 @@ const DIFFICULTIES = [
 
 type ScenarioDifficulty = (typeof DIFFICULTIES)[number];
 
+// 難易度ラベル（日本語表示用）
+const DIFFICULTY_LABELS: Record<ScenarioDifficulty, string> = {
+  gomoku_beginner: "五目並べ:入門",
+  gomoku_intermediate: "五目並べ:初級",
+  renju_beginner: "連珠:入門",
+  renju_intermediate: "連珠:初級",
+  renju_advanced: "連珠:中級",
+  renju_expert: "連珠:上級",
+};
+
+// シナリオメタデータ（index.jsonエントリ用）
+interface ScenarioMeta {
+  id: string;
+  title: string;
+  description: string;
+  path: string;
+}
+
+// 難易度ごとのデータ
+interface DifficultyData {
+  label: string;
+  scenarios: ScenarioMeta[];
+}
+
+// シナリオインデックス全体
+interface ScenarioIndex {
+  difficulties: Partial<Record<ScenarioDifficulty, DifficultyData>>;
+}
+
 // ===== ベースセクション =====
 
 interface BaseSection {
@@ -202,6 +231,9 @@ export type {
   Position,
   SuccessOperator,
   ScenarioDifficulty,
+  ScenarioMeta,
+  DifficultyData,
+  ScenarioIndex,
 };
 
-export { DIFFICULTIES };
+export { DIFFICULTIES, DIFFICULTY_LABELS };
