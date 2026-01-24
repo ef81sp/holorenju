@@ -275,6 +275,7 @@ export const useBoardStore = defineStore("board", () => {
       label?: string;
     }[],
     dialogueIndex: number,
+    startIndex = 0,
   ): Mark[] {
     const addedMarks: Mark[] = [];
 
@@ -283,7 +284,7 @@ export const useBoardStore = defineStore("board", () => {
       if (!markData) {
         continue;
       }
-      const id = `${dialogueIndex}-mark-${i}`;
+      const id = `${dialogueIndex}-mark-${startIndex + i}`;
       const newMark: Mark = {
         id,
         positions: markData.positions,
@@ -331,6 +332,7 @@ export const useBoardStore = defineStore("board", () => {
       style?: "solid" | "dashed";
     }[],
     dialogueIndex: number,
+    startIndex = 0,
   ): Line[] {
     const addedLines: Line[] = [];
 
@@ -339,7 +341,7 @@ export const useBoardStore = defineStore("board", () => {
       if (!lineData) {
         continue;
       }
-      const id = `${dialogueIndex}-line-${i}`;
+      const id = `${dialogueIndex}-line-${startIndex + i}`;
       const newLine: Line = {
         id,
         fromPosition: lineData.fromPosition,
@@ -359,6 +361,25 @@ export const useBoardStore = defineStore("board", () => {
    */
   function clearLines(): void {
     lines.value = [];
+  }
+
+  /**
+   * 指定位置のラインを削除
+   */
+  function removeLine(fromPosition: Position, toPosition: Position): void {
+    lines.value = lines.value.filter((line) => {
+      const matchForward =
+        line.fromPosition.row === fromPosition.row &&
+        line.fromPosition.col === fromPosition.col &&
+        line.toPosition.row === toPosition.row &&
+        line.toPosition.col === toPosition.col;
+      const matchBackward =
+        line.fromPosition.row === toPosition.row &&
+        line.fromPosition.col === toPosition.col &&
+        line.toPosition.row === fromPosition.row &&
+        line.toPosition.col === fromPosition.col;
+      return !matchForward && !matchBackward;
+    });
   }
 
   /**
@@ -402,6 +423,7 @@ export const useBoardStore = defineStore("board", () => {
     removeMarks,
     addLines,
     clearLines,
+    removeLine,
     resetAll,
     resetMarkLine,
   };

@@ -7,6 +7,7 @@ import type {
   BoardAction,
   LineAction,
   MarkAction,
+  PlaceMoveAction,
 } from "@/types/scenario";
 import type { TextNode } from "@/types/text";
 
@@ -428,8 +429,54 @@ export const useScenarioNavigation = (
     // テキストなし + clear なし → 前の状態を維持（何もしない）
   };
 
+  // ===== アクショングループ化ヘルパー =====
+
+  type ActionGroupType =
+    | "place"
+    | "mark-draw"
+    | "mark-remove"
+    | "line-draw"
+    | "immediate";
+
+  type ActionGroup =
+    | { type: "place"; actions: PlaceMoveAction[] }
+    | { type: "mark-draw"; actions: MarkAction[] }
+    | { type: "mark-remove"; actions: MarkAction[] }
+    | { type: "line-draw"; actions: LineAction[] }
+    | { type: "immediate"; actions: BoardAction[] };
+
+  const getActionGroupType = (action: BoardAction): ActionGroupType => {
+    switch (action.type) {
+      case "place":
+        return "place";
+      case "mark":
+        return action.action === "remove" ? "mark-remove" : "mark-draw";
+      case "line":
+        return action.action === "draw" ? "line-draw" : "immediate";
+      default:
+        return "immediate"; // resetAll, resetMarkLine, setBoard, remove
+    }
+  };
+
+  const groupActionsByConsecutiveType = (
+    actions: BoardAction[],
+  ): ActionGroup[] => {
+    const groups: ActionGroup[] = [];
+    for (const action of actions) {
+      const groupType = getActionGroupType(action);
+      const lastGroup = groups[groups.length - 1];
+      if (lastGroup && lastGroup.type === groupType) {
+        (lastGroup.actions as BoardAction[]).push(action);
+      } else {
+        groups.push({ type: groupType, actions: [action] } as ActionGroup);
+      }
+    }
+    return groups;
+  };
+
   /**
    * ダイアログを表示して石・マーク・ラインを追加
+   * アクションはJSON配列の順序通りに実行される（同一タイプの連続はグループ化）
    */
   const showDialogueWithAction = async (
     dialogue: DemoDialogue,
@@ -438,94 +485,114 @@ export const useScenarioNavigation = (
     showDialogueMessage(dialogue);
     updateDescriptionForDialogue(dialogue);
 
-    // placeアクションの石を追加
-    const placeActions = dialogue.boardActions.filter(
-      (a) => a.type === "place",
-    );
-    if (placeActions.length > 0) {
-      // アニメーション対象のIDを先行登録（描画時に半透明になるように）
-      if (animate) {
-        const stoneIds = placeActions.map(
-          (a) =>
-            `${currentDialogueIndex.value}-${a.position.row}-${a.position.col}`,
-        );
-        animationStore.prepareForAnimation(stoneIds);
+    const actionGroups = groupActionsByConsecutiveType(dialogue.boardActions);
+    let markCounter = 0;
+    let lineCounter = 0;
+
+    /* eslint-disable no-await-in-loop -- アニメーションを順序通りに実行するために意図的 */
+    for (const group of actionGroups) {
+      switch (group.type) {
+        case "place": {
+          const placeActions = group.actions;
+          // アニメーション対象のIDを先行登録（描画時に半透明になるように）
+          if (animate) {
+            const stoneIds = placeActions.map(
+              (a) =>
+                `${currentDialogueIndex.value}-${a.position.row}-${a.position.col}`,
+            );
+            animationStore.prepareForAnimation(stoneIds);
+          }
+
+          const addedStones = boardStore.addStones(
+            placeActions.map((a) => ({
+              position: a.position,
+              color: a.color,
+            })),
+            currentDialogueIndex.value,
+          );
+          await animationStore.animateStones(addedStones, { animate });
+          break;
+        }
+
+        case "mark-remove": {
+          const markRemoveActions = group.actions;
+          boardStore.removeMarks(
+            markRemoveActions.map((a) => ({
+              positions: a.positions,
+              markType: a.markType,
+            })),
+          );
+          break;
+        }
+
+        case "mark-draw": {
+          const markDrawActions = group.actions;
+          const startIndex = markCounter;
+          markCounter += markDrawActions.length;
+
+          // アニメーション対象のIDを先行登録（描画時に半透明になるように）
+          if (animate) {
+            const markIds = markDrawActions.map(
+              (_, i) => `${currentDialogueIndex.value}-mark-${startIndex + i}`,
+            );
+            animationStore.prepareForAnimation(markIds);
+          }
+
+          const addedMarks = boardStore.addMarks(
+            markDrawActions.map((a) => ({
+              positions: a.positions,
+              markType: a.markType,
+              label: a.label,
+            })),
+            currentDialogueIndex.value,
+            startIndex,
+          );
+          await animationStore.animateMarks(addedMarks, { animate });
+          break;
+        }
+
+        case "line-draw": {
+          const lineDrawActions = group.actions;
+          const startIndex = lineCounter;
+          lineCounter += lineDrawActions.length;
+
+          // アニメーション対象のIDを先行登録（描画時に半透明になるように）
+          if (animate) {
+            const lineIds = lineDrawActions.map(
+              (_, i) => `${currentDialogueIndex.value}-line-${startIndex + i}`,
+            );
+            animationStore.prepareForAnimation(lineIds);
+          }
+
+          const addedLines = boardStore.addLines(
+            lineDrawActions.map((a) => ({
+              fromPosition: a.fromPosition,
+              toPosition: a.toPosition,
+              style: a.style,
+            })),
+            currentDialogueIndex.value,
+            startIndex,
+          );
+          await animationStore.animateLines(addedLines, { animate });
+          break;
+        }
+
+        case "immediate":
+          applyImmediateActions(group.actions);
+          break;
+
+        default:
+          break;
       }
-
-      const addedStones = boardStore.addStones(
-        placeActions.map((a) => ({
-          position: a.position,
-          color: a.color,
-        })),
-        currentDialogueIndex.value,
-      );
-      await animationStore.animateStones(addedStones, { animate });
     }
+    /* eslint-enable no-await-in-loop */
+  };
 
-    // markアクション（remove）を先に処理
-    const markRemoveActions = dialogue.boardActions.filter(
-      (a): a is MarkAction => a.type === "mark" && a.action === "remove",
-    );
-    if (markRemoveActions.length > 0) {
-      boardStore.removeMarks(
-        markRemoveActions.map((a) => ({
-          positions: a.positions,
-          markType: a.markType,
-        })),
-      );
-    }
-
-    // markアクション（draw）の追加
-    const markDrawActions = dialogue.boardActions.filter(
-      (a): a is MarkAction =>
-        a.type === "mark" && (a.action === "draw" || a.action === undefined),
-    );
-    if (markDrawActions.length > 0) {
-      // アニメーション対象のIDを先行登録（描画時に半透明になるように）
-      if (animate) {
-        const markIds = markDrawActions.map(
-          (_, i) => `${currentDialogueIndex.value}-mark-${i}`,
-        );
-        animationStore.prepareForAnimation(markIds);
-      }
-
-      const addedMarks = boardStore.addMarks(
-        markDrawActions.map((a) => ({
-          positions: a.positions,
-          markType: a.markType,
-          label: a.label,
-        })),
-        currentDialogueIndex.value,
-      );
-      await animationStore.animateMarks(addedMarks, { animate });
-    }
-
-    // lineアクション（draw）の追加
-    const lineDrawActions = dialogue.boardActions.filter(
-      (a): a is LineAction => a.type === "line" && a.action === "draw",
-    );
-    if (lineDrawActions.length > 0) {
-      // アニメーション対象のIDを先行登録（描画時に半透明になるように）
-      if (animate) {
-        const lineIds = lineDrawActions.map(
-          (_, i) => `${currentDialogueIndex.value}-line-${i}`,
-        );
-        animationStore.prepareForAnimation(lineIds);
-      }
-
-      const addedLines = boardStore.addLines(
-        lineDrawActions.map((a) => ({
-          fromPosition: a.fromPosition,
-          toPosition: a.toPosition,
-          style: a.style,
-        })),
-        currentDialogueIndex.value,
-      );
-      await animationStore.animateLines(addedLines, { animate });
-    }
-
-    // resetAll, resetMarkLine, setBoard, remove等の他のアクションも処理
-    for (const action of dialogue.boardActions) {
+  /**
+   * 即時実行アクション（resetAll, resetMarkLine, setBoard, remove, line remove）を適用
+   */
+  const applyImmediateActions = (actions: BoardAction[]): void => {
+    for (const action of actions) {
       switch (action.type) {
         case "resetAll":
           boardStore.resetAll();
@@ -543,13 +610,15 @@ export const useScenarioNavigation = (
         case "remove":
           boardStore.removeStone(action.position);
           break;
-        case "place":
-        case "mark":
         case "line":
-          // これらは上で別途処理済み（アニメーション付き）
+          // line remove はここで処理（line draw は別グループで処理済み）
+          if (action.action === "remove") {
+            boardStore.removeLine(action.fromPosition, action.toPosition);
+          }
           break;
         default:
-          assertNever(action);
+          // place, mark は別グループで処理済み
+          break;
       }
     }
   };
