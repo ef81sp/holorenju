@@ -371,6 +371,14 @@ export const useBoardStore = defineStore("board", () => {
     lastPlacedStone.value = null;
   }
 
+  /**
+   * マーク・ラインのみをリセット（石は残す）
+   */
+  function resetMarkLine(): void {
+    marks.value = [];
+    lines.value = [];
+  }
+
   return {
     // State
     board, // computed
@@ -395,5 +403,6 @@ export const useBoardStore = defineStore("board", () => {
     addLines,
     clearLines,
     resetAll,
+    resetMarkLine,
   };
 });

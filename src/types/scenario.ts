@@ -88,7 +88,8 @@ type BoardAction =
   | SetBoardAction
   | MarkAction
   | LineAction
-  | ResetAllAction;
+  | ResetAllAction
+  | ResetMarkLineAction;
 
 interface PlaceMoveAction {
   type: "place";
@@ -125,6 +126,10 @@ interface LineAction {
 
 interface ResetAllAction {
   type: "resetAll";
+}
+
+interface ResetMarkLineAction {
+  type: "resetMarkLine";
 }
 
 // ===== 問題セクション =====
@@ -217,6 +222,7 @@ export type {
   SetBoardAction,
   MarkAction,
   LineAction,
+  ResetMarkLineAction,
   QuestionSection,
   SuccessCondition,
   PositionCondition,

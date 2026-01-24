@@ -524,11 +524,14 @@ export const useScenarioNavigation = (
       await animationStore.animateLines(addedLines, { animate });
     }
 
-    // resetAll, setBoard, remove等の他のアクションも処理
+    // resetAll, resetMarkLine, setBoard, remove等の他のアクションも処理
     for (const action of dialogue.boardActions) {
       switch (action.type) {
         case "resetAll":
           boardStore.resetAll();
+          break;
+        case "resetMarkLine":
+          boardStore.resetMarkLine();
           break;
         case "setBoard":
           boardStore.setBoard(
@@ -582,6 +585,9 @@ export const useScenarioNavigation = (
     switch (action.type) {
       case "resetAll":
         boardStore.resetAll();
+        break;
+      case "resetMarkLine":
+        boardStore.resetMarkLine();
         break;
       case "setBoard":
         boardStore.setBoard(
