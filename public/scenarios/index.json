@@ -31,6 +31,12 @@
           "title": "五を作るには",
           "description": "勝利条件である五の一歩手前の状態を学びます。",
           "path": "gomoku_intermediate/scenario_mjzr29tu_hh97s.json"
+        },
+        {
+          "id": "scenario_mkpnojq9_pacbt",
+          "title": "何をすればいいの？",
+          "description": "ざっくりとした方針を学びます。",
+          "path": "gomoku_intermediate/scenario_mkpnojq9_pacbt.json"
         }
       ]
     },

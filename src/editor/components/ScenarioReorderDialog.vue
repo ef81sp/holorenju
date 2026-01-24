@@ -14,7 +14,7 @@ interface ScenarioItem {
 type ReorderState = Partial<Record<ScenarioDifficulty, ScenarioItem[]>>;
 
 interface Props {
-  currentData: {
+  currentData?: {
     difficulties: Record<
       ScenarioDifficulty,
       {
@@ -22,8 +22,8 @@ interface Props {
         scenarios: ScenarioItem[];
       }
     >;
-  };
-  dirHandle: FileSystemDirectoryHandle;
+  } | null;
+  dirHandle?: FileSystemDirectoryHandle | null;
 }
 
 const props = defineProps<Props>();
@@ -42,8 +42,15 @@ const difficulties = DIFFICULTIES;
 
 // Props から初期状態を計算
 const initializeState = async (): Promise<void> => {
+  // showModal でガード済みだが、TypeScript のために再確認
+  if (!props.currentData || !props.dirHandle) {
+    return;
+  }
+  const {currentData} = props;
+  const {dirHandle} = props;
+
   const newState: ReorderState = difficulties.reduce((acc, difficulty) => {
-    const scenarios = props.currentData.difficulties[difficulty]?.scenarios;
+    const scenarios = currentData.difficulties[difficulty]?.scenarios;
     acc[difficulty] = scenarios ? [...scenarios] : [];
     return acc;
   }, {} as ReorderState);
@@ -52,7 +59,7 @@ const initializeState = async (): Promise<void> => {
   await Promise.all(
     difficulties.map(async (difficulty) => {
       try {
-        const diffDir = await props.dirHandle.getDirectoryHandle(difficulty, {
+        const diffDir = await dirHandle.getDirectoryHandle(difficulty, {
           create: false,
         });
         const fileIds = new Set<string>();
@@ -114,15 +121,19 @@ const initializeState = async (): Promise<void> => {
 };
 
 // 新規追加されたシナリオを検出
-const hasNewScenarios = computed(() =>
-  difficulties.some((difficulty) => {
+const hasNewScenarios = computed(() => {
+  if (!props.currentData) {
+    return false;
+  }
+  return difficulties.some((difficulty) => {
     const scenarios = state.value[difficulty] ?? [];
     const currentIds =
-      props.currentData.difficulties[difficulty]?.scenarios.map((s) => s.id) ??
-      [];
+      props.currentData?.difficulties[difficulty]?.scenarios?.map(
+        (s) => s.id,
+      ) ?? [];
     return scenarios.some((scenario) => !currentIds.includes(scenario.id));
-  }),
-);
+  });
+});
 
 const onDragStart = (difficulty: ScenarioDifficulty, index: number): void => {
   draggedItem.value = { difficulty, index };
@@ -199,6 +210,12 @@ const handleCancel = (): void => {
 
 // 外部から開く用メソッド
 const showModal = (): void => {
+  if (!props.currentData || !props.dirHandle) {
+    console.warn(
+      "ScenarioReorderDialog: currentData または dirHandle が未設定です",
+    );
+    return;
+  }
   initializeState().catch((error) => {
     console.error("Failed to initialize state:", error);
   });
@@ -233,7 +250,7 @@ defineExpose({
         >
           <h3>
             {{
-              props.currentData.difficulties[difficulty]?.label ??
+              props.currentData?.difficulties[difficulty]?.label ??
               DIFFICULTY_LABELS[difficulty]
             }}
           </h3>
@@ -254,9 +271,9 @@ defineExpose({
               :key="scenario.id"
               draggable="true"
               :class="{
-                'is-new': !props.currentData.difficulties[
+                'is-new': !props.currentData?.difficulties[
                   difficulty
-                ]?.scenarios.some((s) => s.id === scenario.id),
+                ]?.scenarios?.some((s) => s.id === scenario.id),
               }"
               @dragstart="onDragStart(difficulty, index)"
               @dragover="onDragOver"

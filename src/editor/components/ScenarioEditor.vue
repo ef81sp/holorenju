@@ -251,7 +251,6 @@ const handleReloadFile = async (): Promise<void> => {
       @deleted="handleFileDeleted"
     />
     <ScenarioReorderDialog
-      v-if="indexOps.currentIndexData.value && dirOps.scenarioDir.value"
       ref="reorderDialogRef"
       :current-data="indexOps.currentIndexData.value"
       :dir-handle="dirOps.scenarioDir.value"
