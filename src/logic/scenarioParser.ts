@@ -11,6 +11,7 @@ import type { TextNode, InlineTextNode } from "../types/text";
 
 import {
   DIFFICULTIES,
+  BOARD_ACTION_TYPES,
   type Scenario,
   type ScenarioDifficulty,
   type DemoSection,
@@ -288,12 +289,7 @@ function validateBoardAction(data: unknown, path: string): BoardAction {
     throw new Error(`${path} must be an object`);
   }
 
-  const type = validateEnum(
-    data,
-    "type",
-    ["place", "remove", "setBoard", "mark", "line", "resetAll"],
-    path,
-  );
+  const type = validateEnum(data, "type", BOARD_ACTION_TYPES, path);
 
   switch (type) {
     case "place": {
@@ -364,8 +360,14 @@ function validateBoardAction(data: unknown, path: string): BoardAction {
       return { type: "resetAll" };
     }
 
-    default:
-      throw new Error(`Unknown board action type: ${type}`);
+    case "resetMarkLine": {
+      return { type: "resetMarkLine" };
+    }
+
+    default: {
+      const _exhaustive: never = type;
+      throw new Error(`Unknown board action type: ${_exhaustive}`);
+    }
   }
 }
 

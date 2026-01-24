@@ -28,6 +28,19 @@ const DIFFICULTY_LABELS: Record<ScenarioDifficulty, string> = {
   renju_expert: "連珠:上級",
 };
 
+// ボードアクションの種類一覧（バリデーションとエディタで共通利用）
+const BOARD_ACTION_TYPES = [
+  "place",
+  "remove",
+  "setBoard",
+  "mark",
+  "line",
+  "resetAll",
+  "resetMarkLine",
+] as const;
+
+type BoardActionType = (typeof BOARD_ACTION_TYPES)[number];
+
 // シナリオメタデータ（index.jsonエントリ用）
 interface ScenarioMeta {
   id: string;
@@ -217,6 +230,7 @@ export type {
   DemoSection,
   DemoDialogue,
   BoardAction,
+  BoardActionType,
   PlaceMoveAction,
   RemoveMoveAction,
   SetBoardAction,
@@ -242,4 +256,4 @@ export type {
   ScenarioIndex,
 };
 
-export { DIFFICULTIES, DIFFICULTY_LABELS };
+export { DIFFICULTIES, DIFFICULTY_LABELS, BOARD_ACTION_TYPES };

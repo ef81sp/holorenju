@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { BoardAction } from "@/types/scenario";
+import { BOARD_ACTION_TYPES, type BoardAction } from "@/types/scenario";
 import { computed } from "vue";
 import PlaceActionForm from "./PlaceActionForm.vue";
 import RemoveActionForm from "./RemoveActionForm.vue";
@@ -58,6 +58,18 @@ const isResetAllAction = computed(() => props.action.type === "resetAll");
 const isResetMarkLineAction = computed(
   () => props.action.type === "resetMarkLine",
 );
+
+// アクションタイプのラベル
+const ACTION_TYPE_LABELS: Record<(typeof BOARD_ACTION_TYPES)[number], string> =
+  {
+    place: "Place",
+    remove: "Remove",
+    setBoard: "SetBoard",
+    mark: "Mark",
+    line: "Line",
+    resetAll: "ResetAll",
+    resetMarkLine: "ResetMarkLine",
+  };
 
 // アクションタイプ選択
 const actionType = computed({
@@ -133,13 +145,13 @@ const handleLineStyleUpdate = (style: "solid" | "dashed"): void => {
         v-model="actionType"
         class="type-select"
       >
-        <option value="place">Place</option>
-        <option value="remove">Remove</option>
-        <option value="setBoard">SetBoard</option>
-        <option value="mark">Mark</option>
-        <option value="line">Line</option>
-        <option value="resetAll">ResetAll</option>
-        <option value="resetMarkLine">ResetMarkLine</option>
+        <option
+          v-for="type in BOARD_ACTION_TYPES"
+          :key="type"
+          :value="type"
+        >
+          {{ ACTION_TYPE_LABELS[type] }}
+        </option>
       </select>
       <button
         type="button"
