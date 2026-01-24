@@ -6,16 +6,16 @@
 
 ## 修正対象ファイル一覧
 
-| ファイル | 役割 |
-|---------|------|
-| `src/types/scenario.ts` | 型定義（BoardAction union型） |
-| `src/stores/boardStore.ts` | 盤面操作の実装 |
-| `useScenarioNavigation.ts` | シナリオ再生時の処理 |
-| `BoardActionEditor/types.ts` | エディタ用型エイリアス |
-| `useBoardActions.ts` | エディタでのアクション生成 |
-| `XxxActionForm.vue` | エディタUI（新規作成） |
-| `BoardActionEditor.vue` | エディタUI統合 |
-| `PreviewPanel.vue` | プレビュー処理 |
+| ファイル                     | 役割                          |
+| ---------------------------- | ----------------------------- |
+| `src/types/scenario.ts`      | 型定義（BoardAction union型） |
+| `src/stores/boardStore.ts`   | 盤面操作の実装                |
+| `useScenarioNavigation.ts`   | シナリオ再生時の処理          |
+| `BoardActionEditor/types.ts` | エディタ用型エイリアス        |
+| `useBoardActions.ts`         | エディタでのアクション生成    |
+| `XxxActionForm.vue`          | エディタUI（新規作成）        |
+| `BoardActionEditor.vue`      | エディタUI統合                |
+| `PreviewPanel.vue`           | プレビュー処理                |
 
 ## 手順詳細
 
