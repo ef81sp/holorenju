@@ -43,6 +43,12 @@
           "title": "何をすればいいの？(2)",
           "description": "複数の連を作る",
           "path": "gomoku_intermediate/scenario_mkrv3oyt_80m86.json"
+        },
+        {
+          "id": "scenario_mks7it0d_3v7gb",
+          "title": "何をすればいいの？(3)",
+          "description": "相手の連を止めることを学びます。",
+          "path": "gomoku_intermediate/scenario_mks7it0d_3v7gb.json"
         }
       ]
     },

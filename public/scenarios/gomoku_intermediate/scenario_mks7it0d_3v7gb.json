@@ -1,0 +1,486 @@
+{
+  "id": "scenario_mks7it0d_3v7gb",
+  "title": "何をすればいいの？(3)",
+  "difficulty": "gomoku_intermediate",
+  "description": "相手の連を止めることを学びます。",
+  "objectives": [],
+  "sections": [
+    {
+      "id": "section_1",
+      "type": "demo",
+      "title": "デモセクション",
+      "initialBoard": [
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------"
+      ],
+      "dialogues": [
+        {
+          "id": "dialogue_1",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "複数の連を作ると強力な攻撃ができることを学んだよね。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_2",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "うん"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_3",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "ということは、相手に複数の連を作られると、強力な攻撃をされてしまうわけだ。"
+            }
+          ],
+          "emotion": 5,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_4",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "やだねぇ"
+            }
+          ],
+          "emotion": 9,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_5",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "だから、"
+            },
+            {
+              "type": "emphasis",
+              "content": [
+                {
+                  "type": "text",
+                  "content": "相手の連を止める"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "content": "ことも重要なんだ。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_6",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "なーほーね"
+            }
+          ],
+          "emotion": 1,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_7",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "じゃあみこさん白だ。黒に連があるよね。どうする？"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": [
+            {
+              "type": "setBoard",
+              "board": [
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "--------x------",
+                "-------x-------",
+                "--------o------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "dialogue_8",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "連を止める！"
+            }
+          ],
+          "emotion": 17,
+          "boardActions": [
+            {
+              "type": "place",
+              "position": {
+                "row": 5,
+                "col": 9
+              },
+              "color": "white"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_9",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "そうだね。連を止めるのが大事だ。ところで、自分が連を作ることも大事だよね。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_10",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "ううっ……"
+            }
+          ],
+          "emotion": 7,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_11",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "これを合わせると、"
+            },
+            {
+              "type": "emphasis",
+              "content": [
+                {
+                  "type": "text",
+                  "content": "相手の連を止めながら自分の連を作る"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "content": "のが理想なわけだ。それを踏まえると？"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_12",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "うーんとうーんと"
+            }
+          ],
+          "emotion": 14,
+          "boardActions": [
+            {
+              "type": "remove",
+              "position": {
+                "row": 5,
+                "col": 9
+              }
+            }
+          ]
+        },
+        {
+          "id": "dialogue_13",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "あっここ！"
+            }
+          ],
+          "emotion": 19,
+          "boardActions": [
+            {
+              "type": "place",
+              "position": {
+                "row": 8,
+                "col": 6
+              },
+              "color": "white"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_14",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "すーばーらーしーい！黒の連を止めながら白の連ができたね！"
+            }
+          ],
+          "emotion": 37,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_15",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "emphasis",
+              "content": [
+                {
+                  "type": "text",
+                  "content": "相手の連を止めながら連を作る"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "content": "こと、"
+            },
+            {
+              "type": "emphasis",
+              "content": [
+                {
+                  "type": "text",
+                  "content": "複数の連を作る"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "content": "ことが重要だね。練習問題で慣れてみよう！"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_16",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "わがった！！"
+            }
+          ],
+          "emotion": 19,
+          "boardActions": []
+        }
+      ]
+    },
+    {
+      "id": "section_2",
+      "type": "question",
+      "title": "練習問題(1)",
+      "initialBoard": [
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "--------x------",
+        "------ox-------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------"
+      ],
+      "description": [
+        {
+          "type": "text",
+          "content": "白番です。連を止めながら連を作りましょう"
+        }
+      ],
+      "dialogues": [
+        {
+          "id": "dialogue_1",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "がんばろう！"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        }
+      ],
+      "successOperator": "or",
+      "successConditions": [
+        {
+          "type": "position",
+          "positions": [
+            {
+              "row": 8,
+              "col": 6
+            }
+          ],
+          "color": "white"
+        }
+      ],
+      "feedback": {
+        "success": [
+          {
+            "character": "fubuki",
+            "text": [
+              {
+                "type": "text",
+                "content": "ないすー！"
+              }
+            ],
+            "emotion": 37
+          }
+        ],
+        "failure": [
+          {
+            "character": "miko",
+            "text": [
+              {
+                "type": "text",
+                "content": "おうおうおう……"
+              }
+            ],
+            "emotion": 34
+          }
+        ]
+      }
+    },
+    {
+      "id": "section_3",
+      "type": "question",
+      "title": "問題セクション",
+      "initialBoard": [
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------o-----",
+        "-------oxx-----",
+        "--------ox-----",
+        "------xxoxo----",
+        "--------oxx----",
+        "--------xo-----",
+        "---------o-----",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------"
+      ],
+      "description": [
+        {
+          "type": "text",
+          "content": "白番です。連を2つ作りましょう"
+        }
+      ],
+      "dialogues": [
+        {
+          "id": "dialogue_1",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "ゆっくり考えよう！"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        }
+      ],
+      "successOperator": "or",
+      "successConditions": [
+        {
+          "type": "position",
+          "positions": [
+            {
+              "row": 4,
+              "col": 7
+            },
+            {
+              "row": 4,
+              "col": 8
+            }
+          ],
+          "color": "white"
+        }
+      ],
+      "feedback": {
+        "success": [
+          {
+            "character": "fubuki",
+            "text": [
+              {
+                "type": "text",
+                "content": "ないすー！"
+              }
+            ],
+            "emotion": 37
+          }
+        ],
+        "failure": [
+          {
+            "character": "miko",
+            "text": [
+              {
+                "type": "text",
+                "content": "おうおうおう……"
+              }
+            ],
+            "emotion": 34
+          }
+        ]
+      }
+    }
+  ]
+}

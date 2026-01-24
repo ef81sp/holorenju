@@ -326,27 +326,7 @@
           "emotion": 0,
           "boardActions": [
             {
-              "type": "resetAll"
-            },
-            {
-              "type": "setBoard",
-              "board": [
-                "---------------",
-                "---------------",
-                "---------------",
-                "---------------",
-                "---------------",
-                "-------o-------",
-                "------x-o------",
-                "------xx-------",
-                "---------------",
-                "---------------",
-                "---------------",
-                "---------------",
-                "---------------",
-                "---------------",
-                "---------------"
-              ]
+              "type": "resetMarkLine"
             },
             {
               "type": "place",
@@ -612,17 +592,10 @@
                 "row": 8,
                 "col": 6
               },
-              "color": "white",
-              "highlight": false
+              "color": "white"
             },
             {
               "type": "mark",
-              "position": {
-                "row": 7,
-                "col": 7
-              },
-              "color": "black",
-              "highlight": false,
               "positions": [
                 {
                   "row": 9,
@@ -646,13 +619,7 @@
           "emotion": 19,
           "boardActions": [
             {
-              "type": "resetMarkLine",
-              "position": {
-                "row": 7,
-                "col": 7
-              },
-              "color": "black",
-              "highlight": false
+              "type": "resetMarkLine"
             },
             {
               "type": "place",
@@ -660,8 +627,7 @@
                 "row": 9,
                 "col": 7
               },
-              "color": "black",
-              "highlight": false
+              "color": "black"
             }
           ]
         },
@@ -682,17 +648,10 @@
                 "row": 10,
                 "col": 6
               },
-              "color": "white",
-              "highlight": false
+              "color": "white"
             },
             {
               "type": "mark",
-              "position": {
-                "row": 7,
-                "col": 7
-              },
-              "color": "black",
-              "highlight": false,
               "positions": [
                 {
                   "row": 9,
@@ -716,13 +675,7 @@
           "emotion": 19,
           "boardActions": [
             {
-              "type": "resetMarkLine",
-              "position": {
-                "row": 7,
-                "col": 7
-              },
-              "color": "black",
-              "highlight": false
+              "type": "resetMarkLine"
             },
             {
               "type": "place",
@@ -730,8 +683,7 @@
                 "row": 9,
                 "col": 9
               },
-              "color": "black",
-              "highlight": false
+              "color": "black"
             }
           ]
         },
@@ -784,15 +736,6 @@
           "boardActions": [
             {
               "type": "line",
-              "position": {
-                "row": 7,
-                "col": 7
-              },
-              "color": "black",
-              "highlight": false,
-              "positions": [],
-              "markType": "circle",
-              "action": "draw",
               "fromPosition": {
                 "row": 6,
                 "col": 6
@@ -801,16 +744,11 @@
                 "row": 9,
                 "col": 9
               },
+              "action": "draw",
               "style": "solid"
             },
             {
               "type": "line",
-              "position": {
-                "row": 7,
-                "col": 7
-              },
-              "color": "black",
-              "highlight": false,
               "fromPosition": {
                 "row": 9,
                 "col": 6
