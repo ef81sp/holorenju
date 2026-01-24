@@ -115,6 +115,10 @@ export function useBoardActions(
         return {
           type: "resetAll",
         };
+      case "resetMarkLine":
+        return {
+          type: "resetMarkLine",
+        };
       default:
         return {
           type: "place",

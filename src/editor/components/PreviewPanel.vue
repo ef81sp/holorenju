@@ -60,6 +60,7 @@ const applyBoardAction = (
     case "resetAll":
       // 石を全て消して空の盤面にする（初期盤面に戻すのではない）
       return stringBoardToBoardState(Array(15).fill("-".repeat(15)));
+    case "resetMarkLine":
     case "mark":
     case "line":
       // マーク・ラインは盤面に影響しない
@@ -192,6 +193,7 @@ const currentMarks = computed<Mark[]>(() => {
     for (const action of dialogue.boardActions) {
       switch (action.type) {
         case "resetAll":
+        case "resetMarkLine":
           marks.length = 0;
           markCounter = 0;
           break;
@@ -247,6 +249,7 @@ const currentLines = computed<Line[]>(() => {
     for (const action of dialogue.boardActions) {
       switch (action.type) {
         case "resetAll":
+        case "resetMarkLine":
           lines.length = 0;
           lineCounter = 0;
           break;

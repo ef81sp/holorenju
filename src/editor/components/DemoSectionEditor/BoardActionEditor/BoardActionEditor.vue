@@ -7,6 +7,7 @@ import SetBoardActionForm from "./SetBoardActionForm.vue";
 import MarkActionForm from "./MarkActionForm.vue";
 import LineActionForm from "./LineActionForm.vue";
 import ResetAllActionForm from "./ResetAllActionForm.vue";
+import ResetMarkLineActionForm from "./ResetMarkLineActionForm.vue";
 import type {
   PlaceAction,
   RemoveAction,
@@ -54,6 +55,9 @@ const isSetBoardAction = computed(() => props.action.type === "setBoard");
 const isMarkAction = computed(() => props.action.type === "mark");
 const isLineAction = computed(() => props.action.type === "line");
 const isResetAllAction = computed(() => props.action.type === "resetAll");
+const isResetMarkLineAction = computed(
+  () => props.action.type === "resetMarkLine",
+);
 
 // アクションタイプ選択
 const actionType = computed({
@@ -135,6 +139,7 @@ const handleLineStyleUpdate = (style: "solid" | "dashed"): void => {
         <option value="mark">Mark</option>
         <option value="line">Line</option>
         <option value="resetAll">ResetAll</option>
+        <option value="resetMarkLine">ResetMarkLine</option>
       </select>
       <button
         type="button"
@@ -184,6 +189,8 @@ const handleLineStyleUpdate = (style: "solid" | "dashed"): void => {
     />
 
     <ResetAllActionForm v-else-if="isResetAllAction" />
+
+    <ResetMarkLineActionForm v-else-if="isResetMarkLineAction" />
   </div>
 </template>
 
