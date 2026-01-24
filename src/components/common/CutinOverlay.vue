@@ -67,8 +67,8 @@ defineExpose({
   background-color: inherit;
   opacity: 0;
   transition:
-    opacity 0.2s ease-out,
-    display 0.2s ease-out allow-discrete;
+    opacity var(--duration-cutin-overlay) ease-out,
+    display var(--duration-cutin-overlay) ease-out allow-discrete;
 }
 
 .cutin-overlay:popover-open {
@@ -98,7 +98,7 @@ defineExpose({
   width: var(--size-350);
   aspect-ratio: 1 / 1;
   transform: scale(0.9);
-  transition: transform 0.2s ease-out;
+  transition: transform var(--duration-cutin-overlay) ease-out;
 }
 
 .cutin-overlay:popover-open .cutin-icon {

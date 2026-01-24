@@ -7,13 +7,14 @@ import { computed, ref, watch } from "vue";
 
 const STORAGE_KEY = "holorenju_preferences";
 
-export type StoneSpeed = "slow" | "normal" | "fast";
+export type AnimationSpeed = "slowest" | "slow" | "normal" | "fast" | "fastest";
 export type TextSize = "small" | "normal" | "large";
 
 interface Preferences {
   animation: {
     enabled: boolean;
-    stoneSpeed: StoneSpeed;
+    speed: AnimationSpeed; // 石・マーク・ライン
+    effectSpeed: AnimationSpeed; // キャラクター・ダイアログ・カットイン
   };
   display: {
     textSize: TextSize;
@@ -23,12 +24,106 @@ interface Preferences {
 const defaultPreferences: Preferences = {
   animation: {
     enabled: true,
-    stoneSpeed: "normal",
+    speed: "normal",
+    effectSpeed: "normal",
   },
   display: {
     textSize: "normal",
   },
 };
+
+/**
+ * 速度設定ごとの倍率
+ */
+const SPEED_MULTIPLIERS: Record<AnimationSpeed, number> = {
+  slowest: 2.0,
+  slow: 1.5,
+  normal: 1.0,
+  fast: 0.5,
+  fastest: 0.25,
+};
+
+/**
+ * 基準アニメーション時間（秒）
+ * normal (x1.0) の場合の時間
+ */
+const BASE_DURATIONS = {
+  stone: 0.4,
+  mark: 0.5,
+  line: 0.4,
+} as const;
+
+/**
+ * 基準演出時間（秒）
+ */
+const BASE_EFFECT_DURATIONS = {
+  character: 0.3,
+  dialog: 0.15,
+  sprite: 0.3,
+  cutinOverlay: 0.2,
+  cutinDisplay: 0.8, // カットイン表示時間
+} as const;
+
+/**
+ * 旧設定からのマイグレーション
+ * stoneSpeed を speed / effectSpeed に変換
+ */
+type OldStoneSpeed = "slow" | "normal" | "fast";
+interface OldPreferences {
+  animation?: {
+    enabled?: boolean;
+    stoneSpeed?: OldStoneSpeed;
+    speed?: AnimationSpeed;
+    effectSpeed?: AnimationSpeed;
+  };
+  display?: {
+    textSize?: TextSize;
+  };
+}
+
+function migrateFromOldFormat(parsed: OldPreferences): Preferences {
+  const animation = parsed.animation ?? {};
+
+  // 既に新形式であればそのまま使用
+  if (animation.speed !== undefined && animation.effectSpeed !== undefined) {
+    return {
+      animation: {
+        enabled: animation.enabled ?? defaultPreferences.animation.enabled,
+        speed: animation.speed,
+        effectSpeed: animation.effectSpeed,
+      },
+      display: { ...defaultPreferences.display, ...parsed.display },
+    };
+  }
+
+  // 旧形式からマイグレーション
+  const oldSpeed = animation.stoneSpeed;
+  let newSpeed: AnimationSpeed = "normal";
+  let newEffectSpeed: AnimationSpeed = "normal";
+
+  if (oldSpeed === "slow") {
+    // 旧slow (0.4s) → 新normal (0.4s)
+    newSpeed = "normal";
+    newEffectSpeed = "normal";
+  } else if (oldSpeed === "normal") {
+    // 旧normal (0.2s) → 新fast (0.2s)
+    newSpeed = "fast";
+    newEffectSpeed = "fast";
+  } else if (oldSpeed === "fast") {
+    // 旧fast (0.1s) → 新fastest (0.1s)
+    newSpeed = "fastest";
+    newEffectSpeed = "fastest";
+  }
+
+  return {
+    animation: {
+      enabled: animation.enabled ?? defaultPreferences.animation.enabled,
+      speed: newSpeed,
+      effectSpeed: newEffectSpeed,
+    },
+    display: { ...defaultPreferences.display, ...parsed.display },
+  };
+}
 
 export const usePreferencesStore = defineStore("preferences", () => {
   // State
@@ -38,12 +133,8 @@ export const usePreferencesStore = defineStore("preferences", () => {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       try {
-        const parsed = JSON.parse(saved);
-        // デフォルト値とマージ（将来の項目追加に対応）
-        return {
-          animation: { ...defaultPreferences.animation, ...parsed.animation },
-          display: { ...defaultPreferences.display, ...parsed.display },
-        };
+        const parsed = JSON.parse(saved) as OldPreferences;
+        return migrateFromOldFormat(parsed);
       } catch {
         return { ...defaultPreferences };
       }
@@ -64,9 +155,14 @@ export const usePreferencesStore = defineStore("preferences", () => {
     set: (v) => (preferences.value.animation.enabled = v),
   });
 
-  const stoneSpeed = computed({
-    get: () => preferences.value.animation.stoneSpeed,
-    set: (v) => (preferences.value.animation.stoneSpeed = v),
+  const speed = computed({
+    get: () => preferences.value.animation.speed,
+    set: (v) => (preferences.value.animation.speed = v),
+  });
+
+  const effectSpeed = computed({
+    get: () => preferences.value.animation.effectSpeed,
+    set: (v) => (preferences.value.animation.effectSpeed = v),
   });
 
   const textSize = computed({
@@ -74,54 +170,77 @@ export const usePreferencesStore = defineStore("preferences", () => {
     set: (v) => (preferences.value.display.textSize = v),
   });
 
-  // 速度値のマッピング（秒単位）
+  // 速度倍率
+  const speedMultiplier = computed(
+    () => SPEED_MULTIPLIERS[preferences.value.animation.speed],
+  );
+  const effectSpeedMultiplier = computed(
+    () => SPEED_MULTIPLIERS[preferences.value.animation.effectSpeed],
+  );
+
+  // アニメーション時間（秒単位）
   const stoneAnimationDuration = computed(() => {
     if (!preferences.value.animation.enabled) {
       return 0;
     }
-    const speeds: Record<StoneSpeed, number> = {
-      slow: 0.4,
-      normal: 0.2,
-      fast: 0.1,
-    };
-    return speeds[preferences.value.animation.stoneSpeed];
+    return BASE_DURATIONS.stone * speedMultiplier.value;
   });
 
-  // マーク・ラインのアニメーション時間
   const markAnimationDuration = computed(() => {
     if (!preferences.value.animation.enabled) {
       return 0;
     }
-    const speeds: Record<StoneSpeed, number> = {
-      slow: 0.5,
-      normal: 0.25,
-      fast: 0.125,
-    };
-    return speeds[preferences.value.animation.stoneSpeed];
+    return BASE_DURATIONS.mark * speedMultiplier.value;
   });
 
   const lineAnimationDuration = computed(() => {
     if (!preferences.value.animation.enabled) {
       return 0;
     }
-    const speeds: Record<StoneSpeed, number> = {
-      slow: 0.4,
-      normal: 0.2,
-      fast: 0.1,
-    };
-    return speeds[preferences.value.animation.stoneSpeed];
+    return BASE_DURATIONS.line * speedMultiplier.value;
   });
+
+  // 演出時間（秒単位）
+  const characterAnimationDuration = computed(
+    () => BASE_EFFECT_DURATIONS.character * effectSpeedMultiplier.value,
+  );
+
+  const dialogAnimationDuration = computed(
+    () => BASE_EFFECT_DURATIONS.dialog * effectSpeedMultiplier.value,
+  );
+
+  const spriteAnimationDuration = computed(
+    () => BASE_EFFECT_DURATIONS.sprite * effectSpeedMultiplier.value,
+  );
+
+  const cutinOverlayDuration = computed(
+    () => BASE_EFFECT_DURATIONS.cutinOverlay * effectSpeedMultiplier.value,
+  );
+
+  const cutinDisplayDuration = computed(
+    () => BASE_EFFECT_DURATIONS.cutinDisplay * effectSpeedMultiplier.value,
+  );
 
   return {
     // State
     preferences,
     // 個別のgetter/setter
     animationEnabled,
-    stoneSpeed,
+    speed,
+    effectSpeed,
     textSize,
+    // 速度倍率
+    speedMultiplier,
+    effectSpeedMultiplier,
     // 計算されたアニメーション時間
     stoneAnimationDuration,
     markAnimationDuration,
     lineAnimationDuration,
+    // 計算された演出時間
+    characterAnimationDuration,
+    dialogAnimationDuration,
+    spriteAnimationDuration,
+    cutinOverlayDuration,
+    cutinDisplayDuration,
   };
 });

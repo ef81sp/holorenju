@@ -2,13 +2,7 @@ import { ref, onUnmounted, type Ref } from "vue";
 
 import type { CutinType } from "@/components/common/CutinOverlay.vue";
 
-/**
- * カットイン表示時間（ミリ秒）
- */
-const CUTIN_DURATION: Record<CutinType, number> = {
-  correct: 800,
-  wrong: 800,
-};
+import { usePreferencesStore } from "@/stores/preferencesStore";
 
 /**
  * カットイン表示を管理するComposable
@@ -23,6 +17,7 @@ export const useCutinDisplay = (
   showCutin: (type: CutinType) => void;
   hideCutin: () => void;
 } => {
+  const preferencesStore = usePreferencesStore();
   const isCutinVisible = ref(false);
   let autoHideTimer: ReturnType<typeof setTimeout> | null = null;
   let isHandlerAttached = false;
@@ -42,7 +37,7 @@ export const useCutinDisplay = (
   /**
    * カットインを表示
    */
-  const showCutin = (type: CutinType): void => {
+  const showCutin = (_type: CutinType): void => {
     if (!cutinRef.value) {
       return;
     }
@@ -61,11 +56,11 @@ export const useCutinDisplay = (
       isHandlerAttached = true;
     }
 
-    // 自動消滅タイマーを設定
-    const duration = CUTIN_DURATION[type];
+    // 自動消滅タイマーを設定（秒→ミリ秒に変換）
+    const durationMs = preferencesStore.cutinDisplayDuration * 1000;
     autoHideTimer = setTimeout(() => {
       hideCutin();
-    }, duration);
+    }, durationMs);
   };
 
   /**

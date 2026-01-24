@@ -37,9 +37,14 @@ describe("preferencesStore", () => {
       expect(store.animationEnabled).toBe(true);
     });
 
-    it("animation.stoneSpeedがnormal", () => {
+    it("animation.speedがnormal", () => {
       const store = usePreferencesStore();
-      expect(store.stoneSpeed).toBe("normal");
+      expect(store.speed).toBe("normal");
+    });
+
+    it("animation.effectSpeedがnormal", () => {
+      const store = usePreferencesStore();
+      expect(store.effectSpeed).toBe("normal");
     });
 
     it("display.textSizeがnormal", () => {
@@ -49,11 +54,11 @@ describe("preferencesStore", () => {
   });
 
   describe("localStorage読み込み", () => {
-    it("保存されたデータを復元する", () => {
+    it("新形式の保存データを復元する", () => {
       localStorageMock.setItem(
         "holorenju_preferences",
         JSON.stringify({
-          animation: { enabled: false, stoneSpeed: "fast" },
+          animation: { enabled: false, speed: "fast", effectSpeed: "slow" },
           display: { textSize: "large" },
         }),
       );
@@ -62,7 +67,8 @@ describe("preferencesStore", () => {
       const store = usePreferencesStore();
 
       expect(store.animationEnabled).toBe(false);
-      expect(store.stoneSpeed).toBe("fast");
+      expect(store.speed).toBe("fast");
+      expect(store.effectSpeed).toBe("slow");
       expect(store.textSize).toBe("large");
     });
 
@@ -71,7 +77,7 @@ describe("preferencesStore", () => {
         "holorenju_preferences",
         JSON.stringify({
           animation: { enabled: false },
-          // stoneSpeed, displayは未定義
+          // speed, effectSpeed, displayは未定義
         }),
       );
       setActivePinia(createPinia());
@@ -79,7 +85,8 @@ describe("preferencesStore", () => {
       const store = usePreferencesStore();
 
       expect(store.animationEnabled).toBe(false);
-      expect(store.stoneSpeed).toBe("normal"); // デフォルト値
+      expect(store.speed).toBe("normal"); // デフォルト値
+      expect(store.effectSpeed).toBe("normal"); // デフォルト値
       expect(store.textSize).toBe("normal"); // デフォルト値
     });
 
@@ -91,7 +98,8 @@ describe("preferencesStore", () => {
 
       // デフォルト値が使用される
       expect(store.animationEnabled).toBe(true);
-      expect(store.stoneSpeed).toBe("normal");
+      expect(store.speed).toBe("normal");
+      expect(store.effectSpeed).toBe("normal");
       expect(store.textSize).toBe("normal");
     });
 
@@ -102,8 +110,56 @@ describe("preferencesStore", () => {
       const store = usePreferencesStore();
 
       expect(store.animationEnabled).toBe(true);
-      expect(store.stoneSpeed).toBe("normal");
+      expect(store.speed).toBe("normal");
+      expect(store.effectSpeed).toBe("normal");
       expect(store.textSize).toBe("normal");
+    });
+  });
+
+  describe("旧形式からのマイグレーション", () => {
+    it("旧stoneSpeed=slow → speed=normal, effectSpeed=normal", () => {
+      localStorageMock.setItem(
+        "holorenju_preferences",
+        JSON.stringify({
+          animation: { enabled: true, stoneSpeed: "slow" },
+        }),
+      );
+      setActivePinia(createPinia());
+
+      const store = usePreferencesStore();
+
+      expect(store.speed).toBe("normal");
+      expect(store.effectSpeed).toBe("normal");
+    });
+
+    it("旧stoneSpeed=normal → speed=fast, effectSpeed=fast", () => {
+      localStorageMock.setItem(
+        "holorenju_preferences",
+        JSON.stringify({
+          animation: { enabled: true, stoneSpeed: "normal" },
+        }),
+      );
+      setActivePinia(createPinia());
+
+      const store = usePreferencesStore();
+
+      expect(store.speed).toBe("fast");
+      expect(store.effectSpeed).toBe("fast");
+    });
+
+    it("旧stoneSpeed=fast → speed=fastest, effectSpeed=fastest", () => {
+      localStorageMock.setItem(
+        "holorenju_preferences",
+        JSON.stringify({
+          animation: { enabled: true, stoneSpeed: "fast" },
+        }),
+      );
+      setActivePinia(createPinia());
+
+      const store = usePreferencesStore();
+
+      expect(store.speed).toBe("fastest");
+      expect(store.effectSpeed).toBe("fastest");
     });
   });
 
@@ -116,12 +172,20 @@ describe("preferencesStore", () => {
       expect(store.animationEnabled).toBe(false);
     });
 
-    it("stoneSpeedを変更できる", () => {
+    it("speedを変更できる", () => {
       const store = usePreferencesStore();
 
-      store.stoneSpeed = "slow";
+      store.speed = "slow";
 
-      expect(store.stoneSpeed).toBe("slow");
+      expect(store.speed).toBe("slow");
+    });
+
+    it("effectSpeedを変更できる", () => {
+      const store = usePreferencesStore();
+
+      store.effectSpeed = "fastest";
+
+      expect(store.effectSpeed).toBe("fastest");
     });
 
     it("textSizeを変更できる", () => {
@@ -153,26 +217,42 @@ describe("preferencesStore", () => {
 
   describe("アニメーション時間計算", () => {
     describe("stoneAnimationDuration", () => {
-      it("slowで0.4", () => {
+      it("slowest (x2.0)で0.8", () => {
         const store = usePreferencesStore();
         store.animationEnabled = true;
-        store.stoneSpeed = "slow";
+        store.speed = "slowest";
+
+        expect(store.stoneAnimationDuration).toBe(0.8);
+      });
+
+      it("slow (x1.5)で0.6", () => {
+        const store = usePreferencesStore();
+        store.animationEnabled = true;
+        store.speed = "slow";
+
+        expect(store.stoneAnimationDuration).toBeCloseTo(0.6);
+      });
+
+      it("normal (x1.0)で0.4", () => {
+        const store = usePreferencesStore();
+        store.animationEnabled = true;
+        store.speed = "normal";
 
         expect(store.stoneAnimationDuration).toBe(0.4);
       });
 
-      it("normalで0.2", () => {
+      it("fast (x0.5)で0.2", () => {
         const store = usePreferencesStore();
         store.animationEnabled = true;
-        store.stoneSpeed = "normal";
+        store.speed = "fast";
 
         expect(store.stoneAnimationDuration).toBe(0.2);
       });
 
-      it("fastで0.1", () => {
+      it("fastest (x0.25)で0.1", () => {
         const store = usePreferencesStore();
         store.animationEnabled = true;
-        store.stoneSpeed = "fast";
+        store.speed = "fastest";
 
         expect(store.stoneAnimationDuration).toBe(0.1);
       });
@@ -186,26 +266,26 @@ describe("preferencesStore", () => {
     });
 
     describe("markAnimationDuration", () => {
-      it("slowで0.5", () => {
+      it("normal (x1.0)で0.5", () => {
         const store = usePreferencesStore();
         store.animationEnabled = true;
-        store.stoneSpeed = "slow";
+        store.speed = "normal";
 
         expect(store.markAnimationDuration).toBe(0.5);
       });
 
-      it("normalで0.25", () => {
+      it("fast (x0.5)で0.25", () => {
         const store = usePreferencesStore();
         store.animationEnabled = true;
-        store.stoneSpeed = "normal";
+        store.speed = "fast";
 
         expect(store.markAnimationDuration).toBe(0.25);
       });
 
-      it("fastで0.125", () => {
+      it("fastest (x0.25)で0.125", () => {
         const store = usePreferencesStore();
         store.animationEnabled = true;
-        store.stoneSpeed = "fast";
+        store.speed = "fastest";
 
         expect(store.markAnimationDuration).toBe(0.125);
       });
@@ -219,26 +299,26 @@ describe("preferencesStore", () => {
     });
 
     describe("lineAnimationDuration", () => {
-      it("slowで0.4", () => {
+      it("normal (x1.0)で0.4", () => {
         const store = usePreferencesStore();
         store.animationEnabled = true;
-        store.stoneSpeed = "slow";
+        store.speed = "normal";
 
         expect(store.lineAnimationDuration).toBe(0.4);
       });
 
-      it("normalで0.2", () => {
+      it("fast (x0.5)で0.2", () => {
         const store = usePreferencesStore();
         store.animationEnabled = true;
-        store.stoneSpeed = "normal";
+        store.speed = "fast";
 
         expect(store.lineAnimationDuration).toBe(0.2);
       });
 
-      it("fastで0.1", () => {
+      it("fastest (x0.25)で0.1", () => {
         const store = usePreferencesStore();
         store.animationEnabled = true;
-        store.stoneSpeed = "fast";
+        store.speed = "fastest";
 
         expect(store.lineAnimationDuration).toBe(0.1);
       });
@@ -252,18 +332,68 @@ describe("preferencesStore", () => {
     });
   });
 
+  describe("演出時間計算", () => {
+    describe("characterAnimationDuration", () => {
+      it("normal (x1.0)で0.3", () => {
+        const store = usePreferencesStore();
+        store.effectSpeed = "normal";
+
+        expect(store.characterAnimationDuration).toBe(0.3);
+      });
+
+      it("slow (x1.5)で0.45", () => {
+        const store = usePreferencesStore();
+        store.effectSpeed = "slow";
+
+        expect(store.characterAnimationDuration).toBeCloseTo(0.45);
+      });
+
+      it("fast (x0.5)で0.15", () => {
+        const store = usePreferencesStore();
+        store.effectSpeed = "fast";
+
+        expect(store.characterAnimationDuration).toBe(0.15);
+      });
+    });
+
+    describe("cutinDisplayDuration", () => {
+      it("normal (x1.0)で0.8", () => {
+        const store = usePreferencesStore();
+        store.effectSpeed = "normal";
+
+        expect(store.cutinDisplayDuration).toBe(0.8);
+      });
+
+      it("slowest (x2.0)で1.6", () => {
+        const store = usePreferencesStore();
+        store.effectSpeed = "slowest";
+
+        expect(store.cutinDisplayDuration).toBe(1.6);
+      });
+
+      it("fastest (x0.25)で0.2", () => {
+        const store = usePreferencesStore();
+        store.effectSpeed = "fastest";
+
+        expect(store.cutinDisplayDuration).toBe(0.2);
+      });
+    });
+  });
+
   describe("preferencesオブジェクト全体", () => {
     it("preferencesオブジェクトに直接アクセスできる", () => {
       const store = usePreferencesStore();
       // 明示的にデフォルト値に設定
       store.animationEnabled = true;
-      store.stoneSpeed = "normal";
+      store.speed = "normal";
+      store.effectSpeed = "normal";
       store.textSize = "normal";
 
       expect(store.preferences).toEqual({
         animation: {
           enabled: true,
-          stoneSpeed: "normal",
+          speed: "normal",
+          effectSpeed: "normal",
         },
         display: {
           textSize: "normal",

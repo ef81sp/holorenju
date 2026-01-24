@@ -93,6 +93,15 @@
   /* テキストサイズ倍率 */
   --text-size-multiplier: 1;
 
+  /* 演出速度倍率（JSからセット） */
+  --effect-speed-multiplier: 1;
+
+  /* 演出duration（CSS用） */
+  --duration-character: calc(0.3s * var(--effect-speed-multiplier));
+  --duration-dialog: calc(0.15s * var(--effect-speed-multiplier));
+  --duration-sprite: calc(0.3s * var(--effect-speed-multiplier));
+  --duration-cutin-overlay: calc(0.2s * var(--effect-speed-multiplier));
+
   color-scheme: light;
   color: var(--color-text-primary);
   background-color: var(--color-bg-white);

@@ -26,6 +26,18 @@ watch(
   { immediate: true },
 );
 
+// 演出速度倍率をCSS変数に反映
+watch(
+  () => preferencesStore.effectSpeedMultiplier,
+  (multiplier) => {
+    document.documentElement.style.setProperty(
+      "--effect-speed-multiplier",
+      String(multiplier),
+    );
+  },
+  { immediate: true },
+);
+
 onMounted(() => {
   showFullscreenPrompt();
 });

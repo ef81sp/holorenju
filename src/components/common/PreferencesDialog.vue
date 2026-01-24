@@ -13,9 +13,11 @@ const confirmDialogRef = ref<InstanceType<typeof ConfirmDialog> | null>(null);
 
 // ラベル定義
 const speedLabels = {
-  slow: "遅い",
+  slowest: "超ゆっくり",
+  slow: "ゆっくり",
   normal: "標準",
   fast: "速い",
+  fastest: "超速い",
 } as const;
 
 const textSizeLabels = {
@@ -93,15 +95,31 @@ defineExpose({
               />
             </label>
             <label class="setting-row">
-              <span class="setting-label">石の配置速度</span>
+              <span class="setting-label">アニメーション速度</span>
               <select
-                v-model="preferencesStore.stoneSpeed"
+                v-model="preferencesStore.speed"
                 class="select"
                 :disabled="!preferencesStore.animationEnabled"
               >
+                <option value="slowest">{{ speedLabels.slowest }}</option>
                 <option value="slow">{{ speedLabels.slow }}</option>
                 <option value="normal">{{ speedLabels.normal }}</option>
                 <option value="fast">{{ speedLabels.fast }}</option>
+                <option value="fastest">{{ speedLabels.fastest }}</option>
+              </select>
+            </label>
+            <label class="setting-row">
+              <span class="setting-label">演出速度</span>
+              <select
+                v-model="preferencesStore.effectSpeed"
+                class="select"
+                :disabled="!preferencesStore.animationEnabled"
+              >
+                <option value="slowest">{{ speedLabels.slowest }}</option>
+                <option value="slow">{{ speedLabels.slow }}</option>
+                <option value="normal">{{ speedLabels.normal }}</option>
+                <option value="fast">{{ speedLabels.fast }}</option>
+                <option value="fastest">{{ speedLabels.fastest }}</option>
               </select>
             </label>
           </div>

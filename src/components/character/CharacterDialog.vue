@@ -198,7 +198,7 @@ const messageCharacterInfo = computed(() => {
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  animation: fadeIn 0.3s ease-in;
+  animation: fadeIn var(--duration-character) ease-in;
 }
 
 .character-slot.left-slot {
@@ -211,7 +211,7 @@ const messageCharacterInfo = computed(() => {
 
 .character-slot .avatar {
   transform: translateY(var(--size-4));
-  transition: transform 0.3s ease-in-out;
+  transition: transform var(--duration-character) ease-in-out;
 }
 
 .character-slot.is-active .avatar {
@@ -265,7 +265,7 @@ const messageCharacterInfo = computed(() => {
 /* トランジション: 下から上へせり上がり */
 .dialog-slide-enter-active,
 .dialog-slide-leave-active {
-  transition: all 0.15s ease-out;
+  transition: all var(--duration-dialog) ease-out;
 }
 
 .dialog-slide-enter-from {

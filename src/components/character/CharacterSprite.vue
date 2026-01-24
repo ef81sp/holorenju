@@ -73,8 +73,8 @@ watch([spriteUrl, coords], cropSprite, { immediate: true });
   height: 100%;
   object-fit: contain;
   transition:
-    filter 0.3s ease,
-    opacity 0.3s ease;
+    filter var(--duration-sprite) ease,
+    opacity var(--duration-sprite) ease;
 }
 
 .character-sprite.inactive {
