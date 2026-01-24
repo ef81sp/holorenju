@@ -23,7 +23,6 @@ const emit = defineEmits<{
 const showDebugInfo = ref(false);
 const showPasteInput = ref(false);
 const pasteInputText = ref("");
-const hoveredPosition = ref<Position | null>(null);
 
 // Convert board string array to BoardState
 const boardState = computed((): BoardState => {
@@ -119,10 +118,6 @@ const handleCopyToClipboard = async (): Promise<void> => {
     console.error("クリップボードへのコピーに失敗しました", err);
   }
 };
-
-const handleHover = (position: Position | null): void => {
-  hoveredPosition.value = position;
-};
 </script>
 
 <template>
@@ -172,14 +167,9 @@ const handleHover = (position: Position | null): void => {
           :stage-size="stageSize"
           :allow-overwrite="true"
           @place-stone="handleCellClick"
-          @hover-cell="handleHover"
         />
         <div class="board-info">
-          <small>
-            クリックで石を置く（黒→白→空のサイクル）
-            <span v-if="hoveredPosition">| 座標: ({{ hoveredPosition.row }},
-              {{ hoveredPosition.col }})</span>
-          </small>
+          <small> クリックで石を置く（黒→白→空のサイクル） </small>
         </div>
       </div>
 
