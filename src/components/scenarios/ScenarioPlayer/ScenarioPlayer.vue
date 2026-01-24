@@ -28,6 +28,7 @@ import { useDialogStore } from "@/stores/dialogStore";
 import type { QuestionSection, SuccessCondition } from "@/types/scenario";
 import type { Position } from "@/types/game";
 import type { TextNode } from "@/types/text";
+import { getSectionDisplayTitle } from "@/utils/sectionUtils";
 
 // Props
 interface Props {
@@ -281,7 +282,12 @@ const handleGoToList = (): void => {
     <div class="info-section-slot">
       <ScenarioInfoPanel
         :scenario-title="scenarioNav.scenario.value.title"
-        :section-title="scenarioNav.currentSection.value?.title || ''"
+        :section-title="
+          getSectionDisplayTitle(
+            scenarioNav.scenario.value.sections,
+            scenarioNav.currentSectionIndex.value,
+          )
+        "
         :description="
           scenarioNav.currentSection.value?.type === 'demo'
             ? scenarioNav.demoDescriptionNodes.value

@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, type PropType } from "vue";
 import { useEditorStore } from "@/editor/stores/editorStore";
-import SectionMetaEditor from "./SectionMetaEditor.vue";
 import BoardVisualEditor from "./BoardVisualEditor.vue";
 import SuccessConditionsEditor from "./QuestionSectionEditor/SuccessConditionsEditor.vue";
 import FeedbackEditor from "./QuestionSectionEditor/FeedbackEditor.vue";
@@ -47,12 +46,6 @@ const updateBoard = (newBoard: string[]): void => {
   }
 };
 
-const updateSectionTitle = (title: string): void => {
-  updateSection({
-    title,
-  });
-};
-
 const updateDescription = (description: string): void => {
   updateSection({
     description: parseText(description),
@@ -74,14 +67,20 @@ const updateSuccessOperator = (operator: "or" | "and"): void => {
         v-if="props.view !== 'content'"
         class="detail-left"
       >
-        <!-- セクション情報 -->
-        <SectionMetaEditor
-          :title="currentSection.title"
-          :description="descriptionText"
-          with-description
-          @update:title="updateSectionTitle"
-          @update:description="updateDescription"
-        />
+        <!-- 説明編集 -->
+        <div class="description-editor">
+          <div class="form-group">
+            <label>説明</label>
+            <textarea
+              :value="descriptionText"
+              class="form-textarea"
+              rows="4"
+              @input="
+                updateDescription(($event.target as HTMLTextAreaElement).value)
+              "
+            />
+          </div>
+        </div>
       </div>
 
       <div
@@ -169,5 +168,39 @@ const updateSuccessOperator = (operator: "or" | "and"): void => {
 
 .board-editor-wrapper summary:hover {
   color: #4a90e2;
+}
+
+.description-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--form-group-gap);
+  padding: var(--padding-md);
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--form-label-gap);
+}
+
+.form-group label {
+  font-weight: 500;
+  font-size: var(--font-size-sm);
+  color: var(--text-primary);
+}
+
+.form-textarea {
+  padding: var(--input-padding);
+  border: var(--border-input);
+  border-radius: var(--border-radius-sm);
+  font-size: var(--font-size-base);
+  font-family: inherit;
+  resize: vertical;
+
+  &:focus {
+    outline: none;
+    border-color: var(--border-focus);
+    box-shadow: var(--shadow-focus);
+  }
 }
 </style>

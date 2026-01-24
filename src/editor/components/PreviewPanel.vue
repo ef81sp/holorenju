@@ -14,6 +14,7 @@ import type { BoardState, StoneColor } from "@/types/game";
 import type { CharacterType, EmotionId } from "@/types/character";
 import { isMarkMatching, type Mark, type Line } from "@/stores/boardStore";
 import { assertNever } from "@/utils/assertNever";
+import { getSectionDisplayTitle } from "@/utils/sectionUtils";
 
 const editorStore = useEditorStore();
 const dialoguePageIndex = computed(() => editorStore.previewDialogueIndex);
@@ -370,7 +371,16 @@ const currentLines = computed<Line[]>(() => {
         v-else
         class="preview-question"
       >
-        <h4>{{ editorStore.currentSection?.title }}</h4>
+        <h4>
+          {{
+            editorStore.selectedSectionIndex !== null
+              ? getSectionDisplayTitle(
+                  editorStore.scenario.sections,
+                  editorStore.selectedSectionIndex,
+                )
+              : ""
+          }}
+        </h4>
         <div class="preview-info">
           <p><strong>説明:</strong></p>
           <div class="description-preview">
