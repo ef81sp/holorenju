@@ -82,14 +82,14 @@ export function useBoardActions(
       case "place":
         return {
           type: "place",
-          position: { row: 0, col: 0 },
+          position: { row: 7, col: 7 },
           color: "black",
           highlight: false,
         };
       case "remove":
         return {
           type: "remove",
-          position: { row: 0, col: 0 },
+          position: { row: 7, col: 7 },
         };
       case "setBoard":
         return {
@@ -106,8 +106,8 @@ export function useBoardActions(
       case "line":
         return {
           type: "line",
-          fromPosition: { row: 0, col: 0 },
-          toPosition: { row: 0, col: 0 },
+          fromPosition: { row: 7, col: 7 },
+          toPosition: { row: 7, col: 7 },
           action: "draw",
           style: "solid",
         };
@@ -118,7 +118,7 @@ export function useBoardActions(
       default:
         return {
           type: "place",
-          position: { row: 0, col: 0 },
+          position: { row: 7, col: 7 },
           color: "black",
         };
     }
@@ -355,7 +355,7 @@ export function useBoardActions(
       return;
     }
 
-    const positions = [...action.positions, { row: 0, col: 0 }];
+    const positions = [...action.positions, { row: 7, col: 7 }];
     updateBoardActionInArray(dialogueIndex, actionIndex, { positions });
   };
 

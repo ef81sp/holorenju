@@ -41,13 +41,27 @@ const handlePositionUpdate = (field: "row" | "col", value: number): void => {
       />
     </label>
 
-    <label class="field field-small">
+    <div class="field field-small">
       <span>色</span>
-      <select v-model="color">
-        <option value="black">黒</option>
-        <option value="white">白</option>
-      </select>
-    </label>
+      <div class="radio-group">
+        <label class="radio-label">
+          <input
+            v-model="color"
+            type="radio"
+            value="black"
+          />
+          黒
+        </label>
+        <label class="radio-label">
+          <input
+            v-model="color"
+            type="radio"
+            value="white"
+          />
+          白
+        </label>
+      </div>
+    </div>
 
     <label class="field checkbox-field">
       <span>ハイライト</span>
@@ -85,19 +99,17 @@ const handlePositionUpdate = (field: "row" | "col", value: number): void => {
   flex: 0 0 auto;
 }
 
-.field-small select {
-  padding: var(--size-3) var(--size-5);
-  border: 1px solid var(--color-border);
-  border-radius: 3px;
-  font-family: inherit;
-  font-size: var(--size-12);
-  color: var(--color-text-primary);
-  background: var(--color-bg-white);
+.radio-group {
+  display: flex;
+  gap: var(--size-8);
 }
 
-.field-small select:focus {
-  outline: none;
-  border-color: var(--color-holo-blue);
+.radio-label {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2);
+  font-size: var(--size-12);
+  cursor: pointer;
 }
 
 .checkbox-field {

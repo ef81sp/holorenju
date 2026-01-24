@@ -166,26 +166,24 @@ const handleAddAfter = (): void => {
     <div class="dialogue-section">
       <div class="dialogue-editor">
         <div class="dialogue-row">
-          <label class="field">
+          <div class="field field-character">
             <span>キャラクター</span>
-            <select
-              :value="dialogue.character"
-              @change="
-                (e) =>
-                  handleCharacterChange(
-                    (e.target as HTMLSelectElement).value as CharacterType,
-                  )
-              "
-            >
-              <option
+            <div class="radio-group-vertical">
+              <label
                 v-for="char in CHARACTERS"
                 :key="char"
-                :value="char"
+                class="radio-label"
               >
+                <input
+                  type="radio"
+                  :value="char"
+                  :checked="dialogue.character === char"
+                  @change="handleCharacterChange(char)"
+                />
                 {{ char }}
-              </option>
-            </select>
-          </label>
+              </label>
+            </div>
+          </div>
 
           <label class="field field-emotion">
             <span>表情</span>
@@ -372,9 +370,28 @@ const handleAddAfter = (): void => {
   min-width: var(--size-200);
 }
 
+.field-character {
+  min-width: var(--size-100);
+}
+
 .field-emotion {
   max-width: var(--size-120);
   align-items: flex-start;
+}
+
+.radio-group-vertical {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-2);
+}
+
+.radio-label {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4);
+  font-size: var(--size-12);
+  line-height: 1;
+  cursor: pointer;
 }
 
 select,
