@@ -1,8 +1,8 @@
 {
   "id": "scenario_mkpnojq9_pacbt",
-  "title": "何をすればいいの？",
+  "title": "何をすればいいの？(1)",
   "difficulty": "gomoku_intermediate",
-  "description": "ざっくりとした方針を学びます。",
+  "description": "ざっくりとした方針を学びます。闇雲に三や四を作らない。",
   "objectives": [],
   "sections": [
     {
@@ -81,7 +81,14 @@
           "text": [
             {
               "type": "text",
-              "content": "四と三を同時に作らないといけないから、"
+              "content": "相手が見落としをしない限り、四と三を同時に作らないと勝てないよね。"
+            },
+            {
+              "type": "lineBreak"
+            },
+            {
+              "type": "text",
+              "content": "だから、"
             },
             {
               "type": "emphasis",
@@ -94,118 +101,676 @@
             },
             {
               "type": "text",
-              "content": "んだ。繋げたものを連携しないといけないんだね。"
+              "content": "んだ。"
             }
           ],
           "emotion": 0,
           "boardActions": []
-        }
-      ]
-    },
-    {
-      "id": "section_2",
-      "type": "demo",
-      "title": "複数の連を作る",
-      "initialBoard": [
-        "---------------",
-        "---------------",
-        "---------------",
-        "---------------",
-        "---------------",
-        "---------------",
-        "---------------",
-        "---------------",
-        "---------------",
-        "---------------",
-        "---------------",
-        "---------------",
-        "---------------",
-        "---------------",
-        "---------------"
-      ],
-      "dialogues": [
+        },
         {
-          "id": "dialogue_1",
+          "id": "dialogue_6",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "うん……？"
+            }
+          ],
+          "emotion": 9,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_7",
           "character": "fubuki",
           "text": [
             {
               "type": "text",
-              "content": "五目並べの最終目的を整理しておこう。五を作るために四三を作るんだったよね。"
+              "content": "対局してみよう。みこさん黒ね。ガンガン攻めてみよう。"
+            }
+          ],
+          "emotion": 1,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_8",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "あい"
+            }
+          ],
+          "emotion": 1,
+          "boardActions": [
+            {
+              "type": "place",
+              "position": {
+                "row": 7,
+                "col": 7
+              },
+              "color": "black"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_9",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "ほっ"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": [
+            {
+              "type": "place",
+              "position": {
+                "row": 6,
+                "col": 7
+              },
+              "color": "white"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_10",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "ていっ"
+            }
+          ],
+          "emotion": 18,
+          "boardActions": [
+            {
+              "type": "place",
+              "position": {
+                "row": 7,
+                "col": 6
+              },
+              "color": "black"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_11",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "ほっ"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": [
+            {
+              "type": "place",
+              "position": {
+                "row": 6,
+                "col": 6
+              },
+              "color": "white"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_12",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "うりゃ"
+            }
+          ],
+          "emotion": 26,
+          "boardActions": [
+            {
+              "type": "place",
+              "position": {
+                "row": 7,
+                "col": 5
+              },
+              "color": "black"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_13",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "ほい"
+            }
+          ],
+          "emotion": 1,
+          "boardActions": [
+            {
+              "type": "place",
+              "position": {
+                "row": 7,
+                "col": 4
+              },
+              "color": "white"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_14",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "ぐぬぬ"
+            }
+          ],
+          "emotion": 15,
+          "boardActions": [
+            {
+              "type": "place",
+              "position": {
+                "row": 7,
+                "col": 8
+              },
+              "color": "black"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_15",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "はっ"
+            }
+          ],
+          "emotion": 11,
+          "boardActions": [
+            {
+              "type": "place",
+              "position": {
+                "row": 7,
+                "col": 9
+              },
+              "color": "white"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_16",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "んむむむむ"
+            }
+          ],
+          "emotion": 15,
+          "boardActions": [
+            {
+              "type": "place",
+              "position": {
+                "row": 8,
+                "col": 5
+              },
+              "color": "black"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_17",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "ミオー俺だー結婚してくれー"
+            }
+          ],
+          "emotion": 8,
+          "description": {
+            "text": [
+              {
+                "type": "text",
+                "content": "ウチ！？"
+              }
+            ]
+          },
+          "boardActions": [
+            {
+              "type": "place",
+              "position": {
+                "row": 8,
+                "col": 4
+              },
+              "color": "white"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_18",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "ここぉ！"
+            }
+          ],
+          "emotion": 19,
+          "description": {
+            "text": [],
+            "clear": true
+          },
+          "boardActions": [
+            {
+              "type": "place",
+              "position": {
+                "row": 9,
+                "col": 5
+              },
+              "color": "black"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_19",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "三はとめる"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": [
+            {
+              "type": "place",
+              "position": {
+                "row": 6,
+                "col": 5
+              },
+              "color": "white"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_20",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "三は止める！"
+            }
+          ],
+          "emotion": 18,
+          "description": {
+            "text": [
+              {
+                "type": "text",
+                "content": "反対を止めればまだ負けないんですが……"
+              }
+            ]
+          },
+          "boardActions": [
+            {
+              "type": "place",
+              "position": {
+                "row": 6,
+                "col": 8
+              },
+              "color": "black"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_21",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "ほい四三"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": [
+            {
+              "type": "place",
+              "position": {
+                "row": 6,
+                "col": 4
+              },
+              "color": "white"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_22",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "だあっ（台パン）"
+            }
+          ],
+          "emotion": 26,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_23",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "……というように、単体で三や四を作っても相手に止められてしまう。"
+            },
+            {
+              "type": "lineBreak"
+            },
+            {
+              "type": "lineBreak"
+            }
+          ],
+          "emotion": 0,
+          "description": {
+            "text": [],
+            "clear": true
+          },
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_24",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "攻めているはずが不利な状況になって、逆に負けてしまうこともあるよ。"
+            }
+          ],
+          "emotion": 1,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_25",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "せんせーどうすればいいんですか"
+            }
+          ],
+          "emotion": 15,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_26",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "四三をつくるには、繋がってる石のまとまりが、少なくとも2つ必要だよね。"
+            },
+            {
+              "type": "lineBreak"
+            },
+            {
+              "type": "text",
+              "content": "四と三を同時に作るわけだから。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": [
+            {
+              "type": "resetAll"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_27",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "うん"
             }
           ],
           "emotion": 0,
           "boardActions": []
-        }
-      ]
-    },
-    {
-      "id": "section_3",
-      "type": "demo",
-      "title": "相手の連を止める",
-      "initialBoard": [
-        "---------------",
-        "---------------",
-        "---------------",
-        "---------------",
-        "---------------",
-        "---------------",
-        "---------------",
-        "---------------",
-        "---------------",
-        "---------------",
-        "---------------",
-        "---------------",
-        "---------------",
-        "---------------",
-        "---------------"
-      ],
-      "dialogues": [
+        },
         {
-          "id": "dialogue_1",
+          "id": "dialogue_28",
           "character": "fubuki",
           "text": [
             {
               "type": "text",
-              "content": "四三を作ろうとするのは当然相手も同じだ。だから、妨害するのも有効だね。"
+              "content": "だから、石の繋がりを複数作って、それを連携させないといけないんだ。"
             }
           ],
           "emotion": 0,
           "boardActions": []
-        }
-      ]
-    },
-    {
-      "id": "section_4",
-      "type": "demo",
-      "title": "相手の連を止めながら連を作る",
-      "initialBoard": [
-        "---------------",
-        "---------------",
-        "---------------",
-        "---------------",
-        "---------------",
-        "---------------",
-        "---------------",
-        "---------------",
-        "---------------",
-        "---------------",
-        "---------------",
-        "---------------",
-        "---------------",
-        "---------------",
-        "---------------"
-      ],
-      "dialogues": [
+        },
         {
-          "id": "dialogue_1",
+          "id": "dialogue_29",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "イメージわかないなぁ"
+            }
+          ],
+          "emotion": 10,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_30",
           "character": "fubuki",
           "text": [
             {
               "type": "text",
-              "content": "さて、ここまでやった2つを同時にできたら最高じゃないか？"
+              "content": "三や四を連続で作ると、相手は止め続けるしかないよね。"
+            }
+          ],
+          "emotion": 1,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_31",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "それはそう"
+            }
+          ],
+          "emotion": 1,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_32",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "だから、三や四を連続で作ることで、最終的に四三を作るのが、基本的にやりたいことになるんだ。"
             }
           ],
           "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_33",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "ど、どうやるんですか"
+            }
+          ],
+          "emotion": 5,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_34",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "そのためには、三をいきなり作ると止められちゃうから、その手前の"
+            },
+            {
+              "type": "emphasis",
+              "content": [
+                {
+                  "type": "text",
+                  "content": "二を複数作る"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "content": "んだ。"
+            },
+            {
+              "type": "lineBreak"
+            },
+            {
+              "type": "text",
+              "content": "そうすると、三を連続で作りやすくなる。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": [
+            {
+              "type": "setBoard",
+              "board": [
+                "---------------",
+                "---------------",
+                "---x-------x---",
+                "---x-----------",
+                "-----------x---",
+                "---------------",
+                "---------------",
+                "--xx------x-x--",
+                "---------------",
+                "---------------",
+                "-----------x---",
+                "---x-----------",
+                "----x----x-----",
+                "---------------",
+                "---------------"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "dialogue_35",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "ほうほう"
+            }
+          ],
+          "emotion": 8,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_36",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "二のことは"
+            },
+            {
+              "type": "emphasis",
+              "content": [
+                {
+                  "type": "ruby",
+                  "base": "連",
+                  "ruby": "れん"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "content": "と呼ぶよ。ひとつ離れていてもOKだ。"
+            }
+          ],
+          "emotion": 0,
+          "description": {
+            "text": [
+              {
+                "type": "emphasis",
+                "content": [
+                  {
+                    "type": "ruby",
+                    "base": "連",
+                    "ruby": "れん"
+                  }
+                ]
+              },
+              {
+                "type": "lineBreak"
+              },
+              {
+                "type": "lineBreak"
+              },
+              {
+                "type": "text",
+                "content": "2つ繋がっていて、止められていないもののこと。次に石を打つと三になる。"
+              }
+            ]
+          },
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_37",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "れん"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_38",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "闇雲に三や四を作るよりは、連を複数作る。それを連携させて、連続で三や四を作って、最終的に四三を作る。これが理想なんだ。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_39",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "次のセクションで詳しくやっていこうね。"
+            }
+          ],
+          "emotion": 1,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_40",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "あい！"
+            }
+          ],
+          "emotion": 1,
           "boardActions": []
         }
       ]
