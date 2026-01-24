@@ -134,7 +134,10 @@ export const usePreferencesStore = defineStore("preferences", () => {
     if (saved) {
       try {
         const parsed = JSON.parse(saved) as OldPreferences;
-        return migrateFromOldFormat(parsed);
+        const migrated = migrateFromOldFormat(parsed);
+        // マイグレーション後、新形式で即座に保存
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
+        return migrated;
       } catch {
         return { ...defaultPreferences };
       }
