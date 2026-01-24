@@ -46,8 +46,8 @@ const initializeState = async (): Promise<void> => {
   if (!props.currentData || !props.dirHandle) {
     return;
   }
-  const {currentData} = props;
-  const {dirHandle} = props;
+  const { currentData } = props;
+  const { dirHandle } = props;
 
   const newState: ReorderState = difficulties.reduce((acc, difficulty) => {
     const scenarios = currentData.difficulties[difficulty]?.scenarios;
