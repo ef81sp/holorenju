@@ -41,6 +41,18 @@ const updateSectionTitle = (title: string): void => {
     title,
   });
 };
+
+const handleSplitHere = (dialogueIndex: number): void => {
+  if (editorStore.selectedSectionIndex === null) {
+    return;
+  }
+  // dialogueIndex のダイアログ「から」新しいセクションに分割
+  // つまり dialogueIndex - 1 まで元のセクションに残す
+  editorStore.splitDemoSection(
+    editorStore.selectedSectionIndex,
+    dialogueIndex - 1,
+  );
+};
 </script>
 
 <template>
@@ -113,6 +125,7 @@ const updateSectionTitle = (title: string): void => {
               @move-down="editorStore.moveDialogueDown(index)"
               @remove="removeDialogue(index)"
               @add-after="insertDialogueAfter(index)"
+              @split-here="handleSplitHere(index)"
             />
           </div>
           <button

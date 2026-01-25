@@ -21,6 +21,7 @@ const emit = defineEmits<{
   "move-up": [];
   "move-down": [];
   "add-after": [];
+  "split-here": [];
 }>();
 
 const props = defineProps<{
@@ -83,6 +84,11 @@ const canMoveDown = computed(
   () => props.dialogueIndex < props.dialogueCount - 1,
 );
 
+// 分割可能条件: 最初のダイアログでなく、ダイアログが2つ以上ある
+const canSplit = computed(
+  () => props.dialogueIndex > 0 && props.dialogueCount > 1,
+);
+
 const openEmotionPicker = (): void => {
   const pickerRef = emotionPickerRef.value as {
     showModal?: () => void;
@@ -122,6 +128,12 @@ const handleRemove = (): void => {
 const handleAddAfter = (): void => {
   emit("add-after");
 };
+
+const handleSplitHere = (): void => {
+  if (canSplit.value) {
+    emit("split-here");
+  }
+};
 </script>
 
 <template>
@@ -137,6 +149,15 @@ const handleAddAfter = (): void => {
         />
       </div>
       <div class="dialogue-actions">
+        <button
+          v-if="canSplit"
+          type="button"
+          class="split-button"
+          title="ここから新しいセクションに分割"
+          @click="handleSplitHere"
+        >
+          ✂
+        </button>
         <button
           type="button"
           class="move-button"
@@ -311,13 +332,24 @@ const handleAddAfter = (): void => {
 }
 
 .move-button,
-.remove-button {
+.remove-button,
+.split-button {
   width: var(--size-20);
   height: var(--size-20);
   border-radius: 2px;
   border: 1px solid var(--color-border);
   background: var(--color-background-soft);
   font-size: var(--size-12);
+}
+
+.split-button {
+  border-color: var(--color-holo-blue);
+  color: var(--color-holo-blue);
+}
+
+.split-button:hover {
+  background: var(--color-holo-blue);
+  color: white;
 }
 
 .move-button:disabled {

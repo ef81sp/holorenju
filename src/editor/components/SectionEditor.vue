@@ -41,6 +41,20 @@ const handleSelectSection = (index: number): void => {
 const handleTypeChange = (type: "demo" | "question"): void => {
   editorStore.changeCurrentSectionType(type);
 };
+
+const canMergeSections = (index: number): boolean => {
+  const { sections } = editorStore.scenario;
+  if (index < 0 || index >= sections.length - 1) {
+    return false;
+  }
+  const current = sections[index];
+  const next = sections[index + 1];
+  return current?.type === "demo" && next?.type === "demo";
+};
+
+const handleMergeSections = (index: number): void => {
+  editorStore.mergeDemoSections(index);
+};
 </script>
 
 <template>
@@ -96,6 +110,14 @@ const handleTypeChange = (type: "demo" | "question"): void => {
             <span class="section-title">（{{ section.title }}）</span>
           </button>
           <div class="section-actions-buttons">
+            <button
+              v-if="canMergeSections(index)"
+              class="btn-merge"
+              title="次のデモセクションと統合"
+              @click="handleMergeSections(index)"
+            >
+              ⊕
+            </button>
             <button
               class="btn-move"
               :disabled="index === 0"
@@ -309,6 +331,20 @@ const handleTypeChange = (type: "demo" | "question"): void => {
 }
 
 .btn-delete:hover {
+  opacity: 0.8;
+}
+
+.btn-merge {
+  padding: var(--size-5);
+  background-color: #4caf50;
+  border: none;
+  cursor: pointer;
+  font-size: var(--size-12);
+  transition: opacity 0.2s;
+  min-width: var(--size-24);
+}
+
+.btn-merge:hover {
   opacity: 0.8;
 }
 

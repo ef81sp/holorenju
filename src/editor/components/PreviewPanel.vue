@@ -5,71 +5,18 @@ import RenjuBoard from "@/components/game/RenjuBoard/RenjuBoard.vue";
 import CharacterSprite from "@/components/character/CharacterSprite.vue";
 import DialogText from "@/components/common/DialogText.vue";
 import RichText from "@/components/common/RichText.vue";
-import type {
-  DemoSection,
-  QuestionSection,
-  BoardAction,
-} from "@/types/scenario";
-import type { BoardState, StoneColor } from "@/types/game";
+import type { DemoSection, QuestionSection } from "@/types/scenario";
 import type { CharacterType, EmotionId } from "@/types/character";
 import { isMarkMatching, type Mark, type Line } from "@/stores/boardStore";
 import { assertNever } from "@/utils/assertNever";
 import { getSectionDisplayTitle } from "@/utils/sectionUtils";
+import {
+  stringArrayToBoardState,
+  applyBoardAction,
+} from "@/editor/logic/boardCalculator";
 
 const editorStore = useEditorStore();
 const dialoguePageIndex = computed(() => editorStore.previewDialogueIndex);
-
-// ボード文字列を BoardState に変換
-const stringBoardToBoardState = (boardLines: string[]): BoardState =>
-  boardLines.map((line) =>
-    line.split("").map((char) => {
-      if (char === "x") {
-        return "black" as StoneColor;
-      }
-      if (char === "o") {
-        return "white" as StoneColor;
-      }
-      return null;
-    }),
-  );
-
-// 盤面アクションを適用
-const applyBoardAction = (
-  action: BoardAction,
-  board: BoardState,
-  initialBoard: string[],
-): BoardState => {
-  switch (action.type) {
-    case "place": {
-      const { row, col } = action.position;
-      const boardRow = board[row];
-      if (boardRow) {
-        boardRow[col] = action.color;
-      }
-      return board;
-    }
-    case "remove": {
-      const { row, col } = action.position;
-      const boardRow = board[row];
-      if (boardRow) {
-        boardRow[col] = null;
-      }
-      return board;
-    }
-    case "setBoard":
-      return stringBoardToBoardState(action.board);
-    case "resetAll":
-      // 石を全て消して空の盤面にする（初期盤面に戻すのではない）
-      return stringBoardToBoardState(Array(15).fill("-".repeat(15)));
-    case "resetMarkLine":
-    case "mark":
-    case "line":
-      // マーク・ラインは盤面に影響しない
-      return board;
-    default:
-      assertNever(action);
-  }
-};
 
 const previewContent = computed(() => {
   const section = editorStore.currentSection;
@@ -141,11 +88,11 @@ const currentBoard = computed(() => {
   }
 
   if (previewContent.value.type === "question") {
-    return stringBoardToBoardState(previewContent.value.board);
+    return stringArrayToBoardState(previewContent.value.board);
   }
 
   const { initialBoard, dialogues } = previewContent.value;
-  let board = stringBoardToBoardState(initialBoard);
+  let board = stringArrayToBoardState(initialBoard);
 
   // 現在のダイアログインデックスまでのアクションを適用（現在のダイアログを含む）
   for (let i = 0; i <= dialoguePageIndex.value; i++) {
@@ -155,7 +102,7 @@ const currentBoard = computed(() => {
     }
     // BoardActions 配列をループして各アクションを順次適用
     for (const action of dialogue.boardActions) {
-      board = applyBoardAction(action, board, initialBoard);
+      board = applyBoardAction(action, board);
     }
   }
 

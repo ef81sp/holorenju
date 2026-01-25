@@ -11,7 +11,9 @@ export const getSectionDisplayTitle = (
   sectionIndex: number,
 ): string => {
   const section = sections[sectionIndex];
-  if (!section) {return "";}
+  if (!section) {
+    return "";
+  }
 
   if (section.type === "demo") {
     return section.title;

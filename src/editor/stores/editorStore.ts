@@ -5,8 +5,14 @@
 import { defineStore } from "pinia";
 import { ref, computed } from "vue";
 
-import type { Scenario, Section, ScenarioDifficulty } from "@/types/scenario";
+import type {
+  Scenario,
+  Section,
+  ScenarioDifficulty,
+  DemoSection,
+} from "@/types/scenario";
 
+import { computeBoardAtDialogue } from "@/editor/logic/boardCalculator";
 import {
   createEmptyScenario,
   createEmptyDemoSection,
@@ -255,6 +261,145 @@ export const useEditorStore = defineStore("editor", () => {
     isDirty.value = false;
   };
 
+  /**
+   * デモセクションを分割する
+   * @param sectionIndex 分割対象のセクションインデックス
+   * @param splitAfterDialogueIndex この index のダイアログまでを元のセクションに残す
+   */
+  const splitDemoSection = (
+    sectionIndex: number,
+    splitAfterDialogueIndex: number,
+  ): void => {
+    const section = scenario.value.sections[sectionIndex];
+    if (!section || section.type !== "demo") {
+      return;
+    }
+    const demoSection = section as DemoSection;
+
+    // 分割位置のバリデーション
+    if (
+      splitAfterDialogueIndex < 0 ||
+      splitAfterDialogueIndex >= demoSection.dialogues.length - 1
+    ) {
+      return;
+    }
+
+    // 新セクションの初期盤面を計算（分割位置のダイアログ終了時点の盤面）
+    const newInitialBoard = computeBoardAtDialogue(
+      demoSection.initialBoard,
+      demoSection.dialogues,
+      splitAfterDialogueIndex,
+    );
+
+    // ダイアログを分割
+    const originalDialogues = demoSection.dialogues.slice(
+      0,
+      splitAfterDialogueIndex + 1,
+    );
+    const newDialogues = demoSection.dialogues.slice(
+      splitAfterDialogueIndex + 1,
+    );
+
+    // 新セクションを作成
+    const newSection: DemoSection = {
+      id: "", // 後で再採番
+      type: "demo",
+      title: `${demoSection.title}（続き）`,
+      initialBoard: newInitialBoard,
+      dialogues: newDialogues,
+    };
+
+    // 元のセクションを更新
+    demoSection.dialogues = originalDialogues;
+
+    // 新セクションを挿入
+    scenario.value.sections.splice(sectionIndex + 1, 0, newSection);
+
+    // 全セクションのIDを再採番
+    scenario.value.sections.forEach((s, idx) => {
+      s.id = `section_${idx + 1}`;
+    });
+
+    // 両セクションのダイアログIDを再採番
+    demoSection.dialogues.forEach((dialogue, idx) => {
+      dialogue.id = `dialogue_${idx + 1}`;
+    });
+    newSection.dialogues.forEach((dialogue, idx) => {
+      dialogue.id = `dialogue_${idx + 1}`;
+    });
+
+    // 分割後にプレビューインデックスが範囲外にならないよう調整
+    if (selectedSectionIndex.value === sectionIndex) {
+      previewDialogueIndex.value = Math.min(
+        previewDialogueIndex.value,
+        splitAfterDialogueIndex,
+      );
+    }
+
+    isDirty.value = true;
+  };
+
+  /**
+   * 隣接する2つのデモセクションを統合する
+   * @param firstSectionIndex 統合する最初のセクションインデックス
+   * @returns 統合成功 (true) / 失敗 (false)
+   */
+  const mergeDemoSections = (firstSectionIndex: number): boolean => {
+    const { sections } = scenario.value;
+
+    // バリデーション
+    if (firstSectionIndex < 0 || firstSectionIndex >= sections.length - 1) {
+      return false;
+    }
+
+    const firstSection = sections[firstSectionIndex];
+    const secondSection = sections[firstSectionIndex + 1];
+
+    if (
+      !firstSection ||
+      !secondSection ||
+      firstSection.type !== "demo" ||
+      secondSection.type !== "demo"
+    ) {
+      return false;
+    }
+
+    const firstDemo = firstSection as DemoSection;
+    const secondDemo = secondSection as DemoSection;
+
+    // ダイアログを連結（最初のセクションの initialBoard と title を維持）
+    firstDemo.dialogues = [...firstDemo.dialogues, ...secondDemo.dialogues];
+
+    // 2番目のセクションを削除
+    sections.splice(firstSectionIndex + 1, 1);
+
+    // 全セクションのIDを再採番
+    sections.forEach((s, idx) => {
+      s.id = `section_${idx + 1}`;
+    });
+
+    // 統合後のダイアログIDを再採番
+    firstDemo.dialogues.forEach((dialogue, idx) => {
+      dialogue.id = `dialogue_${idx + 1}`;
+    });
+
+    // 選択状態を調整
+    if (selectedSectionIndex.value === firstSectionIndex + 1) {
+      // 2番目のセクションが選択されていた場合、1番目に移動
+      selectedSectionIndex.value = firstSectionIndex;
+      previewDialogueIndex.value = 0;
+    } else if (
+      selectedSectionIndex.value !== null &&
+      selectedSectionIndex.value > firstSectionIndex + 1
+    ) {
+      // 2番目より後のセクションが選択されていた場合、インデックスを調整
+      selectedSectionIndex.value -= 1;
+    }
+
+    isDirty.value = true;
+    return true;
+  };
+
   const setCurrentFileHandle = (handle: FileSystemFileHandle | null): void => {
     currentFileHandle.value = handle;
   };
@@ -296,6 +441,8 @@ export const useEditorStore = defineStore("editor", () => {
     goToLastDialogue,
     goToDialogueIndex,
     markClean,
+    splitDemoSection,
+    mergeDemoSections,
     currentFileHandle,
     setCurrentFileHandle,
     clearCurrentFileHandle,
