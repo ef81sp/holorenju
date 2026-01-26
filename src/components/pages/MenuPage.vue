@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useAppStore } from "@/stores/appStore";
 import PageHeader from "@/components/common/PageHeader.vue";
+import InfoControl from "@/components/common/InfoControl.vue";
 
 const appStore = useAppStore();
 
@@ -20,13 +21,17 @@ const handleSelectEditor = (): void => {
 
 <template>
   <div class="menu-page">
-    <PageHeader title="ホロ連珠" />
+    <PageHeader title="ホロ連珠">
+      <template #right>
+        <InfoControl />
+      </template>
+    </PageHeader>
     <div class="content">
       <div class="menu-buttons">
         <button
           class="menu-button"
           @click="handleSelectTraining"
-        >
+>
           <div class="button-icon">📚</div>
           <div class="button-text-area">
             <span class="button-text">学習</span>
@@ -37,7 +42,7 @@ const handleSelectEditor = (): void => {
           class="menu-button"
           :disabled="true"
           @click="handleSelectCPU"
-        >
+>
           <div class="button-icon">🎮</div>
           <div class="button-text-area">
             <span class="button-text">CPU対戦</span>
@@ -49,7 +54,7 @@ const handleSelectEditor = (): void => {
           class="menu-button"
           style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%)"
           @click="handleSelectEditor"
-        >
+>
           <div class="button-icon">⚙️</div>
           <div class="button-text-area">
             <span class="button-text">シナリオ編集</span>
