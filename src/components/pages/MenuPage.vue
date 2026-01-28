@@ -10,7 +10,6 @@ const handleSelectTraining = (): void => {
 };
 
 const handleSelectCPU = (): void => {
-  // CPU対戦は未実装
   appStore.selectMode("cpu");
 };
 
@@ -40,15 +39,13 @@ const handleSelectEditor = (): void => {
         </button>
         <button
           class="menu-button"
-          :disabled="true"
           @click="handleSelectCPU"
         >
           <div class="button-icon">🎮</div>
           <div class="button-text-area">
             <span class="button-text">CPU対戦</span>
-            <p class="button-description">今後実装予定</p>
+            <p class="button-description">AIと対局して腕を磨こう</p>
           </div>
-          <span class="badge">未実装</span>
         </button>
         <button
           class="menu-button"

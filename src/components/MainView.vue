@@ -8,6 +8,7 @@ import { ScenarioPlayer } from "./scenarios/ScenarioPlayer";
 // oxlint-disable-next-line consistent-type-imports
 import ConfirmDialog from "./common/ConfirmDialog.vue";
 import ScenarioEditor from "@/editor/components/ScenarioEditor.vue";
+import { CpuSetupPage, CpuGamePlayer } from "./cpu";
 
 const appStore = useAppStore();
 const confirmDialogRef = ref<InstanceType<typeof ConfirmDialog> | null>(null);
@@ -27,8 +28,11 @@ const pendingPopState = ref<AppState | null>(null);
 const handlePopState = (event: PopStateEvent): void => {
   const state = event.state as AppState | null;
 
-  // シナリオプレイ中の場合は確認ダイアログを表示
-  if (currentScene.value === "scenarioPlay") {
+  // シナリオプレイ中またはCPU対戦中の場合は確認ダイアログを表示
+  if (
+    currentScene.value === "scenarioPlay" ||
+    currentScene.value === "cpuPlay"
+  ) {
     event.preventDefault();
     pendingPopState.value = state;
     confirmDialogRef.value?.showModal();
@@ -91,6 +95,8 @@ onUnmounted(() => {
         v-else-if="currentScene === 'scenarioPlay' && selectedScenarioId"
         :scenario-id="selectedScenarioId"
       />
+      <CpuSetupPage v-else-if="currentScene === 'cpuSetup'" />
+      <CpuGamePlayer v-else-if="currentScene === 'cpuPlay'" />
       <ScenarioEditor v-else-if="currentScene === 'editor'" />
     </Transition>
   </div>

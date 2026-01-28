@@ -58,12 +58,12 @@ describe("appStore", () => {
       expect(store.scene).toBe("difficulty");
     });
 
-    it("cpuモードは未実装のため何もしない", () => {
+    it("cpuモードを選択するとcpuSetup画面に遷移する", () => {
       const store = useAppStore();
       store.selectMode("cpu");
 
-      expect(store.selectedMode).toBeNull();
-      expect(store.scene).toBe("menu");
+      expect(store.selectedMode).toBe("cpu");
+      expect(store.scene).toBe("cpuSetup");
     });
 
     it("transitionDirectionがforwardになる", () => {
@@ -187,6 +187,41 @@ describe("appStore", () => {
 
       expect(store.scene).toBe("editor");
       expect(store.transitionDirection).toBe("forward");
+    });
+  });
+
+  describe("CPU対戦機能", () => {
+    it("startCpuGameでCPU対戦を開始できる", () => {
+      const store = useAppStore();
+      store.selectMode("cpu");
+      store.startCpuGame("medium", true);
+
+      expect(store.scene).toBe("cpuPlay");
+      expect(store.cpuDifficulty).toBe("medium");
+      expect(store.cpuPlayerFirst).toBe(true);
+    });
+
+    it("goToCpuSetupでCPU設定画面に戻れる", () => {
+      const store = useAppStore();
+      store.selectMode("cpu");
+      store.startCpuGame("hard", false);
+
+      store.goToCpuSetup();
+
+      expect(store.scene).toBe("cpuSetup");
+      expect(store.cpuDifficulty).toBeNull();
+      expect(store.cpuPlayerFirst).toBeNull();
+    });
+
+    it("goToMenuでCPU関連の状態もリセットされる", () => {
+      const store = useAppStore();
+      store.selectMode("cpu");
+      store.startCpuGame("medium", true);
+
+      store.goToMenu();
+
+      expect(store.cpuDifficulty).toBeNull();
+      expect(store.cpuPlayerFirst).toBeNull();
     });
   });
 

@@ -1,5 +1,6 @@
 import { defineStore } from "pinia";
 
+import type { CpuDifficulty } from "@/types/cpu";
 import type { ScenarioDifficulty } from "@/types/scenario";
 
 export type Scene =
@@ -7,7 +8,9 @@ export type Scene =
   | "difficulty"
   | "scenarioList"
   | "scenarioPlay"
-  | "editor";
+  | "editor"
+  | "cpuSetup"
+  | "cpuPlay";
 export type Mode = "training" | "cpu";
 export type Difficulty = ScenarioDifficulty;
 export type TransitionDirection = "forward" | "back";
@@ -18,6 +21,8 @@ export interface AppState {
   selectedDifficulty: ScenarioDifficulty | null;
   currentPage: number;
   selectedScenarioId: string | null;
+  cpuDifficulty: CpuDifficulty | null;
+  cpuPlayerFirst: boolean | null;
 }
 
 interface AppStoreState extends AppState {
@@ -32,17 +37,21 @@ export const useAppStore = defineStore("app", {
     currentPage: 0,
     selectedScenarioId: null,
     transitionDirection: "forward",
+    cpuDifficulty: null,
+    cpuPlayerFirst: null,
   }),
 
   actions: {
     selectMode(mode: Mode) {
-      if (mode === "cpu") {
-        // CPU対戦は未実装
-        return;
-      }
       this.transitionDirection = "forward";
       this.selectedMode = mode;
-      this.scene = "difficulty";
+
+      if (mode === "cpu") {
+        this.scene = "cpuSetup";
+      } else {
+        this.scene = "difficulty";
+      }
+
       this.pushHistory();
     },
 
@@ -72,6 +81,8 @@ export const useAppStore = defineStore("app", {
       this.selectedDifficulty = null;
       this.currentPage = 0;
       this.selectedScenarioId = null;
+      this.cpuDifficulty = null;
+      this.cpuPlayerFirst = null;
       this.pushHistory();
     },
 
@@ -101,6 +112,22 @@ export const useAppStore = defineStore("app", {
       this.pushHistory();
     },
 
+    goToCpuSetup() {
+      this.transitionDirection = "back";
+      this.scene = "cpuSetup";
+      this.cpuDifficulty = null;
+      this.cpuPlayerFirst = null;
+      this.pushHistory();
+    },
+
+    startCpuGame(difficulty: CpuDifficulty, playerFirst: boolean) {
+      this.transitionDirection = "forward";
+      this.cpuDifficulty = difficulty;
+      this.cpuPlayerFirst = playerFirst;
+      this.scene = "cpuPlay";
+      this.pushHistory();
+    },
+
     setPage(page: number) {
       this.currentPage = page;
       this.pushHistory();
@@ -123,6 +150,21 @@ export const useAppStore = defineStore("app", {
       if (state.selectedScenarioId !== undefined) {
         this.selectedScenarioId = state.selectedScenarioId;
       }
+      if (state.cpuDifficulty !== undefined) {
+        this.cpuDifficulty = state.cpuDifficulty;
+      }
+      if (state.cpuPlayerFirst !== undefined) {
+        this.cpuPlayerFirst = state.cpuPlayerFirst;
+      }
+    },
+
+    restoreCpuState(state: Partial<AppState>) {
+      if (state.cpuDifficulty !== undefined) {
+        this.cpuDifficulty = state.cpuDifficulty;
+      }
+      if (state.cpuPlayerFirst !== undefined) {
+        this.cpuPlayerFirst = state.cpuPlayerFirst;
+      }
     },
 
     pushHistory() {
@@ -132,6 +174,8 @@ export const useAppStore = defineStore("app", {
         selectedDifficulty: this.selectedDifficulty,
         currentPage: this.currentPage,
         selectedScenarioId: this.selectedScenarioId,
+        cpuDifficulty: this.cpuDifficulty,
+        cpuPlayerFirst: this.cpuPlayerFirst,
       };
       window.history.pushState(state, "", `#${this.scene}`);
     },
