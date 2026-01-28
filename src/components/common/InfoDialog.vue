@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref } from "vue";
 
 const dialogRef = ref<HTMLDialogElement | null>(null);
 
@@ -10,7 +10,10 @@ defineExpose({
 </script>
 
 <template>
-  <dialog ref="dialogRef" class="info-dialog">
+  <dialog
+    ref="dialogRef"
+    class="info-dialog"
+  >
     <div class="dialog-content">
       <div class="dialog-header">
         <h2 class="dialog-title">アプリ情報</h2>
@@ -29,8 +32,18 @@ defineExpose({
             stroke-linecap="round"
             stroke-linejoin="round"
           >
-            <line x1="18" y1="6" x2="6" y2="18" />
-            <line x1="6" y1="6" x2="18" y2="18" />
+            <line
+              x1="18"
+              y1="6"
+              x2="6"
+              y2="18"
+            />
+            <line
+              x1="6"
+              y1="6"
+              x2="18"
+              y2="18"
+            />
           </svg>
         </button>
       </div>
@@ -72,8 +85,7 @@ defineExpose({
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                @toki_p_happi </a
-              >)
+                @toki_p_happi </a>)
             </p>
           </div>
         </section>
@@ -88,8 +100,7 @@ defineExpose({
                   href="https://hololivepro.com/terms/"
                   target="_blank"
                   rel="noopener noreferrer"
-                  >二次創作ガイドライン | ホロライブプロダクション</a
-                >に基づく二次創作です。
+                  >二次創作ガイドライン | ホロライブプロダクション</a>に基づく二次創作です。
               </li>
               <li>無料でご利用いただけます。</li>
               <li>配信等で、公序良俗を守った上でご自由にお使いください。</li>
@@ -109,8 +120,7 @@ defineExpose({
                 href="https://x.com/p_craft"
                 target="_blank"
                 rel="noopener noreferrer"
-                >@p_craft </a
-              >)
+                >@p_craft </a>)
             </p>
           </div>
         </section>
