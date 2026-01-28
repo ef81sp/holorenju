@@ -268,3 +268,78 @@ export function findBestMove(
     score: best.score,
   };
 }
+
+/**
+ * Iterative Deepening結果
+ */
+export interface IterativeDeepingResult extends MinimaxResult {
+  /** 実際に完了した探索深度 */
+  completedDepth: number;
+  /** 時間切れで中断したか */
+  interrupted: boolean;
+}
+
+/**
+ * Iterative Deepeningで最善手を探索
+ *
+ * 深さ1から始めて、時間制限内で可能な限り深く探索する。
+ * 時間切れになった場合は、最後に完了した深さの結果を返す。
+ *
+ * @param board 盤面
+ * @param color 手番の色
+ * @param maxDepth 最大探索深度
+ * @param timeLimit 時間制限（ミリ秒）
+ * @param randomFactor ランダム要素（0-1）
+ * @returns 最善手と探索情報
+ */
+export function findBestMoveIterative(
+  board: BoardState,
+  color: "black" | "white",
+  maxDepth: number,
+  timeLimit: number,
+  randomFactor = 0,
+): IterativeDeepingResult {
+  const startTime = performance.now();
+
+  // 初期結果（深さ1で必ず結果を得る）
+  let bestResult = findBestMove(board, color, 1, randomFactor);
+  let completedDepth = 1;
+  let interrupted = false;
+
+  // 深さ2から開始して、時間制限内で可能な限り深く探索
+  for (let depth = 2; depth <= maxDepth; depth++) {
+    const elapsedTime = performance.now() - startTime;
+
+    // 時間制限チェック（次の深さを探索する余裕があるか）
+    // 探索時間は深さとともに指数関数的に増加するため、
+    // 残り時間が経過時間の半分以下なら中断
+    if (elapsedTime > timeLimit * 0.5) {
+      interrupted = true;
+      break;
+    }
+
+    // 深さdで探索
+    const result = findBestMove(board, color, depth, randomFactor);
+
+    // 探索完了後の時間チェック
+    const currentTime = performance.now() - startTime;
+    if (currentTime >= timeLimit) {
+      // 時間オーバーだが、このdepthの結果は使用可能
+      bestResult = result;
+      completedDepth = depth;
+      interrupted = true;
+      break;
+    }
+
+    // 結果を更新
+    bestResult = result;
+    completedDepth = depth;
+  }
+
+  return {
+    position: bestResult.position,
+    score: bestResult.score,
+    completedDepth,
+    interrupted,
+  };
+}

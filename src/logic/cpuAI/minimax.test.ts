@@ -9,7 +9,7 @@ import type { BoardState, StoneColor } from "@/types/game";
 import { createEmptyBoard } from "@/logic/renjuRules";
 
 import { PATTERN_SCORES } from "./evaluation";
-import { findBestMove, minimax } from "./minimax";
+import { findBestMove, findBestMoveIterative, minimax } from "./minimax";
 
 /**
  * テスト用の盤面にパターンを配置するヘルパー
@@ -165,5 +165,79 @@ describe("findBestMove", () => {
     expect(result.position.row).toBeLessThan(15);
     expect(result.position.col).toBeGreaterThanOrEqual(0);
     expect(result.position.col).toBeLessThan(15);
+  });
+});
+
+describe("findBestMoveIterative", () => {
+  it("深さ1から開始して有効な手を返す", () => {
+    const board = createEmptyBoard();
+    const result = findBestMoveIterative(board, "black", 3, 5000);
+
+    expect(result.position).toEqual({ row: 7, col: 7 });
+    expect(result.completedDepth).toBeGreaterThanOrEqual(1);
+    expect(typeof result.interrupted).toBe("boolean");
+  });
+
+  it("時間制限内で可能な限り深く探索する", () => {
+    const board = createEmptyBoard();
+    placeStonesOnBoard(board, [
+      { row: 7, col: 7, color: "black" },
+      { row: 7, col: 8, color: "white" },
+    ]);
+
+    // 5秒の時間制限で最大深度4まで探索
+    const result = findBestMoveIterative(board, "black", 4, 5000);
+
+    expect(result.position.row).toBeGreaterThanOrEqual(0);
+    expect(result.position.row).toBeLessThan(15);
+    expect(result.completedDepth).toBeGreaterThanOrEqual(1);
+    expect(result.completedDepth).toBeLessThanOrEqual(4);
+  });
+
+  it("短い時間制限では早期に中断する", () => {
+    const board = createEmptyBoard();
+    placeStonesOnBoard(board, [
+      { row: 7, col: 7, color: "black" },
+      { row: 7, col: 8, color: "white" },
+      { row: 6, col: 6, color: "black" },
+      { row: 6, col: 8, color: "white" },
+    ]);
+
+    // 非常に短い時間制限（10ms）
+    const result = findBestMoveIterative(board, "black", 5, 10);
+
+    // 有効な手が返される
+    expect(result.position.row).toBeGreaterThanOrEqual(0);
+    expect(result.position.row).toBeLessThan(15);
+    // 浅い深度で完了するはず
+    expect(result.completedDepth).toBeGreaterThanOrEqual(1);
+  });
+
+  it("勝利できる手がある場合は高スコアを返す", () => {
+    const board = createEmptyBoard();
+    // 黒が4つ並んでいる状態（両端が空いている）
+    placeStonesOnBoard(board, [
+      { row: 7, col: 4, color: "black" },
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+    ]);
+
+    const result = findBestMoveIterative(board, "black", 3, 5000);
+
+    // 有効な手が選択され、勝利手があるため高スコアになるはず
+    expect(result.position.row).toBeGreaterThanOrEqual(0);
+    expect(result.position.row).toBeLessThan(15);
+    expect(result.score).toBeGreaterThanOrEqual(PATTERN_SCORES.FIVE);
+  });
+
+  it("completedDepthとinterruptedが正しく設定される", () => {
+    const board = createEmptyBoard();
+
+    const result = findBestMoveIterative(board, "black", 2, 10000);
+
+    // 十分な時間があれば最大深度まで到達
+    expect(result.completedDepth).toBe(2);
+    expect(result.interrupted).toBe(false);
   });
 });

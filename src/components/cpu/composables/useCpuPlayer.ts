@@ -6,8 +6,8 @@
 
 import { ref, onUnmounted, type Ref } from "vue";
 
-import type { BoardState, Position } from "@/types/game";
 import type { AIRequest, AIResponse, CpuDifficulty } from "@/types/cpu";
+import type { BoardState } from "@/types/game";
 
 // Viteの?workerサフィックスでWorkerをインポート
 import RenjuAIWorker from "@/logic/cpuAI/renjuAI.worker?worker";

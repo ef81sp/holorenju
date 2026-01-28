@@ -7,14 +7,18 @@
  * import RenjuAIWorker from './renjuAI.worker?worker'
  */
 
-import type { BoardState } from "@/types/game";
-import type { AIRequest, AIResponse, CpuDifficulty } from "@/types/cpu";
+import {
+  DIFFICULTY_PARAMS,
+  type AIRequest,
+  type AIResponse,
+} from "@/types/cpu";
 
-import { findBestMove } from "./minimax";
-import { DIFFICULTY_PARAMS } from "@/types/cpu";
+import { findBestMoveIterative } from "./minimax";
 
 /**
  * Worker内でのメッセージハンドラ
+ *
+ * Iterative Deepeningを使用して、時間制限内で可能な限り深く探索する
  */
 self.onmessage = (event: MessageEvent<AIRequest>) => {
   const request = event.data;
@@ -22,10 +26,13 @@ self.onmessage = (event: MessageEvent<AIRequest>) => {
 
   try {
     const params = DIFFICULTY_PARAMS[request.difficulty];
-    const result = findBestMove(
+
+    // Iterative Deepeningで探索（時間制限付き）
+    const result = findBestMoveIterative(
       request.board,
       request.currentTurn as "black" | "white",
       params.depth,
+      params.timeLimit,
       params.randomFactor,
     );
 
@@ -36,7 +43,7 @@ self.onmessage = (event: MessageEvent<AIRequest>) => {
       position: result.position,
       score: result.score,
       thinkingTime,
-      depth: params.depth,
+      depth: result.completedDepth,
     };
 
     self.postMessage(response);

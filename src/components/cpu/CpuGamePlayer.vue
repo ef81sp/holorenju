@@ -10,6 +10,7 @@ import { computed, onMounted, onUnmounted, ref } from "vue";
 
 import RenjuBoard from "@/components/game/RenjuBoard/RenjuBoard.vue";
 import CutinOverlay from "@/components/common/CutinOverlay.vue";
+import ConfirmDialog from "@/components/common/ConfirmDialog.vue";
 import SettingsControl from "@/components/common/SettingsControl.vue";
 import CpuGameStatus from "./CpuGameStatus.vue";
 import { useCpuPlayer } from "./composables/useCpuPlayer";
@@ -38,6 +39,18 @@ const cutinRef = ref<InstanceType<typeof CutinOverlay> | null>(null);
 const cutinType = ref<"correct" | "wrong">("correct");
 const isCutinVisible = ref(false);
 
+// 戻る確認ダイアログ
+const confirmDialogRef = ref<InstanceType<typeof ConfirmDialog> | null>(null);
+
+// キーボードイベント処理
+function handleKeyDown(event: KeyboardEvent): void {
+  // Escキーで戻る確認ダイアログを表示
+  if (event.key === "Escape") {
+    event.preventDefault();
+    showBackConfirmDialog();
+  }
+}
+
 // ゲーム開始
 onMounted(() => {
   if (appStore.cpuDifficulty && appStore.cpuPlayerFirst !== null) {
@@ -51,10 +64,12 @@ onMounted(() => {
 
   updateBoardSize();
   window.addEventListener("resize", updateBoardSize);
+  window.addEventListener("keydown", handleKeyDown);
 });
 
 onUnmounted(() => {
   window.removeEventListener("resize", updateBoardSize);
+  window.removeEventListener("keydown", handleKeyDown);
 });
 
 // 盤面サイズを更新
@@ -109,36 +124,26 @@ function handlePlaceStone(position: Position): void {
   cpuMove();
 }
 
-// CPUの着手処理
+// CPUの着手処理（Web Worker経由）
 async function cpuMove(): Promise<void> {
   if (cpuGameStore.isGameOver) {
     return;
   }
 
-  isThinking.value = true;
-
-  // 少し待ってから思考開始（UIの反映を待つ）
+  // 少し待ってからUI更新（思考開始を見せる）
   await new Promise<void>((resolve) => {
     setTimeout(resolve, 100);
   });
 
-  const params = DIFFICULTY_PARAMS[cpuGameStore.difficulty];
-  const result = findBestMove(
+  // Worker経由でAIに着手をリクエスト
+  const response = await requestMove(
     boardStore.board,
     cpuGameStore.currentTurn,
-    params.depth,
-    params.randomFactor,
+    cpuGameStore.difficulty,
   );
 
-  // 最低でも500ms待つ（思考中の表示を見せる）
-  await new Promise<void>((resolve) => {
-    setTimeout(resolve, 400);
-  });
-
-  isThinking.value = false;
-
   // 石を配置
-  cpuGameStore.addMove(result.position, cpuGameStore.currentTurn);
+  cpuGameStore.addMove(response.position, cpuGameStore.currentTurn);
 
   // 勝敗判定
   if (cpuGameStore.isGameOver) {
@@ -195,8 +200,18 @@ function handleRematch(): void {
   }
 }
 
-// 設定画面に戻る
-function handleBack(): void {
+// 戻る確認ダイアログを表示
+function showBackConfirmDialog(): void {
+  // ゲーム終了後は確認不要
+  if (cpuGameStore.isGameOver) {
+    handleConfirmBack();
+    return;
+  }
+  confirmDialogRef.value?.showModal();
+}
+
+// 戻る確認
+function handleConfirmBack(): void {
   cpuGameStore.resetGame();
   appStore.goToCpuSetup();
 }
@@ -223,7 +238,7 @@ const gameEndMessage = computed(() => {
       <div class="control-header">
         <button
           class="back-button"
-          @click="handleBack"
+          @click="showBackConfirmDialog"
         >
           ← 戻る
         </button>
@@ -294,6 +309,16 @@ const gameEndMessage = computed(() => {
         </p>
       </div>
     </div>
+
+    <!-- 戻る確認ダイアログ -->
+    <ConfirmDialog
+      ref="confirmDialogRef"
+      title="対局を中断しますか？"
+      message="現在の対局を終了して、設定画面に戻ります。"
+      confirm-text="戻る"
+      cancel-text="続ける"
+      @confirm="handleConfirmBack"
+    />
   </div>
 </template>
 
