@@ -49,17 +49,25 @@ self.onmessage = (event: MessageEvent<AIRequest>) => {
     if (isOpeningPhase(moveCount)) {
       const openingMove = getOpeningMove(request.board, currentTurn);
       if (openingMove) {
-        const endTime = performance.now();
-        const thinkingTime = Math.round(endTime - startTime);
+        // 探索と同程度の遅延を設ける（難易度に応じた時間の30-60%）
+        const params = DIFFICULTY_PARAMS[request.difficulty];
+        const minDelay = params.timeLimit * 0.3;
+        const maxDelay = params.timeLimit * 0.6;
+        const delay = minDelay + Math.random() * (maxDelay - minDelay);
 
-        const response: AIResponse = {
-          position: openingMove,
-          score: 0, // 開局の手は評価スコアなし
-          thinkingTime,
-          depth: 0, // 探索なし
-        };
+        setTimeout(() => {
+          const endTime = performance.now();
+          const thinkingTime = Math.round(endTime - startTime);
 
-        self.postMessage(response);
+          const response: AIResponse = {
+            position: openingMove,
+            score: 0, // 開局の手は評価スコアなし
+            thinkingTime,
+            depth: 0, // 探索なし
+          };
+
+          self.postMessage(response);
+        }, delay);
         return;
       }
     }
