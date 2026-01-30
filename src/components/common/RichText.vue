@@ -63,9 +63,9 @@ function renderInlineNodes(nodes: InlineTextNode[]): InlineTextNode[] {
                 v-for="(grandchild, grandchildIndex) in child.content"
                 :key="grandchildIndex"
               >
-                <span v-if="grandchild.type === 'text'">{{
-                  grandchild.content
-                }}</span>
+                <span v-if="grandchild.type === 'text'">
+                  {{ grandchild.content }}
+                </span>
                 <ruby v-else-if="grandchild.type === 'ruby'">
                   {{ grandchild.base }}
                   <rt>{{ grandchild.ruby }}</rt>

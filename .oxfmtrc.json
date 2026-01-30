@@ -14,5 +14,6 @@
   "insertFinalNewline": true,
   "embeddedLanguageFormatting": "auto",
   "singleAttributePerLine": true,
+  "htmlWhitespaceSensitivity": "ignore",
   "experimentalSortImports": {}
 }

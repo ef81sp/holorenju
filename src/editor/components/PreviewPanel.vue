@@ -252,7 +252,8 @@ const currentLines = computed<Line[]>(() => {
         <div class="preview-info">
           <div class="dialogue-header">
             <p>
-              <strong>ダイアログ数:</strong> {{ previewContent.dialogueCount }}
+              <strong>ダイアログ数:</strong>
+              {{ previewContent.dialogueCount }}
             </p>
             <div
               v-if="previewContent.dialogueCount > 1"
@@ -296,9 +297,9 @@ const currentLines = computed<Line[]>(() => {
                 />
               </div>
               <div class="dialogue-text-area">
-                <span class="character-name">{{
-                  currentDialogue.character
-                }}</span>
+                <span class="character-name">
+                  {{ currentDialogue.character }}
+                </span>
                 <span class="dialogue-content">
                   <DialogText :nodes="currentDialogue.text" />
                 </span>
@@ -346,7 +347,8 @@ const currentLines = computed<Line[]>(() => {
             </p>
           </div>
           <p>
-            <strong>成功条件数:</strong> {{ previewContent.conditionCount }}
+            <strong>成功条件数:</strong>
+            {{ previewContent.conditionCount }}
           </p>
         </div>
       </div>

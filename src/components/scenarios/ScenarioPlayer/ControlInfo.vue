@@ -28,13 +28,18 @@ withDefaults(defineProps<Props>(), {
 
     <div class="control-section">
       <h4 class="section-title">キーボード</h4>
-      <div class="control-keys"><span class="key">←/→</span>: 会話を進める</div>
+      <div class="control-keys">
+        <span class="key">←/→</span>
+        : 会話を進める
+      </div>
       <template v-if="sectionType === 'question'">
         <div class="control-keys">
-          <span class="key">W/A/S/D</span>: カーソル移動
+          <span class="key">W/A/S/D</span>
+          : カーソル移動
         </div>
         <div class="control-keys">
-          <span class="key">Space/Enter</span>: 配置
+          <span class="key">Space/Enter</span>
+          : 配置
         </div>
       </template>
     </div>

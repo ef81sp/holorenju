@@ -169,7 +169,7 @@ const handleCopyToClipboard = async (): Promise<void> => {
           @place-stone="handleCellClick"
         />
         <div class="board-info">
-          <small> クリックで石を置く（黒→白→空のサイクル） </small>
+          <small>クリックで石を置く（黒→白→空のサイクル）</small>
         </div>
       </div>
 
@@ -191,7 +191,8 @@ const handleCopyToClipboard = async (): Promise<void> => {
       >
         <h4>盤面テキストを貼り付け</h4>
         <p class="paste-hint">
-          15行×15文字の盤面をペーストしてください<br />
+          15行×15文字の盤面をペーストしてください
+          <br />
           (-, x, o のみ使用可能)
         </p>
         <textarea

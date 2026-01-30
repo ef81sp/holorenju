@@ -58,8 +58,14 @@ defineExpose({
               の白上フブキ・さくらみこと一緒に連珠（五目並べ）を学習できるゲームです。
             </p>
             <ul>
-              <li><strong>デモモード</strong>：対話形式で戦略を説明</li>
-              <li><strong>問題モード</strong>：実践練習でスキルを磨く</li>
+              <li>
+                <strong>デモモード</strong>
+                ：対話形式で戦略を説明
+              </li>
+              <li>
+                <strong>問題モード</strong>
+                ：実践練習でスキルを磨く
+              </li>
             </ul>
           </div>
         </section>
@@ -85,7 +91,9 @@ defineExpose({
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                @toki_p_happi </a>)
+                @toki_p_happi
+              </a>
+              )
             </p>
           </div>
         </section>
@@ -96,11 +104,15 @@ defineExpose({
           <div class="section-content">
             <ul>
               <li>
-                このゲームは<a
+                このゲームは
+                <a
                   href="https://hololivepro.com/terms/"
                   target="_blank"
                   rel="noopener noreferrer"
-                  >二次創作ガイドライン | ホロライブプロダクション</a>に基づく二次創作です。
+                >
+                  二次創作ガイドライン | ホロライブプロダクション
+                </a>
+                に基づく二次創作です。
               </li>
               <li>無料でご利用いただけます。</li>
               <li>配信等で、公序良俗を守った上でご自由にお使いください。</li>
@@ -116,11 +128,15 @@ defineExpose({
           <h3 class="section-title">作者</h3>
           <div class="section-content">
             <p>
-              かみくず(<a
+              かみくず(
+              <a
                 href="https://x.com/p_craft"
                 target="_blank"
                 rel="noopener noreferrer"
-                >@p_craft </a>)
+              >
+                @p_craft
+              </a>
+              )
             </p>
           </div>
         </section>

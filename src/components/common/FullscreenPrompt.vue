@@ -49,7 +49,8 @@ defineExpose({
     <div class="dialog-content">
       <h2 class="dialog-title">📱 全画面表示のおすすめ</h2>
       <p class="dialog-message">
-        快適にプレイするため、全画面表示をおすすめします。<br />
+        快適にプレイするため、全画面表示をおすすめします。
+        <br />
         より見やすくなります。
       </p>
 

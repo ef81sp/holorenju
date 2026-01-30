@@ -201,9 +201,9 @@ defineExpose({
                   @click="handleSelect(scenario.path)"
                 >
                   <span class="scenario-title">{{ scenario.title }}</span>
-                  <span class="scenario-description">{{
-                    scenario.description
-                  }}</span>
+                  <span class="scenario-description">
+                    {{ scenario.description }}
+                  </span>
                 </button>
                 <button
                   v-if="dirHandle"
