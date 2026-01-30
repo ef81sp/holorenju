@@ -12,13 +12,19 @@ import RenjuBoard from "@/components/game/RenjuBoard/RenjuBoard.vue";
 import CutinOverlay from "@/components/common/CutinOverlay.vue";
 import ConfirmDialog from "@/components/common/ConfirmDialog.vue";
 import SettingsControl from "@/components/common/SettingsControl.vue";
+import DialogText from "@/components/common/DialogText.vue";
+import CharacterSprite from "@/components/character/CharacterSprite.vue";
 import CpuGameStatus from "./CpuGameStatus.vue";
+import CpuCharacterPanel from "./CpuCharacterPanel.vue";
+import CpuRecordDialog from "./CpuRecordDialog.vue";
 import { useCpuPlayer } from "./composables/useCpuPlayer";
+import { useCpuDialogue } from "./composables/useCpuDialogue";
 import { useBoardSize } from "@/components/scenarios/ScenarioPlayer/composables/useBoardSize";
 import { useAppStore } from "@/stores/appStore";
 import { useCpuGameStore } from "@/stores/cpuGameStore";
 import { useCpuRecordStore } from "@/stores/cpuRecordStore";
 import { useBoardStore } from "@/stores/boardStore";
+import { useDialogStore } from "@/stores/dialogStore";
 import { usePreferencesStore } from "@/stores/preferencesStore";
 import { checkForbiddenMove } from "@/logic/renjuRules";
 import type { BattleResult } from "@/types/cpu";
@@ -28,10 +34,18 @@ const appStore = useAppStore();
 const cpuGameStore = useCpuGameStore();
 const cpuRecordStore = useCpuRecordStore();
 const boardStore = useBoardStore();
+const dialogStore = useDialogStore();
 const preferencesStore = usePreferencesStore();
 
 // CPU Player (Web Worker経由)
 const { isThinking, requestMove } = useCpuPlayer();
+
+// セリフ・表情管理
+const { cpuCharacter, currentEmotion, showDialogue, initCharacter } =
+  useCpuDialogue();
+
+// 対戦記録ダイアログ
+const recordDialogRef = ref<InstanceType<typeof CpuRecordDialog> | null>(null);
 
 // 盤面サイズ計算用
 const boardFrameRef = ref<HTMLElement | null>(null);
@@ -109,6 +123,10 @@ onMounted(() => {
   if (appStore.cpuDifficulty && appStore.cpuPlayerFirst !== null) {
     cpuGameStore.startGame(appStore.cpuDifficulty, appStore.cpuPlayerFirst);
 
+    // キャラクター初期化とゲーム開始セリフ
+    initCharacter(appStore.cpuDifficulty);
+    showDialogue("gameStart");
+
     // 後手の場合はCPUが最初に打つ
     if (!appStore.cpuPlayerFirst) {
       cpuMove();
@@ -126,6 +144,9 @@ onUnmounted(() => {
     clearTimeout(cutinAutoHideTimer);
     cutinAutoHideTimer = null;
   }
+
+  // セリフをクリア
+  dialogStore.reset();
 });
 
 // プレイヤーの石色
@@ -178,6 +199,9 @@ async function cpuMove(): Promise<void> {
     return;
   }
 
+  // 思考中セリフを表示
+  showDialogue("cpuThinking");
+
   // 少し待ってからUI更新（思考開始を見せる）
   await new Promise<void>((resolve) => {
     setTimeout(resolve, 100);
@@ -196,6 +220,9 @@ async function cpuMove(): Promise<void> {
   // 勝敗判定
   if (cpuGameStore.isGameOver) {
     handleGameEnd();
+  } else {
+    // CPUが着手した後、プレイヤーの番
+    showDialogue("cpuAdvantage");
   }
 }
 
@@ -209,9 +236,11 @@ function handleGameEnd(): void {
   } else if (winner === cpuGameStore.playerColor) {
     result = "win";
     cutinType.value = "correct";
+    showDialogue("playerWin");
   } else {
     result = "lose";
     cutinType.value = "wrong";
+    showDialogue("cpuWin");
   }
 
   // 記録を保存
@@ -239,6 +268,10 @@ function handleRematch(): void {
   if (appStore.cpuDifficulty && appStore.cpuPlayerFirst !== null) {
     cpuGameStore.startGame(appStore.cpuDifficulty, appStore.cpuPlayerFirst);
     isCutinVisible.value = false;
+
+    // キャラクター初期化とゲーム開始セリフ
+    initCharacter(appStore.cpuDifficulty);
+    showDialogue("gameStart");
 
     // 後手の場合はCPUが最初に打つ
     if (!appStore.cpuPlayerFirst) {
@@ -319,7 +352,19 @@ const gameEndMessage = computed(() => {
 
     <!-- コントロールセクション（右側）-->
     <div class="info-section-slot">
+      <!-- キャラクター表示 -->
+      <CpuCharacterPanel
+        :character="cpuCharacter"
+        :emotion-id="currentEmotion"
+      />
+
       <div class="game-controls">
+        <button
+          class="control-button"
+          @click="recordDialogRef?.showModal()"
+        >
+          対戦記録
+        </button>
         <button
           class="control-button"
           :disabled="cpuGameStore.moveCount < 2 || isThinking"
@@ -348,7 +393,54 @@ const gameEndMessage = computed(() => {
 
     <!-- セリフ部（左下）-->
     <div class="dialog-section-slot">
-      <div class="help-text">
+      <div
+        v-if="dialogStore.currentMessage"
+        class="character-dialog"
+      >
+        <div
+          class="dialog-avatar"
+          :style="{
+            backgroundColor:
+              cpuCharacter === 'fubuki'
+                ? 'var(--color-fubuki-bg)'
+                : 'var(--color-miko-bg)',
+          }"
+        >
+          <CharacterSprite
+            :character="cpuCharacter"
+            :emotion-id="currentEmotion"
+            :is-active="true"
+          />
+        </div>
+        <div
+          class="dialog-bubble"
+          :style="{
+            borderColor:
+              cpuCharacter === 'fubuki'
+                ? 'var(--color-fubuki-primary)'
+                : 'var(--color-miko-primary)',
+          }"
+        >
+          <div
+            class="dialog-character-name"
+            :style="{
+              color:
+                cpuCharacter === 'fubuki'
+                  ? 'var(--color-fubuki-primary)'
+                  : 'var(--color-miko-primary)',
+            }"
+          >
+            {{ cpuCharacter === "fubuki" ? "フブキ" : "みこ" }}
+          </div>
+          <div class="dialog-text-wrapper">
+            <DialogText :nodes="dialogStore.currentMessage.text" />
+          </div>
+        </div>
+      </div>
+      <div
+        v-else
+        class="help-text"
+      >
         <p v-if="!cpuGameStore.isGameOver && cpuGameStore.isPlayerTurn">
           盤面をクリックして石を置いてください
         </p>
@@ -367,6 +459,9 @@ const gameEndMessage = computed(() => {
       cancel-text="続ける"
       @confirm="handleConfirmBack"
     />
+
+    <!-- 対戦記録ダイアログ -->
+    <CpuRecordDialog ref="recordDialogRef" />
   </div>
 </template>
 
@@ -520,5 +615,47 @@ const gameEndMessage = computed(() => {
   margin: 0;
   font-size: var(--size-14);
   color: var(--color-text-secondary);
+}
+
+.character-dialog {
+  display: flex;
+  gap: var(--size-12);
+  align-items: stretch;
+  padding-block: var(--size-5);
+  width: 100%;
+  height: 100%;
+}
+
+.dialog-avatar {
+  flex-shrink: 0;
+  width: var(--size-100);
+  aspect-ratio: 1;
+  border-radius: var(--size-8);
+  border: var(--size-2) solid var(--color-border);
+  box-shadow: 0 var(--size-5) var(--size-5) rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.dialog-bubble {
+  flex: 1;
+  height: 100%;
+  padding: var(--size-8);
+  background: white;
+  border-radius: var(--size-12);
+  border: var(--size-2) solid;
+  box-shadow: 0 var(--size-5) var(--size-8) rgba(0, 0, 0, 0.1);
+  position: relative;
+}
+
+.dialog-character-name {
+  font-weight: 500;
+  font-size: var(--size-14);
+}
+
+.dialog-text-wrapper {
+  font-size: calc(var(--size-20) * var(--text-size-multiplier));
 }
 </style>

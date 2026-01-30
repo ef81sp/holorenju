@@ -8,7 +8,8 @@ import { ScenarioPlayer } from "./scenarios/ScenarioPlayer";
 // oxlint-disable-next-line consistent-type-imports
 import ConfirmDialog from "./common/ConfirmDialog.vue";
 import ScenarioEditor from "@/editor/components/ScenarioEditor.vue";
-import { CpuSetupPage, CpuGamePlayer } from "./cpu";
+import CpuSetupPage from "./cpu/CpuSetupPage.vue";
+import CpuGamePlayer from "./cpu/CpuGamePlayer.vue";
 
 const appStore = useAppStore();
 const confirmDialogRef = ref<InstanceType<typeof ConfirmDialog> | null>(null);
