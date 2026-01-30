@@ -59,7 +59,7 @@ describe("useBoardActions", () => {
 
       expect(action).toEqual({
         type: "place",
-        position: { row: 0, col: 0 },
+        position: { row: 7, col: 7 },
         color: "black",
         highlight: false,
       });
@@ -75,7 +75,7 @@ describe("useBoardActions", () => {
 
       expect(action).toEqual({
         type: "remove",
-        position: { row: 0, col: 0 },
+        position: { row: 7, col: 7 },
       });
     });
 
@@ -120,8 +120,8 @@ describe("useBoardActions", () => {
 
       expect(action).toEqual({
         type: "line",
-        fromPosition: { row: 0, col: 0 },
-        toPosition: { row: 0, col: 0 },
+        fromPosition: { row: 7, col: 7 },
+        toPosition: { row: 7, col: 7 },
         action: "draw",
         style: "solid",
       });
@@ -154,7 +154,7 @@ describe("useBoardActions", () => {
         boardActions: [
           {
             type: "place",
-            position: { row: 0, col: 0 },
+            position: { row: 7, col: 7 },
             color: "black",
             highlight: false,
           },
@@ -407,8 +407,8 @@ describe("useBoardActions", () => {
         const action = callArgs.boardActions[0] as MarkAction;
         expect(action.positions).toHaveLength(1);
         expect(action.positions[0]).toEqual({
-          row: 0,
-          col: 0,
+          row: 7,
+          col: 7,
         });
       });
     });

@@ -20,6 +20,13 @@ vi.mock("vue", async () => {
   };
 });
 
+// preferencesStoreをモック
+vi.mock("@/stores/preferencesStore", () => ({
+  usePreferencesStore: () => ({
+    cutinDisplayDuration: 0.8, // 800ms
+  }),
+}));
+
 describe("useCutinDisplay", () => {
   // eslint-disable-next-line init-declarations
   let mockCutinRef: ReturnType<

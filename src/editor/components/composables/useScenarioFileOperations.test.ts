@@ -10,6 +10,7 @@ const mockSetValidationErrors = vi.fn();
 const mockClearValidationErrors = vi.fn();
 const mockClearCurrentFileHandle = vi.fn();
 const mockSetCurrentFileHandle = vi.fn();
+const mockClearOriginalDifficulty = vi.fn();
 
 vi.mock("@/editor/stores/editorStore", () => ({
   useEditorStore: () => ({
@@ -18,6 +19,7 @@ vi.mock("@/editor/stores/editorStore", () => ({
     clearValidationErrors: mockClearValidationErrors,
     clearCurrentFileHandle: mockClearCurrentFileHandle,
     setCurrentFileHandle: mockSetCurrentFileHandle,
+    clearOriginalDifficulty: mockClearOriginalDifficulty,
     currentFileHandle: null as FileSystemFileHandle | null,
   }),
 }));

@@ -18,6 +18,8 @@ const mockSetValidationErrors = vi.fn();
 const mockClearValidationErrors = vi.fn();
 const mockMarkClean = vi.fn();
 
+const mockUpdateOriginalDifficulty = vi.fn();
+
 vi.mock("@/editor/stores/editorStore", () => ({
   useEditorStore: () => ({
     get scenario() {
@@ -27,6 +29,7 @@ vi.mock("@/editor/stores/editorStore", () => ({
     setValidationErrors: mockSetValidationErrors,
     clearValidationErrors: mockClearValidationErrors,
     markClean: mockMarkClean,
+    updateOriginalDifficulty: mockUpdateOriginalDifficulty,
   }),
 }));
 
