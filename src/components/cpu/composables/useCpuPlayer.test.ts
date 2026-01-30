@@ -32,6 +32,7 @@ class MockWorker {
     }, 10);
   }
 
+  // eslint-disable-next-line class-methods-use-this
   terminate(): void {
     // No-op for mock
   }

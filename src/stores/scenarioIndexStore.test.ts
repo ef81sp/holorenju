@@ -83,7 +83,8 @@ describe("scenarioIndexStore", () => {
     });
 
     it("読み込み中はisLoadingがtrue", async () => {
-      let resolvePromise: (value: unknown) => void;
+      // eslint-disable-next-line no-empty-function
+      let resolvePromise: (value: unknown) => void = () => {};
       const pendingPromise = new Promise((resolve) => {
         resolvePromise = resolve;
       });
@@ -95,7 +96,7 @@ describe("scenarioIndexStore", () => {
 
       expect(store.isLoading).toBe(true);
 
-      resolvePromise!({
+      resolvePromise({
         ok: true,
         json: () => Promise.resolve(mockIndexData),
       });
@@ -151,7 +152,7 @@ describe("scenarioIndexStore", () => {
   });
 
   describe("findScenarioPath", () => {
-    beforeEach(async () => {
+    beforeEach(() => {
       vi.stubGlobal(
         "fetch",
         vi.fn().mockResolvedValue({

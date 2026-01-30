@@ -4,12 +4,6 @@
       "label": "五目並べ:入門",
       "scenarios": [
         {
-          "id": "scenario_mkjs7lp4_kx96z",
-          "title": "負けないために",
-          "description": "相手の攻撃を防ぐ方法を学び、すぐに負けないようになりましょう",
-          "path": "gomoku_beginner/scenario_mkjs7lp4_kx96z.json"
-        },
-        {
           "id": "scenario_mkjnx2v6_uqagf",
           "title": "プロローグ",
           "description": "フブみこさんが五目並べをやるようですが……？",
@@ -20,6 +14,12 @@
           "title": "五目並べ概説",
           "description": "初めての人向けのルール説明",
           "path": "gomoku_beginner/scenario_mkjr4es0_3cfow.json"
+        },
+        {
+          "id": "scenario_mkjs7lp4_kx96z",
+          "title": "負けないために",
+          "description": "相手の攻撃を防ぐ方法を学び、すぐに負けないようになりましょう",
+          "path": "gomoku_beginner/scenario_mkjs7lp4_kx96z.json"
         }
       ]
     },
@@ -27,28 +27,28 @@
       "label": "五目並べ:初級",
       "scenarios": [
         {
-          "id": "scenario_mkpnojq9_pacbt",
-          "title": "何をすればいいの？(1)",
-          "description": "ざっくりとした方針を学びます。闇雲に三や四を作らない。",
-          "path": "gomoku_intermediate/scenario_mkpnojq9_pacbt.json"
-        },
-        {
           "id": "scenario_mjzr29tu_hh97s",
           "title": "五を作るには",
           "description": "勝利条件である五の一歩手前の状態を学びます。",
           "path": "gomoku_intermediate/scenario_mjzr29tu_hh97s.json"
         },
         {
-          "id": "scenario_mks7it0d_3v7gb",
-          "title": "何をすればいいの？(3)",
-          "description": "相手の連を止めることを学びます。",
-          "path": "gomoku_intermediate/scenario_mks7it0d_3v7gb.json"
+          "id": "scenario_mkpnojq9_pacbt",
+          "title": "何をすればいいの？(1)",
+          "description": "ざっくりとした方針を学びます。闇雲に三や四を作らない。",
+          "path": "gomoku_intermediate/scenario_mkpnojq9_pacbt.json"
         },
         {
           "id": "scenario_mkrv3oyt_80m86",
           "title": "何をすればいいの？(2)",
           "description": "複数の連を作る",
           "path": "gomoku_intermediate/scenario_mkrv3oyt_80m86.json"
+        },
+        {
+          "id": "scenario_mks7it0d_3v7gb",
+          "title": "何をすればいいの？(3)",
+          "description": "相手の連を止めることを学びます。",
+          "path": "gomoku_intermediate/scenario_mks7it0d_3v7gb.json"
         }
       ]
     },
