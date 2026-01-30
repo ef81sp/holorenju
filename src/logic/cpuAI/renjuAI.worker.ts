@@ -14,23 +14,63 @@ import {
 } from "@/types/cpu";
 
 import { findBestMoveIterative } from "./minimax";
+import { getOpeningMove, isOpeningPhase } from "./opening";
+
+/**
+ * 盤面上の石の数をカウント
+ */
+function countStonesOnBoard(board: AIRequest["board"]): number {
+  let count = 0;
+  for (let row = 0; row < 15; row++) {
+    for (let col = 0; col < 15; col++) {
+      if (board[row]?.[col] !== null) {
+        count++;
+      }
+    }
+  }
+  return count;
+}
 
 /**
  * Worker内でのメッセージハンドラ
  *
- * Iterative Deepeningを使用して、時間制限内で可能な限り深く探索する
+ * 開局フェーズ（1〜3手目）では珠型パターンを使用し、
+ * 4手目以降はIterative Deepeningで探索する
  */
 self.onmessage = (event: MessageEvent<AIRequest>) => {
   const request = event.data;
   const startTime = performance.now();
 
   try {
+    const moveCount = countStonesOnBoard(request.board);
+    const currentTurn = request.currentTurn as "black" | "white";
+
+    // 開局フェーズかチェック
+    if (isOpeningPhase(moveCount)) {
+      const openingMove = getOpeningMove(request.board, currentTurn);
+      if (openingMove) {
+        const endTime = performance.now();
+        const thinkingTime = Math.round(endTime - startTime);
+
+        const response: AIResponse = {
+          position: openingMove,
+          score: 0, // 開局の手は評価スコアなし
+          thinkingTime,
+          depth: 0, // 探索なし
+        };
+
+        self.postMessage(response);
+        return;
+      }
+    }
+
+    // 4手目以降、または開局パターン外の場合は通常のAI探索
     const params = DIFFICULTY_PARAMS[request.difficulty];
 
     // Iterative Deepeningで探索（時間制限付き）
     const result = findBestMoveIterative(
       request.board,
-      request.currentTurn as "black" | "white",
+      currentTurn,
       params.depth,
       params.timeLimit,
       params.randomFactor,
