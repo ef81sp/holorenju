@@ -18,6 +18,7 @@ import { useAppStore } from "@/stores/appStore";
 import { useCpuGameStore } from "@/stores/cpuGameStore";
 import { useCpuRecordStore } from "@/stores/cpuRecordStore";
 import { useBoardStore } from "@/stores/boardStore";
+import { usePreferencesStore } from "@/stores/preferencesStore";
 import { checkForbiddenMove } from "@/logic/renjuRules";
 import type { BattleResult } from "@/types/cpu";
 import type { Position } from "@/types/game";
@@ -26,6 +27,7 @@ const appStore = useAppStore();
 const cpuGameStore = useCpuGameStore();
 const cpuRecordStore = useCpuRecordStore();
 const boardStore = useBoardStore();
+const preferencesStore = usePreferencesStore();
 
 // CPU Player (Web Worker経由)
 const { isThinking, requestMove } = useCpuPlayer();
@@ -38,17 +40,66 @@ const boardSize = ref(400);
 const cutinRef = ref<InstanceType<typeof CutinOverlay> | null>(null);
 const cutinType = ref<"correct" | "wrong">("correct");
 const isCutinVisible = ref(false);
+let cutinAutoHideTimer: ReturnType<typeof setTimeout> | null = null;
 
 // 戻る確認ダイアログ
 const confirmDialogRef = ref<InstanceType<typeof ConfirmDialog> | null>(null);
 
 // キーボードイベント処理
 function handleKeyDown(event: KeyboardEvent): void {
+  // カットイン表示中は任意キーでスキップ
+  if (isCutinVisible.value) {
+    event.stopPropagation();
+    event.preventDefault();
+    hideCutin();
+    return;
+  }
+
   // Escキーで戻る確認ダイアログを表示
   if (event.key === "Escape") {
     event.preventDefault();
     showBackConfirmDialog();
   }
+}
+
+// カットインを表示
+function showCutin(): void {
+  if (!cutinRef.value) {
+    return;
+  }
+
+  // 既存のタイマーをクリア
+  if (cutinAutoHideTimer) {
+    clearTimeout(cutinAutoHideTimer);
+    cutinAutoHideTimer = null;
+  }
+
+  isCutinVisible.value = true;
+  cutinRef.value.showPopover();
+
+  // 自動消滅タイマーを設定（秒→ミリ秒に変換）
+  const durationMs = preferencesStore.cutinDisplayDuration * 1000;
+  cutinAutoHideTimer = setTimeout(() => {
+    hideCutin();
+  }, durationMs);
+}
+
+// カットインを非表示
+function hideCutin(): void {
+  if (!isCutinVisible.value) {
+    return;
+  }
+
+  if (cutinAutoHideTimer) {
+    clearTimeout(cutinAutoHideTimer);
+    cutinAutoHideTimer = null;
+  }
+
+  if (cutinRef.value) {
+    cutinRef.value.hidePopover();
+  }
+
+  isCutinVisible.value = false;
 }
 
 // ゲーム開始
@@ -70,6 +121,12 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener("resize", updateBoardSize);
   window.removeEventListener("keydown", handleKeyDown);
+
+  // カットインタイマーをクリア
+  if (cutinAutoHideTimer) {
+    clearTimeout(cutinAutoHideTimer);
+    cutinAutoHideTimer = null;
+  }
 });
 
 // 盤面サイズを更新
@@ -174,9 +231,8 @@ function handleGameEnd(): void {
     cpuGameStore.moveCount,
   );
 
-  // カットイン表示
-  isCutinVisible.value = true;
-  cutinRef.value?.showPopover();
+  // カットイン表示（自動消滅タイマー付き）
+  showCutin();
 }
 
 // 待った機能（2手戻す）
@@ -255,6 +311,7 @@ const gameEndMessage = computed(() => {
       ref="boardFrameRef"
       class="board-section-wrapper"
       style="anchor-name: --board-area"
+      @click="isCutinVisible && hideCutin()"
     >
       <RenjuBoard
         :disabled="isBoardDisabled"

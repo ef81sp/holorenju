@@ -8,7 +8,12 @@ import type { BoardState, StoneColor } from "@/types/game";
 
 import { createEmptyBoard } from "@/logic/renjuRules";
 
-import { evaluateBoard, evaluatePosition, PATTERN_SCORES } from "./evaluation";
+import {
+  evaluateBoard,
+  evaluatePosition,
+  evaluateStonePatterns,
+  PATTERN_SCORES,
+} from "./evaluation";
 
 /**
  * テスト用の盤面にパターンを配置するヘルパー
@@ -28,13 +33,98 @@ function placeStonesOnBoard(
 describe("PATTERN_SCORES", () => {
   it("スコア定数が正しく定義されている", () => {
     expect(PATTERN_SCORES.FIVE).toBe(100000);
-    expect(PATTERN_SCORES.OPEN_FOUR).toBe(5000);
-    expect(PATTERN_SCORES.FOUR).toBe(500);
-    expect(PATTERN_SCORES.OPEN_THREE).toBe(300);
-    expect(PATTERN_SCORES.THREE).toBe(50);
-    expect(PATTERN_SCORES.OPEN_TWO).toBe(10);
+    expect(PATTERN_SCORES.OPEN_FOUR).toBe(10000);
+    expect(PATTERN_SCORES.FOUR).toBe(1000);
+    expect(PATTERN_SCORES.OPEN_THREE).toBe(1000);
+    expect(PATTERN_SCORES.THREE).toBe(100);
+    expect(PATTERN_SCORES.OPEN_TWO).toBe(50);
+    expect(PATTERN_SCORES.TWO).toBe(10);
     expect(PATTERN_SCORES.CENTER_BONUS).toBe(5);
     expect(PATTERN_SCORES.FORBIDDEN_TRAP).toBe(100);
+  });
+});
+
+describe("evaluateStonePatterns", () => {
+  it("単独の石は0スコア", () => {
+    const board = createEmptyBoard();
+    placeStonesOnBoard(board, [{ row: 7, col: 7, color: "black" }]);
+    const score = evaluateStonePatterns(board, 7, 7, "black");
+    expect(score).toBe(0);
+  });
+
+  it("2連（活二）のスコア", () => {
+    const board = createEmptyBoard();
+    placeStonesOnBoard(board, [
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+    ]);
+    // 横方向で2連（両端空き）= OPEN_TWO
+    const score = evaluateStonePatterns(board, 7, 7, "black");
+    expect(score).toBe(PATTERN_SCORES.OPEN_TWO);
+  });
+
+  it("3連（活三）のスコア", () => {
+    const board = createEmptyBoard();
+    placeStonesOnBoard(board, [
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+    ]);
+    // 横方向で3連（両端空き）= OPEN_THREE
+    const score = evaluateStonePatterns(board, 7, 6, "black");
+    expect(score).toBe(PATTERN_SCORES.OPEN_THREE);
+  });
+
+  it("4連（活四）のスコア", () => {
+    const board = createEmptyBoard();
+    placeStonesOnBoard(board, [
+      { row: 7, col: 4, color: "black" },
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+    ]);
+    // 横方向で4連（両端空き）= OPEN_FOUR
+    const score = evaluateStonePatterns(board, 7, 5, "black");
+    expect(score).toBe(PATTERN_SCORES.OPEN_FOUR);
+  });
+
+  it("5連（五連）のスコア", () => {
+    const board = createEmptyBoard();
+    placeStonesOnBoard(board, [
+      { row: 7, col: 3, color: "black" },
+      { row: 7, col: 4, color: "black" },
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+    ]);
+    // 横方向で5連 = FIVE
+    const score = evaluateStonePatterns(board, 7, 5, "black");
+    expect(score).toBe(PATTERN_SCORES.FIVE);
+  });
+
+  it("止め三（片端塞がり）のスコア", () => {
+    const board = createEmptyBoard();
+    placeStonesOnBoard(board, [
+      { row: 7, col: 0, color: "black" }, // 盤端
+      { row: 7, col: 1, color: "black" },
+      { row: 7, col: 2, color: "black" },
+    ]);
+    // 横方向で3連（片端盤端）= THREE
+    const score = evaluateStonePatterns(board, 7, 1, "black");
+    expect(score).toBe(PATTERN_SCORES.THREE);
+  });
+
+  it("止め四（片端塞がり）のスコア", () => {
+    const board = createEmptyBoard();
+    placeStonesOnBoard(board, [
+      { row: 7, col: 0, color: "black" }, // 盤端
+      { row: 7, col: 1, color: "black" },
+      { row: 7, col: 2, color: "black" },
+      { row: 7, col: 3, color: "black" },
+    ]);
+    // 横方向で4連（片端盤端）= FOUR
+    const score = evaluateStonePatterns(board, 7, 2, "black");
+    expect(score).toBe(PATTERN_SCORES.FOUR);
   });
 });
 
@@ -93,10 +183,28 @@ describe("evaluatePosition", () => {
     const score = evaluatePosition(board, 7, 7, "black");
     expect(score).toBeGreaterThanOrEqual(PATTERN_SCORES.OPEN_THREE);
   });
+
+  it("相手の脅威をブロックする手は防御スコアを得る", () => {
+    const board = createEmptyBoard();
+    // 白石を3つ並べる（活三）
+    placeStonesOnBoard(board, [
+      { row: 7, col: 4, color: "white" },
+      { row: 7, col: 5, color: "white" },
+      { row: 7, col: 6, color: "white" },
+    ]);
+
+    // 黒が7,7に置く（白の活四形成をブロック）
+    const blockScore = evaluatePosition(board, 7, 7, "black");
+    // 黒が別の位置に置く
+    const otherScore = evaluatePosition(board, 0, 0, "black");
+
+    // ブロックする手のほうが高スコア
+    expect(blockScore).toBeGreaterThan(otherScore);
+  });
 });
 
 describe("evaluateBoard", () => {
-  it("空の盤面は0に近いスコア", () => {
+  it("空の盤面は0スコア", () => {
     const board = createEmptyBoard();
     const score = evaluateBoard(board, "black");
     expect(score).toBe(0);
