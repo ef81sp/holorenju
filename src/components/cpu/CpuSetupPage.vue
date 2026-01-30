@@ -150,7 +150,7 @@ const handleBack = (): void => {
   display: flex;
   flex-direction: column;
   gap: var(--size-24);
-  max-width: var(--size-600);
+  max-width: var(--size-500);
   width: 100%;
 }
 
@@ -207,7 +207,7 @@ const handleBack = (): void => {
 }
 
 .card-description {
-  font-size: var(--size-11);
+  font-size: var(--size-10);
   color: var(--color-text-secondary);
   text-align: center;
   line-height: 1.3;

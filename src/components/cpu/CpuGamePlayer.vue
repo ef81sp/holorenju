@@ -14,6 +14,7 @@ import ConfirmDialog from "@/components/common/ConfirmDialog.vue";
 import SettingsControl from "@/components/common/SettingsControl.vue";
 import CpuGameStatus from "./CpuGameStatus.vue";
 import { useCpuPlayer } from "./composables/useCpuPlayer";
+import { useBoardSize } from "@/components/scenarios/ScenarioPlayer/composables/useBoardSize";
 import { useAppStore } from "@/stores/appStore";
 import { useCpuGameStore } from "@/stores/cpuGameStore";
 import { useCpuRecordStore } from "@/stores/cpuRecordStore";
@@ -34,7 +35,8 @@ const { isThinking, requestMove } = useCpuPlayer();
 
 // 盤面サイズ計算用
 const boardFrameRef = ref<HTMLElement | null>(null);
-const boardSize = ref(400);
+const { boardSize: boardSizeValue } = useBoardSize(boardFrameRef);
+const boardSize = computed(() => boardSizeValue.value);
 
 // カットイン
 const cutinRef = ref<InstanceType<typeof CutinOverlay> | null>(null);
@@ -113,13 +115,10 @@ onMounted(() => {
     }
   }
 
-  updateBoardSize();
-  window.addEventListener("resize", updateBoardSize);
   window.addEventListener("keydown", handleKeyDown);
 });
 
 onUnmounted(() => {
-  window.removeEventListener("resize", updateBoardSize);
   window.removeEventListener("keydown", handleKeyDown);
 
   // カットインタイマーをクリア
@@ -128,14 +127,6 @@ onUnmounted(() => {
     cutinAutoHideTimer = null;
   }
 });
-
-// 盤面サイズを更新
-function updateBoardSize(): void {
-  if (boardFrameRef.value) {
-    const rect = boardFrameRef.value.getBoundingClientRect();
-    boardSize.value = Math.min(rect.width, rect.height);
-  }
-}
 
 // プレイヤーの石色
 const playerColor = computed(() => cpuGameStore.playerColor);

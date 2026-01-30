@@ -83,6 +83,14 @@
   --color-bg-gray: #f5f5f5;
   --color-bg-dark: #444444;
 
+  /* セマンティックトークン - UI共通 */
+  --color-primary: var(--color-cyan-500);
+  --color-primary-light: var(--color-cyan-100);
+  --color-primary-hover: var(--color-cyan-200);
+  --color-background-secondary: var(--color-bg-gray);
+  --color-background-hover: var(--color-cyan-100);
+  --color-border-light: var(--color-border);
+
   /* ブロック背景用カラー */
   --color-block-bg: #764ba233;
 
