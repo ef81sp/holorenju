@@ -63,6 +63,7 @@ pnpm build         # Production build
 - When referencing component methods via refs, use optional chaining (`ref?.method()`)
 - Keep SFCs under ~400 lines; extract composables or split components
 - When handling union types, don't use if-else chains; use type guards or switch statements
+- When develop some scripts, use `node --expperimental-strip-types`, not `ts-node` or `tsx`
 
 ### CSS
 
