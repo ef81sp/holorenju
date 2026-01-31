@@ -1,14 +1,16 @@
 <script setup lang="ts">
 /**
- * CPU対戦設定画面
+ * ホロメン対戦設定画面
  *
- * 難易度と先後手を選択してゲームを開始する
+ * キャラクターと先後手を選択してゲームを開始する
  */
 
 import { ref } from "vue";
 
 import PageHeader from "@/components/common/PageHeader.vue";
+import { getCharacterSpriteUrl } from "@/logic/characterSprites";
 import { useAppStore } from "@/stores/appStore";
+import type { CharacterType } from "@/types/character";
 import type { CpuDifficulty } from "@/types/cpu";
 
 const appStore = useAppStore();
@@ -17,39 +19,33 @@ const appStore = useAppStore();
 const selectedDifficulty = ref<CpuDifficulty>("medium");
 const selectedFirst = ref(true);
 
-interface DifficultyCard {
+/**
+ * キャラクターカードの定義
+ * TODO: 将来的にキャラクターを追加する際はここに追加
+ * - キャラクターごとに複数の難易度を持つ構成
+ * - 星の数で強さを表現
+ */
+interface CharacterCard {
   key: CpuDifficulty;
-  label: string;
-  icon: string;
-  description: string;
+  character: CharacterType;
+  name: string;
+  stars: number;
 }
 
-const difficultyCards: DifficultyCard[] = [
-  {
-    key: "beginner",
-    label: "かんたん",
-    icon: "🌱",
-    description: "ゆっくり考えて練習したい人向け",
-  },
-  {
-    key: "easy",
-    label: "やさしい",
-    icon: "⭐",
-    description: "基本的な戦術を試せる難易度",
-  },
-  {
-    key: "medium",
-    label: "ふつう",
-    icon: "🔥",
-    description: "しっかり読まないと勝てない",
-  },
-  {
-    key: "hard",
-    label: "むずかしい",
-    icon: "👑",
-    description: "上級者向けの強さ",
-  },
+const characterCards: CharacterCard[] = [
+  { key: "beginner", character: "miko", name: "みこ", stars: 1 },
+  { key: "easy", character: "miko", name: "みこ", stars: 2 },
+  { key: "medium", character: "fubuki", name: "フブキ", stars: 3 },
+  { key: "hard", character: "fubuki", name: "フブキ", stars: 4 },
 ];
+
+/** スプライトシートからキャラクター顔画像のスタイルを取得（emotionId=0） */
+const getFaceStyle = (
+  character: CharacterType,
+): { backgroundImage: string; backgroundPosition: string } => ({
+  backgroundImage: `url(${getCharacterSpriteUrl(character, 1)})`,
+  backgroundPosition: "0px 0px",
+});
 
 const handleStartGame = (): void => {
   appStore.startCpuGame(selectedDifficulty.value, selectedFirst.value);
@@ -63,31 +59,34 @@ const handleBack = (): void => {
 <template>
   <div class="cpu-setup-page">
     <PageHeader
-      title="CPU対戦"
+      title="ホロメン対戦"
       show-back
       @back="handleBack"
     />
     <div class="content">
       <div class="setup-container">
-        <!-- 難易度選択 -->
+        <!-- キャラクター選択 -->
         <fieldset class="setup-section">
-          <legend class="section-title">難易度を選択</legend>
-          <div class="difficulty-grid">
+          <legend class="section-title">キャラクターを選択</legend>
+          <div class="character-grid">
             <label
-              v-for="card in difficultyCards"
+              v-for="card in characterCards"
               :key="card.key"
-              class="difficulty-card"
+              class="character-card"
             >
               <input
                 v-model="selectedDifficulty"
                 type="radio"
-                name="difficulty"
+                name="character"
                 :value="card.key"
                 class="visually-hidden"
               />
-              <span class="card-icon">{{ card.icon }}</span>
-              <span class="card-label">{{ card.label }}</span>
-              <span class="card-description">{{ card.description }}</span>
+              <span
+                class="card-face"
+                :style="getFaceStyle(card.character)"
+              />
+              <span class="card-name">{{ card.name }}</span>
+              <span class="card-stars">{{ "★".repeat(card.stars) }}</span>
             </label>
           </div>
         </fieldset>
@@ -192,18 +191,18 @@ const handleBack = (): void => {
   border: 0;
 }
 
-.difficulty-grid {
+.character-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: var(--size-8);
+  gap: var(--size-6);
 }
 
-.difficulty-card {
+.character-card {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--size-4);
-  padding: var(--size-10) var(--size-8);
+  gap: var(--size-2);
+  padding: var(--size-6);
   background: var(--color-background-secondary);
   border: var(--size-2) solid transparent;
   border-radius: var(--size-10);
@@ -211,36 +210,37 @@ const handleBack = (): void => {
   transition: all 0.2s ease;
 }
 
-.difficulty-card:hover {
+.character-card:hover {
   transform: translateY(calc(-1 * var(--size-2)));
   box-shadow: 0 var(--size-4) var(--size-12) rgba(0, 0, 0, 0.15);
 }
 
-.difficulty-card:has(input:checked) {
+.character-card:has(input:checked) {
   border-color: var(--color-primary);
   background: var(--color-primary-light);
 }
 
-.difficulty-card:has(input:focus-visible) {
-  outline: var(--size-2) solid var(--color-primary);
-  outline-offset: var(--size-2);
+.character-card:has(input:focus-visible) {
+  animation: focus-pulse 1.5s ease-in-out infinite;
 }
 
-.card-icon {
-  font-size: var(--size-20);
+.card-face {
+  width: var(--size-48);
+  height: var(--size-48);
+  background-size: calc(var(--size-48) * 4) calc(var(--size-48) * 2);
+  border-radius: 50%;
 }
 
-.card-label {
-  font-size: var(--size-12);
+.card-name {
+  font-size: var(--size-10);
   font-weight: 500;
   color: var(--color-text-primary);
 }
 
-.card-description {
-  font-size: var(--size-8);
-  color: var(--color-text-secondary);
-  text-align: center;
-  line-height: 1.3;
+.card-stars {
+  font-size: var(--size-10);
+  color: #f59e0b;
+  letter-spacing: -0.1em;
 }
 
 .order-buttons {
@@ -272,8 +272,7 @@ const handleBack = (): void => {
 }
 
 .order-button:has(input:focus-visible) {
-  outline: var(--size-2) solid var(--color-primary);
-  outline-offset: var(--size-2);
+  animation: focus-pulse 1.5s ease-in-out infinite;
 }
 
 .order-icon {
@@ -323,5 +322,19 @@ const handleBack = (): void => {
 
 .start-button:active {
   transform: translateY(0);
+}
+
+@keyframes focus-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 1px var(--color-primary),
+      0 0 0 var(--size-2) rgba(102, 126, 234, 0.4);
+  }
+  50% {
+    box-shadow:
+      0 0 0 var(--size-2) var(--color-primary),
+      0 0 0 var(--size-6) rgba(102, 126, 234, 0.2);
+  }
 }
 </style>
