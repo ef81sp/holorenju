@@ -12,6 +12,7 @@ CPU対戦（`CpuGamePlayer.vue`）とシナリオプレイヤー（`ScenarioPlay
 ### 1. グリッドレイアウト（優先度：高）
 
 **完全に同一のCSS設定**:
+
 ```css
 display: grid;
 grid-template-columns: 4fr 7fr 5fr;
@@ -21,6 +22,7 @@ gap: var(--size-14);
 ```
 
 **重複しているクラス**（約60行のCSS）:
+
 - `.control-section-slot` - 完全一致
 - `.control-header` - 完全一致
 - `.header-controls` - 完全一致
@@ -30,19 +32,21 @@ gap: var(--size-14);
 
 ### 2. カットイン表示管理（優先度：高）
 
-| 項目 | シナリオ版 | CPU対戦版 |
-|------|-----------|----------|
+| 項目 | シナリオ版                                                               | CPU対戦版                                  |
+| ---- | ------------------------------------------------------------------------ | ------------------------------------------ |
 | 場所 | `src/components/scenarios/ScenarioPlayer/composables/useCutinDisplay.ts` | `CpuGamePlayer.vue` 行55-119（インライン） |
-| 行数 | 104行（完全なcomposable） | 約40行（関数2つ + 変数） |
-| 機能 | showPopover、自動非表示、キーボードスキップ | showPopover、自動非表示 |
+| 行数 | 104行（完全なcomposable）                                                | 約40行（関数2つ + 変数）                   |
+| 機能 | showPopover、自動非表示、キーボードスキップ                              | showPopover、自動非表示                    |
 
 **差分**:
+
 - シナリオ版: キーボードリスナーを内部管理（任意キーでスキップ）
 - CPU版: キーボードリスナーは外部の`handleKeyDown`で管理
 
 ### 2. プレイヤー色推論関数（優先度：中）
 
 `getPlayerColorFromConditions` が2箇所に完全重複:
+
 - `src/components/scenarios/ScenarioPlayer/composables/useQuestionSolver.ts` 行23-38
 - `src/components/scenarios/ScenarioPlayer/ScenarioPlayer.vue` 行190-205
 
@@ -61,6 +65,7 @@ gap: var(--size-14);
 `GamePlayerLayout.vue` を作成し、slotで各セクションの中身を差し込む構造にする
 
 **新規ファイル**: `src/components/common/GamePlayerLayout.vue`
+
 ```vue
 <template>
   <div class="game-player-layout">
@@ -76,7 +81,10 @@ gap: var(--size-14);
     </div>
 
     <!-- 盤面セクション（中央）-->
-    <div class="board-section" ref="boardFrameRef">
+    <div
+      class="board-section"
+      ref="boardFrameRef"
+    >
       <slot name="board" />
     </div>
 
@@ -94,30 +102,36 @@ gap: var(--size-14);
 ```
 
 **Props**:
+
 - `boardFrameRef` をexposeして、`useBoardSize` で使用可能にする
 
 **変更ファイル**:
+
 - `src/components/common/GamePlayerLayout.vue` （新規作成）
 - `src/components/scenarios/ScenarioPlayer/ScenarioPlayer.vue` （レイアウト部分をslot使用に変更）
 - `src/components/cpu/CpuGamePlayer.vue` （レイアウト部分をslot使用に変更）
 
 **注意点**:
+
 - 各コンポーネント固有のスタイル（`.back-button`等）は各コンポーネントの`<style scoped>`に残す
 - `boardFrameRef` はレイアウトコンポーネントからexposeし、親でアクセス
 
 ### Step 2: カットイン表示composableの共通化
 
 **作業内容**:
+
 1. `useCutinDisplay.ts` を `src/composables/` に移動
 2. `CpuGamePlayer.vue` のインライン実装を削除し、composableを使用
 
 **変更ファイル**:
+
 - `src/composables/useCutinDisplay.ts` （新規作成 = 移動）
 - `src/components/scenarios/ScenarioPlayer/composables/useCutinDisplay.ts` （削除）
 - `src/components/scenarios/ScenarioPlayer/ScenarioPlayer.vue` （import パス変更）
 - `src/components/cpu/CpuGamePlayer.vue` （インライン実装をcomposable使用に置換）
 
 **インターフェース** （変更なし）:
+
 ```typescript
 export const useCutinDisplay = (
   cutinRef: Ref<{ showPopover: () => void; hidePopover: () => void } | null>,
@@ -129,16 +143,19 @@ export const useCutinDisplay = (
 ```
 
 **注意点**:
+
 - CPU対戦側のキーボード処理（Escキー対応）は既存の`handleKeyDown`内に残す
 - composableのキーボードスキップ機能がそのまま使える
 
 ### Step 3: getPlayerColorFromConditions の共通化
 
 **作業内容**:
+
 1. `src/utils/conditionUtils.ts` を新規作成
 2. 関数を移動し、両方のファイルから参照
 
 **変更ファイル**:
+
 - `src/utils/conditionUtils.ts` （新規作成）
 - `src/components/scenarios/ScenarioPlayer/composables/useQuestionSolver.ts` （関数削除、import追加）
 - `src/components/scenarios/ScenarioPlayer/ScenarioPlayer.vue` （関数削除、import追加）
@@ -146,9 +163,11 @@ export const useCutinDisplay = (
 ### Step 4: cloneBoard の共通化（オプション）
 
 **作業内容**:
+
 - `boardStore.ts` に `cloneBoard` 関数をエクスポート
 
 **変更ファイル**:
+
 - `src/stores/boardStore.ts` （関数追加）
 - `src/components/scenarios/ScenarioPlayer/composables/useQuestionSolver.ts` （import変更）
 
@@ -196,6 +215,7 @@ docs/snapshots/before/cpu-game-player.png
 ### 3. 機能テスト
 
 開発サーバーで以下を手動テスト:
+
 - シナリオプレイヤーでカットイン表示（正解/不正解）が動作すること
 - CPU対戦でカットイン表示（勝利/敗北）が動作すること
 - 両方でキー押下によるカットインスキップが動作すること
@@ -205,6 +225,7 @@ docs/snapshots/before/cpu-game-player.png
 ## 見送り事項
 
 以下は今回の対象外:
+
 - ゲーム状態管理の統合（`cpuGameStore` と シナリオナビゲーションは目的が異なるため）
 - 禁じ手チェックのシナリオへの導入（シナリオでは出題者が設定で確認）
 - 勝利判定の統合（シナリオは`evaluateAllConditions`、CPU対戦は`checkWin`で目的が異なる）
