@@ -51,10 +51,6 @@ const difficultyCards: DifficultyCard[] = [
   },
 ];
 
-const handleSelectDifficulty = (difficulty: CpuDifficulty): void => {
-  selectedDifficulty.value = difficulty;
-};
-
 const handleStartGame = (): void => {
   appStore.startCpuGame(selectedDifficulty.value, selectedFirst.value);
 };
@@ -74,47 +70,62 @@ const handleBack = (): void => {
     <div class="content">
       <div class="setup-container">
         <!-- 難易度選択 -->
-        <section class="setup-section">
-          <h2 class="section-title">難易度を選択</h2>
+        <fieldset class="setup-section">
+          <legend class="section-title">難易度を選択</legend>
           <div class="difficulty-grid">
-            <button
+            <label
               v-for="card in difficultyCards"
               :key="card.key"
               class="difficulty-card"
-              :class="{ selected: selectedDifficulty === card.key }"
-              @click="handleSelectDifficulty(card.key)"
             >
+              <input
+                v-model="selectedDifficulty"
+                type="radio"
+                name="difficulty"
+                :value="card.key"
+                class="visually-hidden"
+              />
               <span class="card-icon">{{ card.icon }}</span>
               <span class="card-label">{{ card.label }}</span>
               <span class="card-description">{{ card.description }}</span>
-            </button>
+            </label>
           </div>
-        </section>
+        </fieldset>
 
         <!-- 先後手選択 -->
-        <section class="setup-section">
-          <h2 class="section-title">先後手を選択</h2>
+        <fieldset class="setup-section">
+          <legend class="section-title">先後手を選択</legend>
           <div class="order-buttons">
-            <button
-              class="order-button"
-              :class="{ selected: selectedFirst }"
-              @click="selectedFirst = true"
-            >
+            <label class="order-button">
+              <input
+                v-model="selectedFirst"
+                type="radio"
+                name="player-order"
+                :value="true"
+                class="visually-hidden"
+              />
               <span class="order-icon">●</span>
-              <span class="order-label">先手（黒）</span>
-              <span class="order-description">あなたから打ち始めます</span>
-            </button>
-            <button
-              class="order-button"
-              :class="{ selected: !selectedFirst }"
-              @click="selectedFirst = false"
-            >
+              <div class="order-text">
+                <span class="order-label">先手（黒）</span>
+                <span class="order-description">あなたから打ち始めます</span>
+              </div>
+            </label>
+            <label class="order-button">
+              <input
+                v-model="selectedFirst"
+                type="radio"
+                name="player-order"
+                :value="false"
+                class="visually-hidden"
+              />
               <span class="order-icon white">○</span>
-              <span class="order-label">後手（白）</span>
-              <span class="order-description">CPUから打ち始めます</span>
-            </button>
+              <div class="order-text">
+                <span class="order-label">後手（白）</span>
+                <span class="order-description">CPUから打ち始めます</span>
+              </div>
+            </label>
           </div>
-        </section>
+        </fieldset>
 
         <!-- 開始ボタン -->
         <button
@@ -134,8 +145,7 @@ const handleBack = (): void => {
   flex-direction: column;
   width: 100%;
   height: 100%;
-  padding: var(--size-40) var(--size-20);
-  overflow-y: auto;
+  padding: var(--size-24) var(--size-20);
   box-sizing: border-box;
 }
 
@@ -149,39 +159,54 @@ const handleBack = (): void => {
 .setup-container {
   display: flex;
   flex-direction: column;
-  gap: var(--size-24);
-  max-width: var(--size-500);
+  gap: var(--size-16);
+  max-width: var(--size-600);
   width: 100%;
 }
 
 .setup-section {
   display: flex;
   flex-direction: column;
-  gap: var(--size-12);
+  gap: var(--size-8);
+  border: none;
+  padding: 0;
+  margin: 0;
 }
 
 .section-title {
-  font-size: var(--size-16);
+  font-size: var(--size-14);
   font-weight: 500;
   color: var(--color-text-primary);
-  margin: 0;
+  padding: 0;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .difficulty-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: var(--size-12);
+  gap: var(--size-8);
 }
 
 .difficulty-card {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--size-6);
-  padding: var(--size-16);
+  gap: var(--size-4);
+  padding: var(--size-10) var(--size-8);
   background: var(--color-background-secondary);
   border: var(--size-2) solid transparent;
-  border-radius: var(--size-12);
+  border-radius: var(--size-10);
   cursor: pointer;
   transition: all 0.2s ease;
 }
@@ -191,23 +216,28 @@ const handleBack = (): void => {
   box-shadow: 0 var(--size-4) var(--size-12) rgba(0, 0, 0, 0.15);
 }
 
-.difficulty-card.selected {
+.difficulty-card:has(input:checked) {
   border-color: var(--color-primary);
   background: var(--color-primary-light);
 }
 
+.difficulty-card:has(input:focus-visible) {
+  outline: var(--size-2) solid var(--color-primary);
+  outline-offset: var(--size-2);
+}
+
 .card-icon {
-  font-size: var(--size-24);
+  font-size: var(--size-20);
 }
 
 .card-label {
-  font-size: var(--size-14);
+  font-size: var(--size-12);
   font-weight: 500;
   color: var(--color-text-primary);
 }
 
 .card-description {
-  font-size: var(--size-10);
+  font-size: var(--size-8);
   color: var(--color-text-secondary);
   text-align: center;
   line-height: 1.3;
@@ -216,18 +246,17 @@ const handleBack = (): void => {
 .order-buttons {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: var(--size-12);
+  gap: var(--size-8);
 }
 
 .order-button {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: var(--size-8);
-  padding: var(--size-20);
+  gap: var(--size-10);
+  padding: var(--size-10) var(--size-16);
   background: var(--color-background-secondary);
   border: var(--size-2) solid transparent;
-  border-radius: var(--size-12);
+  border-radius: var(--size-10);
   cursor: pointer;
   transition: all 0.2s ease;
 }
@@ -237,37 +266,50 @@ const handleBack = (): void => {
   box-shadow: 0 var(--size-4) var(--size-12) rgba(0, 0, 0, 0.15);
 }
 
-.order-button.selected {
+.order-button:has(input:checked) {
   border-color: var(--color-primary);
   background: var(--color-primary-light);
 }
 
+.order-button:has(input:focus-visible) {
+  outline: var(--size-2) solid var(--color-primary);
+  outline-offset: var(--size-2);
+}
+
 .order-icon {
-  font-size: var(--size-32);
+  font-size: var(--size-24);
   line-height: 1;
+  flex-shrink: 0;
 }
 
 .order-icon.white {
   color: #888;
 }
 
+.order-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-2);
+  text-align: left;
+}
+
 .order-label {
-  font-size: var(--size-16);
+  font-size: var(--size-14);
   font-weight: 500;
   color: var(--color-text-primary);
 }
 
 .order-description {
-  font-size: var(--size-12);
+  font-size: var(--size-10);
   color: var(--color-text-secondary);
 }
 
 .start-button {
-  padding: var(--size-16) var(--size-32);
+  padding: var(--size-12) var(--size-24);
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   border: none;
-  border-radius: var(--size-12);
-  font-size: var(--size-18);
+  border-radius: var(--size-10);
+  font-size: var(--size-16);
   font-weight: 500;
   color: white;
   cursor: pointer;
