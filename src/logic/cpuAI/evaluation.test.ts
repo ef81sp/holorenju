@@ -4,8 +4,6 @@
 
 import { describe, expect, it } from "vitest";
 
-import type { BoardState, StoneColor } from "@/types/game";
-
 import { createEmptyBoard } from "@/logic/renjuRules";
 
 import {
@@ -14,21 +12,7 @@ import {
   evaluateStonePatterns,
   PATTERN_SCORES,
 } from "./evaluation";
-
-/**
- * テスト用の盤面にパターンを配置するヘルパー
- */
-function placeStonesOnBoard(
-  board: BoardState,
-  stones: { row: number; col: number; color: StoneColor }[],
-): void {
-  for (const stone of stones) {
-    const row = board[stone.row];
-    if (row) {
-      row[stone.col] = stone.color;
-    }
-  }
-}
+import { placeStonesOnBoard } from "./testUtils";
 
 describe("PATTERN_SCORES", () => {
   it("スコア定数が正しく定義されている", () => {

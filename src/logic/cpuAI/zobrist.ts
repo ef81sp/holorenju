@@ -8,8 +8,7 @@
 
 import type { BoardState, StoneColor } from "@/types/game";
 
-/** 盤面サイズ */
-const BOARD_SIZE = 15;
+import { BOARD_SIZE } from "@/constants";
 
 /** 石の色を配列インデックスに変換 */
 const COLOR_INDEX = {

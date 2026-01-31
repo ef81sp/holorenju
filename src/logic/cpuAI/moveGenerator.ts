@@ -7,6 +7,7 @@
 
 import type { BoardState, Position, StoneColor } from "@/types/game";
 
+import { BOARD_SIZE } from "@/constants";
 import {
   checkFive,
   checkForbiddenMove,
@@ -121,8 +122,8 @@ export type HistoryTable = number[][];
  */
 export function createHistoryTable(): HistoryTable {
   const table: HistoryTable = [];
-  for (let row = 0; row < 15; row++) {
-    table[row] = new Array(15).fill(0) as number[];
+  for (let row = 0; row < BOARD_SIZE; row++) {
+    table[row] = new Array(BOARD_SIZE).fill(0) as number[];
   }
   return table;
 }
@@ -157,10 +158,10 @@ export function getHistoryScore(history: HistoryTable, move: Position): number {
  * History Tableをクリア
  */
 export function clearHistoryTable(history: HistoryTable): void {
-  for (let row = 0; row < 15; row++) {
+  for (let row = 0; row < BOARD_SIZE; row++) {
     const r = history[row];
     if (r) {
-      for (let col = 0; col < 15; col++) {
+      for (let col = 0; col < BOARD_SIZE; col++) {
         r[col] = 0;
       }
     }
@@ -216,8 +217,8 @@ export function generateMoves(
 
   // 盤面に石があるかチェック
   let hasStones = false;
-  for (let row = 0; row < 15; row++) {
-    for (let col = 0; col < 15; col++) {
+  for (let row = 0; row < BOARD_SIZE; row++) {
+    for (let col = 0; col < BOARD_SIZE; col++) {
       if (board[row]?.[col] !== null) {
         hasStones = true;
         break;
@@ -234,8 +235,8 @@ export function generateMoves(
   }
 
   // 既存石の周囲2マスを候補として収集
-  for (let row = 0; row < 15; row++) {
-    for (let col = 0; col < 15; col++) {
+  for (let row = 0; row < BOARD_SIZE; row++) {
+    for (let col = 0; col < BOARD_SIZE; col++) {
       // 空きマスでなければスキップ
       if (board[row]?.[col] !== null) {
         continue;

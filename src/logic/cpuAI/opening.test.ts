@@ -4,8 +4,6 @@
 
 import { describe, expect, it } from "vitest";
 
-import type { BoardState, StoneColor } from "@/types/game";
-
 import { createEmptyBoard } from "@/logic/renjuRules";
 
 import {
@@ -14,21 +12,7 @@ import {
   isOpeningPhase,
   TENGEN,
 } from "./opening";
-
-/**
- * テスト用の盤面にパターンを配置するヘルパー
- */
-function placeStonesOnBoard(
-  board: BoardState,
-  stones: { row: number; col: number; color: StoneColor }[],
-): void {
-  for (const stone of stones) {
-    const row = board[stone.row];
-    if (row) {
-      row[stone.col] = stone.color;
-    }
-  }
-}
+import { placeStonesOnBoard } from "./testUtils";
 
 describe("isOpeningPhase", () => {
   it("手数が0の場合はtrue", () => {

@@ -8,11 +8,12 @@
 
 import type { BoardState, Position } from "@/types/game";
 
-/** 天元（盤面中央）の座標 */
-export const TENGEN: Position = { row: 7, col: 7 };
+import { BOARD_SIZE, TENGEN } from "@/constants";
 
-/** 盤面サイズ */
-const BOARD_SIZE = 15;
+import { countStones, selectRandom } from "./utils";
+
+// TENGENをre-exportして後方互換性を維持
+export { TENGEN } from "@/constants";
 
 /**
  * 2手目の方向タイプ
@@ -134,21 +135,6 @@ const ORTHOGONAL_PATTERNS: JushuPattern[] = [
  */
 export function isOpeningPhase(moveCount: number): boolean {
   return moveCount < 3;
-}
-
-/**
- * 盤面上の石の数をカウント
- */
-function countStones(board: BoardState): number {
-  let count = 0;
-  for (let row = 0; row < BOARD_SIZE; row++) {
-    for (let col = 0; col < BOARD_SIZE; col++) {
-      if (board[row]?.[col] !== null) {
-        count++;
-      }
-    }
-  }
-  return count;
 }
 
 /**
@@ -274,12 +260,7 @@ export function getOpeningMove(
       return isEmpty(board, { row, col });
     });
 
-    if (validOffsets.length === 0) {
-      return null;
-    }
-
-    const randomIndex = Math.floor(Math.random() * validOffsets.length);
-    const selected = validOffsets[randomIndex];
+    const selected = selectRandom(validOffsets);
     if (!selected) {
       return null;
     }
@@ -323,13 +304,8 @@ export function getOpeningMove(
       }
     }
 
-    if (validPositions.length === 0) {
-      return null;
-    }
-
     // ランダムに選択
-    const randomIndex = Math.floor(Math.random() * validPositions.length);
-    return validPositions[randomIndex] ?? null;
+    return selectRandom(validPositions) ?? null;
   }
 
   // 4手目以降は通常のAI処理

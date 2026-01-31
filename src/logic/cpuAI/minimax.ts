@@ -6,7 +6,7 @@
 
 import type { BoardState, Position, StoneColor } from "@/types/game";
 
-import { checkWin, copyBoard } from "@/logic/renjuRules";
+import { checkWin } from "@/logic/renjuRules";
 
 import { evaluateBoard, evaluatePosition, PATTERN_SCORES } from "./evaluation";
 import {
@@ -24,6 +24,7 @@ import {
   TranspositionTable,
   type ScoreType,
 } from "./transpositionTable";
+import { applyMove, getOppositeColor } from "./utils";
 import { computeBoardHash, updateHash } from "./zobrist";
 
 /** 無限大の代わりに使う大きな値 */
@@ -80,9 +81,6 @@ export function minimax(
   lastMove: Position | null = null,
 ): number {
   // 現在の手番を決定
-  function getOppositeColor(c: "black" | "white"): "black" | "white" {
-    return c === "black" ? "white" : "black";
-  }
   const currentColor: "black" | "white" = isMaximizing
     ? perspective
     : getOppositeColor(perspective);
@@ -119,12 +117,7 @@ export function minimax(
     let maxScore = -INFINITY;
 
     for (const move of moves) {
-      // 仮の着手
-      const newBoard = copyBoard(board);
-      const row = newBoard[move.row];
-      if (row) {
-        row[move.col] = currentColor;
-      }
+      const newBoard = applyMove(board, move, currentColor);
 
       const score = minimax(
         newBoard,
@@ -150,12 +143,7 @@ export function minimax(
   let minScore = INFINITY;
 
   for (const move of moves) {
-    // 仮の着手
-    const newBoard = copyBoard(board);
-    const row = newBoard[move.row];
-    if (row) {
-      row[move.col] = currentColor;
-    }
+    const newBoard = applyMove(board, move, currentColor);
 
     const score = minimax(
       newBoard,
@@ -227,12 +215,7 @@ export function findBestMove(
   const moveScores: MoveScore[] = [];
 
   for (const move of moves) {
-    // 仮の着手
-    const newBoard = copyBoard(board);
-    const row = newBoard[move.row];
-    if (row) {
-      row[move.col] = color;
-    }
+    const newBoard = applyMove(board, move, color);
 
     // Minimaxで評価（次は相手の手番なのでfalse）
     const score = minimax(
@@ -440,9 +423,6 @@ export function minimaxWithTT(
   ctx.stats.nodes++;
 
   // 現在の手番を決定
-  function getOppositeColor(c: "black" | "white"): "black" | "white" {
-    return c === "black" ? "white" : "black";
-  }
   const currentColor: "black" | "white" = isMaximizing
     ? perspective
     : getOppositeColor(perspective);
@@ -514,12 +494,7 @@ export function minimaxWithTT(
   let scoreType: ScoreType = isMaximizing ? "UPPER_BOUND" : "LOWER_BOUND";
 
   for (const move of moves) {
-    // 仮の着手
-    const newBoard = copyBoard(board);
-    const row = newBoard[move.row];
-    if (row) {
-      row[move.col] = currentColor;
-    }
+    const newBoard = applyMove(board, move, currentColor);
     const newHash = updateHash(hash, move.row, move.col, currentColor);
 
     const score = minimaxWithTT(
@@ -638,11 +613,7 @@ export function findBestMoveWithTT(
   const beta = INFINITY;
 
   for (const move of moves) {
-    const newBoard = copyBoard(board);
-    const row = newBoard[move.row];
-    if (row) {
-      row[move.col] = color;
-    }
+    const newBoard = applyMove(board, move, color);
     const newHash = updateHash(hash, move.row, move.col, color);
 
     const score = minimaxWithTT(

@@ -4,27 +4,11 @@
 
 import { describe, expect, it } from "vitest";
 
-import type { BoardState, StoneColor } from "@/types/game";
-
 import { createEmptyBoard } from "@/logic/renjuRules";
 
 import { PATTERN_SCORES } from "./evaluation";
 import { findBestMove, findBestMoveIterative, minimax } from "./minimax";
-
-/**
- * テスト用の盤面にパターンを配置するヘルパー
- */
-function placeStonesOnBoard(
-  board: BoardState,
-  stones: { row: number; col: number; color: StoneColor }[],
-): void {
-  for (const stone of stones) {
-    const row = board[stone.row];
-    if (row) {
-      row[stone.col] = stone.color;
-    }
-  }
-}
+import { placeStonesOnBoard } from "./testUtils";
 
 describe("minimax", () => {
   it("深さ0では現在の盤面評価を返す", () => {
