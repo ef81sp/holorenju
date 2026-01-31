@@ -9,7 +9,22 @@ import type { BoardState, Position, StoneColor } from "@/types/game";
 import { checkWin, copyBoard } from "@/logic/renjuRules";
 
 import { evaluateBoard, evaluatePosition, PATTERN_SCORES } from "./evaluation";
-import { generateMoves } from "./moveGenerator";
+import {
+  createHistoryTable,
+  createKillerMoves,
+  generateMoves,
+  generateSortedMoves,
+  recordKillerMove,
+  updateHistory,
+  type HistoryTable,
+  type KillerMoves,
+} from "./moveGenerator";
+import {
+  globalTT,
+  TranspositionTable,
+  type ScoreType,
+} from "./transpositionTable";
+import { computeBoardHash, updateHash } from "./zobrist";
 
 /** 無限大の代わりに使う大きな値 */
 const INFINITY = 1000000;
@@ -341,5 +356,405 @@ export function findBestMoveIterative(
     score: bestResult.score,
     completedDepth,
     interrupted,
+  };
+}
+
+// =============================================================================
+// Transposition Table 統合版
+// =============================================================================
+
+/**
+ * 探索コンテキスト
+ *
+ * 探索中に使用するデータ構造を一元管理
+ */
+export interface SearchContext {
+  /** Transposition Table */
+  tt: TranspositionTable;
+  /** History Table */
+  history: HistoryTable;
+  /** Killer Moves */
+  killers: KillerMoves;
+  /** 探索統計 */
+  stats: SearchStats;
+}
+
+/**
+ * 探索統計
+ */
+export interface SearchStats {
+  /** 探索ノード数 */
+  nodes: number;
+  /** TTヒット数 */
+  ttHits: number;
+  /** TTカットオフ数 */
+  ttCutoffs: number;
+  /** Beta剪定数 */
+  betaCutoffs: number;
+}
+
+/**
+ * SearchContextを作成
+ */
+export function createSearchContext(
+  tt: TranspositionTable = globalTT,
+): SearchContext {
+  return {
+    tt,
+    history: createHistoryTable(),
+    killers: createKillerMoves(),
+    stats: {
+      nodes: 0,
+      ttHits: 0,
+      ttCutoffs: 0,
+      betaCutoffs: 0,
+    },
+  };
+}
+
+/**
+ * Minimax探索（TT/Move Ordering統合版）
+ *
+ * @param board 盤面
+ * @param hash 現在の盤面ハッシュ
+ * @param depth 残り探索深度
+ * @param isMaximizing 最大化プレイヤーの手番か
+ * @param perspective 評価の視点
+ * @param alphaInit Alpha値
+ * @param betaInit Beta値
+ * @param lastMove 最後の着手位置
+ * @param ctx 探索コンテキスト
+ * @returns 評価スコア
+ */
+export function minimaxWithTT(
+  board: BoardState,
+  hash: bigint,
+  depth: number,
+  isMaximizing: boolean,
+  perspective: "black" | "white",
+  alphaInit: number,
+  betaInit: number,
+  lastMove: Position | null,
+  ctx: SearchContext,
+): number {
+  ctx.stats.nodes++;
+
+  // 現在の手番を決定
+  function getOppositeColor(c: "black" | "white"): "black" | "white" {
+    return c === "black" ? "white" : "black";
+  }
+  const currentColor: "black" | "white" = isMaximizing
+    ? perspective
+    : getOppositeColor(perspective);
+  const lastMoveColor: "black" | "white" = getOppositeColor(currentColor);
+
+  let alpha = alphaInit;
+  let beta = betaInit;
+
+  // 終端条件チェック
+  if (lastMove && isTerminal(board, lastMove, lastMoveColor)) {
+    if (lastMoveColor === perspective) {
+      return PATTERN_SCORES.FIVE;
+    }
+    return -PATTERN_SCORES.FIVE;
+  }
+
+  // TTプローブ
+  const ttEntry = ctx.tt.probe(hash);
+  let ttMove: Position | null = null;
+
+  if (ttEntry && ttEntry.depth >= depth) {
+    ctx.stats.ttHits++;
+
+    switch (ttEntry.type) {
+      case "EXACT":
+        ctx.stats.ttCutoffs++;
+        return ttEntry.score;
+      case "LOWER_BOUND":
+        alpha = Math.max(alpha, ttEntry.score);
+        break;
+      case "UPPER_BOUND":
+        beta = Math.min(beta, ttEntry.score);
+        break;
+      default:
+        // ScoreTypeは3種類のみなので到達しない
+        break;
+    }
+
+    if (alpha >= beta) {
+      ctx.stats.ttCutoffs++;
+      return ttEntry.score;
+    }
+
+    ttMove = ttEntry.bestMove;
+  }
+
+  // 探索深度が0になった場合は盤面評価
+  if (depth === 0) {
+    const score = evaluateBoard(board, perspective);
+    ctx.tt.store(hash, score, depth, "EXACT", null);
+    return score;
+  }
+
+  // ソート済み候補手生成
+  const moves = generateSortedMoves(board, currentColor, {
+    ttMove,
+    killers: ctx.killers,
+    depth,
+    history: ctx.history,
+    useStaticEval: true,
+  });
+
+  if (moves.length === 0) {
+    return 0;
+  }
+
+  let bestMove: Position | null = null;
+  let bestScore = isMaximizing ? -INFINITY : INFINITY;
+  let scoreType: ScoreType = isMaximizing ? "UPPER_BOUND" : "LOWER_BOUND";
+
+  for (const move of moves) {
+    // 仮の着手
+    const newBoard = copyBoard(board);
+    const row = newBoard[move.row];
+    if (row) {
+      row[move.col] = currentColor;
+    }
+    const newHash = updateHash(hash, move.row, move.col, currentColor);
+
+    const score = minimaxWithTT(
+      newBoard,
+      newHash,
+      depth - 1,
+      !isMaximizing,
+      perspective,
+      alpha,
+      beta,
+      move,
+      ctx,
+    );
+
+    if (isMaximizing) {
+      if (score > bestScore) {
+        bestScore = score;
+        bestMove = move;
+      }
+      alpha = Math.max(alpha, score);
+    } else {
+      if (score < bestScore) {
+        bestScore = score;
+        bestMove = move;
+      }
+      beta = Math.min(beta, score);
+    }
+
+    // 剪定チェック
+    if (beta <= alpha) {
+      ctx.stats.betaCutoffs++;
+      recordKillerMove(ctx.killers, depth, move);
+      updateHistory(ctx.history, move, depth);
+      scoreType = isMaximizing ? "LOWER_BOUND" : "UPPER_BOUND";
+      break;
+    }
+  }
+
+  // スコアタイプを決定
+  if (beta > alpha) {
+    if (isMaximizing && bestScore > alphaInit) {
+      scoreType = "EXACT";
+    } else if (!isMaximizing && bestScore < betaInit) {
+      scoreType = "EXACT";
+    }
+  }
+
+  // TTに保存
+  ctx.tt.store(hash, bestScore, depth, scoreType, bestMove);
+
+  return bestScore;
+}
+
+/**
+ * 最善手を探索（TT統合版）
+ *
+ * @param board 盤面
+ * @param color 手番の色
+ * @param depth 探索深度
+ * @param randomFactor ランダム要素（0-1）
+ * @param ctx 探索コンテキスト（省略時は新規作成）
+ * @returns 最善手と評価スコア
+ */
+export function findBestMoveWithTT(
+  board: BoardState,
+  color: "black" | "white",
+  depth: number,
+  randomFactor = 0,
+  ctx: SearchContext = createSearchContext(),
+): MinimaxResult & { ctx: SearchContext } {
+  const hash = computeBoardHash(board);
+
+  // TTからの前回の最善手を取得
+  const ttEntry = ctx.tt.probe(hash);
+  const ttMove = ttEntry?.bestMove ?? null;
+
+  const moves = generateSortedMoves(board, color, {
+    ttMove,
+    killers: ctx.killers,
+    depth,
+    history: ctx.history,
+    useStaticEval: true,
+  });
+
+  if (moves.length === 0) {
+    return {
+      position: { row: 7, col: 7 },
+      score: 0,
+      ctx,
+    };
+  }
+
+  if (moves.length === 1) {
+    const [move] = moves;
+    if (!move) {
+      return {
+        position: { row: 7, col: 7 },
+        score: 0,
+        ctx,
+      };
+    }
+    return {
+      position: move,
+      score: evaluatePosition(board, move.row, move.col, color),
+      ctx,
+    };
+  }
+
+  interface MoveScore {
+    move: Position;
+    score: number;
+  }
+  const moveScores: MoveScore[] = [];
+
+  let alpha = -INFINITY;
+  const beta = INFINITY;
+
+  for (const move of moves) {
+    const newBoard = copyBoard(board);
+    const row = newBoard[move.row];
+    if (row) {
+      row[move.col] = color;
+    }
+    const newHash = updateHash(hash, move.row, move.col, color);
+
+    const score = minimaxWithTT(
+      newBoard,
+      newHash,
+      depth - 1,
+      false,
+      color,
+      alpha,
+      beta,
+      move,
+      ctx,
+    );
+
+    moveScores.push({ move, score });
+    alpha = Math.max(alpha, score);
+  }
+
+  moveScores.sort((a, b) => b.score - a.score);
+
+  // ランダム要素を適用
+  if (
+    randomFactor > 0 &&
+    Math.random() < randomFactor &&
+    moveScores.length > 1
+  ) {
+    const topN = Math.max(2, Math.floor(moveScores.length / 3));
+    const randomIndex = Math.floor(Math.random() * topN);
+    const selected = moveScores[randomIndex];
+    if (selected) {
+      return {
+        position: selected.move,
+        score: selected.score,
+        ctx,
+      };
+    }
+  }
+
+  const [best] = moveScores;
+  if (!best) {
+    return {
+      position: { row: 7, col: 7 },
+      score: 0,
+      ctx,
+    };
+  }
+
+  return {
+    position: best.move,
+    score: best.score,
+    ctx,
+  };
+}
+
+/**
+ * Iterative Deepeningで最善手を探索（TT統合版）
+ *
+ * @param board 盤面
+ * @param color 手番の色
+ * @param maxDepth 最大探索深度
+ * @param timeLimit 時間制限（ミリ秒）
+ * @param randomFactor ランダム要素（0-1）
+ * @returns 最善手と探索情報
+ */
+export function findBestMoveIterativeWithTT(
+  board: BoardState,
+  color: "black" | "white",
+  maxDepth: number,
+  timeLimit: number,
+  randomFactor = 0,
+): IterativeDeepingResult & { stats: SearchStats } {
+  const startTime = performance.now();
+  const ctx = createSearchContext();
+
+  // 新しい探索開始
+  ctx.tt.newGeneration();
+
+  // 初期結果（深さ1で必ず結果を得る）
+  let bestResult = findBestMoveWithTT(board, color, 1, randomFactor, ctx);
+  let completedDepth = 1;
+  let interrupted = false;
+
+  // 深さ2から開始して、時間制限内で可能な限り深く探索
+  for (let depth = 2; depth <= maxDepth; depth++) {
+    const elapsedTime = performance.now() - startTime;
+
+    // 時間制限チェック
+    if (elapsedTime > timeLimit * 0.5) {
+      interrupted = true;
+      break;
+    }
+
+    // 深さdで探索
+    const result = findBestMoveWithTT(board, color, depth, randomFactor, ctx);
+
+    const currentTime = performance.now() - startTime;
+    if (currentTime >= timeLimit) {
+      bestResult = result;
+      completedDepth = depth;
+      interrupted = true;
+      break;
+    }
+
+    bestResult = result;
+    completedDepth = depth;
+  }
+
+  return {
+    position: bestResult.position,
+    score: bestResult.score,
+    completedDepth,
+    interrupted,
+    stats: ctx.stats,
   };
 }

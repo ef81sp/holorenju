@@ -13,7 +13,7 @@ import {
   type AIResponse,
 } from "@/types/cpu";
 
-import { findBestMoveIterative } from "./minimax";
+import { findBestMoveIterativeWithTT } from "./minimax";
 import { getOpeningMove, isOpeningPhase } from "./opening";
 
 /**
@@ -75,8 +75,8 @@ self.onmessage = (event: MessageEvent<AIRequest>) => {
     // 4手目以降、または開局パターン外の場合は通常のAI探索
     const params = DIFFICULTY_PARAMS[request.difficulty];
 
-    // Iterative Deepeningで探索（時間制限付き）
-    const result = findBestMoveIterative(
+    // Iterative Deepeningで探索（TT/Move Ordering統合版）
+    const result = findBestMoveIterativeWithTT(
       request.board,
       currentTurn,
       params.depth,
