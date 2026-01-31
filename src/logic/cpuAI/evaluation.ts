@@ -18,6 +18,7 @@ import {
 } from "@/logic/renjuRules";
 
 import { hasVCF } from "./vcf";
+import { countStones, hasVCT, VCT_STONE_THRESHOLD } from "./vct";
 
 /**
  * パターンスコア定数
@@ -33,6 +34,12 @@ export interface EvaluationOptions {
   enableMise: boolean;
   /** 禁手追い込み評価を有効にするか */
   enableForbiddenTrap: boolean;
+  /** 複数方向脅威ボーナスを有効にするか */
+  enableMultiThreat: boolean;
+  /** カウンターフォー（防御しながら四を作る）を有効にするか */
+  enableCounterFour: boolean;
+  /** VCT（三・四連続勝ち）探索を有効にするか */
+  enableVCT: boolean;
 }
 
 /**
@@ -42,6 +49,9 @@ export const DEFAULT_EVAL_OPTIONS: EvaluationOptions = {
   enableFukumi: false,
   enableMise: false,
   enableForbiddenTrap: false,
+  enableMultiThreat: false,
+  enableCounterFour: false,
+  enableVCT: false,
 };
 
 /**
@@ -51,6 +61,9 @@ export const FULL_EVAL_OPTIONS: EvaluationOptions = {
   enableFukumi: true,
   enableMise: true,
   enableForbiddenTrap: true,
+  enableMultiThreat: true,
+  enableCounterFour: true,
+  enableVCT: true,
 };
 
 export const PATTERN_SCORES = {
@@ -82,6 +95,12 @@ export const PATTERN_SCORES = {
   CENTER_BONUS: 5,
   /** 禁じ手誘導ボーナス（白番・旧定数、後方互換） */
   FORBIDDEN_TRAP: 100,
+  /** 複数方向脅威ボーナス（2方向以上の脅威に追加） */
+  MULTI_THREAT_BONUS: 500,
+  /** VCT（三・四連続勝ち）ボーナス */
+  VCT_BONUS: 8000,
+  /** カウンターフォー倍率 */
+  COUNTER_FOUR_MULTIPLIER: 1.5,
 } as const;
 
 /**
@@ -411,6 +430,90 @@ function analyzeJumpPatterns(
   }
 
   return result;
+}
+
+/**
+ * 複数方向に脅威（活三以上）がある数をカウント
+ *
+ * @param board 盤面（石を置いた状態）
+ * @param row 石を置いた行
+ * @param col 石を置いた列
+ * @param color 石の色
+ * @returns 脅威がある方向数
+ */
+function countThreatDirections(
+  board: BoardState,
+  row: number,
+  col: number,
+  color: "black" | "white",
+): number {
+  let threatCount = 0;
+
+  for (let i = 0; i < DIRECTION_INDICES.length; i++) {
+    const dirIndex = DIRECTION_INDICES[i];
+    if (dirIndex === undefined) {
+      continue;
+    }
+
+    const direction = DIRECTIONS[i];
+    if (!direction) {
+      continue;
+    }
+    const [dr, dc] = direction;
+    const pattern = analyzeDirection(board, row, col, dr, dc, color);
+
+    // 活四 or 止め四
+    if (
+      pattern.count === 4 &&
+      (pattern.end1 === "empty" || pattern.end2 === "empty")
+    ) {
+      threatCount++;
+      continue;
+    }
+
+    // 活三
+    if (
+      pattern.count === 3 &&
+      pattern.end1 === "empty" &&
+      pattern.end2 === "empty"
+    ) {
+      // 黒の場合はウソの三かどうかチェック
+      if (
+        color === "white" ||
+        isValidConsecutiveThree(board, row, col, dirIndex)
+      ) {
+        threatCount++;
+        continue;
+      }
+    }
+
+    // 跳び四をチェック（連続四がない場合のみ）
+    if (pattern.count !== 4 && checkJumpFour(board, row, col, dirIndex)) {
+      threatCount++;
+      continue;
+    }
+
+    // 跳び三をチェック（連続三がない場合のみ）
+    if (pattern.count !== 3 && checkJumpThree(board, row, col, dirIndex)) {
+      if (color === "white" || isValidJumpThree(board, row, col, dirIndex)) {
+        threatCount++;
+      }
+    }
+  }
+
+  return threatCount;
+}
+
+/**
+ * 複数方向脅威ボーナスを計算
+ *
+ * @param threatCount 脅威がある方向数
+ * @returns ボーナススコア
+ */
+function evaluateMultiThreat(threatCount: number): number {
+  return threatCount >= 2
+    ? PATTERN_SCORES.MULTI_THREAT_BONUS * (threatCount - 1)
+    : 0;
 }
 
 /**
@@ -819,6 +922,25 @@ export function evaluatePosition(
     fukumiBonus = PATTERN_SCORES.FUKUMI_BONUS;
   }
 
+  // 複数方向脅威ボーナス: 2方向以上で脅威を作る手（オプションで有効時のみ）
+  let multiThreatBonus = 0;
+  if (options.enableMultiThreat) {
+    const threatCount = countThreatDirections(testBoard, row, col, color);
+    multiThreatBonus = evaluateMultiThreat(threatCount);
+  }
+
+  // VCTボーナス: 三・四連続勝ちがある手（オプションで有効時のみ、終盤のみ）
+  // 計算コストが高いので、既にOPEN_FOUR以上の手はスキップ
+  let vctBonus = 0;
+  if (
+    options.enableVCT &&
+    attackScore < PATTERN_SCORES.OPEN_FOUR &&
+    countStones(board) >= VCT_STONE_THRESHOLD &&
+    hasVCT(testBoard, color)
+  ) {
+    vctBonus = PATTERN_SCORES.VCT_BONUS;
+  }
+
   // 防御スコア: 相手の脅威をブロック
   const opponentColor = color === "black" ? "white" : "black";
   let defenseScore = 0;
@@ -840,6 +962,17 @@ export function evaluatePosition(
   // ブロック価値は相手のスコアの50%
   defenseScore = opponentPatternScore * 0.5;
 
+  // カウンターフォー: 防御しながら四を作る手（オプションで有効時のみ）
+  // 自分が四以上を作り、相手が活三以上を持っていた場合、防御スコアを1.5倍
+  if (options.enableCounterFour) {
+    if (
+      attackScore >= PATTERN_SCORES.FOUR &&
+      opponentPatternScore >= PATTERN_SCORES.OPEN_THREE
+    ) {
+      defenseScore *= PATTERN_SCORES.COUNTER_FOUR_MULTIPLIER;
+    }
+  }
+
   // 中央ボーナスを追加
   const centerBonus = getCenterBonus(row, col);
 
@@ -850,7 +983,9 @@ export function evaluatePosition(
     fourThreeBonus +
     forbiddenTrapBonus +
     miseBonus +
-    fukumiBonus
+    fukumiBonus +
+    multiThreatBonus +
+    vctBonus
   );
 }
 

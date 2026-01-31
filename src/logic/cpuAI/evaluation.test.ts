@@ -435,4 +435,151 @@ describe("スコア定数", () => {
     expect(PATTERN_SCORES.FORBIDDEN_TRAP_SETUP).toBe(1500);
     expect(PATTERN_SCORES.MISE_BONUS).toBe(1000);
   });
+
+  it("高度な戦術評価のスコア定数が正しく定義されている", () => {
+    expect(PATTERN_SCORES.MULTI_THREAT_BONUS).toBe(500);
+    expect(PATTERN_SCORES.VCT_BONUS).toBe(8000);
+    expect(PATTERN_SCORES.COUNTER_FOUR_MULTIPLIER).toBe(1.5);
+  });
+});
+
+describe("複数方向脅威ボーナス", () => {
+  it("2方向以上の脅威にボーナス加算", () => {
+    // 横と縦に活三を作る配置
+    const board = createBoardWithStones([
+      // 横に二（活三になる）
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+      // 縦に二（活三になる）
+      { row: 5, col: 8, color: "black" },
+      { row: 6, col: 8, color: "black" },
+    ]);
+
+    // enableMultiThreat有効時のスコア
+    const scoreWithBonus = evaluatePosition(board, 7, 8, "black", {
+      enableFukumi: false,
+      enableMise: false,
+      enableForbiddenTrap: false,
+      enableMultiThreat: true,
+      enableCounterFour: false,
+      enableVCT: false,
+    });
+
+    // enableMultiThreat無効時のスコア
+    const scoreWithoutBonus = evaluatePosition(board, 7, 8, "black", {
+      enableFukumi: false,
+      enableMise: false,
+      enableForbiddenTrap: false,
+      enableMultiThreat: false,
+      enableCounterFour: false,
+      enableVCT: false,
+    });
+
+    // ボーナス有効時の方が高スコア
+    expect(scoreWithBonus).toBeGreaterThan(scoreWithoutBonus);
+    // ボーナス差は最低500（2方向-1=1 × 500）、浮動小数点誤差を考慮
+    expect(scoreWithBonus - scoreWithoutBonus).toBeGreaterThanOrEqual(
+      PATTERN_SCORES.MULTI_THREAT_BONUS - 1,
+    );
+  });
+
+  it("1方向のみの脅威にはボーナスなし", () => {
+    // 横に活三のみ
+    const board = createBoardWithStones([
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+    ]);
+
+    const scoreWithBonus = evaluatePosition(board, 7, 8, "black", {
+      enableFukumi: false,
+      enableMise: false,
+      enableForbiddenTrap: false,
+      enableMultiThreat: true,
+      enableCounterFour: false,
+      enableVCT: false,
+    });
+
+    const scoreWithoutBonus = evaluatePosition(board, 7, 8, "black", {
+      enableFukumi: false,
+      enableMise: false,
+      enableForbiddenTrap: false,
+      enableMultiThreat: false,
+      enableCounterFour: false,
+      enableVCT: false,
+    });
+
+    // 1方向のみなので差がほぼ0
+    expect(scoreWithBonus).toBe(scoreWithoutBonus);
+  });
+});
+
+describe("カウンターフォー", () => {
+  it("防御しながら四を作る手の防御スコアが1.5倍になる", () => {
+    // 相手（白）が活三を持っている
+    // 自分（黒）がその防御位置で四を作れる状況
+    const board = createBoardWithStones([
+      // 白の活三
+      { row: 5, col: 5, color: "white" },
+      { row: 5, col: 6, color: "white" },
+      { row: 5, col: 7, color: "white" },
+      // 黒の三（5,8に置くと四になる）
+      { row: 5, col: 9, color: "black" },
+      { row: 5, col: 10, color: "black" },
+      { row: 5, col: 11, color: "black" },
+    ]);
+
+    // enableCounterFour有効時のスコア
+    const scoreWithCounter = evaluatePosition(board, 5, 8, "black", {
+      enableFukumi: false,
+      enableMise: false,
+      enableForbiddenTrap: false,
+      enableMultiThreat: false,
+      enableCounterFour: true,
+      enableVCT: false,
+    });
+
+    // enableCounterFour無効時のスコア
+    const scoreWithoutCounter = evaluatePosition(board, 5, 8, "black", {
+      enableFukumi: false,
+      enableMise: false,
+      enableForbiddenTrap: false,
+      enableMultiThreat: false,
+      enableCounterFour: false,
+      enableVCT: false,
+    });
+
+    // カウンターフォー有効時の方が高スコア（防御スコアが1.5倍）
+    expect(scoreWithCounter).toBeGreaterThan(scoreWithoutCounter);
+  });
+
+  it("自分が四を作らない場合はカウンターフォーなし", () => {
+    // 相手が活三、自分は普通の防御
+    const board = createBoardWithStones([
+      { row: 5, col: 5, color: "white" },
+      { row: 5, col: 6, color: "white" },
+      { row: 5, col: 7, color: "white" },
+    ]);
+
+    const scoreWithCounter = evaluatePosition(board, 5, 8, "black", {
+      enableFukumi: false,
+      enableMise: false,
+      enableForbiddenTrap: false,
+      enableMultiThreat: false,
+      enableCounterFour: true,
+      enableVCT: false,
+    });
+
+    const scoreWithoutCounter = evaluatePosition(board, 5, 8, "black", {
+      enableFukumi: false,
+      enableMise: false,
+      enableForbiddenTrap: false,
+      enableMultiThreat: false,
+      enableCounterFour: false,
+      enableVCT: false,
+    });
+
+    // 自分が四を作らないのでスコアは同じ
+    expect(scoreWithCounter).toBe(scoreWithoutCounter);
+  });
 });

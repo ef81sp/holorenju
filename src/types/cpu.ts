@@ -47,8 +47,8 @@ export interface DifficultyParams {
  *
  * 評価オプション:
  * - beginner/easy: 全機能無効（高速モード）
- * - medium: ミセ手のみ有効
- * - hard: 全機能有効
+ * - medium: ミセ手・複数方向脅威・カウンターフォー有効
+ * - hard: 全機能有効（VCT含む）
  */
 export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
   beginner: {
@@ -59,6 +59,9 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
       enableFukumi: false,
       enableMise: false,
       enableForbiddenTrap: false,
+      enableMultiThreat: false,
+      enableCounterFour: false,
+      enableVCT: false,
     },
   },
   easy: {
@@ -69,6 +72,9 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
       enableFukumi: false,
       enableMise: false,
       enableForbiddenTrap: false,
+      enableMultiThreat: false,
+      enableCounterFour: false,
+      enableVCT: false,
     },
   },
   medium: {
@@ -79,6 +85,9 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
       enableFukumi: false,
       enableMise: true,
       enableForbiddenTrap: false,
+      enableMultiThreat: true,
+      enableCounterFour: true,
+      enableVCT: false,
     },
   },
   hard: {
@@ -89,6 +98,9 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
       enableFukumi: true,
       enableMise: true,
       enableForbiddenTrap: true,
+      enableMultiThreat: true,
+      enableCounterFour: true,
+      enableVCT: true,
     },
   },
 };
