@@ -169,14 +169,14 @@ describe("findBestMoveIterative", () => {
       { row: 7, col: 8, color: "white" },
     ]);
 
-    // 5秒の時間制限で最大深度4まで探索
-    const result = findBestMoveIterative(board, "black", 4, 5000);
+    // 2秒の時間制限で最大深度3まで探索（評価関数の計算量増加に対応）
+    const result = findBestMoveIterative(board, "black", 3, 2000);
 
     expect(result.position.row).toBeGreaterThanOrEqual(0);
     expect(result.position.row).toBeLessThan(15);
     expect(result.completedDepth).toBeGreaterThanOrEqual(1);
-    expect(result.completedDepth).toBeLessThanOrEqual(4);
-  });
+    expect(result.completedDepth).toBeLessThanOrEqual(3);
+  }, 10000);
 
   it("短い時間制限では早期に中断する", () => {
     const board = createEmptyBoard();

@@ -6,7 +6,16 @@
 
 import type { BoardState, StoneColor } from "@/types/game";
 
-import { checkFive, copyBoard, isValidPosition } from "@/logic/renjuRules";
+import {
+  checkFive,
+  checkForbiddenMove,
+  checkJumpFour,
+  checkJumpThree,
+  copyBoard,
+  getConsecutiveThreeStraightFourPoints,
+  getJumpThreeStraightFourPoints,
+  isValidPosition,
+} from "@/logic/renjuRules";
 
 /**
  * パターンスコア定数
@@ -16,6 +25,8 @@ export const PATTERN_SCORES = {
   FIVE: 100000,
   /** 活四（両端開） */
   OPEN_FOUR: 10000,
+  /** 四三同時作成ボーナス */
+  FOUR_THREE_BONUS: 5000,
   /** 止め四（片端開） */
   FOUR: 1000,
   /** 活三（両端開） */
@@ -42,6 +53,13 @@ const DIRECTIONS: [number, number][] = [
   [1, 1], // 右下斜め
   [1, -1], // 右上斜め
 ];
+
+/**
+ * 4方向のペアインデックス（renjuRules.tsのDIRECTIONSに対応）
+ * renjuRules.tsの方向: 0=上, 1=右上, 2=右, 3=右下, 4=下, 5=左下, 6=左, 7=左上
+ * ペア: [0,4]=縦, [2,6]=横, [1,5]=右上-左下, [3,7]=右下-左上
+ */
+const DIRECTION_INDICES = [2, 0, 3, 1] as const; // 横, 縦, 右下斜め, 右上斜め（DIRECTIONSに対応）
 
 /**
  * 端の状態
@@ -192,7 +210,193 @@ function getCenterBonus(row: number, col: number): number {
 }
 
 /**
+ * 跳びパターンの分析結果
+ */
+interface JumpPatternResult {
+  /** 跳び四がある（連続四 or 跳び四） */
+  hasFour: boolean;
+  /** 跳び四の数（連続四は含まない） */
+  jumpFourCount: number;
+  /** 活跳び四がある（両端が空いている跳び四は存在しないので連続四のみ） */
+  hasOpenFour: boolean;
+  /** 跳び三がある */
+  hasJumpThree: boolean;
+  /** 有効な活三がある（連続三・跳び三ともにウソの三でない） */
+  hasValidOpenThree: boolean;
+}
+
+/**
+ * 連続三が有効（ウソの三でない）かをチェック
+ *
+ * @param board 盤面（石を置いた状態）
+ * @param row 石を置いた行
+ * @param col 石を置いた列
+ * @param dirIndex renjuRules.tsのDIRECTIONSに対応する方向インデックス
+ * @returns 三が有効ならtrue
+ */
+function isValidConsecutiveThree(
+  board: BoardState,
+  row: number,
+  col: number,
+  dirIndex: number,
+): boolean {
+  const straightFourPoints = getConsecutiveThreeStraightFourPoints(
+    board,
+    row,
+    col,
+    dirIndex,
+  );
+
+  if (straightFourPoints.length === 0) {
+    return false;
+  }
+
+  for (const pos of straightFourPoints) {
+    const result = checkForbiddenMove(board, pos.row, pos.col);
+    if (!result.isForbidden) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * 跳び三が有効（ウソの三でない）かをチェック
+ *
+ * @param board 盤面（石を置いた状態）
+ * @param row 石を置いた行
+ * @param col 石を置いた列
+ * @param dirIndex renjuRules.tsのDIRECTIONSに対応する方向インデックス
+ * @returns 三が有効ならtrue
+ */
+function isValidJumpThree(
+  board: BoardState,
+  row: number,
+  col: number,
+  dirIndex: number,
+): boolean {
+  const straightFourPoints = getJumpThreeStraightFourPoints(
+    board,
+    row,
+    col,
+    dirIndex,
+  );
+
+  if (straightFourPoints.length === 0) {
+    return false;
+  }
+
+  for (const pos of straightFourPoints) {
+    const result = checkForbiddenMove(board, pos.row, pos.col);
+    if (!result.isForbidden) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * 跳びパターン（跳び三・跳び四）を分析
+ *
+ * @param board 盤面（石を置いた状態）
+ * @param row 石を置いた行
+ * @param col 石を置いた列
+ * @param color 石の色
+ * @returns 跳びパターンの分析結果
+ */
+function analyzeJumpPatterns(
+  board: BoardState,
+  row: number,
+  col: number,
+  color: "black" | "white",
+): JumpPatternResult {
+  const result: JumpPatternResult = {
+    hasFour: false,
+    jumpFourCount: 0,
+    hasOpenFour: false,
+    hasJumpThree: false,
+    hasValidOpenThree: false,
+  };
+
+  for (let i = 0; i < DIRECTION_INDICES.length; i++) {
+    const dirIndex = DIRECTION_INDICES[i];
+    if (dirIndex === undefined) {
+      continue;
+    }
+
+    // 連続パターンを先にチェック（DIRECTIONSの順に）
+    const direction = DIRECTIONS[i];
+    if (!direction) {
+      continue;
+    }
+    const [dr, dc] = direction;
+    const pattern = analyzeDirection(board, row, col, dr, dc, color);
+
+    // 連続四をチェック
+    if (pattern.count === 4) {
+      result.hasFour = true;
+      if (pattern.end1 === "empty" && pattern.end2 === "empty") {
+        result.hasOpenFour = true;
+      }
+    }
+
+    // 連続三をチェック（活三）
+    if (pattern.count === 3) {
+      if (pattern.end1 === "empty" && pattern.end2 === "empty") {
+        if (
+          color === "white" ||
+          isValidConsecutiveThree(board, row, col, dirIndex)
+        ) {
+          result.hasValidOpenThree = true;
+        }
+      }
+    }
+
+    // 跳び四をチェック（連続四がない場合のみ）
+    if (pattern.count !== 4 && checkJumpFour(board, row, col, dirIndex)) {
+      result.hasFour = true;
+      result.jumpFourCount++;
+      // 跳び四は両端開の形がないので、常に止め四扱い
+    }
+
+    // 跳び三をチェック（連続三がない場合のみ）
+    if (pattern.count !== 3 && checkJumpThree(board, row, col, dirIndex)) {
+      result.hasJumpThree = true;
+      // 白番ならウソの三チェック不要、黒番なら達四点が禁点でないかチェック
+      if (color === "white" || isValidJumpThree(board, row, col, dirIndex)) {
+        result.hasValidOpenThree = true;
+      }
+    }
+  }
+
+  return result;
+}
+
+/**
+ * 跳びパターンからスコアを計算
+ *
+ * @param jumpResult 跳びパターンの分析結果
+ * @returns スコア
+ */
+function getJumpPatternScore(jumpResult: JumpPatternResult): number {
+  let score = 0;
+
+  // 跳び四のスコア（連続四はanalyzeDirectionでカウント済みなので、跳び四のみ）
+  // 跳び四は止め四と同等のスコア（FOURスコア）
+  score += jumpResult.jumpFourCount * PATTERN_SCORES.FOUR;
+
+  // 有効な活跳び三のスコア（hasValidOpenThreeは連続三・跳び三両方を含むが、
+  // 連続三のスコアはanalyzeDirectionでカウント済みなので、跳び三のみ追加）
+  if (jumpResult.hasJumpThree && jumpResult.hasValidOpenThree) {
+    score += PATTERN_SCORES.OPEN_THREE;
+  }
+
+  return score;
+}
+
+/**
  * 指定位置の石について全方向のパターンスコアを計算
+ * 連続パターンと跳びパターンの両方を評価
  *
  * @param board 盤面
  * @param row 行
@@ -208,10 +412,15 @@ export function evaluateStonePatterns(
 ): number {
   let score = 0;
 
+  // 連続パターンのスコア
   for (const [dr, dc] of DIRECTIONS) {
     const pattern = analyzeDirection(board, row, col, dr, dc, color);
     score += getPatternScore(pattern);
   }
+
+  // 跳びパターンのスコア
+  const jumpResult = analyzeJumpPatterns(board, row, col, color);
+  score += getJumpPatternScore(jumpResult);
 
   return score;
 }
@@ -250,6 +459,13 @@ export function evaluatePosition(
   // 攻撃スコア: 自分のパターン
   const attackScore = evaluateStonePatterns(testBoard, row, col, color);
 
+  // 四三ボーナス: 四と有効な活三を同時に作る手
+  const jumpResult = analyzeJumpPatterns(testBoard, row, col, color);
+  let fourThreeBonus = 0;
+  if (jumpResult.hasFour && jumpResult.hasValidOpenThree) {
+    fourThreeBonus = PATTERN_SCORES.FOUR_THREE_BONUS;
+  }
+
   // 防御スコア: 相手の脅威をブロック
   const opponentColor = color === "black" ? "white" : "black";
   let defenseScore = 0;
@@ -274,7 +490,7 @@ export function evaluatePosition(
   // 中央ボーナスを追加
   const centerBonus = getCenterBonus(row, col);
 
-  return attackScore + defenseScore + centerBonus;
+  return attackScore + defenseScore + centerBonus + fourThreeBonus;
 }
 
 /**

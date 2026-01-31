@@ -224,7 +224,7 @@ interface ThreeInfo {
  * @param dirIndex 方向インデックス
  * @returns 達四点の配列
  */
-function getConsecutiveThreeStraightFourPoints(
+export function getConsecutiveThreeStraightFourPoints(
   board: BoardState,
   row: number,
   col: number,
@@ -293,7 +293,7 @@ function getConsecutiveThreeStraightFourPoints(
  * @param dirIndex 方向インデックス
  * @returns 達四点の配列（0または1点）
  */
-function getJumpThreeStraightFourPoints(
+export function getJumpThreeStraightFourPoints(
   board: BoardState,
   row: number,
   col: number,
@@ -407,7 +407,7 @@ function getJumpThreeStraightFourPoints(
  *
  * 置いた後にこの形になれば「飛び三を作った」ことになる
  */
-function checkJumpThree(
+export function checkJumpThree(
   board: BoardState,
   row: number,
   col: number,
@@ -726,7 +726,7 @@ interface FourInfo {
  *
  * 置いた後にこの形になれば「飛び四を作った」ことになる
  */
-function checkJumpFour(
+export function checkJumpFour(
   board: BoardState,
   row: number,
   col: number,

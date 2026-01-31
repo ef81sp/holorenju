@@ -12,12 +12,13 @@ import {
   evaluateStonePatterns,
   PATTERN_SCORES,
 } from "./evaluation";
-import { placeStonesOnBoard } from "./testUtils";
+import { createBoardWithStones, placeStonesOnBoard } from "./testUtils";
 
 describe("PATTERN_SCORES", () => {
   it("スコア定数が正しく定義されている", () => {
     expect(PATTERN_SCORES.FIVE).toBe(100000);
     expect(PATTERN_SCORES.OPEN_FOUR).toBe(10000);
+    expect(PATTERN_SCORES.FOUR_THREE_BONUS).toBe(5000);
     expect(PATTERN_SCORES.FOUR).toBe(1000);
     expect(PATTERN_SCORES.OPEN_THREE).toBe(1000);
     expect(PATTERN_SCORES.THREE).toBe(100);
@@ -248,5 +249,117 @@ describe("evaluateBoard", () => {
 
     const score = evaluateBoard(board, "black");
     expect(score).toBeGreaterThanOrEqual(PATTERN_SCORES.FIVE);
+  });
+});
+
+describe("跳びパターン評価", () => {
+  describe("跳び四", () => {
+    it("跳び四（●●●・●）はFOURスコアで評価", () => {
+      // ●●●・● パターン: 7行目に [3]=黒, [4]=黒, [5]=黒, [6]=空, [7]=黒
+      const board = createBoardWithStones([
+        { row: 7, col: 3, color: "black" },
+        { row: 7, col: 4, color: "black" },
+        { row: 7, col: 5, color: "black" },
+        { row: 7, col: 7, color: "black" },
+      ]);
+
+      // 中央の石で評価
+      const score = evaluateStonePatterns(board, 7, 5, "black");
+      expect(score).toBeGreaterThanOrEqual(PATTERN_SCORES.FOUR);
+    });
+
+    it("跳び四（●●・●●）はFOURスコアで評価", () => {
+      // ●●・●● パターン: 7行目に [3]=黒, [4]=黒, [5]=空, [6]=黒, [7]=黒
+      const board = createBoardWithStones([
+        { row: 7, col: 3, color: "black" },
+        { row: 7, col: 4, color: "black" },
+        { row: 7, col: 6, color: "black" },
+        { row: 7, col: 7, color: "black" },
+      ]);
+
+      const score = evaluateStonePatterns(board, 7, 4, "black");
+      expect(score).toBeGreaterThanOrEqual(PATTERN_SCORES.FOUR);
+    });
+
+    it("跳び四（●・●●●）はFOURスコアで評価", () => {
+      // ●・●●● パターン: 7行目に [3]=黒, [4]=空, [5]=黒, [6]=黒, [7]=黒
+      const board = createBoardWithStones([
+        { row: 7, col: 3, color: "black" },
+        { row: 7, col: 5, color: "black" },
+        { row: 7, col: 6, color: "black" },
+        { row: 7, col: 7, color: "black" },
+      ]);
+
+      const score = evaluateStonePatterns(board, 7, 5, "black");
+      expect(score).toBeGreaterThanOrEqual(PATTERN_SCORES.FOUR);
+    });
+  });
+
+  describe("跳び三", () => {
+    it("活跳び三（・●●・●・）はOPEN_THREEスコアで評価", () => {
+      // ・●●・●・ パターン: 7行目に [2]=空, [3]=黒, [4]=黒, [5]=空, [6]=黒, [7]=空
+      const board = createBoardWithStones([
+        { row: 7, col: 3, color: "black" },
+        { row: 7, col: 4, color: "black" },
+        { row: 7, col: 6, color: "black" },
+      ]);
+
+      const score = evaluateStonePatterns(board, 7, 4, "black");
+      expect(score).toBeGreaterThanOrEqual(PATTERN_SCORES.OPEN_THREE);
+    });
+
+    it("活跳び三（・●・●●・）はOPEN_THREEスコアで評価", () => {
+      // ・●・●●・ パターン: 7行目に [2]=空, [3]=黒, [4]=空, [5]=黒, [6]=黒, [7]=空
+      const board = createBoardWithStones([
+        { row: 7, col: 3, color: "black" },
+        { row: 7, col: 5, color: "black" },
+        { row: 7, col: 6, color: "black" },
+      ]);
+
+      const score = evaluateStonePatterns(board, 7, 5, "black");
+      expect(score).toBeGreaterThanOrEqual(PATTERN_SCORES.OPEN_THREE);
+    });
+  });
+});
+
+describe("四三ボーナス", () => {
+  it("四と活三を同時に作る手にボーナス加算", () => {
+    // 横に四を作り、縦に活三を作る配置
+    // 横: ・●●●○（7行目 col=4,5,6に黒、col=7で四になる）
+    // 縦: ・●●・（col=7 row=5,6に黒、row=7で三になる）
+    const board = createBoardWithStones([
+      // 横の三
+      { row: 7, col: 4, color: "black" },
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      // 縦の二
+      { row: 5, col: 7, color: "black" },
+      { row: 6, col: 7, color: "black" },
+    ]);
+
+    // 7,7に置くと、横に四、縦に三ができる
+    const score = evaluatePosition(board, 7, 7, "black");
+
+    // 四三ボーナスが含まれているはず
+    // 最低限、OPEN_FOUR + OPEN_THREE + FOUR_THREE_BONUS の一部が含まれる
+    expect(score).toBeGreaterThanOrEqual(
+      PATTERN_SCORES.OPEN_FOUR + PATTERN_SCORES.OPEN_THREE,
+    );
+  });
+
+  it("四だけで活三がない場合はボーナスなし", () => {
+    // 横に四のみ
+    const board = createBoardWithStones([
+      { row: 7, col: 4, color: "black" },
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+    ]);
+
+    const score = evaluatePosition(board, 7, 7, "black");
+
+    // OPEN_FOURのスコアはあるが、FOUR_THREE_BONUSは含まれない
+    expect(score).toBeLessThan(
+      PATTERN_SCORES.OPEN_FOUR + PATTERN_SCORES.FOUR_THREE_BONUS,
+    );
   });
 });
