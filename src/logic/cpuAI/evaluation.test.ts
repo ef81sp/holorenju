@@ -363,3 +363,76 @@ describe("四三ボーナス", () => {
     );
   });
 });
+
+describe("白の三三・四四評価", () => {
+  it("白の三三をFIVE（勝利）として評価", () => {
+    const board = createBoardWithStones([
+      // 横に二（活三になる準備）
+      { row: 7, col: 6, color: "white" },
+      { row: 7, col: 7, color: "white" },
+      // 縦に二（活三になる準備）
+      { row: 5, col: 8, color: "white" },
+      { row: 6, col: 8, color: "white" },
+    ]);
+    // 7,8 に置くと横縦両方で活三
+
+    const score = evaluatePosition(board, 7, 8, "white");
+    expect(score).toBe(PATTERN_SCORES.FIVE);
+  });
+
+  it("白の四四をFIVE（勝利）として評価", () => {
+    const board = createBoardWithStones([
+      // 横に三（四になる）
+      { row: 7, col: 5, color: "white" },
+      { row: 7, col: 6, color: "white" },
+      { row: 7, col: 7, color: "white" },
+      // 縦に三（四になる）
+      { row: 4, col: 8, color: "white" },
+      { row: 5, col: 8, color: "white" },
+      { row: 6, col: 8, color: "white" },
+    ]);
+
+    const score = evaluatePosition(board, 7, 8, "white");
+    expect(score).toBe(PATTERN_SCORES.FIVE);
+  });
+
+  it("黒の三三はFIVE扱いにならない（禁手）", () => {
+    const board = createBoardWithStones([
+      // 横に二
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+      // 縦に二
+      { row: 5, col: 8, color: "black" },
+      { row: 6, col: 8, color: "black" },
+    ]);
+    // 7,8 は禁手なのでFIVE扱いにはならない
+    // （実際には禁手でプレイできないが、評価としては低くなる）
+    const score = evaluatePosition(board, 7, 8, "black");
+    expect(score).toBeLessThan(PATTERN_SCORES.FIVE);
+  });
+});
+
+describe("禁手追い込み評価", () => {
+  it("白の四で黒の防御点が禁手の場合は高スコア", () => {
+    // 複雑な配置が必要なので、基本的なテストケースのみ
+    const board = createBoardWithStones([
+      { row: 7, col: 5, color: "white" },
+      { row: 7, col: 6, color: "white" },
+      { row: 7, col: 7, color: "white" },
+    ]);
+
+    // 白が7,8に置いて四を作る
+    const score = evaluatePosition(board, 7, 8, "white");
+    // 最低限OPEN_FOURスコアは含まれる
+    expect(score).toBeGreaterThanOrEqual(PATTERN_SCORES.OPEN_FOUR);
+  });
+});
+
+describe("スコア定数", () => {
+  it("新しいスコア定数が正しく定義されている", () => {
+    expect(PATTERN_SCORES.FORBIDDEN_TRAP_STRONG).toBe(8000);
+    expect(PATTERN_SCORES.FUKUMI_BONUS).toBe(1500);
+    expect(PATTERN_SCORES.FORBIDDEN_TRAP_SETUP).toBe(1500);
+    expect(PATTERN_SCORES.MISE_BONUS).toBe(1000);
+  });
+});

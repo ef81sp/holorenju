@@ -17,6 +17,8 @@ import {
   isValidPosition,
 } from "@/logic/renjuRules";
 
+import { hasVCF } from "./vcf";
+
 /**
  * パターンスコア定数
  */
@@ -25,8 +27,16 @@ export const PATTERN_SCORES = {
   FIVE: 100000,
   /** 活四（両端開） */
   OPEN_FOUR: 10000,
+  /** 禁手追い込み強（四の防御点が禁手） */
+  FORBIDDEN_TRAP_STRONG: 8000,
   /** 四三同時作成ボーナス */
   FOUR_THREE_BONUS: 5000,
+  /** フクミ手ボーナス（次にVCFがある手） */
+  FUKUMI_BONUS: 1500,
+  /** 禁手追い込みセットアップ（活三の延長点が禁手） */
+  FORBIDDEN_TRAP_SETUP: 1500,
+  /** ミセ手ボーナス（次に四三を作れる手） */
+  MISE_BONUS: 1000,
   /** 止め四（片端開） */
   FOUR: 1000,
   /** 活三（両端開） */
@@ -39,7 +49,7 @@ export const PATTERN_SCORES = {
   TWO: 10,
   /** 中央寄りボーナス */
   CENTER_BONUS: 5,
-  /** 禁じ手誘導ボーナス（白番） */
+  /** 禁じ手誘導ボーナス（白番・旧定数、後方互換） */
   FORBIDDEN_TRAP: 100,
 } as const;
 
@@ -373,6 +383,288 @@ function analyzeJumpPatterns(
 }
 
 /**
+ * 白の三三・四四パターンをチェック
+ * 白には禁手がないため、三三・四四は即勝利となる
+ *
+ * @param board 盤面（石を置いた状態）
+ * @param row 石を置いた行
+ * @param col 石を置いた列
+ * @returns 三三または四四なら true
+ */
+function checkWhiteWinningPattern(
+  board: BoardState,
+  row: number,
+  col: number,
+): boolean {
+  let openThreeCount = 0;
+  let fourCount = 0;
+
+  for (let i = 0; i < DIRECTION_INDICES.length; i++) {
+    const dirIndex = DIRECTION_INDICES[i];
+    if (dirIndex === undefined) {
+      continue;
+    }
+
+    const direction = DIRECTIONS[i];
+    if (!direction) {
+      continue;
+    }
+    const [dr, dc] = direction;
+    const pattern = analyzeDirection(board, row, col, dr, dc, "white");
+
+    // 活三カウント
+    if (
+      pattern.count === 3 &&
+      pattern.end1 === "empty" &&
+      pattern.end2 === "empty"
+    ) {
+      openThreeCount++;
+    }
+
+    // 四カウント（活四・止め四両方）
+    if (
+      pattern.count === 4 &&
+      (pattern.end1 === "empty" || pattern.end2 === "empty")
+    ) {
+      fourCount++;
+    }
+
+    // 跳び三をチェック（連続三がない場合のみ）
+    if (pattern.count !== 3 && checkJumpThree(board, row, col, dirIndex)) {
+      openThreeCount++;
+    }
+
+    // 跳び四をチェック（連続四がない場合のみ）
+    if (pattern.count !== 4 && checkJumpFour(board, row, col, dirIndex)) {
+      fourCount++;
+    }
+  }
+
+  // 三三（活三2つ以上）または四四（四2つ以上）なら即勝利
+  return openThreeCount >= 2 || fourCount >= 2;
+}
+
+/**
+ * 禁手追い込み評価
+ * 白が四や活三を作った時、黒の防御位置が禁手なら高評価
+ *
+ * @param board 盤面（石を置いた状態）
+ * @param row 石を置いた行
+ * @param col 石を置いた列
+ * @returns 禁手追い込みスコア
+ */
+function evaluateForbiddenTrap(
+  board: BoardState,
+  row: number,
+  col: number,
+): number {
+  let trapScore = 0;
+
+  for (const [dr, dc] of DIRECTIONS) {
+    const pattern = analyzeDirection(board, row, col, dr, dc, "white");
+
+    // 四を作った場合
+    if (
+      pattern.count === 4 &&
+      (pattern.end1 === "empty" || pattern.end2 === "empty")
+    ) {
+      // 黒の止め位置を特定
+      const defensePositions = getDefensePositions(board, row, col, dr, dc);
+
+      // すべての防御位置が禁手ならば白の勝利確定
+      let allForbidden = defensePositions.length > 0;
+      for (const pos of defensePositions) {
+        const forbiddenResult = checkForbiddenMove(board, pos.row, pos.col);
+        if (!forbiddenResult.isForbidden) {
+          allForbidden = false;
+          break;
+        }
+      }
+
+      if (allForbidden && defensePositions.length > 0) {
+        trapScore += PATTERN_SCORES.FORBIDDEN_TRAP_STRONG;
+      }
+    }
+
+    // 活三を作った場合（次に四になる）
+    if (
+      pattern.count === 3 &&
+      pattern.end1 === "empty" &&
+      pattern.end2 === "empty"
+    ) {
+      // 両端の位置をチェック（活三の延長点）
+      const extensionPoints = getExtensionPoints(board, row, col, dr, dc);
+
+      for (const pos of extensionPoints) {
+        const forbiddenResult = checkForbiddenMove(board, pos.row, pos.col);
+        if (forbiddenResult.isForbidden) {
+          // 禁手への誘導セットアップ
+          trapScore += PATTERN_SCORES.FORBIDDEN_TRAP_SETUP;
+        }
+      }
+    }
+  }
+
+  return trapScore;
+}
+
+/**
+ * 四に対する防御位置を取得
+ */
+function getDefensePositions(
+  board: BoardState,
+  row: number,
+  col: number,
+  dr: number,
+  dc: number,
+): { row: number; col: number }[] {
+  const positions: { row: number; col: number }[] = [];
+
+  // 正方向の端
+  let r = row + dr;
+  let c = col + dc;
+  while (isValidPosition(r, c) && board[r]?.[c] === "white") {
+    r += dr;
+    c += dc;
+  }
+  if (isValidPosition(r, c) && board[r]?.[c] === null) {
+    positions.push({ row: r, col: c });
+  }
+
+  // 負方向の端
+  r = row - dr;
+  c = col - dc;
+  while (isValidPosition(r, c) && board[r]?.[c] === "white") {
+    r -= dr;
+    c -= dc;
+  }
+  if (isValidPosition(r, c) && board[r]?.[c] === null) {
+    positions.push({ row: r, col: c });
+  }
+
+  return positions;
+}
+
+/**
+ * 活三の延長点を取得（両端の空きマス）
+ */
+function getExtensionPoints(
+  board: BoardState,
+  row: number,
+  col: number,
+  dr: number,
+  dc: number,
+): { row: number; col: number }[] {
+  const positions: { row: number; col: number }[] = [];
+
+  // 正方向の端
+  let r = row + dr;
+  let c = col + dc;
+  while (isValidPosition(r, c) && board[r]?.[c] === "white") {
+    r += dr;
+    c += dc;
+  }
+  if (isValidPosition(r, c) && board[r]?.[c] === null) {
+    positions.push({ row: r, col: c });
+  }
+
+  // 負方向の端
+  r = row - dr;
+  c = col - dc;
+  while (isValidPosition(r, c) && board[r]?.[c] === "white") {
+    r -= dr;
+    c -= dc;
+  }
+  if (isValidPosition(r, c) && board[r]?.[c] === null) {
+    positions.push({ row: r, col: c });
+  }
+
+  return positions;
+}
+
+/**
+ * ミセ手判定
+ * 次の手で四三が作れる位置かどうかをチェック
+ *
+ * @param board 盤面（石を置いた状態）
+ * @param row 石を置いた行
+ * @param col 石を置いた列
+ * @param color 石の色
+ * @returns ミセ手ならtrue
+ */
+function isMiseMove(
+  board: BoardState,
+  row: number,
+  col: number,
+  color: "black" | "white",
+): boolean {
+  // この手の後、周囲に四三が作れる位置があるかチェック
+  for (let dr = -2; dr <= 2; dr++) {
+    for (let dc = -2; dc <= 2; dc++) {
+      if (dr === 0 && dc === 0) {
+        continue;
+      }
+      const nr = row + dr;
+      const nc = col + dc;
+      if (!isValidPosition(nr, nc)) {
+        continue;
+      }
+      if (board[nr]?.[nc] !== null) {
+        continue;
+      }
+
+      // 黒の禁手チェック
+      if (color === "black") {
+        const forbidden = checkForbiddenMove(board, nr, nc);
+        if (forbidden.isForbidden) {
+          continue;
+        }
+      }
+
+      // この位置で四三が作れるか
+      if (createsFourThree(board, nr, nc, color)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+/**
+ * 指定位置に石を置くと四三ができるかチェック
+ */
+function createsFourThree(
+  board: BoardState,
+  row: number,
+  col: number,
+  color: "black" | "white",
+): boolean {
+  // 仮想的に石を置く
+  const testBoard = copyBoard(board);
+  const testRow = testBoard[row];
+  if (testRow) {
+    testRow[col] = color;
+  }
+
+  // 四と有効な活三を同時に作るかチェック
+  const jumpResult = analyzeJumpPatterns(testBoard, row, col, color);
+  return jumpResult.hasFour && jumpResult.hasValidOpenThree;
+}
+
+/**
+ * フクミ手判定
+ * 次の手でVCF（四追い勝ち）があるかどうかをチェック
+ *
+ * @param board 盤面（石を置いた状態）
+ * @param color 石の色
+ * @returns フクミ手ならtrue
+ */
+function isFukumiMove(board: BoardState, color: "black" | "white"): boolean {
+  return hasVCF(board, color);
+}
+
+/**
  * 跳びパターンからスコアを計算
  *
  * @param jumpResult 跳びパターンの分析結果
@@ -456,6 +748,11 @@ export function evaluatePosition(
     testRow[col] = color;
   }
 
+  // 白の三三・四四チェック（白には禁手がないため即勝利）
+  if (color === "white" && checkWhiteWinningPattern(testBoard, row, col)) {
+    return PATTERN_SCORES.FIVE;
+  }
+
   // 攻撃スコア: 自分のパターン
   const attackScore = evaluateStonePatterns(testBoard, row, col, color);
 
@@ -464,6 +761,28 @@ export function evaluatePosition(
   let fourThreeBonus = 0;
   if (jumpResult.hasFour && jumpResult.hasValidOpenThree) {
     fourThreeBonus = PATTERN_SCORES.FOUR_THREE_BONUS;
+  }
+
+  // 禁手追い込みボーナス（白番のみ）
+  let forbiddenTrapBonus = 0;
+  if (color === "white") {
+    forbiddenTrapBonus = evaluateForbiddenTrap(testBoard, row, col);
+  }
+
+  // ミセ手ボーナス: 次に四三を作れる手
+  let miseBonus = 0;
+  if (isMiseMove(testBoard, row, col, color)) {
+    miseBonus = PATTERN_SCORES.MISE_BONUS;
+  }
+
+  // フクミ手ボーナス: 次にVCF（四追い勝ち）がある手
+  // 計算コストが高いので、既に高スコアの場合はスキップ
+  let fukumiBonus = 0;
+  if (
+    attackScore < PATTERN_SCORES.OPEN_FOUR &&
+    isFukumiMove(testBoard, color)
+  ) {
+    fukumiBonus = PATTERN_SCORES.FUKUMI_BONUS;
   }
 
   // 防御スコア: 相手の脅威をブロック
@@ -490,7 +809,15 @@ export function evaluatePosition(
   // 中央ボーナスを追加
   const centerBonus = getCenterBonus(row, col);
 
-  return attackScore + defenseScore + centerBonus + fourThreeBonus;
+  return (
+    attackScore +
+    defenseScore +
+    centerBonus +
+    fourThreeBonus +
+    forbiddenTrapBonus +
+    miseBonus +
+    fukumiBonus
+  );
 }
 
 /**
