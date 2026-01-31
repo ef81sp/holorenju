@@ -19,6 +19,7 @@ import CpuCharacterPanel from "./CpuCharacterPanel.vue";
 import CpuRecordDialog from "./CpuRecordDialog.vue";
 import { useCpuPlayer } from "./composables/useCpuPlayer";
 import { useCpuDialogue } from "./composables/useCpuDialogue";
+import { useForbiddenMark } from "./composables/useForbiddenMark";
 import { useBoardSize } from "@/components/scenarios/ScenarioPlayer/composables/useBoardSize";
 import { useAppStore } from "@/stores/appStore";
 import { useCpuGameStore } from "@/stores/cpuGameStore";
@@ -44,6 +45,9 @@ const { isThinking, requestMove } = useCpuPlayer();
 const { cpuCharacter, currentEmotion, showDialogue, initCharacter } =
   useCpuDialogue();
 
+// 禁手マーク表示
+const { showForbiddenMark, clearForbiddenMark } = useForbiddenMark();
+
 // 対戦記録ダイアログ
 const recordDialogRef = ref<InstanceType<typeof CpuRecordDialog> | null>(null);
 
@@ -60,31 +64,6 @@ let cutinAutoHideTimer: ReturnType<typeof setTimeout> | null = null;
 
 // 戻る確認ダイアログ
 const confirmDialogRef = ref<InstanceType<typeof ConfirmDialog> | null>(null);
-
-// 禁手表示用タイマー
-let forbiddenMarkTimer: ReturnType<typeof setTimeout> | null = null;
-
-/** 禁手マークを表示（一定時間後に自動消去） */
-function showForbiddenMark(position: Position): void {
-  // 既存のマークをクリア
-  if (forbiddenMarkTimer) {
-    clearTimeout(forbiddenMarkTimer);
-    forbiddenMarkTimer = null;
-  }
-  boardStore.clearMarks();
-
-  // 禁手位置にcrossマークを追加
-  boardStore.addMarks(
-    [{ positions: [position], markType: "cross" }],
-    -1, // CPU対戦用の特殊なdialogueIndex
-  );
-
-  // 1秒後にマークを消去
-  forbiddenMarkTimer = setTimeout(() => {
-    boardStore.clearMarks();
-    forbiddenMarkTimer = null;
-  }, 1000);
-}
 
 // キーボードイベント処理
 function handleKeyDown(event: KeyboardEvent): void {
@@ -170,12 +149,6 @@ onUnmounted(() => {
     cutinAutoHideTimer = null;
   }
 
-  // 禁手マークタイマーをクリア
-  if (forbiddenMarkTimer) {
-    clearTimeout(forbiddenMarkTimer);
-    forbiddenMarkTimer = null;
-  }
-
   // セリフをクリア
   dialogStore.reset();
 });
@@ -213,7 +186,7 @@ function handlePlaceStone(position: Position): void {
   }
 
   // 既存の禁手マークをクリア
-  boardStore.clearMarks();
+  clearForbiddenMark();
 
   // 石を配置
   cpuGameStore.addMove(position, cpuGameStore.currentTurn);
@@ -302,7 +275,7 @@ function handleUndo(): void {
 function handleRematch(): void {
   if (appStore.cpuDifficulty && appStore.cpuPlayerFirst !== null) {
     cpuGameStore.startGame(appStore.cpuDifficulty, appStore.cpuPlayerFirst);
-    boardStore.clearMarks();
+    clearForbiddenMark();
     isCutinVisible.value = false;
 
     // キャラクター初期化とゲーム開始セリフ
