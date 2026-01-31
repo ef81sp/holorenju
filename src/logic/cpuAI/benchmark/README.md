@@ -20,8 +20,14 @@ pnpm bench:ai --verbose
 # CSV形式で出力
 pnpm bench:ai --format=csv
 
+# 並列実行（CPUコア数-1のワーカーを使用）
+pnpm bench:ai --parallel
+
+# ワーカー数を指定して並列実行
+pnpm bench:ai --parallel --workers=4
+
 # 組み合わせ例
-pnpm bench:ai --players=easy,medium,hard --games=20 --verbose
+pnpm bench:ai --players=easy,medium,hard --games=20 --parallel
 ```
 
 ### CLI オプション
@@ -33,6 +39,8 @@ pnpm bench:ai --players=easy,medium,hard --games=20 --verbose
 | `--output=<dir>`   | 結果出力ディレクトリ           | `bench-results` |
 | `--format=<fmt>`   | 出力形式（json/csv）           | json            |
 | `--verbose`, `-v`  | 詳細ログ出力                   | false           |
+| `--parallel`, `-p` | 並列実行（worker_threads）     | false           |
+| `--workers=<n>`    | ワーカー数（--parallel 暗黙）  | CPUコア数-1     |
 
 ### 出力例
 
