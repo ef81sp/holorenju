@@ -49,4 +49,22 @@ export default [
       "vue/html-closing-bracket-newline": "off",
     },
   },
+
+  // scripts ディレクトリ用設定（CLI ツール）
+  {
+    files: ["scripts/**/*.ts"],
+    languageOptions: {
+      ecmaVersion: "latest",
+      globals: globals.node,
+      parser: tseslint.parser,
+      parserOptions: {
+        ecmaVersion: "latest",
+        sourceType: "module",
+      },
+      sourceType: "module",
+    },
+    rules: {
+      "no-console": "off",
+    },
+  },
 ];

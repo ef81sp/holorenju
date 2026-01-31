@@ -28,3 +28,7 @@ dist-ssr
 *.sw?
 
 .playwright-mcp
+
+# Benchmark results
+bench-results/*
+!bench-results/.gitkeep
