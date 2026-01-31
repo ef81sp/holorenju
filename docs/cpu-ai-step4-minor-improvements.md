@@ -16,10 +16,10 @@
 
 斜め方向の石は、隣接する空き点が多いため効率が良い。
 
-| 方向 | 二連の隣接空き点数 |
-|------|------------------|
-| 縦・横 | 10点 |
-| 斜め | 12点 |
+| 方向   | 二連の隣接空き点数 |
+| ------ | ------------------ |
+| 縦・横 | 10点               |
+| 斜め   | 12点               |
 
 ### 実装方針
 
@@ -36,12 +36,13 @@ const DIAGONAL_BONUS_MULTIPLIER = 1.05;
 /**
  * 4方向のベクトル（斜めを識別可能に）
  */
-const DIRECTIONS_WITH_TYPE: { dr: number; dc: number; isDiagonal: boolean }[] = [
-  { dr: 0, dc: 1, isDiagonal: false },  // 横（右）
-  { dr: 1, dc: 0, isDiagonal: false },  // 縦（下）
-  { dr: 1, dc: 1, isDiagonal: true },   // 右下斜め
-  { dr: 1, dc: -1, isDiagonal: true },  // 右上斜め
-];
+const DIRECTIONS_WITH_TYPE: { dr: number; dc: number; isDiagonal: boolean }[] =
+  [
+    { dr: 0, dc: 1, isDiagonal: false }, // 横（右）
+    { dr: 1, dc: 0, isDiagonal: false }, // 縦（下）
+    { dr: 1, dc: 1, isDiagonal: true }, // 右下斜め
+    { dr: 1, dc: -1, isDiagonal: true }, // 右上斜め
+  ];
 
 export function evaluateStonePatterns(
   board: BoardState,
@@ -101,17 +102,17 @@ describe("斜め方向ボーナス", () => {
 
 ### 珠型ごとの評価
 
-| 珠型 | 評価 | 推奨スコア調整 |
-|------|------|---------------|
-| 花月 | 黒必勝 | 黒+500, 白-500 |
-| 浦月 | 黒必勝 | 黒+500, 白-500 |
-| 疎星 | 黒有利 | 黒+300, 白-300 |
-| 流星 | 黒有利 | 黒+300, 白-300 |
+| 珠型 | 評価       | 推奨スコア調整 |
+| ---- | ---------- | -------------- |
+| 花月 | 黒必勝     | 黒+500, 白-500 |
+| 浦月 | 黒必勝     | 黒+500, 白-500 |
+| 疎星 | 黒有利     | 黒+300, 白-300 |
+| 流星 | 黒有利     | 黒+300, 白-300 |
 | 渓月 | 黒やや有利 | 黒+100, 白-100 |
 | 峡月 | 黒やや有利 | 黒+100, 白-100 |
-| 瑞星 | 互角 | ±0 |
+| 瑞星 | 互角       | ±0             |
 | 山月 | 白やや有利 | 黒-100, 白+100 |
-| 寒星 | 白有利 | 黒-200, 白+200 |
+| 寒星 | 白有利     | 黒-200, 白+200 |
 
 ### 実装方針
 
@@ -130,40 +131,40 @@ describe("斜め方向ボーナス", () => {
  */
 export const JUSHU_EVALUATION: Record<string, number> = {
   // 黒必勝
-  "花月": 500,
-  "浦月": 500,
+  花月: 500,
+  浦月: 500,
 
   // 黒有利
-  "疎星": 300,
-  "流星": 300,
-  "金星": 250,
-  "松月": 250,
+  疎星: 300,
+  流星: 300,
+  金星: 250,
+  松月: 250,
 
   // 黒やや有利
-  "渓月": 100,
-  "峡月": 100,
-  "雲月": 100,
-  "名月": 100,
+  渓月: 100,
+  峡月: 100,
+  雲月: 100,
+  名月: 100,
 
   // 互角
-  "瑞星": 0,
-  "遊星": 0,
-  "彗星": 0,
-  "水月": 0,
+  瑞星: 0,
+  遊星: 0,
+  彗星: 0,
+  水月: 0,
 
   // 白やや有利
-  "山月": -100,
-  "岩月": -100,
-  "銀月": -100,
+  山月: -100,
+  岩月: -100,
+  銀月: -100,
 
   // 白有利
-  "寒星": -200,
-  "残月": -200,
-  "明星": -200,
-  "雨月": -200,
-  "丘月": -200,
-  "新月": -200,
-  "恒星": -200,
+  寒星: -200,
+  残月: -200,
+  明星: -200,
+  雨月: -200,
+  丘月: -200,
+  新月: -200,
+  恒星: -200,
 };
 
 /**
@@ -225,9 +226,9 @@ describe("開局パターン評価", () => {
   it("花月は黒有利として評価", () => {
     const board = createEmptyBoard();
     // 花月の配置
-    board[7][7] = "black";  // 天元
-    board[8][8] = "white";  // 右下斜め
-    board[6][7] = "black";  // 花月
+    board[7][7] = "black"; // 天元
+    board[8][8] = "white"; // 右下斜め
+    board[6][7] = "black"; // 花月
 
     const blackEval = getOpeningEvaluation(board, "black");
     const whiteEval = getOpeningEvaluation(board, "white");
@@ -239,9 +240,9 @@ describe("開局パターン評価", () => {
   it("寒星は白有利として評価", () => {
     const board = createEmptyBoard();
     // 寒星の配置
-    board[7][7] = "black";  // 天元
-    board[8][8] = "white";  // 右下斜め
-    board[6][6] = "black";  // 寒星
+    board[7][7] = "black"; // 天元
+    board[8][8] = "white"; // 右下斜め
+    board[6][6] = "black"; // 寒星
 
     const blackEval = getOpeningEvaluation(board, "black");
     const whiteEval = getOpeningEvaluation(board, "white");
@@ -254,8 +255,17 @@ describe("開局パターン評価", () => {
     const board = createEmptyBoard();
     // 11手置かれた状態をシミュレート
     const positions = [
-      [7, 7], [8, 8], [6, 7], [9, 9], [5, 7],
-      [10, 10], [4, 7], [11, 11], [3, 7], [12, 12], [2, 7]
+      [7, 7],
+      [8, 8],
+      [6, 7],
+      [9, 9],
+      [5, 7],
+      [10, 10],
+      [4, 7],
+      [11, 11],
+      [3, 7],
+      [12, 12],
+      [2, 7],
     ];
     positions.forEach(([r, c], i) => {
       board[r!]![c!] = i % 2 === 0 ? "black" : "white";
@@ -277,12 +287,12 @@ describe("開局パターン評価", () => {
 
 ## 変更ファイル
 
-| ファイル | 変更内容 |
-|---------|---------|
-| `src/logic/cpuAI/evaluation.ts` | 斜め方向ボーナス追加 |
-| `src/logic/cpuAI/opening.ts` | 珠型評価データ、`getOpeningEvaluation()` 追加 |
-| `src/logic/cpuAI/opening.test.ts` | 開局評価のテスト追加 |
-| `src/logic/cpuAI/evaluation.test.ts` | 斜め方向ボーナスのテスト追加 |
+| ファイル                             | 変更内容                                      |
+| ------------------------------------ | --------------------------------------------- |
+| `src/logic/cpuAI/evaluation.ts`      | 斜め方向ボーナス追加                          |
+| `src/logic/cpuAI/opening.ts`         | 珠型評価データ、`getOpeningEvaluation()` 追加 |
+| `src/logic/cpuAI/opening.test.ts`    | 開局評価のテスト追加                          |
+| `src/logic/cpuAI/evaluation.test.ts` | 斜め方向ボーナスのテスト追加                  |
 
 ## 検証方法
 

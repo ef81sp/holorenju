@@ -14,7 +14,11 @@ import {
   isValidPosition,
 } from "@/logic/renjuRules";
 
-import { evaluatePosition } from "./evaluation";
+import {
+  DEFAULT_EVAL_OPTIONS,
+  evaluatePosition,
+  type EvaluationOptions,
+} from "./evaluation";
 
 /** 探索範囲（既存石からの距離） */
 const SEARCH_RANGE = 2;
@@ -287,6 +291,8 @@ export interface MoveOrderingOptions {
   history?: HistoryTable;
   /** 静的評価を使用するか */
   useStaticEval?: boolean;
+  /** 評価オプション（重い機能の有効/無効） */
+  evaluationOptions?: EvaluationOptions;
 }
 
 /**
@@ -310,7 +316,14 @@ export function sortMoves(
   color: StoneColor,
   options: MoveOrderingOptions = {},
 ): Position[] {
-  const { ttMove, killers, depth, history, useStaticEval = true } = options;
+  const {
+    ttMove,
+    killers,
+    depth,
+    history,
+    useStaticEval = true,
+    evaluationOptions = DEFAULT_EVAL_OPTIONS,
+  } = options;
 
   // スコア計算用の配列
   interface MoveWithScore {
@@ -343,7 +356,13 @@ export function sortMoves(
 
     // 3. 静的評価
     if (useStaticEval && color !== null) {
-      score += evaluatePosition(board, move.row, move.col, color);
+      score += evaluatePosition(
+        board,
+        move.row,
+        move.col,
+        color,
+        evaluationOptions,
+      );
     }
 
     // 4. History Heuristic

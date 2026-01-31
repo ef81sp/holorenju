@@ -2,6 +2,8 @@
  * CPU対戦関連の型定義
  */
 
+import type { EvaluationOptions } from "@/logic/cpuAI/evaluation";
+
 import type { BoardState, Position, StoneColor } from "./game";
 
 /**
@@ -36,31 +38,58 @@ export interface DifficultyParams {
   timeLimit: number;
   /** ランダム要素（0-1、0で完全決定論的） */
   randomFactor: number;
+  /** 評価オプション（重い機能の有効/無効） */
+  evaluationOptions: EvaluationOptions;
 }
 
 /**
  * 難易度ごとのパラメータ設定
+ *
+ * 評価オプション:
+ * - beginner/easy: 全機能無効（高速モード）
+ * - medium: ミセ手のみ有効
+ * - hard: 全機能有効
  */
 export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
   beginner: {
     depth: 2,
     timeLimit: 1000,
     randomFactor: 0.3,
+    evaluationOptions: {
+      enableFukumi: false,
+      enableMise: false,
+      enableForbiddenTrap: false,
+    },
   },
   easy: {
     depth: 3,
     timeLimit: 2000,
     randomFactor: 0.15,
+    evaluationOptions: {
+      enableFukumi: false,
+      enableMise: false,
+      enableForbiddenTrap: false,
+    },
   },
   medium: {
     depth: 4,
     timeLimit: 3000,
     randomFactor: 0,
+    evaluationOptions: {
+      enableFukumi: false,
+      enableMise: true,
+      enableForbiddenTrap: false,
+    },
   },
   hard: {
     depth: 5,
     timeLimit: 5000,
     randomFactor: 0,
+    evaluationOptions: {
+      enableFukumi: true,
+      enableMise: true,
+      enableForbiddenTrap: true,
+    },
   },
 };
 

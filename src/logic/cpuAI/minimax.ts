@@ -8,7 +8,13 @@ import type { BoardState, Position, StoneColor } from "@/types/game";
 
 import { checkWin } from "@/logic/renjuRules";
 
-import { evaluateBoard, evaluatePosition, PATTERN_SCORES } from "./evaluation";
+import {
+  DEFAULT_EVAL_OPTIONS,
+  evaluateBoard,
+  evaluatePosition,
+  PATTERN_SCORES,
+  type EvaluationOptions,
+} from "./evaluation";
 import {
   createHistoryTable,
   createKillerMoves,
@@ -360,6 +366,8 @@ export interface SearchContext {
   killers: KillerMoves;
   /** 探索統計 */
   stats: SearchStats;
+  /** 評価オプション */
+  evaluationOptions: EvaluationOptions;
 }
 
 /**
@@ -381,6 +389,7 @@ export interface SearchStats {
  */
 export function createSearchContext(
   tt: TranspositionTable = globalTT,
+  evaluationOptions: EvaluationOptions = DEFAULT_EVAL_OPTIONS,
 ): SearchContext {
   return {
     tt,
@@ -392,6 +401,7 @@ export function createSearchContext(
       ttCutoffs: 0,
       betaCutoffs: 0,
     },
+    evaluationOptions,
   };
 }
 
@@ -483,6 +493,7 @@ export function minimaxWithTT(
     depth,
     history: ctx.history,
     useStaticEval: true,
+    evaluationOptions: ctx.evaluationOptions,
   });
 
   if (moves.length === 0) {
@@ -577,6 +588,7 @@ export function findBestMoveWithTT(
     depth,
     history: ctx.history,
     useStaticEval: true,
+    evaluationOptions: ctx.evaluationOptions,
   });
 
   if (moves.length === 0) {
@@ -598,7 +610,13 @@ export function findBestMoveWithTT(
     }
     return {
       position: move,
-      score: evaluatePosition(board, move.row, move.col, color),
+      score: evaluatePosition(
+        board,
+        move.row,
+        move.col,
+        color,
+        ctx.evaluationOptions,
+      ),
       ctx,
     };
   }
@@ -676,6 +694,7 @@ export function findBestMoveWithTT(
  * @param maxDepth 最大探索深度
  * @param timeLimit 時間制限（ミリ秒）
  * @param randomFactor ランダム要素（0-1）
+ * @param evaluationOptions 評価オプション
  * @returns 最善手と探索情報
  */
 export function findBestMoveIterativeWithTT(
@@ -684,9 +703,10 @@ export function findBestMoveIterativeWithTT(
   maxDepth: number,
   timeLimit: number,
   randomFactor = 0,
+  evaluationOptions: EvaluationOptions = DEFAULT_EVAL_OPTIONS,
 ): IterativeDeepingResult & { stats: SearchStats } {
   const startTime = performance.now();
-  const ctx = createSearchContext();
+  const ctx = createSearchContext(globalTT, evaluationOptions);
 
   // 新しい探索開始
   ctx.tt.newGeneration();

@@ -22,6 +22,37 @@ import { hasVCF } from "./vcf";
 /**
  * パターンスコア定数
  */
+/**
+ * 評価オプション
+ * 重い評価処理を難易度に応じて有効/無効化する
+ */
+export interface EvaluationOptions {
+  /** フクミ手（VCF）評価を有効にするか */
+  enableFukumi: boolean;
+  /** ミセ手評価を有効にするか */
+  enableMise: boolean;
+  /** 禁手追い込み評価を有効にするか */
+  enableForbiddenTrap: boolean;
+}
+
+/**
+ * デフォルトの評価オプション（全て無効 = 高速モード）
+ */
+export const DEFAULT_EVAL_OPTIONS: EvaluationOptions = {
+  enableFukumi: false,
+  enableMise: false,
+  enableForbiddenTrap: false,
+};
+
+/**
+ * 全機能有効の評価オプション
+ */
+export const FULL_EVAL_OPTIONS: EvaluationOptions = {
+  enableFukumi: true,
+  enableMise: true,
+  enableForbiddenTrap: true,
+};
+
 export const PATTERN_SCORES = {
   /** 五連（勝利） */
   FIVE: 100000,
@@ -724,6 +755,7 @@ export function evaluateStonePatterns(
  * @param row 行
  * @param col 列
  * @param color 石の色
+ * @param options 評価オプション（省略時はデフォルト=高速モード）
  * @returns 評価スコア
  */
 export function evaluatePosition(
@@ -731,6 +763,7 @@ export function evaluatePosition(
   row: number,
   col: number,
   color: StoneColor,
+  options: EvaluationOptions = DEFAULT_EVAL_OPTIONS,
 ): number {
   if (color === null) {
     return 0;
@@ -763,22 +796,23 @@ export function evaluatePosition(
     fourThreeBonus = PATTERN_SCORES.FOUR_THREE_BONUS;
   }
 
-  // 禁手追い込みボーナス（白番のみ）
+  // 禁手追い込みボーナス（白番のみ、オプションで有効時のみ）
   let forbiddenTrapBonus = 0;
-  if (color === "white") {
+  if (options.enableForbiddenTrap && color === "white") {
     forbiddenTrapBonus = evaluateForbiddenTrap(testBoard, row, col);
   }
 
-  // ミセ手ボーナス: 次に四三を作れる手
+  // ミセ手ボーナス: 次に四三を作れる手（オプションで有効時のみ）
   let miseBonus = 0;
-  if (isMiseMove(testBoard, row, col, color)) {
+  if (options.enableMise && isMiseMove(testBoard, row, col, color)) {
     miseBonus = PATTERN_SCORES.MISE_BONUS;
   }
 
-  // フクミ手ボーナス: 次にVCF（四追い勝ち）がある手
+  // フクミ手ボーナス: 次にVCF（四追い勝ち）がある手（オプションで有効時のみ）
   // 計算コストが高いので、既に高スコアの場合はスキップ
   let fukumiBonus = 0;
   if (
+    options.enableFukumi &&
     attackScore < PATTERN_SCORES.OPEN_FOUR &&
     isFukumiMove(testBoard, color)
   ) {

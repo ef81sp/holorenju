@@ -18,12 +18,12 @@
 
 ### 検出すべきパターン
 
-| パターン | 形の例 | スコア |
-|---------|--------|--------|
-| 跳び四 | `●_●●●`, `●●_●●` | FOUR (1000) |
+| パターン | 形の例               | スコア            |
+| -------- | -------------------- | ----------------- |
+| 跳び四   | `●_●●●`, `●●_●●`     | FOUR (1000)       |
 | 活跳び四 | `_●_●●●_`, `_●●_●●_` | OPEN_FOUR (10000) |
-| 跳び三 | `●_●●`, `●●_●` | THREE (100) |
-| 活跳び三 | `_●_●●_`, `_●●_●_` | OPEN_THREE (1000) |
+| 跳び三   | `●_●●`, `●●_●`       | THREE (100)       |
+| 活跳び三 | `_●_●●_`, `_●●_●_`   | OPEN_THREE (1000) |
 
 ### 実装方針
 
@@ -173,11 +173,11 @@ const FOUR_THREE_BONUS = 5000;
  * 方向ごとのパターン分析結果
  */
 interface DirectionScores {
-  hasFour: boolean;    // 四（活四または止め四）がある
+  hasFour: boolean; // 四（活四または止め四）がある
   hasOpenFour: boolean; // 活四がある
   hasOpenThree: boolean; // 活三がある
-  hasThree: boolean;   // 三（活三または止め三）がある
-  score: number;       // この方向のスコア
+  hasThree: boolean; // 三（活三または止め三）がある
+  score: number; // この方向のスコア
 }
 
 export function evaluatePosition(
@@ -196,10 +196,20 @@ export function evaluatePosition(
     const jumpPattern = analyzeJumpPatterns(testBoard, row, col, dr, dc, color);
 
     const result: DirectionScores = {
-      hasFour: pattern.count === 4 && (pattern.end1 === "empty" || pattern.end2 === "empty"),
-      hasOpenFour: pattern.count === 4 && pattern.end1 === "empty" && pattern.end2 === "empty",
-      hasOpenThree: pattern.count === 3 && pattern.end1 === "empty" && pattern.end2 === "empty",
-      hasThree: pattern.count === 3 && (pattern.end1 === "empty" || pattern.end2 === "empty"),
+      hasFour:
+        pattern.count === 4 &&
+        (pattern.end1 === "empty" || pattern.end2 === "empty"),
+      hasOpenFour:
+        pattern.count === 4 &&
+        pattern.end1 === "empty" &&
+        pattern.end2 === "empty",
+      hasOpenThree:
+        pattern.count === 3 &&
+        pattern.end1 === "empty" &&
+        pattern.end2 === "empty",
+      hasThree:
+        pattern.count === 3 &&
+        (pattern.end1 === "empty" || pattern.end2 === "empty"),
       score: getPatternScore(pattern),
     };
 
@@ -221,8 +231,8 @@ export function evaluatePosition(
   }
 
   // 四三同時作成ボーナス
-  const hasFour = directionResults.some(r => r.hasFour || r.hasOpenFour);
-  const hasThree = directionResults.some(r => r.hasOpenThree);
+  const hasFour = directionResults.some((r) => r.hasFour || r.hasOpenFour);
+  const hasThree = directionResults.some((r) => r.hasOpenThree);
 
   let bonus = 0;
   if (hasFour && hasThree) {
@@ -250,17 +260,19 @@ describe("四三同時作成ボーナス", () => {
 
     const score = evaluatePosition(board, 7, 9, "black");
     // 四 + 活三 + 四三ボーナス
-    expect(score).toBeGreaterThan(PATTERN_SCORES.FOUR + PATTERN_SCORES.OPEN_THREE);
+    expect(score).toBeGreaterThan(
+      PATTERN_SCORES.FOUR + PATTERN_SCORES.OPEN_THREE,
+    );
   });
 });
 ```
 
 ## 変更ファイル
 
-| ファイル | 変更内容 |
-|---------|---------|
-| `src/logic/cpuAI/evaluation.ts` | `analyzeJumpPatterns()` 追加、`evaluatePosition()` 拡張 |
-| `src/logic/cpuAI/evaluation.test.ts` | 跳びパターン・四三ボーナスのテスト追加 |
+| ファイル                             | 変更内容                                                |
+| ------------------------------------ | ------------------------------------------------------- |
+| `src/logic/cpuAI/evaluation.ts`      | `analyzeJumpPatterns()` 追加、`evaluatePosition()` 拡張 |
+| `src/logic/cpuAI/evaluation.test.ts` | 跳びパターン・四三ボーナスのテスト追加                  |
 
 ## 検証方法
 

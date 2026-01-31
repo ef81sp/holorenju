@@ -82,6 +82,7 @@ self.onmessage = (event: MessageEvent<AIRequest>) => {
       params.depth,
       params.timeLimit,
       params.randomFactor,
+      params.evaluationOptions,
     );
 
     const endTime = performance.now();

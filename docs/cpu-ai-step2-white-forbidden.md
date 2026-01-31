@@ -14,11 +14,11 @@
 
 ### 現状
 
-| パターン | 現状 | 提案 |
-|---------|------|------|
+| パターン | 現状   | 提案                 |
+| -------- | ------ | -------------------- |
 | 白の三三 | 未対応 | FIVE と同等 (100000) |
 | 白の四四 | 未対応 | FIVE と同等 (100000) |
-| 白の長連 | 対応済 | FIVE と同等 |
+| 白の長連 | 対応済 | FIVE と同等          |
 
 ### 実装方針
 
@@ -52,17 +52,31 @@ function checkWhiteWinningPattern(
     const pattern = analyzeDirection(testBoard, row, col, dr, dc, "white");
 
     // 活三カウント
-    if (pattern.count === 3 && pattern.end1 === "empty" && pattern.end2 === "empty") {
+    if (
+      pattern.count === 3 &&
+      pattern.end1 === "empty" &&
+      pattern.end2 === "empty"
+    ) {
       openThreeCount++;
     }
 
     // 四カウント（活四・止め四両方）
-    if (pattern.count === 4 && (pattern.end1 === "empty" || pattern.end2 === "empty")) {
+    if (
+      pattern.count === 4 &&
+      (pattern.end1 === "empty" || pattern.end2 === "empty")
+    ) {
       fourCount++;
     }
 
     // 跳びパターンも考慮
-    const jumpPattern = analyzeJumpPatterns(testBoard, row, col, dr, dc, "white");
+    const jumpPattern = analyzeJumpPatterns(
+      testBoard,
+      row,
+      col,
+      dr,
+      dc,
+      "white",
+    );
     if (jumpPattern.openJumpThree > 0) {
       openThreeCount++;
     }
@@ -131,10 +145,10 @@ describe("白の三三・四四", () => {
 
 ### 現状
 
-| 状況 | 現状 | 提案スコア |
-|------|------|-----------|
-| 黒の防御位置が禁手 | 100 | +5000~10000 |
-| 禁手への誘導手（ネライ手） | 未対応 | +1000~2000 |
+| 状況                       | 現状   | 提案スコア  |
+| -------------------------- | ------ | ----------- |
+| 黒の防御位置が禁手         | 100    | +5000~10000 |
+| 禁手への誘導手（ネライ手） | 未対応 | +1000~2000  |
 
 ### 実装方針
 
@@ -171,7 +185,10 @@ function evaluateForbiddenTrap(
     const pattern = analyzeDirection(testBoard, row, col, dr, dc, "white");
 
     // 四を作った場合
-    if (pattern.count === 4 && (pattern.end1 === "empty" || pattern.end2 === "empty")) {
+    if (
+      pattern.count === 4 &&
+      (pattern.end1 === "empty" || pattern.end2 === "empty")
+    ) {
       // 黒の止め位置を特定
       const defensePositions = getDefensePositions(testBoard, row, col, dr, dc);
 
@@ -185,7 +202,11 @@ function evaluateForbiddenTrap(
     }
 
     // 活三を作った場合（次に四になる）
-    if (pattern.count === 3 && pattern.end1 === "empty" && pattern.end2 === "empty") {
+    if (
+      pattern.count === 3 &&
+      pattern.end1 === "empty" &&
+      pattern.end2 === "empty"
+    ) {
       // 両端の位置をチェック
       const extensionPoints = getExtensionPoints(testBoard, row, col, dr, dc);
 
@@ -244,10 +265,10 @@ function getDefensePositions(
 
 ### 定義
 
-| 用語 | 説明 | 提案スコア |
-|------|------|-----------|
-| ミセ手 | 次に四三を作れる手 | +1000 |
-| フクミ手 | 次にVCF（四追い勝ち）の手 | +1500 |
+| 用語     | 説明                      | 提案スコア |
+| -------- | ------------------------- | ---------- |
+| ミセ手   | 次に四三を作れる手        | +1000      |
+| フクミ手 | 次にVCF（四追い勝ち）の手 | +1500      |
 
 ### ミセ手の判定アルゴリズム
 
@@ -311,7 +332,12 @@ export function hasVCF(
     }
 
     // 相手の応手（四を止める）
-    const defensePos = getFourDefensePosition(afterFour, move.row, move.col, color);
+    const defensePos = getFourDefensePosition(
+      afterFour,
+      move.row,
+      move.col,
+      color,
+    );
     if (!defensePos) {
       // 止められない = 勝利
       return true;
@@ -320,7 +346,11 @@ export function hasVCF(
     // 黒の場合、防御位置が禁手ならVCF成立
     if (color === "white") {
       const opponentColor = "black";
-      const forbiddenResult = checkForbiddenMove(afterFour, defensePos.row, defensePos.col);
+      const forbiddenResult = checkForbiddenMove(
+        afterFour,
+        defensePos.row,
+        defensePos.col,
+      );
       if (forbiddenResult.isForbidden) {
         return true;
       }
@@ -342,7 +372,10 @@ export function hasVCF(
 /**
  * 四を作れる位置を列挙
  */
-function findFourMoves(board: BoardState, color: "black" | "white"): Position[] {
+function findFourMoves(
+  board: BoardState,
+  color: "black" | "white",
+): Position[] {
   const moves: Position[] = [];
 
   for (let row = 0; row < 15; row++) {
@@ -426,12 +459,12 @@ function isFukumiMove(
 
 ## 変更ファイル
 
-| ファイル | 変更内容 |
-|---------|---------|
-| `src/logic/cpuAI/evaluation.ts` | 白の三三四四判定、禁手追い込み、ミセ手判定追加 |
-| `src/logic/cpuAI/vcf.ts` | VCF探索（新規作成） |
-| `src/logic/cpuAI/vcf.test.ts` | VCF探索のテスト（新規作成） |
-| `src/logic/cpuAI/evaluation.test.ts` | 白勝利パターン・禁手追い込みのテスト追加 |
+| ファイル                             | 変更内容                                       |
+| ------------------------------------ | ---------------------------------------------- |
+| `src/logic/cpuAI/evaluation.ts`      | 白の三三四四判定、禁手追い込み、ミセ手判定追加 |
+| `src/logic/cpuAI/vcf.ts`             | VCF探索（新規作成）                            |
+| `src/logic/cpuAI/vcf.test.ts`        | VCF探索のテスト（新規作成）                    |
+| `src/logic/cpuAI/evaluation.test.ts` | 白勝利パターン・禁手追い込みのテスト追加       |
 
 ## 検証方法
 

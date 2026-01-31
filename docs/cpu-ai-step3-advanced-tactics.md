@@ -32,9 +32,7 @@ const MULTI_THREAT_BONUS = 500;
  * 複数方向脅威をチェック
  * OPEN_THREE以上の脅威が2方向以上あればボーナス
  */
-function evaluateMultiThreat(
-  directionResults: DirectionScores[],
-): number {
+function evaluateMultiThreat(directionResults: DirectionScores[]): number {
   let threatCount = 0;
 
   for (const result of directionResults) {
@@ -116,7 +114,10 @@ export function evaluatePosition(
 
   // カウンターフォーボーナス
   // 自分の攻撃スコアが高い（四以上）場合、防御価値を1.5倍に
-  if (attackScore >= PATTERN_SCORES.FOUR && opponentPatternScore >= PATTERN_SCORES.OPEN_THREE) {
+  if (
+    attackScore >= PATTERN_SCORES.FOUR &&
+    opponentPatternScore >= PATTERN_SCORES.OPEN_THREE
+  ) {
     defenseScore *= COUNTER_ATTACK_MULTIPLIER;
   }
 
@@ -211,7 +212,12 @@ export function hasVCT(
 
     // 相手の全ての応手について調べる
     // 活三の場合、相手は2箇所のどちらかを止める必要がある
-    const defensePositions = getThreatDefensePositions(afterThreat, move.row, move.col, color);
+    const defensePositions = getThreatDefensePositions(
+      afterThreat,
+      move.row,
+      move.col,
+      color,
+    );
 
     // 全ての防御に対して脅威を継続できるかチェック
     let canContinueAllDefenses = true;
@@ -221,7 +227,11 @@ export function hasVCT(
 
       // 黒の場合、防御位置が禁手なら相手は止められない
       if (opponentColor === "black") {
-        const forbiddenResult = checkForbiddenMove(afterThreat, defensePos.row, defensePos.col);
+        const forbiddenResult = checkForbiddenMove(
+          afterThreat,
+          defensePos.row,
+          defensePos.col,
+        );
         if (forbiddenResult.isForbidden) {
           continue; // この防御は不可能、次の防御をチェック
         }
@@ -248,7 +258,10 @@ export function hasVCT(
 /**
  * 脅威（活三・四）を作れる位置を列挙
  */
-function findThreatMoves(board: BoardState, color: "black" | "white"): Position[] {
+function findThreatMoves(
+  board: BoardState,
+  color: "black" | "white",
+): Position[] {
   const moves: Position[] = [];
 
   for (let row = 0; row < 15; row++) {
@@ -288,7 +301,11 @@ function getThreatDefensePositions(
     const pattern = analyzeDirection(board, row, col, dr, dc, color);
 
     // 活三の場合、両端が防御位置
-    if (pattern.count === 3 && pattern.end1 === "empty" && pattern.end2 === "empty") {
+    if (
+      pattern.count === 3 &&
+      pattern.end1 === "empty" &&
+      pattern.end2 === "empty"
+    ) {
       // 両端の位置を追加
       const end1Pos = getEndPosition(board, row, col, dr, dc, color, 1);
       const end2Pos = getEndPosition(board, row, col, dr, dc, color, -1);
@@ -297,7 +314,10 @@ function getThreatDefensePositions(
     }
 
     // 四の場合、1箇所のみ防御位置
-    if (pattern.count === 4 && (pattern.end1 === "empty" || pattern.end2 === "empty")) {
+    if (
+      pattern.count === 4 &&
+      (pattern.end1 === "empty" || pattern.end2 === "empty")
+    ) {
       if (pattern.end1 === "empty") {
         const end1Pos = getEndPosition(board, row, col, dr, dc, color, 1);
         if (end1Pos) positions.push(end1Pos);
@@ -350,12 +370,12 @@ function evaluateVCT(
 
 ## 変更ファイル
 
-| ファイル | 変更内容 |
-|---------|---------|
-| `src/logic/cpuAI/evaluation.ts` | 複数方向脅威、カウンターフォー、VCT評価追加 |
-| `src/logic/cpuAI/vct.ts` | VCT探索（新規作成） |
-| `src/logic/cpuAI/vct.test.ts` | VCT探索のテスト（新規作成） |
-| `src/logic/cpuAI/evaluation.test.ts` | 複数方向脅威・カウンターフォーのテスト追加 |
+| ファイル                             | 変更内容                                    |
+| ------------------------------------ | ------------------------------------------- |
+| `src/logic/cpuAI/evaluation.ts`      | 複数方向脅威、カウンターフォー、VCT評価追加 |
+| `src/logic/cpuAI/vct.ts`             | VCT探索（新規作成）                         |
+| `src/logic/cpuAI/vct.test.ts`        | VCT探索のテスト（新規作成）                 |
+| `src/logic/cpuAI/evaluation.test.ts` | 複数方向脅威・カウンターフォーのテスト追加  |
 
 ## 検証方法
 
@@ -394,6 +414,7 @@ VCT探索は計算コストが高いため:
 4. **キャッシュ**: 同一局面の結果をキャッシュ
 
 パフォーマンスが問題になる場合:
+
 - VCT探索を別スレッドで実行
 - 時間制限を設ける
 - 深さ制限をさらに厳しくする
