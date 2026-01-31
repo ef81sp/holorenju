@@ -66,11 +66,13 @@ const turnColor = computed(() =>
         {{ turnLabel }}
       </span>
     </div>
-    <div
-      v-if="props.isThinking"
-      class="thinking-indicator"
-    >
-      <span class="thinking-dots">考え中...</span>
+    <div class="thinking-indicator">
+      <span
+        v-show="props.isThinking"
+        class="thinking-dots"
+      >
+        考え中...
+      </span>
     </div>
   </div>
 </template>
@@ -122,6 +124,7 @@ const turnColor = computed(() =>
   justify-content: center;
   padding-top: var(--size-8);
   border-top: 1px solid var(--color-border-light);
+  min-height: var(--size-16);
 }
 
 .thinking-dots {

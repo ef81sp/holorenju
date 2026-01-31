@@ -389,15 +389,15 @@ const gameEndMessage = computed(() => {
           もう一度
         </button>
       </div>
+    </div>
 
-      <!-- ゲーム終了時のメッセージ -->
-      <div
-        v-if="cpuGameStore.isGameOver"
-        class="game-result"
-      >
-        <p class="result-message">{{ gameEndMessage }}</p>
-        <p class="result-moves">{{ cpuGameStore.moveCount }}手</p>
-      </div>
+    <!-- ゲーム終了時のメッセージ（右下に独立配置）-->
+    <div
+      v-if="cpuGameStore.isGameOver"
+      class="game-result"
+    >
+      <p class="result-message">{{ gameEndMessage }}</p>
+      <p class="result-moves">{{ cpuGameStore.moveCount }}手</p>
     </div>
 
     <!-- セリフ部（左下）-->
@@ -539,7 +539,7 @@ const gameEndMessage = computed(() => {
 
 .info-section-slot {
   grid-column: 3;
-  grid-row: 1 / 3;
+  grid-row: 1;
   display: flex;
   flex-direction: column;
   gap: var(--size-16);
@@ -586,11 +586,13 @@ const gameEndMessage = computed(() => {
 }
 
 .game-result {
-  margin-top: var(--size-16);
+  grid-column: 3;
+  grid-row: 2;
   padding: var(--size-16);
   background: var(--color-background-secondary);
   border-radius: var(--size-12);
   text-align: center;
+  align-self: center;
 }
 
 .result-message {
