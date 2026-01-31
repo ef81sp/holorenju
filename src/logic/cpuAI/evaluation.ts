@@ -101,6 +101,8 @@ export const PATTERN_SCORES = {
   VCT_BONUS: 8000,
   /** カウンターフォー倍率 */
   COUNTER_FOUR_MULTIPLIER: 1.5,
+  /** 斜め方向ボーナス係数（斜め連は隣接空き点が多く効率が良い） */
+  DIAGONAL_BONUS_MULTIPLIER: 1.05,
 } as const;
 
 /**
@@ -839,9 +841,22 @@ export function evaluateStonePatterns(
   let score = 0;
 
   // 連続パターンのスコア
-  for (const [dr, dc] of DIRECTIONS) {
+  // DIRECTIONSのインデックス: 0=横, 1=縦, 2=右下斜め, 3=右上斜め
+  for (let i = 0; i < DIRECTIONS.length; i++) {
+    const direction = DIRECTIONS[i];
+    if (!direction) {
+      continue;
+    }
+    const [dr, dc] = direction;
     const pattern = analyzeDirection(board, row, col, dr, dc, color);
-    score += getPatternScore(pattern);
+    let dirScore = getPatternScore(pattern);
+
+    // 斜め方向（インデックス2,3）にボーナスを適用
+    if ((i === 2 || i === 3) && dirScore > 0) {
+      dirScore *= PATTERN_SCORES.DIAGONAL_BONUS_MULTIPLIER;
+    }
+
+    score += dirScore;
   }
 
   // 跳びパターンのスコア

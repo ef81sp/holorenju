@@ -583,3 +583,58 @@ describe("カウンターフォー", () => {
     expect(scoreWithCounter).toBe(scoreWithoutCounter);
   });
 });
+
+describe("斜め方向ボーナス", () => {
+  it("斜め方向のパターンに5%ボーナスが付与される", () => {
+    // 横方向の活二
+    const horizontalBoard = createBoardWithStones([
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+    ]);
+    const horizontalScore = evaluateStonePatterns(
+      horizontalBoard,
+      7,
+      7,
+      "black",
+    );
+
+    // 斜め方向の活二（同等のパターン）
+    const diagonalBoard = createBoardWithStones([
+      { row: 6, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+    ]);
+    const diagonalScore = evaluateStonePatterns(diagonalBoard, 7, 7, "black");
+
+    // 斜め方向が5%高い
+    expect(diagonalScore).toBeGreaterThan(horizontalScore);
+    // 倍率が1.05であることを確認（浮動小数点誤差を考慮）
+    expect(diagonalScore / horizontalScore).toBeCloseTo(
+      PATTERN_SCORES.DIAGONAL_BONUS_MULTIPLIER,
+      2,
+    );
+  });
+
+  it("縦方向にはボーナスがない", () => {
+    // 横方向の活二
+    const horizontalBoard = createBoardWithStones([
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+    ]);
+    const horizontalScore = evaluateStonePatterns(
+      horizontalBoard,
+      7,
+      7,
+      "black",
+    );
+
+    // 縦方向の活二
+    const verticalBoard = createBoardWithStones([
+      { row: 6, col: 7, color: "black" },
+      { row: 7, col: 7, color: "black" },
+    ]);
+    const verticalScore = evaluateStonePatterns(verticalBoard, 7, 7, "black");
+
+    // 縦と横は同じスコア
+    expect(verticalScore).toBe(horizontalScore);
+  });
+});

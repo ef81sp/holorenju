@@ -7,9 +7,11 @@ import { describe, expect, it } from "vitest";
 import { createEmptyBoard } from "@/logic/renjuRules";
 
 import {
+  getOpeningEvaluation,
   getOpeningMove,
   getOpeningPatternInfo,
   isOpeningPhase,
+  JUSHU_EVALUATION,
   TENGEN,
 } from "./opening";
 import { placeStonesOnBoard } from "./testUtils";
@@ -310,5 +312,131 @@ describe("珠型の座標変換", () => {
     if (move) {
       expect(board[move.row]?.[move.col]).toBe(null);
     }
+  });
+});
+
+describe("JUSHU_EVALUATION", () => {
+  it("花月は黒必勝として500点", () => {
+    expect(JUSHU_EVALUATION["花月"]).toBe(500);
+  });
+
+  it("寒星は白有利として-200点", () => {
+    expect(JUSHU_EVALUATION["寒星"]).toBe(-200);
+  });
+
+  it("瑞星は互角として0点", () => {
+    expect(JUSHU_EVALUATION["瑞星"]).toBe(0);
+  });
+
+  it("全26種類の珠型が定義されている", () => {
+    const expectedPatterns = [
+      "花月",
+      "浦月",
+      "疎星",
+      "流星",
+      "金星",
+      "松月",
+      "溪月",
+      "峡月",
+      "雲月",
+      "名月",
+      "瑞星",
+      "遊星",
+      "彗星",
+      "水月",
+      "山月",
+      "岩月",
+      "銀月",
+      "寒星",
+      "残月",
+      "明星",
+      "雨月",
+      "丘月",
+      "新月",
+      "恒星",
+    ];
+    for (const name of expectedPatterns) {
+      expect(JUSHU_EVALUATION[name]).toBeDefined();
+    }
+  });
+});
+
+describe("getOpeningEvaluation", () => {
+  it("花月は黒有利として評価", () => {
+    const board = createEmptyBoard();
+    // 花月の配置（直打ち）
+    placeStonesOnBoard(board, [
+      { row: 7, col: 7, color: "black" }, // 天元
+      { row: 8, col: 8, color: "white" }, // 右下斜め
+      { row: 6, col: 7, color: "black" }, // 花月（縦方向）
+    ]);
+
+    const blackEval = getOpeningEvaluation(board, "black");
+    const whiteEval = getOpeningEvaluation(board, "white");
+
+    expect(blackEval).toBe(500);
+    expect(whiteEval).toBe(-500);
+  });
+
+  it("寒星は白有利として評価", () => {
+    const board = createEmptyBoard();
+    // 寒星の配置（直打ち）
+    placeStonesOnBoard(board, [
+      { row: 7, col: 7, color: "black" }, // 天元
+      { row: 8, col: 8, color: "white" }, // 右下斜め
+      { row: 6, col: 6, color: "black" }, // 寒星（白と反対側の斜め）
+    ]);
+
+    const blackEval = getOpeningEvaluation(board, "black");
+    const whiteEval = getOpeningEvaluation(board, "white");
+
+    expect(blackEval).toBe(-200);
+    expect(whiteEval).toBe(200);
+  });
+
+  it("3手未満では開局評価なし", () => {
+    const board = createEmptyBoard();
+    placeStonesOnBoard(board, [
+      { row: 7, col: 7, color: "black" },
+      { row: 8, col: 8, color: "white" },
+    ]);
+
+    expect(getOpeningEvaluation(board, "black")).toBe(0);
+  });
+
+  it("11手目以降は開局評価なし", () => {
+    const board = createEmptyBoard();
+    // 11手置かれた状態をシミュレート
+    const positions: [number, number][] = [
+      [7, 7],
+      [8, 8],
+      [6, 7],
+      [9, 9],
+      [5, 7],
+      [10, 10],
+      [4, 7],
+      [11, 11],
+      [3, 7],
+      [12, 12],
+      [2, 7],
+    ];
+    positions.forEach(([r, c], i) => {
+      placeStonesOnBoard(board, [
+        { row: r, col: c, color: i % 2 === 0 ? "black" : "white" },
+      ]);
+    });
+
+    expect(getOpeningEvaluation(board, "black")).toBe(0);
+  });
+
+  it("天元に黒石がない場合は開局評価なし", () => {
+    const board = createEmptyBoard();
+    placeStonesOnBoard(board, [
+      { row: 0, col: 0, color: "black" },
+      { row: 1, col: 1, color: "white" },
+      { row: 2, col: 2, color: "black" },
+    ]);
+
+    expect(getOpeningEvaluation(board, "black")).toBe(0);
   });
 });

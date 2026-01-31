@@ -356,3 +356,75 @@ export function getOpeningPatternInfo(
 
   return null;
 }
+
+/**
+ * 珠型の評価値
+ * 正の値は黒有利、負の値は白有利
+ * 研究に基づく定石評価を参考に設定
+ */
+export const JUSHU_EVALUATION: Record<string, number> = {
+  // 黒必勝
+  花月: 500,
+  浦月: 500,
+
+  // 黒有利
+  疎星: 300,
+  流星: 300,
+  金星: 250,
+  松月: 250,
+
+  // 黒やや有利
+  溪月: 100,
+  峡月: 100,
+  雲月: 100,
+  名月: 100,
+
+  // 互角
+  瑞星: 0,
+  遊星: 0,
+  彗星: 0,
+  水月: 0,
+
+  // 白やや有利
+  山月: -100,
+  岩月: -100,
+  銀月: -100,
+
+  // 白有利
+  寒星: -200,
+  残月: -200,
+  明星: -200,
+  雨月: -200,
+  丘月: -200,
+  新月: -200,
+  恒星: -200,
+};
+
+/**
+ * 開局評価ボーナスを取得
+ *
+ * @param board 盤面
+ * @param color 評価する視点
+ * @returns 評価ボーナス（黒視点で計算、白の場合は符号反転）
+ */
+export function getOpeningEvaluation(
+  board: BoardState,
+  color: "black" | "white",
+): number {
+  // 開局フェーズ外（3手未満 or 10手超）なら0
+  const stoneCount = countStones(board);
+  if (stoneCount < 3 || stoneCount > 10) {
+    return 0;
+  }
+
+  // 珠型を判定
+  const patternInfo = getOpeningPatternInfo(board);
+  if (!patternInfo) {
+    return 0;
+  }
+
+  const evaluation = JUSHU_EVALUATION[patternInfo.name] ?? 0;
+
+  // 白視点なら符号反転
+  return color === "black" ? evaluation : -evaluation;
+}
