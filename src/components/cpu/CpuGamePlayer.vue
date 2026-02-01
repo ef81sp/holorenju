@@ -267,154 +267,161 @@ const gameEndMessage = computed(() => {
 </script>
 
 <template>
-  <GamePlayerLayout ref="layoutRef">
-    <template #back-button>
-      <button
-        class="back-button"
-        @click="showBackConfirmDialog"
-      >
-        ← 戻る
-      </button>
-    </template>
+  <div class="cpu-game-player">
+    <GamePlayerLayout ref="layoutRef">
+      <template #back-button>
+        <button
+          class="back-button"
+          @click="showBackConfirmDialog"
+        >
+          ← 戻る
+        </button>
+      </template>
 
-    <template #header-controls>
-      <SettingsControl />
-    </template>
+      <template #header-controls>
+        <SettingsControl />
+      </template>
 
-    <template #control-info>
-      <CpuGameStatus :is-thinking="isThinking" />
-    </template>
+      <template #control-info>
+        <CpuGameStatus :is-thinking="isThinking" />
+      </template>
 
-    <template #board="{ boardSize }">
-      <RenjuBoard
-        :disabled="isBoardDisabled"
-        :stage-size="boardSize"
-        :player-color="playerColor"
-        @place-stone="handlePlaceStone"
-      />
-      <CutinOverlay
-        ref="cutinRef"
-        :type="cutinType"
-        :anchor="'board-anchor'"
-      />
-    </template>
-
-    <template #info>
-      <div class="info-content">
-        <!-- キャラクター表示 -->
-        <CpuCharacterPanel
-          :character="cpuCharacter"
-          :emotion-id="currentEmotion"
+      <template #board="{ boardSize }">
+        <RenjuBoard
+          :disabled="isBoardDisabled"
+          :stage-size="boardSize"
+          :player-color="playerColor"
+          @place-stone="handlePlaceStone"
         />
+        <CutinOverlay
+          ref="cutinRef"
+          :type="cutinType"
+          :anchor="'board-anchor'"
+        />
+      </template>
 
-        <div class="game-controls">
-          <button
-            class="control-button"
-            @click="recordDialogRef?.showModal()"
-          >
-            対戦記録
-          </button>
-          <button
-            class="control-button"
-            :disabled="cpuGameStore.moveCount < 2 || isThinking"
-            @click="handleUndo"
-          >
-            待った
-          </button>
-          <button
-            v-if="cpuGameStore.isGameOver"
-            class="control-button primary"
-            @click="handleRematch"
-          >
-            もう一度
-          </button>
-        </div>
-
-        <!-- ゲーム終了時のメッセージ -->
-        <div
-          v-if="cpuGameStore.isGameOver"
-          class="game-result"
-        >
-          <p class="result-message">{{ gameEndMessage }}</p>
-          <p class="result-moves">{{ cpuGameStore.moveCount }}手</p>
-        </div>
-      </div>
-    </template>
-
-    <template #dialog>
-      <div
-        v-if="dialogStore.currentMessage"
-        class="character-dialog"
-      >
-        <div
-          class="dialog-avatar"
-          :style="{
-            backgroundColor:
-              cpuCharacter === 'fubuki'
-                ? 'var(--color-fubuki-bg)'
-                : 'var(--color-miko-bg)',
-          }"
-        >
-          <CharacterSprite
+      <template #info>
+        <div class="info-content">
+          <!-- キャラクター表示 -->
+          <CpuCharacterPanel
             :character="cpuCharacter"
             :emotion-id="currentEmotion"
-            :is-active="true"
           />
+
+          <div class="game-controls">
+            <button
+              class="control-button"
+              @click="recordDialogRef?.showModal()"
+            >
+              対戦記録
+            </button>
+            <button
+              class="control-button"
+              :disabled="cpuGameStore.moveCount < 2 || isThinking"
+              @click="handleUndo"
+            >
+              待った
+            </button>
+            <button
+              v-if="cpuGameStore.isGameOver"
+              class="control-button primary"
+              @click="handleRematch"
+            >
+              もう一度
+            </button>
+          </div>
+
+          <!-- ゲーム終了時のメッセージ -->
+          <div
+            v-if="cpuGameStore.isGameOver"
+            class="game-result"
+          >
+            <p class="result-message">{{ gameEndMessage }}</p>
+            <p class="result-moves">{{ cpuGameStore.moveCount }}手</p>
+          </div>
         </div>
+      </template>
+
+      <template #dialog>
         <div
-          class="dialog-bubble"
-          :style="{
-            borderColor:
-              cpuCharacter === 'fubuki'
-                ? 'var(--color-fubuki-primary)'
-                : 'var(--color-miko-primary)',
-          }"
+          v-if="dialogStore.currentMessage"
+          class="character-dialog"
         >
           <div
-            class="dialog-character-name"
+            class="dialog-avatar"
             :style="{
-              color:
+              backgroundColor:
+                cpuCharacter === 'fubuki'
+                  ? 'var(--color-fubuki-bg)'
+                  : 'var(--color-miko-bg)',
+            }"
+          >
+            <CharacterSprite
+              :character="cpuCharacter"
+              :emotion-id="currentEmotion"
+              :is-active="true"
+            />
+          </div>
+          <div
+            class="dialog-bubble"
+            :style="{
+              borderColor:
                 cpuCharacter === 'fubuki'
                   ? 'var(--color-fubuki-primary)'
                   : 'var(--color-miko-primary)',
             }"
           >
-            {{ cpuCharacter === "fubuki" ? "フブキ" : "みこ" }}
-          </div>
-          <div class="dialog-text-wrapper">
-            <DialogText :nodes="dialogStore.currentMessage.text" />
+            <div
+              class="dialog-character-name"
+              :style="{
+                color:
+                  cpuCharacter === 'fubuki'
+                    ? 'var(--color-fubuki-primary)'
+                    : 'var(--color-miko-primary)',
+              }"
+            >
+              {{ cpuCharacter === "fubuki" ? "フブキ" : "みこ" }}
+            </div>
+            <div class="dialog-text-wrapper">
+              <DialogText :nodes="dialogStore.currentMessage.text" />
+            </div>
           </div>
         </div>
-      </div>
-      <div
-        v-else
-        class="help-text"
-      >
-        <p v-if="!cpuGameStore.isGameOver && cpuGameStore.isPlayerTurn">
-          盤面をクリックして石を置いてください
-        </p>
-        <p v-else-if="!cpuGameStore.isGameOver && !cpuGameStore.isPlayerTurn">
-          CPUが考え中です...
-        </p>
-      </div>
-    </template>
-  </GamePlayerLayout>
+        <div
+          v-else
+          class="help-text"
+        >
+          <p v-if="!cpuGameStore.isGameOver && cpuGameStore.isPlayerTurn">
+            盤面をクリックして石を置いてください
+          </p>
+          <p v-else-if="!cpuGameStore.isGameOver && !cpuGameStore.isPlayerTurn">
+            CPUが考え中です...
+          </p>
+        </div>
+      </template>
+    </GamePlayerLayout>
 
-  <!-- 戻る確認ダイアログ -->
-  <ConfirmDialog
-    ref="confirmDialogRef"
-    title="対局を中断しますか？"
-    message="現在の対局を終了して、設定画面に戻ります。"
-    confirm-text="戻る"
-    cancel-text="続ける"
-    @confirm="handleConfirmBack"
-  />
+    <!-- 戻る確認ダイアログ -->
+    <ConfirmDialog
+      ref="confirmDialogRef"
+      title="対局を中断しますか？"
+      message="現在の対局を終了して、設定画面に戻ります。"
+      confirm-text="戻る"
+      cancel-text="続ける"
+      @confirm="handleConfirmBack"
+    />
 
-  <!-- 対戦記録ダイアログ -->
-  <CpuRecordDialog ref="recordDialogRef" />
+    <!-- 対戦記録ダイアログ -->
+    <CpuRecordDialog ref="recordDialogRef" />
+  </div>
 </template>
 
 <style scoped>
+.cpu-game-player {
+  width: 100%;
+  height: 100%;
+}
+
 .back-button {
   width: fit-content;
   padding: var(--size-10) var(--size-20);
