@@ -863,6 +863,41 @@ describe("単発四ペナルティ", () => {
   });
 });
 
+describe("detectOpponentThreats - 止め四", () => {
+  it("横の止め四を検出する（片端が盤端）", () => {
+    const board = createEmptyBoard();
+    // x●●●●- (列0,1,2,3に黒石、列4が空き)
+    placeStonesOnBoard(board, [
+      { row: 7, col: 0, color: "black" },
+      { row: 7, col: 1, color: "black" },
+      { row: 7, col: 2, color: "black" },
+      { row: 7, col: 3, color: "black" },
+    ]);
+
+    const threats = detectOpponentThreats(board, "black");
+
+    expect(threats.fours.length).toBe(1);
+    expect(threats.fours[0]).toEqual({ row: 7, col: 4 });
+  });
+
+  it("横の止め四を検出する（片端が相手石）", () => {
+    const board = createEmptyBoard();
+    // ○●●●●- (白石で塞がれている)
+    placeStonesOnBoard(board, [
+      { row: 7, col: 3, color: "white" },
+      { row: 7, col: 4, color: "black" },
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+    ]);
+
+    const threats = detectOpponentThreats(board, "black");
+
+    expect(threats.fours.length).toBe(1);
+    expect(threats.fours[0]).toEqual({ row: 7, col: 8 });
+  });
+});
+
 describe("detectOpponentThreats", () => {
   it("横の活三を検出する", () => {
     const board = createEmptyBoard();
