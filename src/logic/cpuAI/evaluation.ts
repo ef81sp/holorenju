@@ -46,6 +46,8 @@ export interface EvaluationOptions {
   enableMandatoryDefense: boolean;
   /** 単発四の低評価を有効にするか（後続脅威がない四にペナルティ） */
   enableSingleFourPenalty: boolean;
+  /** ミセ手脅威防御を有効にするか（相手のミセ手を止めない手を除外） */
+  enableMiseThreat: boolean;
   /** 事前計算された脅威情報（最適化用、ルートノードで計算して渡す） */
   precomputedThreats?: ThreatInfo;
 }
@@ -62,6 +64,7 @@ export const DEFAULT_EVAL_OPTIONS: EvaluationOptions = {
   enableVCT: false,
   enableMandatoryDefense: false,
   enableSingleFourPenalty: false,
+  enableMiseThreat: false,
 };
 
 /**
@@ -76,6 +79,7 @@ export const FULL_EVAL_OPTIONS: EvaluationOptions = {
   enableVCT: true,
   enableMandatoryDefense: true,
   enableSingleFourPenalty: true,
+  enableMiseThreat: true,
 };
 
 export const PATTERN_SCORES = {
@@ -1378,6 +1382,23 @@ export function evaluatePosition(
         (p) => p.row === row && p.col === col,
       );
       if (!isDefendingOpenThree) {
+        return -Infinity;
+      }
+    }
+
+    // 相手のミセ手を止めない手は除外（他の脅威がない場合のみ）
+    if (
+      options.enableMiseThreat &&
+      threats.mises.length > 0 &&
+      threats.openFours.length === 0 &&
+      threats.fours.length === 0 &&
+      threats.openThrees.length === 0 &&
+      !canWinFirst
+    ) {
+      const isDefendingMise = threats.mises.some(
+        (p) => p.row === row && p.col === col,
+      );
+      if (!isDefendingMise) {
         return -Infinity;
       }
     }
