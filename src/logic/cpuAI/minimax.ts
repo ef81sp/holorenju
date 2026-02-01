@@ -444,6 +444,12 @@ export interface SearchContext {
   stats: SearchStats;
   /** 評価オプション */
   evaluationOptions: EvaluationOptions;
+  /** 探索開始時刻（時間制限用） */
+  startTime?: number;
+  /** 時間制限（ミリ秒） */
+  timeLimit?: number;
+  /** 時間切れフラグ */
+  timeoutFlag?: boolean;
 }
 
 /**
@@ -495,6 +501,9 @@ export function createSearchContext(
  * @param ctx 探索コンテキスト
  * @returns 評価スコア
  */
+/** 時間チェックの間隔（ノード数） */
+const TIME_CHECK_INTERVAL = 10;
+
 export function minimaxWithTT(
   board: BoardState,
   hash: bigint,
@@ -507,6 +516,25 @@ export function minimaxWithTT(
   ctx: SearchContext,
 ): number {
   ctx.stats.nodes++;
+
+  // 時間制限チェック（一定ノード数ごと）
+  // 毎回チェックするとオーバーヘッドが大きいため、一定間隔でチェック
+  if (
+    !ctx.timeoutFlag &&
+    ctx.startTime !== undefined &&
+    ctx.timeLimit !== undefined &&
+    (ctx.stats.nodes & 0x7) === 0 // 8ノードごとにチェック（ビット演算で高速化）
+  ) {
+    const elapsed = performance.now() - ctx.startTime;
+    if (elapsed >= ctx.timeLimit) {
+      ctx.timeoutFlag = true;
+    }
+  }
+
+  // 時間切れなら即座に現在の評価を返す
+  if (ctx.timeoutFlag) {
+    return evaluateBoard(board, perspective);
+  }
 
   // 現在の手番を決定
   const currentColor: "black" | "white" = isMaximizing
@@ -769,6 +797,11 @@ export function findBestMoveWithTT(
   let beta = prevScore === undefined ? INFINITY : prevScore + windowSize;
 
   for (const move of moves) {
+    // タイムアウトチェック
+    if (ctx.timeoutFlag) {
+      break;
+    }
+
     const newBoard = applyMove(board, move, color);
     const newHash = updateHash(hash, move.row, move.col, color);
 
@@ -865,6 +898,11 @@ export function findBestMoveIterativeWithTT(
     moves.length,
   );
 
+  // 時間制限情報をコンテキストに設定
+  ctx.startTime = startTime;
+  ctx.timeLimit = dynamicTimeLimit;
+  ctx.timeoutFlag = false;
+
   // 唯一の候補手なら即座に返す
   if (moves.length === 1 && moves[0]) {
     return {
@@ -892,8 +930,8 @@ export function findBestMoveIterativeWithTT(
   for (let depth = 2; depth <= maxDepth; depth++) {
     const elapsedTime = performance.now() - startTime;
 
-    // 動的時間制限チェック
-    if (elapsedTime > dynamicTimeLimit * 0.5) {
+    // 動的時間制限チェック（探索開始前）
+    if (elapsedTime > dynamicTimeLimit * 0.5 || ctx.timeoutFlag) {
       interrupted = true;
       break;
     }
@@ -904,12 +942,24 @@ export function findBestMoveIterativeWithTT(
       windowSize: ASPIRATION_WINDOW,
     });
 
+    // 探索中にタイムアウトした場合は前の結果を使用
+    if (ctx.timeoutFlag) {
+      interrupted = true;
+      break;
+    }
+
     // ウィンドウ外の結果が出たら再探索（フルウィンドウ）
     const lowerBound = bestResult.score - ASPIRATION_WINDOW;
     const upperBound = bestResult.score + ASPIRATION_WINDOW;
     if (result.score <= lowerBound || result.score >= upperBound) {
       // 再探索（フルウィンドウ）
       result = findBestMoveWithTT(board, color, depth, randomFactor, ctx);
+
+      // 再探索中にタイムアウトした場合
+      if (ctx.timeoutFlag) {
+        interrupted = true;
+        break;
+      }
     }
 
     const currentTime = performance.now() - startTime;

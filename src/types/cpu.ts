@@ -67,7 +67,7 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
   easy: {
     depth: 3,
     timeLimit: 2000,
-    randomFactor: 0.15,
+    randomFactor: 0.25,
     evaluationOptions: {
       enableFukumi: false,
       enableMise: false,
@@ -78,11 +78,11 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
     },
   },
   medium: {
-    depth: 4,
+    depth: 5,
     timeLimit: 3000,
     randomFactor: 0,
     evaluationOptions: {
-      enableFukumi: false,
+      enableFukumi: true,
       enableMise: true,
       enableForbiddenTrap: false,
       enableMultiThreat: true,
