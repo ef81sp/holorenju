@@ -18,6 +18,7 @@ import {
 } from "@/logic/renjuRules";
 
 import { DIRECTION_INDICES, DIRECTIONS } from "./core/constants";
+import { checkEnds, countLine } from "./core/lineAnalysis";
 import { isNearExistingStone } from "./moveGenerator";
 import { hasVCF } from "./vcf";
 
@@ -254,72 +255,6 @@ function createsOpenThree(
   }
 
   return false;
-}
-
-/**
- * 指定方向に連続する石の数をカウント
- */
-function countLine(
-  board: BoardState,
-  row: number,
-  col: number,
-  dr: number,
-  dc: number,
-  color: "black" | "white",
-): number {
-  let count = 1; // 起点自身
-
-  // 正方向
-  let r = row + dr;
-  let c = col + dc;
-  while (isValidPosition(r, c) && board[r]?.[c] === color) {
-    count++;
-    r += dr;
-    c += dc;
-  }
-
-  // 負方向
-  r = row - dr;
-  c = col - dc;
-  while (isValidPosition(r, c) && board[r]?.[c] === color) {
-    count++;
-    r -= dr;
-    c -= dc;
-  }
-
-  return count;
-}
-
-/**
- * 連の両端の状態をチェック
- */
-function checkEnds(
-  board: BoardState,
-  row: number,
-  col: number,
-  dr: number,
-  dc: number,
-  color: "black" | "white",
-): { end1Open: boolean; end2Open: boolean } {
-  // 正方向の端
-  let r = row + dr;
-  let c = col + dc;
-  while (isValidPosition(r, c) && board[r]?.[c] === color) {
-    r += dr;
-    c += dc;
-  }
-  const end1Open = isValidPosition(r, c) && board[r]?.[c] === null;
-
-  // 負方向の端
-  r = row - dr;
-  c = col - dc;
-  while (isValidPosition(r, c) && board[r]?.[c] === color) {
-    r -= dr;
-    c -= dc;
-  }
-  const end2Open = isValidPosition(r, c) && board[r]?.[c] === null;
-
-  return { end1Open, end2Open };
 }
 
 /**
