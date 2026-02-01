@@ -19,6 +19,7 @@ vi.mock("@/stores/boardStore", () => ({
     board: mockBoard,
     setBoard: mockSetBoard,
   }),
+  cloneBoard: (board: BoardState) => board.map((row) => [...row]),
 }));
 
 const mockShowMessage = vi.fn();
