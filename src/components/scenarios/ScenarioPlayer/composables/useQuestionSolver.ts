@@ -6,7 +6,7 @@ import type {
   SuccessOperator,
 } from "@/types/scenario";
 
-import { useBoardStore } from "@/stores/boardStore";
+import { useBoardStore, cloneBoard } from "@/stores/boardStore";
 import { useDialogStore } from "@/stores/dialogStore";
 import { useProgressStore } from "@/stores/progressStore";
 import { getPlayerColorFromConditions } from "@/utils/conditionUtils";
@@ -50,9 +50,6 @@ export const useQuestionSolver = (
   const progressStore = useProgressStore();
 
   let attemptBaseBoard: BoardState | null = null;
-
-  const cloneBoard = (board: BoardState): BoardState =>
-    board.map((row) => [...row]);
 
   const ensureAttemptBaseBoard = (): void => {
     if (!attemptBaseBoard) {

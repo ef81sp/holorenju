@@ -15,6 +15,12 @@ import type { BoardState, Position, StoneColor } from "@/types/game";
 import { createEmptyBoard } from "@/logic/renjuRules";
 
 /**
+ * 盤面のディープコピーを作成
+ */
+export const cloneBoard = (board: BoardState): BoardState =>
+  board.map((row) => [...row]);
+
+/**
  * ダイアログインデックスの型
  * - number: デモセクションのダイアログインデックス
  * - 'initial': 初期盤面
