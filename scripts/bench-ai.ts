@@ -266,6 +266,7 @@ function runBenchmarkSequential(options: CliOptions): BenchmarkResult {
         playerA,
         playerB,
         winner,
+        isABlack,
       });
 
       completedGames++;
@@ -293,6 +294,12 @@ function runBenchmarkSequential(options: CliOptions): BenchmarkResult {
     );
     console.log(`  Avg moves: ${stats.avgMoves.toFixed(1)}`);
     console.log(`  Avg duration: ${(stats.avgDuration / 1000).toFixed(2)}s`);
+    console.log(
+      `  Thinking time (${playerA}): avg=${stats.thinkingTimeA.avg.toFixed(0)}ms, max=${stats.thinkingTimeA.max.toFixed(0)}ms`,
+    );
+    console.log(
+      `  Thinking time (${playerB}): avg=${stats.thinkingTimeB.avg.toFixed(0)}ms, max=${stats.thinkingTimeB.max.toFixed(0)}ms`,
+    );
     console.log();
   }
 
@@ -443,6 +450,7 @@ async function runBenchmarkParallel(
       playerA,
       playerB,
       winner,
+      isABlack: task.isABlack,
     });
   }
 
@@ -469,6 +477,12 @@ async function runBenchmarkParallel(
     );
     console.log(`  Avg moves: ${stats.avgMoves.toFixed(1)}`);
     console.log(`  Avg duration: ${(stats.avgDuration / 1000).toFixed(2)}s`);
+    console.log(
+      `  Thinking time (${playerA}): avg=${stats.thinkingTimeA.avg.toFixed(0)}ms, max=${stats.thinkingTimeA.max.toFixed(0)}ms`,
+    );
+    console.log(
+      `  Thinking time (${playerB}): avg=${stats.thinkingTimeB.avg.toFixed(0)}ms, max=${stats.thinkingTimeB.max.toFixed(0)}ms`,
+    );
   }
 
   return {

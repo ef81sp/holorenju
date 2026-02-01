@@ -33,6 +33,22 @@ export interface PlayerConfig {
 }
 
 /**
+ * 着手記録（Position を拡張）
+ */
+export interface MoveRecord {
+  /** 行 */
+  row: number;
+  /** 列 */
+  col: number;
+  /** 思考時間（ミリ秒） */
+  time: number;
+  /** 開局定石だったか */
+  isOpening: boolean;
+  /** 到達探索深度（開局時は undefined） */
+  depth?: number;
+}
+
+/**
  * 対局結果
  */
 export interface GameResult {
@@ -48,8 +64,10 @@ export interface GameResult {
   moves: number;
   /** 対局時間（ミリ秒） */
   duration: number;
-  /** 棋譜 */
-  moveHistory: Position[];
+  /** 棋譜（思考時間付き） */
+  moveHistory: MoveRecord[];
+  /** プレイヤーAが黒番（先手）か */
+  isABlack: boolean;
 }
 
 /**
@@ -97,7 +115,7 @@ export function runHeadlessGame(
 
   const startTime = performance.now();
   let board: BoardState = createEmptyBoard();
-  const moveHistory: Position[] = [];
+  const moveHistory: MoveRecord[] = [];
   let currentColor: StoneColor = "black";
   let moveCount = 0;
 
@@ -118,6 +136,11 @@ export function runHeadlessGame(
     const config = isBlack ? playerA : playerB;
     const params = isBlack ? paramsA : paramsB;
 
+    // 思考時間計測開始
+    const moveStartTime = performance.now();
+    let isOpening = false;
+    let depth: number | undefined = undefined;
+
     // 着手を決定
     let move: Position | null = null;
 
@@ -125,6 +148,9 @@ export function runHeadlessGame(
     const stoneCount = countStones(board);
     if (isOpeningPhase(stoneCount)) {
       move = getOpeningMove(board, currentColor);
+      if (move) {
+        isOpening = true;
+      }
     }
 
     // 通常の探索
@@ -138,7 +164,10 @@ export function runHeadlessGame(
         params.evaluationOptions,
       );
       move = result.position;
+      depth = result.completedDepth;
     }
+
+    const moveTime = performance.now() - moveStartTime;
 
     if (!move) {
       // 着手不可（全マス埋まっている）
@@ -151,6 +180,7 @@ export function runHeadlessGame(
         moves: moveCount,
         duration: performance.now() - startTime,
         moveHistory,
+        isABlack: true,
       };
     }
 
@@ -162,6 +192,13 @@ export function runHeadlessGame(
           `Move ${moveCount + 1}: ${config.id} plays forbidden move at (${move.row}, ${move.col}) - ${forbidden.type}`,
         );
         // 禁手は白の勝利
+        const forbiddenMoveRecord: MoveRecord = {
+          row: move.row,
+          col: move.col,
+          time: moveTime,
+          isOpening,
+          depth,
+        };
         return {
           playerA: playerA.id,
           playerB: playerB.id,
@@ -169,14 +206,21 @@ export function runHeadlessGame(
           reason: "forbidden",
           moves: moveCount + 1,
           duration: performance.now() - startTime,
-          moveHistory: [...moveHistory, move],
+          moveHistory: [...moveHistory, forbiddenMoveRecord],
+          isABlack: true,
         };
       }
     }
 
     // 着手を適用
     board = applyMove(board, move, currentColor);
-    moveHistory.push(move);
+    moveHistory.push({
+      row: move.row,
+      col: move.col,
+      time: moveTime,
+      isOpening,
+      depth,
+    });
     moveCount++;
 
     log(`Move ${moveCount}: ${config.id} plays at (${move.row}, ${move.col})`);
@@ -192,6 +236,7 @@ export function runHeadlessGame(
         moves: moveCount,
         duration: performance.now() - startTime,
         moveHistory,
+        isABlack: true,
       };
     }
 
@@ -209,6 +254,7 @@ export function runHeadlessGame(
     moves: moveCount,
     duration: performance.now() - startTime,
     moveHistory,
+    isABlack: true,
   };
 }
 
@@ -239,7 +285,10 @@ export function runMultipleGames(
 
     // 結果を正規化（常にplayerA/playerBの視点で記録）
     if (isABlack) {
-      results.push(result);
+      results.push({
+        ...result,
+        isABlack: true,
+      });
     } else {
       // A が白番だった場合、winner を反転
       const invertWinner = (w: "A" | "B" | "draw"): "A" | "B" | "draw" => {
@@ -256,11 +305,28 @@ export function runMultipleGames(
         playerA: playerA.id,
         playerB: playerB.id,
         winner: invertWinner(result.winner),
+        isABlack: false,
       });
     }
   }
 
   return results;
+}
+
+/**
+ * 思考時間統計
+ */
+export interface ThinkingTimeStats {
+  /** 平均思考時間（ミリ秒） */
+  avg: number;
+  /** 最小思考時間（ミリ秒） */
+  min: number;
+  /** 最大思考時間（ミリ秒） */
+  max: number;
+  /** 中央値思考時間（ミリ秒） */
+  median: number;
+  /** 着手数 */
+  count: number;
 }
 
 /**
@@ -281,6 +347,35 @@ export interface GameStats {
   avgMoves: number;
   /** 平均対局時間（ミリ秒） */
   avgDuration: number;
+  /** プレイヤーA思考時間統計 */
+  thinkingTimeA: ThinkingTimeStats;
+  /** プレイヤーB思考時間統計 */
+  thinkingTimeB: ThinkingTimeStats;
+}
+
+/**
+ * 思考時間統計を計算するヘルパー関数
+ */
+function calculateThinkingTimeStats(times: number[]): ThinkingTimeStats {
+  if (times.length === 0) {
+    return { avg: 0, min: 0, max: 0, median: 0, count: 0 };
+  }
+
+  const sorted = [...times].sort((a, b) => a - b);
+  const sum = sorted.reduce((acc, t) => acc + t, 0);
+  const mid = Math.floor(sorted.length / 2);
+  const median =
+    sorted.length % 2 === 0
+      ? ((sorted[mid - 1] ?? 0) + (sorted[mid] ?? 0)) / 2
+      : (sorted[mid] ?? 0);
+
+  return {
+    avg: sum / sorted.length,
+    min: sorted[0] ?? 0,
+    max: sorted[sorted.length - 1] ?? 0,
+    median,
+    count: sorted.length,
+  };
 }
 
 /**
@@ -290,6 +385,14 @@ export interface GameStats {
  * @returns 統計情報
  */
 export function calculateStats(results: GameResult[]): GameStats {
+  const emptyThinkingStats: ThinkingTimeStats = {
+    avg: 0,
+    min: 0,
+    max: 0,
+    median: 0,
+    count: 0,
+  };
+
   const total = results.length;
   if (total === 0) {
     return {
@@ -300,6 +403,8 @@ export function calculateStats(results: GameResult[]): GameStats {
       winRateA: 0,
       avgMoves: 0,
       avgDuration: 0,
+      thinkingTimeA: emptyThinkingStats,
+      thinkingTimeB: emptyThinkingStats,
     };
   }
 
@@ -309,6 +414,34 @@ export function calculateStats(results: GameResult[]): GameStats {
   const totalMoves = results.reduce((sum, r) => sum + r.moves, 0);
   const totalDuration = results.reduce((sum, r) => sum + r.duration, 0);
 
+  // プレイヤーごとの思考時間を集計
+  // isABlack=true: 偶数インデックス=A（黒）、奇数インデックス=B（白）
+  // isABlack=false: 偶数インデックス=B（黒）、奇数インデックス=A（白）
+  const timesA: number[] = [];
+  const timesB: number[] = [];
+
+  for (const result of results) {
+    for (let i = 0; i < result.moveHistory.length; i++) {
+      const move = result.moveHistory[i];
+      if (!move) {
+        continue;
+      }
+
+      const isEvenIndex = i % 2 === 0;
+      // 偶数インデックス = 黒番の手
+      const isBlackMove = isEvenIndex;
+
+      // A が黒番: 黒の手は A、白の手は B
+      // A が白番: 黒の手は B、白の手は A
+      const isPlayerAMove = result.isABlack === isBlackMove;
+      if (isPlayerAMove) {
+        timesA.push(move.time);
+      } else {
+        timesB.push(move.time);
+      }
+    }
+  }
+
   return {
     total,
     winsA,
@@ -317,5 +450,7 @@ export function calculateStats(results: GameResult[]): GameStats {
     winRateA: winsA / total,
     avgMoves: totalMoves / total,
     avgDuration: totalDuration / total,
+    thinkingTimeA: calculateThinkingTimeStats(timesA),
+    thinkingTimeB: calculateThinkingTimeStats(timesB),
   };
 }

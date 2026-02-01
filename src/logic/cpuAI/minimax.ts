@@ -36,6 +36,79 @@ import { computeBoardHash, updateHash } from "./zobrist";
 /** 無限大の代わりに使う大きな値 */
 const INFINITY = 1000000;
 
+// =============================================================================
+// 動的時間配分
+// =============================================================================
+
+/**
+ * 盤面上の石の数を数える
+ */
+function countStones(board: BoardState): number {
+  let count = 0;
+  for (let row = 0; row < 15; row++) {
+    for (let col = 0; col < 15; col++) {
+      if (board[row]?.[col]) {
+        count++;
+      }
+    }
+  }
+  return count;
+}
+
+/**
+ * 動的時間配分の計算
+ *
+ * @param baseTimeLimit 基本時間制限（ms）
+ * @param board 盤面
+ * @param moveCount 候補手の数
+ * @returns 調整後の時間制限（ms）
+ */
+function calculateDynamicTimeLimit(
+  baseTimeLimit: number,
+  board: BoardState,
+  moveCount: number,
+): number {
+  // 唯一の候補手なら即座に返す
+  if (moveCount <= 1) {
+    return 0;
+  }
+
+  const stones = countStones(board);
+
+  // 序盤（6手以下）: 時間を短縮
+  if (stones <= 6) {
+    return Math.floor(baseTimeLimit * 0.5);
+  }
+
+  // 候補手が少ない（緊急手の可能性）: 時間を短縮
+  if (moveCount <= 3) {
+    return Math.floor(baseTimeLimit * 0.3);
+  }
+
+  // 通常
+  return baseTimeLimit;
+}
+
+// =============================================================================
+// LMR (Late Move Reductions) パラメータ
+// =============================================================================
+
+/** LMRを適用する候補手のインデックス閾値（この値以上のインデックスで適用） */
+const LMR_MOVE_THRESHOLD = 4;
+
+/** LMRを適用する最小探索深度 */
+const LMR_MIN_DEPTH = 3;
+
+/** LMRによる探索深度の削減量 */
+const LMR_REDUCTION = 1;
+
+// =============================================================================
+// Aspiration Windows パラメータ
+// =============================================================================
+
+/** Aspiration Windowの初期幅 */
+const ASPIRATION_WINDOW = 50;
+
 /**
  * Minimax探索結果
  */
@@ -281,6 +354,8 @@ export interface IterativeDeepingResult extends MinimaxResult {
   completedDepth: number;
   /** 時間切れで中断したか */
   interrupted: boolean;
+  /** 経過時間（ミリ秒） */
+  elapsedTime: number;
 }
 
 /**
@@ -345,6 +420,7 @@ export function findBestMoveIterative(
     score: bestResult.score,
     completedDepth,
     interrupted,
+    elapsedTime: performance.now() - startTime,
   };
 }
 
@@ -504,21 +580,68 @@ export function minimaxWithTT(
   let bestScore = isMaximizing ? -INFINITY : INFINITY;
   let scoreType: ScoreType = isMaximizing ? "UPPER_BOUND" : "LOWER_BOUND";
 
-  for (const move of moves) {
+  for (let moveIndex = 0; moveIndex < moves.length; moveIndex++) {
+    const move = moves[moveIndex];
+    if (!move) {
+      continue;
+    }
+
     const newBoard = applyMove(board, move, currentColor);
     const newHash = updateHash(hash, move.row, move.col, currentColor);
 
-    const score = minimaxWithTT(
-      newBoard,
-      newHash,
-      depth - 1,
-      !isMaximizing,
-      perspective,
-      alpha,
-      beta,
-      move,
-      ctx,
-    );
+    let score = 0;
+
+    // LMR (Late Move Reductions)
+    // 後半の候補手は浅く探索し、有望なら再探索
+    const canApplyLMR =
+      moveIndex >= LMR_MOVE_THRESHOLD &&
+      depth >= LMR_MIN_DEPTH &&
+      bestScore > -PATTERN_SCORES.FIVE + 1000; // 負けが確定していない
+
+    if (canApplyLMR) {
+      // 浅い探索
+      score = minimaxWithTT(
+        newBoard,
+        newHash,
+        depth - 1 - LMR_REDUCTION,
+        !isMaximizing,
+        perspective,
+        alpha,
+        beta,
+        move,
+        ctx,
+      );
+
+      // 有望な結果なら再探索
+      const needsResearch = isMaximizing ? score > alpha : score < beta;
+
+      if (needsResearch) {
+        score = minimaxWithTT(
+          newBoard,
+          newHash,
+          depth - 1,
+          !isMaximizing,
+          perspective,
+          alpha,
+          beta,
+          move,
+          ctx,
+        );
+      }
+    } else {
+      // 通常の探索
+      score = minimaxWithTT(
+        newBoard,
+        newHash,
+        depth - 1,
+        !isMaximizing,
+        perspective,
+        alpha,
+        beta,
+        move,
+        ctx,
+      );
+    }
 
     if (isMaximizing) {
       if (score > bestScore) {
@@ -560,6 +683,16 @@ export function minimaxWithTT(
 }
 
 /**
+ * Aspiration Windows用オプション
+ */
+interface AspirationOptions {
+  /** 前回のスコア（Aspiration Windowsの中心） */
+  previousScore?: number;
+  /** ウィンドウ幅 */
+  windowSize?: number;
+}
+
+/**
  * 最善手を探索（TT統合版）
  *
  * @param board 盤面
@@ -567,6 +700,7 @@ export function minimaxWithTT(
  * @param depth 探索深度
  * @param randomFactor ランダム要素（0-1）
  * @param ctx 探索コンテキスト（省略時は新規作成）
+ * @param aspiration Aspiration Windowsオプション
  * @returns 最善手と評価スコア
  */
 export function findBestMoveWithTT(
@@ -575,6 +709,7 @@ export function findBestMoveWithTT(
   depth: number,
   randomFactor = 0,
   ctx: SearchContext = createSearchContext(),
+  aspiration?: AspirationOptions,
 ): MinimaxResult & { ctx: SearchContext } {
   const hash = computeBoardHash(board);
 
@@ -627,8 +762,11 @@ export function findBestMoveWithTT(
   }
   const moveScores: MoveScore[] = [];
 
-  let alpha = -INFINITY;
-  const beta = INFINITY;
+  // Aspiration Windows: 前回のスコアをもとにウィンドウを設定
+  const windowSize = aspiration?.windowSize ?? ASPIRATION_WINDOW;
+  const prevScore = aspiration?.previousScore;
+  let alpha = prevScore === undefined ? -INFINITY : prevScore - windowSize;
+  let beta = prevScore === undefined ? INFINITY : prevScore + windowSize;
 
   for (const move of moves) {
     const newBoard = applyMove(board, move, color);
@@ -711,6 +849,40 @@ export function findBestMoveIterativeWithTT(
   // 新しい探索開始
   ctx.tt.newGeneration();
 
+  // 候補手の数を取得して動的時間配分を計算
+  const moves = generateSortedMoves(board, color, {
+    ttMove: null,
+    killers: ctx.killers,
+    depth: 1,
+    history: ctx.history,
+    useStaticEval: true,
+    evaluationOptions,
+  });
+
+  const dynamicTimeLimit = calculateDynamicTimeLimit(
+    timeLimit,
+    board,
+    moves.length,
+  );
+
+  // 唯一の候補手なら即座に返す
+  if (moves.length === 1 && moves[0]) {
+    return {
+      position: moves[0],
+      score: evaluatePosition(
+        board,
+        moves[0].row,
+        moves[0].col,
+        color,
+        evaluationOptions,
+      ),
+      completedDepth: 0,
+      interrupted: false,
+      elapsedTime: performance.now() - startTime,
+      stats: ctx.stats,
+    };
+  }
+
   // 初期結果（深さ1で必ず結果を得る）
   let bestResult = findBestMoveWithTT(board, color, 1, randomFactor, ctx);
   let completedDepth = 1;
@@ -720,17 +892,28 @@ export function findBestMoveIterativeWithTT(
   for (let depth = 2; depth <= maxDepth; depth++) {
     const elapsedTime = performance.now() - startTime;
 
-    // 時間制限チェック
-    if (elapsedTime > timeLimit * 0.5) {
+    // 動的時間制限チェック
+    if (elapsedTime > dynamicTimeLimit * 0.5) {
       interrupted = true;
       break;
     }
 
-    // 深さdで探索
-    const result = findBestMoveWithTT(board, color, depth, randomFactor, ctx);
+    // Aspiration Windowsで探索
+    let result = findBestMoveWithTT(board, color, depth, randomFactor, ctx, {
+      previousScore: bestResult.score,
+      windowSize: ASPIRATION_WINDOW,
+    });
+
+    // ウィンドウ外の結果が出たら再探索（フルウィンドウ）
+    const lowerBound = bestResult.score - ASPIRATION_WINDOW;
+    const upperBound = bestResult.score + ASPIRATION_WINDOW;
+    if (result.score <= lowerBound || result.score >= upperBound) {
+      // 再探索（フルウィンドウ）
+      result = findBestMoveWithTT(board, color, depth, randomFactor, ctx);
+    }
 
     const currentTime = performance.now() - startTime;
-    if (currentTime >= timeLimit) {
+    if (currentTime >= dynamicTimeLimit) {
       bestResult = result;
       completedDepth = depth;
       interrupted = true;
@@ -746,6 +929,7 @@ export function findBestMoveIterativeWithTT(
     score: bestResult.score,
     completedDepth,
     interrupted,
+    elapsedTime: performance.now() - startTime,
     stats: ctx.stats,
   };
 }

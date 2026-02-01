@@ -22,5 +22,7 @@ export type {
   GameOptions,
   GameResult,
   GameStats,
+  MoveRecord,
   PlayerConfig,
+  ThinkingTimeStats,
 } from "./headless.ts";
