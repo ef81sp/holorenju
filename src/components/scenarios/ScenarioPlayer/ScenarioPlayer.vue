@@ -16,10 +16,10 @@ import RenjuBoard from "@/components/game/RenjuBoard/RenjuBoard.vue";
 import DialogSection from "./DialogSection.vue";
 import CutinOverlay from "@/components/common/CutinOverlay.vue";
 import SettingsControl from "@/components/common/SettingsControl.vue";
+import GamePlayerLayout from "@/components/common/GamePlayerLayout.vue";
 import DebugReloadButton from "./DebugReloadButton.vue";
 import { useScenarioNavigation } from "./composables/useScenarioNavigation";
 import { useKeyboardNavigation } from "./composables/useKeyboardNavigation";
-import { useBoardSize } from "./composables/useBoardSize";
 import { useQuestionSolver } from "./composables/useQuestionSolver";
 import { useCutinDisplay } from "@/composables/useCutinDisplay";
 import { scenarioNavKey } from "./composables/useScenarioNavProvide";
@@ -49,9 +49,8 @@ provide(scenarioNavKey, {
   loadScenario: scenarioNav.loadScenario,
 });
 
-const boardFrameRef = ref<HTMLElement | null>(null);
-const { boardSize: boardSizeValue } = useBoardSize(boardFrameRef);
-const boardSize = computed(() => boardSizeValue.value);
+// レイアウトコンポーネントの参照
+const layoutRef = ref<InstanceType<typeof GamePlayerLayout> | null>(null);
 
 // カットイン
 const cutinRef = ref<InstanceType<typeof CutinOverlay> | null>(null);
@@ -134,8 +133,8 @@ onMounted(async () => {
 
   await nextTick();
   console.warn("[ScenarioPlayer] Initial size:", {
-    width: boardFrameRef.value?.clientWidth,
-    height: boardFrameRef.value?.clientHeight,
+    width: layoutRef.value?.boardFrameRef?.clientWidth,
+    height: layoutRef.value?.boardFrameRef?.clientHeight,
   });
 });
 
@@ -219,32 +218,27 @@ const handleGoToList = (): void => {
 </script>
 
 <template>
-  <div
+  <GamePlayerLayout
     v-if="scenarioNav.scenario.value"
-    class="scenario-player"
+    ref="layoutRef"
   >
-    <!-- 操作セクション（左上 4×7）-->
-    <div class="control-section-slot">
-      <div class="control-header">
-        <BackButton @back="scenarioNav.goBack" />
-        <div class="header-controls">
-          <DebugReloadButton />
-          <SettingsControl />
-        </div>
-      </div>
+    <template #back-button>
+      <BackButton @back="scenarioNav.goBack" />
+    </template>
+
+    <template #header-controls>
+      <DebugReloadButton />
+      <SettingsControl />
+    </template>
+
+    <template #control-info>
       <ControlInfo
         :cursor-position="keyboardNav.cursorPosition.value"
         :section-type="scenarioNav.currentSection.value?.type"
       />
-    </div>
+    </template>
 
-    <!-- 連珠盤セクション（中央 7×7）-->
-    <div
-      id="board-anchor"
-      ref="boardFrameRef"
-      class="board-section-wrapper"
-      style="anchor-name: --board-area"
-    >
+    <template #board="{ boardSize }">
       <RenjuBoard
         :disabled="isBoardDisabled"
         :stage-size="boardSize"
@@ -257,10 +251,9 @@ const handleGoToList = (): void => {
         :type="cutinType"
         :anchor="'board-anchor'"
       />
-    </div>
+    </template>
 
-    <!-- 説明・コントロール部（右側 5×9）-->
-    <div class="info-section-slot">
+    <template #info>
       <ScenarioInfoPanel
         :scenario-title="scenarioNav.scenario.value.title"
         :section-title="
@@ -284,11 +277,9 @@ const handleGoToList = (): void => {
         @submit-answer="handleSubmitAnswer"
         @complete-scenario="handleGoToList"
       />
-    </div>
+    </template>
 
-    <!-- セリフ部（左下 11×2）-->
-    <!-- セリフ部（左下 11×2）-->
-    <div class="dialog-section-slot">
+    <template #dialog>
       <DialogSection
         :message="dialogStore.currentMessage"
         :is-demo="scenarioNav.currentSection.value?.type === 'demo'"
@@ -300,65 +291,6 @@ const handleGoToList = (): void => {
         @next-dialogue="scenarioNav.nextDialogue"
         @previous-dialogue="scenarioNav.previousDialogue"
       />
-    </div>
-  </div>
+    </template>
+  </GamePlayerLayout>
 </template>
-
-<style scoped>
-.scenario-player {
-  width: 100%;
-  height: 100%;
-  display: grid;
-  grid-template-columns: 4fr 7fr 5fr;
-  grid-template-rows: 7fr 2fr;
-  padding: var(--size-14);
-  gap: var(--size-14);
-  box-sizing: border-box;
-  position: relative;
-}
-
-.control-section-slot {
-  grid-column: 1;
-  grid-row: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: var(--size-12);
-  overflow: hidden;
-}
-
-.control-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-}
-
-.header-controls {
-  display: flex;
-  align-items: center;
-  gap: var(--size-8);
-}
-
-.board-section-wrapper {
-  grid-column: 2;
-  grid-row: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  min-height: 0;
-  position: relative;
-}
-
-.info-section-slot {
-  grid-column: 3;
-  grid-row: 1 / 3;
-  overflow-y: auto;
-}
-
-.dialog-section-slot {
-  grid-column: 1 / 3;
-  grid-row: 2;
-  overflow-y: auto;
-}
-</style>

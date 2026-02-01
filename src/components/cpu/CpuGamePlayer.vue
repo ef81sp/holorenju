@@ -12,6 +12,7 @@ import RenjuBoard from "@/components/game/RenjuBoard/RenjuBoard.vue";
 import CutinOverlay from "@/components/common/CutinOverlay.vue";
 import ConfirmDialog from "@/components/common/ConfirmDialog.vue";
 import SettingsControl from "@/components/common/SettingsControl.vue";
+import GamePlayerLayout from "@/components/common/GamePlayerLayout.vue";
 import DialogText from "@/components/common/DialogText.vue";
 import CharacterSprite from "@/components/character/CharacterSprite.vue";
 import CpuGameStatus from "./CpuGameStatus.vue";
@@ -20,7 +21,6 @@ import CpuRecordDialog from "./CpuRecordDialog.vue";
 import { useCpuPlayer } from "./composables/useCpuPlayer";
 import { useCpuDialogue } from "./composables/useCpuDialogue";
 import { useForbiddenMark } from "./composables/useForbiddenMark";
-import { useBoardSize } from "@/components/scenarios/ScenarioPlayer/composables/useBoardSize";
 import { useCutinDisplay } from "@/composables/useCutinDisplay";
 import { useAppStore } from "@/stores/appStore";
 import { useCpuGameStore } from "@/stores/cpuGameStore";
@@ -50,10 +50,8 @@ const { showForbiddenMark, clearForbiddenMark } = useForbiddenMark();
 // 対戦記録ダイアログ
 const recordDialogRef = ref<InstanceType<typeof CpuRecordDialog> | null>(null);
 
-// 盤面サイズ計算用
-const boardFrameRef = ref<HTMLElement | null>(null);
-const { boardSize: boardSizeValue } = useBoardSize(boardFrameRef);
-const boardSize = computed(() => boardSizeValue.value);
+// レイアウトコンポーネントの参照
+const layoutRef = ref<InstanceType<typeof GamePlayerLayout> | null>(null);
 
 // カットイン
 const cutinRef = ref<InstanceType<typeof CutinOverlay> | null>(null);
@@ -269,31 +267,25 @@ const gameEndMessage = computed(() => {
 </script>
 
 <template>
-  <div class="cpu-game-player">
-    <!-- 操作セクション（左上）-->
-    <div class="control-section-slot">
-      <div class="control-header">
-        <button
-          class="back-button"
-          @click="showBackConfirmDialog"
-        >
-          ← 戻る
-        </button>
-        <div class="header-controls">
-          <SettingsControl />
-        </div>
-      </div>
-      <CpuGameStatus :is-thinking="isThinking" />
-    </div>
+  <GamePlayerLayout ref="layoutRef">
+    <template #back-button>
+      <button
+        class="back-button"
+        @click="showBackConfirmDialog"
+      >
+        ← 戻る
+      </button>
+    </template>
 
-    <!-- 盤面セクション（中央）-->
-    <div
-      id="board-anchor"
-      ref="boardFrameRef"
-      class="board-section-wrapper"
-      style="anchor-name: --board-area"
-      @click="isCutinVisible && hideCutin()"
-    >
+    <template #header-controls>
+      <SettingsControl />
+    </template>
+
+    <template #control-info>
+      <CpuGameStatus :is-thinking="isThinking" />
+    </template>
+
+    <template #board="{ boardSize }">
       <RenjuBoard
         :disabled="isBoardDisabled"
         :stage-size="boardSize"
@@ -305,51 +297,51 @@ const gameEndMessage = computed(() => {
         :type="cutinType"
         :anchor="'board-anchor'"
       />
-    </div>
+    </template>
 
-    <!-- コントロールセクション（右側）-->
-    <div class="info-section-slot">
-      <!-- キャラクター表示 -->
-      <CpuCharacterPanel
-        :character="cpuCharacter"
-        :emotion-id="currentEmotion"
-      />
+    <template #info>
+      <div class="info-content">
+        <!-- キャラクター表示 -->
+        <CpuCharacterPanel
+          :character="cpuCharacter"
+          :emotion-id="currentEmotion"
+        />
 
-      <div class="game-controls">
-        <button
-          class="control-button"
-          @click="recordDialogRef?.showModal()"
-        >
-          対戦記録
-        </button>
-        <button
-          class="control-button"
-          :disabled="cpuGameStore.moveCount < 2 || isThinking"
-          @click="handleUndo"
-        >
-          待った
-        </button>
-        <button
+        <div class="game-controls">
+          <button
+            class="control-button"
+            @click="recordDialogRef?.showModal()"
+          >
+            対戦記録
+          </button>
+          <button
+            class="control-button"
+            :disabled="cpuGameStore.moveCount < 2 || isThinking"
+            @click="handleUndo"
+          >
+            待った
+          </button>
+          <button
+            v-if="cpuGameStore.isGameOver"
+            class="control-button primary"
+            @click="handleRematch"
+          >
+            もう一度
+          </button>
+        </div>
+
+        <!-- ゲーム終了時のメッセージ -->
+        <div
           v-if="cpuGameStore.isGameOver"
-          class="control-button primary"
-          @click="handleRematch"
+          class="game-result"
         >
-          もう一度
-        </button>
+          <p class="result-message">{{ gameEndMessage }}</p>
+          <p class="result-moves">{{ cpuGameStore.moveCount }}手</p>
+        </div>
       </div>
-    </div>
+    </template>
 
-    <!-- ゲーム終了時のメッセージ（右下に独立配置）-->
-    <div
-      v-if="cpuGameStore.isGameOver"
-      class="game-result"
-    >
-      <p class="result-message">{{ gameEndMessage }}</p>
-      <p class="result-moves">{{ cpuGameStore.moveCount }}手</p>
-    </div>
-
-    <!-- セリフ部（左下）-->
-    <div class="dialog-section-slot">
+    <template #dialog>
       <div
         v-if="dialogStore.currentMessage"
         class="character-dialog"
@@ -405,58 +397,24 @@ const gameEndMessage = computed(() => {
           CPUが考え中です...
         </p>
       </div>
-    </div>
+    </template>
+  </GamePlayerLayout>
 
-    <!-- 戻る確認ダイアログ -->
-    <ConfirmDialog
-      ref="confirmDialogRef"
-      title="対局を中断しますか？"
-      message="現在の対局を終了して、設定画面に戻ります。"
-      confirm-text="戻る"
-      cancel-text="続ける"
-      @confirm="handleConfirmBack"
-    />
+  <!-- 戻る確認ダイアログ -->
+  <ConfirmDialog
+    ref="confirmDialogRef"
+    title="対局を中断しますか？"
+    message="現在の対局を終了して、設定画面に戻ります。"
+    confirm-text="戻る"
+    cancel-text="続ける"
+    @confirm="handleConfirmBack"
+  />
 
-    <!-- 対戦記録ダイアログ -->
-    <CpuRecordDialog ref="recordDialogRef" />
-  </div>
+  <!-- 対戦記録ダイアログ -->
+  <CpuRecordDialog ref="recordDialogRef" />
 </template>
 
 <style scoped>
-.cpu-game-player {
-  width: 100%;
-  height: 100%;
-  display: grid;
-  grid-template-columns: 4fr 7fr 5fr;
-  grid-template-rows: 7fr 2fr;
-  padding: var(--size-14);
-  gap: var(--size-14);
-  box-sizing: border-box;
-  position: relative;
-}
-
-.control-section-slot {
-  grid-column: 1;
-  grid-row: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: var(--size-12);
-  overflow: hidden;
-}
-
-.control-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-}
-
-.header-controls {
-  display: flex;
-  align-items: center;
-  gap: var(--size-8);
-}
-
 .back-button {
   width: fit-content;
   padding: var(--size-10) var(--size-20);
@@ -474,24 +432,12 @@ const gameEndMessage = computed(() => {
   border-color: #4a9eff;
 }
 
-.board-section-wrapper {
-  grid-column: 2;
-  grid-row: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  min-height: 0;
-  position: relative;
-}
-
-.info-section-slot {
-  grid-column: 3;
-  grid-row: 1;
+.info-content {
   display: flex;
   flex-direction: column;
   gap: var(--size-16);
   padding: var(--size-12);
+  height: 100%;
 }
 
 .game-controls {
@@ -534,13 +480,11 @@ const gameEndMessage = computed(() => {
 }
 
 .game-result {
-  grid-column: 3;
-  grid-row: 2;
+  margin-top: auto;
   padding: var(--size-16);
   background: var(--color-background-secondary);
   border-radius: var(--size-12);
   text-align: center;
-  align-self: center;
 }
 
 .result-message {
@@ -554,13 +498,6 @@ const gameEndMessage = computed(() => {
   font-size: var(--size-14);
   color: var(--color-text-secondary);
   margin: 0;
-}
-
-.dialog-section-slot {
-  grid-column: 1 / 3;
-  grid-row: 2;
-  display: flex;
-  align-items: center;
 }
 
 .help-text {

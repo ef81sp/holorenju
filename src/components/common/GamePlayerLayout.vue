@@ -1,0 +1,121 @@
+<script setup lang="ts">
+/**
+ * ゲームプレイヤー共通レイアウト
+ *
+ * ScenarioPlayerとCpuGamePlayerで共通のグリッドレイアウトを提供。
+ * grid-template-columns: 4fr 7fr 5fr
+ * grid-template-rows: 7fr 2fr
+ */
+
+import { ref, computed, type Ref } from "vue";
+
+import { useBoardSize } from "@/components/scenarios/ScenarioPlayer/composables/useBoardSize";
+
+// boardFrameRefを親に公開
+const boardFrameRef = ref<HTMLElement | null>(null);
+const { boardSize: boardSizeValue } = useBoardSize(boardFrameRef);
+const boardSize = computed(() => boardSizeValue.value);
+
+// Exposeでbordサイズと参照を親に公開
+defineExpose({
+  boardFrameRef,
+  boardSize,
+});
+</script>
+
+<template>
+  <div class="game-player-layout">
+    <!-- 操作セクション（左上 4×7）-->
+    <div class="control-section-slot">
+      <div class="control-header">
+        <slot name="back-button" />
+        <div class="header-controls">
+          <slot name="header-controls" />
+        </div>
+      </div>
+      <slot name="control-info" />
+    </div>
+
+    <!-- 連珠盤セクション（中央 7×7）-->
+    <div
+      id="board-anchor"
+      ref="boardFrameRef"
+      class="board-section-wrapper"
+      style="anchor-name: --board-area"
+    >
+      <slot
+        name="board"
+        :board-size="boardSize"
+      />
+    </div>
+
+    <!-- 説明・コントロール部（右側 5×9）-->
+    <div class="info-section-slot">
+      <slot name="info" />
+    </div>
+
+    <!-- セリフ部（左下 11×2）-->
+    <div class="dialog-section-slot">
+      <slot name="dialog" />
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.game-player-layout {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  grid-template-columns: 4fr 7fr 5fr;
+  grid-template-rows: 7fr 2fr;
+  padding: var(--size-14);
+  gap: var(--size-14);
+  box-sizing: border-box;
+  position: relative;
+}
+
+.control-section-slot {
+  grid-column: 1;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: var(--size-12);
+  overflow: hidden;
+}
+
+.control-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.header-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--size-8);
+}
+
+.board-section-wrapper {
+  grid-column: 2;
+  grid-row: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  min-height: 0;
+  position: relative;
+}
+
+.info-section-slot {
+  grid-column: 3;
+  grid-row: 1 / 3;
+  overflow-y: auto;
+}
+
+.dialog-section-slot {
+  grid-column: 1 / 3;
+  grid-row: 2;
+  overflow-y: auto;
+}
+</style>
