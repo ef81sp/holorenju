@@ -21,7 +21,7 @@ import { useScenarioNavigation } from "./composables/useScenarioNavigation";
 import { useKeyboardNavigation } from "./composables/useKeyboardNavigation";
 import { useBoardSize } from "./composables/useBoardSize";
 import { useQuestionSolver } from "./composables/useQuestionSolver";
-import { useCutinDisplay } from "./composables/useCutinDisplay";
+import { useCutinDisplay } from "@/composables/useCutinDisplay";
 import { scenarioNavKey } from "./composables/useScenarioNavProvide";
 import { useDialogStore } from "@/stores/dialogStore";
 

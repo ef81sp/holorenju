@@ -21,12 +21,12 @@ import { useCpuPlayer } from "./composables/useCpuPlayer";
 import { useCpuDialogue } from "./composables/useCpuDialogue";
 import { useForbiddenMark } from "./composables/useForbiddenMark";
 import { useBoardSize } from "@/components/scenarios/ScenarioPlayer/composables/useBoardSize";
+import { useCutinDisplay } from "@/composables/useCutinDisplay";
 import { useAppStore } from "@/stores/appStore";
 import { useCpuGameStore } from "@/stores/cpuGameStore";
 import { useCpuRecordStore } from "@/stores/cpuRecordStore";
 import { useBoardStore } from "@/stores/boardStore";
 import { useDialogStore } from "@/stores/dialogStore";
-import { usePreferencesStore } from "@/stores/preferencesStore";
 import { checkForbiddenMove } from "@/logic/renjuRules";
 import type { BattleResult } from "@/types/cpu";
 import type { Position } from "@/types/game";
@@ -36,7 +36,6 @@ const cpuGameStore = useCpuGameStore();
 const cpuRecordStore = useCpuRecordStore();
 const boardStore = useBoardStore();
 const dialogStore = useDialogStore();
-const preferencesStore = usePreferencesStore();
 
 // CPU Player (Web Worker経由)
 const { isThinking, requestMove } = useCpuPlayer();
@@ -59,19 +58,15 @@ const boardSize = computed(() => boardSizeValue.value);
 // カットイン
 const cutinRef = ref<InstanceType<typeof CutinOverlay> | null>(null);
 const cutinType = ref<"correct" | "wrong">("correct");
-const isCutinVisible = ref(false);
-let cutinAutoHideTimer: ReturnType<typeof setTimeout> | null = null;
+const { isCutinVisible, showCutin, hideCutin } = useCutinDisplay(cutinRef);
 
 // 戻る確認ダイアログ
 const confirmDialogRef = ref<InstanceType<typeof ConfirmDialog> | null>(null);
 
 // キーボードイベント処理
 function handleKeyDown(event: KeyboardEvent): void {
-  // カットイン表示中は任意キーでスキップ
+  // カットイン表示中のキースキップはcomposableが処理するためスキップ
   if (isCutinVisible.value) {
-    event.stopPropagation();
-    event.preventDefault();
-    hideCutin();
     return;
   }
 
@@ -80,46 +75,6 @@ function handleKeyDown(event: KeyboardEvent): void {
     event.preventDefault();
     showBackConfirmDialog();
   }
-}
-
-// カットインを表示
-function showCutin(): void {
-  if (!cutinRef.value) {
-    return;
-  }
-
-  // 既存のタイマーをクリア
-  if (cutinAutoHideTimer) {
-    clearTimeout(cutinAutoHideTimer);
-    cutinAutoHideTimer = null;
-  }
-
-  isCutinVisible.value = true;
-  cutinRef.value.showPopover();
-
-  // 自動消滅タイマーを設定（秒→ミリ秒に変換）
-  const durationMs = preferencesStore.cutinDisplayDuration * 1000;
-  cutinAutoHideTimer = setTimeout(() => {
-    hideCutin();
-  }, durationMs);
-}
-
-// カットインを非表示
-function hideCutin(): void {
-  if (!isCutinVisible.value) {
-    return;
-  }
-
-  if (cutinAutoHideTimer) {
-    clearTimeout(cutinAutoHideTimer);
-    cutinAutoHideTimer = null;
-  }
-
-  if (cutinRef.value) {
-    cutinRef.value.hidePopover();
-  }
-
-  isCutinVisible.value = false;
 }
 
 // ゲーム開始
@@ -142,13 +97,6 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener("keydown", handleKeyDown);
-
-  // カットインタイマーをクリア
-  if (cutinAutoHideTimer) {
-    clearTimeout(cutinAutoHideTimer);
-    cutinAutoHideTimer = null;
-  }
-
   // セリフをクリア
   dialogStore.reset();
 });
@@ -260,7 +208,7 @@ function handleGameEnd(): void {
   );
 
   // カットイン表示（自動消滅タイマー付き）
-  showCutin();
+  showCutin(cutinType.value);
 }
 
 // 待った機能（2手戻す）
@@ -276,7 +224,7 @@ function handleRematch(): void {
   if (appStore.cpuDifficulty && appStore.cpuPlayerFirst !== null) {
     cpuGameStore.startGame(appStore.cpuDifficulty, appStore.cpuPlayerFirst);
     clearForbiddenMark();
-    isCutinVisible.value = false;
+    hideCutin();
 
     // キャラクター初期化とゲーム開始セリフ
     initCharacter(appStore.cpuDifficulty);
