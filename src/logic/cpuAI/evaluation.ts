@@ -1340,10 +1340,25 @@ export function evaluatePosition(
       }
     }
 
-    // 相手の活三を止めない手は除外（活四がある場合は活四優先）
+    // 相手の止め四を止めない手は除外（活四がある場合は活四優先）
+    if (
+      threats.fours.length > 0 &&
+      threats.openFours.length === 0 &&
+      !canWinFirst
+    ) {
+      const isDefendingFour = threats.fours.some(
+        (p) => p.row === row && p.col === col,
+      );
+      if (!isDefendingFour) {
+        return -Infinity;
+      }
+    }
+
+    // 相手の活三を止めない手は除外（活四・止め四がある場合はそちらを優先）
     if (
       threats.openThrees.length > 0 &&
       threats.openFours.length === 0 &&
+      threats.fours.length === 0 &&
       !canWinFirst
     ) {
       const isDefendingOpenThree = threats.openThrees.some(
