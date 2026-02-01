@@ -99,3 +99,80 @@ describe("VCT_STONE_THRESHOLD", () => {
     expect(VCT_STONE_THRESHOLD).toBe(20);
   });
 });
+
+describe("石数閾値の動作", () => {
+  it("20石未満の盤面でもVCT探索は実行される（即VCF判定のみ）", () => {
+    // 活三の状態（VCFでもある）
+    const board = createBoardWithStones([
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+    ]);
+    // 石数は3個で20未満だが、VCFがあるのでVCT成立
+    expect(countStones(board)).toBe(3);
+    expect(hasVCT(board, "black")).toBe(true);
+  });
+
+  it("20石以上の盤面ではVCT探索が実行される", () => {
+    // 20石以上の盤面を作成
+    const stones: { row: number; col: number; color: "black" | "white" }[] = [];
+    // 交互に石を配置（VCFにならない形で）
+    for (let i = 0; i < 10; i++) {
+      stones.push({ row: 0, col: i, color: "black" });
+      stones.push({ row: 14, col: i, color: "white" });
+    }
+    // 黒の活三を追加
+    stones.push({ row: 7, col: 5, color: "black" });
+    stones.push({ row: 7, col: 6, color: "black" });
+    stones.push({ row: 7, col: 7, color: "black" });
+
+    const board = createBoardWithStones(stones);
+    expect(countStones(board)).toBeGreaterThanOrEqual(20);
+    expect(hasVCT(board, "black")).toBe(true);
+  });
+});
+
+describe("VCTゴールデンテスト", () => {
+  // 既存の振る舞いを保証するスナップショットテスト
+  const testCases = [
+    {
+      name: "空の盤面はVCTなし",
+      stones: [] as { row: number; col: number; color: "black" | "white" }[],
+      color: "black" as const,
+      expected: false,
+    },
+    {
+      name: "黒の活三からVCT成立（VCF ⊂ VCT）",
+      stones: [
+        { row: 7, col: 5, color: "black" as const },
+        { row: 7, col: 6, color: "black" as const },
+        { row: 7, col: 7, color: "black" as const },
+      ],
+      color: "black" as const,
+      expected: true,
+    },
+    {
+      name: "白の斜め活三からVCT成立",
+      stones: [
+        { row: 5, col: 5, color: "white" as const },
+        { row: 6, col: 6, color: "white" as const },
+        { row: 7, col: 7, color: "white" as const },
+      ],
+      color: "white" as const,
+      expected: true,
+    },
+    {
+      name: "1石だけではVCTなし",
+      stones: [{ row: 7, col: 7, color: "black" as const }],
+      color: "black" as const,
+      expected: false,
+    },
+  ];
+
+  testCases.forEach(({ name, stones, color, expected }) => {
+    it(name, () => {
+      const board = createBoardWithStones(stones);
+      expect(hasVCT(board, color)).toBe(expected);
+    });
+  });
+});

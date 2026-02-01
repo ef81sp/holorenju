@@ -17,6 +17,7 @@ import {
   isValidPosition,
 } from "@/logic/renjuRules";
 
+import { DIRECTION_INDICES, DIRECTIONS } from "./core/constants";
 import { isNearExistingStone } from "./moveGenerator";
 import { hasVCF } from "./vcf";
 
@@ -25,21 +26,6 @@ const VCT_MAX_DEPTH = 4;
 
 /** VCT探索を有効にする石数の閾値（終盤のみ） */
 export const VCT_STONE_THRESHOLD = 20;
-
-/**
- * 4方向のベクトル
- */
-const DIRECTIONS: [number, number][] = [
-  [0, 1], // 横（右）
-  [1, 0], // 縦（下）
-  [1, 1], // 右下斜め
-  [1, -1], // 右上斜め
-];
-
-/**
- * 4方向のペアインデックス（renjuRules.tsのDIRECTIONSに対応）
- */
-const DIRECTION_INDICES = [2, 0, 3, 1] as const;
 
 /**
  * VCT（三・四連続勝ち）が成立するかチェック
@@ -662,17 +648,5 @@ function getJumpThreeDefensePositions(
   return positions;
 }
 
-/**
- * 盤面の石数をカウント
- */
-export function countStones(board: BoardState): number {
-  let count = 0;
-  for (let row = 0; row < BOARD_SIZE; row++) {
-    for (let col = 0; col < BOARD_SIZE; col++) {
-      if (board[row]?.[col] !== null) {
-        count++;
-      }
-    }
-  }
-  return count;
-}
+// 後方互換性のため core/boardUtils から再export
+export { countStones } from "./core/boardUtils";

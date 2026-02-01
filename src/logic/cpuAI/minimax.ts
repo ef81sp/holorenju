@@ -8,6 +8,7 @@ import type { BoardState, Position, StoneColor } from "@/types/game";
 
 import { checkWin } from "@/logic/renjuRules";
 
+import { applyMove, countStones, getOppositeColor } from "./core/boardUtils";
 import {
   DEFAULT_EVAL_OPTIONS,
   detectOpponentThreats,
@@ -31,7 +32,6 @@ import {
   TranspositionTable,
   type ScoreType,
 } from "./transpositionTable";
-import { applyMove, getOppositeColor } from "./utils";
 import { findVCFMove } from "./vcf";
 import { computeBoardHash, updateHash } from "./zobrist";
 
@@ -41,21 +41,6 @@ const INFINITY = 1000000;
 // =============================================================================
 // 動的時間配分
 // =============================================================================
-
-/**
- * 盤面上の石の数を数える
- */
-function countStones(board: BoardState): number {
-  let count = 0;
-  for (let row = 0; row < 15; row++) {
-    for (let col = 0; col < 15; col++) {
-      if (board[row]?.[col]) {
-        count++;
-      }
-    }
-  }
-  return count;
-}
 
 /**
  * 動的時間配分の計算

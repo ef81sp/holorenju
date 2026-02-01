@@ -16,9 +16,9 @@ import {
   checkWin,
   createEmptyBoard,
 } from "../../renjuRules.ts";
+import { applyMove, countStones } from "../core/boardUtils.ts";
 import { findBestMoveIterativeWithTT } from "../minimax.ts";
 import { getOpeningMove, isOpeningPhase } from "../opening.ts";
-import { applyMove, countStones } from "../utils.ts";
 
 /**
  * プレイヤー設定

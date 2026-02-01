@@ -17,8 +17,10 @@ import {
   isValidPosition,
 } from "@/logic/renjuRules";
 
+import { countStones } from "./core/boardUtils";
+import { DIRECTION_INDICES, DIRECTIONS } from "./core/constants";
 import { hasVCF } from "./vcf";
-import { countStones, hasVCT, VCT_STONE_THRESHOLD } from "./vct";
+import { hasVCT, VCT_STONE_THRESHOLD } from "./vct";
 
 /**
  * パターンスコア定数
@@ -114,24 +116,6 @@ export const PATTERN_SCORES = {
   /** 斜め方向ボーナス係数（斜め連は隣接空き点が多く効率が良い） */
   DIAGONAL_BONUS_MULTIPLIER: 1.05,
 } as const;
-
-/**
- * 4方向のベクトル
- * [dr, dc]: 行方向, 列方向
- */
-const DIRECTIONS: [number, number][] = [
-  [0, 1], // 横（右）
-  [1, 0], // 縦（下）
-  [1, 1], // 右下斜め
-  [1, -1], // 右上斜め
-];
-
-/**
- * 4方向のペアインデックス（renjuRules.tsのDIRECTIONSに対応）
- * renjuRules.tsの方向: 0=上, 1=右上, 2=右, 3=右下, 4=下, 5=左下, 6=左, 7=左上
- * ペア: [0,4]=縦, [2,6]=横, [1,5]=右上-左下, [3,7]=右下-左上
- */
-const DIRECTION_INDICES = [2, 0, 3, 1] as const; // 横, 縦, 右下斜め, 右上斜め（DIRECTIONSに対応）
 
 /**
  * 端の状態

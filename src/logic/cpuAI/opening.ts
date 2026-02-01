@@ -10,7 +10,7 @@ import type { BoardState, Position } from "@/types/game";
 
 import { BOARD_SIZE, TENGEN } from "@/constants";
 
-import { countStones, selectRandom } from "./utils";
+import { countStones, selectRandom } from "./core/boardUtils";
 
 // TENGENをre-exportして後方互換性を維持
 export { TENGEN } from "@/constants";

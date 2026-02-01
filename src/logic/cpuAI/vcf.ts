@@ -16,25 +16,11 @@ import {
   isValidPosition,
 } from "@/logic/renjuRules";
 
+import { DIRECTION_INDICES, DIRECTIONS } from "./core/constants";
 import { isNearExistingStone } from "./moveGenerator";
 
 /** VCF探索の最大深度 */
 const VCF_MAX_DEPTH = 8;
-
-/**
- * 4方向のベクトル
- */
-const DIRECTIONS: [number, number][] = [
-  [0, 1], // 横（右）
-  [1, 0], // 縦（下）
-  [1, 1], // 右下斜め
-  [1, -1], // 右上斜め
-];
-
-/**
- * 4方向のペアインデックス（renjuRules.tsのDIRECTIONSに対応）
- */
-const DIRECTION_INDICES = [2, 0, 3, 1] as const;
 
 /**
  * VCFが成立するかチェック
@@ -186,8 +172,9 @@ function findVCFMoveRecursive(
 
 /**
  * 四を作れる位置を列挙
+ * @internal テスト用にexport
  */
-function findFourMoves(
+export function findFourMoves(
   board: BoardState,
   color: "black" | "white",
 ): Position[] {
@@ -282,8 +269,9 @@ function createsFour(
 
 /**
  * 指定方向に連続する石の数をカウント
+ * @internal テスト用にexport
  */
-function countLine(
+export function countLine(
   board: BoardState,
   row: number,
   col: number,
@@ -316,8 +304,9 @@ function countLine(
 
 /**
  * 連の両端の状態をチェック
+ * @internal テスト用にexport
  */
-function checkEnds(
+export function checkEnds(
   board: BoardState,
   row: number,
   col: number,
@@ -404,8 +393,9 @@ function getFourDefensePosition(
 
 /**
  * 連続四に対する防御位置を取得
+ * @internal テスト用にexport
  */
-function findDefenseForConsecutiveFour(
+export function findDefenseForConsecutiveFour(
   board: BoardState,
   row: number,
   col: number,
@@ -453,8 +443,9 @@ function findDefenseForConsecutiveFour(
 /**
  * 跳び四に対する防御位置を取得
  * 跳び四は中の空きを埋めるしかない
+ * @internal テスト用にexport
  */
-function findDefenseForJumpFour(
+export function findDefenseForJumpFour(
   board: BoardState,
   row: number,
   col: number,

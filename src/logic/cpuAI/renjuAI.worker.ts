@@ -13,23 +13,9 @@ import {
   type AIResponse,
 } from "@/types/cpu";
 
+import { countStones } from "./core/boardUtils";
 import { findBestMoveIterativeWithTT } from "./minimax";
 import { getOpeningMove, isOpeningPhase } from "./opening";
-
-/**
- * 盤面上の石の数をカウント
- */
-function countStonesOnBoard(board: AIRequest["board"]): number {
-  let count = 0;
-  for (let row = 0; row < 15; row++) {
-    for (let col = 0; col < 15; col++) {
-      if (board[row]?.[col] !== null) {
-        count++;
-      }
-    }
-  }
-  return count;
-}
 
 /**
  * Worker内でのメッセージハンドラ
@@ -42,7 +28,7 @@ self.onmessage = (event: MessageEvent<AIRequest>) => {
   const startTime = performance.now();
 
   try {
-    const moveCount = countStonesOnBoard(request.board);
+    const moveCount = countStones(request.board);
     const currentTurn = request.currentTurn as "black" | "white";
 
     // 開局フェーズかチェック
