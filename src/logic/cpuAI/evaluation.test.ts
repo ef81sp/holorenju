@@ -916,6 +916,74 @@ describe("evaluatePosition - 止め四防御", () => {
   });
 });
 
+describe("evaluatePosition - ミセ手防御", () => {
+  const enableMiseThreatOptions = {
+    enableFukumi: false,
+    enableMise: false,
+    enableForbiddenTrap: false,
+    enableMultiThreat: false,
+    enableCounterFour: false,
+    enableVCT: false,
+    enableMandatoryDefense: true,
+    enableSingleFourPenalty: false,
+    enableMiseThreat: true,
+  };
+
+  it("相手のミセ手を止めない手は-Infinityを返す（他の脅威がない場合）", () => {
+    const board = createEmptyBoard();
+    // 横に-●●- (活三準備、三にならないよう離れた位置)
+    // 縦に-●●- (活三準備)
+    // (7,7)に置くと横に三、縦に三ができて活三+活三 → 片方が四になる構成が必要
+    // 四三になるには一方が「3連の状態から4連」、もう一方が「2連の状態から活三」
+    // 横に●●●-, 縦に-●●-
+    // ただし横の●●●-が活三になってしまうので止め三にする
+    // 止め三にするには片端を塞ぐ
+    placeStonesOnBoard(board, [
+      // 横: 白で止められた止め三 ○●●●- (7行 col 3=白, 4,5,6=黒)
+      { row: 7, col: 3, color: "white" },
+      { row: 7, col: 4, color: "black" },
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      // 縦: -●●- (col 7, row 5,6=黒)
+      { row: 5, col: 7, color: "black" },
+      { row: 6, col: 7, color: "black" },
+    ]);
+    // (7,7)に置くと横に止め四、縦に活三 → 四三
+
+    const score = evaluatePosition(
+      board,
+      0,
+      0,
+      "white",
+      enableMiseThreatOptions,
+    );
+
+    expect(score).toBe(-Infinity);
+  });
+
+  it("相手のミセ手を止める手は有効なスコアを返す", () => {
+    const board = createEmptyBoard();
+    placeStonesOnBoard(board, [
+      { row: 7, col: 3, color: "white" },
+      { row: 7, col: 4, color: "black" },
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 5, col: 7, color: "black" },
+      { row: 6, col: 7, color: "black" },
+    ]);
+
+    const score = evaluatePosition(
+      board,
+      7,
+      7,
+      "white",
+      enableMiseThreatOptions,
+    );
+
+    expect(score).toBeGreaterThan(-Infinity);
+  });
+});
+
 describe("detectOpponentThreats - ミセ手", () => {
   it("次に四三が作れる位置を検出する", () => {
     const board = createEmptyBoard();
