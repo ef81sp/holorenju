@@ -6,14 +6,14 @@ import { describe, expect, it } from "vitest";
 
 import { createEmptyBoard } from "@/logic/renjuRules";
 
-import { DEFAULT_EVAL_OPTIONS, PATTERN_SCORES } from "./evaluation";
+import { DEFAULT_EVAL_OPTIONS, PATTERN_SCORES } from "../evaluation";
+import { placeStonesOnBoard } from "../testUtils";
 import {
   findBestMove,
   findBestMoveIterative,
   findBestMoveIterativeWithTT,
   minimax,
 } from "./minimax";
-import { placeStonesOnBoard } from "./testUtils";
 
 describe("minimax", () => {
   it("深さ0では現在の盤面評価を返す", () => {
@@ -329,8 +329,8 @@ describe("活三防御", () => {
     board[5][5] = "white";
 
     // デバッグ: 候補手を確認
-    const { generateSortedMoves } = await import("./moveGenerator");
-    const { detectOpponentThreats } = await import("./evaluation");
+    const { generateSortedMoves } = await import("../moveGenerator");
+    const { detectOpponentThreats } = await import("../evaluation");
     const { findVCFMove } = await import("./vcf");
 
     // 白にVCFがないことを確認

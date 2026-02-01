@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 
 import { createEmptyBoard } from "@/logic/renjuRules";
 
-import { createBoardWithStones, placeStonesOnBoard } from "./testUtils";
+import { createBoardWithStones, placeStonesOnBoard } from "../testUtils";
 import {
   checkEnds,
   countLine,

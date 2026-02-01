@@ -6,7 +6,7 @@
 
 export { evaluateBoard, evaluatePosition, PATTERN_SCORES } from "./evaluation";
 export { generateMoves, isNearExistingStone } from "./moveGenerator";
-export { findBestMove, minimax, type MinimaxResult } from "./minimax";
+export { findBestMove, minimax, type MinimaxResult } from "./search/minimax";
 export {
   getOpeningMove,
   getOpeningPatternInfo,

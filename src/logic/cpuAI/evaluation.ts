@@ -19,8 +19,8 @@ import {
 
 import { countStones } from "./core/boardUtils";
 import { DIRECTION_INDICES, DIRECTIONS } from "./core/constants";
-import { hasVCF } from "./vcf";
-import { hasVCT, VCT_STONE_THRESHOLD } from "./vct";
+import { hasVCF } from "./search/vcf";
+import { hasVCT, VCT_STONE_THRESHOLD } from "./search/vct";
 
 /**
  * パターンスコア定数

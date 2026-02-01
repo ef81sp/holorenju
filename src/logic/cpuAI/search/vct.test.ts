@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 
 import { createEmptyBoard } from "@/logic/renjuRules";
 
-import { createBoardWithStones } from "./testUtils";
+import { createBoardWithStones } from "../testUtils";
 import { countStones, hasVCT, VCT_STONE_THRESHOLD } from "./vct";
 
 describe("hasVCT", () => {

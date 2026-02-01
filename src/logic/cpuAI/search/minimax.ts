@@ -8,7 +8,7 @@ import type { BoardState, Position, StoneColor } from "@/types/game";
 
 import { checkWin } from "@/logic/renjuRules";
 
-import { applyMove, countStones, getOppositeColor } from "./core/boardUtils";
+import { applyMove, countStones, getOppositeColor } from "../core/boardUtils";
 import {
   DEFAULT_EVAL_OPTIONS,
   detectOpponentThreats,
@@ -16,7 +16,7 @@ import {
   evaluatePosition,
   PATTERN_SCORES,
   type EvaluationOptions,
-} from "./evaluation";
+} from "../evaluation";
 import {
   createHistoryTable,
   createKillerMoves,
@@ -26,14 +26,14 @@ import {
   updateHistory,
   type HistoryTable,
   type KillerMoves,
-} from "./moveGenerator";
+} from "../moveGenerator";
 import {
   globalTT,
   TranspositionTable,
   type ScoreType,
-} from "./transpositionTable";
+} from "../transpositionTable";
+import { computeBoardHash, updateHash } from "../zobrist";
 import { findVCFMove } from "./vcf";
-import { computeBoardHash, updateHash } from "./zobrist";
 
 /** 無限大の代わりに使う大きな値 */
 const INFINITY = 1000000;

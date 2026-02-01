@@ -16,13 +16,13 @@ import {
   copyBoard,
 } from "@/logic/renjuRules";
 
-import { DIRECTION_INDICES, DIRECTIONS } from "./core/constants";
-import { checkEnds, countLine, getLineEnds } from "./core/lineAnalysis";
-import { isNearExistingStone } from "./moveGenerator";
+import { DIRECTION_INDICES, DIRECTIONS } from "../core/constants";
+import { checkEnds, countLine, getLineEnds } from "../core/lineAnalysis";
+import { isNearExistingStone } from "../moveGenerator";
 import {
   findJumpGapPosition,
   getJumpThreeDefensePositions,
-} from "./patterns/threatAnalysis";
+} from "../patterns/threatAnalysis";
 import { hasVCF } from "./vcf";
 
 /** VCT探索の最大深度 */
@@ -355,4 +355,4 @@ function getThreatDefensePositions(
 }
 
 // 後方互換性のため core/boardUtils から再export
-export { countStones } from "./core/boardUtils";
+export { countStones } from "../core/boardUtils";

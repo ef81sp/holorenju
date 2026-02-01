@@ -16,13 +16,13 @@ import {
   isValidPosition,
 } from "@/logic/renjuRules";
 
-import { DIRECTION_INDICES, DIRECTIONS } from "./core/constants";
-import { checkEnds, countLine } from "./core/lineAnalysis";
-import { isNearExistingStone } from "./moveGenerator";
-import { findJumpGapPosition } from "./patterns/threatAnalysis";
+import { DIRECTION_INDICES, DIRECTIONS } from "../core/constants";
+import { checkEnds, countLine } from "../core/lineAnalysis";
+import { isNearExistingStone } from "../moveGenerator";
+import { findJumpGapPosition } from "../patterns/threatAnalysis";
 
 // 後方互換性のためライン解析関数を再export
-export { checkEnds, countLine } from "./core/lineAnalysis";
+export { checkEnds, countLine } from "../core/lineAnalysis";
 
 /** VCF探索の最大深度 */
 const VCF_MAX_DEPTH = 8;

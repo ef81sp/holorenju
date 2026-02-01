@@ -14,8 +14,8 @@ import {
 } from "@/types/cpu";
 
 import { countStones } from "./core/boardUtils";
-import { findBestMoveIterativeWithTT } from "./minimax";
 import { getOpeningMove, isOpeningPhase } from "./opening";
+import { findBestMoveIterativeWithTT } from "./search/minimax";
 
 /**
  * Worker内でのメッセージハンドラ
