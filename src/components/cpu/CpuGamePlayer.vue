@@ -18,6 +18,7 @@ import CharacterSprite from "@/components/character/CharacterSprite.vue";
 import CpuGameStatus from "./CpuGameStatus.vue";
 import CpuCharacterPanel from "./CpuCharacterPanel.vue";
 import CpuRecordDialog from "./CpuRecordDialog.vue";
+import CpuAIDebugInfo from "./CpuAIDebugInfo.vue";
 import { useCpuPlayer } from "./composables/useCpuPlayer";
 import { useCpuDialogue } from "./composables/useCpuDialogue";
 import { useForbiddenMark } from "./composables/useForbiddenMark";
@@ -27,6 +28,7 @@ import { useCpuGameStore } from "@/stores/cpuGameStore";
 import { useCpuRecordStore } from "@/stores/cpuRecordStore";
 import { useBoardStore } from "@/stores/boardStore";
 import { useDialogStore } from "@/stores/dialogStore";
+import { usePreferencesStore } from "@/stores/preferencesStore";
 import { checkForbiddenMove } from "@/logic/renjuRules";
 import type { BattleResult } from "@/types/cpu";
 import type { Position } from "@/types/game";
@@ -36,9 +38,10 @@ const cpuGameStore = useCpuGameStore();
 const cpuRecordStore = useCpuRecordStore();
 const boardStore = useBoardStore();
 const dialogStore = useDialogStore();
+const preferencesStore = usePreferencesStore();
 
 // CPU Player (Web Worker経由)
-const { isThinking, requestMove } = useCpuPlayer();
+const { isThinking, lastResponse, requestMove } = useCpuPlayer();
 
 // セリフ・表情管理
 const { cpuCharacter, currentEmotion, showDialogue, initCharacter } =
@@ -330,6 +333,12 @@ const gameEndMessage = computed(() => {
               もう一度
             </button>
           </div>
+
+          <!-- AIデバッグ情報 -->
+          <CpuAIDebugInfo
+            v-if="preferencesStore.showAIInfo"
+            :response="lastResponse"
+          />
 
           <!-- ゲーム終了時のメッセージ -->
           <div

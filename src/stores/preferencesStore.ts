@@ -19,6 +19,9 @@ interface Preferences {
   display: {
     textSize: TextSize;
   };
+  debug: {
+    showAIInfo: boolean;
+  };
 }
 
 const defaultPreferences: Preferences = {
@@ -29,6 +32,9 @@ const defaultPreferences: Preferences = {
   },
   display: {
     textSize: "normal",
+  },
+  debug: {
+    showAIInfo: false,
   },
 };
 
@@ -79,6 +85,9 @@ interface OldPreferences {
   display?: {
     textSize?: TextSize;
   };
+  debug?: {
+    showAIInfo?: boolean;
+  };
 }
 
 function migrateFromOldFormat(parsed: OldPreferences): Preferences {
@@ -93,6 +102,7 @@ function migrateFromOldFormat(parsed: OldPreferences): Preferences {
         effectSpeed: animation.effectSpeed,
       },
       display: { ...defaultPreferences.display, ...parsed.display },
+      debug: { ...defaultPreferences.debug, ...parsed.debug },
     };
   }
 
@@ -122,6 +132,7 @@ function migrateFromOldFormat(parsed: OldPreferences): Preferences {
       effectSpeed: newEffectSpeed,
     },
     display: { ...defaultPreferences.display, ...parsed.display },
+    debug: { ...defaultPreferences.debug, ...parsed.debug },
   };
 }
 
@@ -171,6 +182,11 @@ export const usePreferencesStore = defineStore("preferences", () => {
   const textSize = computed({
     get: () => preferences.value.display.textSize,
     set: (v) => (preferences.value.display.textSize = v),
+  });
+
+  const showAIInfo = computed({
+    get: () => preferences.value.debug.showAIInfo,
+    set: (v) => (preferences.value.debug.showAIInfo = v),
   });
 
   // 速度倍率
@@ -232,6 +248,7 @@ export const usePreferencesStore = defineStore("preferences", () => {
     speed,
     effectSpeed,
     textSize,
+    showAIInfo,
     // 速度倍率
     speedMultiplier,
     effectSpeedMultiplier,

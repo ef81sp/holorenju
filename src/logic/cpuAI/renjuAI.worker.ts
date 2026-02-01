@@ -75,11 +75,35 @@ self.onmessage = (event: MessageEvent<AIRequest>) => {
     const endTime = performance.now();
     const thinkingTime = Math.round(endTime - startTime);
 
+    // 候補手を上位5手に制限（通信オーバーヘッド削減）
+    const candidates = result.candidates?.slice(0, 5).map((entry, index) => ({
+      position: entry.move,
+      score: entry.score,
+      rank: index + 1,
+    }));
+
+    // 深度履歴を変換
+    const depthHistory = result.depthHistory?.map((entry) => ({
+      depth: entry.depth,
+      position: entry.position,
+      score: entry.score,
+    }));
+
     const response: AIResponse = {
       position: result.position,
       score: result.score,
       thinkingTime,
       depth: result.completedDepth,
+      candidates,
+      randomSelection: result.randomSelection
+        ? {
+            wasRandom: result.randomSelection.wasRandom,
+            originalRank: result.randomSelection.originalRank,
+            candidateCount: result.randomSelection.candidateCount,
+            randomFactor: params.randomFactor,
+          }
+        : undefined,
+      depthHistory,
     };
 
     self.postMessage(response);

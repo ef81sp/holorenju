@@ -136,6 +136,44 @@ export interface AIRequest {
 }
 
 /**
+ * 候補手情報（デバッグ表示用）
+ */
+export interface CandidateMove {
+  /** 着手位置 */
+  position: Position;
+  /** 評価スコア */
+  score: number;
+  /** 順位（1始まり） */
+  rank: number;
+}
+
+/**
+ * ランダム選択情報（デバッグ表示用）
+ */
+export interface RandomSelectionInfo {
+  /** ランダム選択が発生したか */
+  wasRandom: boolean;
+  /** 選択された手の元の順位（1始まり） */
+  originalRank: number;
+  /** 選択対象の候補数 */
+  candidateCount: number;
+  /** 設定されたランダム係数 */
+  randomFactor: number;
+}
+
+/**
+ * 深度別の最善手情報（デバッグ表示用）
+ */
+export interface DepthResult {
+  /** 探索深度 */
+  depth: number;
+  /** 最善手の位置 */
+  position: Position;
+  /** 評価スコア */
+  score: number;
+}
+
+/**
  * AI着手レスポンス（Worker通信用）
  */
 export interface AIResponse {
@@ -147,6 +185,12 @@ export interface AIResponse {
   thinkingTime: number;
   /** 探索深度 */
   depth: number;
+  /** 候補手リスト（デバッグ用、上位5手） */
+  candidates?: CandidateMove[];
+  /** ランダム選択情報（デバッグ用） */
+  randomSelection?: RandomSelectionInfo;
+  /** 深度別の最善手履歴（デバッグ用） */
+  depthHistory?: DepthResult[];
 }
 
 /**

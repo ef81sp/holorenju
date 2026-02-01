@@ -97,6 +97,28 @@ const LMR_REDUCTION = 1;
 const ASPIRATION_WINDOW = 50;
 
 /**
+ * 候補手のスコア情報
+ */
+export interface MoveScoreEntry {
+  /** 着手位置 */
+  move: Position;
+  /** 評価スコア */
+  score: number;
+}
+
+/**
+ * ランダム選択情報
+ */
+export interface RandomSelectionResult {
+  /** ランダム選択が発生したか */
+  wasRandom: boolean;
+  /** 選択された手の元の順位（1始まり） */
+  originalRank: number;
+  /** 選択対象の候補数 */
+  candidateCount: number;
+}
+
+/**
  * Minimax探索結果
  */
 export interface MinimaxResult {
@@ -104,6 +126,10 @@ export interface MinimaxResult {
   position: Position;
   /** 評価スコア */
   score: number;
+  /** 候補手のスコアリスト（ソート済み） */
+  candidates?: MoveScoreEntry[];
+  /** ランダム選択情報 */
+  randomSelection?: RandomSelectionResult;
 }
 
 /**
@@ -334,6 +360,18 @@ export function findBestMove(
 }
 
 /**
+ * 深度別の最善手情報
+ */
+export interface DepthHistoryEntry {
+  /** 探索深度 */
+  depth: number;
+  /** 最善手の位置 */
+  position: Position;
+  /** 評価スコア */
+  score: number;
+}
+
+/**
  * Iterative Deepening結果
  */
 export interface IterativeDeepingResult extends MinimaxResult {
@@ -343,6 +381,8 @@ export interface IterativeDeepingResult extends MinimaxResult {
   interrupted: boolean;
   /** 経過時間（ミリ秒） */
   elapsedTime: number;
+  /** 深度別の最善手履歴 */
+  depthHistory?: DepthHistoryEntry[];
 }
 
 /**
@@ -773,24 +813,22 @@ export function findBestMoveWithTT(
         ctx,
       };
     }
+    const score = evaluatePosition(
+      board,
+      move.row,
+      move.col,
+      color,
+      ctx.evaluationOptions,
+    );
     return {
       position: move,
-      score: evaluatePosition(
-        board,
-        move.row,
-        move.col,
-        color,
-        ctx.evaluationOptions,
-      ),
+      score,
+      candidates: [{ move, score }],
       ctx,
     };
   }
 
-  interface MoveScore {
-    move: Position;
-    score: number;
-  }
-  const moveScores: MoveScore[] = [];
+  const moveScores: MoveScoreEntry[] = [];
 
   // Aspiration Windows: 前回のスコアをもとにウィンドウを設定
   const windowSize = aspiration?.windowSize ?? ASPIRATION_WINDOW;
@@ -838,6 +876,12 @@ export function findBestMoveWithTT(
       return {
         position: selected.move,
         score: selected.score,
+        candidates: moveScores,
+        randomSelection: {
+          wasRandom: true,
+          originalRank: randomIndex + 1,
+          candidateCount: topN,
+        },
         ctx,
       };
     }
@@ -855,6 +899,12 @@ export function findBestMoveWithTT(
   return {
     position: best.move,
     score: best.score,
+    candidates: moveScores,
+    randomSelection: {
+      wasRandom: false,
+      originalRank: 1,
+      candidateCount: moveScores.length,
+    },
     ctx,
   };
 }
@@ -1005,6 +1055,9 @@ export function findBestMoveIterativeWithTT(
     };
   }
 
+  // 深度履歴を記録
+  const depthHistory: DepthHistoryEntry[] = [];
+
   // 初期結果（深さ1で必ず結果を得る）
   // 活三防御時はmovesが防御位置のみに制限されているので、それを渡す
   let bestResult = findBestMoveWithTT(
@@ -1018,6 +1071,13 @@ export function findBestMoveIterativeWithTT(
   );
   let completedDepth = 1;
   let interrupted = false;
+
+  // 深度1の結果を記録
+  depthHistory.push({
+    depth: 1,
+    position: bestResult.position,
+    score: bestResult.score,
+  });
 
   // 深さ2から開始して、時間制限内で可能な限り深く探索
   for (let depth = 2; depth <= maxDepth; depth++) {
@@ -1075,6 +1135,13 @@ export function findBestMoveIterativeWithTT(
       }
     }
 
+    // 深度履歴に記録
+    depthHistory.push({
+      depth,
+      position: result.position,
+      score: result.score,
+    });
+
     const currentTime = performance.now() - startTime;
     if (currentTime >= dynamicTimeLimit) {
       bestResult = result;
@@ -1090,9 +1157,12 @@ export function findBestMoveIterativeWithTT(
   return {
     position: bestResult.position,
     score: bestResult.score,
+    candidates: bestResult.candidates,
+    randomSelection: bestResult.randomSelection,
     completedDepth,
     interrupted,
     elapsedTime: performance.now() - startTime,
+    depthHistory,
     stats: ctx.stats,
   };
 }
