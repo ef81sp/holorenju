@@ -822,6 +822,8 @@ export interface ThreatInfo {
   fours: { row: number; col: number }[];
   /** 活三の防御位置 */
   openThrees: { row: number; col: number }[];
+  /** ミセ手（次に四三が作れる位置） */
+  mises: { row: number; col: number }[];
 }
 
 /**
@@ -839,6 +841,7 @@ export function detectOpponentThreats(
     openFours: [],
     fours: [],
     openThrees: [],
+    mises: [],
   };
 
   // 相手の石を全て走査
@@ -959,6 +962,16 @@ export function detectOpponentThreats(
             }
           }
         }
+      }
+    }
+  }
+
+  // 相手のミセ手（次に四三が作れる位置）を検出
+  for (let r = 0; r < 15; r++) {
+    for (let c = 0; c < 15; c++) {
+      if (board[r]?.[c] !== null) continue;
+      if (createsFourThree(board, r, c, opponentColor)) {
+        result.mises.push({ row: r, col: c });
       }
     }
   }

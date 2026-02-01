@@ -919,8 +919,11 @@ describe("evaluatePosition - 止め四防御", () => {
 describe("detectOpponentThreats - ミセ手", () => {
   it("次に四三が作れる位置を検出する", () => {
     const board = createEmptyBoard();
-    // ●●- + -●●（交差点で四三が作れる）
+    // 横に●●●- (四になる準備)
+    // 縦に-●●- (活三になる準備)
+    // (7,7)に置くと横に四、縦に活三ができる = 四三
     placeStonesOnBoard(board, [
+      { row: 7, col: 4, color: "black" },
       { row: 7, col: 5, color: "black" },
       { row: 7, col: 6, color: "black" },
       { row: 5, col: 7, color: "black" },
