@@ -973,7 +973,7 @@ export function detectOpponentThreats(
   // 相手のミセ手（次に四三が作れる位置）を検出
   for (let r = 0; r < 15; r++) {
     for (let c = 0; c < 15; c++) {
-      if (board[r]?.[c] !== null) continue;
+      if (board[r]?.[c] !== null) {continue;}
       if (createsFourThree(board, r, c, opponentColor)) {
         result.mises.push({ row: r, col: c });
       }

@@ -67,6 +67,7 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
       enableVCT: false,
       enableMandatoryDefense: false,
       enableSingleFourPenalty: false,
+      enableMiseThreat: false,
     },
   },
   easy: {
@@ -83,6 +84,7 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
       enableVCT: false,
       enableMandatoryDefense: true,
       enableSingleFourPenalty: false,
+      enableMiseThreat: false,
     },
   },
   medium: {
@@ -99,6 +101,7 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
       enableVCT: false,
       enableMandatoryDefense: true,
       enableSingleFourPenalty: true,
+      enableMiseThreat: true,
     },
   },
   hard: {
@@ -115,6 +118,7 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
       enableVCT: true,
       enableMandatoryDefense: true,
       enableSingleFourPenalty: true,
+      enableMiseThreat: true,
     },
   },
 };

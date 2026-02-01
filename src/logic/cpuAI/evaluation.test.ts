@@ -466,6 +466,7 @@ describe("複数方向脅威ボーナス", () => {
       enableVCT: false,
       enableMandatoryDefense: false,
       enableSingleFourPenalty: false,
+      enableMiseThreat: false,
     });
 
     // enableMultiThreat無効時のスコア
@@ -478,6 +479,7 @@ describe("複数方向脅威ボーナス", () => {
       enableVCT: false,
       enableMandatoryDefense: false,
       enableSingleFourPenalty: false,
+      enableMiseThreat: false,
     });
 
     // ボーナス有効時の方が高スコア
@@ -505,6 +507,7 @@ describe("複数方向脅威ボーナス", () => {
       enableVCT: false,
       enableMandatoryDefense: false,
       enableSingleFourPenalty: false,
+      enableMiseThreat: false,
     });
 
     const scoreWithoutBonus = evaluatePosition(board, 7, 8, "black", {
@@ -516,6 +519,7 @@ describe("複数方向脅威ボーナス", () => {
       enableVCT: false,
       enableMandatoryDefense: false,
       enableSingleFourPenalty: false,
+      enableMiseThreat: false,
     });
 
     // 1方向のみなので差がほぼ0
@@ -548,6 +552,7 @@ describe("カウンターフォー", () => {
       enableVCT: false,
       enableMandatoryDefense: false,
       enableSingleFourPenalty: false,
+      enableMiseThreat: false,
     });
 
     // enableCounterFour無効時のスコア
@@ -560,6 +565,7 @@ describe("カウンターフォー", () => {
       enableVCT: false,
       enableMandatoryDefense: false,
       enableSingleFourPenalty: false,
+      enableMiseThreat: false,
     });
 
     // カウンターフォー有効時の方が高スコア（防御スコアが1.5倍）
@@ -583,6 +589,7 @@ describe("カウンターフォー", () => {
       enableVCT: false,
       enableMandatoryDefense: false,
       enableSingleFourPenalty: false,
+      enableMiseThreat: false,
     });
 
     const scoreWithoutCounter = evaluatePosition(board, 5, 8, "black", {
@@ -594,6 +601,7 @@ describe("カウンターフォー", () => {
       enableVCT: false,
       enableMandatoryDefense: false,
       enableSingleFourPenalty: false,
+      enableMiseThreat: false,
     });
 
     // 自分が四を作らないのでスコアは同じ
@@ -666,6 +674,7 @@ describe("必須防御ルール", () => {
     enableVCT: false,
     enableMandatoryDefense: true,
     enableSingleFourPenalty: false,
+    enableMiseThreat: false,
   };
 
   it("相手の活四を止めない手は-Infinityになる", () => {
@@ -785,6 +794,7 @@ describe("単発四ペナルティ", () => {
     enableVCT: false,
     enableMandatoryDefense: false,
     enableSingleFourPenalty: true,
+    enableMiseThreat: false,
   };
 
   it("後続脅威がない四は低評価される", () => {
@@ -873,6 +883,7 @@ describe("evaluatePosition - 止め四防御", () => {
     enableVCT: false,
     enableMandatoryDefense: true,
     enableSingleFourPenalty: false,
+    enableMiseThreat: false,
   };
 
   it("相手の止め四を止めない手は-Infinityを返す", () => {
