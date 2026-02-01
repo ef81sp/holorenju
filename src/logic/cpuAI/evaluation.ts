@@ -40,6 +40,12 @@ export interface EvaluationOptions {
   enableCounterFour: boolean;
   /** VCT（三・四連続勝ち）探索を有効にするか */
   enableVCT: boolean;
+  /** 必須防御ルールを有効にするか（相手の活四・活三を止めない手を除外） */
+  enableMandatoryDefense: boolean;
+  /** 単発四の低評価を有効にするか（後続脅威がない四にペナルティ） */
+  enableSingleFourPenalty: boolean;
+  /** 事前計算された脅威情報（最適化用、ルートノードで計算して渡す） */
+  precomputedThreats?: ThreatInfo;
 }
 
 /**
@@ -52,6 +58,8 @@ export const DEFAULT_EVAL_OPTIONS: EvaluationOptions = {
   enableMultiThreat: false,
   enableCounterFour: false,
   enableVCT: false,
+  enableMandatoryDefense: false,
+  enableSingleFourPenalty: false,
 };
 
 /**
@@ -64,6 +72,8 @@ export const FULL_EVAL_OPTIONS: EvaluationOptions = {
   enableMultiThreat: true,
   enableCounterFour: true,
   enableVCT: true,
+  enableMandatoryDefense: true,
+  enableSingleFourPenalty: true,
 };
 
 export const PATTERN_SCORES = {
@@ -415,14 +425,20 @@ function analyzeJumpPatterns(
     }
 
     // 跳び四をチェック（連続四がない場合のみ）
-    if (pattern.count !== 4 && checkJumpFour(board, row, col, dirIndex)) {
+    if (
+      pattern.count !== 4 &&
+      checkJumpFour(board, row, col, dirIndex, color)
+    ) {
       result.hasFour = true;
       result.jumpFourCount++;
       // 跳び四は両端開の形がないので、常に止め四扱い
     }
 
     // 跳び三をチェック（連続三がない場合のみ）
-    if (pattern.count !== 3 && checkJumpThree(board, row, col, dirIndex)) {
+    if (
+      pattern.count !== 3 &&
+      checkJumpThree(board, row, col, dirIndex, color)
+    ) {
       result.hasJumpThree = true;
       // 白番ならウソの三チェック不要、黒番なら達四点が禁点でないかチェック
       if (color === "white" || isValidJumpThree(board, row, col, dirIndex)) {
@@ -490,13 +506,19 @@ function countThreatDirections(
     }
 
     // 跳び四をチェック（連続四がない場合のみ）
-    if (pattern.count !== 4 && checkJumpFour(board, row, col, dirIndex)) {
+    if (
+      pattern.count !== 4 &&
+      checkJumpFour(board, row, col, dirIndex, color)
+    ) {
       threatCount++;
       continue;
     }
 
     // 跳び三をチェック（連続三がない場合のみ）
-    if (pattern.count !== 3 && checkJumpThree(board, row, col, dirIndex)) {
+    if (
+      pattern.count !== 3 &&
+      checkJumpThree(board, row, col, dirIndex, color)
+    ) {
       if (color === "white" || isValidJumpThree(board, row, col, dirIndex)) {
         threatCount++;
       }
@@ -566,12 +588,18 @@ function checkWhiteWinningPattern(
     }
 
     // 跳び三をチェック（連続三がない場合のみ）
-    if (pattern.count !== 3 && checkJumpThree(board, row, col, dirIndex)) {
+    if (
+      pattern.count !== 3 &&
+      checkJumpThree(board, row, col, dirIndex, "white")
+    ) {
       openThreeCount++;
     }
 
     // 跳び四をチェック（連続四がない場合のみ）
-    if (pattern.count !== 4 && checkJumpFour(board, row, col, dirIndex)) {
+    if (
+      pattern.count !== 4 &&
+      checkJumpFour(board, row, col, dirIndex, "white")
+    ) {
       fourCount++;
     }
   }
@@ -801,6 +829,397 @@ function isFukumiMove(board: BoardState, color: "black" | "white"): boolean {
 }
 
 /**
+ * 相手の脅威情報
+ */
+export interface ThreatInfo {
+  /** 活四の防御位置（両端空き = 防御不可） */
+  openFours: { row: number; col: number }[];
+  /** 止め四の防御位置（片側空き = 1点で防御可） */
+  fours: { row: number; col: number }[];
+  /** 活三の防御位置 */
+  openThrees: { row: number; col: number }[];
+}
+
+/**
+ * 相手の脅威（活四・活三）を検出
+ *
+ * @param board 盤面
+ * @param opponentColor 相手の色
+ * @returns 脅威情報（活四・活三の防御位置）
+ */
+export function detectOpponentThreats(
+  board: BoardState,
+  opponentColor: "black" | "white",
+): ThreatInfo {
+  const result: ThreatInfo = {
+    openFours: [],
+    fours: [],
+    openThrees: [],
+  };
+
+  // 相手の石を全て走査
+  for (let row = 0; row < 15; row++) {
+    for (let col = 0; col < 15; col++) {
+      if (board[row]?.[col] !== opponentColor) {
+        continue;
+      }
+
+      // 各方向をチェック
+      for (const [dr, dc] of DIRECTIONS) {
+        const pattern = analyzeDirection(
+          board,
+          row,
+          col,
+          dr,
+          dc,
+          opponentColor,
+        );
+
+        // 活四をチェック（両端が空いている4連）
+        if (
+          pattern.count === 4 &&
+          pattern.end1 === "empty" &&
+          pattern.end2 === "empty"
+        ) {
+          // 両端の防御位置を追加
+          const defensePositions = getOpenFourDefensePositions(
+            board,
+            row,
+            col,
+            dr,
+            dc,
+            opponentColor,
+          );
+          for (const pos of defensePositions) {
+            // 重複チェック
+            if (
+              !result.openFours.some(
+                (p) => p.row === pos.row && p.col === pos.col,
+              )
+            ) {
+              result.openFours.push(pos);
+            }
+          }
+        }
+
+        // 止め四をチェック（片側だけ空いている4連）
+        if (
+          pattern.count === 4 &&
+          ((pattern.end1 === "empty" && pattern.end2 !== "empty") ||
+            (pattern.end1 !== "empty" && pattern.end2 === "empty"))
+        ) {
+          // 空いている側の防御位置を追加（止め四は1点のみ）
+          const defensePositions = getOpenFourDefensePositions(
+            board,
+            row,
+            col,
+            dr,
+            dc,
+            opponentColor,
+          );
+          for (const pos of defensePositions) {
+            // 重複チェック
+            if (
+              !result.fours.some((p) => p.row === pos.row && p.col === pos.col)
+            ) {
+              result.fours.push(pos);
+            }
+          }
+        }
+
+        // 活三をチェック（両端が空いている3連）
+        if (
+          pattern.count === 3 &&
+          pattern.end1 === "empty" &&
+          pattern.end2 === "empty"
+        ) {
+          // 両端の防御位置を追加
+          const defensePositions = getOpenThreeDefensePositions(
+            board,
+            row,
+            col,
+            dr,
+            dc,
+            opponentColor,
+          );
+          for (const pos of defensePositions) {
+            // 重複チェック
+            if (
+              !result.openThrees.some(
+                (p) => p.row === pos.row && p.col === pos.col,
+              )
+            ) {
+              result.openThrees.push(pos);
+            }
+          }
+        }
+
+        // 跳び三をチェック（連続3石以外のパターン）
+        if (pattern.count < 3) {
+          const jumpDefensePositions = detectJumpThreePattern(
+            board,
+            row,
+            col,
+            dr,
+            dc,
+            opponentColor,
+          );
+          for (const pos of jumpDefensePositions) {
+            // 重複チェック
+            if (
+              !result.openThrees.some(
+                (p) => p.row === pos.row && p.col === pos.col,
+              )
+            ) {
+              result.openThrees.push(pos);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return result;
+}
+
+/**
+ * 活四の防御位置を取得（両端の空きマス）
+ */
+function getOpenFourDefensePositions(
+  board: BoardState,
+  row: number,
+  col: number,
+  dr: number,
+  dc: number,
+  color: "black" | "white",
+): { row: number; col: number }[] {
+  const positions: { row: number; col: number }[] = [];
+
+  // 正方向の端を探す
+  let r = row + dr;
+  let c = col + dc;
+  while (isValidPosition(r, c) && board[r]?.[c] === color) {
+    r += dr;
+    c += dc;
+  }
+  if (isValidPosition(r, c) && board[r]?.[c] === null) {
+    positions.push({ row: r, col: c });
+  }
+
+  // 負方向の端を探す
+  r = row - dr;
+  c = col - dc;
+  while (isValidPosition(r, c) && board[r]?.[c] === color) {
+    r -= dr;
+    c -= dc;
+  }
+  if (isValidPosition(r, c) && board[r]?.[c] === null) {
+    positions.push({ row: r, col: c });
+  }
+
+  return positions;
+}
+
+/**
+ * 活三の防御位置を取得（両端の空きマス）
+ */
+function getOpenThreeDefensePositions(
+  board: BoardState,
+  row: number,
+  col: number,
+  dr: number,
+  dc: number,
+  color: "black" | "white",
+): { row: number; col: number }[] {
+  // 活四と同じロジック（両端の空きマス）
+  return getOpenFourDefensePositions(board, row, col, dr, dc, color);
+}
+
+/**
+ * 跳び三パターンを検出して防御位置を返す
+ *
+ * 跳び三パターン:
+ * - ・●●・●・ (空白, 2石, 空白, 1石, 空白)
+ * - ・●・●●・ (空白, 1石, 空白, 2石, 空白)
+ *
+ * @param board 盤面
+ * @param row 起点行
+ * @param col 起点列
+ * @param dr 行方向
+ * @param dc 列方向
+ * @param color 石の色
+ * @returns 防御位置の配列（跳びの空きマスと両端）
+ */
+function detectJumpThreePattern(
+  board: BoardState,
+  row: number,
+  col: number,
+  dr: number,
+  dc: number,
+  color: "black" | "white",
+): { row: number; col: number }[] {
+  const positions: { row: number; col: number }[] = [];
+
+  // パターン1: ・●●・●・ (起点が2石の先頭)
+  // 位置: [row-dr, col-dc]=空, [row]=色, [row+dr]=色, [row+2dr]=空, [row+3dr]=色, [row+4dr]=空
+  const p1_before = { row: row - dr, col: col - dc };
+  const p1_second = { row: row + dr, col: col + dc };
+  const p1_gap = { row: row + 2 * dr, col: col + 2 * dc };
+  const p1_third = { row: row + 3 * dr, col: col + 3 * dc };
+  const p1_after = { row: row + 4 * dr, col: col + 4 * dc };
+
+  if (
+    isValidPosition(p1_before.row, p1_before.col) &&
+    board[p1_before.row]?.[p1_before.col] === null &&
+    isValidPosition(p1_second.row, p1_second.col) &&
+    board[p1_second.row]?.[p1_second.col] === color &&
+    isValidPosition(p1_gap.row, p1_gap.col) &&
+    board[p1_gap.row]?.[p1_gap.col] === null &&
+    isValidPosition(p1_third.row, p1_third.col) &&
+    board[p1_third.row]?.[p1_third.col] === color &&
+    isValidPosition(p1_after.row, p1_after.col) &&
+    board[p1_after.row]?.[p1_after.col] === null
+  ) {
+    // 防御位置: 間の空きマスと両端（どれが最善かは探索で決める）
+    positions.push(p1_gap, p1_before, p1_after);
+  }
+
+  // パターン2: ・●・●●・ (起点が1石)
+  // 位置: [row-dr]=空, [row]=色, [row+dr]=空, [row+2dr]=色, [row+3dr]=色, [row+4dr]=空
+  const p2_before = { row: row - dr, col: col - dc };
+  const p2_gap = { row: row + dr, col: col + dc };
+  const p2_second = { row: row + 2 * dr, col: col + 2 * dc };
+  const p2_third = { row: row + 3 * dr, col: col + 3 * dc };
+  const p2_after = { row: row + 4 * dr, col: col + 4 * dc };
+
+  if (
+    isValidPosition(p2_before.row, p2_before.col) &&
+    board[p2_before.row]?.[p2_before.col] === null &&
+    isValidPosition(p2_gap.row, p2_gap.col) &&
+    board[p2_gap.row]?.[p2_gap.col] === null &&
+    isValidPosition(p2_second.row, p2_second.col) &&
+    board[p2_second.row]?.[p2_second.col] === color &&
+    isValidPosition(p2_third.row, p2_third.col) &&
+    board[p2_third.row]?.[p2_third.col] === color &&
+    isValidPosition(p2_after.row, p2_after.col) &&
+    board[p2_after.row]?.[p2_after.col] === null
+  ) {
+    // 防御位置: 間の空きマスと両端（どれが最善かは探索で決める）
+    positions.push(p2_gap, p2_before, p2_after);
+  }
+
+  return positions;
+}
+
+/** 単発四ペナルティ倍率（30%に減額） */
+const SINGLE_FOUR_PENALTY_MULTIPLIER = 0.3;
+
+/**
+ * 四を置いた後に後続脅威があるかチェック
+ *
+ * @param board 盤面（四を置いた状態）
+ * @param row 四を置いた行
+ * @param col 四を置いた列
+ * @param color 石の色
+ * @returns 後続脅威があればtrue
+ */
+function hasFollowUpThreat(
+  board: BoardState,
+  row: number,
+  col: number,
+  color: "black" | "white",
+): boolean {
+  const opponentColor = color === "black" ? "white" : "black";
+
+  // 四の防御位置を見つける
+  // 各方向で四を形成しているかチェック
+  for (const [dr, dc] of DIRECTIONS) {
+    const pattern = analyzeDirection(board, row, col, dr, dc, color);
+
+    // 四を形成している場合
+    if (
+      pattern.count === 4 &&
+      (pattern.end1 === "empty" || pattern.end2 === "empty")
+    ) {
+      // 防御位置を取得
+      const defensePositions: { row: number; col: number }[] = [];
+
+      // 正方向の端
+      let r = row + dr;
+      let c = col + dc;
+      while (isValidPosition(r, c) && board[r]?.[c] === color) {
+        r += dr;
+        c += dc;
+      }
+      if (isValidPosition(r, c) && board[r]?.[c] === null) {
+        defensePositions.push({ row: r, col: c });
+      }
+
+      // 負方向の端
+      r = row - dr;
+      c = col - dc;
+      while (isValidPosition(r, c) && board[r]?.[c] === color) {
+        r -= dr;
+        c -= dc;
+      }
+      if (isValidPosition(r, c) && board[r]?.[c] === null) {
+        defensePositions.push({ row: r, col: c });
+      }
+
+      // 各防御位置について、相手が防御した後も脅威があるかチェック
+      for (const defensePos of defensePositions) {
+        // 相手が防御した盤面を作成
+        const defendedBoard = copyBoard(board);
+        const defendedRow = defendedBoard[defensePos.row];
+        if (defendedRow) {
+          defendedRow[defensePos.col] = opponentColor;
+        }
+
+        // 防御後、自分が四または活三を作れる位置があるかチェック
+        // 防御位置の周囲を探索
+        for (let searchDr = -1; searchDr <= 1; searchDr++) {
+          for (let searchDc = -1; searchDc <= 1; searchDc++) {
+            if (searchDr === 0 && searchDc === 0) {
+              continue;
+            }
+            const newRow = defensePos.row + searchDr;
+            const newCol = defensePos.col + searchDc;
+
+            if (!isValidPosition(newRow, newCol)) {
+              continue;
+            }
+            if (defendedBoard[newRow]?.[newCol] !== null) {
+              continue;
+            }
+
+            // この位置で四または活三を作れるかチェック
+            const testBoard = copyBoard(defendedBoard);
+            const testRow = testBoard[newRow];
+            if (testRow) {
+              testRow[newCol] = color;
+            }
+
+            const jumpResult = analyzeJumpPatterns(
+              testBoard,
+              newRow,
+              newCol,
+              color,
+            );
+
+            // 四または活三を作れる
+            if (jumpResult.hasFour || jumpResult.hasValidOpenThree) {
+              return true;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return false;
+}
+
+/**
  * 跳びパターンからスコアを計算
  *
  * @param jumpResult 跳びパターンの分析結果
@@ -914,6 +1333,44 @@ export function evaluatePosition(
     fourThreeBonus = PATTERN_SCORES.FOUR_THREE_BONUS;
   }
 
+  // 必須防御ルール: 相手の活四・活三を止めない手は除外
+  if (options.enableMandatoryDefense) {
+    const opponentColor = color === "black" ? "white" : "black";
+    // 事前計算された脅威情報があればそれを使用（最適化）
+    const threats =
+      options.precomputedThreats ?? detectOpponentThreats(board, opponentColor);
+
+    // 自分が先に勝てるかチェック（活四、四三、またはフクミ手）
+    const canWinFirst =
+      attackScore >= PATTERN_SCORES.OPEN_FOUR ||
+      fourThreeBonus > 0 ||
+      (options.enableFukumi && isFukumiMove(testBoard, color));
+
+    // 相手の活四を止めない手は除外
+    if (threats.openFours.length > 0 && !canWinFirst) {
+      const isDefendingOpenFour = threats.openFours.some(
+        (p) => p.row === row && p.col === col,
+      );
+      if (!isDefendingOpenFour) {
+        return -Infinity;
+      }
+    }
+
+    // 相手の活三を止めない手は除外（活四がある場合は活四優先）
+    if (
+      threats.openThrees.length > 0 &&
+      threats.openFours.length === 0 &&
+      !canWinFirst
+    ) {
+      const isDefendingOpenThree = threats.openThrees.some(
+        (p) => p.row === row && p.col === col,
+      );
+      if (!isDefendingOpenThree) {
+        return -Infinity;
+      }
+    }
+  }
+
   // 禁手追い込みボーナス（白番のみ、オプションで有効時のみ）
   let forbiddenTrapBonus = 0;
   if (options.enableForbiddenTrap && color === "white") {
@@ -954,6 +1411,24 @@ export function evaluatePosition(
     hasVCT(testBoard, color)
   ) {
     vctBonus = PATTERN_SCORES.VCT_BONUS;
+  }
+
+  // 単発四ペナルティ: 四を作るが四三ではなく、後続脅威もない場合
+  let singleFourPenalty = 0;
+  if (options.enableSingleFourPenalty) {
+    // 四を作るが四三ではない場合
+    if (jumpResult.hasFour && !jumpResult.hasValidOpenThree) {
+      // 後続脅威がない場合のみペナルティ
+      if (!hasFollowUpThreat(testBoard, row, col, color)) {
+        // FOURスコアにペナルティ適用（30%に減額 = 70%減）
+        const fourCount =
+          jumpResult.jumpFourCount > 0 ? jumpResult.jumpFourCount : 1;
+        singleFourPenalty =
+          PATTERN_SCORES.FOUR *
+          fourCount *
+          (1 - SINGLE_FOUR_PENALTY_MULTIPLIER);
+      }
+    }
   }
 
   // 防御スコア: 相手の脅威をブロック
@@ -1000,7 +1475,8 @@ export function evaluatePosition(
     miseBonus +
     fukumiBonus +
     multiThreatBonus +
-    vctBonus
+    vctBonus -
+    singleFourPenalty
   );
 }
 

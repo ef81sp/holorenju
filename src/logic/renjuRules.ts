@@ -412,6 +412,7 @@ export function checkJumpThree(
   row: number,
   col: number,
   dirIndex: number,
+  color: "black" | "white",
 ): boolean {
   const dir1 = DIRECTIONS[dirIndex];
   const dir2 = DIRECTIONS[(dirIndex + 4) % 8];
@@ -424,7 +425,7 @@ export function checkJumpThree(
   const testBoard = board.map((r: StoneColor[]) => [...r]);
   const testRow = testBoard[row];
   if (testRow) {
-    testRow[col] = "black";
+    testRow[col] = color;
   }
 
   // 置いた後、その方向のライン全体をスキャンして飛び三パターンを探す
@@ -443,7 +444,7 @@ export function checkJumpThree(
   }
 
   // 置いた位置（インデックス5）
-  lineStones.push("black");
+  lineStones.push(color);
 
   // dir1方向（正の方向）に5マス
   for (let i = 1; i <= 5; i++) {
@@ -467,13 +468,13 @@ export function checkJumpThree(
   for (const offset of [-1, 0]) {
     // 置いた位置が2石の先頭(offset=0)または2番目(offset=-1)
     const startIdx = placedIndex + offset;
-    // パターン: [startIdx-1]=空, [startIdx]=黒, [startIdx+1]=黒, [startIdx+2]=空, [startIdx+3]=黒, [startIdx+4]=空
+    // パターン: [startIdx-1]=空, [startIdx]=石, [startIdx+1]=石, [startIdx+2]=空, [startIdx+3]=石, [startIdx+4]=空
     if (
       lineStones[startIdx - 1] === null &&
-      lineStones[startIdx] === "black" &&
-      lineStones[startIdx + 1] === "black" &&
+      lineStones[startIdx] === color &&
+      lineStones[startIdx + 1] === color &&
       lineStones[startIdx + 2] === null &&
-      lineStones[startIdx + 3] === "black" &&
+      lineStones[startIdx + 3] === color &&
       lineStones[startIdx + 4] === null
     ) {
       // 置いた位置がこのパターンに含まれているか
@@ -488,13 +489,13 @@ export function checkJumpThree(
   for (const offset of [-3, -2, 0]) {
     // 置いた位置が1石(offset=0)、2石の先頭(offset=-3)、2石の2番目(offset=-2)
     const startIdx = placedIndex + offset;
-    // パターン: [startIdx-1]=空, [startIdx]=黒, [startIdx+1]=空, [startIdx+2]=黒, [startIdx+3]=黒, [startIdx+4]=空
+    // パターン: [startIdx-1]=空, [startIdx]=石, [startIdx+1]=空, [startIdx+2]=石, [startIdx+3]=石, [startIdx+4]=空
     if (
       lineStones[startIdx - 1] === null &&
-      lineStones[startIdx] === "black" &&
+      lineStones[startIdx] === color &&
       lineStones[startIdx + 1] === null &&
-      lineStones[startIdx + 2] === "black" &&
-      lineStones[startIdx + 3] === "black" &&
+      lineStones[startIdx + 2] === color &&
+      lineStones[startIdx + 3] === color &&
       lineStones[startIdx + 4] === null
     ) {
       // 置いた位置がこのパターンに含まれているか
@@ -587,7 +588,7 @@ function checkDoubleThree(
     }
 
     // 飛び三をチェック（連続三がない場合のみ）
-    if (!pattern.open3 && checkJumpThree(board, row, col, dir1Index)) {
+    if (!pattern.open3 && checkJumpThree(board, row, col, dir1Index, "black")) {
       const straightFourPoints = getJumpThreeStraightFourPoints(
         board,
         row,
@@ -731,6 +732,7 @@ export function checkJumpFour(
   row: number,
   col: number,
   dirIndex: number,
+  color: StoneColor,
 ): boolean {
   const dir1 = DIRECTIONS[dirIndex];
   const dir2 = DIRECTIONS[(dirIndex + 4) % 8];
@@ -743,7 +745,7 @@ export function checkJumpFour(
   const testBoard = board.map((r: StoneColor[]) => [...r]);
   const testRow = testBoard[row];
   if (testRow) {
-    testRow[col] = "black";
+    testRow[col] = color;
   }
 
   // ラインを取得（置いた位置を中心に両方向に5マスずつ）
@@ -761,7 +763,7 @@ export function checkJumpFour(
   }
 
   // 置いた位置（インデックス5）
-  lineStones.push("black");
+  lineStones.push(color);
 
   // dir1方向（正の方向）に5マス
   for (let i = 1; i <= 5; i++) {
@@ -779,13 +781,13 @@ export function checkJumpFour(
   // 飛び四パターン1: ●●●・● (3石, 空白, 1石)
   for (const offset of [-2, -1, 0]) {
     const startIdx = placedIndex + offset;
-    // パターン: [startIdx]=黒, [startIdx+1]=黒, [startIdx+2]=黒, [startIdx+3]=空, [startIdx+4]=黒
+    // パターン: [startIdx]=色, [startIdx+1]=色, [startIdx+2]=色, [startIdx+3]=空, [startIdx+4]=色
     if (
-      lineStones[startIdx] === "black" &&
-      lineStones[startIdx + 1] === "black" &&
-      lineStones[startIdx + 2] === "black" &&
+      lineStones[startIdx] === color &&
+      lineStones[startIdx + 1] === color &&
+      lineStones[startIdx + 2] === color &&
       lineStones[startIdx + 3] === null &&
-      lineStones[startIdx + 4] === "black"
+      lineStones[startIdx + 4] === color
     ) {
       if (placedIndex >= startIdx && placedIndex <= startIdx + 4) {
         return true;
@@ -796,13 +798,13 @@ export function checkJumpFour(
   // 飛び四パターン2: ●●・●● (2石, 空白, 2石)
   for (const offset of [-1, 0, -3]) {
     const startIdx = placedIndex + offset;
-    // パターン: [startIdx]=黒, [startIdx+1]=黒, [startIdx+2]=空, [startIdx+3]=黒, [startIdx+4]=黒
+    // パターン: [startIdx]=色, [startIdx+1]=色, [startIdx+2]=空, [startIdx+3]=色, [startIdx+4]=色
     if (
-      lineStones[startIdx] === "black" &&
-      lineStones[startIdx + 1] === "black" &&
+      lineStones[startIdx] === color &&
+      lineStones[startIdx + 1] === color &&
       lineStones[startIdx + 2] === null &&
-      lineStones[startIdx + 3] === "black" &&
-      lineStones[startIdx + 4] === "black"
+      lineStones[startIdx + 3] === color &&
+      lineStones[startIdx + 4] === color
     ) {
       if (placedIndex >= startIdx && placedIndex <= startIdx + 4) {
         return true;
@@ -813,13 +815,13 @@ export function checkJumpFour(
   // 飛び四パターン3: ●・●●● (1石, 空白, 3石)
   for (const offset of [0, -2, -3, -4]) {
     const startIdx = placedIndex + offset;
-    // パターン: [startIdx]=黒, [startIdx+1]=空, [startIdx+2]=黒, [startIdx+3]=黒, [startIdx+4]=黒
+    // パターン: [startIdx]=色, [startIdx+1]=空, [startIdx+2]=色, [startIdx+3]=色, [startIdx+4]=色
     if (
-      lineStones[startIdx] === "black" &&
+      lineStones[startIdx] === color &&
       lineStones[startIdx + 1] === null &&
-      lineStones[startIdx + 2] === "black" &&
-      lineStones[startIdx + 3] === "black" &&
-      lineStones[startIdx + 4] === "black"
+      lineStones[startIdx + 2] === color &&
+      lineStones[startIdx + 3] === color &&
+      lineStones[startIdx + 4] === color
     ) {
       if (placedIndex >= startIdx && placedIndex <= startIdx + 4) {
         return true;
@@ -852,7 +854,7 @@ function checkDoubleFour(board: BoardState, row: number, col: number): boolean {
     }
 
     // 飛び四をチェック（連続四がない場合のみ）
-    if (!pattern.four && checkJumpFour(board, row, col, dir1Index)) {
+    if (!pattern.four && checkJumpFour(board, row, col, dir1Index, "black")) {
       fours.push({ directionIndex: dir1Index, type: "jump" });
     }
   }

@@ -223,7 +223,7 @@ function createsFour(
     }
 
     // 跳び四をチェック
-    if (count !== 4 && checkJumpFour(board, row, col, dirIndex)) {
+    if (count !== 4 && checkJumpFour(board, row, col, dirIndex, color)) {
       return true;
     }
   }
@@ -262,7 +262,7 @@ function createsOpenThree(
     }
 
     // 跳び三をチェック
-    if (count !== 3 && checkJumpThree(board, row, col, dirIndex)) {
+    if (count !== 3 && checkJumpThree(board, row, col, dirIndex, color)) {
       return true;
     }
   }
@@ -395,7 +395,7 @@ function getThreatDefensePositions(
     }
 
     // 跳び四をチェック
-    if (count !== 4 && checkJumpFour(board, row, col, dirIndex)) {
+    if (count !== 4 && checkJumpFour(board, row, col, dirIndex, color)) {
       const jumpGap = findJumpGap(board, row, col, dr, dc, color);
       if (jumpGap) {
         defensePositions.push(jumpGap);
@@ -412,7 +412,7 @@ function getThreatDefensePositions(
     }
 
     // 跳び三をチェック
-    if (count !== 3 && checkJumpThree(board, row, col, dirIndex)) {
+    if (count !== 3 && checkJumpThree(board, row, col, dirIndex, color)) {
       const ends = getJumpThreeDefensePositions(board, row, col, dr, dc, color);
       defensePositions.push(...ends);
     }
