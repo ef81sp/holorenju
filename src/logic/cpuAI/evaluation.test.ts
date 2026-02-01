@@ -863,6 +863,59 @@ describe("単発四ペナルティ", () => {
   });
 });
 
+describe("evaluatePosition - 止め四防御", () => {
+  const enableMandatoryDefenseOptions = {
+    enableFukumi: false,
+    enableMise: false,
+    enableForbiddenTrap: false,
+    enableMultiThreat: false,
+    enableCounterFour: false,
+    enableVCT: false,
+    enableMandatoryDefense: true,
+    enableSingleFourPenalty: false,
+  };
+
+  it("相手の止め四を止めない手は-Infinityを返す", () => {
+    const board = createEmptyBoard();
+    placeStonesOnBoard(board, [
+      { row: 7, col: 0, color: "black" },
+      { row: 7, col: 1, color: "black" },
+      { row: 7, col: 2, color: "black" },
+      { row: 7, col: 3, color: "black" },
+    ]);
+
+    const score = evaluatePosition(
+      board,
+      10,
+      10,
+      "white",
+      enableMandatoryDefenseOptions,
+    );
+
+    expect(score).toBe(-Infinity);
+  });
+
+  it("相手の止め四を止める手は有効なスコアを返す", () => {
+    const board = createEmptyBoard();
+    placeStonesOnBoard(board, [
+      { row: 7, col: 0, color: "black" },
+      { row: 7, col: 1, color: "black" },
+      { row: 7, col: 2, color: "black" },
+      { row: 7, col: 3, color: "black" },
+    ]);
+
+    const score = evaluatePosition(
+      board,
+      7,
+      4,
+      "white",
+      enableMandatoryDefenseOptions,
+    );
+
+    expect(score).toBeGreaterThan(-Infinity);
+  });
+});
+
 describe("detectOpponentThreats - 止め四", () => {
   it("横の止め四を検出する（片端が盤端）", () => {
     const board = createEmptyBoard();
