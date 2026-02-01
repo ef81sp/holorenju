@@ -25,10 +25,11 @@ import { useCutinDisplay } from "./composables/useCutinDisplay";
 import { scenarioNavKey } from "./composables/useScenarioNavProvide";
 import { useDialogStore } from "@/stores/dialogStore";
 
-import type { QuestionSection, SuccessCondition } from "@/types/scenario";
+import type { QuestionSection } from "@/types/scenario";
 import type { Position } from "@/types/game";
 import type { TextNode } from "@/types/text";
 import { getSectionDisplayTitle } from "@/utils/sectionUtils";
+import { getPlayerColorFromConditions } from "@/utils/conditionUtils";
 
 // Props
 interface Props {
@@ -183,26 +184,6 @@ const descriptionNodes = computed<TextNode[]>(() => {
   }
   return section.description || [];
 });
-
-/**
- * successConditionsからプレイヤーの石色を推論する
- */
-const getPlayerColorFromConditions = (
-  conditions: SuccessCondition[],
-): "black" | "white" => {
-  for (const condition of conditions) {
-    if (condition.type === "position" || condition.type === "pattern") {
-      return condition.color;
-    }
-    if (condition.type === "sequence" && condition.moves.length > 0) {
-      const [firstMove] = condition.moves;
-      if (firstMove) {
-        return firstMove.color;
-      }
-    }
-  }
-  return "black";
-};
 
 const playerColor = computed(() => {
   const section = scenarioNav.currentSection.value;

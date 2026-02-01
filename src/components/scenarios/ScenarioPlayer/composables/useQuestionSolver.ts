@@ -9,33 +9,9 @@ import type {
 import { useBoardStore } from "@/stores/boardStore";
 import { useDialogStore } from "@/stores/dialogStore";
 import { useProgressStore } from "@/stores/progressStore";
+import { getPlayerColorFromConditions } from "@/utils/conditionUtils";
 
 import { evaluateAllConditions, evaluateCondition } from "./problemConditions";
-
-/**
- * successConditionsからプレイヤーの石色を推論する
- *
- * 推論ロジック:
- * - PositionConditionまたはPatternConditionのcolorを使用
- * - SequenceConditionの場合は最初のmoveのcolorを使用
- * - 条件がない場合は"black"をデフォルトとする
- */
-const getPlayerColorFromConditions = (
-  conditions: SuccessCondition[],
-): "black" | "white" => {
-  for (const condition of conditions) {
-    if (condition.type === "position" || condition.type === "pattern") {
-      return condition.color;
-    }
-    if (condition.type === "sequence" && condition.moves.length > 0) {
-      const [firstMove] = condition.moves;
-      if (firstMove) {
-        return firstMove.color;
-      }
-    }
-  }
-  return "black";
-};
 
 /**
  * 問題セクション固有のロジックを管理するComposable
