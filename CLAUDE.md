@@ -50,6 +50,11 @@ pnpm build         # Production build
 
 ## Development Guidelines
 
+### Planning
+
+- Do SSoT, DRY, SOLID, t-wada TDD
+- commit by phase
+
 ### package manager / scripts
 
 - Use `pnpm` for package management
