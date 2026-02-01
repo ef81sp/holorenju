@@ -973,7 +973,9 @@ export function detectOpponentThreats(
   // 相手のミセ手（次に四三が作れる位置）を検出
   for (let r = 0; r < 15; r++) {
     for (let c = 0; c < 15; c++) {
-      if (board[r]?.[c] !== null) {continue;}
+      if (board[r]?.[c] !== null) {
+        continue;
+      }
       if (createsFourThree(board, r, c, opponentColor)) {
         result.mises.push({ row: r, col: c });
       }
@@ -1341,11 +1343,17 @@ export function evaluatePosition(
     const threats =
       options.precomputedThreats ?? detectOpponentThreats(board, opponentColor);
 
-    // 自分が先に勝てるかチェック（活四、四三、またはフクミ手）
+    // この手が四を作るかチェック（連続四または跳び四）
+    const makesFour = attackScore >= PATTERN_SCORES.FOUR || jumpResult.hasFour;
+
+    // 自分が先に勝てるかチェック（活四、四三、またはVCF開始）
+    // VCFは四の連続で勝つので、相手のミセ手より速い
+    // ただし、VCFを始めるには四を作る手を打つ必要がある
+    // （四を作らない手の場合、相手に1手の猶予があるためVCFは無効）
     const canWinFirst =
       attackScore >= PATTERN_SCORES.OPEN_FOUR ||
       fourThreeBonus > 0 ||
-      (options.enableFukumi && isFukumiMove(testBoard, color));
+      (options.enableFukumi && makesFour && isFukumiMove(testBoard, color));
 
     // 相手の活四を止めない手は除外
     if (threats.openFours.length > 0 && !canWinFirst) {
@@ -1371,34 +1379,35 @@ export function evaluatePosition(
       }
     }
 
-    // 相手の活三を止めない手は除外（活四・止め四がある場合はそちらを優先）
-    if (
-      threats.openThrees.length > 0 &&
-      threats.openFours.length === 0 &&
-      threats.fours.length === 0 &&
-      !canWinFirst
-    ) {
-      const isDefendingOpenThree = threats.openThrees.some(
-        (p) => p.row === row && p.col === col,
-      );
-      if (!isDefendingOpenThree) {
-        return -Infinity;
-      }
-    }
-
-    // 相手のミセ手を止めない手は除外（他の脅威がない場合のみ）
+    // 相手のミセ手を止めない手は除外（活四・止め四がない場合、活三より優先）
+    // ミセ手を止めないと次に四三で負けるため、活三よりも優先度が高い
     if (
       options.enableMiseThreat &&
       threats.mises.length > 0 &&
       threats.openFours.length === 0 &&
       threats.fours.length === 0 &&
-      threats.openThrees.length === 0 &&
       !canWinFirst
     ) {
       const isDefendingMise = threats.mises.some(
         (p) => p.row === row && p.col === col,
       );
       if (!isDefendingMise) {
+        return -Infinity;
+      }
+    }
+
+    // 相手の活三を止めない手は除外（活四・止め四・ミセ手がある場合はそちらを優先）
+    if (
+      threats.openThrees.length > 0 &&
+      threats.openFours.length === 0 &&
+      threats.fours.length === 0 &&
+      threats.mises.length === 0 &&
+      !canWinFirst
+    ) {
+      const isDefendingOpenThree = threats.openThrees.some(
+        (p) => p.row === row && p.col === col,
+      );
+      if (!isDefendingOpenThree) {
         return -Infinity;
       }
     }
