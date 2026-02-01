@@ -14,12 +14,15 @@ import {
   checkJumpFour,
   checkJumpThree,
   copyBoard,
-  isValidPosition,
 } from "@/logic/renjuRules";
 
 import { DIRECTION_INDICES, DIRECTIONS } from "./core/constants";
-import { checkEnds, countLine } from "./core/lineAnalysis";
+import { checkEnds, countLine, getLineEnds } from "./core/lineAnalysis";
 import { isNearExistingStone } from "./moveGenerator";
+import {
+  findJumpGapPosition,
+  getJumpThreeDefensePositions,
+} from "./patterns/threatAnalysis";
 import { hasVCF } from "./vcf";
 
 /** VCT探索の最大深度 */
@@ -317,7 +320,7 @@ function getThreatDefensePositions(
 
     // 跳び四をチェック
     if (count !== 4 && checkJumpFour(board, row, col, dirIndex, color)) {
-      const jumpGap = findJumpGap(board, row, col, dr, dc, color);
+      const jumpGap = findJumpGapPosition(board, row, col, dr, dc, color);
       if (jumpGap) {
         defensePositions.push(jumpGap);
       }
@@ -349,238 +352,6 @@ function getThreatDefensePositions(
   }
 
   return Array.from(unique.values());
-}
-
-/**
- * 連の両端の位置を取得
- */
-function getLineEnds(
-  board: BoardState,
-  row: number,
-  col: number,
-  dr: number,
-  dc: number,
-  color: "black" | "white",
-): Position[] {
-  const positions: Position[] = [];
-
-  // 正方向の端
-  let r = row + dr;
-  let c = col + dc;
-  while (isValidPosition(r, c) && board[r]?.[c] === color) {
-    r += dr;
-    c += dc;
-  }
-  if (isValidPosition(r, c) && board[r]?.[c] === null) {
-    positions.push({ row: r, col: c });
-  }
-
-  // 負方向の端
-  r = row - dr;
-  c = col - dc;
-  while (isValidPosition(r, c) && board[r]?.[c] === color) {
-    r -= dr;
-    c -= dc;
-  }
-  if (isValidPosition(r, c) && board[r]?.[c] === null) {
-    positions.push({ row: r, col: c });
-  }
-
-  return positions;
-}
-
-/**
- * 跳び四の空きを探す
- */
-function findJumpGap(
-  board: BoardState,
-  row: number,
-  col: number,
-  dr: number,
-  dc: number,
-  color: "black" | "white",
-): Position | null {
-  // ラインをスキャンして跳び四パターンの空きを探す
-  const linePositions: { pos: Position; stone: "black" | "white" | null }[] =
-    [];
-
-  // 負方向に5マス
-  for (let i = 5; i >= 1; i--) {
-    const pr = row - dr * i;
-    const pc = col - dc * i;
-    if (isValidPosition(pr, pc)) {
-      linePositions.push({
-        pos: { row: pr, col: pc },
-        stone: board[pr]?.[pc] ?? null,
-      });
-    }
-  }
-
-  // 置いた位置
-  linePositions.push({
-    pos: { row, col },
-    stone: color,
-  });
-
-  // 正方向に5マス
-  for (let i = 1; i <= 5; i++) {
-    const pr = row + dr * i;
-    const pc = col + dc * i;
-    if (isValidPosition(pr, pc)) {
-      linePositions.push({
-        pos: { row: pr, col: pc },
-        stone: board[pr]?.[pc] ?? null,
-      });
-    }
-  }
-
-  // 跳び四パターンを探す
-  for (let start = 0; start <= linePositions.length - 5; start++) {
-    const segment = linePositions.slice(start, start + 5);
-    if (segment.length !== 5) {
-      continue;
-    }
-
-    const stones = segment.map((s) => s.stone);
-    const positions = segment.map((s) => s.pos);
-
-    // パターン1: ●●●・●
-    if (
-      stones[0] === color &&
-      stones[1] === color &&
-      stones[2] === color &&
-      stones[3] === null &&
-      stones[4] === color
-    ) {
-      return positions[3] ?? null;
-    }
-
-    // パターン2: ●●・●●
-    if (
-      stones[0] === color &&
-      stones[1] === color &&
-      stones[2] === null &&
-      stones[3] === color &&
-      stones[4] === color
-    ) {
-      return positions[2] ?? null;
-    }
-
-    // パターン3: ●・●●●
-    if (
-      stones[0] === color &&
-      stones[1] === null &&
-      stones[2] === color &&
-      stones[3] === color &&
-      stones[4] === color
-    ) {
-      return positions[1] ?? null;
-    }
-  }
-
-  return null;
-}
-
-/**
- * 跳び三の防御位置を取得
- */
-function getJumpThreeDefensePositions(
-  board: BoardState,
-  row: number,
-  col: number,
-  dr: number,
-  dc: number,
-  color: "black" | "white",
-): Position[] {
-  const positions: Position[] = [];
-
-  // ラインをスキャンして跳び三パターンの空きを探す
-  const linePositions: { pos: Position; stone: "black" | "white" | null }[] =
-    [];
-
-  // 負方向に4マス
-  for (let i = 4; i >= 1; i--) {
-    const pr = row - dr * i;
-    const pc = col - dc * i;
-    if (isValidPosition(pr, pc)) {
-      linePositions.push({
-        pos: { row: pr, col: pc },
-        stone: board[pr]?.[pc] ?? null,
-      });
-    }
-  }
-
-  // 置いた位置
-  linePositions.push({
-    pos: { row, col },
-    stone: color,
-  });
-
-  // 正方向に4マス
-  for (let i = 1; i <= 4; i++) {
-    const pr = row + dr * i;
-    const pc = col + dc * i;
-    if (isValidPosition(pr, pc)) {
-      linePositions.push({
-        pos: { row: pr, col: pc },
-        stone: board[pr]?.[pc] ?? null,
-      });
-    }
-  }
-
-  // 跳び三パターン ・●●・●・ または ・●・●●・ を探す
-  for (let start = 0; start <= linePositions.length - 6; start++) {
-    const segment = linePositions.slice(start, start + 6);
-    if (segment.length !== 6) {
-      continue;
-    }
-
-    const stones = segment.map((s) => s.stone);
-    const posArr = segment.map((s) => s.pos);
-
-    // パターン: ・●●・●・
-    if (
-      stones[0] === null &&
-      stones[1] === color &&
-      stones[2] === color &&
-      stones[3] === null &&
-      stones[4] === color &&
-      stones[5] === null
-    ) {
-      // 両端と中間の空きが防御点
-      if (posArr[0]) {
-        positions.push(posArr[0]);
-      }
-      if (posArr[3]) {
-        positions.push(posArr[3]);
-      }
-      if (posArr[5]) {
-        positions.push(posArr[5]);
-      }
-    }
-
-    // パターン: ・●・●●・
-    if (
-      stones[0] === null &&
-      stones[1] === color &&
-      stones[2] === null &&
-      stones[3] === color &&
-      stones[4] === color &&
-      stones[5] === null
-    ) {
-      if (posArr[0]) {
-        positions.push(posArr[0]);
-      }
-      if (posArr[2]) {
-        positions.push(posArr[2]);
-      }
-      if (posArr[5]) {
-        positions.push(posArr[5]);
-      }
-    }
-  }
-
-  return positions;
 }
 
 // 後方互換性のため core/boardUtils から再export

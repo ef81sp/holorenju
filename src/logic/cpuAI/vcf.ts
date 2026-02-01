@@ -19,6 +19,7 @@ import {
 import { DIRECTION_INDICES, DIRECTIONS } from "./core/constants";
 import { checkEnds, countLine } from "./core/lineAnalysis";
 import { isNearExistingStone } from "./moveGenerator";
+import { findJumpGapPosition } from "./patterns/threatAnalysis";
 
 // 後方互換性のためライン解析関数を再export
 export { checkEnds, countLine } from "./core/lineAnalysis";
@@ -271,7 +272,6 @@ function createsFour(
   return false;
 }
 
-
 /**
  * 四に対する防御位置を取得
  * 四は1点でしか止められないので、その位置を返す
@@ -390,86 +390,5 @@ export function findDefenseForJumpFour(
   dc: number,
   color: "black" | "white",
 ): Position | null {
-  // ラインをスキャンして空きマスを探す
-  const linePositions: { pos: Position; stone: "black" | "white" | null }[] =
-    [];
-
-  // 負方向に5マス
-  for (let i = 5; i >= 1; i--) {
-    const pr = row - dr * i;
-    const pc = col - dc * i;
-    if (isValidPosition(pr, pc)) {
-      linePositions.push({
-        pos: { row: pr, col: pc },
-        stone: board[pr]?.[pc] ?? null,
-      });
-    }
-  }
-
-  // 置いた位置
-  linePositions.push({
-    pos: { row, col },
-    stone: color,
-  });
-
-  // 正方向に5マス
-  for (let i = 1; i <= 5; i++) {
-    const pr = row + dr * i;
-    const pc = col + dc * i;
-    if (isValidPosition(pr, pc)) {
-      linePositions.push({
-        pos: { row: pr, col: pc },
-        stone: board[pr]?.[pc] ?? null,
-      });
-    }
-  }
-
-  // 跳び四パターンを探して空きマスを特定
-  // パターン1: ●●●・● (3連 + 空 + 1)
-  // パターン2: ●●・●● (2連 + 空 + 2連)
-  // パターン3: ●・●●● (1 + 空 + 3連)
-  for (let start = 0; start <= linePositions.length - 5; start++) {
-    const segment = linePositions.slice(start, start + 5);
-    if (segment.length !== 5) {
-      continue;
-    }
-
-    const stones = segment.map((s) => s.stone);
-    const positions = segment.map((s) => s.pos);
-
-    // パターン1: ●●●・●
-    if (
-      stones[0] === color &&
-      stones[1] === color &&
-      stones[2] === color &&
-      stones[3] === null &&
-      stones[4] === color
-    ) {
-      return positions[3] ?? null;
-    }
-
-    // パターン2: ●●・●●
-    if (
-      stones[0] === color &&
-      stones[1] === color &&
-      stones[2] === null &&
-      stones[3] === color &&
-      stones[4] === color
-    ) {
-      return positions[2] ?? null;
-    }
-
-    // パターン3: ●・●●●
-    if (
-      stones[0] === color &&
-      stones[1] === null &&
-      stones[2] === color &&
-      stones[3] === color &&
-      stones[4] === color
-    ) {
-      return positions[1] ?? null;
-    }
-  }
-
-  return null;
+  return findJumpGapPosition(board, row, col, dr, dc, color);
 }
