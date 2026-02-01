@@ -106,6 +106,85 @@ export function hasVCF(
 }
 
 /**
+ * VCFの最初の手を返す
+ *
+ * @param board 盤面
+ * @param color 手番
+ * @returns VCFの最初の四追い手、なければnull
+ */
+export function findVCFMove(
+  board: BoardState,
+  color: "black" | "white",
+): Position | null {
+  return findVCFMoveRecursive(board, color, 0);
+}
+
+/**
+ * VCFの最初の手を返す（再帰版）
+ */
+function findVCFMoveRecursive(
+  board: BoardState,
+  color: "black" | "white",
+  depth: number,
+): Position | null {
+  if (depth >= VCF_MAX_DEPTH) {
+    return null;
+  }
+
+  const fourMoves = findFourMoves(board, color);
+
+  for (const move of fourMoves) {
+    // 四を作る
+    const afterFour = copyBoard(board);
+    const afterFourRow = afterFour[move.row];
+    if (afterFourRow) {
+      afterFourRow[move.col] = color;
+    }
+
+    // 五連チェック
+    if (checkFive(afterFour, move.row, move.col, color)) {
+      return move;
+    }
+
+    // 相手の応手（四を止める）
+    const defensePos = getFourDefensePosition(afterFour, move, color);
+
+    if (!defensePos) {
+      // 止められない = 勝利
+      return move;
+    }
+
+    // 白番の場合、黒の防御位置が禁手ならVCF成立
+    if (color === "white") {
+      const forbiddenResult = checkForbiddenMove(
+        afterFour,
+        defensePos.row,
+        defensePos.col,
+      );
+      if (forbiddenResult.isForbidden) {
+        return move;
+      }
+    }
+
+    // 相手が止めた後の局面で再帰
+    const afterDefense = copyBoard(afterFour);
+    const opponentColor = color === "black" ? "white" : "black";
+    const afterDefenseRow = afterDefense[defensePos.row];
+    if (afterDefenseRow) {
+      afterDefenseRow[defensePos.col] = opponentColor;
+    }
+
+    const vcfMove = findVCFMoveRecursive(afterDefense, color, depth + 1);
+    if (vcfMove !== null) {
+      // depth=0の場合は最初の手を返す
+      return depth === 0 ? move : vcfMove;
+    }
+  }
+
+  return null;
+}
+
+/**
  * 四を作れる位置を列挙
  */
 function findFourMoves(
@@ -193,7 +272,7 @@ function createsFour(
     }
 
     // 跳び四をチェック
-    if (count !== 4 && checkJumpFour(testBoard, row, col, dirIndex)) {
+    if (count !== 4 && checkJumpFour(testBoard, row, col, dirIndex, color)) {
       return true;
     }
   }
@@ -312,7 +391,7 @@ function getFourDefensePosition(
     }
 
     // 跳び四をチェック
-    if (count !== 4 && checkJumpFour(board, row, col, dirIndex)) {
+    if (count !== 4 && checkJumpFour(board, row, col, dirIndex, color)) {
       const defensePos = findDefenseForJumpFour(board, row, col, dr, dc, color);
       if (defensePos) {
         return defensePos;

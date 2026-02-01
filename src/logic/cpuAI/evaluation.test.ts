@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import { createEmptyBoard } from "@/logic/renjuRules";
 
 import {
+  detectOpponentThreats,
   evaluateBoard,
   evaluatePosition,
   evaluateStonePatterns,
@@ -463,6 +464,8 @@ describe("複数方向脅威ボーナス", () => {
       enableMultiThreat: true,
       enableCounterFour: false,
       enableVCT: false,
+      enableMandatoryDefense: false,
+      enableSingleFourPenalty: false,
     });
 
     // enableMultiThreat無効時のスコア
@@ -473,6 +476,8 @@ describe("複数方向脅威ボーナス", () => {
       enableMultiThreat: false,
       enableCounterFour: false,
       enableVCT: false,
+      enableMandatoryDefense: false,
+      enableSingleFourPenalty: false,
     });
 
     // ボーナス有効時の方が高スコア
@@ -498,6 +503,8 @@ describe("複数方向脅威ボーナス", () => {
       enableMultiThreat: true,
       enableCounterFour: false,
       enableVCT: false,
+      enableMandatoryDefense: false,
+      enableSingleFourPenalty: false,
     });
 
     const scoreWithoutBonus = evaluatePosition(board, 7, 8, "black", {
@@ -507,6 +514,8 @@ describe("複数方向脅威ボーナス", () => {
       enableMultiThreat: false,
       enableCounterFour: false,
       enableVCT: false,
+      enableMandatoryDefense: false,
+      enableSingleFourPenalty: false,
     });
 
     // 1方向のみなので差がほぼ0
@@ -537,6 +546,8 @@ describe("カウンターフォー", () => {
       enableMultiThreat: false,
       enableCounterFour: true,
       enableVCT: false,
+      enableMandatoryDefense: false,
+      enableSingleFourPenalty: false,
     });
 
     // enableCounterFour無効時のスコア
@@ -547,6 +558,8 @@ describe("カウンターフォー", () => {
       enableMultiThreat: false,
       enableCounterFour: false,
       enableVCT: false,
+      enableMandatoryDefense: false,
+      enableSingleFourPenalty: false,
     });
 
     // カウンターフォー有効時の方が高スコア（防御スコアが1.5倍）
@@ -568,6 +581,8 @@ describe("カウンターフォー", () => {
       enableMultiThreat: false,
       enableCounterFour: true,
       enableVCT: false,
+      enableMandatoryDefense: false,
+      enableSingleFourPenalty: false,
     });
 
     const scoreWithoutCounter = evaluatePosition(board, 5, 8, "black", {
@@ -577,6 +592,8 @@ describe("カウンターフォー", () => {
       enableMultiThreat: false,
       enableCounterFour: false,
       enableVCT: false,
+      enableMandatoryDefense: false,
+      enableSingleFourPenalty: false,
     });
 
     // 自分が四を作らないのでスコアは同じ
@@ -636,5 +653,279 @@ describe("斜め方向ボーナス", () => {
 
     // 縦と横は同じスコア
     expect(verticalScore).toBe(horizontalScore);
+  });
+});
+
+describe("必須防御ルール", () => {
+  const enableMandatoryDefenseOptions = {
+    enableFukumi: false,
+    enableMise: false,
+    enableForbiddenTrap: false,
+    enableMultiThreat: false,
+    enableCounterFour: false,
+    enableVCT: false,
+    enableMandatoryDefense: true,
+    enableSingleFourPenalty: false,
+  };
+
+  it("相手の活四を止めない手は-Infinityになる", () => {
+    // 白の活四: row=7, col=[3,4,5,6] 両端空き
+    const board = createBoardWithStones([
+      { row: 7, col: 3, color: "white" },
+      { row: 7, col: 4, color: "white" },
+      { row: 7, col: 5, color: "white" },
+      { row: 7, col: 6, color: "white" },
+    ]);
+
+    // 活四を止める位置 (7,2) または (7,7) 以外は-Infinity
+    const nonDefenseScore = evaluatePosition(
+      board,
+      0,
+      0,
+      "black",
+      enableMandatoryDefenseOptions,
+    );
+    expect(nonDefenseScore).toBe(-Infinity);
+
+    // 活四を止める位置は有効
+    const defenseScore = evaluatePosition(
+      board,
+      7,
+      7,
+      "black",
+      enableMandatoryDefenseOptions,
+    );
+    expect(defenseScore).toBeGreaterThan(-Infinity);
+  });
+
+  it("相手の活三を止めない手は-Infinityになる", () => {
+    // 白の活三: row=7, col=[4,5,6] 両端空き
+    const board = createBoardWithStones([
+      { row: 7, col: 4, color: "white" },
+      { row: 7, col: 5, color: "white" },
+      { row: 7, col: 6, color: "white" },
+    ]);
+
+    // 活三を止める位置 (7,3) または (7,7) 以外は-Infinity
+    const nonDefenseScore = evaluatePosition(
+      board,
+      0,
+      0,
+      "black",
+      enableMandatoryDefenseOptions,
+    );
+    expect(nonDefenseScore).toBe(-Infinity);
+
+    // 活三を止める位置は有効
+    const defenseScore = evaluatePosition(
+      board,
+      7,
+      7,
+      "black",
+      enableMandatoryDefenseOptions,
+    );
+    expect(defenseScore).toBeGreaterThan(-Infinity);
+  });
+
+  it("自分が四三を作れる場合は防御不要", () => {
+    // 白の活三がある
+    // 黒が四三を作れる配置
+    const board = createBoardWithStones([
+      // 白の活三
+      { row: 0, col: 4, color: "white" },
+      { row: 0, col: 5, color: "white" },
+      { row: 0, col: 6, color: "white" },
+      // 黒の四三準備: 横三 + 縦二
+      { row: 7, col: 4, color: "black" },
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 5, col: 7, color: "black" },
+      { row: 6, col: 7, color: "black" },
+    ]);
+
+    // (7,7)は四三を作る手なので、防御不要で有効
+    const score = evaluatePosition(
+      board,
+      7,
+      7,
+      "black",
+      enableMandatoryDefenseOptions,
+    );
+    // 四三を作れるので防御不要、有効な手
+    expect(score).toBeGreaterThan(-Infinity);
+  });
+
+  it("enableMandatoryDefense=falseなら通常評価", () => {
+    const disabledOptions = {
+      ...enableMandatoryDefenseOptions,
+      enableMandatoryDefense: false,
+    };
+
+    // 白の活四
+    const board = createBoardWithStones([
+      { row: 7, col: 3, color: "white" },
+      { row: 7, col: 4, color: "white" },
+      { row: 7, col: 5, color: "white" },
+      { row: 7, col: 6, color: "white" },
+    ]);
+
+    // 無効時は-Infinityにならない
+    const score = evaluatePosition(board, 0, 0, "black", disabledOptions);
+    expect(score).toBeGreaterThan(-Infinity);
+  });
+});
+
+describe("単発四ペナルティ", () => {
+  const enableSingleFourPenaltyOptions = {
+    enableFukumi: false,
+    enableMise: false,
+    enableForbiddenTrap: false,
+    enableMultiThreat: false,
+    enableCounterFour: false,
+    enableVCT: false,
+    enableMandatoryDefense: false,
+    enableSingleFourPenalty: true,
+  };
+
+  it("後続脅威がない四は低評価される", () => {
+    // 単純な四（後続脅威なし）
+    const board = createBoardWithStones([
+      { row: 7, col: 4, color: "black" },
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+    ]);
+
+    // ペナルティありのスコア
+    const scoreWithPenalty = evaluatePosition(
+      board,
+      7,
+      7,
+      "black",
+      enableSingleFourPenaltyOptions,
+    );
+
+    // ペナルティなしのスコア
+    const scoreWithoutPenalty = evaluatePosition(board, 7, 7, "black", {
+      ...enableSingleFourPenaltyOptions,
+      enableSingleFourPenalty: false,
+    });
+
+    // ペナルティありの方が低い
+    expect(scoreWithPenalty).toBeLessThan(scoreWithoutPenalty);
+  });
+
+  it("四三を作る手にはペナルティなし", () => {
+    // 四三を作れる配置
+    const board = createBoardWithStones([
+      // 横の三
+      { row: 7, col: 4, color: "black" },
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      // 縦の二
+      { row: 5, col: 7, color: "black" },
+      { row: 6, col: 7, color: "black" },
+    ]);
+
+    // ペナルティありのスコア（四三はペナルティ免除）
+    const scoreWithPenalty = evaluatePosition(
+      board,
+      7,
+      7,
+      "black",
+      enableSingleFourPenaltyOptions,
+    );
+
+    // ペナルティなしのスコア
+    const scoreWithoutPenalty = evaluatePosition(board, 7, 7, "black", {
+      ...enableSingleFourPenaltyOptions,
+      enableSingleFourPenalty: false,
+    });
+
+    // 四三を作る手にはペナルティがないので同じスコア
+    expect(scoreWithPenalty).toBe(scoreWithoutPenalty);
+  });
+
+  it("enableSingleFourPenalty=falseなら通常評価", () => {
+    const disabledOptions = {
+      ...enableSingleFourPenaltyOptions,
+      enableSingleFourPenalty: false,
+    };
+
+    const board = createBoardWithStones([
+      { row: 7, col: 4, color: "black" },
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+    ]);
+
+    // ペナルティなしなら元のスコア
+    const score = evaluatePosition(board, 7, 7, "black", disabledOptions);
+    expect(score).toBeGreaterThan(0);
+  });
+});
+
+describe("detectOpponentThreats", () => {
+  it("横の活三を検出する", () => {
+    const board = createEmptyBoard();
+    // --ooo-- (列4,5,6に黒石)
+    placeStonesOnBoard(board, [
+      { row: 7, col: 4, color: "black" },
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+    ]);
+
+    const threats = detectOpponentThreats(board, "black");
+
+    expect(threats.openThrees.length).toBeGreaterThan(0);
+    // 防御位置は(7,3)と(7,7) - 石に直接隣接
+    const positions = threats.openThrees.map((p) => `${p.row},${p.col}`);
+    expect(positions).toContain("7,3");
+    expect(positions).toContain("7,7");
+  });
+
+  it("斜めの活三を検出する", () => {
+    const board = createEmptyBoard();
+    // 斜め3連: (7,9)-(8,8)-(9,7)
+    placeStonesOnBoard(board, [
+      { row: 7, col: 9, color: "black" },
+      { row: 8, col: 8, color: "black" },
+      { row: 9, col: 7, color: "black" },
+    ]);
+
+    const threats = detectOpponentThreats(board, "black");
+
+    expect(threats.openThrees.length).toBeGreaterThan(0);
+    // 防御位置は(6,10)と(10,6) - 石に直接隣接
+    const positions = threats.openThrees.map((p) => `${p.row},${p.col}`);
+    expect(positions).toContain("6,10");
+    expect(positions).toContain("10,6");
+  });
+
+  it("実際の対局盤面で斜め活三を検出する", () => {
+    const board = createEmptyBoard();
+    // 黒石
+    board[7][7] = "black";
+    board[8][8] = "black";
+    board[9][9] = "black";
+    board[9][7] = "black";
+    board[7][9] = "black";
+    // 白石
+    board[8][6] = "white";
+    board[5][5] = "white";
+    board[10][10] = "white";
+    board[9][6] = "white";
+
+    const threats = detectOpponentThreats(board, "black");
+
+    console.log("活三の防御位置:");
+    for (const pos of threats.openThrees) {
+      console.log(`  (${pos.row}, ${pos.col})`);
+    }
+
+    // (7,9)-(8,8)-(9,7)の活三が検出されるべき
+    // 防御位置は(6,10)と(10,6)
+    expect(threats.openThrees.length).toBeGreaterThan(0);
+    const positions = threats.openThrees.map((p) => `${p.row},${p.col}`);
+    expect(positions).toContain("6,10");
+    expect(positions).toContain("10,6");
   });
 });

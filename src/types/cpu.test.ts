@@ -50,7 +50,15 @@ describe("DifficultyParams", () => {
       expect(typeof params.depth).toBe("number");
       expect(typeof params.timeLimit).toBe("number");
       expect(typeof params.randomFactor).toBe("number");
+      expect(typeof params.maxNodes).toBe("number");
     }
+  });
+
+  it("maxNodesが難易度順に増加する", () => {
+    expect(DIFFICULTY_PARAMS.beginner.maxNodes).toBe(10000);
+    expect(DIFFICULTY_PARAMS.easy.maxNodes).toBe(50000);
+    expect(DIFFICULTY_PARAMS.medium.maxNodes).toBe(200000);
+    expect(DIFFICULTY_PARAMS.hard.maxNodes).toBe(500000);
   });
 
   it("beginnerは探索深度2、ランダム要素0.3", () => {
@@ -60,16 +68,16 @@ describe("DifficultyParams", () => {
     expect(params.randomFactor).toBe(0.3);
   });
 
-  it("easyは探索深度3、ランダム要素0.15", () => {
+  it("easyは探索深度3、ランダム要素0.25", () => {
     const params: DifficultyParams = DIFFICULTY_PARAMS.easy;
     expect(params.depth).toBe(3);
     expect(params.timeLimit).toBe(2000);
-    expect(params.randomFactor).toBe(0.15);
+    expect(params.randomFactor).toBe(0.25);
   });
 
-  it("mediumは探索深度4、ランダム要素0", () => {
+  it("mediumは探索深度5、ランダム要素0", () => {
     const params: DifficultyParams = DIFFICULTY_PARAMS.medium;
-    expect(params.depth).toBe(4);
+    expect(params.depth).toBe(5);
     expect(params.timeLimit).toBe(3000);
     expect(params.randomFactor).toBe(0);
   });

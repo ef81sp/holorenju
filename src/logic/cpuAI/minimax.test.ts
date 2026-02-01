@@ -95,26 +95,22 @@ describe("findBestMove", () => {
     expect(result.score).toBeLessThan(0);
   });
 
-  it(
-    "活四を作る手を優先する",
-    () => {
-      const board = createEmptyBoard();
-      // 黒が3つ並んでいる状態（両端が空いている）
-      placeStonesOnBoard(board, [
-        { row: 7, col: 4, color: "black" },
-        { row: 7, col: 5, color: "black" },
-        { row: 7, col: 6, color: "black" },
-      ]);
+  it("活四を作る手を優先する", () => {
+    const board = createEmptyBoard();
+    // 黒が3つ並んでいる状態（両端が空いている）
+    placeStonesOnBoard(board, [
+      { row: 7, col: 4, color: "black" },
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+    ]);
 
-      const result = findBestMove(board, "black", 3);
+    const result = findBestMove(board, "black", 3);
 
-      // 活四を作る手を選ぶはず（(7,3) または (7,7)）
-      // より高い評価を持つ手を選ぶ
-      expect(result.position.row === 7).toBe(true);
-      expect(result.score).toBeGreaterThan(0);
-    },
-    15000,
-  );
+    // 活四を作る手を選ぶはず（(7,3) または (7,7)）
+    // より高い評価を持つ手を選ぶ
+    expect(result.position.row === 7).toBe(true);
+    expect(result.score).toBeGreaterThan(0);
+  }, 15000);
 
   it("探索深度に応じた結果を返す", () => {
     const board = createEmptyBoard();
@@ -318,5 +314,65 @@ describe("findBestMoveIterativeWithTT - ノード数制限", () => {
     // 有効な結果が返される
     expect(result.position.row).toBeGreaterThanOrEqual(0);
     expect(result.completedDepth).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe("活三防御", () => {
+  it("白は黒の横活三を止める", async () => {
+    // 白にVCFがない盤面で、黒の活三を止めることをテスト
+    const board = createEmptyBoard();
+    // 黒石: 横に3つ並んでいる（活三）- 両端が空いている
+    board[7][6] = "black";
+    board[7][7] = "black";
+    board[7][8] = "black";
+    // 白石: 1つだけ（VCFを作れない）
+    board[5][5] = "white";
+
+    // デバッグ: 候補手を確認
+    const { generateSortedMoves } = await import("./moveGenerator");
+    const { detectOpponentThreats } = await import("./evaluation");
+    const { findVCFMove } = await import("./vcf");
+
+    // 白にVCFがないことを確認
+    const vcfMove = findVCFMove(board, "white");
+    console.log("白のVCF:", vcfMove);
+
+    const moves = generateSortedMoves(board, "white", {
+      ttMove: null,
+      useStaticEval: true,
+      evaluationOptions: DEFAULT_EVAL_OPTIONS,
+    });
+    console.log("候補手数:", moves.length);
+
+    const threats = detectOpponentThreats(board, "black");
+    console.log("活三の防御位置:", threats.openThrees);
+
+    // VCFがあっても活三防御位置に打つべき場合がある
+    // （VCFより活三防御が優先される場合）
+    // ただし、VCFがあれば VCF を打つのが正しい動作
+    // このテストでは活三防御が機能することを確認する
+    const result = findBestMoveIterativeWithTT(
+      board,
+      "white",
+      3,
+      5000,
+      0,
+      DEFAULT_EVAL_OPTIONS,
+    );
+
+    console.log("白の選択:", result.position);
+
+    // 白の選択が活三防御位置(7,5)か(7,9)、またはVCFの手であること
+    // VCFがあればVCFを優先するのが正しい
+    if (vcfMove) {
+      // VCFがあればVCFの手を選ぶべき
+      expect(result.position).toEqual(vcfMove);
+    } else {
+      // VCFがなければ活三を止めるべき
+      const isDefending =
+        (result.position.row === 7 && result.position.col === 5) ||
+        (result.position.row === 7 && result.position.col === 9);
+      expect(isDefending).toBe(true);
+    }
   });
 });

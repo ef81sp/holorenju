@@ -376,7 +376,15 @@ export function sortMoves(
   // スコア降順でソート
   scoredMoves.sort((a, b) => b.score - a.score);
 
-  return scoredMoves.map((sm) => sm.move);
+  // -Infinityの手を除外（必須防御ルールで除外された手）
+  const validMoves = scoredMoves.filter((sm) => sm.score > -Infinity);
+
+  // 有効な手がなければ全ての手を返す（やむを得ない場合）
+  if (validMoves.length === 0) {
+    return scoredMoves.map((sm) => sm.move);
+  }
+
+  return validMoves.map((sm) => sm.move);
 }
 
 /**

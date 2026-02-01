@@ -38,6 +38,8 @@ export interface DifficultyParams {
   timeLimit: number;
   /** ランダム要素（0-1、0で完全決定論的） */
   randomFactor: number;
+  /** ノード数上限（探索の打ち切り条件） */
+  maxNodes: number;
   /** 評価オプション（重い機能の有効/無効） */
   evaluationOptions: EvaluationOptions;
 }
@@ -55,6 +57,7 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
     depth: 2,
     timeLimit: 1000,
     randomFactor: 0.3,
+    maxNodes: 10000,
     evaluationOptions: {
       enableFukumi: false,
       enableMise: false,
@@ -62,12 +65,15 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
       enableMultiThreat: false,
       enableCounterFour: false,
       enableVCT: false,
+      enableMandatoryDefense: false,
+      enableSingleFourPenalty: false,
     },
   },
   easy: {
     depth: 3,
     timeLimit: 2000,
     randomFactor: 0.25,
+    maxNodes: 50000,
     evaluationOptions: {
       enableFukumi: false,
       enableMise: false,
@@ -75,12 +81,15 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
       enableMultiThreat: false,
       enableCounterFour: false,
       enableVCT: false,
+      enableMandatoryDefense: true,
+      enableSingleFourPenalty: false,
     },
   },
   medium: {
     depth: 5,
     timeLimit: 3000,
     randomFactor: 0,
+    maxNodes: 200000,
     evaluationOptions: {
       enableFukumi: true,
       enableMise: true,
@@ -88,12 +97,15 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
       enableMultiThreat: true,
       enableCounterFour: true,
       enableVCT: false,
+      enableMandatoryDefense: true,
+      enableSingleFourPenalty: true,
     },
   },
   hard: {
     depth: 5,
     timeLimit: 5000,
     randomFactor: 0,
+    maxNodes: 500000,
     evaluationOptions: {
       enableFukumi: true,
       enableMise: true,
@@ -101,6 +113,8 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
       enableMultiThreat: true,
       enableCounterFour: true,
       enableVCT: true,
+      enableMandatoryDefense: true,
+      enableSingleFourPenalty: true,
     },
   },
 };

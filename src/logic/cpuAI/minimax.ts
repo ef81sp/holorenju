@@ -10,6 +10,7 @@ import { checkWin } from "@/logic/renjuRules";
 
 import {
   DEFAULT_EVAL_OPTIONS,
+  detectOpponentThreats,
   evaluateBoard,
   evaluatePosition,
   PATTERN_SCORES,
@@ -31,6 +32,7 @@ import {
   type ScoreType,
 } from "./transpositionTable";
 import { applyMove, getOppositeColor } from "./utils";
+import { findVCFMove } from "./vcf";
 import { computeBoardHash, updateHash } from "./zobrist";
 
 /** 無限大の代わりに使う大きな値 */
@@ -450,6 +452,10 @@ export interface SearchContext {
   timeLimit?: number;
   /** 時間切れフラグ */
   timeoutFlag?: boolean;
+  /** ノード数上限 */
+  maxNodes?: number;
+  /** ノード数上限超過フラグ */
+  nodeCountExceeded?: boolean;
 }
 
 /**
@@ -501,8 +507,6 @@ export function createSearchContext(
  * @param ctx 探索コンテキスト
  * @returns 評価スコア
  */
-/** 時間チェックの間隔（ノード数） */
-const TIME_CHECK_INTERVAL = 10;
 
 export function minimaxWithTT(
   board: BoardState,
@@ -516,6 +520,15 @@ export function minimaxWithTT(
   ctx: SearchContext,
 ): number {
   ctx.stats.nodes++;
+
+  // ノード数上限チェック
+  if (
+    !ctx.nodeCountExceeded &&
+    ctx.maxNodes !== undefined &&
+    ctx.stats.nodes >= ctx.maxNodes
+  ) {
+    ctx.nodeCountExceeded = true;
+  }
 
   // 時間制限チェック（一定ノード数ごと）
   // 毎回チェックするとオーバーヘッドが大きいため、一定間隔でチェック
@@ -531,8 +544,8 @@ export function minimaxWithTT(
     }
   }
 
-  // 時間切れなら即座に現在の評価を返す
-  if (ctx.timeoutFlag) {
+  // 時間切れまたはノード数上限なら即座に現在の評価を返す
+  if (ctx.timeoutFlag || ctx.nodeCountExceeded) {
     return evaluateBoard(board, perspective);
   }
 
@@ -738,6 +751,7 @@ export function findBestMoveWithTT(
   randomFactor = 0,
   ctx: SearchContext = createSearchContext(),
   aspiration?: AspirationOptions,
+  restrictedMoves?: Position[],
 ): MinimaxResult & { ctx: SearchContext } {
   const hash = computeBoardHash(board);
 
@@ -745,14 +759,17 @@ export function findBestMoveWithTT(
   const ttEntry = ctx.tt.probe(hash);
   const ttMove = ttEntry?.bestMove ?? null;
 
-  const moves = generateSortedMoves(board, color, {
-    ttMove,
-    killers: ctx.killers,
-    depth,
-    history: ctx.history,
-    useStaticEval: true,
-    evaluationOptions: ctx.evaluationOptions,
-  });
+  // 制限された候補手があればそれを使う、なければ通常の候補手生成
+  const moves =
+    restrictedMoves ??
+    generateSortedMoves(board, color, {
+      ttMove,
+      killers: ctx.killers,
+      depth,
+      history: ctx.history,
+      useStaticEval: true,
+      evaluationOptions: ctx.evaluationOptions,
+    });
 
   if (moves.length === 0) {
     return {
@@ -866,6 +883,7 @@ export function findBestMoveWithTT(
  * @param timeLimit 時間制限（ミリ秒）
  * @param randomFactor ランダム要素（0-1）
  * @param evaluationOptions 評価オプション
+ * @param maxNodes ノード数上限（省略時は無制限）
  * @returns 最善手と探索情報
  */
 export function findBestMoveIterativeWithTT(
@@ -875,6 +893,7 @@ export function findBestMoveIterativeWithTT(
   timeLimit: number,
   randomFactor = 0,
   evaluationOptions: EvaluationOptions = DEFAULT_EVAL_OPTIONS,
+  maxNodes?: number,
 ): IterativeDeepingResult & { stats: SearchStats } {
   const startTime = performance.now();
   const ctx = createSearchContext(globalTT, evaluationOptions);
@@ -882,8 +901,64 @@ export function findBestMoveIterativeWithTT(
   // 新しい探索開始
   ctx.tt.newGeneration();
 
-  // 候補手の数を取得して動的時間配分を計算
-  const moves = generateSortedMoves(board, color, {
+  // =========================================================================
+  // 必須手の事前チェック（探索より優先）
+  // =========================================================================
+
+  // 1. 四追い勝ち（VCF）があれば即座にその手を返す
+  const vcfMove = findVCFMove(board, color);
+  if (vcfMove) {
+    return {
+      position: vcfMove,
+      score: PATTERN_SCORES.FIVE, // 勝利確定
+      completedDepth: 0,
+      interrupted: false,
+      elapsedTime: performance.now() - startTime,
+      stats: ctx.stats,
+    };
+  }
+
+  // 2. 相手の脅威（活四・止め四・活三）をチェック
+  const opponentColor = color === "black" ? "white" : "black";
+  const threats = detectOpponentThreats(board, opponentColor);
+
+  // 相手の活四があれば止める（実際には止められないが）
+  if (threats.openFours.length > 0) {
+    const defensePos = threats.openFours[0];
+    if (defensePos) {
+      return {
+        position: defensePos,
+        score: -PATTERN_SCORES.FIVE, // 負け確定
+        completedDepth: 0,
+        interrupted: false,
+        elapsedTime: performance.now() - startTime,
+        stats: ctx.stats,
+      };
+    }
+  }
+
+  // 相手の止め四があれば止める（止めないと負け）
+  // 四三の場合も、まず四を止める（どうせ負けだが）
+  if (threats.fours.length > 0) {
+    const defensePos = threats.fours[0];
+    if (defensePos) {
+      return {
+        position: defensePos,
+        score: threats.openThrees.length > 0 ? -PATTERN_SCORES.FIVE : 0, // 四三なら負け
+        completedDepth: 0,
+        interrupted: false,
+        elapsedTime: performance.now() - startTime,
+        stats: ctx.stats,
+      };
+    }
+  }
+
+  // =========================================================================
+  // 通常の探索
+  // =========================================================================
+
+  // 候補手を生成
+  let moves = generateSortedMoves(board, color, {
     ttMove: null,
     killers: ctx.killers,
     depth: 1,
@@ -891,6 +966,21 @@ export function findBestMoveIterativeWithTT(
     useStaticEval: true,
     evaluationOptions,
   });
+
+  // 相手の活三があれば、防御位置のみを候補として探索
+  // （どの止め方がいいかは探索で決める）
+  if (threats.openThrees.length > 0) {
+    const defenseSet = new Set(
+      threats.openThrees.map((p) => `${p.row},${p.col}`),
+    );
+    const defenseMoves = moves.filter((m) =>
+      defenseSet.has(`${m.row},${m.col}`),
+    );
+    // 防御位置が候補手に含まれていれば、それらのみを探索
+    if (defenseMoves.length > 0) {
+      moves = defenseMoves;
+    }
+  }
 
   const dynamicTimeLimit = calculateDynamicTimeLimit(
     timeLimit,
@@ -902,6 +992,15 @@ export function findBestMoveIterativeWithTT(
   ctx.startTime = startTime;
   ctx.timeLimit = dynamicTimeLimit;
   ctx.timeoutFlag = false;
+
+  // ノード数上限を設定
+  ctx.maxNodes = maxNodes;
+  ctx.nodeCountExceeded = false;
+
+  // NOTE: Phase 6の最適化（precomputedThreats）は一旦無効化
+  // 理由: 深いノードでは手番が変わるため、ルートノードで計算した脅威情報が
+  // 不適切に使われる問題がある。毎回detectOpponentThreatsを呼ぶようにする。
+  // 将来的には、ルートノードの候補手評価にのみ適用する形で最適化可能。
 
   // 唯一の候補手なら即座に返す
   if (moves.length === 1 && moves[0]) {
@@ -922,7 +1021,16 @@ export function findBestMoveIterativeWithTT(
   }
 
   // 初期結果（深さ1で必ず結果を得る）
-  let bestResult = findBestMoveWithTT(board, color, 1, randomFactor, ctx);
+  // 活三防御時はmovesが防御位置のみに制限されているので、それを渡す
+  let bestResult = findBestMoveWithTT(
+    board,
+    color,
+    1,
+    randomFactor,
+    ctx,
+    undefined,
+    moves,
+  );
   let completedDepth = 1;
   let interrupted = false;
 
@@ -931,19 +1039,31 @@ export function findBestMoveIterativeWithTT(
     const elapsedTime = performance.now() - startTime;
 
     // 動的時間制限チェック（探索開始前）
-    if (elapsedTime > dynamicTimeLimit * 0.5 || ctx.timeoutFlag) {
+    if (
+      elapsedTime > dynamicTimeLimit * 0.5 ||
+      ctx.timeoutFlag ||
+      ctx.nodeCountExceeded
+    ) {
       interrupted = true;
       break;
     }
 
     // Aspiration Windowsで探索
-    let result = findBestMoveWithTT(board, color, depth, randomFactor, ctx, {
-      previousScore: bestResult.score,
-      windowSize: ASPIRATION_WINDOW,
-    });
+    let result = findBestMoveWithTT(
+      board,
+      color,
+      depth,
+      randomFactor,
+      ctx,
+      {
+        previousScore: bestResult.score,
+        windowSize: ASPIRATION_WINDOW,
+      },
+      moves,
+    );
 
-    // 探索中にタイムアウトした場合は前の結果を使用
-    if (ctx.timeoutFlag) {
+    // 探索中にタイムアウトまたはノード数上限に達した場合は前の結果を使用
+    if (ctx.timeoutFlag || ctx.nodeCountExceeded) {
       interrupted = true;
       break;
     }
@@ -953,10 +1073,18 @@ export function findBestMoveIterativeWithTT(
     const upperBound = bestResult.score + ASPIRATION_WINDOW;
     if (result.score <= lowerBound || result.score >= upperBound) {
       // 再探索（フルウィンドウ）
-      result = findBestMoveWithTT(board, color, depth, randomFactor, ctx);
+      result = findBestMoveWithTT(
+        board,
+        color,
+        depth,
+        randomFactor,
+        ctx,
+        undefined,
+        moves,
+      );
 
-      // 再探索中にタイムアウトした場合
-      if (ctx.timeoutFlag) {
+      // 再探索中にタイムアウトまたはノード数上限に達した場合
+      if (ctx.timeoutFlag || ctx.nodeCountExceeded) {
         interrupted = true;
         break;
       }

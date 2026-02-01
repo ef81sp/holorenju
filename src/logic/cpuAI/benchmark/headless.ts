@@ -162,6 +162,7 @@ export function runHeadlessGame(
         params.timeLimit,
         params.randomFactor,
         params.evaluationOptions,
+        params.maxNodes,
       );
       move = result.position;
       depth = result.completedDepth;
