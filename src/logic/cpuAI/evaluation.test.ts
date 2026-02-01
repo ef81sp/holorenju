@@ -916,6 +916,26 @@ describe("evaluatePosition - 止め四防御", () => {
   });
 });
 
+describe("detectOpponentThreats - ミセ手", () => {
+  it("次に四三が作れる位置を検出する", () => {
+    const board = createEmptyBoard();
+    // ●●- + -●●（交差点で四三が作れる）
+    placeStonesOnBoard(board, [
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 5, col: 7, color: "black" },
+      { row: 6, col: 7, color: "black" },
+    ]);
+
+    const threats = detectOpponentThreats(board, "black");
+
+    expect(threats.mises).toBeDefined();
+    expect(threats.mises.length).toBeGreaterThan(0);
+    const positions = threats.mises.map((p) => `${p.row},${p.col}`);
+    expect(positions).toContain("7,7");
+  });
+});
+
 describe("detectOpponentThreats - 止め四", () => {
   it("横の止め四を検出する（片端が盤端）", () => {
     const board = createEmptyBoard();
