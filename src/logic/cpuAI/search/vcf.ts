@@ -28,7 +28,7 @@ export { checkEnds, countLine } from "../core/lineAnalysis";
 const VCF_MAX_DEPTH = 8;
 
 /** VCF探索の時間制限（ミリ秒） */
-const VCF_TIME_LIMIT = 50;
+const VCF_TIME_LIMIT = 150;
 
 /**
  * VCF探索用の時間制限コンテキスト

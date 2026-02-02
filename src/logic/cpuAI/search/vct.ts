@@ -32,7 +32,7 @@ const VCT_MAX_DEPTH = 4;
 export const VCT_STONE_THRESHOLD = 20;
 
 /** VCT探索の時間制限（ミリ秒） */
-const VCT_TIME_LIMIT = 50;
+const VCT_TIME_LIMIT = 150;
 
 /**
  * VCT（三・四連続勝ち）が成立するかチェック
