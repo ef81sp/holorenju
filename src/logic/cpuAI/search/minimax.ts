@@ -106,6 +106,22 @@ export interface MoveScoreEntry {
   score: number;
   /** Principal Variation（予想手順） */
   pv?: Position[];
+  /** PV末端の盤面（評価内訳計算用） */
+  pvLeafBoard?: BoardState;
+  /** PV末端での手番（評価内訳計算用） */
+  pvLeafColor?: "black" | "white";
+}
+
+/**
+ * PV抽出結果
+ */
+export interface PVExtractionResult {
+  /** Principal Variation（予想手順） */
+  pv: Position[];
+  /** PV末端の盤面 */
+  leafBoard: BoardState;
+  /** PV末端での手番 */
+  leafColor: "black" | "white";
 }
 
 /**
@@ -119,7 +135,7 @@ export interface MoveScoreEntry {
  * @param color 最初の手番の色
  * @param tt TranspositionTable
  * @param maxLength 最大手数（デフォルト: 10）
- * @returns 予想手順の配列
+ * @returns PV抽出結果（予想手順、末端盤面、末端での手番）
  */
 export function extractPV(
   board: BoardState,
@@ -128,7 +144,7 @@ export function extractPV(
   color: "black" | "white",
   tt: TranspositionTable,
   maxLength = 10,
-): Position[] {
+): PVExtractionResult {
   const pv: Position[] = [firstMove];
   let currentBoard = applyMove(board, firstMove, color);
   let currentHash = updateHash(startHash, firstMove.row, firstMove.col, color);
@@ -154,7 +170,11 @@ export function extractPV(
     currentColor = getOppositeColor(currentColor);
   }
 
-  return pv;
+  return {
+    pv,
+    leafBoard: currentBoard,
+    leafColor: currentColor,
+  };
 }
 
 /**
@@ -909,9 +929,15 @@ export function findBestMoveWithTT(
     );
 
     // PVを抽出
-    const pv = extractPV(board, hash, move, color, ctx.tt, depth);
+    const pvResult = extractPV(board, hash, move, color, ctx.tt, depth);
 
-    moveScores.push({ move, score, pv });
+    moveScores.push({
+      move,
+      score,
+      pv: pvResult.pv,
+      pvLeafBoard: pvResult.leafBoard,
+      pvLeafColor: pvResult.leafColor,
+    });
     alpha = Math.max(alpha, score);
   }
 

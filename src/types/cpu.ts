@@ -192,6 +192,32 @@ export interface ScoreBreakdown {
 }
 
 /**
+ * 探索末端の評価内訳（デバッグ表示用）
+ */
+export interface LeafEvaluation {
+  /** 自分のパターンスコア合計 */
+  myScore: number;
+  /** 相手のパターンスコア合計 */
+  opponentScore: number;
+  /** 最終スコア（myScore - opponentScore） */
+  total: number;
+  /** 自分の主要パターン（五連、活四、四、活三の数） */
+  myPatterns: {
+    five: number;
+    openFour: number;
+    four: number;
+    openThree: number;
+  };
+  /** 相手の主要パターン */
+  opponentPatterns: {
+    five: number;
+    openFour: number;
+    four: number;
+    openThree: number;
+  };
+}
+
+/**
  * 候補手情報（デバッグ表示用）
  */
 export interface CandidateMove {
@@ -203,10 +229,12 @@ export interface CandidateMove {
   searchScore: number;
   /** 順位（1始まり、探索スコア順） */
   rank: number;
-  /** スコア内訳 */
+  /** 即時評価の内訳 */
   breakdown?: ScoreBreakdown;
   /** Principal Variation（探索で予想される手順） */
   principalVariation?: Position[];
+  /** 探索末端での評価内訳 */
+  leafEvaluation?: LeafEvaluation;
 }
 
 /**

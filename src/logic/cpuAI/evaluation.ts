@@ -1927,3 +1927,88 @@ export function evaluateBoard(
 
   return myScore - opponentScore;
 }
+
+/**
+ * 盤面評価の内訳（探索末端用）
+ */
+export interface BoardEvaluationBreakdown {
+  /** 自分のパターンスコア合計 */
+  myScore: number;
+  /** 相手のパターンスコア合計 */
+  opponentScore: number;
+  /** 最終スコア（myScore - opponentScore） */
+  total: number;
+  /** 自分の主要パターン数 */
+  myPatterns: {
+    five: number;
+    openFour: number;
+    four: number;
+    openThree: number;
+  };
+  /** 相手の主要パターン数 */
+  opponentPatterns: {
+    five: number;
+    openFour: number;
+    four: number;
+    openThree: number;
+  };
+}
+
+/**
+ * 盤面全体を評価して内訳を返す（探索末端の評価用）
+ *
+ * @param board 盤面
+ * @param perspective 評価の視点（AIの色）
+ * @returns 評価内訳
+ */
+export function evaluateBoardWithBreakdown(
+  board: BoardState,
+  perspective: "black" | "white",
+): BoardEvaluationBreakdown {
+  const opponentColor = perspective === "black" ? "white" : "black";
+  let myScore = 0;
+  let opponentScore = 0;
+
+  const myPatterns = { five: 0, openFour: 0, four: 0, openThree: 0 };
+  const opponentPatterns = { five: 0, openFour: 0, four: 0, openThree: 0 };
+
+  // 全ての石について評価
+  for (let row = 0; row < 15; row++) {
+    for (let col = 0; col < 15; col++) {
+      const stone = board[row]?.[col];
+      if (stone === null || stone === undefined) {
+        continue;
+      }
+
+      const { score, breakdown } = evaluateStonePatternsWithBreakdown(
+        board,
+        row,
+        col,
+        stone,
+      );
+
+      if (stone === perspective) {
+        myScore += score;
+        // パターン数をカウント（スコアからパターン数を推定）
+        if (breakdown.five.final > 0) {myPatterns.five++;}
+        if (breakdown.openFour.final > 0) {myPatterns.openFour++;}
+        if (breakdown.four.final > 0) {myPatterns.four++;}
+        if (breakdown.openThree.final > 0) {myPatterns.openThree++;}
+      } else if (stone === opponentColor) {
+        opponentScore += score;
+        if (breakdown.five.final > 0) {opponentPatterns.five++;}
+        if (breakdown.openFour.final > 0) {opponentPatterns.openFour++;}
+        if (breakdown.four.final > 0) {opponentPatterns.four++;}
+        if (breakdown.openThree.final > 0) {opponentPatterns.openThree++;}
+      }
+    }
+  }
+
+  return {
+    myScore,
+    opponentScore,
+    total: myScore - opponentScore,
+    myPatterns,
+    opponentPatterns,
+  };
+}

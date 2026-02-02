@@ -67,6 +67,40 @@ function formatPV(
 }
 
 /**
+ * パターンがあるかチェック
+ */
+function hasPatterns(patterns: {
+  five: number;
+  openFour: number;
+  four: number;
+  openThree: number;
+}): boolean {
+  return (
+    patterns.five > 0 ||
+    patterns.openFour > 0 ||
+    patterns.four > 0 ||
+    patterns.openThree > 0
+  );
+}
+
+/**
+ * パターン数をフォーマット
+ */
+function formatPatterns(patterns: {
+  five: number;
+  openFour: number;
+  four: number;
+  openThree: number;
+}): string {
+  const parts: string[] = [];
+  if (patterns.five > 0) {parts.push(`五${patterns.five}`);}
+  if (patterns.openFour > 0) {parts.push(`活四${patterns.openFour}`);}
+  if (patterns.four > 0) {parts.push(`四${patterns.four}`);}
+  if (patterns.openThree > 0) {parts.push(`活三${patterns.openThree}`);}
+  return parts.join(" ");
+}
+
+/**
  * パターン内訳のラベル
  */
 const patternLabels: Record<string, string> = {
@@ -450,6 +484,48 @@ function isDepthChanged(index: number): boolean {
               </div>
             </div>
 
+            <!-- 探索末端の評価 -->
+            <div
+              v-if="candidate.leafEvaluation"
+              class="popover-leaf"
+            >
+              <div class="popover-section-label">末端評価</div>
+              <div class="leaf-summary">
+                <span class="leaf-score">
+                  自分: {{ formatScore(candidate.leafEvaluation.myScore) }}
+                </span>
+                <span class="leaf-score">
+                  相手:
+                  {{ formatScore(candidate.leafEvaluation.opponentScore) }}
+                </span>
+                <span class="leaf-total">
+                  = {{ formatScore(candidate.leafEvaluation.total) }}
+                </span>
+              </div>
+              <div class="leaf-patterns">
+                <div
+                  v-if="hasPatterns(candidate.leafEvaluation.myPatterns)"
+                  class="leaf-pattern-row"
+                >
+                  <span class="leaf-label">自分:</span>
+                  <span class="leaf-value">
+                    {{ formatPatterns(candidate.leafEvaluation.myPatterns) }}
+                  </span>
+                </div>
+                <div
+                  v-if="hasPatterns(candidate.leafEvaluation.opponentPatterns)"
+                  class="leaf-pattern-row"
+                >
+                  <span class="leaf-label">相手:</span>
+                  <span class="leaf-value">
+                    {{
+                      formatPatterns(candidate.leafEvaluation.opponentPatterns)
+                    }}
+                  </span>
+                </div>
+              </div>
+            </div>
+
             <div
               v-if="candidate.rank === selectedRank && wasRandom"
               class="popover-selected"
@@ -778,6 +854,49 @@ function isDepthChanged(index: number): boolean {
 .pv-opponent {
   background: rgba(0, 0, 0, 0.08);
   color: var(--color-text-secondary);
+}
+
+/* 探索末端の評価 */
+.popover-leaf {
+  margin-top: var(--size-6);
+  padding-top: var(--size-6);
+  border-top: 1px solid var(--color-border-light);
+}
+
+.leaf-summary {
+  display: flex;
+  gap: var(--size-8);
+  font-size: var(--size-11);
+  font-family: monospace;
+  margin-bottom: var(--size-4);
+}
+
+.leaf-score {
+  color: var(--color-text-secondary);
+}
+
+.leaf-total {
+  color: var(--color-primary);
+  font-weight: 500;
+}
+
+.leaf-patterns {
+  font-size: var(--size-10);
+}
+
+.leaf-pattern-row {
+  display: flex;
+  gap: var(--size-6);
+  padding: var(--size-1) 0;
+}
+
+.leaf-label {
+  color: var(--color-text-secondary);
+  min-width: var(--size-32);
+}
+
+.leaf-value {
+  color: var(--color-text-primary);
 }
 
 .popover-selected {

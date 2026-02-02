@@ -15,7 +15,10 @@ import {
 } from "@/types/cpu";
 
 import { countStones } from "./core/boardUtils";
-import { evaluatePositionWithBreakdown } from "./evaluation";
+import {
+  evaluateBoardWithBreakdown,
+  evaluatePositionWithBreakdown,
+} from "./evaluation";
 import { getOpeningMove, isOpeningPhase } from "./opening";
 import { findBestMoveIterativeWithTT } from "./search/minimax";
 
@@ -80,7 +83,7 @@ self.onmessage = (event: MessageEvent<AIRequest>) => {
     // 候補手を上位5手に制限（通信オーバーヘッド削減）
     // 各候補手の内訳を計算
     const candidates = result.candidates?.slice(0, 5).map((entry, index) => {
-      // 内訳を計算（スコアも取得して内訳と一致させる）
+      // 即時評価の内訳を計算
       const { score: breakdownScore, breakdown } =
         evaluatePositionWithBreakdown(
           request.board,
@@ -90,6 +93,12 @@ self.onmessage = (event: MessageEvent<AIRequest>) => {
           params.evaluationOptions,
         );
 
+      // 探索末端の評価内訳を計算（PVがある場合）
+      const leafEvaluation =
+        entry.pvLeafBoard && entry.pvLeafColor
+          ? evaluateBoardWithBreakdown(entry.pvLeafBoard, currentTurn)
+          : undefined;
+
       return {
         position: entry.move,
         score: Math.round(breakdownScore), // 即時評価（内訳の合計）
@@ -97,6 +106,7 @@ self.onmessage = (event: MessageEvent<AIRequest>) => {
         rank: index + 1,
         breakdown: breakdown as ScoreBreakdown,
         principalVariation: entry.pv, // 予想手順
+        leafEvaluation, // 探索末端の評価内訳
       };
     });
 
