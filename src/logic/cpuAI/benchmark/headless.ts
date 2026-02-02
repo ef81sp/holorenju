@@ -35,6 +35,26 @@ export interface PlayerConfig {
 }
 
 /**
+ * 探索統計情報
+ */
+export interface SearchStatsRecord {
+  /** 探索ノード数 */
+  nodes: number;
+  /** TTヒット数 */
+  ttHits: number;
+  /** TTカットオフ数 */
+  ttCutoffs: number;
+  /** Beta剪定数 */
+  betaCutoffs: number;
+  /** 設定された最大探索深度 */
+  maxDepth: number;
+  /** 実際に到達した探索深度 */
+  completedDepth: number;
+  /** 中断されたか */
+  interrupted: boolean;
+}
+
+/**
  * 着手記録（Position を拡張）
  */
 export interface MoveRecord {
@@ -48,6 +68,8 @@ export interface MoveRecord {
   isOpening: boolean;
   /** 到達探索深度（開局時は undefined） */
   depth?: number;
+  /** 探索統計（開局時は undefined） */
+  stats?: SearchStatsRecord;
 }
 
 /**
@@ -156,6 +178,7 @@ export function runHeadlessGame(
     }
 
     // 通常の探索
+    let stats: SearchStatsRecord | undefined = undefined;
     if (!move) {
       const result = findBestMoveIterativeWithTT(
         board,
@@ -168,6 +191,15 @@ export function runHeadlessGame(
       );
       move = result.position;
       depth = result.completedDepth;
+      stats = {
+        nodes: result.stats.nodes,
+        ttHits: result.stats.ttHits,
+        ttCutoffs: result.stats.ttCutoffs,
+        betaCutoffs: result.stats.betaCutoffs,
+        maxDepth: params.depth,
+        completedDepth: result.completedDepth,
+        interrupted: result.interrupted,
+      };
     }
 
     const moveTime = performance.now() - moveStartTime;
@@ -201,6 +233,7 @@ export function runHeadlessGame(
           time: moveTime,
           isOpening,
           depth,
+          stats,
         };
         return {
           playerA: playerA.id,
@@ -223,6 +256,7 @@ export function runHeadlessGame(
       time: moveTime,
       isOpening,
       depth,
+      stats,
     });
     moveCount++;
 
