@@ -541,8 +541,9 @@ function runTasksWithWorkers(
         },
         execArgv: [
           "--experimental-strip-types",
-          "--loader",
-          path.join(__dirname, "loader.ts"),
+          "--disable-warning=ExperimentalWarning",
+          "--import",
+          path.join(__dirname, "register-loader.mjs"),
         ],
       });
 

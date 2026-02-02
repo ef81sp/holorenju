@@ -266,7 +266,9 @@ function getCenterBonus(row: number, col: number): number {
   const centerCol = 7;
   const distance = Math.abs(row - centerRow) + Math.abs(col - centerCol);
   // 最大距離は14（角から中央）、距離が近いほど高スコア
-  return Math.max(0, PATTERN_SCORES.CENTER_BONUS * (14 - distance)) / 14;
+  return Math.round(
+    Math.max(0, PATTERN_SCORES.CENTER_BONUS * (14 - distance)) / 14,
+  );
 }
 
 /**
@@ -1275,7 +1277,9 @@ export function evaluateStonePatterns(
 
     // 斜め方向（インデックス2,3）にボーナスを適用
     if ((i === 2 || i === 3) && dirScore > 0) {
-      dirScore *= PATTERN_SCORES.DIAGONAL_BONUS_MULTIPLIER;
+      dirScore = Math.round(
+        dirScore * PATTERN_SCORES.DIAGONAL_BONUS_MULTIPLIER,
+      );
     }
 
     score += dirScore;
@@ -1286,6 +1290,165 @@ export function evaluateStonePatterns(
   score += getJumpPatternScore(jumpResult);
 
   return score;
+}
+
+/**
+ * パターンスコア詳細（斜めボーナス・倍率表示用）
+ */
+export interface PatternScoreDetail {
+  /** 基本スコア（斜めボーナス適用前の合計） */
+  base: number;
+  /** 斜めボーナス分 */
+  diagonalBonus: number;
+  /** 最終スコア（base + diagonalBonus、倍率適用後） */
+  final: number;
+  /** 倍率適用前の値（防御の0.5倍前など） */
+  preMultiplier?: number;
+  /** 適用された倍率（0.5など） */
+  multiplier?: number;
+}
+
+/**
+ * パターン内訳
+ */
+export interface PatternBreakdown {
+  five: PatternScoreDetail;
+  openFour: PatternScoreDetail;
+  four: PatternScoreDetail;
+  openThree: PatternScoreDetail;
+  three: PatternScoreDetail;
+  openTwo: PatternScoreDetail;
+  two: PatternScoreDetail;
+}
+
+/**
+ * パターンタイプを取得
+ */
+type PatternType =
+  | "five"
+  | "openFour"
+  | "four"
+  | "openThree"
+  | "three"
+  | "openTwo"
+  | "two"
+  | null;
+
+function getPatternType(pattern: DirectionPattern): PatternType {
+  const { count, end1, end2 } = pattern;
+  const bothOpen = end1 === "empty" && end2 === "empty";
+  const oneOpen = end1 === "empty" || end2 === "empty";
+
+  switch (count) {
+    case 5:
+      return "five";
+    case 4:
+      if (bothOpen) {
+        return "openFour";
+      }
+      if (oneOpen) {
+        return "four";
+      }
+      return null;
+    case 3:
+      if (bothOpen) {
+        return "openThree";
+      }
+      if (oneOpen) {
+        return "three";
+      }
+      return null;
+    case 2:
+      if (bothOpen) {
+        return "openTwo";
+      }
+      if (oneOpen) {
+        return "two";
+      }
+      return null;
+    default:
+      if (count >= 6) {
+        return "five";
+      }
+      return null;
+  }
+}
+
+/** 空のパターンスコア詳細を作成 */
+function emptyScoreDetail(): PatternScoreDetail {
+  return { base: 0, diagonalBonus: 0, final: 0 };
+}
+
+/**
+ * 石のパターンを評価し、内訳も返す
+ */
+export function evaluateStonePatternsWithBreakdown(
+  board: BoardState,
+  row: number,
+  col: number,
+  color: "black" | "white",
+): { score: number; breakdown: PatternBreakdown } {
+  let score = 0;
+  const breakdown: PatternBreakdown = {
+    five: emptyScoreDetail(),
+    openFour: emptyScoreDetail(),
+    four: emptyScoreDetail(),
+    openThree: emptyScoreDetail(),
+    three: emptyScoreDetail(),
+    openTwo: emptyScoreDetail(),
+    two: emptyScoreDetail(),
+  };
+
+  // 連続パターンのスコア
+  for (let i = 0; i < DIRECTIONS.length; i++) {
+    const direction = DIRECTIONS[i];
+    if (!direction) {
+      continue;
+    }
+    const [dr, dc] = direction;
+    const pattern = analyzeDirection(board, row, col, dr, dc, color);
+    const baseScore = getPatternScore(pattern);
+    const patternType = getPatternType(pattern);
+
+    // 斜め方向（インデックス2,3）にボーナスを適用
+    const isDiagonal = i === 2 || i === 3;
+    let finalScore = baseScore;
+    let diagonalBonus = 0;
+
+    if (isDiagonal && baseScore > 0) {
+      finalScore = Math.round(
+        baseScore * PATTERN_SCORES.DIAGONAL_BONUS_MULTIPLIER,
+      );
+      diagonalBonus = finalScore - baseScore;
+    }
+
+    score += finalScore;
+
+    // 内訳に追加
+    if (patternType) {
+      breakdown[patternType].base += baseScore;
+      breakdown[patternType].diagonalBonus += diagonalBonus;
+      breakdown[patternType].final += finalScore;
+    }
+  }
+
+  // 跳びパターンのスコア
+  const jumpResult = analyzeJumpPatterns(board, row, col, color);
+  const jumpScore = getJumpPatternScore(jumpResult);
+  score += jumpScore;
+
+  // 跳び四は四に、跳び三は活三に加算（跳びパターンは斜めボーナスなし）
+  if (jumpResult.jumpFourCount > 0) {
+    const jumpFourScore = PATTERN_SCORES.FOUR * jumpResult.jumpFourCount;
+    breakdown.four.base += jumpFourScore;
+    breakdown.four.final += jumpFourScore;
+  }
+  if (jumpResult.hasValidOpenThree) {
+    breakdown.openThree.base += PATTERN_SCORES.OPEN_THREE;
+    breakdown.openThree.final += PATTERN_SCORES.OPEN_THREE;
+  }
+
+  return { score, breakdown };
 }
 
 /**
@@ -1526,8 +1689,10 @@ export function evaluatePosition(
  * スコア内訳（デバッグ表示用）
  */
 export interface ScoreBreakdown {
-  /** 基本パターンスコア（四、活三、二など） */
-  pattern: number;
+  /** 攻撃パターン内訳 */
+  pattern: PatternBreakdown;
+  /** 防御パターン内訳（相手のパターンを阻止） */
+  defense: PatternBreakdown;
   /** 四三ボーナス */
   fourThree: number;
   /** フクミ手ボーナス */
@@ -1551,8 +1716,19 @@ export function evaluatePositionWithBreakdown(
   color: StoneColor,
   options: EvaluationOptions = DEFAULT_EVAL_OPTIONS,
 ): { score: number; breakdown: ScoreBreakdown } {
+  const createEmptyPatternBreakdown = (): PatternBreakdown => ({
+    five: emptyScoreDetail(),
+    openFour: emptyScoreDetail(),
+    four: emptyScoreDetail(),
+    openThree: emptyScoreDetail(),
+    three: emptyScoreDetail(),
+    openTwo: emptyScoreDetail(),
+    two: emptyScoreDetail(),
+  });
+
   const defaultBreakdown: ScoreBreakdown = {
-    pattern: 0,
+    pattern: createEmptyPatternBreakdown(),
+    defense: createEmptyPatternBreakdown(),
     fourThree: 0,
     fukumi: 0,
     mise: 0,
@@ -1566,9 +1742,18 @@ export function evaluatePositionWithBreakdown(
 
   // 五連チェック（最優先）
   if (checkFive(board, row, col, color)) {
+    const fiveBreakdown = createEmptyPatternBreakdown();
+    fiveBreakdown.five = {
+      base: PATTERN_SCORES.FIVE,
+      diagonalBonus: 0,
+      final: PATTERN_SCORES.FIVE,
+    };
     return {
       score: PATTERN_SCORES.FIVE,
-      breakdown: { ...defaultBreakdown, pattern: PATTERN_SCORES.FIVE },
+      breakdown: {
+        ...defaultBreakdown,
+        pattern: fiveBreakdown,
+      },
     };
   }
 
@@ -1581,14 +1766,24 @@ export function evaluatePositionWithBreakdown(
 
   // 白の三三・四四チェック
   if (color === "white" && checkWhiteWinningPattern(testBoard, row, col)) {
+    const fiveBreakdown = createEmptyPatternBreakdown();
+    fiveBreakdown.five = {
+      base: PATTERN_SCORES.FIVE,
+      diagonalBonus: 0,
+      final: PATTERN_SCORES.FIVE,
+    };
     return {
       score: PATTERN_SCORES.FIVE,
-      breakdown: { ...defaultBreakdown, pattern: PATTERN_SCORES.FIVE },
+      breakdown: {
+        ...defaultBreakdown,
+        pattern: fiveBreakdown,
+      },
     };
   }
 
-  // 攻撃スコア: 自分のパターン
-  const attackScore = evaluateStonePatterns(testBoard, row, col, color);
+  // 攻撃スコア: 自分のパターン（内訳付き）
+  const { score: attackScore, breakdown: patternBreakdown } =
+    evaluateStonePatternsWithBreakdown(testBoard, row, col, color);
 
   // 四三ボーナス
   const jumpResult = analyzeJumpPatterns(testBoard, row, col, color);
@@ -1623,24 +1818,60 @@ export function evaluatePositionWithBreakdown(
   // 中央ボーナス
   const centerBonus = getCenterBonus(row, col);
 
-  // 防御スコア（内訳には含めない）
+  // 防御スコア（相手のパターンを阻止）
   const opponentColor = color === "black" ? "white" : "black";
   const opponentTestBoard = copyBoard(board);
   const opponentTestRow = opponentTestBoard[row];
   if (opponentTestRow) {
     opponentTestRow[col] = opponentColor;
   }
-  const opponentPatternScore = evaluateStonePatterns(
-    opponentTestBoard,
-    row,
-    col,
-    opponentColor,
-  );
-  const defenseScore = opponentPatternScore * 0.5;
+  const { breakdown: opponentPatternBreakdown } =
+    evaluateStonePatternsWithBreakdown(
+      opponentTestBoard,
+      row,
+      col,
+      opponentColor,
+    );
+
+  // 防御内訳（0.5倍を適用、丸め処理）
+  // 防御は相手のパターンを阻止するので、斜めボーナスも含めた最終値に0.5を掛ける
+  const DEFENSE_MULTIPLIER = 0.5;
+  const applyDefenseMultiplier = (
+    detail: PatternScoreDetail,
+  ): PatternScoreDetail => ({
+    base: Math.round(detail.base * DEFENSE_MULTIPLIER),
+    diagonalBonus: Math.round(detail.diagonalBonus * DEFENSE_MULTIPLIER),
+    final: Math.round(detail.final * DEFENSE_MULTIPLIER),
+    preMultiplier: detail.final, // 0.5倍前の値（斜めボーナス込み）
+    multiplier: DEFENSE_MULTIPLIER,
+  });
+
+  const defenseBreakdown: PatternBreakdown = {
+    five: applyDefenseMultiplier(opponentPatternBreakdown.five),
+    openFour: applyDefenseMultiplier(opponentPatternBreakdown.openFour),
+    four: applyDefenseMultiplier(opponentPatternBreakdown.four),
+    openThree: applyDefenseMultiplier(opponentPatternBreakdown.openThree),
+    three: applyDefenseMultiplier(opponentPatternBreakdown.three),
+    openTwo: applyDefenseMultiplier(opponentPatternBreakdown.openTwo),
+    two: applyDefenseMultiplier(opponentPatternBreakdown.two),
+  };
+
+  // 内訳の合計を計算（表示と一致させる）
+  const sumPatternBreakdown = (breakdown: PatternBreakdown): number =>
+    breakdown.five.final +
+    breakdown.openFour.final +
+    breakdown.four.final +
+    breakdown.openThree.final +
+    breakdown.three.final +
+    breakdown.openTwo.final +
+    breakdown.two.final;
+
+  const patternTotal = sumPatternBreakdown(patternBreakdown);
+  const defenseTotal = sumPatternBreakdown(defenseBreakdown);
 
   const totalScore =
-    attackScore +
-    defenseScore +
+    patternTotal +
+    defenseTotal +
     centerBonus +
     fourThreeBonus +
     miseBonus +
@@ -1650,7 +1881,8 @@ export function evaluatePositionWithBreakdown(
   return {
     score: totalScore,
     breakdown: {
-      pattern: attackScore,
+      pattern: patternBreakdown,
+      defense: defenseBreakdown,
       fourThree: fourThreeBonus,
       fukumi: fukumiBonus,
       mise: miseBonus,

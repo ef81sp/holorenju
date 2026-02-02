@@ -136,11 +136,49 @@ export interface AIRequest {
 }
 
 /**
+ * パターンスコア詳細（斜めボーナス・倍率表示用）
+ */
+export interface PatternScoreDetail {
+  /** 基本スコア（斜めボーナス適用前の合計） */
+  base: number;
+  /** 斜めボーナス分 */
+  diagonalBonus: number;
+  /** 最終スコア（base + diagonalBonus、倍率適用後） */
+  final: number;
+  /** 倍率適用前の値（防御の0.5倍前など） */
+  preMultiplier?: number;
+  /** 適用された倍率（0.5など） */
+  multiplier?: number;
+}
+
+/**
+ * パターン内訳（デバッグ表示用）
+ */
+export interface PatternBreakdown {
+  /** 五連 */
+  five: PatternScoreDetail;
+  /** 活四（両端開） */
+  openFour: PatternScoreDetail;
+  /** 止め四（片端開） */
+  four: PatternScoreDetail;
+  /** 活三（両端開） */
+  openThree: PatternScoreDetail;
+  /** 止め三（片端開） */
+  three: PatternScoreDetail;
+  /** 活二 */
+  openTwo: PatternScoreDetail;
+  /** 止め二 */
+  two: PatternScoreDetail;
+}
+
+/**
  * スコア内訳（デバッグ表示用）
  */
 export interface ScoreBreakdown {
-  /** 基本パターンスコア（四、活三、二など） */
-  pattern: number;
+  /** 攻撃パターン内訳 */
+  pattern: PatternBreakdown;
+  /** 防御パターン内訳（相手のパターンを阻止） */
+  defense: PatternBreakdown;
   /** 四三ボーナス */
   fourThree: number;
   /** フクミ手ボーナス */

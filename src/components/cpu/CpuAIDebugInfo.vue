@@ -7,7 +7,12 @@
 
 import { computed, ref } from "vue";
 
-import type { AIResponse, CandidateMove, DepthResult } from "@/types/cpu";
+import type {
+  AIResponse,
+  CandidateMove,
+  DepthResult,
+  PatternScoreDetail,
+} from "@/types/cpu";
 import { useBoardStore } from "@/stores/boardStore";
 
 const props = defineProps<{
@@ -46,10 +51,22 @@ function formatScore(score: number): string {
 }
 
 /**
- * 内訳項目のラベル
+ * パターン内訳のラベル
  */
-const breakdownLabels: Record<string, string> = {
-  pattern: "パターン",
+const patternLabels: Record<string, string> = {
+  five: "五連",
+  openFour: "活四",
+  four: "四",
+  openThree: "活三",
+  three: "三",
+  openTwo: "活二",
+  two: "二",
+};
+
+/**
+ * ボーナス内訳項目のラベル
+ */
+const bonusLabels: Record<string, string> = {
   fourThree: "四三",
   fukumi: "フクミ手",
   mise: "ミセ手",
@@ -58,21 +75,92 @@ const breakdownLabels: Record<string, string> = {
 };
 
 /**
- * 内訳の非ゼロ項目を取得
+ * パターン内訳の項目
  */
-function getNonZeroBreakdown(
-  candidate: CandidateMove,
-): { key: string; label: string; value: number }[] {
+interface PatternItem {
+  key: string;
+  label: string;
+  detail: PatternScoreDetail;
+}
+
+/**
+ * ボーナス内訳の項目
+ */
+interface BonusItem {
+  key: string;
+  label: string;
+  value: number;
+}
+
+/**
+ * 内訳の非ゼロ項目を取得（攻撃・防御・ボーナスを分離）
+ */
+function getNonZeroBreakdown(candidate: CandidateMove): {
+  patterns: PatternItem[];
+  defense: PatternItem[];
+  bonuses: BonusItem[];
+} {
   if (!candidate.breakdown) {
-    return [];
+    return { patterns: [], defense: [], bonuses: [] };
   }
-  return Object.entries(candidate.breakdown)
-    .filter(([, value]) => value !== 0)
+
+  // 攻撃パターン内訳
+  const patterns = Object.entries(candidate.breakdown.pattern)
+    .filter(([, detail]) => (detail as PatternScoreDetail).final !== 0)
+    .map(([key, detail]) => ({
+      key,
+      label: patternLabels[key] ?? key,
+      detail: detail as PatternScoreDetail,
+    }));
+
+  // 防御パターン内訳
+  const defense = Object.entries(candidate.breakdown.defense)
+    .filter(([, detail]) => (detail as PatternScoreDetail).final !== 0)
+    .map(([key, detail]) => ({
+      key,
+      label: patternLabels[key] ?? key,
+      detail: detail as PatternScoreDetail,
+    }));
+
+  // ボーナス内訳
+  const bonuses = Object.entries(candidate.breakdown)
+    .filter(
+      ([key, value]) => key !== "pattern" && key !== "defense" && value !== 0,
+    )
     .map(([key, value]) => ({
       key,
-      label: breakdownLabels[key] ?? key,
-      value,
+      label: bonusLabels[key] ?? key,
+      value: value as number,
     }));
+
+  return { patterns, defense, bonuses };
+}
+
+/**
+ * パターンスコアの表示文字列を生成
+ * 倍率がある場合: "preMultiplier × multiplier = final"
+ * 斜めボーナスがある場合: "base + bonus = final"
+ * ない場合: "+final"
+ */
+function formatPatternScore(detail: PatternScoreDetail): string {
+  // 倍率が適用されている場合（防御など）
+  if (detail.multiplier !== undefined && detail.preMultiplier !== undefined) {
+    if (detail.preMultiplier === 0) {
+      return formatScore(detail.final);
+    }
+    // 斜めボーナスもある場合: "(base + bonus) × multiplier = final"
+    if (detail.diagonalBonus !== 0) {
+      const preMultBase = Math.round(detail.base / detail.multiplier);
+      const preMultBonus = Math.round(detail.diagonalBonus / detail.multiplier);
+      return `(${preMultBase} + ${preMultBonus}) × ${detail.multiplier} = ${detail.final}`;
+    }
+    return `${detail.preMultiplier} × ${detail.multiplier} = ${detail.final}`;
+  }
+  // 斜めボーナスのみの場合
+  if (detail.diagonalBonus !== 0) {
+    return `${detail.base} + ${detail.diagonalBonus} = ${detail.final}`;
+  }
+  return formatScore(detail.final);
 }
 
 /**
@@ -239,14 +327,56 @@ function isDepthChanged(index: number): boolean {
               v-if="candidate.breakdown"
               class="popover-breakdown"
             >
-              <div
-                v-for="item in getNonZeroBreakdown(candidate)"
-                :key="item.key"
-                class="popover-row"
+              <!-- 攻撃パターン内訳 -->
+              <template
+                v-if="getNonZeroBreakdown(candidate).patterns.length > 0"
               >
-                <span class="popover-label">{{ item.label }}:</span>
-                <span class="popover-value">{{ formatScore(item.value) }}</span>
-              </div>
+                <div class="popover-section-label">攻撃</div>
+                <div
+                  v-for="item in getNonZeroBreakdown(candidate).patterns"
+                  :key="`attack-${item.key}`"
+                  class="popover-row"
+                >
+                  <span class="popover-label">{{ item.label }}:</span>
+                  <span class="popover-value">
+                    {{ formatPatternScore(item.detail) }}
+                  </span>
+                </div>
+              </template>
+
+              <!-- 防御パターン内訳 -->
+              <template
+                v-if="getNonZeroBreakdown(candidate).defense.length > 0"
+              >
+                <div class="popover-section-label">防御</div>
+                <div
+                  v-for="item in getNonZeroBreakdown(candidate).defense"
+                  :key="`defense-${item.key}`"
+                  class="popover-row"
+                >
+                  <span class="popover-label">{{ item.label }}:</span>
+                  <span class="popover-value">
+                    {{ formatPatternScore(item.detail) }}
+                  </span>
+                </div>
+              </template>
+
+              <!-- ボーナス内訳 -->
+              <template
+                v-if="getNonZeroBreakdown(candidate).bonuses.length > 0"
+              >
+                <div class="popover-section-label">ボーナス</div>
+                <div
+                  v-for="item in getNonZeroBreakdown(candidate).bonuses"
+                  :key="`bonus-${item.key}`"
+                  class="popover-row"
+                >
+                  <span class="popover-label">{{ item.label }}:</span>
+                  <span class="popover-value">
+                    {{ formatScore(item.value) }}
+                  </span>
+                </div>
+              </template>
             </div>
 
             <div
@@ -458,6 +588,17 @@ function isDepthChanged(index: number): boolean {
 
 .popover-breakdown {
   font-family: monospace;
+}
+
+.popover-section-label {
+  font-size: var(--size-10);
+  color: var(--color-text-secondary);
+  margin-top: var(--size-4);
+  margin-bottom: var(--size-2);
+}
+
+.popover-section-label:first-child {
+  margin-top: 0;
 }
 
 .popover-row {

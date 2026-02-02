@@ -80,18 +80,19 @@ self.onmessage = (event: MessageEvent<AIRequest>) => {
     // 候補手を上位5手に制限（通信オーバーヘッド削減）
     // 各候補手の内訳を計算
     const candidates = result.candidates?.slice(0, 5).map((entry, index) => {
-      // 内訳を計算
-      const { breakdown } = evaluatePositionWithBreakdown(
-        request.board,
-        entry.move.row,
-        entry.move.col,
-        currentTurn,
-        params.evaluationOptions,
-      );
+      // 内訳を計算（スコアも取得して内訳と一致させる）
+      const { score: breakdownScore, breakdown } =
+        evaluatePositionWithBreakdown(
+          request.board,
+          entry.move.row,
+          entry.move.col,
+          currentTurn,
+          params.evaluationOptions,
+        );
 
       return {
         position: entry.move,
-        score: entry.score,
+        score: Math.round(breakdownScore), // 内訳と一致するスコアを使用
         rank: index + 1,
         breakdown: breakdown as ScoreBreakdown,
       };
