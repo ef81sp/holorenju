@@ -18,6 +18,7 @@ import {
 } from "@/logic/renjuRules";
 
 import { DIRECTION_INDICES, DIRECTIONS } from "./core/constants";
+import { findJumpGapPosition } from "./patterns/threatAnalysis";
 import { hasVCF } from "./search/vcf";
 // VCT判定はルートレベル（findBestMoveIterativeWithTT）で行うため、評価関数では使用しない
 
@@ -864,7 +865,11 @@ export function detectOpponentThreats(
       }
 
       // 各方向をチェック
-      for (const [dr, dc] of DIRECTIONS) {
+      for (let dirIdx = 0; dirIdx < DIRECTIONS.length; dirIdx++) {
+        const direction = DIRECTIONS[dirIdx];
+        if (!direction) {continue;}
+        const [dr, dc] = direction;
+        const renjuDirIndex = DIRECTION_INDICES[dirIdx] ?? -1;
         const pattern = analyzeDirection(
           board,
           row,
@@ -922,6 +927,34 @@ export function detectOpponentThreats(
               !result.fours.some((p) => p.row === pos.row && p.col === pos.col)
             ) {
               result.fours.push(pos);
+            }
+          }
+        }
+
+        // 跳び四をチェック（●●・●● など、連続4石以外のパターン）
+        // 跳び四は中の空きを埋めると五連になるため、止め四と同等の脅威
+        if (
+          pattern.count !== 4 &&
+          renjuDirIndex >= 0 &&
+          checkJumpFour(board, row, col, renjuDirIndex, opponentColor)
+        ) {
+          // 跳び四の防御位置は中の空きマス（埋めると五連になる）
+          const gapPos = findJumpGapPosition(
+            board,
+            row,
+            col,
+            dr,
+            dc,
+            opponentColor,
+          );
+          if (gapPos) {
+            // 重複チェック
+            if (
+              !result.fours.some(
+                (p) => p.row === gapPos.row && p.col === gapPos.col,
+              )
+            ) {
+              result.fours.push(gapPos);
             }
           }
         }
@@ -1557,35 +1590,36 @@ export function evaluatePosition(
       }
     }
 
-    // 相手のミセ手を止めない手は除外（活四・止め四がない場合、活三より優先）
-    // ミセ手を止めないと次に四三で負けるため、活三よりも優先度が高い
-    if (
-      options.enableMiseThreat &&
-      threats.mises.length > 0 &&
-      threats.openFours.length === 0 &&
-      threats.fours.length === 0 &&
-      !canWinFirst
-    ) {
-      const isDefendingMise = threats.mises.some(
-        (p) => p.row === row && p.col === col,
-      );
-      if (!isDefendingMise) {
-        return -Infinity;
-      }
-    }
-
-    // 相手の活三を止めない手は除外（活四・止め四・ミセ手がある場合はそちらを優先）
+    // 相手の活三を止めない手は除外（活四・止め四がない場合）
+    // 活三 → 活四 → 負け確定なので、ミセより優先度が高い
     if (
       threats.openThrees.length > 0 &&
       threats.openFours.length === 0 &&
       threats.fours.length === 0 &&
-      threats.mises.length === 0 &&
       !canWinFirst
     ) {
       const isDefendingOpenThree = threats.openThrees.some(
         (p) => p.row === row && p.col === col,
       );
       if (!isDefendingOpenThree) {
+        return -Infinity;
+      }
+    }
+
+    // 相手のミセ手を止めない手は除外（活四・止め四・活三がない場合）
+    // ミセ → 四三はまだ止められる可能性があるが、放置すると危険
+    if (
+      options.enableMiseThreat &&
+      threats.mises.length > 0 &&
+      threats.openFours.length === 0 &&
+      threats.fours.length === 0 &&
+      threats.openThrees.length === 0 &&
+      !canWinFirst
+    ) {
+      const isDefendingMise = threats.mises.some(
+        (p) => p.row === row && p.col === col,
+      );
+      if (!isDefendingMise) {
         return -Infinity;
       }
     }
