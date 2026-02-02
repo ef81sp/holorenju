@@ -1523,6 +1523,144 @@ export function evaluatePosition(
 }
 
 /**
+ * スコア内訳（デバッグ表示用）
+ */
+export interface ScoreBreakdown {
+  /** 基本パターンスコア（四、活三、二など） */
+  pattern: number;
+  /** 四三ボーナス */
+  fourThree: number;
+  /** フクミ手ボーナス */
+  fukumi: number;
+  /** ミセ手ボーナス */
+  mise: number;
+  /** 中央ボーナス */
+  center: number;
+  /** 複数方向脅威ボーナス */
+  multiThreat: number;
+}
+
+/**
+ * 指定位置に石を置いた場合の評価スコアと内訳を計算
+ * デバッグ表示用
+ */
+export function evaluatePositionWithBreakdown(
+  board: BoardState,
+  row: number,
+  col: number,
+  color: StoneColor,
+  options: EvaluationOptions = DEFAULT_EVAL_OPTIONS,
+): { score: number; breakdown: ScoreBreakdown } {
+  const defaultBreakdown: ScoreBreakdown = {
+    pattern: 0,
+    fourThree: 0,
+    fukumi: 0,
+    mise: 0,
+    center: 0,
+    multiThreat: 0,
+  };
+
+  if (color === null) {
+    return { score: 0, breakdown: defaultBreakdown };
+  }
+
+  // 五連チェック（最優先）
+  if (checkFive(board, row, col, color)) {
+    return {
+      score: PATTERN_SCORES.FIVE,
+      breakdown: { ...defaultBreakdown, pattern: PATTERN_SCORES.FIVE },
+    };
+  }
+
+  // 仮想的に石を置いた盤面でパターンを評価
+  const testBoard = copyBoard(board);
+  const testRow = testBoard[row];
+  if (testRow) {
+    testRow[col] = color;
+  }
+
+  // 白の三三・四四チェック
+  if (color === "white" && checkWhiteWinningPattern(testBoard, row, col)) {
+    return {
+      score: PATTERN_SCORES.FIVE,
+      breakdown: { ...defaultBreakdown, pattern: PATTERN_SCORES.FIVE },
+    };
+  }
+
+  // 攻撃スコア: 自分のパターン
+  const attackScore = evaluateStonePatterns(testBoard, row, col, color);
+
+  // 四三ボーナス
+  const jumpResult = analyzeJumpPatterns(testBoard, row, col, color);
+  let fourThreeBonus = 0;
+  if (jumpResult.hasFour && jumpResult.hasValidOpenThree) {
+    fourThreeBonus = PATTERN_SCORES.FOUR_THREE_BONUS;
+  }
+
+  // ミセ手ボーナス
+  let miseBonus = 0;
+  if (options.enableMise && isMiseMove(testBoard, row, col, color)) {
+    miseBonus = PATTERN_SCORES.MISE_BONUS;
+  }
+
+  // フクミ手ボーナス
+  let fukumiBonus = 0;
+  if (
+    options.enableFukumi &&
+    attackScore < PATTERN_SCORES.OPEN_FOUR &&
+    isFukumiMove(testBoard, color)
+  ) {
+    fukumiBonus = PATTERN_SCORES.FUKUMI_BONUS;
+  }
+
+  // 複数方向脅威ボーナス
+  let multiThreatBonus = 0;
+  if (options.enableMultiThreat) {
+    const threatCount = countThreatDirections(testBoard, row, col, color);
+    multiThreatBonus = evaluateMultiThreat(threatCount);
+  }
+
+  // 中央ボーナス
+  const centerBonus = getCenterBonus(row, col);
+
+  // 防御スコア（内訳には含めない）
+  const opponentColor = color === "black" ? "white" : "black";
+  const opponentTestBoard = copyBoard(board);
+  const opponentTestRow = opponentTestBoard[row];
+  if (opponentTestRow) {
+    opponentTestRow[col] = opponentColor;
+  }
+  const opponentPatternScore = evaluateStonePatterns(
+    opponentTestBoard,
+    row,
+    col,
+    opponentColor,
+  );
+  const defenseScore = opponentPatternScore * 0.5;
+
+  const totalScore =
+    attackScore +
+    defenseScore +
+    centerBonus +
+    fourThreeBonus +
+    miseBonus +
+    fukumiBonus +
+    multiThreatBonus;
+
+  return {
+    score: totalScore,
+    breakdown: {
+      pattern: attackScore,
+      fourThree: fourThreeBonus,
+      fukumi: fukumiBonus,
+      mise: miseBonus,
+      center: centerBonus,
+      multiThreat: multiThreatBonus,
+    },
+  };
+}
+
+/**
  * 盤面全体の評価スコアを計算
  *
  * @param board 盤面

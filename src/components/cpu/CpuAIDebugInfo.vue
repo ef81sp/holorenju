@@ -46,34 +46,33 @@ function formatScore(score: number): string {
 }
 
 /**
- * スコアの評価を文字列で返す
+ * 内訳項目のラベル
  */
-function getScoreEvaluation(score: number): string {
-  if (score >= 900000) {
-    return "勝ち確定";
+const breakdownLabels: Record<string, string> = {
+  pattern: "パターン",
+  fourThree: "四三",
+  fukumi: "フクミ手",
+  mise: "ミセ手",
+  center: "中央",
+  multiThreat: "複数脅威",
+};
+
+/**
+ * 内訳の非ゼロ項目を取得
+ */
+function getNonZeroBreakdown(
+  candidate: CandidateMove,
+): { key: string; label: string; value: number }[] {
+  if (!candidate.breakdown) {
+    return [];
   }
-  if (score >= 10000) {
-    return "大優勢";
-  }
-  if (score >= 1000) {
-    return "優勢";
-  }
-  if (score >= 100) {
-    return "やや有利";
-  }
-  if (score >= -100) {
-    return "互角";
-  }
-  if (score >= -1000) {
-    return "やや不利";
-  }
-  if (score >= -10000) {
-    return "劣勢";
-  }
-  if (score >= -900000) {
-    return "大劣勢";
-  }
-  return "負け確定";
+  return Object.entries(candidate.breakdown)
+    .filter(([, value]) => value !== 0)
+    .map(([key, value]) => ({
+      key,
+      label: breakdownLabels[key] ?? key,
+      value,
+    }));
 }
 
 /**
@@ -224,31 +223,37 @@ function isDepthChanged(index: number): boolean {
             class="candidate-popover"
             :style="{ positionAnchor: `--candidate-anchor-${candidate.rank}` }"
           >
-            <div class="popover-row">
-              <span class="popover-label">位置:</span>
-              <span class="popover-value">
+            <div class="popover-header">
+              <span class="popover-pos">
                 {{
                   formatPosition(candidate.position.row, candidate.position.col)
                 }}
               </span>
-            </div>
-            <div class="popover-row">
-              <span class="popover-label">スコア:</span>
-              <span class="popover-value">
+              <span class="popover-total">
                 {{ formatScore(candidate.score) }}
               </span>
             </div>
-            <div class="popover-row">
-              <span class="popover-label">評価:</span>
-              <span class="popover-value popover-eval">
-                {{ getScoreEvaluation(candidate.score) }}
-              </span>
-            </div>
+
+            <!-- スコア内訳 -->
             <div
-              v-if="candidate.rank === selectedRank"
-              class="popover-row popover-selected"
+              v-if="candidate.breakdown"
+              class="popover-breakdown"
             >
-              {{ wasRandom ? "ランダム選択された手" : "最善手として選択" }}
+              <div
+                v-for="item in getNonZeroBreakdown(candidate)"
+                :key="item.key"
+                class="popover-row"
+              >
+                <span class="popover-label">{{ item.label }}:</span>
+                <span class="popover-value">{{ formatScore(item.value) }}</span>
+              </div>
+            </div>
+
+            <div
+              v-if="candidate.rank === selectedRank && wasRandom"
+              class="popover-selected"
+            >
+              ランダム選択
             </div>
           </div>
         </li>
@@ -430,11 +435,36 @@ function isDepthChanged(index: number): boolean {
   font-family: sans-serif;
 }
 
+.popover-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: var(--size-6);
+  margin-bottom: var(--size-6);
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.popover-pos {
+  font-size: var(--size-14);
+  font-weight: 500;
+  color: var(--color-text-primary);
+}
+
+.popover-total {
+  font-size: var(--size-14);
+  font-weight: 500;
+  color: var(--color-primary);
+}
+
+.popover-breakdown {
+  font-family: monospace;
+}
+
 .popover-row {
   display: flex;
   justify-content: space-between;
   gap: var(--size-12);
-  padding: var(--size-2) 0;
+  padding: var(--size-1) 0;
   font-size: var(--size-11);
 }
 
@@ -447,12 +477,8 @@ function isDepthChanged(index: number): boolean {
   font-weight: 500;
 }
 
-.popover-eval {
-  color: var(--color-primary);
-}
-
 .popover-selected {
-  margin-top: var(--size-4);
+  margin-top: var(--size-6);
   padding-top: var(--size-6);
   border-top: 1px solid var(--color-border-light);
   color: var(--color-primary);

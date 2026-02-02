@@ -11,9 +11,11 @@ import {
   DIFFICULTY_PARAMS,
   type AIRequest,
   type AIResponse,
+  type ScoreBreakdown,
 } from "@/types/cpu";
 
 import { countStones } from "./core/boardUtils";
+import { evaluatePositionWithBreakdown } from "./evaluation";
 import { getOpeningMove, isOpeningPhase } from "./opening";
 import { findBestMoveIterativeWithTT } from "./search/minimax";
 
@@ -76,11 +78,24 @@ self.onmessage = (event: MessageEvent<AIRequest>) => {
     const thinkingTime = Math.round(endTime - startTime);
 
     // 候補手を上位5手に制限（通信オーバーヘッド削減）
-    const candidates = result.candidates?.slice(0, 5).map((entry, index) => ({
-      position: entry.move,
-      score: entry.score,
-      rank: index + 1,
-    }));
+    // 各候補手の内訳を計算
+    const candidates = result.candidates?.slice(0, 5).map((entry, index) => {
+      // 内訳を計算
+      const { breakdown } = evaluatePositionWithBreakdown(
+        request.board,
+        entry.move.row,
+        entry.move.col,
+        currentTurn,
+        params.evaluationOptions,
+      );
+
+      return {
+        position: entry.move,
+        score: entry.score,
+        rank: index + 1,
+        breakdown: breakdown as ScoreBreakdown,
+      };
+    });
 
     // 深度履歴を変換
     const depthHistory = result.depthHistory?.map((entry) => ({

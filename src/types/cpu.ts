@@ -136,6 +136,24 @@ export interface AIRequest {
 }
 
 /**
+ * スコア内訳（デバッグ表示用）
+ */
+export interface ScoreBreakdown {
+  /** 基本パターンスコア（四、活三、二など） */
+  pattern: number;
+  /** 四三ボーナス */
+  fourThree: number;
+  /** フクミ手ボーナス */
+  fukumi: number;
+  /** ミセ手ボーナス */
+  mise: number;
+  /** 中央ボーナス */
+  center: number;
+  /** 複数方向脅威ボーナス */
+  multiThreat: number;
+}
+
+/**
  * 候補手情報（デバッグ表示用）
  */
 export interface CandidateMove {
@@ -145,6 +163,8 @@ export interface CandidateMove {
   score: number;
   /** 順位（1始まり） */
   rank: number;
+  /** スコア内訳 */
+  breakdown?: ScoreBreakdown;
 }
 
 /**
