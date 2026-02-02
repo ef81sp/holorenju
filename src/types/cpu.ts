@@ -54,7 +54,7 @@ export interface DifficultyParams {
  */
 export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
   beginner: {
-    depth: 2,
+    depth: 1,
     timeLimit: 1000,
     randomFactor: 0.3,
     maxNodes: 10000,
@@ -71,7 +71,7 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
     },
   },
   easy: {
-    depth: 3,
+    depth: 2,
     timeLimit: 2000,
     randomFactor: 0.25,
     maxNodes: 50000,
@@ -88,7 +88,7 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
     },
   },
   medium: {
-    depth: 5,
+    depth: 3,
     timeLimit: 3000,
     randomFactor: 0,
     maxNodes: 200000,
@@ -105,7 +105,7 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
     },
   },
   hard: {
-    depth: 5,
+    depth: 4,
     timeLimit: 5000,
     randomFactor: 0,
     maxNodes: 500000,

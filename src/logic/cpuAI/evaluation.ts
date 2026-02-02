@@ -786,6 +786,7 @@ function isMiseMove(
 
 /**
  * 指定位置に石を置くと四三ができるかチェック
+ * 最適化: 盤面を直接変更して元に戻す方式（copyBoard不要）
  */
 function createsFourThree(
   board: BoardState,
@@ -793,16 +794,22 @@ function createsFourThree(
   col: number,
   color: "black" | "white",
 ): boolean {
-  // 仮想的に石を置く
-  const testBoard = copyBoard(board);
-  const testRow = testBoard[row];
-  if (testRow) {
-    testRow[col] = color;
+  // 盤面を直接変更
+  const targetRow = board[row];
+  if (targetRow) {
+    targetRow[col] = color;
   }
 
   // 四と有効な活三を同時に作るかチェック
-  const jumpResult = analyzeJumpPatterns(testBoard, row, col, color);
-  return jumpResult.hasFour && jumpResult.hasValidOpenThree;
+  const jumpResult = analyzeJumpPatterns(board, row, col, color);
+  const result = jumpResult.hasFour && jumpResult.hasValidOpenThree;
+
+  // 盤面を元に戻す
+  if (targetRow) {
+    targetRow[col] = null;
+  }
+
+  return result;
 }
 
 /**
@@ -1120,6 +1127,7 @@ const SINGLE_FOUR_PENALTY_MULTIPLIER = 0.3;
 
 /**
  * 四を置いた後に後続脅威があるかチェック
+ * 最適化: copyBoardを1回のみ使用し、盤面を直接変更して元に戻す方式
  *
  * @param board 盤面（四を置いた状態）
  * @param row 四を置いた行
@@ -1135,10 +1143,13 @@ function hasFollowUpThreat(
 ): boolean {
   const opponentColor = color === "black" ? "white" : "black";
 
+  // 1回だけコピーして、以降は直接変更→復元する
+  const workBoard = copyBoard(board);
+
   // 四の防御位置を見つける
   // 各方向で四を形成しているかチェック
   for (const [dr, dc] of DIRECTIONS) {
-    const pattern = analyzeDirection(board, row, col, dr, dc, color);
+    const pattern = analyzeDirection(workBoard, row, col, dr, dc, color);
 
     // 四を形成している場合
     if (
@@ -1151,32 +1162,31 @@ function hasFollowUpThreat(
       // 正方向の端
       let r = row + dr;
       let c = col + dc;
-      while (isValidPosition(r, c) && board[r]?.[c] === color) {
+      while (isValidPosition(r, c) && workBoard[r]?.[c] === color) {
         r += dr;
         c += dc;
       }
-      if (isValidPosition(r, c) && board[r]?.[c] === null) {
+      if (isValidPosition(r, c) && workBoard[r]?.[c] === null) {
         defensePositions.push({ row: r, col: c });
       }
 
       // 負方向の端
       r = row - dr;
       c = col - dc;
-      while (isValidPosition(r, c) && board[r]?.[c] === color) {
+      while (isValidPosition(r, c) && workBoard[r]?.[c] === color) {
         r -= dr;
         c -= dc;
       }
-      if (isValidPosition(r, c) && board[r]?.[c] === null) {
+      if (isValidPosition(r, c) && workBoard[r]?.[c] === null) {
         defensePositions.push({ row: r, col: c });
       }
 
       // 各防御位置について、相手が防御した後も脅威があるかチェック
       for (const defensePos of defensePositions) {
-        // 相手が防御した盤面を作成
-        const defendedBoard = copyBoard(board);
-        const defendedRow = defendedBoard[defensePos.row];
-        if (defendedRow) {
-          defendedRow[defensePos.col] = opponentColor;
+        // 相手の防御を盤面に直接置く
+        const defenseRow = workBoard[defensePos.row];
+        if (defenseRow) {
+          defenseRow[defensePos.col] = opponentColor;
         }
 
         // 防御後、自分が四または活三を作れる位置があるかチェック
@@ -1192,29 +1202,42 @@ function hasFollowUpThreat(
             if (!isValidPosition(newRow, newCol)) {
               continue;
             }
-            if (defendedBoard[newRow]?.[newCol] !== null) {
+            if (workBoard[newRow]?.[newCol] !== null) {
               continue;
             }
 
-            // この位置で四または活三を作れるかチェック
-            const testBoard = copyBoard(defendedBoard);
-            const testRow = testBoard[newRow];
+            // この位置に自分の石を直接置く
+            const testRow = workBoard[newRow];
             if (testRow) {
               testRow[newCol] = color;
             }
 
             const jumpResult = analyzeJumpPatterns(
-              testBoard,
+              workBoard,
               newRow,
               newCol,
               color,
             );
 
+            // 石を元に戻す
+            if (testRow) {
+              testRow[newCol] = null;
+            }
+
             // 四または活三を作れる
             if (jumpResult.hasFour || jumpResult.hasValidOpenThree) {
+              // 相手の防御も元に戻す（早期リターンのため）
+              if (defenseRow) {
+                defenseRow[defensePos.col] = null;
+              }
               return true;
             }
           }
+        }
+
+        // 相手の防御を元に戻す
+        if (defenseRow) {
+          defenseRow[defensePos.col] = null;
         }
       }
     }
@@ -1476,7 +1499,7 @@ export function evaluatePosition(
     return PATTERN_SCORES.FIVE;
   }
 
-  // 仮想的に石を置いた盤面でパターンを評価
+  // 仮想的に石を置いた盤面でパターンを評価（1回のコピーで使い回す）
   const testBoard = copyBoard(board);
   const testRow = testBoard[row];
   if (testRow) {
@@ -1493,6 +1516,7 @@ export function evaluatePosition(
 
   // 四三ボーナス: 四と有効な活三を同時に作る手
   const jumpResult = analyzeJumpPatterns(testBoard, row, col, color);
+  const opponentColor = color === "black" ? "white" : "black";
   let fourThreeBonus = 0;
   if (jumpResult.hasFour && jumpResult.hasValidOpenThree) {
     fourThreeBonus = PATTERN_SCORES.FOUR_THREE_BONUS;
@@ -1500,22 +1524,14 @@ export function evaluatePosition(
 
   // 必須防御ルール: 相手の活四・活三を止めない手は除外
   if (options.enableMandatoryDefense) {
-    const opponentColor = color === "black" ? "white" : "black";
     // 事前計算された脅威情報があればそれを使用（最適化）
     const threats =
       options.precomputedThreats ?? detectOpponentThreats(board, opponentColor);
 
-    // この手が四を作るかチェック（連続四または跳び四）
-    const makesFour = attackScore >= PATTERN_SCORES.FOUR || jumpResult.hasFour;
-
-    // 自分が先に勝てるかチェック（活四、四三、またはVCF開始）
-    // VCFは四の連続で勝つので、相手のミセ手より速い
-    // ただし、VCFを始めるには四を作る手を打つ必要がある
-    // （四を作らない手の場合、相手に1手の猶予があるためVCFは無効）
+    // 自分が先に勝てるかチェック（活四、四三）
+    // 注: VCF判定(isFukumiMove)は計算コストが高いため、ルートレベルでのみ行う
     const canWinFirst =
-      attackScore >= PATTERN_SCORES.OPEN_FOUR ||
-      fourThreeBonus > 0 ||
-      (options.enableFukumi && makesFour && isFukumiMove(testBoard, color));
+      attackScore >= PATTERN_SCORES.OPEN_FOUR || fourThreeBonus > 0;
 
     // 相手の活四を止めない手は除外
     if (threats.openFours.length > 0 && !canWinFirst) {
@@ -1587,16 +1603,9 @@ export function evaluatePosition(
     miseBonus = PATTERN_SCORES.MISE_BONUS;
   }
 
-  // フクミ手ボーナス: 次にVCF（四追い勝ち）がある手（オプションで有効時のみ）
-  // 計算コストが高いので、既に高スコアの場合はスキップ
-  let fukumiBonus = 0;
-  if (
-    options.enableFukumi &&
-    attackScore < PATTERN_SCORES.OPEN_FOUR &&
-    isFukumiMove(testBoard, color)
-  ) {
-    fukumiBonus = PATTERN_SCORES.FUKUMI_BONUS;
-  }
+  // フクミ手ボーナス: ルートレベルでのみ判定するため、評価関数内では無効化
+  // 理由: isFukumiMove(hasVCF)は計算コストが高い
+  const fukumiBonus = 0;
 
   // 複数方向脅威ボーナス: 2方向以上で脅威を作る手（オプションで有効時のみ）
   let multiThreatBonus = 0;
@@ -1629,21 +1638,23 @@ export function evaluatePosition(
   }
 
   // 防御スコア: 相手の脅威をブロック
-  const opponentColor = color === "black" ? "white" : "black";
   let defenseScore = 0;
 
   // この位置に相手が置いた場合のスコアを計算（ブロック価値）
-  const opponentTestBoard = copyBoard(board);
-  const opponentTestRow = opponentTestBoard[row];
-  if (opponentTestRow) {
-    opponentTestRow[col] = opponentColor;
+  // testBoardを再利用: 自分の石を消して相手の石を置く
+  if (testRow) {
+    testRow[col] = opponentColor;
   }
   const opponentPatternScore = evaluateStonePatterns(
-    opponentTestBoard,
+    testBoard,
     row,
     col,
     opponentColor,
   );
+  // 元に戻す（自分の石を戻す）
+  if (testRow) {
+    testRow[col] = color;
+  }
 
   // 相手の活三・活四をブロックする手は高評価
   // ブロック価値は相手のスコアの50%
@@ -1777,6 +1788,8 @@ export function evaluatePositionWithBreakdown(
   const { score: attackScore, breakdown: patternBreakdown } =
     evaluateStonePatternsWithBreakdown(testBoard, row, col, color);
 
+  const opponentColor = color === "black" ? "white" : "black";
+
   // 四三ボーナス
   const jumpResult = analyzeJumpPatterns(testBoard, row, col, color);
   let fourThreeBonus = 0;
@@ -1811,19 +1824,16 @@ export function evaluatePositionWithBreakdown(
   const centerBonus = getCenterBonus(row, col);
 
   // 防御スコア（相手のパターンを阻止）
-  const opponentColor = color === "black" ? "white" : "black";
-  const opponentTestBoard = copyBoard(board);
-  const opponentTestRow = opponentTestBoard[row];
-  if (opponentTestRow) {
-    opponentTestRow[col] = opponentColor;
+  // testBoardを再利用: 自分の石を消して相手の石を置く
+  if (testRow) {
+    testRow[col] = opponentColor;
   }
   const { breakdown: opponentPatternBreakdown } =
-    evaluateStonePatternsWithBreakdown(
-      opponentTestBoard,
-      row,
-      col,
-      opponentColor,
-    );
+    evaluateStonePatternsWithBreakdown(testBoard, row, col, opponentColor);
+  // 元に戻す（自分の石を戻す）
+  if (testRow) {
+    testRow[col] = color;
+  }
 
   // 防御内訳（0.5倍を適用、丸め処理）
   // 防御は相手のパターンを阻止するので、斜めボーナスも含めた最終値に0.5を掛ける
