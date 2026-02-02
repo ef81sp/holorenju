@@ -176,6 +176,20 @@ function generateMatchups(
   return matchups;
 }
 
+/**
+ * ステータス行を更新（同じ行を上書き）
+ */
+function writeStatus(message: string): void {
+  process.stdout.write(`\r${message.padEnd(80)}`);
+}
+
+/**
+ * ステータス行をクリアして改行
+ */
+function clearStatus(): void {
+  process.stdout.write("\r" + " ".repeat(80) + "\r");
+}
+
 function runBenchmarkSequential(options: CliOptions): BenchmarkResult {
   const { players, games, verbose } = options;
 
@@ -201,6 +215,7 @@ function runBenchmarkSequential(options: CliOptions): BenchmarkResult {
   console.log();
 
   let completedGames = 0;
+  const benchStartTime = performance.now();
 
   for (const [playerA, playerB] of matchups) {
     console.log(`--- ${playerA} vs ${playerB} ---`);
@@ -222,6 +237,13 @@ function runBenchmarkSequential(options: CliOptions): BenchmarkResult {
 
       const black = isABlack ? configA : configB;
       const white = isABlack ? configB : configA;
+
+      // ステータス行を更新
+      const gameStartTime = performance.now();
+      const elapsed = ((gameStartTime - benchStartTime) / 1000).toFixed(0);
+      writeStatus(
+        `[${elapsed}s] ${playerA} vs ${playerB}: Game ${i + 1}/${games} (${matchupResult.winsA}W-${matchupResult.winsB}L-${matchupResult.draws}D) - playing...`,
+      );
 
       const result = runHeadlessGame(black, white, { verbose });
 
@@ -271,8 +293,21 @@ function runBenchmarkSequential(options: CliOptions): BenchmarkResult {
 
       completedGames++;
 
+      // ゲーム終了後のステータス更新
+      const gameEndTime = performance.now();
+      const gameDuration = ((gameEndTime - gameStartTime) / 1000).toFixed(1);
+      const totalElapsed = ((gameEndTime - benchStartTime) / 1000).toFixed(0);
+      const progress = ((completedGames / totalGames) * 100).toFixed(1);
+
+      // 最長思考時間を計算
+      const maxThinkTime = Math.max(...result.moveHistory.map((m) => m.time));
+
+      writeStatus(
+        `[${totalElapsed}s] ${playerA} vs ${playerB}: Game ${i + 1}/${games} done - ${result.moves}手 ${gameDuration}s (max ${(maxThinkTime / 1000).toFixed(1)}s/手) ${result.reason}`,
+      );
+
       if ((i + 1) % 10 === 0 || i + 1 === games) {
-        const progress = ((completedGames / totalGames) * 100).toFixed(1);
+        clearStatus();
         console.log(
           `  Game ${i + 1}/${games} (${progress}% total) - ${matchupResult.winsA}W-${matchupResult.winsB}L-${matchupResult.draws}D`,
         );
@@ -280,6 +315,7 @@ function runBenchmarkSequential(options: CliOptions): BenchmarkResult {
     }
 
     matchupResults.push(matchupResult);
+    clearStatus();
 
     const stats = calculateStats(
       allGames.filter(

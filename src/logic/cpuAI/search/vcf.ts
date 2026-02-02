@@ -27,19 +27,43 @@ export { checkEnds, countLine } from "../core/lineAnalysis";
 /** VCF探索の最大深度 */
 const VCF_MAX_DEPTH = 8;
 
+/** VCF探索の時間制限（ミリ秒） */
+const VCF_TIME_LIMIT = 50;
+
+/**
+ * VCF探索用の時間制限コンテキスト
+ */
+export interface VCFTimeLimiter {
+  startTime: number;
+  timeLimit: number;
+}
+
 /**
  * VCFが成立するかチェック
  *
  * @param board 盤面
  * @param color 手番
  * @param depth 現在の探索深度
+ * @param timeLimiter 時間制限コンテキスト（ルート呼び出し時は省略可）
  * @returns VCFが成立する場合true
  */
 export function hasVCF(
   board: BoardState,
   color: "black" | "white",
   depth = 0,
+  timeLimiter?: VCFTimeLimiter,
 ): boolean {
+  // 時間制限の初期化（ルート呼び出し時）
+  const limiter = timeLimiter ?? {
+    startTime: performance.now(),
+    timeLimit: VCF_TIME_LIMIT,
+  };
+
+  // 時間制限チェック
+  if (performance.now() - limiter.startTime >= limiter.timeLimit) {
+    return false;
+  }
+
   if (depth >= VCF_MAX_DEPTH) {
     return false;
   }
@@ -88,7 +112,7 @@ export function hasVCF(
       afterDefenseRow[defensePos.col] = opponentColor;
     }
 
-    if (hasVCF(afterDefense, color, depth + 1)) {
+    if (hasVCF(afterDefense, color, depth + 1, limiter)) {
       return true;
     }
   }

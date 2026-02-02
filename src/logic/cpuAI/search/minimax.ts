@@ -633,22 +633,21 @@ export function minimaxWithTT(
   // 時間制限チェック（一定ノード数ごと）
   // 毎回チェックするとオーバーヘッドが大きいため、一定間隔でチェック
   if (
-    !ctx.timeoutFlag &&
     ctx.startTime !== undefined &&
-    ctx.timeLimit !== undefined &&
-    (ctx.stats.nodes & 0x7) === 0 // 8ノードごとにチェック（ビット演算で高速化）
+    (ctx.stats.nodes & 0x3) === 0 // 4ノードごとにチェック（ビット演算で高速化）
   ) {
     const elapsed = performance.now() - ctx.startTime;
-    if (elapsed >= ctx.timeLimit) {
-      ctx.timeoutFlag = true;
+    // 通常の時間制限チェック
+    if (!ctx.timeoutFlag && ctx.timeLimit !== undefined) {
+      if (elapsed >= ctx.timeLimit) {
+        ctx.timeoutFlag = true;
+      }
     }
-    // 絶対時間制限チェック
-    if (
-      !ctx.absoluteTimeLimitExceeded &&
-      ctx.absoluteTimeLimit !== undefined &&
-      elapsed >= ctx.absoluteTimeLimit
-    ) {
-      ctx.absoluteTimeLimitExceeded = true;
+    // 絶対時間制限チェック（通常のタイムアウトとは独立してチェック）
+    if (!ctx.absoluteTimeLimitExceeded && ctx.absoluteTimeLimit !== undefined) {
+      if (elapsed >= ctx.absoluteTimeLimit) {
+        ctx.absoluteTimeLimitExceeded = true;
+      }
     }
   }
 
@@ -924,8 +923,12 @@ export function findBestMoveWithTT(
   let beta = prevScore === undefined ? INFINITY : prevScore + windowSize;
 
   for (const move of moves) {
-    // タイムアウトチェック
-    if (ctx.timeoutFlag) {
+    // タイムアウト・制限チェック
+    if (
+      ctx.timeoutFlag ||
+      ctx.nodeCountExceeded ||
+      ctx.absoluteTimeLimitExceeded
+    ) {
       break;
     }
 

@@ -23,7 +23,7 @@ import {
   findJumpGapPosition,
   getJumpThreeDefensePositions,
 } from "../patterns/threatAnalysis";
-import { hasVCF } from "./vcf";
+import { hasVCF, type VCFTimeLimiter } from "./vcf";
 
 /** VCT探索の最大深度 */
 const VCT_MAX_DEPTH = 4;
@@ -31,25 +31,42 @@ const VCT_MAX_DEPTH = 4;
 /** VCT探索を有効にする石数の閾値（終盤のみ） */
 export const VCT_STONE_THRESHOLD = 20;
 
+/** VCT探索の時間制限（ミリ秒） */
+const VCT_TIME_LIMIT = 50;
+
 /**
  * VCT（三・四連続勝ち）が成立するかチェック
  *
  * @param board 盤面
  * @param color 手番
  * @param depth 現在の探索深度
+ * @param timeLimiter 時間制限コンテキスト（ルート呼び出し時は省略可）
  * @returns VCTが成立する場合true
  */
 export function hasVCT(
   board: BoardState,
   color: "black" | "white",
   depth = 0,
+  timeLimiter?: VCFTimeLimiter,
 ): boolean {
+  // 時間制限の初期化（ルート呼び出し時）
+  const limiter = timeLimiter ?? {
+    startTime: performance.now(),
+    timeLimit: VCT_TIME_LIMIT,
+  };
+
+  // 時間制限チェック
+  if (performance.now() - limiter.startTime >= limiter.timeLimit) {
+    return false;
+  }
+
   if (depth >= VCT_MAX_DEPTH) {
     return false;
   }
 
   // VCFがあればVCT成立（VCF ⊂ VCT）
-  if (hasVCF(board, color)) {
+  // 時間制限を共有（VCTの残り時間をVCFにも適用）
+  if (hasVCF(board, color, 0, limiter)) {
     return true;
   }
 
@@ -110,7 +127,7 @@ export function hasVCT(
       }
 
       // 再帰的にVCTをチェック
-      if (!hasVCT(afterDefense, color, depth + 1)) {
+      if (!hasVCT(afterDefense, color, depth + 1, limiter)) {
         allDefenseLeadsToVCT = false;
         break;
       }
