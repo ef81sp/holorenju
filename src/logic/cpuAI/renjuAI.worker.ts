@@ -92,7 +92,8 @@ self.onmessage = (event: MessageEvent<AIRequest>) => {
 
       return {
         position: entry.move,
-        score: Math.round(breakdownScore), // 内訳と一致するスコアを使用
+        score: Math.round(breakdownScore), // 即時評価（内訳の合計）
+        searchScore: entry.score, // 探索スコア（順位の根拠）
         rank: index + 1,
         breakdown: breakdown as ScoreBreakdown,
       };

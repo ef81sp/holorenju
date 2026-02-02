@@ -295,7 +295,7 @@ function isDepthChanged(index: number): boolean {
             {{ formatPosition(candidate.position.row, candidate.position.col) }}
           </span>
           <span class="candidate-score">
-            {{ formatScore(candidate.score) }}
+            {{ formatScore(candidate.searchScore) }}
           </span>
           <span
             v-if="candidate.rank === selectedRank"
@@ -317,9 +317,12 @@ function isDepthChanged(index: number): boolean {
                   formatPosition(candidate.position.row, candidate.position.col)
                 }}
               </span>
-              <span class="popover-total">
-                {{ formatScore(candidate.score) }}
+              <span class="popover-search-score">
+                探索: {{ formatScore(candidate.searchScore) }}
               </span>
+            </div>
+            <div class="popover-eval-score">
+              即時評価: {{ formatScore(candidate.score) }}
             </div>
 
             <!-- スコア内訳 -->
@@ -580,10 +583,16 @@ function isDepthChanged(index: number): boolean {
   color: var(--color-text-primary);
 }
 
-.popover-total {
-  font-size: var(--size-14);
+.popover-search-score {
+  font-size: var(--size-12);
   font-weight: 500;
   color: var(--color-primary);
+}
+
+.popover-eval-score {
+  font-size: var(--size-11);
+  color: var(--color-text-secondary);
+  margin-bottom: var(--size-6);
 }
 
 .popover-breakdown {

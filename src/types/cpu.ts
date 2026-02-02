@@ -197,9 +197,11 @@ export interface ScoreBreakdown {
 export interface CandidateMove {
   /** 着手位置 */
   position: Position;
-  /** 評価スコア */
+  /** 即時評価スコア（内訳の合計） */
   score: number;
-  /** 順位（1始まり） */
+  /** 探索スコア（複数手先読みの結果、順位の根拠） */
+  searchScore: number;
+  /** 順位（1始まり、探索スコア順） */
   rank: number;
   /** スコア内訳 */
   breakdown?: ScoreBreakdown;
