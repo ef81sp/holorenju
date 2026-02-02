@@ -110,8 +110,8 @@ export const PATTERN_SCORES = {
   FOUR: 1000,
   /** 活三（両端開） */
   OPEN_THREE: 1000,
-  /** 止め三（片端開） */
-  THREE: 100,
+  /** 止め三（片端開）- 単独では価値が低い（剣先問題） */
+  THREE: 30,
   /** 活二 */
   OPEN_TWO: 50,
   /** 止め二 */
