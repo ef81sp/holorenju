@@ -12,6 +12,7 @@ import type {
   CandidateMove,
   DepthResult,
   PatternScoreDetail,
+  SearchStats,
 } from "@/types/cpu";
 import { useBoardStore } from "@/stores/boardStore";
 
@@ -236,6 +237,34 @@ const depthHistory = computed<DepthResult[]>(
   () => props.response?.depthHistory ?? [],
 );
 
+// 探索統計
+const searchStats = computed<SearchStats | null>(
+  () => props.response?.searchStats ?? null,
+);
+
+/**
+ * 数値をK/M単位でフォーマット
+ */
+function formatNumber(n: number): string {
+  if (n >= 1000000) {
+    return `${(n / 1000000).toFixed(1)}M`;
+  }
+  if (n >= 1000) {
+    return `${(n / 1000).toFixed(1)}K`;
+  }
+  return String(n);
+}
+
+/**
+ * パーセンテージをフォーマット
+ */
+function formatPercent(value: number, total: number): string {
+  if (total === 0) {
+    return "0%";
+  }
+  return `${((value / total) * 100).toFixed(1)}%`;
+}
+
 // 手が変わった深度を判定
 function isDepthChanged(index: number): boolean {
   if (index === 0) {
@@ -421,6 +450,40 @@ function isDepthChanged(index: number): boolean {
         </li>
       </ul>
     </div>
+
+    <!-- 探索統計 -->
+    <div
+      v-if="searchStats"
+      class="debug-section"
+    >
+      <div class="debug-divider" />
+      <div class="section-label">探索統計:</div>
+      <div class="stats-grid">
+        <div class="stats-row">
+          <span class="stats-label">ノード:</span>
+          <span class="stats-value">{{ formatNumber(searchStats.nodes) }}</span>
+        </div>
+        <div class="stats-row">
+          <span class="stats-label">TTヒット:</span>
+          <span class="stats-value">
+            {{ formatNumber(searchStats.ttHits) }}
+            ({{ formatPercent(searchStats.ttHits, searchStats.nodes) }})
+          </span>
+        </div>
+        <div class="stats-row">
+          <span class="stats-label">TTカット:</span>
+          <span class="stats-value">
+            {{ formatNumber(searchStats.ttCutoffs) }}
+          </span>
+        </div>
+        <div class="stats-row">
+          <span class="stats-label">β剪定:</span>
+          <span class="stats-value">
+            {{ formatNumber(searchStats.betaCutoffs) }}
+          </span>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -545,6 +608,27 @@ function isDepthChanged(index: number): boolean {
 
 .depth-item.changed .depth-label {
   color: var(--color-primary);
+}
+
+/* 探索統計 */
+.stats-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-2);
+}
+
+.stats-row {
+  display: flex;
+  gap: var(--size-8);
+}
+
+.stats-label {
+  width: var(--size-64);
+  color: var(--color-text-secondary);
+}
+
+.stats-value {
+  color: var(--color-text-primary);
 }
 
 /* ポップオーバー (Popover API + Anchor Positioning API) */

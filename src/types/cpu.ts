@@ -234,6 +234,20 @@ export interface DepthResult {
 }
 
 /**
+ * 探索統計（デバッグ表示用）
+ */
+export interface SearchStats {
+  /** 探索ノード数 */
+  nodes: number;
+  /** TTヒット数 */
+  ttHits: number;
+  /** TTカットオフ数 */
+  ttCutoffs: number;
+  /** Beta剪定数 */
+  betaCutoffs: number;
+}
+
+/**
  * AI着手レスポンス（Worker通信用）
  */
 export interface AIResponse {
@@ -251,6 +265,8 @@ export interface AIResponse {
   randomSelection?: RandomSelectionInfo;
   /** 深度別の最善手履歴（デバッグ用） */
   depthHistory?: DepthResult[];
+  /** 探索統計（デバッグ用） */
+  searchStats?: SearchStats;
 }
 
 /**

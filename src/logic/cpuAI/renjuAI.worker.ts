@@ -121,6 +121,7 @@ self.onmessage = (event: MessageEvent<AIRequest>) => {
           }
         : undefined,
       depthHistory,
+      searchStats: result.stats,
     };
 
     self.postMessage(response);
