@@ -1267,8 +1267,9 @@ function hasFollowUpThreat(
               testRow[newCol] = null;
             }
 
-            // 四または活三を作れる
-            if (jumpResult.hasFour || jumpResult.hasValidOpenThree) {
+            // 次の四を作れる（四追いの継続）
+            // 活三のみでは四追いにならないので、四のみをチェック
+            if (jumpResult.hasFour) {
               // 相手の防御も元に戻す（早期リターンのため）
               if (defenseRow) {
                 defenseRow[defensePos.col] = null;
