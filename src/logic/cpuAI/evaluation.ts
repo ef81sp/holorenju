@@ -46,6 +46,13 @@ export interface EvaluationOptions {
   enableMandatoryDefense: boolean;
   /** 単発四の低評価を有効にするか（後続脅威がない四にペナルティ） */
   enableSingleFourPenalty: boolean;
+  /**
+   * 単発四ペナルティ後の残存倍率（0.0〜1.0）
+   * 0.0 = 完全に無価値（四のスコアを全て打ち消す）
+   * 1.0 = ペナルティなし
+   * デフォルト: 0.0（hard用、単独の四は攻撃リソースの浪費なので価値なし）
+   */
+  singleFourPenaltyMultiplier: number;
   /** ミセ手脅威防御を有効にするか（相手のミセ手を止めない手を除外） */
   enableMiseThreat: boolean;
   /** 事前計算された脅威情報（最適化用、ルートノードで計算して渡す） */
@@ -64,6 +71,7 @@ export const DEFAULT_EVAL_OPTIONS: EvaluationOptions = {
   enableVCT: false,
   enableMandatoryDefense: false,
   enableSingleFourPenalty: false,
+  singleFourPenaltyMultiplier: 1.0, // ペナルティ無効時は1.0（100%維持）
   enableMiseThreat: false,
 };
 
@@ -79,6 +87,7 @@ export const FULL_EVAL_OPTIONS: EvaluationOptions = {
   enableVCT: true,
   enableMandatoryDefense: true,
   enableSingleFourPenalty: true,
+  singleFourPenaltyMultiplier: 0.0, // 全機能有効時は0.0（単独四は完全に無価値）
   enableMiseThreat: true,
 };
 
@@ -867,7 +876,9 @@ export function detectOpponentThreats(
       // 各方向をチェック
       for (let dirIdx = 0; dirIdx < DIRECTIONS.length; dirIdx++) {
         const direction = DIRECTIONS[dirIdx];
-        if (!direction) {continue;}
+        if (!direction) {
+          continue;
+        }
         const [dr, dc] = direction;
         const renjuDirIndex = DIRECTION_INDICES[dirIdx] ?? -1;
         const pattern = analyzeDirection(
@@ -1155,8 +1166,7 @@ function detectJumpThreePattern(
   return positions;
 }
 
-/** 単発四ペナルティ倍率（30%に減額） */
-const SINGLE_FOUR_PENALTY_MULTIPLIER = 0.3;
+// 単発四ペナルティ倍率は options.singleFourPenaltyMultiplier で難易度別に設定
 
 /**
  * 四を置いた後に後続脅威があるかチェック
@@ -1660,13 +1670,14 @@ export function evaluatePosition(
     if (jumpResult.hasFour && !jumpResult.hasValidOpenThree) {
       // 後続脅威がない場合のみペナルティ
       if (!hasFollowUpThreat(testBoard, row, col, color)) {
-        // FOURスコアにペナルティ適用（30%に減額 = 70%減）
+        // FOURスコアにペナルティ適用（倍率は難易度で設定）
+        // multiplier=0.0なら1000点全て減点、multiplier=0.1なら900点減点
         const fourCount =
           jumpResult.jumpFourCount > 0 ? jumpResult.jumpFourCount : 1;
         singleFourPenalty =
           PATTERN_SCORES.FOUR *
           fourCount *
-          (1 - SINGLE_FOUR_PENALTY_MULTIPLIER);
+          (1 - options.singleFourPenaltyMultiplier);
       }
     }
   }
@@ -1740,6 +1751,8 @@ export interface ScoreBreakdown {
   center: number;
   /** 複数方向脅威ボーナス */
   multiThreat: number;
+  /** 単発四ペナルティ（減点） */
+  singleFourPenalty: number;
 }
 
 /**
@@ -1771,6 +1784,7 @@ export function evaluatePositionWithBreakdown(
     mise: 0,
     center: 0,
     multiThreat: 0,
+    singleFourPenalty: 0,
   };
 
   if (color === null) {
@@ -1854,6 +1868,24 @@ export function evaluatePositionWithBreakdown(
     multiThreatBonus = evaluateMultiThreat(threatCount);
   }
 
+  // 単発四ペナルティ: 四を作るが四三ではなく、後続脅威もない場合
+  let singleFourPenalty = 0;
+  if (options.enableSingleFourPenalty) {
+    // 四を作るが四三ではない場合
+    if (jumpResult.hasFour && !jumpResult.hasValidOpenThree) {
+      // 後続脅威がない場合のみペナルティ
+      if (!hasFollowUpThreat(testBoard, row, col, color)) {
+        // FOURスコアにペナルティ適用（倍率は難易度で設定）
+        const fourCount =
+          jumpResult.jumpFourCount > 0 ? jumpResult.jumpFourCount : 1;
+        singleFourPenalty =
+          PATTERN_SCORES.FOUR *
+          fourCount *
+          (1 - options.singleFourPenaltyMultiplier);
+      }
+    }
+  }
+
   // 中央ボーナス
   const centerBonus = getCenterBonus(row, col);
 
@@ -1912,7 +1944,8 @@ export function evaluatePositionWithBreakdown(
     fourThreeBonus +
     miseBonus +
     fukumiBonus +
-    multiThreatBonus;
+    multiThreatBonus -
+    singleFourPenalty;
 
   return {
     score: totalScore,
@@ -1924,6 +1957,7 @@ export function evaluatePositionWithBreakdown(
       mise: miseBonus,
       center: centerBonus,
       multiThreat: multiThreatBonus,
+      singleFourPenalty: singleFourPenalty,
     },
   };
 }

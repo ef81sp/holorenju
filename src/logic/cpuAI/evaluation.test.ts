@@ -466,6 +466,7 @@ describe("複数方向脅威ボーナス", () => {
       enableVCT: false,
       enableMandatoryDefense: false,
       enableSingleFourPenalty: false,
+      singleFourPenaltyMultiplier: 1.0,
       enableMiseThreat: false,
     });
 
@@ -479,6 +480,7 @@ describe("複数方向脅威ボーナス", () => {
       enableVCT: false,
       enableMandatoryDefense: false,
       enableSingleFourPenalty: false,
+      singleFourPenaltyMultiplier: 1.0,
       enableMiseThreat: false,
     });
 
@@ -507,6 +509,7 @@ describe("複数方向脅威ボーナス", () => {
       enableVCT: false,
       enableMandatoryDefense: false,
       enableSingleFourPenalty: false,
+      singleFourPenaltyMultiplier: 1.0,
       enableMiseThreat: false,
     });
 
@@ -519,6 +522,7 @@ describe("複数方向脅威ボーナス", () => {
       enableVCT: false,
       enableMandatoryDefense: false,
       enableSingleFourPenalty: false,
+      singleFourPenaltyMultiplier: 1.0,
       enableMiseThreat: false,
     });
 
@@ -552,6 +556,7 @@ describe("カウンターフォー", () => {
       enableVCT: false,
       enableMandatoryDefense: false,
       enableSingleFourPenalty: false,
+      singleFourPenaltyMultiplier: 1.0,
       enableMiseThreat: false,
     });
 
@@ -565,6 +570,7 @@ describe("カウンターフォー", () => {
       enableVCT: false,
       enableMandatoryDefense: false,
       enableSingleFourPenalty: false,
+      singleFourPenaltyMultiplier: 1.0,
       enableMiseThreat: false,
     });
 
@@ -589,6 +595,7 @@ describe("カウンターフォー", () => {
       enableVCT: false,
       enableMandatoryDefense: false,
       enableSingleFourPenalty: false,
+      singleFourPenaltyMultiplier: 1.0,
       enableMiseThreat: false,
     });
 
@@ -601,6 +608,7 @@ describe("カウンターフォー", () => {
       enableVCT: false,
       enableMandatoryDefense: false,
       enableSingleFourPenalty: false,
+      singleFourPenaltyMultiplier: 1.0,
       enableMiseThreat: false,
     });
 
@@ -674,6 +682,7 @@ describe("必須防御ルール", () => {
     enableVCT: false,
     enableMandatoryDefense: true,
     enableSingleFourPenalty: false,
+    singleFourPenaltyMultiplier: 1.0,
     enableMiseThreat: false,
   };
 
@@ -794,6 +803,7 @@ describe("単発四ペナルティ", () => {
     enableVCT: false,
     enableMandatoryDefense: false,
     enableSingleFourPenalty: true,
+    singleFourPenaltyMultiplier: 0.0, // 100%減点
     enableMiseThreat: false,
   };
 
@@ -883,6 +893,7 @@ describe("evaluatePosition - 止め四防御", () => {
     enableVCT: false,
     enableMandatoryDefense: true,
     enableSingleFourPenalty: false,
+    singleFourPenaltyMultiplier: 1.0,
     enableMiseThreat: false,
   };
 
@@ -937,6 +948,7 @@ describe("evaluatePosition - ミセ手防御", () => {
     enableVCT: false,
     enableMandatoryDefense: true,
     enableSingleFourPenalty: false,
+    singleFourPenaltyMultiplier: 1.0,
     enableMiseThreat: true,
   };
 

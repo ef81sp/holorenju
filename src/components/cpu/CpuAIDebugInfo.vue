@@ -138,6 +138,7 @@ const bonusLabels: Record<string, string> = {
   mise: "ミセ手",
   center: "中央",
   multiThreat: "複数脅威",
+  singleFourPenalty: "単発四ペナ",
 };
 
 /**
@@ -196,7 +197,9 @@ function getNonZeroBreakdown(candidate: CandidateMove): {
     .map(([key, value]) => ({
       key,
       label: bonusLabels[key] ?? key,
-      value: value as number,
+      // ペナルティは減点なので符号を反転
+      value:
+        key === "singleFourPenalty" ? -(value as number) : (value as number),
     }));
 
   return { patterns, defense, bonuses };

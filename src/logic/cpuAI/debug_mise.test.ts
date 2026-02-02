@@ -185,6 +185,7 @@ describe("ミセ手デバッグ", () => {
       enableCounterFour: false,
       enableVCT: false,
       enableSingleFourPenalty: false,
+      singleFourPenaltyMultiplier: 1.0,
     };
 
     // 黒のミセ手(5,9)がある状態で、白(5,5)の評価

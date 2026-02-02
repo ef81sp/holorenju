@@ -67,6 +67,7 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
       enableVCT: false,
       enableMandatoryDefense: false,
       enableSingleFourPenalty: false,
+      singleFourPenaltyMultiplier: 1.0, // ペナルティなし（初心者らしく四を打ちがち）
       enableMiseThreat: false,
     },
   },
@@ -84,6 +85,7 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
       enableVCT: false,
       enableMandatoryDefense: true,
       enableSingleFourPenalty: false,
+      singleFourPenaltyMultiplier: 1.0, // ペナルティなし（四を打ちがち）
       enableMiseThreat: false,
     },
   },
@@ -101,6 +103,7 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
       enableVCT: false,
       enableMandatoryDefense: true,
       enableSingleFourPenalty: true,
+      singleFourPenaltyMultiplier: 0.1, // 90%減点（単独四は100点、連作りより低い）
       enableMiseThreat: true,
     },
   },
@@ -118,6 +121,7 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
       enableVCT: true,
       enableMandatoryDefense: true,
       enableSingleFourPenalty: true,
+      singleFourPenaltyMultiplier: 0.0, // 100%減点（単独四は完全に無価値）
       enableMiseThreat: true,
     },
   },
@@ -189,6 +193,8 @@ export interface ScoreBreakdown {
   center: number;
   /** 複数方向脅威ボーナス */
   multiThreat: number;
+  /** 単発四ペナルティ（減点） */
+  singleFourPenalty: number;
 }
 
 /**
