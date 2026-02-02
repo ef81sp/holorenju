@@ -1615,6 +1615,28 @@ export function evaluatePosition(
       if (!isDefendingOpenThree) {
         return -Infinity;
       }
+
+      // 活三を止めつつミセ手も止める必要がある
+      if (options.enableMiseThreat && threats.mises.length > 0) {
+        const isDefendingMise = threats.mises.some(
+          (p) => p.row === row && p.col === col,
+        );
+        if (!isDefendingMise) {
+          // 活三とミセ手の両方を止める手が存在するかチェック
+          const hasDefenseThatBlocksBoth = threats.openThrees.some(
+            (openThreePos) =>
+              threats.mises.some(
+                (misePos) =>
+                  openThreePos.row === misePos.row &&
+                  openThreePos.col === misePos.col,
+              ),
+          );
+          // 両方を止める手がある場合のみ、この手を除外
+          if (hasDefenseThatBlocksBoth) {
+            return -Infinity;
+          }
+        }
+      }
     }
 
     // 相手のミセ手を止めない手は除外（活四・止め四・活三がない場合）

@@ -398,6 +398,9 @@ describe("preferencesStore", () => {
         display: {
           textSize: "normal",
         },
+        debug: {
+          showAIInfo: false,
+        },
       });
     });
   });
