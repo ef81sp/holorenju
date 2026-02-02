@@ -23,6 +23,9 @@ const DEBUG_MARK_INDEX = -999;
 // ホバー中の候補手
 const hoveredCandidate = ref<CandidateMove | null>(null);
 
+// ポップオーバー要素のref（各候補手ごと）
+const popoverRefs = ref<Map<number, HTMLElement>>(new Map());
+
 /**
  * 座標を人間が読みやすい形式に変換 (例: H8)
  */
@@ -74,6 +77,17 @@ function getScoreEvaluation(score: number): string {
 }
 
 /**
+ * ポップオーバーのrefを設定
+ */
+function setPopoverRef(rank: number, el: HTMLElement | null): void {
+  if (el) {
+    popoverRefs.value.set(rank, el);
+  } else {
+    popoverRefs.value.delete(rank);
+  }
+}
+
+/**
  * 候補手のホバー開始
  */
 function handleCandidateEnter(candidate: CandidateMove): void {
@@ -84,6 +98,10 @@ function handleCandidateEnter(candidate: CandidateMove): void {
     [{ positions: [candidate.position], markType: "circle" }],
     DEBUG_MARK_INDEX,
   );
+
+  // ポップオーバーを表示
+  const popover = popoverRefs.value.get(candidate.rank);
+  popover?.showPopover();
 }
 
 /**
@@ -95,6 +113,10 @@ function handleCandidateLeave(): void {
     boardStore.removeMarks([
       { positions: [hoveredCandidate.value.position], markType: "circle" },
     ]);
+
+    // ポップオーバーを非表示
+    const popover = popoverRefs.value.get(hoveredCandidate.value.rank);
+    popover?.hidePopover();
   }
   hoveredCandidate.value = null;
 }
@@ -177,6 +199,7 @@ function isDepthChanged(index: number): boolean {
             selected: candidate.rank === selectedRank,
             hovered: hoveredCandidate?.rank === candidate.rank,
           }"
+          :style="{ anchorName: `--candidate-anchor-${candidate.rank}` }"
           @mouseenter="handleCandidateEnter(candidate)"
           @mouseleave="handleCandidateLeave"
         >
@@ -194,10 +217,12 @@ function isDepthChanged(index: number): boolean {
             {{ wasRandom ? "選択" : "" }}
           </span>
 
-          <!-- ポップオーバー -->
+          <!-- ポップオーバー (Popover API + Anchor Positioning API) -->
           <div
-            v-if="hoveredCandidate?.rank === candidate.rank"
+            :ref="(el) => setPopoverRef(candidate.rank, el as HTMLElement)"
+            popover="manual"
             class="candidate-popover"
+            :style="{ positionAnchor: `--candidate-anchor-${candidate.rank}` }"
           >
             <div class="popover-row">
               <span class="popover-label">位置:</span>
@@ -384,41 +409,25 @@ function isDepthChanged(index: number): boolean {
   color: var(--color-primary);
 }
 
-/* ポップオーバー */
+/* ポップオーバー (Popover API + Anchor Positioning API) */
 .candidate-popover {
-  position: absolute;
-  left: 100%;
-  top: 50%;
-  transform: translateY(-50%);
-  margin-left: var(--size-8);
+  /* Popover のデフォルトスタイルをリセット */
+  margin: 0;
+  inset: auto;
+
+  /* Anchor Positioning */
+  position: fixed;
+  position-area: block-end;
+  position-try-fallbacks: flip-block;
+
+  /* スタイル */
   padding: var(--size-10);
   background: var(--color-bg-white, #fff);
   border: 1px solid var(--color-border-light);
   border-radius: var(--size-8);
   box-shadow: 0 var(--size-4) var(--size-12) rgba(0, 0, 0, 0.15);
   min-width: var(--size-140, 140px);
-  z-index: 100;
   font-family: sans-serif;
-}
-
-.candidate-popover::before {
-  content: "";
-  position: absolute;
-  left: calc(var(--size-8) * -1);
-  top: 50%;
-  transform: translateY(-50%);
-  border: var(--size-6) solid transparent;
-  border-right-color: var(--color-border-light);
-}
-
-.candidate-popover::after {
-  content: "";
-  position: absolute;
-  left: calc(var(--size-6) * -1);
-  top: 50%;
-  transform: translateY(-50%);
-  border: var(--size-5) solid transparent;
-  border-right-color: var(--color-bg-white, #fff);
 }
 
 .popover-row {
