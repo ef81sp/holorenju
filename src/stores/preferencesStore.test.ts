@@ -399,7 +399,7 @@ describe("preferencesStore", () => {
           textSize: "normal",
         },
         debug: {
-          showAIInfo: false,
+          showCpuInfo: false,
         },
       });
     });

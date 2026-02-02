@@ -1,16 +1,16 @@
 /**
- * Renju AI Web Worker
+ * Renju CPU Web Worker
  *
- * AIをメインスレッドから分離してUIブロッキングを回避
+ * CPUをメインスレッドから分離してUIブロッキングを回避
  *
  * Viteの?workerサフィックスでインポートして使用:
- * import RenjuAIWorker from './renjuAI.worker?worker'
+ * import CpuWorker from './cpu.worker?worker'
  */
 
 import {
   DIFFICULTY_PARAMS,
-  type AIRequest,
-  type AIResponse,
+  type CpuRequest,
+  type CpuResponse,
   type ScoreBreakdown,
 } from "@/types/cpu";
 
@@ -28,7 +28,7 @@ import { findBestMoveIterativeWithTT } from "./search/minimax";
  * 開局フェーズ（1〜3手目）では珠型パターンを使用し、
  * 4手目以降はIterative Deepeningで探索する
  */
-self.onmessage = (event: MessageEvent<AIRequest>) => {
+self.onmessage = (event: MessageEvent<CpuRequest>) => {
   const request = event.data;
   const startTime = performance.now();
 
@@ -50,7 +50,7 @@ self.onmessage = (event: MessageEvent<AIRequest>) => {
           const endTime = performance.now();
           const thinkingTime = Math.round(endTime - startTime);
 
-          const response: AIResponse = {
+          const response: CpuResponse = {
             position: openingMove,
             score: 0, // 開局の手は評価スコアなし
             thinkingTime,
@@ -63,7 +63,7 @@ self.onmessage = (event: MessageEvent<AIRequest>) => {
       }
     }
 
-    // 4手目以降、または開局パターン外の場合は通常のAI探索
+    // 4手目以降、または開局パターン外の場合は通常のCPU探索
     const params = DIFFICULTY_PARAMS[request.difficulty];
 
     // Iterative Deepeningで探索（TT/Move Ordering統合版）
@@ -117,7 +117,7 @@ self.onmessage = (event: MessageEvent<AIRequest>) => {
       score: entry.score,
     }));
 
-    const response: AIResponse = {
+    const response: CpuResponse = {
       position: result.position,
       score: result.score,
       thinkingTime,
@@ -138,8 +138,8 @@ self.onmessage = (event: MessageEvent<AIRequest>) => {
     self.postMessage(response);
   } catch (error) {
     // エラー時はデフォルト位置を返す
-    console.error("AI Worker error:", error);
-    const response: AIResponse = {
+    console.error("CPU Worker error:", error);
+    const response: CpuResponse = {
       position: { row: 7, col: 7 },
       score: 0,
       thinkingTime: 0,
@@ -150,4 +150,4 @@ self.onmessage = (event: MessageEvent<AIRequest>) => {
 };
 
 // TypeScript用の型宣言
-export type { AIRequest, AIResponse };
+export type { CpuRequest, CpuResponse };

@@ -1,7 +1,7 @@
 /**
  * ヘッドレス対局エンジン
  *
- * GUI なしで CPU AI 同士の対局を実行する
+ * GUI なしで CPU同士の対局を実行する
  */
 
 import type { BoardState, Position, StoneColor } from "../../../types/game.ts";

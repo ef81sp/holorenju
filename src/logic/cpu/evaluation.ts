@@ -2109,7 +2109,7 @@ function emptyLeafPatternScores(): LeafPatternScores {
  * 盤面全体を評価して内訳を返す（探索末端の評価用）
  *
  * @param board 盤面
- * @param perspective 評価の視点（AIの色）
+ * @param perspective 評価の視点（CPUの色）
  * @returns 評価内訳
  */
 export function evaluateBoardWithBreakdown(

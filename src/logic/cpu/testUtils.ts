@@ -1,5 +1,5 @@
 /**
- * CPU AIテスト用ユーティリティ
+ * CPUテスト用ユーティリティ
  */
 
 import type { BoardState, StoneColor } from "@/types/game";

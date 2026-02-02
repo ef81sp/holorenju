@@ -1,5 +1,5 @@
 /**
- * CPU AI ライン解析ユーティリティ
+ * CPUライン解析ユーティリティ
  *
  * SSoT (Single Source of Truth) として連の解析に関する関数を提供
  */

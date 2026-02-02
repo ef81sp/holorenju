@@ -1,33 +1,33 @@
-# CPU AI ベンチマーク
+# CPU ベンチマーク
 
-CPU AI の強さを定量的に評価するための Self-Play レーティングシステム。
+CPUの強さを定量的に評価するための Self-Play レーティングシステム。
 
 ## 使用方法
 
 ```bash
 # 全難易度総当たり（各50対局、デフォルト）
-pnpm bench:ai
+pnpm bench:cpu
 
 # 特定難易度のみ
-pnpm bench:ai --players=medium,hard
+pnpm bench:cpu --players=medium,hard
 
 # 対局数を指定
-pnpm bench:ai --games=100
+pnpm bench:cpu --games=100
 
 # 詳細ログ出力
-pnpm bench:ai --verbose
+pnpm bench:cpu --verbose
 
 # CSV形式で出力
-pnpm bench:ai --format=csv
+pnpm bench:cpu --format=csv
 
 # 並列実行（CPUコア数-1のワーカーを使用）
-pnpm bench:ai --parallel
+pnpm bench:cpu --parallel
 
 # ワーカー数を指定して並列実行
-pnpm bench:ai --parallel --workers=4
+pnpm bench:cpu --parallel --workers=4
 
 # 組み合わせ例
-pnpm bench:ai --players=easy,medium,hard --games=20 --parallel
+pnpm bench:cpu --players=easy,medium,hard --games=20 --parallel
 ```
 
 ### CLI オプション
@@ -109,7 +109,7 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
 ### 調整ワークフロー
 
 1. パラメータを変更
-2. `pnpm bench:ai --players=<変更した難易度>,<隣接難易度> --games=50` で確認
+2. `pnpm bench:cpu --players=<変更した難易度>,<隣接難易度> --games=50` で確認
 3. レーティング差が適切か確認
 4. 必要に応じて微調整
 
@@ -132,7 +132,7 @@ import {
   calculateStats,
   createInitialRating,
   updateRatings,
-} from "@/logic/cpuAI/benchmark";
+} from "@/logic/cpu/benchmark";
 
 // 単一対局
 const result = runHeadlessGame(

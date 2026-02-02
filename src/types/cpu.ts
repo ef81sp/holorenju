@@ -2,7 +2,7 @@
  * CPU対戦関連の型定義
  */
 
-import type { EvaluationOptions } from "@/logic/cpuAI/evaluation";
+import type { EvaluationOptions } from "@/logic/cpu/evaluation";
 
 import type { BoardState, Position, StoneColor } from "./game";
 
@@ -128,9 +128,9 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
 };
 
 /**
- * AI着手リクエスト（Worker通信用）
+ * CPU着手リクエスト（Worker通信用）
  */
-export interface AIRequest {
+export interface CpuRequest {
   /** 現在の盤面 */
   board: BoardState;
   /** 現在の手番 */
@@ -296,9 +296,9 @@ export interface SearchStats {
 }
 
 /**
- * AI着手レスポンス（Worker通信用）
+ * CPU着手レスポンス（Worker通信用）
  */
-export interface AIResponse {
+export interface CpuResponse {
   /** 着手位置 */
   position: Position;
   /** 評価スコア */

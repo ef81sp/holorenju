@@ -1,5 +1,5 @@
 /**
- * CPU AI 探索モジュール
+ * CPU探索モジュール
  *
  * - VCF (Victory by Continuous Fours)
  * - VCT (Victory by Continuous Threats)

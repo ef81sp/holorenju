@@ -7,7 +7,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { nextTick } from "vue";
 
-import type { AIResponse } from "@/types/cpu";
+import type { CpuResponse } from "@/types/cpu";
 import type { BoardState } from "@/types/game";
 
 import { createEmptyBoard } from "@/logic/renjuRules";
@@ -20,7 +20,7 @@ class MockWorker {
   postMessage(_data: unknown): void {
     // 非同期でレスポンスを返す
     setTimeout(() => {
-      const response: AIResponse = {
+      const response: CpuResponse = {
         position: { row: 7, col: 7 },
         score: 100,
         thinkingTime: 50,
@@ -39,7 +39,7 @@ class MockWorker {
 }
 
 // Workerモジュールをモック
-vi.mock("@/logic/cpuAI/renjuAI.worker?worker", () => ({
+vi.mock("@/logic/cpu/cpu.worker?worker", () => ({
   default: MockWorker,
 }));
 
@@ -92,7 +92,7 @@ describe("useCpuPlayer", () => {
     expect(isThinking.value).toBe(false);
   });
 
-  it("requestMoveはAIResponseを返す", async () => {
+  it("requestMoveはCpuResponseを返す", async () => {
     const { requestMove } = useCpuPlayer();
     const board: BoardState = createEmptyBoard();
 

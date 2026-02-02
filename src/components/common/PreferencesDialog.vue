@@ -165,9 +165,9 @@ defineExpose({
           <h3 class="section-title">開発者向け</h3>
           <div class="settings-group">
             <label class="setting-row">
-              <span class="setting-label">AI分析を表示</span>
+              <span class="setting-label">コンピュータ分析を表示</span>
               <input
-                v-model="preferencesStore.showAIInfo"
+                v-model="preferencesStore.showCpuInfo"
                 type="checkbox"
                 class="checkbox"
               />

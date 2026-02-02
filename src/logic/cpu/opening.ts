@@ -249,7 +249,7 @@ export function getOpeningMove(
   // 2手目（白）: 天元の周囲8マスからランダムに選択
   if (stoneCount === 1 && color === "white") {
     if (!hasStoneatTengen(board)) {
-      // 黒が天元以外に置いた場合は通常のAI処理
+      // 黒が天元以外に置いた場合は通常のCPU処理
       return null;
     }
 
@@ -274,13 +274,13 @@ export function getOpeningMove(
   // 3手目（黒）: 珠型パターンからランダムに選択
   if (stoneCount === 2 && color === "black") {
     if (!hasStoneatTengen(board)) {
-      // 黒が天元以外に置いた場合は通常のAI処理
+      // 黒が天元以外に置いた場合は通常のCPU処理
       return null;
     }
 
     const secondMove = findSecondMovePosition(board);
     if (!secondMove) {
-      // 白が天元周囲以外に置いた場合は通常のAI処理
+      // 白が天元周囲以外に置いた場合は通常のCPU処理
       return null;
     }
 
@@ -308,7 +308,7 @@ export function getOpeningMove(
     return selectRandom(validPositions) ?? null;
   }
 
-  // 4手目以降は通常のAI処理
+  // 4手目以降は通常のCPU処理
   return null;
 }
 

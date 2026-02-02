@@ -1,5 +1,5 @@
 /**
- * CPU AI 脅威解析モジュール
+ * CPU脅威解析モジュール
  *
  * SSoT (Single Source of Truth) として脅威検出に関する関数を提供
  * - 跳び四の空き位置検出

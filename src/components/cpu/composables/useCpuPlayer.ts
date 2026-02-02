@@ -1,16 +1,16 @@
 /**
  * CPU Player Composable
  *
- * Web Workerを使用してAIの着手を非同期で取得
+ * Web Workerを使用してCPUの着手を非同期で取得
  */
 
 import { ref, onUnmounted, type Ref } from "vue";
 
-import type { AIRequest, AIResponse, CpuDifficulty } from "@/types/cpu";
+import type { CpuRequest, CpuResponse, CpuDifficulty } from "@/types/cpu";
 import type { BoardState } from "@/types/game";
 
 // Viteの?workerサフィックスでWorkerをインポート
-import RenjuAIWorker from "@/logic/cpuAI/renjuAI.worker?worker";
+import CpuWorker from "@/logic/cpu/cpu.worker?worker";
 
 /**
  * useCpuPlayerの戻り値
@@ -19,13 +19,13 @@ export interface UseCpuPlayerReturn {
   /** 思考中かどうか */
   isThinking: Ref<boolean>;
   /** 最後のレスポンス */
-  lastResponse: Ref<AIResponse | null>;
+  lastResponse: Ref<CpuResponse | null>;
   /** 着手をリクエスト */
   requestMove: (
     board: BoardState,
     currentTurn: "black" | "white",
     difficulty: CpuDifficulty,
-  ) => Promise<AIResponse>;
+  ) => Promise<CpuResponse>;
   /** Workerを終了 */
   terminate: () => void;
 }
@@ -33,14 +33,14 @@ export interface UseCpuPlayerReturn {
 /**
  * CPU Player Composable
  *
- * @returns Worker管理とAI着手リクエスト機能
+ * @returns Worker管理とCPU着手リクエスト機能
  */
 export function useCpuPlayer(): UseCpuPlayerReturn {
   const isThinking = ref(false);
-  const lastResponse = ref<AIResponse | null>(null);
+  const lastResponse = ref<CpuResponse | null>(null);
 
   let worker: Worker | null = null;
-  let pendingResolve: ((response: AIResponse) => void) | null = null;
+  let pendingResolve: ((response: CpuResponse) => void) | null = null;
 
   /**
    * Workerを初期化
@@ -50,8 +50,8 @@ export function useCpuPlayer(): UseCpuPlayerReturn {
       return worker;
     }
 
-    worker = new RenjuAIWorker();
-    worker.onmessage = (event: MessageEvent<AIResponse>) => {
+    worker = new CpuWorker();
+    worker.onmessage = (event: MessageEvent<CpuResponse>) => {
       const response = event.data;
       lastResponse.value = response;
       isThinking.value = false;
@@ -63,11 +63,11 @@ export function useCpuPlayer(): UseCpuPlayerReturn {
     };
 
     worker.onerror = (error) => {
-      console.error("AI Worker error:", error);
+      console.error("CPU Worker error:", error);
       isThinking.value = false;
 
       // エラー時はデフォルト位置を返す
-      const defaultResponse: AIResponse = {
+      const defaultResponse: CpuResponse = {
         position: { row: 7, col: 7 },
         score: 0,
         thinkingTime: 0,
@@ -85,19 +85,19 @@ export function useCpuPlayer(): UseCpuPlayerReturn {
   }
 
   /**
-   * AIに着手をリクエスト
+   * CPUに着手をリクエスト
    */
   function requestMove(
     board: BoardState,
     currentTurn: "black" | "white",
     difficulty: CpuDifficulty,
-  ): Promise<AIResponse> {
+  ): Promise<CpuResponse> {
     return new Promise((resolve) => {
       const w = initWorker();
       isThinking.value = true;
       pendingResolve = resolve;
 
-      const request: AIRequest = {
+      const request: CpuRequest = {
         board,
         currentTurn,
         difficulty,

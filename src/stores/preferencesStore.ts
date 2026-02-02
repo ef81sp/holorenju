@@ -20,7 +20,7 @@ interface Preferences {
     textSize: TextSize;
   };
   debug: {
-    showAIInfo: boolean;
+    showCpuInfo: boolean;
   };
 }
 
@@ -34,7 +34,7 @@ const defaultPreferences: Preferences = {
     textSize: "normal",
   },
   debug: {
-    showAIInfo: false,
+    showCpuInfo: false,
   },
 };
 
@@ -86,7 +86,7 @@ interface OldPreferences {
     textSize?: TextSize;
   };
   debug?: {
-    showAIInfo?: boolean;
+    showCpuInfo?: boolean;
   };
 }
 
@@ -184,9 +184,9 @@ export const usePreferencesStore = defineStore("preferences", () => {
     set: (v) => (preferences.value.display.textSize = v),
   });
 
-  const showAIInfo = computed({
-    get: () => preferences.value.debug.showAIInfo,
-    set: (v) => (preferences.value.debug.showAIInfo = v),
+  const showCpuInfo = computed({
+    get: () => preferences.value.debug.showCpuInfo,
+    set: (v) => (preferences.value.debug.showCpuInfo = v),
   });
 
   // 速度倍率
@@ -248,7 +248,7 @@ export const usePreferencesStore = defineStore("preferences", () => {
     speed,
     effectSpeed,
     textSize,
-    showAIInfo,
+    showCpuInfo,
     // 速度倍率
     speedMultiplier,
     effectSpeedMultiplier,

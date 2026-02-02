@@ -1,7 +1,7 @@
 /**
- * CPU AI ロジック
+ * CPUロジック
  *
- * Minimax + Alpha-Beta剪定を使用したAI実装
+ * Minimax + Alpha-Beta剪定を使用した実装
  */
 
 export { evaluateBoard, evaluatePosition, PATTERN_SCORES } from "./evaluation";

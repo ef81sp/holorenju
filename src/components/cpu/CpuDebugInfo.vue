@@ -1,14 +1,14 @@
 <script setup lang="ts">
 /**
- * AIデバッグ情報表示コンポーネント
+ * CPUデバッグ情報表示コンポーネント
  *
- * CPU対戦画面でAIの判断を可視化するためのデバッグ用パネル
+ * CPU対戦画面でコンピュータの判断を可視化するためのデバッグ用パネル
  */
 
 import { computed, ref } from "vue";
 
 import type {
-  AIResponse,
+  CpuResponse,
   CandidateMove,
   DepthResult,
   PatternScoreDetail,
@@ -17,8 +17,8 @@ import type {
 import { useBoardStore } from "@/stores/boardStore";
 
 const props = defineProps<{
-  /** 最後のAIレスポンス */
-  response: AIResponse | null;
+  /** 最後のCPUレスポンス */
+  response: CpuResponse | null;
 }>();
 
 const boardStore = useBoardStore();
@@ -360,7 +360,7 @@ function isDepthChanged(index: number): boolean {
     class="ai-debug-info"
   >
     <div class="debug-header">
-      <span class="debug-title">AI分析</span>
+      <span class="debug-title">コンピュータ分析</span>
       <span class="debug-stats">
         {{ response.depth }}手読み / {{ response.thinkingTime }}ms
       </span>

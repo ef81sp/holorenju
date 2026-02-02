@@ -3,7 +3,7 @@
  * CPU対戦画面
  *
  * ScenarioPlayerと同じグリッドレイアウトを使用
- * AIはWeb Worker経由で非同期実行してUIブロッキングを回避
+ * CPUはWeb Worker経由で非同期実行してUIブロッキングを回避
  */
 
 import { computed, onMounted, onUnmounted, ref } from "vue";
@@ -18,7 +18,7 @@ import CharacterSprite from "@/components/character/CharacterSprite.vue";
 import CpuGameStatus from "./CpuGameStatus.vue";
 import CpuCharacterPanel from "./CpuCharacterPanel.vue";
 import CpuRecordDialog from "./CpuRecordDialog.vue";
-import CpuAIDebugInfo from "./CpuAIDebugInfo.vue";
+import CpuDebugInfo from "./CpuDebugInfo.vue";
 import { useCpuPlayer } from "./composables/useCpuPlayer";
 import { useCpuDialogue } from "./composables/useCpuDialogue";
 import { useForbiddenMark } from "./composables/useForbiddenMark";
@@ -334,9 +334,9 @@ const gameEndMessage = computed(() => {
             </button>
           </div>
 
-          <!-- AIデバッグ情報 -->
-          <CpuAIDebugInfo
-            v-if="preferencesStore.showAIInfo"
+          <!-- CPUデバッグ情報 -->
+          <CpuDebugInfo
+            v-if="preferencesStore.showCpuInfo"
             :response="lastResponse"
           />
 

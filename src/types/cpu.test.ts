@@ -8,8 +8,8 @@ import {
   CPU_DIFFICULTIES,
   DIFFICULTY_PARAMS,
   isCpuDifficulty,
-  type AIRequest,
-  type AIResponse,
+  type CpuRequest,
+  type CpuResponse,
   type CpuBattleRecord,
   type CpuBattleStats,
   type CpuDifficulty,
@@ -90,9 +90,9 @@ describe("DifficultyParams", () => {
   });
 });
 
-describe("AIRequest/AIResponse型", () => {
-  it("AIRequestを構築できる", () => {
-    const request: AIRequest = {
+describe("CpuRequest/CpuResponse型", () => {
+  it("CpuRequestを構築できる", () => {
+    const request: CpuRequest = {
       board: new Array(15).fill(null).map(() => new Array(15).fill(null)),
       currentTurn: "black",
       difficulty: "medium",
@@ -103,8 +103,8 @@ describe("AIRequest/AIResponse型", () => {
     expect(request.difficulty).toBe("medium");
   });
 
-  it("AIResponseを構築できる", () => {
-    const response: AIResponse = {
+  it("CpuResponseを構築できる", () => {
+    const response: CpuResponse = {
       position: { row: 7, col: 7 },
       score: 100,
       thinkingTime: 500,

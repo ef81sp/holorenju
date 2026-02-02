@@ -1,5 +1,5 @@
 /**
- * CPU AI 共通定数
+ * CPU共通定数
  *
  * SSoT (Single Source of Truth) として、4方向の探索に使用する定数を定義
  */

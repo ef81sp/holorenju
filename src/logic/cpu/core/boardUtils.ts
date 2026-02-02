@@ -1,5 +1,5 @@
 /**
- * CPU AI 盤面ユーティリティ関数
+ * CPU盤面ユーティリティ関数
  *
  * SSoT (Single Source of Truth) として盤面操作関数を提供
  */
