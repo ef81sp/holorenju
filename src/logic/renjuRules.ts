@@ -798,7 +798,8 @@ export function checkJumpFour(
   const placedIndex = 5;
 
   // 飛び四パターン1: ●●●・● (3石, 空白, 1石)
-  for (const offset of [-2, -1, 0]) {
+  // 置いた石の位置: 0, 1, 2, または 4（gapは3）
+  for (const offset of [-4, -2, -1, 0]) {
     const startIdx = placedIndex + offset;
     // パターン: [startIdx]=色, [startIdx+1]=色, [startIdx+2]=色, [startIdx+3]=空, [startIdx+4]=色
     if (
@@ -815,7 +816,8 @@ export function checkJumpFour(
   }
 
   // 飛び四パターン2: ●●・●● (2石, 空白, 2石)
-  for (const offset of [-1, 0, -3]) {
+  // 置いた石の位置: 0, 1, 3, または 4（gapは2）
+  for (const offset of [-4, -3, -1, 0]) {
     const startIdx = placedIndex + offset;
     // パターン: [startIdx]=色, [startIdx+1]=色, [startIdx+2]=空, [startIdx+3]=色, [startIdx+4]=色
     if (

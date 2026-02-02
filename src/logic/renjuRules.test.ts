@@ -974,6 +974,54 @@ describe("飛び四の追加パターン", () => {
     const result = checkForbiddenMove(board, 7, 5);
     expect(result.isForbidden).toBe(false);
   });
+
+  it("●●●・* パターン（置く石が末尾）で四四禁になる", () => {
+    // 実際のゲームで発生したバグのリグレッションテスト
+    // 縦方向: ●●●・* (col=8, rows 6,7,8=石, row=5=空, row=4=置く)
+    // 斜め方向: ●●●・* (6,6), (7,5), (8,4) = 石, (5,7)=空, (4,8)=置く
+    const board = createEmptyBoard();
+
+    // 縦方向の石（下から上へ: 8,7,6、空き5、置く4）
+    board[8][8] = "black";
+    board[7][8] = "black";
+    board[6][8] = "black";
+    // row=5, col=8 は空き（飛びの空き）
+    // row=4, col=8 が置く位置
+
+    // 斜め方向の石（右下から左上へ）
+    board[8][4] = "black";
+    board[7][5] = "black";
+    board[6][6] = "black";
+    // (5,7) は空き（飛びの空き）
+    // (4,8) が置く位置（縦と共通）
+
+    // (4,8) に置くと縦に飛び四(●●●・●) + 斜めに飛び四(●●●・●) = 四四禁
+    const result = checkForbiddenMove(board, 4, 8);
+    expect(result.isForbidden).toBe(true);
+    expect(result.type).toBe("double-four");
+  });
+
+  it("●●・●* パターン（置く石が末尾）で四四禁になる", () => {
+    // パターン2: ●●・●● の末尾に置く場合
+    const board = createEmptyBoard();
+
+    // 横方向: ●●・●* (row=7, cols 4,5=石, col=6=空, col=7=石, col=8=置く)
+    board[7][4] = "black";
+    board[7][5] = "black";
+    // col=6 は空き
+    board[7][7] = "black";
+    // col=8 が置く位置
+
+    // 縦方向に別の四を作る: ●●●* (col=8, rows 4,5,6=石, row=7=置く)
+    board[4][8] = "black";
+    board[5][8] = "black";
+    board[6][8] = "black";
+
+    // (7,8) に置くと横に飛び四(●●・●●) + 縦に連続四(●●●●) = 四四禁
+    const result = checkForbiddenMove(board, 7, 8);
+    expect(result.isForbidden).toBe(true);
+    expect(result.type).toBe("double-four");
+  });
 });
 
 describe("四の種類（達四/止四）", () => {
