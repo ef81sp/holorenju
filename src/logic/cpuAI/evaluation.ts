@@ -1929,6 +1929,20 @@ export function evaluateBoard(
 }
 
 /**
+ * パターンスコア内訳（探索末端用）
+ */
+export interface LeafPatternScores {
+  five: number;
+  openFour: number;
+  four: number;
+  openThree: number;
+  three: number;
+  openTwo: number;
+  two: number;
+  total: number;
+}
+
+/**
  * 盤面評価の内訳（探索末端用）
  */
 export interface BoardEvaluationBreakdown {
@@ -1938,19 +1952,25 @@ export interface BoardEvaluationBreakdown {
   opponentScore: number;
   /** 最終スコア（myScore - opponentScore） */
   total: number;
-  /** 自分の主要パターン数 */
-  myPatterns: {
-    five: number;
-    openFour: number;
-    four: number;
-    openThree: number;
-  };
-  /** 相手の主要パターン数 */
-  opponentPatterns: {
-    five: number;
-    openFour: number;
-    four: number;
-    openThree: number;
+  /** 自分のパターンスコア内訳 */
+  myBreakdown: LeafPatternScores;
+  /** 相手のパターンスコア内訳 */
+  opponentBreakdown: LeafPatternScores;
+}
+
+/**
+ * 空のパターンスコア内訳を作成
+ */
+function emptyLeafPatternScores(): LeafPatternScores {
+  return {
+    five: 0,
+    openFour: 0,
+    four: 0,
+    openThree: 0,
+    three: 0,
+    openTwo: 0,
+    two: 0,
+    total: 0,
   };
 }
 
@@ -1966,11 +1986,9 @@ export function evaluateBoardWithBreakdown(
   perspective: "black" | "white",
 ): BoardEvaluationBreakdown {
   const opponentColor = perspective === "black" ? "white" : "black";
-  let myScore = 0;
-  let opponentScore = 0;
 
-  const myPatterns = { five: 0, openFour: 0, four: 0, openThree: 0 };
-  const opponentPatterns = { five: 0, openFour: 0, four: 0, openThree: 0 };
+  const myBreakdown = emptyLeafPatternScores();
+  const opponentBreakdown = emptyLeafPatternScores();
 
   // 全ての石について評価
   for (let row = 0; row < 15; row++) {
@@ -1988,27 +2006,32 @@ export function evaluateBoardWithBreakdown(
       );
 
       if (stone === perspective) {
-        myScore += score;
-        // パターン数をカウント（スコアからパターン数を推定）
-        if (breakdown.five.final > 0) {myPatterns.five++;}
-        if (breakdown.openFour.final > 0) {myPatterns.openFour++;}
-        if (breakdown.four.final > 0) {myPatterns.four++;}
-        if (breakdown.openThree.final > 0) {myPatterns.openThree++;}
+        myBreakdown.five += breakdown.five.final;
+        myBreakdown.openFour += breakdown.openFour.final;
+        myBreakdown.four += breakdown.four.final;
+        myBreakdown.openThree += breakdown.openThree.final;
+        myBreakdown.three += breakdown.three.final;
+        myBreakdown.openTwo += breakdown.openTwo.final;
+        myBreakdown.two += breakdown.two.final;
+        myBreakdown.total += score;
       } else if (stone === opponentColor) {
-        opponentScore += score;
-        if (breakdown.five.final > 0) {opponentPatterns.five++;}
-        if (breakdown.openFour.final > 0) {opponentPatterns.openFour++;}
-        if (breakdown.four.final > 0) {opponentPatterns.four++;}
-        if (breakdown.openThree.final > 0) {opponentPatterns.openThree++;}
+        opponentBreakdown.five += breakdown.five.final;
+        opponentBreakdown.openFour += breakdown.openFour.final;
+        opponentBreakdown.four += breakdown.four.final;
+        opponentBreakdown.openThree += breakdown.openThree.final;
+        opponentBreakdown.three += breakdown.three.final;
+        opponentBreakdown.openTwo += breakdown.openTwo.final;
+        opponentBreakdown.two += breakdown.two.final;
+        opponentBreakdown.total += score;
       }
     }
   }
 
   return {
-    myScore,
-    opponentScore,
-    total: myScore - opponentScore,
-    myPatterns,
-    opponentPatterns,
+    myScore: myBreakdown.total,
+    opponentScore: opponentBreakdown.total,
+    total: myBreakdown.total - opponentBreakdown.total,
+    myBreakdown,
+    opponentBreakdown,
   };
 }

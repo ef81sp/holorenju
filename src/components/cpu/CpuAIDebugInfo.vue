@@ -67,37 +67,53 @@ function formatPV(
 }
 
 /**
- * パターンがあるかチェック
+ * 末端評価の内訳項目
  */
-function hasPatterns(patterns: {
-  five: number;
-  openFour: number;
-  four: number;
-  openThree: number;
-}): boolean {
-  return (
-    patterns.five > 0 ||
-    patterns.openFour > 0 ||
-    patterns.four > 0 ||
-    patterns.openThree > 0
-  );
+interface LeafBreakdownItem {
+  key: string;
+  label: string;
+  score: number;
 }
 
 /**
- * パターン数をフォーマット
+ * 末端評価の内訳から非ゼロ項目を取得
  */
-function formatPatterns(patterns: {
+function getLeafBreakdownItems(breakdown: {
   five: number;
   openFour: number;
   four: number;
   openThree: number;
-}): string {
-  const parts: string[] = [];
-  if (patterns.five > 0) {parts.push(`五${patterns.five}`);}
-  if (patterns.openFour > 0) {parts.push(`活四${patterns.openFour}`);}
-  if (patterns.four > 0) {parts.push(`四${patterns.four}`);}
-  if (patterns.openThree > 0) {parts.push(`活三${patterns.openThree}`);}
-  return parts.join(" ");
+  three: number;
+  openTwo: number;
+  two: number;
+}): LeafBreakdownItem[] {
+  const items: LeafBreakdownItem[] = [];
+  if (breakdown.five !== 0) {
+    items.push({ key: "five", label: "五連", score: breakdown.five });
+  }
+  if (breakdown.openFour !== 0) {
+    items.push({ key: "openFour", label: "活四", score: breakdown.openFour });
+  }
+  if (breakdown.four !== 0) {
+    items.push({ key: "four", label: "四", score: breakdown.four });
+  }
+  if (breakdown.openThree !== 0) {
+    items.push({
+      key: "openThree",
+      label: "活三",
+      score: breakdown.openThree,
+    });
+  }
+  if (breakdown.three !== 0) {
+    items.push({ key: "three", label: "三", score: breakdown.three });
+  }
+  if (breakdown.openTwo !== 0) {
+    items.push({ key: "openTwo", label: "活二", score: breakdown.openTwo });
+  }
+  if (breakdown.two !== 0) {
+    items.push({ key: "two", label: "二", score: breakdown.two });
+  }
+  return items;
 }
 
 /**
@@ -491,36 +507,59 @@ function isDepthChanged(index: number): boolean {
             >
               <div class="popover-section-label">末端評価</div>
               <div class="leaf-summary">
-                <span class="leaf-score">
-                  自分: {{ formatScore(candidate.leafEvaluation.myScore) }}
-                </span>
-                <span class="leaf-score">
-                  相手:
-                  {{ formatScore(candidate.leafEvaluation.opponentScore) }}
-                </span>
                 <span class="leaf-total">
-                  = {{ formatScore(candidate.leafEvaluation.total) }}
+                  {{ formatScore(candidate.leafEvaluation.total) }}
+                </span>
+                <span class="leaf-calc">
+                  (自{{ formatScore(candidate.leafEvaluation.myScore) }} - 相{{
+                    formatScore(candidate.leafEvaluation.opponentScore)
+                  }})
                 </span>
               </div>
-              <div class="leaf-patterns">
+
+              <!-- 自分の内訳 -->
+              <div
+                v-if="
+                  getLeafBreakdownItems(candidate.leafEvaluation.myBreakdown)
+                    .length > 0
+                "
+                class="leaf-breakdown-section"
+              >
+                <div class="leaf-breakdown-header">自分</div>
                 <div
-                  v-if="hasPatterns(candidate.leafEvaluation.myPatterns)"
-                  class="leaf-pattern-row"
+                  v-for="item in getLeafBreakdownItems(
+                    candidate.leafEvaluation.myBreakdown,
+                  )"
+                  :key="`my-${item.key}`"
+                  class="leaf-breakdown-row"
                 >
-                  <span class="leaf-label">自分:</span>
-                  <span class="leaf-value">
-                    {{ formatPatterns(candidate.leafEvaluation.myPatterns) }}
+                  <span class="leaf-breakdown-label">{{ item.label }}:</span>
+                  <span class="leaf-breakdown-value">
+                    {{ formatScore(item.score) }}
                   </span>
                 </div>
+              </div>
+
+              <!-- 相手の内訳 -->
+              <div
+                v-if="
+                  getLeafBreakdownItems(
+                    candidate.leafEvaluation.opponentBreakdown,
+                  ).length > 0
+                "
+                class="leaf-breakdown-section"
+              >
+                <div class="leaf-breakdown-header">相手</div>
                 <div
-                  v-if="hasPatterns(candidate.leafEvaluation.opponentPatterns)"
-                  class="leaf-pattern-row"
+                  v-for="item in getLeafBreakdownItems(
+                    candidate.leafEvaluation.opponentBreakdown,
+                  )"
+                  :key="`opp-${item.key}`"
+                  class="leaf-breakdown-row"
                 >
-                  <span class="leaf-label">相手:</span>
-                  <span class="leaf-value">
-                    {{
-                      formatPatterns(candidate.leafEvaluation.opponentPatterns)
-                    }}
+                  <span class="leaf-breakdown-label">{{ item.label }}:</span>
+                  <span class="leaf-breakdown-value">
+                    {{ formatScore(item.score) }}
                   </span>
                 </div>
               </div>
@@ -865,37 +904,48 @@ function isDepthChanged(index: number): boolean {
 
 .leaf-summary {
   display: flex;
-  gap: var(--size-8);
+  align-items: baseline;
+  gap: var(--size-6);
   font-size: var(--size-11);
   font-family: monospace;
-  margin-bottom: var(--size-4);
-}
-
-.leaf-score {
-  color: var(--color-text-secondary);
+  margin-bottom: var(--size-6);
 }
 
 .leaf-total {
+  font-size: var(--size-13);
   color: var(--color-primary);
   font-weight: 500;
 }
 
-.leaf-patterns {
+.leaf-calc {
   font-size: var(--size-10);
-}
-
-.leaf-pattern-row {
-  display: flex;
-  gap: var(--size-6);
-  padding: var(--size-1) 0;
-}
-
-.leaf-label {
   color: var(--color-text-secondary);
-  min-width: var(--size-32);
 }
 
-.leaf-value {
+.leaf-breakdown-section {
+  margin-top: var(--size-4);
+}
+
+.leaf-breakdown-header {
+  font-size: var(--size-10);
+  color: var(--color-text-secondary);
+  margin-bottom: var(--size-2);
+}
+
+.leaf-breakdown-row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--size-8);
+  padding: var(--size-1) 0;
+  font-size: var(--size-10);
+  font-family: monospace;
+}
+
+.leaf-breakdown-label {
+  color: var(--color-text-secondary);
+}
+
+.leaf-breakdown-value {
   color: var(--color-text-primary);
 }
 

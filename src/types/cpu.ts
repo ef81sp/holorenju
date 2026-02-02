@@ -192,6 +192,28 @@ export interface ScoreBreakdown {
 }
 
 /**
+ * パターンスコア内訳（探索末端用）
+ */
+export interface LeafPatternScores {
+  /** 五連のスコア */
+  five: number;
+  /** 活四のスコア */
+  openFour: number;
+  /** 四のスコア */
+  four: number;
+  /** 活三のスコア */
+  openThree: number;
+  /** 三のスコア */
+  three: number;
+  /** 活二のスコア */
+  openTwo: number;
+  /** 二のスコア */
+  two: number;
+  /** 合計スコア */
+  total: number;
+}
+
+/**
  * 探索末端の評価内訳（デバッグ表示用）
  */
 export interface LeafEvaluation {
@@ -201,20 +223,10 @@ export interface LeafEvaluation {
   opponentScore: number;
   /** 最終スコア（myScore - opponentScore） */
   total: number;
-  /** 自分の主要パターン（五連、活四、四、活三の数） */
-  myPatterns: {
-    five: number;
-    openFour: number;
-    four: number;
-    openThree: number;
-  };
-  /** 相手の主要パターン */
-  opponentPatterns: {
-    five: number;
-    openFour: number;
-    four: number;
-    openThree: number;
-  };
+  /** 自分のパターンスコア内訳 */
+  myBreakdown: LeafPatternScores;
+  /** 相手のパターンスコア内訳 */
+  opponentBreakdown: LeafPatternScores;
 }
 
 /**
