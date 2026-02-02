@@ -17,10 +17,9 @@ import {
   isValidPosition,
 } from "@/logic/renjuRules";
 
-import { countStones } from "./core/boardUtils";
 import { DIRECTION_INDICES, DIRECTIONS } from "./core/constants";
 import { hasVCF } from "./search/vcf";
-import { hasVCT, VCT_STONE_THRESHOLD } from "./search/vct";
+// VCT判定はルートレベル（findBestMoveIterativeWithTT）で行うため、評価関数では使用しない
 
 /**
  * パターンスコア定数
@@ -1606,17 +1605,10 @@ export function evaluatePosition(
     multiThreatBonus = evaluateMultiThreat(threatCount);
   }
 
-  // VCTボーナス: 三・四連続勝ちがある手（オプションで有効時のみ、終盤のみ）
-  // 計算コストが高いので、既にOPEN_FOUR以上の手はスキップ
-  let vctBonus = 0;
-  if (
-    options.enableVCT &&
-    attackScore < PATTERN_SCORES.OPEN_FOUR &&
-    countStones(board) >= VCT_STONE_THRESHOLD &&
-    hasVCT(testBoard, color)
-  ) {
-    vctBonus = PATTERN_SCORES.VCT_BONUS;
-  }
+  // VCTボーナス: ルートレベルでのみ判定するため、評価関数内では無効化
+  // 理由: 各ノードでVCT探索を実行すると計算コストが爆発的に増加
+  // 代わりに findBestMoveIterativeWithTT でルートの候補手に対してのみVCT判定
+  const vctBonus = 0;
 
   // 単発四ペナルティ: 四を作るが四三ではなく、後続脅威もない場合
   let singleFourPenalty = 0;
