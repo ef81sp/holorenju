@@ -49,7 +49,7 @@ AIの着手にランダム性を加える確率です。
 
 ## 評価関数
 
-評価関数は `src/logic/cpuAI/evaluation.ts` に実装されています。
+評価関数は `src/logic/cpu/evaluation.ts` に実装されています。
 
 ### パターンスコア
 
@@ -100,7 +100,7 @@ AIの着手にランダム性を加える確率です。
 
 ### Move Ordering（候補手の優先順位）
 
-`src/logic/cpuAI/moveGenerator.ts` の `sortMoves()` で実装。
+`src/logic/cpu/moveGenerator.ts` の `sortMoves()` で実装。
 
 優先度（高い順）:
 
@@ -121,7 +121,7 @@ AIの着手にランダム性を加える確率です。
 
 ### Transposition Table（置換表）
 
-`src/logic/cpuAI/transpositionTable.ts` で実装。
+`src/logic/cpu/transpositionTable.ts` で実装。
 
 同一局面の重複計算を回避するキャッシュ。異なる手順で同じ局面に到達した場合、以前の計算結果を再利用します。
 
@@ -147,7 +147,7 @@ AIの着手にランダム性を加える確率です。
 
 ### Zobrist Hashing
 
-`src/logic/cpuAI/zobrist.ts` で実装。
+`src/logic/cpu/zobrist.ts` で実装。
 
 盤面を高速にハッシュ化する手法。XOR演算により差分更新が可能で、石を置くたびに全盤面を再計算する必要がありません。
 
@@ -165,7 +165,7 @@ AIの着手にランダム性を加える確率です。
 
 ### 開局フェーズ（珠型パターン）
 
-`src/logic/cpuAI/opening.ts` で実装。
+`src/logic/cpu/opening.ts` で実装。
 
 連珠では最初の3手に定型パターン（珠型）があります:
 
@@ -358,14 +358,14 @@ Move Orderingで後半に来る手（5番目以降）は浅く探索し、有望
 
 ## ファイル構成
 
-| ファイル                      | 役割                                 |
-| ----------------------------- | ------------------------------------ |
-| `types/cpu.ts`                | 難易度パラメータ、型定義             |
-| `cpuAI/minimax.ts`            | Minimax探索、Iterative Deepening     |
-| `cpuAI/evaluation.ts`         | 評価関数、パターンスコア             |
-| `cpuAI/moveGenerator.ts`      | 候補手生成、Move Ordering            |
-| `cpuAI/transpositionTable.ts` | 置換表                               |
-| `cpuAI/zobrist.ts`            | Zobristハッシュ                      |
-| `cpuAI/opening.ts`            | 開局処理（珠型パターン、評価データ） |
-| `cpuAI/vcf.ts`                | VCF（四追い勝ち）探索                |
-| `cpuAI/vct.ts`                | VCT（三・四連続勝ち）探索            |
+| ファイル                    | 役割                                 |
+| --------------------------- | ------------------------------------ |
+| `types/cpu.ts`              | 難易度パラメータ、型定義             |
+| `cpu/minimax.ts`            | Minimax探索、Iterative Deepening     |
+| `cpu/evaluation.ts`         | 評価関数、パターンスコア             |
+| `cpu/moveGenerator.ts`      | 候補手生成、Move Ordering            |
+| `cpu/transpositionTable.ts` | 置換表                               |
+| `cpu/zobrist.ts`            | Zobristハッシュ                      |
+| `cpu/opening.ts`            | 開局処理（珠型パターン、評価データ） |
+| `cpu/vcf.ts`                | VCF（四追い勝ち）探索                |
+| `cpu/vct.ts`                | VCT（三・四連続勝ち）探索            |

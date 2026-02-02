@@ -16,7 +16,7 @@
 
 ### 現在の実装
 
-`src/logic/cpuAI/minimax.ts` で Iterative Deepening + Alpha-Beta剪定 + Transposition Table + LMR + Aspiration Windows を実装済み。
+`src/logic/cpu/minimax.ts` で Iterative Deepening + Alpha-Beta剪定 + Transposition Table + LMR + Aspiration Windows を実装済み。
 
 | 難易度   | 探索深度 | 時間制限 | 実測値（目安） |
 | -------- | -------- | -------- | -------------- |
@@ -234,8 +234,8 @@ pnpm bench:ai --mode=time
 
 ## 関連ファイル
 
-| ファイル                     | 変更内容                         |
-| ---------------------------- | -------------------------------- |
-| `src/logic/cpuAI/minimax.ts` | LMR, Futility, Aspiration の実装 |
-| `src/types/cpu.ts`           | パラメータ定義                   |
-| `scripts/bench-ai.ts`        | ベンチマークスクリプト（新規）   |
+| ファイル                   | 変更内容                         |
+| -------------------------- | -------------------------------- |
+| `src/logic/cpu/minimax.ts` | LMR, Futility, Aspiration の実装 |
+| `src/types/cpu.ts`         | パラメータ定義                   |
+| `scripts/bench-ai.ts`      | ベンチマークスクリプト（新規）   |

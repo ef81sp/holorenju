@@ -364,10 +364,10 @@ VCTの例:
 
 ## 関連ファイル
 
-| ファイル                        | 内容                   |
-| ------------------------------- | ---------------------- |
-| `src/logic/cpuAI/evaluation.ts` | 評価関数、パターン検出 |
-| `src/logic/cpuAI/search/vcf.ts` | VCF探索                |
-| `src/logic/cpuAI/search/vct.ts` | VCT探索                |
-| `src/logic/renjuRules.ts`       | 禁手判定、パターン検出 |
-| `src/types/cpu.ts`              | 難易度パラメータ       |
+| ファイル                      | 内容                   |
+| ----------------------------- | ---------------------- |
+| `src/logic/cpu/evaluation.ts` | 評価関数、パターン検出 |
+| `src/logic/cpu/search/vcf.ts` | VCF探索                |
+| `src/logic/cpu/search/vct.ts` | VCT探索                |
+| `src/logic/renjuRules.ts`     | 禁手判定、パターン検出 |
+| `src/types/cpu.ts`            | 難易度パラメータ       |

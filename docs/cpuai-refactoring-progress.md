@@ -1,8 +1,8 @@
-# cpuAI リファクタリング進捗
+# cpu リファクタリング進捗
 
 ## 概要
 
-cpuAIディレクトリのコードをSSoT、DRY、SOLID、t-wada TDD原則に基づいて整理完了。
+cpuディレクトリのコードをSSoT、DRY、SOLID、t-wada TDD原則に基づいて整理完了。
 
 ## 完了したPhase
 
@@ -24,7 +24,7 @@ cpuAIディレクトリのコードをSSoT、DRY、SOLID、t-wada TDD原則に�
 
 **コミット**: `22e658e`
 
-- `src/logic/cpuAI/core/constants.ts` を作成
+- `src/logic/cpu/core/constants.ts` を作成
 - DIRECTIONS, DIRECTION_INDICESをSSoT化
 - vcf.ts, vct.ts, evaluation.tsのimportを切り替え
 
@@ -32,7 +32,7 @@ cpuAIディレクトリのコードをSSoT、DRY、SOLID、t-wada TDD原則に�
 
 **コミット**: `22e658e`
 
-- `src/logic/cpuAI/core/boardUtils.ts` を作成
+- `src/logic/cpu/core/boardUtils.ts` を作成
 - countStones, applyMove, getOppositeColor, selectRandomを統一
 - minimax.ts, vct.ts, renjuAI.worker.tsの重複定義を削除
 - utils.tsを削除
@@ -41,7 +41,7 @@ cpuAIディレクトリのコードをSSoT、DRY、SOLID、t-wada TDD原則に�
 
 **コミット**: `20e176b`
 
-- `src/logic/cpuAI/core/lineAnalysis.ts` を作成
+- `src/logic/cpu/core/lineAnalysis.ts` を作成
 - countLine, checkEnds, getLineEndsを統一
 - vcf.ts, vct.tsの重複定義を削除
 - vcf.tsから後方互換性のため再export
@@ -50,7 +50,7 @@ cpuAIディレクトリのコードをSSoT、DRY、SOLID、t-wada TDD原則に�
 
 **コミット**: `b164d59`
 
-- `src/logic/cpuAI/patterns/threatAnalysis.ts` を作成
+- `src/logic/cpu/patterns/threatAnalysis.ts` を作成
 - findJumpGapPosition() をSSoT化（跳び四空き位置検出）
 - getJumpThreeDefensePositions() をSSoT化（跳び三防御位置）
 - vct.tsから重複関数を削除（getLineEnds, findJumpGap, getJumpThreeDefensePositions）
@@ -61,7 +61,7 @@ cpuAIディレクトリのコードをSSoT、DRY、SOLID、t-wada TDD原則に�
 
 **コミット**: `e079e08`
 
-- `src/logic/cpuAI/search/` ディレクトリを作成
+- `src/logic/cpu/search/` ディレクトリを作成
 - minimax.ts, vcf.ts, vct.tsをsearch/に移動
 - search/index.tsでre-exportを提供
 - 外部ファイルのインポートパスを更新
@@ -77,7 +77,7 @@ cpuAIディレクトリのコードをSSoT、DRY、SOLID、t-wada TDD原則に�
 ## 最終モジュール構成
 
 ```
-src/logic/cpuAI/
+src/logic/cpu/
 ├── core/                      # 共通基盤モジュール
 │   ├── constants.ts           # DIRECTIONS, DIRECTION_INDICES
 │   ├── boardUtils.ts          # countStones, applyMove等
@@ -150,7 +150,7 @@ export { getOpeningMove, getOpeningPatternInfo, isOpeningPhase, TENGEN };
 
 ```bash
 # テスト実行
-pnpm test src/logic/cpuAI/
+pnpm test src/logic/cpu/
 
 # lint/型チェック
 pnpm check-fix

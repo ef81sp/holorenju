@@ -3,13 +3,13 @@
  * worker_threads で並列実行される
  */
 
-import { parentPort, workerData } from "node:worker_threads";
+import { parentPort, workerData } from 'node:worker_threads';
 
 import {
   runHeadlessGame,
   type GameResult,
   type PlayerConfig,
-} from "../src/logic/cpuAI/benchmark/headless.ts";
+} from '../src/logic/cpu/benchmark/headless.ts';
 
 interface WorkerData {
   taskId: number;

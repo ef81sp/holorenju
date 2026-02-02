@@ -22,7 +22,7 @@ export function checkJumpFour(
   row: number,
   col: number,
   dirIndex: number,
-  color: StoneColor, // 必須パラメータ（デフォルト値なし）
+  color: StoneColor // 必須パラメータ（デフォルト値なし）
 ): boolean {
   // ...
   testRow[col] = color; // 修正: "black" → color
@@ -65,9 +65,9 @@ AIの選択: { row: 9, col: 5 }  // 正しく活三を防御
 ## 関連ファイル
 
 - `src/logic/renjuRules.ts` - `checkJumpFour` 関数
-- `src/logic/cpuAI/vcf.ts` - VCF探索
-- `src/logic/cpuAI/vct.ts` - VCT探索
-- `src/logic/cpuAI/evaluation.ts` - 評価関数
+- `src/logic/cpu/vcf.ts` - VCF探索
+- `src/logic/cpu/vct.ts` - VCT探索
+- `src/logic/cpu/evaluation.ts` - 評価関数
 
 ## テスト
 

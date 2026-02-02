@@ -305,7 +305,7 @@
 
 ## 現在の実装状況
 
-### CPU戦の開局処理（`src/logic/cpuAI/opening.ts`）
+### CPU戦の開局処理（`src/logic/cpu/opening.ts`）
 
 ```typescript
 // 現在は自由打ちを実装
