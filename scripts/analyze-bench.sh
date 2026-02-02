@@ -31,12 +31,89 @@ jq -r '
 ' "$FILE"
 echo ""
 
-# マッチアップ
+# マッチアップ（リスト形式）
 echo "【マッチアップ結果】"
 jq -r '
   .matchups[] |
   "  \(.playerA) vs \(.playerB): \(.winsA)-\(.winsB)-\(.draws)"
 ' "$FILE"
+echo ""
+
+# プレイヤーリスト取得
+PLAYERS=$(jq -r '.options.players | join(" ")' "$FILE")
+
+# 先手(黒)勝敗表
+echo "【先手(黒)勝敗表】"
+echo "  行=黒番、列=白番、値=黒勝-白勝-引分"
+# ヘッダー行
+printf "  %10s" ""
+for col in $PLAYERS; do
+  printf " %10s" "$col"
+done
+echo ""
+
+for row in $PLAYERS; do
+  printf "  %10s" "$row"
+  for col in $PLAYERS; do
+    if [ "$row" = "$col" ]; then
+      printf " %10s" "-"
+    else
+      result=$(jq -r --arg black "$row" --arg white "$col" '
+        [.games[] |
+          select(
+            ((.isABlack and .playerA == $black and .playerB == $white) or
+             ((.isABlack | not) and .playerB == $black and .playerA == $white))
+          )
+        ] |
+        {
+          blackWins: [.[] | select((.isABlack and .winner == "A") or ((.isABlack | not) and .winner == "B"))] | length,
+          whiteWins: [.[] | select((.isABlack and .winner == "B") or ((.isABlack | not) and .winner == "A"))] | length,
+          draws: [.[] | select(.winner == "draw")] | length
+        } |
+        "\(.blackWins)-\(.whiteWins)-\(.draws)"
+      ' "$FILE")
+      printf " %10s" "$result"
+    fi
+  done
+  echo ""
+done
+echo ""
+
+# 後手(白)勝敗表
+echo "【後手(白)勝敗表】"
+echo "  行=白番、列=黒番、値=白勝-黒勝-引分"
+# ヘッダー行
+printf "  %10s" ""
+for col in $PLAYERS; do
+  printf " %10s" "$col"
+done
+echo ""
+
+for row in $PLAYERS; do
+  printf "  %10s" "$row"
+  for col in $PLAYERS; do
+    if [ "$row" = "$col" ]; then
+      printf " %10s" "-"
+    else
+      result=$(jq -r --arg white "$row" --arg black "$col" '
+        [.games[] |
+          select(
+            ((.isABlack and .playerA == $black and .playerB == $white) or
+             ((.isABlack | not) and .playerB == $black and .playerA == $white))
+          )
+        ] |
+        {
+          whiteWins: [.[] | select((.isABlack and .winner == "B") or ((.isABlack | not) and .winner == "A"))] | length,
+          blackWins: [.[] | select((.isABlack and .winner == "A") or ((.isABlack | not) and .winner == "B"))] | length,
+          draws: [.[] | select(.winner == "draw")] | length
+        } |
+        "\(.whiteWins)-\(.blackWins)-\(.draws)"
+      ' "$FILE")
+      printf " %10s" "$result"
+    fi
+  done
+  echo ""
+done
 echo ""
 
 # 先手/後手勝率
