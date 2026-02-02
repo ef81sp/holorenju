@@ -52,6 +52,21 @@ function formatScore(score: number): string {
 }
 
 /**
+ * PV（予想手順）をフォーマット
+ * 各手を番号付きで表示（1. H8 2. G9 ...）
+ */
+function formatPV(
+  pv: Array<{ row: number; col: number }> | undefined,
+): string[] {
+  if (!pv || pv.length === 0) {
+    return [];
+  }
+  return pv.map(
+    (pos, idx) => `${idx + 1}. ${formatPosition(pos.row, pos.col)}`,
+  );
+}
+
+/**
  * パターン内訳のラベル
  */
 const patternLabels: Record<string, string> = {
@@ -411,6 +426,30 @@ function isDepthChanged(index: number): boolean {
               </template>
             </div>
 
+            <!-- 予想手順 (PV) -->
+            <div
+              v-if="
+                candidate.principalVariation &&
+                candidate.principalVariation.length > 1
+              "
+              class="popover-pv"
+            >
+              <div class="popover-section-label">予想手順</div>
+              <div class="pv-sequence">
+                <span
+                  v-for="(move, idx) in formatPV(candidate.principalVariation)"
+                  :key="idx"
+                  class="pv-move"
+                  :class="{
+                    'pv-self': idx % 2 === 0,
+                    'pv-opponent': idx % 2 === 1,
+                  }"
+                >
+                  {{ move }}
+                </span>
+              </div>
+            </div>
+
             <div
               v-if="candidate.rank === selectedRank && wasRandom"
               class="popover-selected"
@@ -709,6 +748,36 @@ function isDepthChanged(index: number): boolean {
 .popover-value {
   color: var(--color-text-primary);
   font-weight: 500;
+}
+
+/* 予想手順 (PV) */
+.popover-pv {
+  margin-top: var(--size-6);
+  padding-top: var(--size-6);
+  border-top: 1px solid var(--color-border-light);
+}
+
+.pv-sequence {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--size-4);
+  font-size: var(--size-11);
+  font-family: monospace;
+}
+
+.pv-move {
+  padding: var(--size-1) var(--size-4);
+  border-radius: var(--size-4);
+}
+
+.pv-self {
+  background: rgba(102, 126, 234, 0.15);
+  color: var(--color-primary);
+}
+
+.pv-opponent {
+  background: rgba(0, 0, 0, 0.08);
+  color: var(--color-text-secondary);
 }
 
 .popover-selected {

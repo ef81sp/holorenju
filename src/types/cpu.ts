@@ -205,6 +205,8 @@ export interface CandidateMove {
   rank: number;
   /** スコア内訳 */
   breakdown?: ScoreBreakdown;
+  /** Principal Variation（探索で予想される手順） */
+  principalVariation?: Position[];
 }
 
 /**

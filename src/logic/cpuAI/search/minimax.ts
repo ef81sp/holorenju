@@ -104,6 +104,57 @@ export interface MoveScoreEntry {
   move: Position;
   /** 評価スコア */
   score: number;
+  /** Principal Variation（予想手順） */
+  pv?: Position[];
+}
+
+/**
+ * TranspositionTableからPrincipal Variation（予想手順）を抽出
+ *
+ * TTに保存されたbestMoveを辿って、予想される手順を復元する
+ *
+ * @param board 現在の盤面
+ * @param startHash 開始盤面のハッシュ
+ * @param firstMove 最初の手（候補手）
+ * @param color 最初の手番の色
+ * @param tt TranspositionTable
+ * @param maxLength 最大手数（デフォルト: 10）
+ * @returns 予想手順の配列
+ */
+export function extractPV(
+  board: BoardState,
+  startHash: bigint,
+  firstMove: Position,
+  color: "black" | "white",
+  tt: TranspositionTable,
+  maxLength = 10,
+): Position[] {
+  const pv: Position[] = [firstMove];
+  let currentBoard = applyMove(board, firstMove, color);
+  let currentHash = updateHash(startHash, firstMove.row, firstMove.col, color);
+  let currentColor: "black" | "white" = getOppositeColor(color);
+
+  // TTエントリを辿ってPVを復元
+  for (let i = 1; i < maxLength; i++) {
+    const entry = tt.probe(currentHash);
+    if (!entry?.bestMove) {
+      break;
+    }
+
+    const move = entry.bestMove;
+
+    // 盤面の有効性チェック
+    if (currentBoard[move.row]?.[move.col] !== null) {
+      break;
+    }
+
+    pv.push(move);
+    currentBoard = applyMove(currentBoard, move, currentColor);
+    currentHash = updateHash(currentHash, move.row, move.col, currentColor);
+    currentColor = getOppositeColor(currentColor);
+  }
+
+  return pv;
 }
 
 /**
@@ -857,7 +908,10 @@ export function findBestMoveWithTT(
       ctx,
     );
 
-    moveScores.push({ move, score });
+    // PVを抽出
+    const pv = extractPV(board, hash, move, color, ctx.tt, depth);
+
+    moveScores.push({ move, score, pv });
     alpha = Math.max(alpha, score);
   }
 

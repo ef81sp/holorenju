@@ -96,6 +96,7 @@ self.onmessage = (event: MessageEvent<AIRequest>) => {
         searchScore: entry.score, // 探索スコア（順位の根拠）
         rank: index + 1,
         breakdown: breakdown as ScoreBreakdown,
+        principalVariation: entry.pv, // 予想手順
       };
     });
 
