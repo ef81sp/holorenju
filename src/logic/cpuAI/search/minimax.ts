@@ -552,6 +552,10 @@ export interface SearchContext {
   maxNodes?: number;
   /** ノード数上限超過フラグ */
   nodeCountExceeded?: boolean;
+  /** 絶対時間制限（ミリ秒）- これを超えたら強制終了 */
+  absoluteTimeLimit?: number;
+  /** 絶対時間制限超過フラグ */
+  absoluteTimeLimitExceeded?: boolean;
 }
 
 /**
@@ -638,10 +642,22 @@ export function minimaxWithTT(
     if (elapsed >= ctx.timeLimit) {
       ctx.timeoutFlag = true;
     }
+    // 絶対時間制限チェック
+    if (
+      !ctx.absoluteTimeLimitExceeded &&
+      ctx.absoluteTimeLimit !== undefined &&
+      elapsed >= ctx.absoluteTimeLimit
+    ) {
+      ctx.absoluteTimeLimitExceeded = true;
+    }
   }
 
-  // 時間切れまたはノード数上限なら即座に現在の評価を返す
-  if (ctx.timeoutFlag || ctx.nodeCountExceeded) {
+  // 時間切れ、ノード数上限、または絶対時間制限超過なら即座に現在の評価を返す
+  if (
+    ctx.timeoutFlag ||
+    ctx.nodeCountExceeded ||
+    ctx.absoluteTimeLimitExceeded
+  ) {
     return evaluateBoard(board, perspective);
   }
 
@@ -989,6 +1005,9 @@ export function findBestMoveWithTT(
   };
 }
 
+/** デフォルトの絶対時間制限（10秒） */
+const DEFAULT_ABSOLUTE_TIME_LIMIT = 10000;
+
 /**
  * Iterative Deepeningで最善手を探索（TT統合版）
  *
@@ -999,6 +1018,7 @@ export function findBestMoveWithTT(
  * @param randomFactor ランダム要素（0-1）
  * @param evaluationOptions 評価オプション
  * @param maxNodes ノード数上限（省略時は無制限）
+ * @param absoluteTimeLimit 絶対時間制限（ミリ秒、デフォルト: 10000ms）
  * @returns 最善手と探索情報
  */
 export function findBestMoveIterativeWithTT(
@@ -1009,6 +1029,7 @@ export function findBestMoveIterativeWithTT(
   randomFactor = 0,
   evaluationOptions: EvaluationOptions = DEFAULT_EVAL_OPTIONS,
   maxNodes?: number,
+  absoluteTimeLimit: number = DEFAULT_ABSOLUTE_TIME_LIMIT,
 ): IterativeDeepingResult & { stats: SearchStats } {
   const startTime = performance.now();
   const ctx = createSearchContext(globalTT, evaluationOptions);
@@ -1019,6 +1040,29 @@ export function findBestMoveIterativeWithTT(
   // =========================================================================
   // 必須手の事前チェック（探索より優先）
   // =========================================================================
+
+  // 絶対時間制限チェック（VCF探索前）
+  const elapsedBeforeVCF = performance.now() - startTime;
+  if (elapsedBeforeVCF >= absoluteTimeLimit) {
+    // 時間がないので即座に簡易評価で返す
+    const moves = generateSortedMoves(board, color, {
+      ttMove: null,
+      killers: ctx.killers,
+      depth: 1,
+      history: ctx.history,
+      useStaticEval: true,
+      evaluationOptions,
+    });
+    const fallbackMove = moves[0] ?? { row: 7, col: 7 };
+    return {
+      position: fallbackMove,
+      score: 0,
+      completedDepth: 0,
+      interrupted: true,
+      elapsedTime: performance.now() - startTime,
+      stats: ctx.stats,
+    };
+  }
 
   // 1. 四追い勝ち（VCF）があれば即座にその手を返す
   const vcfMove = findVCFMove(board, color);
@@ -1112,6 +1156,10 @@ export function findBestMoveIterativeWithTT(
   ctx.maxNodes = maxNodes;
   ctx.nodeCountExceeded = false;
 
+  // 絶対時間制限を設定
+  ctx.absoluteTimeLimit = absoluteTimeLimit;
+  ctx.absoluteTimeLimitExceeded = false;
+
   // NOTE: Phase 6の最適化（precomputedThreats）は一旦無効化
   // 理由: 深いノードでは手番が変わるため、ルートノードで計算した脅威情報が
   // 不適切に使われる問題がある。毎回detectOpponentThreatsを呼ぶようにする。
@@ -1163,6 +1211,13 @@ export function findBestMoveIterativeWithTT(
   for (let depth = 2; depth <= maxDepth; depth++) {
     const elapsedTime = performance.now() - startTime;
 
+    // 絶対時間制限チェック
+    if (elapsedTime >= absoluteTimeLimit) {
+      ctx.absoluteTimeLimitExceeded = true;
+      interrupted = true;
+      break;
+    }
+
     // 動的時間制限チェック（探索開始前）
     if (
       elapsedTime > dynamicTimeLimit * 0.5 ||
@@ -1187,8 +1242,12 @@ export function findBestMoveIterativeWithTT(
       moves,
     );
 
-    // 探索中にタイムアウトまたはノード数上限に達した場合は前の結果を使用
-    if (ctx.timeoutFlag || ctx.nodeCountExceeded) {
+    // 探索中にタイムアウト、ノード数上限、または絶対時間制限に達した場合は前の結果を使用
+    if (
+      ctx.timeoutFlag ||
+      ctx.nodeCountExceeded ||
+      ctx.absoluteTimeLimitExceeded
+    ) {
       interrupted = true;
       break;
     }
@@ -1208,8 +1267,12 @@ export function findBestMoveIterativeWithTT(
         moves,
       );
 
-      // 再探索中にタイムアウトまたはノード数上限に達した場合
-      if (ctx.timeoutFlag || ctx.nodeCountExceeded) {
+      // 再探索中にタイムアウト、ノード数上限、または絶対時間制限に達した場合
+      if (
+        ctx.timeoutFlag ||
+        ctx.nodeCountExceeded ||
+        ctx.absoluteTimeLimitExceeded
+      ) {
         interrupted = true;
         break;
       }

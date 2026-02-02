@@ -317,6 +317,63 @@ describe("findBestMoveIterativeWithTT - ノード数制限", () => {
   });
 });
 
+describe("findBestMoveIterativeWithTT - 絶対時間制限", () => {
+  it("絶対時間制限で探索が中断される", () => {
+    const board = createEmptyBoard();
+    placeStonesOnBoard(board, [
+      { row: 7, col: 7, color: "black" },
+      { row: 7, col: 8, color: "white" },
+      { row: 6, col: 6, color: "black" },
+      { row: 6, col: 8, color: "white" },
+    ]);
+
+    // 短い絶対時間制限（100ms）
+    const startTime = performance.now();
+    const result = findBestMoveIterativeWithTT(
+      board,
+      "black",
+      20, // 深度は深め
+      60000, // 通常の時間制限は長め
+      0,
+      DEFAULT_EVAL_OPTIONS,
+      undefined, // ノード数上限なし
+      100, // 絶対時間制限100ms
+    );
+    const elapsed = performance.now() - startTime;
+
+    // 有効な手が返される
+    expect(result.position.row).toBeGreaterThanOrEqual(0);
+    expect(result.position.row).toBeLessThan(15);
+
+    // 絶対時間制限内で終了している（マージン考慮）
+    expect(elapsed).toBeLessThan(200);
+
+    // 探索が中断された
+    expect(result.interrupted).toBe(true);
+  });
+
+  it("絶対時間制限がデフォルト値（10秒）で動作する", () => {
+    const board = createEmptyBoard();
+    placeStonesOnBoard(board, [{ row: 7, col: 7, color: "black" }]);
+
+    // 絶対時間制限を指定しない（デフォルト10秒）
+    const result = findBestMoveIterativeWithTT(
+      board,
+      "white",
+      2,
+      1000,
+      0,
+      DEFAULT_EVAL_OPTIONS,
+      undefined,
+      // absoluteTimeLimit省略
+    );
+
+    // 有効な結果が返される
+    expect(result.position.row).toBeGreaterThanOrEqual(0);
+    expect(result.completedDepth).toBeGreaterThanOrEqual(1);
+  });
+});
+
 describe("活三防御", () => {
   it("白は黒の横活三を止める", async () => {
     // 白にVCFがない盤面で、黒の活三を止めることをテスト

@@ -10,6 +10,25 @@ import type {
   StoneColor,
 } from "@/types/game";
 
+// =============================================================================
+// 引き分けルール
+// =============================================================================
+
+/** 引き分けとなる手数上限（ゲームルールとして定義） */
+export const DRAW_MOVE_LIMIT = 70;
+
+/**
+ * 引き分け判定
+ *
+ * 総手数が上限に達したら引き分けとする
+ *
+ * @param moveCount 現在の総手数
+ * @returns 引き分けならtrue
+ */
+export function checkDraw(moveCount: number): boolean {
+  return moveCount >= DRAW_MOVE_LIMIT;
+}
+
 /**
  * 禁手判定の再帰的コンテキスト
  * - inProgress: 現在判定中の点のSet（循環参照検出用）

@@ -12,9 +12,11 @@ import {
   type DifficultyParams,
 } from "../../../types/cpu.ts";
 import {
+  checkDraw,
   checkForbiddenMove,
   checkWin,
   createEmptyBoard,
+  DRAW_MOVE_LIMIT,
 } from "../../renjuRules.ts";
 import { applyMove, countStones } from "../core/boardUtils.ts";
 import { getOpeningMove, isOpeningPhase } from "../opening.ts";
@@ -59,7 +61,7 @@ export interface GameResult {
   /** 勝者（"A" | "B" | "draw"） */
   winner: "A" | "B" | "draw";
   /** 終局理由 */
-  reason: "five" | "forbidden" | "draw" | "max_moves";
+  reason: "five" | "forbidden" | "draw" | "move_limit";
   /** 手数 */
   moves: number;
   /** 対局時間（ミリ秒） */
@@ -74,7 +76,7 @@ export interface GameResult {
  * 対局オプション
  */
 export interface GameOptions {
-  /** 最大手数（デフォルト: 225） */
+  /** 最大手数（デフォルト: DRAW_MOVE_LIMIT = 70） */
   maxMoves?: number;
   /** 詳細ログ出力 */
   verbose?: boolean;
@@ -111,7 +113,7 @@ export function runHeadlessGame(
   playerB: PlayerConfig,
   options: GameOptions = {},
 ): GameResult {
-  const { maxMoves = 225, verbose = false } = options;
+  const { maxMoves = DRAW_MOVE_LIMIT, verbose = false } = options;
 
   const startTime = performance.now();
   let board: BoardState = createEmptyBoard();
@@ -241,17 +243,32 @@ export function runHeadlessGame(
       };
     }
 
+    // 引き分け判定（ゲームルールとして70手で引き分け）
+    if (checkDraw(moveCount)) {
+      log(`Move limit (${DRAW_MOVE_LIMIT}) reached - draw`);
+      return {
+        playerA: playerA.id,
+        playerB: playerB.id,
+        winner: "draw",
+        reason: "move_limit",
+        moves: moveCount,
+        duration: performance.now() - startTime,
+        moveHistory,
+        isABlack: true,
+      };
+    }
+
     // 手番交代
     currentColor = currentColor === "black" ? "white" : "black";
   }
 
-  // 最大手数到達
+  // 最大手数到達（maxMovesオプションによる打ち切り、通常はここには来ない）
   log("Max moves reached - draw");
   return {
     playerA: playerA.id,
     playerB: playerB.id,
     winner: "draw",
-    reason: "max_moves",
+    reason: "move_limit",
     moves: moveCount,
     duration: performance.now() - startTime,
     moveHistory,

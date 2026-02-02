@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  checkDraw,
   checkFive,
   checkForbiddenMove,
   checkWin,
   copyBoard,
   createEmptyBoard,
+  DRAW_MOVE_LIMIT,
   isValidPosition,
   recognizePattern,
 } from "./renjuRules";
@@ -1033,5 +1035,33 @@ describe("四の種類（達四/止四）", () => {
     const result = checkForbiddenMove(board, 7, 7);
     expect(result.isForbidden).toBe(true);
     expect(result.type).toBe("double-four");
+  });
+});
+
+describe("引き分けルール", () => {
+  describe("DRAW_MOVE_LIMIT（引き分け手数上限）", () => {
+    it("引き分け上限は正の整数", () => {
+      expect(DRAW_MOVE_LIMIT).toBeGreaterThan(0);
+      expect(Number.isInteger(DRAW_MOVE_LIMIT)).toBe(true);
+    });
+  });
+
+  describe("checkDraw（引き分け判定）", () => {
+    it("上限未満では引き分けにならない", () => {
+      expect(checkDraw(DRAW_MOVE_LIMIT - 1)).toBe(false);
+    });
+
+    it("上限に達したら引き分けになる", () => {
+      expect(checkDraw(DRAW_MOVE_LIMIT)).toBe(true);
+    });
+
+    it("上限を超えても引き分けになる", () => {
+      expect(checkDraw(DRAW_MOVE_LIMIT + 1)).toBe(true);
+      expect(checkDraw(DRAW_MOVE_LIMIT + 100)).toBe(true);
+    });
+
+    it("0手では引き分けにならない", () => {
+      expect(checkDraw(0)).toBe(false);
+    });
   });
 });
