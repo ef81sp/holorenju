@@ -1986,19 +1986,33 @@ export function evaluatePositionWithBreakdown(
 }
 
 /**
+ * 末端評価オプション
+ */
+export interface LeafEvaluationOptions {
+  /** 単発四ペナルティ倍率（0.0〜1.0、デフォルト1.0=ペナルティなし） */
+  singleFourPenaltyMultiplier?: number;
+}
+
+/**
  * 盤面全体の評価スコアを計算
  *
  * @param board 盤面
  * @param perspective 評価する視点（黒/白）
+ * @param options 末端評価オプション
  * @returns 評価スコア（正:perspective有利、負:相手有利）
  */
 export function evaluateBoard(
   board: BoardState,
   perspective: "black" | "white",
+  options?: LeafEvaluationOptions,
 ): number {
   const opponentColor = perspective === "black" ? "white" : "black";
   let myScore = 0;
   let opponentScore = 0;
+  let myFourScore = 0;
+  let myOpenThreeScore = 0;
+  let opponentFourScore = 0;
+  let opponentOpenThreeScore = 0;
 
   // 全ての石について評価
   for (let row = 0; row < 15; row++) {
@@ -2008,13 +2022,37 @@ export function evaluateBoard(
         continue;
       }
 
-      const patternScore = evaluateStonePatterns(board, row, col, stone);
+      const { score, breakdown } = evaluateStonePatternsWithBreakdown(
+        board,
+        row,
+        col,
+        stone,
+      );
 
       if (stone === perspective) {
-        myScore += patternScore;
+        myScore += score;
+        myFourScore += breakdown.four.final;
+        myOpenThreeScore += breakdown.openThree.final;
       } else if (stone === opponentColor) {
-        opponentScore += patternScore;
+        opponentScore += score;
+        opponentFourScore += breakdown.four.final;
+        opponentOpenThreeScore += breakdown.openThree.final;
       }
+    }
+  }
+
+  // 単発四ペナルティの適用
+  const multiplier = options?.singleFourPenaltyMultiplier ?? 1.0;
+  if (multiplier < 1.0) {
+    // 四があるのに活三がない場合、四のスコアにペナルティを適用
+    // 四三（四と活三の両方がある）場合はペナルティなし
+    if (myFourScore > 0 && myOpenThreeScore === 0) {
+      const penalty = myFourScore * (1 - multiplier);
+      myScore -= penalty;
+    }
+    if (opponentFourScore > 0 && opponentOpenThreeScore === 0) {
+      const penalty = opponentFourScore * (1 - multiplier);
+      opponentScore -= penalty;
     }
   }
 

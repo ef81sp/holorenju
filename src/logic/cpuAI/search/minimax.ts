@@ -264,6 +264,7 @@ export function minimax(
   }
 
   // 探索深度が0になった場合は盤面評価
+  // この関数はctxを持たないので、デフォルト（ペナルティなし）で評価
   if (depth === 0) {
     return evaluateBoard(board, perspective);
   }
@@ -657,7 +658,10 @@ export function minimaxWithTT(
     ctx.nodeCountExceeded ||
     ctx.absoluteTimeLimitExceeded
   ) {
-    return evaluateBoard(board, perspective);
+    return evaluateBoard(board, perspective, {
+      singleFourPenaltyMultiplier:
+        ctx.evaluationOptions.singleFourPenaltyMultiplier,
+    });
   }
 
   // 現在の手番を決定
@@ -709,7 +713,10 @@ export function minimaxWithTT(
 
   // 探索深度が0になった場合は盤面評価
   if (depth === 0) {
-    const score = evaluateBoard(board, perspective);
+    const score = evaluateBoard(board, perspective, {
+      singleFourPenaltyMultiplier:
+        ctx.evaluationOptions.singleFourPenaltyMultiplier,
+    });
     ctx.tt.store(hash, score, depth, "EXACT", null);
     return score;
   }
