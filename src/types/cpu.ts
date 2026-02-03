@@ -109,9 +109,9 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
   },
   hard: {
     depth: 5,
-    timeLimit: 5000,
+    timeLimit: 6000,
     randomFactor: 0,
-    maxNodes: 500000,
+    maxNodes: 600000,
     evaluationOptions: {
       enableFukumi: true,
       enableMise: true,
