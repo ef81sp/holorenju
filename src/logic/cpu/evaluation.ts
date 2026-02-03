@@ -690,12 +690,12 @@ function evaluateForbiddenTrap(
           if (pos0 && pos1) {
             const forbidden0 = checkForbiddenMove(board, pos0.row, pos0.col);
             const forbidden1 = checkForbiddenMove(board, pos1.row, pos1.col);
-            // 片方だけが禁手なら追い込み（両方禁手だと黒が先に止められない）
+            // 片方だけが禁手なら勝ち確定（黒は禁手でない方を止めるしかないが、白は禁手側から四を作れる）
             if (
               (forbidden0.isForbidden && !forbidden1.isForbidden) ||
               (!forbidden0.isForbidden && forbidden1.isForbidden)
             ) {
-              trapScore += PATTERN_SCORES.FORBIDDEN_TRAP_THREE;
+              trapScore += PATTERN_SCORES.FORBIDDEN_TRAP_STRONG;
             }
           }
         }
@@ -722,9 +722,9 @@ function evaluateForbiddenTrap(
             hasNonForbidden = true;
           }
         }
-        // 片方だけが禁手なら追い込み
+        // 片方だけが禁手なら勝ち確定（黒は禁手でない方を止めるしかないが、白は禁手側から四を作れる）
         if (hasForbidden && hasNonForbidden) {
-          trapScore += PATTERN_SCORES.FORBIDDEN_TRAP_THREE;
+          trapScore += PATTERN_SCORES.FORBIDDEN_TRAP_STRONG;
         }
       }
     }
@@ -1838,6 +1838,8 @@ export interface ScoreBreakdown {
   multiThreat: number;
   /** 単発四ペナルティ（減点） */
   singleFourPenalty: number;
+  /** 禁手追い込みボーナス（白番のみ） */
+  forbiddenTrap: number;
 }
 
 /**
@@ -1870,6 +1872,7 @@ export function evaluatePositionWithBreakdown(
     center: 0,
     multiThreat: 0,
     singleFourPenalty: 0,
+    forbiddenTrap: 0,
   };
 
   if (color === null) {
@@ -1953,6 +1956,12 @@ export function evaluatePositionWithBreakdown(
     multiThreatBonus = evaluateMultiThreat(threatCount);
   }
 
+  // 禁手追い込みボーナス（白番のみ）
+  let forbiddenTrapBonus = 0;
+  if (options.enableForbiddenTrap && color === "white") {
+    forbiddenTrapBonus = evaluateForbiddenTrap(testBoard, row, col);
+  }
+
   // 単発四ペナルティ: 四を作るが四三ではなく、後続脅威もない場合
   let singleFourPenalty = 0;
   if (options.enableSingleFourPenalty) {
@@ -2029,7 +2038,8 @@ export function evaluatePositionWithBreakdown(
     fourThreeBonus +
     miseBonus +
     fukumiBonus +
-    multiThreatBonus -
+    multiThreatBonus +
+    forbiddenTrapBonus -
     singleFourPenalty;
 
   return {
@@ -2043,6 +2053,7 @@ export function evaluatePositionWithBreakdown(
       center: centerBonus,
       multiThreat: multiThreatBonus,
       singleFourPenalty: singleFourPenalty,
+      forbiddenTrap: forbiddenTrapBonus,
     },
   };
 }

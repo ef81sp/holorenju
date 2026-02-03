@@ -1132,6 +1132,66 @@ describe("禁手追い込み三（FORBIDDEN_TRAP_THREE）", () => {
     expect(PATTERN_SCORES.FORBIDDEN_TRAP_THREE).toBe(3000);
   });
 
+  it("達四点の一方が禁手なら勝ち確定スコア（10Gが最善手の盤面）", () => {
+    // 報告された盤面: H8 H9 I8 G8 I9 I10 F7 G7 G9 H10 F9
+    // 座標変換: 行=15-数字, 列=アルファベット-'A'
+    // H8: row=7, col=7 (黒)
+    // H9: row=6, col=7 (白)
+    // I8: row=7, col=8 (黒)
+    // G8: row=7, col=6 (白)
+    // I9: row=6, col=8 (黒)
+    // I10: row=5, col=8 (白)
+    // F7: row=8, col=5 (黒)
+    // G7: row=8, col=6 (白)
+    // G9: row=6, col=6 (黒)
+    // H10: row=5, col=7 (白)
+    // F9: row=6, col=5 (黒)
+    const board = createEmptyBoard();
+    // 黒石 (1, 3, 5, 7, 9, 11手目)
+    board[7][7] = "black"; // H8 (1)
+    board[7][8] = "black"; // I8 (3)
+    board[6][8] = "black"; // I9 (5)
+    board[8][5] = "black"; // F7 (7)
+    board[6][6] = "black"; // G9 (9)
+    board[6][5] = "black"; // F9 (11)
+    // 白石 (2, 4, 6, 8, 10手目)
+    board[6][7] = "white"; // H9 (2)
+    board[7][6] = "white"; // G8 (4)
+    board[5][8] = "white"; // I10 (6)
+    board[8][6] = "white"; // G7 (8)
+    board[5][7] = "white"; // H10 (10)
+
+    // 白番12手目: 10G(row=5, col=6)が最善手
+    // 白10Gで G10-H10-I10 の活三
+    // 達四点: 10F(row=5, col=5)禁手 と 10J(row=5, col=9)通常
+    // 片方が禁手なので勝ち確定
+
+    // 10G(row=5, col=6)のスコア
+    const score10G = evaluatePosition(board, 5, 6, "white", {
+      enableFukumi: false,
+      enableMise: false,
+      enableForbiddenTrap: true,
+      enableMultiThreat: false,
+      enableCounterFour: false,
+      enableVCT: false,
+      enableMandatoryDefense: false,
+      enableSingleFourPenalty: false,
+      singleFourPenaltyMultiplier: 1.0,
+      enableMiseThreat: false,
+    });
+
+    // 10Fが禁手であることを確認
+    const forbidden10F = checkForbiddenMove(board, 5, 5);
+    // G9-F9-E9が活三、F7-F8-F9-F10が四になる配置
+    // F9(row=6, col=5)の黒石があるので、10Fに黒が打つと三三or四四の禁手
+    expect(forbidden10F.isForbidden).toBe(true);
+
+    // 達四点の一方が禁手なら FORBIDDEN_TRAP_STRONG (8000点) 以上のスコア
+    expect(score10G).toBeGreaterThanOrEqual(
+      PATTERN_SCORES.FORBIDDEN_TRAP_STRONG,
+    );
+  });
+
   it("活三の達四点の一つが禁手なら高評価（縦方向）", () => {
     // 盤面設定: 8Gが三三禁になる配置
     // 連珠座標: 15が上、行=15-row, 列=A+col

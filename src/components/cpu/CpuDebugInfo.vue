@@ -139,6 +139,7 @@ const bonusLabels: Record<string, string> = {
   center: "中央",
   multiThreat: "複数脅威",
   singleFourPenalty: "単発四ペナ",
+  forbiddenTrap: "禁手追込",
 };
 
 /**

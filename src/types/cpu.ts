@@ -195,6 +195,8 @@ export interface ScoreBreakdown {
   multiThreat: number;
   /** 単発四ペナルティ（減点） */
   singleFourPenalty: number;
+  /** 禁手追い込みボーナス（白番のみ） */
+  forbiddenTrap: number;
 }
 
 /**

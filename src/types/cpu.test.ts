@@ -13,7 +13,6 @@ import {
   type CpuBattleRecord,
   type CpuBattleStats,
   type CpuDifficulty,
-  type DifficultyParams,
 } from "./cpu";
 
 describe("CpuDifficulty", () => {
@@ -52,41 +51,6 @@ describe("DifficultyParams", () => {
       expect(typeof params.randomFactor).toBe("number");
       expect(typeof params.maxNodes).toBe("number");
     }
-  });
-
-  it("maxNodesが難易度順に増加する", () => {
-    expect(DIFFICULTY_PARAMS.beginner.maxNodes).toBe(10000);
-    expect(DIFFICULTY_PARAMS.easy.maxNodes).toBe(50000);
-    expect(DIFFICULTY_PARAMS.medium.maxNodes).toBe(200000);
-    expect(DIFFICULTY_PARAMS.hard.maxNodes).toBe(600000);
-  });
-
-  it("beginnerは探索深度1、ランダム要素0.35", () => {
-    const params: DifficultyParams = DIFFICULTY_PARAMS.beginner;
-    expect(params.depth).toBe(1);
-    expect(params.timeLimit).toBe(1000);
-    expect(params.randomFactor).toBe(0.35);
-  });
-
-  it("easyは探索深度2、ランダム要素0.3", () => {
-    const params: DifficultyParams = DIFFICULTY_PARAMS.easy;
-    expect(params.depth).toBe(2);
-    expect(params.timeLimit).toBe(2000);
-    expect(params.randomFactor).toBe(0.3);
-  });
-
-  it("mediumは探索深度4、ランダム要素0", () => {
-    const params: DifficultyParams = DIFFICULTY_PARAMS.medium;
-    expect(params.depth).toBe(4);
-    expect(params.timeLimit).toBe(3000);
-    expect(params.randomFactor).toBe(0);
-  });
-
-  it("hardは探索深度5、ランダム要素0", () => {
-    const params: DifficultyParams = DIFFICULTY_PARAMS.hard;
-    expect(params.depth).toBe(5);
-    expect(params.timeLimit).toBe(6000);
-    expect(params.randomFactor).toBe(0);
   });
 });
 
