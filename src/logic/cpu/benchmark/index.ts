@@ -19,7 +19,6 @@ export {
 } from "./headless.ts";
 
 export type {
-  CandidateInfo,
   GameOptions,
   GameResult,
   GameStats,

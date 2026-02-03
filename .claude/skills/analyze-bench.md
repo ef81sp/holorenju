@@ -13,6 +13,68 @@
 /analyze-bench --game <n>          # 特定ゲームの棋譜を詳細分析
 ```
 
+## MoveRecordに記録される情報
+
+各着手（MoveRecord）には以下の情報が記録される:
+
+| フィールド       | 型                | 説明                                   |
+| ---------------- | ----------------- | -------------------------------------- |
+| row, col         | number            | 着手位置                               |
+| time             | number            | 思考時間（ms）                         |
+| isOpening        | boolean           | 開局定石かどうか                       |
+| depth            | number            | 到達探索深度                           |
+| score            | number            | 選択された手の探索スコア               |
+| stats            | SearchStatsRecord | 探索統計（nodes, ttHits, etc.）        |
+| candidates       | CandidateMove[]   | 上位5候補手（詳細情報付き）            |
+| selectedRank     | number            | 選択された手の順位                     |
+| randomSelection  | RandomSelectionInfo | ランダム選択情報                     |
+| depthHistory     | DepthResult[]     | 深度別最善手履歴                       |
+
+### CandidateMove（候補手）に含まれる詳細情報
+
+| フィールド         | 説明                                       |
+| ------------------ | ------------------------------------------ |
+| position           | 着手位置                                   |
+| score              | 即時評価スコア（内訳の合計）               |
+| searchScore        | 探索スコア（順位の根拠）                   |
+| rank               | 順位（1始まり）                            |
+| breakdown          | スコア内訳（攻撃/防御パターン、ボーナス）  |
+| principalVariation | 予想手順（PV）                             |
+| leafEvaluation     | 探索末端での評価内訳                       |
+
+### ScoreBreakdown（スコア内訳）の構造
+
+```
+breakdown: {
+  pattern: {         // 攻撃パターン
+    five, openFour, four, openThree, three, openTwo, two
+    // 各要素: { base, diagonalBonus, final }
+  },
+  defense: {         // 防御パターン
+    five, openFour, four, openThree, three, openTwo, two
+    // 各要素: { base, diagonalBonus, final, preMultiplier, multiplier }
+  },
+  fourThree,         // 四三ボーナス
+  fukumi,            // フクミ手ボーナス
+  mise,              // ミセ手ボーナス
+  center,            // 中央ボーナス
+  multiThreat,       // 複数脅威ボーナス
+  singleFourPenalty  // 単発四ペナルティ
+}
+```
+
+### LeafEvaluation（末端評価）の構造
+
+```
+leafEvaluation: {
+  myScore,           // 自分のスコア合計
+  opponentScore,     // 相手のスコア合計
+  total,             // 最終スコア (myScore - opponentScore)
+  myBreakdown,       // 自分のパターン内訳
+  opponentBreakdown  // 相手のパターン内訳
+}
+```
+
 ## 分析手順
 
 ### 1. ファイル取得
@@ -74,12 +136,13 @@ jq -r '
 
 #### 検出対象パターン
 
-| 問題パターン | 検出方法 | 戦術的意味 |
-|-------------|----------|-----------|
+| 問題パターン           | 検出方法                                        | 戦術的意味         |
+| ---------------------- | ----------------------------------------------- | ------------------ |
 | ランダム選択による悪手 | `randomSelection.wasRandom=true` かつスコア差大 | 難易度調整の副作用 |
-| 深度依存の判断変化 | 異なる深度で最善手が変化 | 評価関数の問題発見 |
-| スコア逆転局面 | 連続する手でスコアが大きく変動 | 致命的なミス |
-| 候補手との乖離 | `selectedRank > 1` で上位手とのスコア差大 | 意図せぬ悪手 |
+| 深度依存の判断変化     | `depthHistory`で深度ごとに最善手が変化          | 評価関数の問題発見 |
+| スコア逆転局面         | 連続する手でスコアが大きく変動                  | 致命的なミス       |
+| 候補手との乖離         | `selectedRank > 1` で上位手とのスコア差大       | 意図せぬ悪手       |
+| 単発四の乱用           | `breakdown.singleFourPenalty`が頻繁に発生       | 戦術的問題         |
 
 #### 分析コード例
 
@@ -88,7 +151,7 @@ jq -r '
 jq -r '
   [.games[].moveHistory[] |
    select(.randomSelection.wasRandom == true) |
-   select(.candidates | length > 1) |
+   select(.candidates and (.candidates | length) > 1) |
    select((.candidates[0].searchScore - .score) > 500)
   ] | length as $count |
   "ランダム選択による悪手: \($count)回"
@@ -97,22 +160,61 @@ jq -r '
 # 上位手を選ばなかった回数（selectedRank > 1）
 jq -r '
   [.games[].moveHistory[] |
-   select(.selectedRank != null and .selectedRank > 1)
+   select(.selectedRank and .selectedRank > 1)
   ] | length as $count |
   "非最善手選択: \($count)回"
 ' "$FILE"
+
+# 深度で最善手が変わった回数（depthHistory確認）
+jq -r '
+  [.games[].moveHistory[] |
+   select(.depthHistory and (.depthHistory | length) > 1) |
+   .depthHistory |
+   [range(1; length) as $i |
+    select(.[$i].position != .[($i-1)].position)
+   ] | length
+  ] | add as $count |
+  "深度変化による最善手変更: \($count)回"
+' "$FILE"
+
+# 単発四ペナルティが発生した着手
+jq -r '
+  [.games[].moveHistory[] |
+   select(.candidates) |
+   .candidates[] |
+   select(.breakdown.singleFourPenalty > 0)
+  ] | length as $count |
+  "単発四ペナルティ発生: \($count)回"
+' "$FILE"
 ```
 
-### 5. 戦術的観点からの洞察
+### 5. 詳細な候補手分析
 
-| 分析項目 | 観点 | 正常範囲 | 参照ドキュメント |
-|----------|------|----------|------------------|
-| 探索効率 | 中断率、TT利用率、深度到達率 | 中断率30%以下 | `docs/cpu-ai-algorithm.md` |
-| 難易度バランス | レーティング差の適切さ | 隣接難易度差50-150 | `docs/cpu-ai-algorithm.md` |
-| 先手/後手バランス | 黒勝率 | 55-65% | `docs/renju-tactics-and-evaluation.md` |
-| 勝利パターン | five/forbidden/drawの比率 | forbidden < 5% | `docs/renju-tactics-and-evaluation.md` |
+```bash
+# 候補手のスコア内訳を確認（特定の手）
+jq '.games[0].moveHistory[5].candidates[0].breakdown' "$FILE"
 
-### 6. 改善提案生成
+# 予想手順（PV）を確認
+jq '.games[0].moveHistory | map(select(.candidates)) | .[0].candidates[0].principalVariation' "$FILE"
+
+# 末端評価の内訳を確認
+jq '.games[0].moveHistory | map(select(.candidates)) | .[0].candidates[0].leafEvaluation' "$FILE"
+
+# 深度履歴を確認（最善手が変わった着手を特定）
+jq '.games[0].moveHistory | map(select(.depthHistory and (.depthHistory | length) > 1)) | .[0].depthHistory' "$FILE"
+```
+
+### 6. 戦術的観点からの洞察
+
+| 分析項目          | 観点                         | 正常範囲           | 参照ドキュメント                       |
+| ----------------- | ---------------------------- | ------------------ | -------------------------------------- |
+| 探索効率          | 中断率、TT利用率、深度到達率 | 中断率30%以下      | `docs/cpu-ai-algorithm.md`             |
+| 難易度バランス    | レーティング差の適切さ       | 隣接難易度差50-150 | `docs/cpu-ai-algorithm.md`             |
+| 先手/後手バランス | 黒勝率                       | 55-65%             | `docs/renju-tactics-and-evaluation.md` |
+| 勝利パターン      | five/forbidden/drawの比率    | forbidden < 5%     | `docs/renju-tactics-and-evaluation.md` |
+| 評価関数の安定性  | 深度による最善手変化率       | 変化率20%以下      | `docs/renju-tactics-and-evaluation.md` |
+
+### 7. 改善提案生成
 
 分析結果に基づいて具体的な改善ポイントを提示:
 
@@ -121,6 +223,8 @@ jq -r '
 - **禁手負けが多い場合**: 禁手検出の改善が必要
 - **ランダム悪手が多い場合**: randomFactorの調整を検討
 - **先手勝率が偏っている場合**: 評価関数のバランス調整を検討
+- **深度による最善手変化が多い場合**: 評価関数の horizon effect を検討
+- **単発四ペナルティが頻発する場合**: singleFourPenaltyMultiplierの調整を検討
 
 ## 出力フォーマット例
 
@@ -144,6 +248,8 @@ jq -r '
 - 先手勝率: 58%（正常範囲）
 - 勝利理由: five 95%, forbidden 3%, draw 2%
 - ランダム選択による悪手: 12回
+- 深度変化による最善手変更: 8回
+- 単発四ペナルティ発生: 45回
 - 評価: 正常
 
 ### 改善提案
@@ -158,19 +264,29 @@ jq -r '
 ```bash
 # ゲーム番号nの棋譜を取得
 jq -r ".games[$n]" "$FILE"
+
+# 特定ゲームの全着手の候補手情報
+jq '.games[0].moveHistory | map(select(.candidates)) | map({
+  move: "\(.row),\(.col)",
+  score: .score,
+  selectedRank: .selectedRank,
+  topCandidate: .candidates[0] | {pos: "\(.position.row),\(.position.col)", searchScore, score},
+  depthChanges: (.depthHistory | if . then length else 0 end)
+})' "$FILE"
 ```
 
 出力内容:
 - 対局情報（プレイヤー、勝敗、手数）
-- 全着手の詳細（位置、スコア、候補手）
+- 全着手の詳細（位置、スコア、候補手、内訳）
 - 問題のある着手のハイライト
+- 各着手の予想手順（PV）と末端評価
 
 ## 関連ファイル
 
-| ファイル | 役割 |
-|----------|------|
-| `scripts/analyze-bench.sh` | 基本統計スクリプト |
-| `src/logic/cpu/benchmark/headless.ts` | MoveRecord型定義 |
-| `src/types/cpu.ts` | CpuResponse型定義 |
-| `docs/renju-tactics-and-evaluation.md` | 戦術知識 |
-| `docs/cpu-ai-algorithm.md` | アルゴリズム知識 |
+| ファイル                               | 役割                            |
+| -------------------------------------- | ------------------------------- |
+| `scripts/analyze-bench.sh`             | 基本統計スクリプト              |
+| `src/logic/cpu/benchmark/headless.ts`  | MoveRecord型定義                |
+| `src/types/cpu.ts`                     | CandidateMove, ScoreBreakdown等 |
+| `docs/renju-tactics-and-evaluation.md` | 戦術知識                        |
+| `docs/cpu-ai-algorithm.md`             | アルゴリズム知識                |

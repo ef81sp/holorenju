@@ -8,9 +8,12 @@ import type { BoardState, Position, StoneColor } from "../../../types/game.ts";
 
 import {
   DIFFICULTY_PARAMS,
+  type CandidateMove,
   type CpuDifficulty,
+  type DepthResult,
   type DifficultyParams,
   type RandomSelectionInfo,
+  type ScoreBreakdown,
 } from "../../../types/cpu.ts";
 import {
   checkDraw,
@@ -20,7 +23,10 @@ import {
   DRAW_MOVE_LIMIT,
 } from "../../renjuRules.ts";
 import { applyMove, countStones } from "../core/boardUtils.ts";
-import { evaluatePosition } from "../evaluation.ts";
+import {
+  evaluateBoardWithBreakdown,
+  evaluatePositionWithBreakdown,
+} from "../evaluation.ts";
 import { getOpeningMove, isOpeningPhase } from "../opening.ts";
 import { findBestMoveIterativeWithTT } from "../search/minimax.ts";
 
@@ -57,20 +63,6 @@ export interface SearchStatsRecord {
 }
 
 /**
- * ベンチマーク用候補手情報（CandidateMoveの簡略版）
- */
-export interface CandidateInfo {
-  /** 着手位置 */
-  position: Position;
-  /** 即時評価スコア */
-  score: number;
-  /** 探索スコア */
-  searchScore: number;
-  /** 順位（1始まり） */
-  rank: number;
-}
-
-/**
  * 着手記録（Position を拡張）
  */
 export interface MoveRecord {
@@ -88,12 +80,14 @@ export interface MoveRecord {
   stats?: SearchStatsRecord;
   /** 選択された手のスコア */
   score?: number;
-  /** 上位候補手（最大5手） */
-  candidates?: CandidateInfo[];
+  /** 上位候補手（最大5手、breakdown/PV/leafEvaluation含む） */
+  candidates?: CandidateMove[];
   /** 選択された手の順位（1始まり） */
   selectedRank?: number;
   /** ランダム選択情報 */
   randomSelection?: RandomSelectionInfo;
+  /** 深度別の最善手履歴 */
+  depthHistory?: DepthResult[];
 }
 
 /**
@@ -164,7 +158,7 @@ export function runHeadlessGame(
   const startTime = performance.now();
   let board: BoardState = createEmptyBoard();
   const moveHistory: MoveRecord[] = [];
-  let currentColor: StoneColor = "black";
+  let currentColor: "black" | "white" = "black";
   let moveCount = 0;
 
   const paramsA = getParams(playerA);
@@ -204,9 +198,10 @@ export function runHeadlessGame(
     // 通常の探索
     let stats: SearchStatsRecord | undefined = undefined;
     let score: number | undefined = undefined;
-    let candidates: CandidateInfo[] | undefined = undefined;
+    let candidates: CandidateMove[] | undefined = undefined;
     let selectedRank: number | undefined = undefined;
     let randomSelection: RandomSelectionInfo | undefined = undefined;
+    let depthHistory: DepthResult[] | undefined = undefined;
 
     if (!move) {
       const result = findBestMoveIterativeWithTT(
@@ -222,20 +217,35 @@ export function runHeadlessGame(
       depth = result.completedDepth;
       ({ score } = result);
 
-      // 候補手情報を記録（最大5手）
+      // 候補手情報を記録（最大5手、breakdown/PV/leafEvaluation含む）
       if (result.candidates && result.candidates.length > 0) {
-        candidates = result.candidates.slice(0, 5).map((c, index) => ({
-          position: c.move,
-          score: evaluatePosition(
-            board,
-            c.move.row,
-            c.move.col,
-            currentColor,
-            params.evaluationOptions,
-          ),
-          searchScore: c.score,
-          rank: index + 1,
-        }));
+        candidates = result.candidates.slice(0, 5).map((entry, index) => {
+          // 即時評価の内訳を計算
+          const { score: breakdownScore, breakdown } =
+            evaluatePositionWithBreakdown(
+              board,
+              entry.move.row,
+              entry.move.col,
+              currentColor,
+              params.evaluationOptions,
+            );
+
+          // 探索末端の評価内訳を計算（PVがある場合）
+          const leafEvaluation =
+            entry.pvLeafBoard && entry.pvLeafColor
+              ? evaluateBoardWithBreakdown(entry.pvLeafBoard, currentColor)
+              : undefined;
+
+          return {
+            position: entry.move,
+            score: Math.round(breakdownScore), // 即時評価（内訳の合計）
+            searchScore: entry.score, // 探索スコア（順位の根拠）
+            rank: index + 1,
+            breakdown: breakdown as ScoreBreakdown,
+            principalVariation: entry.pv, // 予想手順
+            leafEvaluation, // 探索末端の評価内訳
+          };
+        });
 
         // 選択された手の順位を計算
         selectedRank = candidates.findIndex(
@@ -251,6 +261,13 @@ export function runHeadlessGame(
           randomFactor: params.randomFactor,
         };
       }
+
+      // 深度履歴を記録
+      depthHistory = result.depthHistory?.map((entry) => ({
+        depth: entry.depth,
+        position: entry.position,
+        score: entry.score,
+      }));
 
       stats = {
         nodes: result.stats.nodes,
@@ -299,6 +316,7 @@ export function runHeadlessGame(
           candidates,
           selectedRank,
           randomSelection,
+          depthHistory,
         };
         return {
           playerA: playerA.id,
@@ -326,6 +344,7 @@ export function runHeadlessGame(
       candidates,
       selectedRank,
       randomSelection,
+      depthHistory,
     });
     moveCount++;
 
