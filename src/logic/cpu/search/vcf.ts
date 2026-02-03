@@ -17,9 +17,10 @@ import {
 } from "@/logic/renjuRules";
 
 import { DIRECTION_INDICES, DIRECTIONS } from "../core/constants";
-import { checkEnds, countLine } from "../core/lineAnalysis";
+import { countLine } from "../core/lineAnalysis";
 import { isNearExistingStone } from "../moveGenerator";
 import { findJumpGapPosition } from "../patterns/threatAnalysis";
+import { createsFour } from "./threatMoves";
 
 // 後方互換性のためライン解析関数を再export
 export { checkEnds, countLine } from "../core/lineAnalysis";
@@ -245,68 +246,19 @@ export function findFourMoves(
         }
       }
 
-      // 四が作れるかチェック
-      if (createsFour(board, row, col, color)) {
+      // 四が作れるかチェック（仮想的に石を置いて判定）
+      const testBoard = copyBoard(board);
+      const testRow = testBoard[row];
+      if (testRow) {
+        testRow[col] = color;
+      }
+      if (createsFour(testBoard, row, col, color)) {
         moves.push({ row, col });
       }
     }
   }
 
   return moves;
-}
-
-/**
- * 指定位置に石を置くと四ができるかチェック
- */
-function createsFour(
-  board: BoardState,
-  row: number,
-  col: number,
-  color: "black" | "white",
-): boolean {
-  // 仮想的に石を置く
-  const testBoard = copyBoard(board);
-  const testRow = testBoard[row];
-  if (testRow) {
-    testRow[col] = color;
-  }
-
-  for (let i = 0; i < DIRECTION_INDICES.length; i++) {
-    const dirIndex = DIRECTION_INDICES[i];
-    if (dirIndex === undefined) {
-      continue;
-    }
-
-    const direction = DIRECTIONS[i];
-    if (!direction) {
-      continue;
-    }
-    const [dr, dc] = direction;
-
-    // 連続四をチェック
-    const count = countLine(testBoard, row, col, dr, dc, color);
-    if (count === 4) {
-      // 片方でも開いていれば四
-      const { end1Open, end2Open } = checkEnds(
-        testBoard,
-        row,
-        col,
-        dr,
-        dc,
-        color,
-      );
-      if (end1Open || end2Open) {
-        return true;
-      }
-    }
-
-    // 跳び四をチェック
-    if (count !== 4 && checkJumpFour(testBoard, row, col, dirIndex, color)) {
-      return true;
-    }
-  }
-
-  return false;
 }
 
 /**

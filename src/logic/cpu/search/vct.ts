@@ -23,6 +23,7 @@ import {
   findJumpGapPosition,
   getJumpThreeDefensePositions,
 } from "../patterns/threatAnalysis";
+import { createsFour, createsOpenThree } from "./threatMoves";
 import { hasVCF, type VCFTimeLimiter } from "./vcf";
 
 /** VCT探索の最大深度 */
@@ -197,84 +198,6 @@ function findThreatMoves(
 
   // 四を優先して返す
   return [...fourMoves, ...openThreeMoves];
-}
-
-/**
- * 指定位置に石を置くと四ができるかチェック
- */
-function createsFour(
-  board: BoardState,
-  row: number,
-  col: number,
-  color: "black" | "white",
-): boolean {
-  for (let i = 0; i < DIRECTION_INDICES.length; i++) {
-    const dirIndex = DIRECTION_INDICES[i];
-    if (dirIndex === undefined) {
-      continue;
-    }
-
-    const direction = DIRECTIONS[i];
-    if (!direction) {
-      continue;
-    }
-    const [dr, dc] = direction;
-
-    // 連続四をチェック
-    const count = countLine(board, row, col, dr, dc, color);
-    if (count === 4) {
-      const { end1Open, end2Open } = checkEnds(board, row, col, dr, dc, color);
-      if (end1Open || end2Open) {
-        return true;
-      }
-    }
-
-    // 跳び四をチェック
-    if (count !== 4 && checkJumpFour(board, row, col, dirIndex, color)) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
-/**
- * 指定位置に石を置くと活三ができるかチェック
- */
-function createsOpenThree(
-  board: BoardState,
-  row: number,
-  col: number,
-  color: "black" | "white",
-): boolean {
-  for (let i = 0; i < DIRECTION_INDICES.length; i++) {
-    const dirIndex = DIRECTION_INDICES[i];
-    if (dirIndex === undefined) {
-      continue;
-    }
-
-    const direction = DIRECTIONS[i];
-    if (!direction) {
-      continue;
-    }
-    const [dr, dc] = direction;
-
-    // 連続三をチェック
-    const count = countLine(board, row, col, dr, dc, color);
-    if (count === 3) {
-      const { end1Open, end2Open } = checkEnds(board, row, col, dr, dc, color);
-      if (end1Open && end2Open) {
-        return true;
-      }
-    }
-
-    // 跳び三をチェック
-    if (count !== 3 && checkJumpThree(board, row, col, dirIndex, color)) {
-      return true;
-    }
-  }
-
-  return false;
 }
 
 /**
