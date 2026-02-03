@@ -99,3 +99,12 @@ pnpm build         # Production build
 
 - Check `docs/` for implementation plans and TODOs
 - Generalize learnings to AGENTS.md
+
+## Renju Knowledge
+
+- Renju is played on a 15x15 grid
+- Black plays first, with forbidden moves (double-three, double-four, overline)
+- Winning condition: first to align five stones horizontally, vertically, or diagonally
+- Coordinate notation: origin at bottom-left, e.g., 15A, 1O
+- Game record example:
+  - H8 H9 I8 G8 I9 I10 F7 G7 G9 H10 F9 J11

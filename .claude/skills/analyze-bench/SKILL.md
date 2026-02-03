@@ -1,6 +1,10 @@
 ---
 name: analyze-bench
 description: ベンチマーク結果を分析して戦術的洞察を提供
+allowed-tools:
+  - Bash(jq:*)
+  - Bash(./scripts/analyze-bench.sh:*)
+  - Bash(ls:*)
 ---
 
 # 対局分析スキル

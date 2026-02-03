@@ -56,7 +56,7 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
   beginner: {
     depth: 1,
     timeLimit: 1000,
-    randomFactor: 0.35, // 悪手率を上げて弱体化
+    randomFactor: 0.45, // 悪手率を上げて弱体化
     maxNodes: 10000,
     evaluationOptions: {
       enableFukumi: false,
@@ -74,7 +74,7 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
   easy: {
     depth: 2,
     timeLimit: 2000,
-    randomFactor: 0.3, // 悪手率を上げて弱体化
+    randomFactor: 0.4, // 悪手率を上げて弱体化
     maxNodes: 50000,
     evaluationOptions: {
       enableFukumi: false,
@@ -91,11 +91,11 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
   },
   medium: {
     depth: 4,
-    timeLimit: 3000,
-    randomFactor: 0,
+    timeLimit: 4000,
+    randomFactor: 0.15, // hardとの差をつける
     maxNodes: 200000,
     evaluationOptions: {
-      enableFukumi: true,
+      enableFukumi: false, // 探索効率を優先
       enableMise: true,
       enableForbiddenTrap: false,
       enableMultiThreat: true,
