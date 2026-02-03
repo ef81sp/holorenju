@@ -90,7 +90,7 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
     },
   },
   medium: {
-    depth: 3,
+    depth: 4,
     timeLimit: 3000,
     randomFactor: 0,
     maxNodes: 200000,
@@ -108,7 +108,7 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
     },
   },
   hard: {
-    depth: 4,
+    depth: 5,
     timeLimit: 5000,
     randomFactor: 0,
     maxNodes: 500000,

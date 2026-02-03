@@ -47,9 +47,9 @@ export class TranspositionTable {
   private currentGeneration: number;
 
   /**
-   * @param maxSize 最大エントリ数（デフォルト: 1000000）
+   * @param maxSize 最大エントリ数（デフォルト: 2000000）
    */
-  constructor(maxSize = 1000000) {
+  constructor(maxSize = 2000000) {
     this.table = new Map();
     this.maxSize = maxSize;
     this.currentGeneration = 0;
@@ -108,11 +108,16 @@ export class TranspositionTable {
     const existing = this.table.get(hash);
 
     if (existing) {
-      // 置換判定
+      // 置換判定（改良版）
+      // - EXACT型は最も信頼性が高いので優先的に保存
+      // - より深い探索結果を優先
+      // - 同深度ならLOWER_BOUND/EXACTをUPPER_BOUNDより優先
+      // - 2世代以上前のエントリは置換
       const shouldReplace =
-        depth >= existing.depth ||
-        existing.generation < this.currentGeneration ||
-        type === "EXACT";
+        type === "EXACT" ||
+        depth > existing.depth ||
+        (depth === existing.depth && type !== "UPPER_BOUND") ||
+        existing.generation < this.currentGeneration - 1;
 
       if (!shouldReplace) {
         return;

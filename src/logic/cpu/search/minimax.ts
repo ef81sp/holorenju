@@ -404,15 +404,21 @@ export function findBestMove(
     Math.random() < randomFactor &&
     moveScores.length > 1
   ) {
-    // 上位N手からランダムに選択（Nは候補数の1/3程度）
-    const topN = Math.max(2, Math.floor(moveScores.length / 3));
-    const randomIndex = Math.floor(Math.random() * topN);
-    const selected = moveScores[randomIndex];
-    if (selected) {
-      return {
-        position: selected.move,
-        score: selected.score,
-      };
+    // スコア差ベースでランダム選択範囲を制限（ベストから200点以内）
+    const bestScore = moveScores[0]?.score ?? 0;
+    const scoreThreshold = 200;
+    const validMoves = moveScores.filter(
+      (m) => m.score >= bestScore - scoreThreshold,
+    );
+    if (validMoves.length > 1) {
+      const randomIndex = Math.floor(Math.random() * validMoves.length);
+      const selected = validMoves[randomIndex];
+      if (selected) {
+        return {
+          position: selected.move,
+          score: selected.score,
+        };
+      }
     }
   }
 
@@ -721,7 +727,7 @@ export function minimaxWithTT(
     return score;
   }
 
-  // ソート済み候補手生成
+  // ソート済み候補手生成（Lazy Evaluation: 上位8手のみ静的評価）
   const moves = generateSortedMoves(board, currentColor, {
     ttMove,
     killers: ctx.killers,
@@ -729,6 +735,7 @@ export function minimaxWithTT(
     history: ctx.history,
     useStaticEval: true,
     evaluationOptions: ctx.evaluationOptions,
+    maxStaticEvalCount: 8,
   });
 
   if (moves.length === 0) {
@@ -975,21 +982,31 @@ export function findBestMoveWithTT(
     Math.random() < randomFactor &&
     moveScores.length > 1
   ) {
-    const topN = Math.max(2, Math.floor(moveScores.length / 3));
-    const randomIndex = Math.floor(Math.random() * topN);
-    const selected = moveScores[randomIndex];
-    if (selected) {
-      return {
-        position: selected.move,
-        score: selected.score,
-        candidates: moveScores,
-        randomSelection: {
-          wasRandom: true,
-          originalRank: randomIndex + 1,
-          candidateCount: topN,
-        },
-        ctx,
-      };
+    // スコア差ベースでランダム選択範囲を制限（ベストから200点以内）
+    const bestScore = moveScores[0]?.score ?? 0;
+    const scoreThreshold = 200;
+    const validMoves = moveScores.filter(
+      (m) => m.score >= bestScore - scoreThreshold,
+    );
+    if (validMoves.length > 1) {
+      const randomIndex = Math.floor(Math.random() * validMoves.length);
+      const selected = validMoves[randomIndex];
+      if (selected) {
+        // 元の順位を計算
+        const originalRank =
+          moveScores.findIndex((m) => m.move === selected.move) + 1;
+        return {
+          position: selected.move,
+          score: selected.score,
+          candidates: moveScores,
+          randomSelection: {
+            wasRandom: true,
+            originalRank,
+            candidateCount: validMoves.length,
+          },
+          ctx,
+        };
+      }
     }
   }
 
@@ -1054,7 +1071,7 @@ export function findBestMoveIterativeWithTT(
   // 絶対時間制限チェック（VCF探索前）
   const elapsedBeforeVCF = performance.now() - startTime;
   if (elapsedBeforeVCF >= absoluteTimeLimit) {
-    // 時間がないので即座に簡易評価で返す
+    // 時間がないので即座に簡易評価で返す（上位5手のみ評価）
     const moves = generateSortedMoves(board, color, {
       ttMove: null,
       killers: ctx.killers,
@@ -1062,6 +1079,7 @@ export function findBestMoveIterativeWithTT(
       history: ctx.history,
       useStaticEval: true,
       evaluationOptions,
+      maxStaticEvalCount: 5,
     });
     const fallbackMove = moves[0] ?? { row: 7, col: 7 };
     return {
@@ -1229,8 +1247,9 @@ export function findBestMoveIterativeWithTT(
     }
 
     // 動的時間制限チェック（探索開始前）
+    // 0.8: 残り20%の時間を確保しつつ、より深い探索を許可
     if (
-      elapsedTime > dynamicTimeLimit * 0.5 ||
+      elapsedTime > dynamicTimeLimit * 0.8 ||
       ctx.timeoutFlag ||
       ctx.nodeCountExceeded
     ) {

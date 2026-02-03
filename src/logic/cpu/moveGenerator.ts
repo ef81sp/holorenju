@@ -293,6 +293,8 @@ export interface MoveOrderingOptions {
   useStaticEval?: boolean;
   /** 評価オプション（重い機能の有効/無効） */
   evaluationOptions?: EvaluationOptions;
+  /** 静的評価を実行する最大候補数（Lazy Evaluation用、デフォルト: 全て） */
+  maxStaticEvalCount?: number;
 }
 
 /**
@@ -301,8 +303,12 @@ export interface MoveOrderingOptions {
  * 優先度（降順）:
  * 1. TT最善手 - 置換表に記録された最善手
  * 2. Killer Moves - 同じ深さで剪定を引き起こした手
- * 3. 静的評価 - evaluatePosition()による攻撃・防御価値
+ * 3. 静的評価 - evaluatePosition()による攻撃・防御価値（Lazy Evaluation対応）
  * 4. History Heuristic - 過去に剪定を引き起こした手の統計
+ *
+ * Lazy Evaluation:
+ * maxStaticEvalCountが指定された場合、TT最善手・Killer・Historyで事前ソートし、
+ * 上位N手のみ静的評価を実行することで高速化する。
  *
  * @param moves 候補手配列
  * @param board 盤面
@@ -323,12 +329,14 @@ export function sortMoves(
     history,
     useStaticEval = true,
     evaluationOptions = DEFAULT_EVAL_OPTIONS,
+    maxStaticEvalCount,
   } = options;
 
   // スコア計算用の配列
   interface MoveWithScore {
     move: Position;
     score: number;
+    staticEvalDone: boolean;
   }
   const scoredMoves: MoveWithScore[] = [];
 
@@ -336,6 +344,7 @@ export function sortMoves(
   const killerMoves =
     killers && depth !== undefined ? getKillerMoves(killers, depth) : [];
 
+  // === 第1パス: TT最善手 + Killer Moves + History でスコア付け ===
   for (const move of moves) {
     let score = 0;
 
@@ -354,26 +363,51 @@ export function sortMoves(
       }
     }
 
-    // 3. 静的評価
-    if (useStaticEval && color !== null) {
-      score += evaluatePosition(
-        board,
-        move.row,
-        move.col,
-        color,
-        evaluationOptions,
-      );
-    }
-
-    // 4. History Heuristic
+    // 4. History Heuristic（静的評価より先に適用）
     if (history) {
       score += getHistoryScore(history, move);
     }
 
-    scoredMoves.push({ move, score });
+    scoredMoves.push({ move, score, staticEvalDone: false });
   }
 
-  // スコア降順でソート
+  // === Lazy Evaluation: 上位N手のみ静的評価 ===
+  if (useStaticEval && color !== null) {
+    const evalCount = maxStaticEvalCount ?? scoredMoves.length;
+
+    if (evalCount < scoredMoves.length) {
+      // Lazy Evaluation: 事前ソートして上位N手のみ評価
+      scoredMoves.sort((a, b) => b.score - a.score);
+
+      for (let i = 0; i < Math.min(evalCount, scoredMoves.length); i++) {
+        const sm = scoredMoves[i];
+        if (sm) {
+          sm.score += evaluatePosition(
+            board,
+            sm.move.row,
+            sm.move.col,
+            color,
+            evaluationOptions,
+          );
+          sm.staticEvalDone = true;
+        }
+      }
+    } else {
+      // 全候補手を評価（従来の動作）
+      for (const sm of scoredMoves) {
+        sm.score += evaluatePosition(
+          board,
+          sm.move.row,
+          sm.move.col,
+          color,
+          evaluationOptions,
+        );
+        sm.staticEvalDone = true;
+      }
+    }
+  }
+
+  // スコア降順でソート（再ソート）
   scoredMoves.sort((a, b) => b.score - a.score);
 
   // -Infinityの手を除外（必須防御ルールで除外された手）
