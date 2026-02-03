@@ -56,7 +56,7 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
   beginner: {
     depth: 1,
     timeLimit: 1000,
-    randomFactor: 0.3,
+    randomFactor: 0.35, // 悪手率を上げて弱体化
     maxNodes: 10000,
     evaluationOptions: {
       enableFukumi: false,
@@ -74,7 +74,7 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
   easy: {
     depth: 2,
     timeLimit: 2000,
-    randomFactor: 0.25,
+    randomFactor: 0.3, // 悪手率を上げて弱体化
     maxNodes: 50000,
     evaluationOptions: {
       enableFukumi: false,
@@ -83,7 +83,7 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
       enableMultiThreat: false,
       enableCounterFour: false,
       enableVCT: false,
-      enableMandatoryDefense: true,
+      enableMandatoryDefense: false, // 防御を甘くして弱体化
       enableSingleFourPenalty: false,
       singleFourPenaltyMultiplier: 1.0, // ペナルティなし（四を打ちがち）
       enableMiseThreat: false,
@@ -103,7 +103,7 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
       enableVCT: false,
       enableMandatoryDefense: true,
       enableSingleFourPenalty: true,
-      singleFourPenaltyMultiplier: 0.1, // 90%減点（単独四は100点、連作りより低い）
+      singleFourPenaltyMultiplier: 0.3, // 70%減点に緩和（単独四にも価値を認める）
       enableMiseThreat: true,
     },
   },

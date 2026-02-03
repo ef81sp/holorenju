@@ -104,6 +104,8 @@ export const PATTERN_SCORES = {
   FUKUMI_BONUS: 1500,
   /** 禁手追い込みセットアップ（活三の延長点が禁手） */
   FORBIDDEN_TRAP_SETUP: 1500,
+  /** 禁手追い込み三（三の達四点の一つが禁手、もう一方を止めても四で勝ち） */
+  FORBIDDEN_TRAP_THREE: 3000,
   /** ミセ手ボーナス（次に四三を作れる手） */
   MISE_BONUS: 1000,
   /** 止め四（片端開） */
@@ -623,7 +625,14 @@ function evaluateForbiddenTrap(
 ): number {
   let trapScore = 0;
 
-  for (const [dr, dc] of DIRECTIONS) {
+  for (let i = 0; i < DIRECTIONS.length; i++) {
+    const direction = DIRECTIONS[i];
+    if (!direction) {
+      continue;
+    }
+    const [dr, dc] = direction;
+    const dirIndex = DIRECTION_INDICES[i] ?? -1;
+
     const pattern = analyzeDirection(board, row, col, dr, dc, "white");
 
     // 四を作った場合
@@ -663,6 +672,59 @@ function evaluateForbiddenTrap(
         if (forbiddenResult.isForbidden) {
           // 禁手への誘導セットアップ
           trapScore += PATTERN_SCORES.FORBIDDEN_TRAP_SETUP;
+        }
+      }
+
+      // 達四点（三を四にする点）の一つが禁手なら追い込み成功
+      if (dirIndex >= 0) {
+        const straightFourPoints = getConsecutiveThreeStraightFourPoints(
+          board,
+          row,
+          col,
+          dirIndex,
+          "white",
+        );
+        if (straightFourPoints.length === 2) {
+          const pos0 = straightFourPoints[0];
+          const pos1 = straightFourPoints[1];
+          if (pos0 && pos1) {
+            const forbidden0 = checkForbiddenMove(board, pos0.row, pos0.col);
+            const forbidden1 = checkForbiddenMove(board, pos1.row, pos1.col);
+            // 片方だけが禁手なら追い込み（両方禁手だと黒が先に止められない）
+            if (
+              (forbidden0.isForbidden && !forbidden1.isForbidden) ||
+              (!forbidden0.isForbidden && forbidden1.isForbidden)
+            ) {
+              trapScore += PATTERN_SCORES.FORBIDDEN_TRAP_THREE;
+            }
+          }
+        }
+      }
+    }
+
+    // 跳び三を作った場合
+    if (dirIndex >= 0 && checkJumpThree(board, row, col, dirIndex, "white")) {
+      const straightFourPoints = getJumpThreeStraightFourPoints(
+        board,
+        row,
+        col,
+        dirIndex,
+        "white",
+      );
+      if (straightFourPoints.length >= 1) {
+        let hasForbidden = false;
+        let hasNonForbidden = false;
+        for (const pos of straightFourPoints) {
+          const forbiddenResult = checkForbiddenMove(board, pos.row, pos.col);
+          if (forbiddenResult.isForbidden) {
+            hasForbidden = true;
+          } else {
+            hasNonForbidden = true;
+          }
+        }
+        // 片方だけが禁手なら追い込み
+        if (hasForbidden && hasNonForbidden) {
+          trapScore += PATTERN_SCORES.FORBIDDEN_TRAP_THREE;
         }
       }
     }

@@ -248,6 +248,7 @@ export function getConsecutiveThreeStraightFourPoints(
   row: number,
   col: number,
   dirIndex: number,
+  color: "black" | "white" = "black",
 ): Position[] {
   const dir1 = DIRECTIONS[dirIndex];
   const dir2 = DIRECTIONS[(dirIndex + 4) % 8];
@@ -260,14 +261,14 @@ export function getConsecutiveThreeStraightFourPoints(
   const testBoard = board.map((r: StoneColor[]) => [...r]);
   const testRow = testBoard[row];
   if (testRow) {
-    testRow[col] = "black";
+    testRow[col] = color;
   }
 
   // 両方向の連続数と端の位置をチェック
   let count1 = 0;
   let r1 = row + dir1.dr;
   let c1 = col + dir1.dc;
-  while (isValidPosition(r1, c1) && testBoard[r1]?.[c1] === "black") {
+  while (isValidPosition(r1, c1) && testBoard[r1]?.[c1] === color) {
     count1++;
     r1 += dir1.dr;
     c1 += dir1.dc;
@@ -276,7 +277,7 @@ export function getConsecutiveThreeStraightFourPoints(
   let count2 = 0;
   let r2 = row + dir2.dr;
   let c2 = col + dir2.dc;
-  while (isValidPosition(r2, c2) && testBoard[r2]?.[c2] === "black") {
+  while (isValidPosition(r2, c2) && testBoard[r2]?.[c2] === color) {
     count2++;
     r2 += dir2.dr;
     c2 += dir2.dc;
@@ -317,6 +318,7 @@ export function getJumpThreeStraightFourPoints(
   row: number,
   col: number,
   dirIndex: number,
+  color: "black" | "white" = "black",
 ): Position[] {
   const dir1 = DIRECTIONS[dirIndex];
   const dir2 = DIRECTIONS[(dirIndex + 4) % 8];
@@ -329,7 +331,7 @@ export function getJumpThreeStraightFourPoints(
   const testBoard = board.map((r: StoneColor[]) => [...r]);
   const testRow = testBoard[row];
   if (testRow) {
-    testRow[col] = "black";
+    testRow[col] = color;
   }
 
   // ラインを取得（置いた位置を中心に両方向に5マスずつ）
@@ -350,7 +352,7 @@ export function getJumpThreeStraightFourPoints(
   }
 
   // 置いた位置（インデックス5）
-  lineStones.push("black");
+  lineStones.push(color);
   linePositions.push({ row, col });
 
   // dir1方向（正の方向）に5マス
@@ -374,10 +376,10 @@ export function getJumpThreeStraightFourPoints(
     const startIdx = placedIndex + offset;
     if (
       lineStones[startIdx - 1] === null &&
-      lineStones[startIdx] === "black" &&
-      lineStones[startIdx + 1] === "black" &&
+      lineStones[startIdx] === color &&
+      lineStones[startIdx + 1] === color &&
       lineStones[startIdx + 2] === null &&
-      lineStones[startIdx + 3] === "black" &&
+      lineStones[startIdx + 3] === color &&
       lineStones[startIdx + 4] === null
     ) {
       if (placedIndex >= startIdx && placedIndex <= startIdx + 3) {
@@ -395,10 +397,10 @@ export function getJumpThreeStraightFourPoints(
     const startIdx = placedIndex + offset;
     if (
       lineStones[startIdx - 1] === null &&
-      lineStones[startIdx] === "black" &&
+      lineStones[startIdx] === color &&
       lineStones[startIdx + 1] === null &&
-      lineStones[startIdx + 2] === "black" &&
-      lineStones[startIdx + 3] === "black" &&
+      lineStones[startIdx + 2] === color &&
+      lineStones[startIdx + 3] === color &&
       lineStones[startIdx + 4] === null
     ) {
       if (

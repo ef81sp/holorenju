@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { createEmptyBoard } from "@/logic/renjuRules";
+import { checkForbiddenMove, createEmptyBoard } from "@/logic/renjuRules";
 
 import {
   detectOpponentThreats,
@@ -1118,16 +1118,109 @@ describe("detectOpponentThreats", () => {
 
     const threats = detectOpponentThreats(board, "black");
 
-    console.log("活三の防御位置:");
-    for (const pos of threats.openThrees) {
-      console.log(`  (${pos.row}, ${pos.col})`);
-    }
-
     // (7,9)-(8,8)-(9,7)の活三が検出されるべき
     // 防御位置は(6,10)と(10,6)
     expect(threats.openThrees.length).toBeGreaterThan(0);
     const positions = threats.openThrees.map((p) => `${p.row},${p.col}`);
     expect(positions).toContain("6,10");
     expect(positions).toContain("10,6");
+  });
+});
+
+describe("禁手追い込み三（FORBIDDEN_TRAP_THREE）", () => {
+  it("スコア定数が正しく定義されている", () => {
+    expect(PATTERN_SCORES.FORBIDDEN_TRAP_THREE).toBe(3000);
+  });
+
+  it("活三の達四点の一つが禁手なら高評価（縦方向）", () => {
+    // 盤面設定: 8Gが三三禁になる配置
+    // 連珠座標: 15が上、行=15-row, 列=A+col
+    // 8G(row=7,col=6)に黒が打つと:
+    //   - 横: F8-G8-H8 の活三
+    //   - 斜め: F9-G8-□-I6 の跳び三（H7が空き）
+    // → 三三禁
+    //
+    //   9  . . . . . X . . . . . . . . .   F9黒(row=6,col=5)
+    //   8  . . . . . X . X . . . . . . .   F8黒(row=7,col=5), H8黒(row=7,col=7)
+    //   7  . . . . . . O . X . . . . . .   G7白(row=8,col=6), I7黒(row=8,col=8)
+    //   6  . . . . O . O O X . . . . . .   E6白(row=9,col=4), G6白(row=9,col=6), H6白(row=9,col=7), I6黒(row=9,col=8)
+    const board = createEmptyBoard();
+    // 黒石（ユーザー提供の moveHistory より）
+    board[7][7] = "black"; // H8 (1手目)
+    board[8][8] = "black"; // I7 (3手目)
+    board[7][5] = "black"; // F8 (5手目)
+    board[6][5] = "black"; // F9 (7手目)
+    board[9][8] = "black"; // I6 (9手目) - これが重要！斜め跳び三を構成
+    // 白石
+    board[8][6] = "white"; // G7 (2手目)
+    board[9][7] = "white"; // H6 (4手目)
+    board[9][6] = "white"; // G6 (6手目)
+    board[9][4] = "white"; // E6 (8手目)
+
+    // 8G(row=7, col=6)が三三禁であることを確認
+    // 横: F8-G8-H8 の活三 + 斜め: F9-G8-□-I6 の跳び三
+    const forbiddenResult = checkForbiddenMove(board, 7, 6);
+    expect(forbiddenResult.isForbidden).toBe(true);
+    expect(forbiddenResult.type).toBe("double-three");
+
+    // 白が5G(row=10, col=6)に打つと、G5-G6-G7の活三ができる
+    // 達四点は4G(row=11, col=6)と8G(row=7, col=6)
+    // 8Gは禁手なので、追い込み成功
+    const scoreWith5G = evaluatePosition(board, 10, 6, "white", {
+      enableFukumi: false,
+      enableMise: false,
+      enableForbiddenTrap: true,
+      enableMultiThreat: false,
+      enableCounterFour: false,
+      enableVCT: false,
+      enableMandatoryDefense: false,
+      enableSingleFourPenalty: false,
+      singleFourPenaltyMultiplier: 1.0,
+      enableMiseThreat: false,
+    });
+
+    // 無関係な位置（追い込みにならない）
+    const scoreOther = evaluatePosition(board, 3, 3, "white", {
+      enableFukumi: false,
+      enableMise: false,
+      enableForbiddenTrap: true,
+      enableMultiThreat: false,
+      enableCounterFour: false,
+      enableVCT: false,
+      enableMandatoryDefense: false,
+      enableSingleFourPenalty: false,
+      singleFourPenaltyMultiplier: 1.0,
+      enableMiseThreat: false,
+    });
+
+    // 5Gに打つ手は追い込みボーナスで高スコアになるべき
+    // scoreWith5G には活三スコア + 禁手追い込みボーナスが含まれる
+    // scoreOther は無関係な位置なので低スコア
+    expect(scoreWith5G).toBeGreaterThan(scoreOther + 2000);
+  });
+
+  it("両方の達四点が禁手でない場合はボーナスなし", () => {
+    // 単純な活三（禁手嵌めにならない）
+    const board = createEmptyBoard();
+    board[7][6] = "white"; // G8
+    board[7][7] = "white"; // H8
+
+    // 白がF8(row=7,col=5)に打つと活三だが、達四点は禁手でない
+    const scoreNormal = evaluatePosition(board, 7, 5, "white", {
+      enableFukumi: false,
+      enableMise: false,
+      enableForbiddenTrap: true,
+      enableMultiThreat: false,
+      enableCounterFour: false,
+      enableVCT: false,
+      enableMandatoryDefense: false,
+      enableSingleFourPenalty: false,
+      singleFourPenaltyMultiplier: 1.0,
+      enableMiseThreat: false,
+    });
+
+    // FORBIDDEN_TRAP_THREEボーナスは含まれないはず
+    // 活三のスコア（OPEN_THREE）と防御スコアのみ
+    expect(scoreNormal).toBeLessThan(PATTERN_SCORES.FORBIDDEN_TRAP_THREE);
   });
 });

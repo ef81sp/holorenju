@@ -93,10 +93,11 @@ describe("TranspositionTable", () => {
       expect(entry?.score).toBe(100);
     });
 
-    it("古い世代のエントリは置換される", () => {
+    it("古い世代のエントリは置換される（2世代以上前）", () => {
       const hash = 400n;
       tt.store(hash, 50, 5, "EXACT", null);
       tt.newGeneration();
+      tt.newGeneration(); // 2世代以上前になるよう2回進める
       tt.store(hash, 100, 2, "LOWER_BOUND", null);
 
       const entry = tt.probe(hash);
