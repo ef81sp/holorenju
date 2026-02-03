@@ -89,6 +89,7 @@ pnpm build         # Production build
 - Playwright MCP available for E2E testing
 - Browser viewport: 960×540 (fixed)
 - Minimize screenshots during testing (context limit)
+- Use `pnpm test:browser:headless` for headless browser tests (useful for agents/CI)
 
 ### Before Committing
 
