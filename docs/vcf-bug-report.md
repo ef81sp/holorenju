@@ -22,7 +22,7 @@ export function checkJumpFour(
   row: number,
   col: number,
   dirIndex: number,
-  color: StoneColor // 必須パラメータ（デフォルト値なし）
+  color: StoneColor, // 必須パラメータ（デフォルト値なし）
 ): boolean {
   // ...
   testRow[col] = color; // 修正: "black" → color

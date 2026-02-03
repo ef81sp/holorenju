@@ -19,10 +19,12 @@ export {
 } from "./headless.ts";
 
 export type {
+  CandidateInfo,
   GameOptions,
   GameResult,
   GameStats,
   MoveRecord,
   PlayerConfig,
+  SearchStatsRecord,
   ThinkingTimeStats,
 } from "./headless.ts";

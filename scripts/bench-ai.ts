@@ -8,11 +8,11 @@
  *   pnpm bench:ai --parallel                   # 並列実行
  */
 
-import * as fs from 'node:fs';
-import * as os from 'node:os';
-import * as path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { Worker } from 'node:worker_threads';
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+import { fileURLToPath } from "node:url";
+import { Worker } from "node:worker_threads";
 
 import {
   calculateStats,
@@ -23,8 +23,8 @@ import {
   type EloRating,
   type GameResult,
   type PlayerConfig,
-} from '../src/logic/cpu/benchmark/index.ts';
-import { CPU_DIFFICULTIES, type CpuDifficulty } from '../src/types/cpu.ts';
+} from "../src/logic/cpu/benchmark/index.ts";
+import { CPU_DIFFICULTIES, type CpuDifficulty } from "../src/types/cpu.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -32,7 +32,7 @@ interface CliOptions {
   players: CpuDifficulty[];
   games: number;
   output: string;
-  format: 'json' | 'csv';
+  format: "json" | "csv";
   verbose: boolean;
   parallel: boolean;
   workers: number;
@@ -81,47 +81,47 @@ function parseArgs(): CliOptions {
   const options: CliOptions = {
     players: [...CPU_DIFFICULTIES],
     games: 50,
-    output: 'bench-results',
-    format: 'json',
+    output: "bench-results",
+    format: "json",
     verbose: false,
     parallel: false,
     workers: Math.max(1, cpuCount - 1),
   };
 
   for (const arg of args) {
-    if (arg.startsWith('--players=')) {
-      const value = arg.slice('--players='.length);
+    if (arg.startsWith("--players=")) {
+      const value = arg.slice("--players=".length);
       const players = value
-        .split(',')
+        .split(",")
         .filter((p): p is CpuDifficulty =>
-          CPU_DIFFICULTIES.includes(p as CpuDifficulty)
+          CPU_DIFFICULTIES.includes(p as CpuDifficulty),
         );
       if (players.length > 0) {
         options.players = players;
       }
-    } else if (arg.startsWith('--games=')) {
-      const value = parseInt(arg.slice('--games='.length), 10);
+    } else if (arg.startsWith("--games=")) {
+      const value = parseInt(arg.slice("--games=".length), 10);
       if (!isNaN(value) && value > 0) {
         options.games = value;
       }
-    } else if (arg.startsWith('--output=')) {
-      options.output = arg.slice('--output='.length);
-    } else if (arg.startsWith('--format=')) {
-      const value = arg.slice('--format='.length);
-      if (value === 'json' || value === 'csv') {
+    } else if (arg.startsWith("--output=")) {
+      options.output = arg.slice("--output=".length);
+    } else if (arg.startsWith("--format=")) {
+      const value = arg.slice("--format=".length);
+      if (value === "json" || value === "csv") {
         options.format = value;
       }
-    } else if (arg === '--verbose' || arg === '-v') {
+    } else if (arg === "--verbose" || arg === "-v") {
       options.verbose = true;
-    } else if (arg === '--parallel' || arg === '-p') {
+    } else if (arg === "--parallel" || arg === "-p") {
       options.parallel = true;
-    } else if (arg.startsWith('--workers=')) {
-      const value = parseInt(arg.slice('--workers='.length), 10);
+    } else if (arg.startsWith("--workers=")) {
+      const value = parseInt(arg.slice("--workers=".length), 10);
       if (!isNaN(value) && value > 0) {
         options.workers = value;
         options.parallel = true;
       }
-    } else if (arg === '--help' || arg === '-h') {
+    } else if (arg === "--help" || arg === "-h") {
       printHelp();
       process.exit(0);
     }
@@ -159,7 +159,7 @@ Examples:
 }
 
 function generateMatchups(
-  players: CpuDifficulty[]
+  players: CpuDifficulty[],
 ): [CpuDifficulty, CpuDifficulty][] {
   const matchups: [CpuDifficulty, CpuDifficulty][] = [];
 
@@ -187,14 +187,14 @@ function writeStatus(message: string): void {
  * ステータス行をクリアして改行
  */
 function clearStatus(): void {
-  process.stdout.write('\r' + ' '.repeat(80) + '\r');
+  process.stdout.write("\r" + " ".repeat(80) + "\r");
 }
 
 function runBenchmarkSequential(options: CliOptions): BenchmarkResult {
   const { players, games, verbose } = options;
 
   console.log(`\n=== CPU AI Benchmark (Sequential) ===`);
-  console.log(`Players: ${players.join(', ')}`);
+  console.log(`Players: ${players.join(", ")}`);
   console.log(`Games per matchup: ${games}`);
   console.log();
 
@@ -242,25 +242,25 @@ function runBenchmarkSequential(options: CliOptions): BenchmarkResult {
       const gameStartTime = performance.now();
       const elapsed = ((gameStartTime - benchStartTime) / 1000).toFixed(0);
       writeStatus(
-        `[${elapsed}s] ${playerA} vs ${playerB}: Game ${i + 1}/${games} (${matchupResult.winsA}W-${matchupResult.winsB}L-${matchupResult.draws}D) - playing...`
+        `[${elapsed}s] ${playerA} vs ${playerB}: Game ${i + 1}/${games} (${matchupResult.winsA}W-${matchupResult.winsB}L-${matchupResult.draws}D) - playing...`,
       );
 
       const result = runHeadlessGame(black, white, { verbose });
 
-      const normalizeWinner = (): 'A' | 'B' | 'draw' => {
-        if (result.winner === 'draw') {
-          return 'draw';
+      const normalizeWinner = (): "A" | "B" | "draw" => {
+        if (result.winner === "draw") {
+          return "draw";
         }
         if (isABlack) {
           return result.winner;
         }
-        return result.winner === 'A' ? 'B' : 'A';
+        return result.winner === "A" ? "B" : "A";
       };
       const winner = normalizeWinner();
 
-      if (winner === 'A') {
+      if (winner === "A") {
         matchupResult.winsA++;
-      } else if (winner === 'B') {
+      } else if (winner === "B") {
         matchupResult.winsB++;
       } else {
         matchupResult.draws++;
@@ -269,14 +269,14 @@ function runBenchmarkSequential(options: CliOptions): BenchmarkResult {
       const ratingA = ratings[playerA];
       const ratingB = ratings[playerB];
       if (ratingA && ratingB) {
-        const getOutcome = (): 'win' | 'loss' | 'draw' => {
-          if (winner === 'A') {
-            return 'win';
+        const getOutcome = (): "win" | "loss" | "draw" => {
+          if (winner === "A") {
+            return "win";
           }
-          if (winner === 'B') {
-            return 'loss';
+          if (winner === "B") {
+            return "loss";
           }
-          return 'draw';
+          return "draw";
         };
         const updated = updateRatings(ratingA, ratingB, getOutcome());
         ratings[playerA] = updated.ratingA;
@@ -300,16 +300,16 @@ function runBenchmarkSequential(options: CliOptions): BenchmarkResult {
       const progress = ((completedGames / totalGames) * 100).toFixed(1);
 
       // 最長思考時間を計算
-      const maxThinkTime = Math.max(...result.moveHistory.map(m => m.time));
+      const maxThinkTime = Math.max(...result.moveHistory.map((m) => m.time));
 
       writeStatus(
-        `[${totalElapsed}s] ${playerA} vs ${playerB}: Game ${i + 1}/${games} done - ${result.moves}手 ${gameDuration}s (max ${(maxThinkTime / 1000).toFixed(1)}s/手) ${result.reason}`
+        `[${totalElapsed}s] ${playerA} vs ${playerB}: Game ${i + 1}/${games} done - ${result.moves}手 ${gameDuration}s (max ${(maxThinkTime / 1000).toFixed(1)}s/手) ${result.reason}`,
       );
 
       if ((i + 1) % 10 === 0 || i + 1 === games) {
         clearStatus();
         console.log(
-          `  Game ${i + 1}/${games} (${progress}% total) - ${matchupResult.winsA}W-${matchupResult.winsB}L-${matchupResult.draws}D`
+          `  Game ${i + 1}/${games} (${progress}% total) - ${matchupResult.winsA}W-${matchupResult.winsB}L-${matchupResult.draws}D`,
         );
       }
     }
@@ -319,22 +319,22 @@ function runBenchmarkSequential(options: CliOptions): BenchmarkResult {
 
     const stats = calculateStats(
       allGames.filter(
-        g =>
+        (g) =>
           (g.playerA === playerA && g.playerB === playerB) ||
-          (g.playerA === playerB && g.playerB === playerA)
-      )
+          (g.playerA === playerB && g.playerB === playerA),
+      ),
     );
 
     console.log(
-      `  Result: ${matchupResult.winsA}-${matchupResult.winsB}-${matchupResult.draws}`
+      `  Result: ${matchupResult.winsA}-${matchupResult.winsB}-${matchupResult.draws}`,
     );
     console.log(`  Avg moves: ${stats.avgMoves.toFixed(1)}`);
     console.log(`  Avg duration: ${(stats.avgDuration / 1000).toFixed(2)}s`);
     console.log(
-      `  Thinking time (${playerA}): avg=${stats.thinkingTimeA.avg.toFixed(0)}ms, max=${stats.thinkingTimeA.max.toFixed(0)}ms`
+      `  Thinking time (${playerA}): avg=${stats.thinkingTimeA.avg.toFixed(0)}ms, max=${stats.thinkingTimeA.max.toFixed(0)}ms`,
     );
     console.log(
-      `  Thinking time (${playerB}): avg=${stats.thinkingTimeB.avg.toFixed(0)}ms, max=${stats.thinkingTimeB.max.toFixed(0)}ms`
+      `  Thinking time (${playerB}): avg=${stats.thinkingTimeB.avg.toFixed(0)}ms, max=${stats.thinkingTimeB.max.toFixed(0)}ms`,
     );
     console.log();
   }
@@ -354,12 +354,12 @@ function runBenchmarkSequential(options: CliOptions): BenchmarkResult {
 }
 
 async function runBenchmarkParallel(
-  options: CliOptions
+  options: CliOptions,
 ): Promise<BenchmarkResult> {
   const { players, games, verbose, workers: numWorkers } = options;
 
   console.log(`\n=== CPU AI Benchmark (Parallel: ${numWorkers} workers) ===`);
-  console.log(`Players: ${players.join(', ')}`);
+  console.log(`Players: ${players.join(", ")}`);
   console.log(`Games per matchup: ${games}`);
   console.log();
 
@@ -405,7 +405,7 @@ async function runBenchmarkParallel(
     tasks,
     numWorkers,
     verbose,
-    totalGames
+    totalGames,
   );
 
   // 結果を集計
@@ -422,7 +422,7 @@ async function runBenchmarkParallel(
       winsB: 0,
       draws: 0,
       total: games,
-    })
+    }),
   );
 
   const allGames: GameResult[] = [];
@@ -445,20 +445,20 @@ async function runBenchmarkParallel(
     const [playerA, playerB] = matchup;
 
     // 結果を正規化
-    const normalizeWinner = (): 'A' | 'B' | 'draw' => {
-      if (result.winner === 'draw') {
-        return 'draw';
+    const normalizeWinner = (): "A" | "B" | "draw" => {
+      if (result.winner === "draw") {
+        return "draw";
       }
       if (task.isABlack) {
         return result.winner;
       }
-      return result.winner === 'A' ? 'B' : 'A';
+      return result.winner === "A" ? "B" : "A";
     };
     const winner = normalizeWinner();
 
-    if (winner === 'A') {
+    if (winner === "A") {
       matchupResult.winsA++;
-    } else if (winner === 'B') {
+    } else if (winner === "B") {
       matchupResult.winsB++;
     } else {
       matchupResult.draws++;
@@ -467,14 +467,14 @@ async function runBenchmarkParallel(
     const ratingA = ratings[playerA];
     const ratingB = ratings[playerB];
     if (ratingA && ratingB) {
-      const getOutcome = (): 'win' | 'loss' | 'draw' => {
-        if (winner === 'A') {
-          return 'win';
+      const getOutcome = (): "win" | "loss" | "draw" => {
+        if (winner === "A") {
+          return "win";
         }
-        if (winner === 'B') {
-          return 'loss';
+        if (winner === "B") {
+          return "loss";
         }
-        return 'draw';
+        return "draw";
       };
       const updated = updateRatings(ratingA, ratingB, getOutcome());
       ratings[playerA] = updated.ratingA;
@@ -501,23 +501,23 @@ async function runBenchmarkParallel(
 
     const [playerA, playerB] = matchup;
     const matchupGames = allGames.filter(
-      g =>
+      (g) =>
         (g.playerA === playerA && g.playerB === playerB) ||
-        (g.playerA === playerB && g.playerB === playerA)
+        (g.playerA === playerB && g.playerB === playerA),
     );
     const stats = calculateStats(matchupGames);
 
     console.log(`--- ${playerA} vs ${playerB} ---`);
     console.log(
-      `  Result: ${matchupResult.winsA}-${matchupResult.winsB}-${matchupResult.draws}`
+      `  Result: ${matchupResult.winsA}-${matchupResult.winsB}-${matchupResult.draws}`,
     );
     console.log(`  Avg moves: ${stats.avgMoves.toFixed(1)}`);
     console.log(`  Avg duration: ${(stats.avgDuration / 1000).toFixed(2)}s`);
     console.log(
-      `  Thinking time (${playerA}): avg=${stats.thinkingTimeA.avg.toFixed(0)}ms, max=${stats.thinkingTimeA.max.toFixed(0)}ms`
+      `  Thinking time (${playerA}): avg=${stats.thinkingTimeA.avg.toFixed(0)}ms, max=${stats.thinkingTimeA.max.toFixed(0)}ms`,
     );
     console.log(
-      `  Thinking time (${playerB}): avg=${stats.thinkingTimeB.avg.toFixed(0)}ms, max=${stats.thinkingTimeB.max.toFixed(0)}ms`
+      `  Thinking time (${playerB}): avg=${stats.thinkingTimeB.avg.toFixed(0)}ms, max=${stats.thinkingTimeB.max.toFixed(0)}ms`,
     );
   }
 
@@ -539,14 +539,14 @@ function runTasksWithWorkers(
   tasks: GameTask[],
   numWorkers: number,
   verbose: boolean,
-  totalGames: number
+  totalGames: number,
 ): Promise<WorkerResult[]> {
   const results: WorkerResult[] = [];
   const taskQueue = [...tasks];
   let completedGames = 0;
   let lastProgress = 0;
 
-  const workerScript = path.join(__dirname, 'game-worker.ts');
+  const workerScript = path.join(__dirname, "game-worker.ts");
 
   return new Promise((resolve, reject) => {
     let activeWorkers = 0;
@@ -576,14 +576,14 @@ function runTasksWithWorkers(
           verbose,
         },
         execArgv: [
-          '--experimental-strip-types',
-          '--disable-warning=ExperimentalWarning',
-          '--import',
-          path.join(__dirname, 'register-loader.mjs'),
+          "--experimental-strip-types",
+          "--disable-warning=ExperimentalWarning",
+          "--import",
+          path.join(__dirname, "register-loader.mjs"),
         ],
       });
 
-      worker.on('message', (result: WorkerResult) => {
+      worker.on("message", (result: WorkerResult) => {
         results.push(result);
         completedGames++;
 
@@ -592,7 +592,7 @@ function runTasksWithWorkers(
         if (progress > lastProgress) {
           lastProgress = progress;
           console.log(
-            `  Progress: ${completedGames}/${totalGames} (${progress * 10}%)`
+            `  Progress: ${completedGames}/${totalGames} (${progress * 10}%)`,
           );
         }
 
@@ -600,7 +600,7 @@ function runTasksWithWorkers(
         startWorker();
       });
 
-      worker.on('error', err => {
+      worker.on("error", (err) => {
         console.error(`Worker error:`, err);
         activeWorkers--;
         if (!finished) {
@@ -609,7 +609,7 @@ function runTasksWithWorkers(
         }
       });
 
-      worker.on('exit', code => {
+      worker.on("exit", (code) => {
         if (code !== 0 && !finished) {
           console.error(`Worker exited with code ${code}`);
         }
@@ -628,7 +628,7 @@ function printResults(result: BenchmarkResult): void {
   console.log(`\n=== Final Ratings ===`);
 
   const sortedRatings = Object.entries(result.ratings).sort(
-    (a, b) => b[1].rating - a[1].rating
+    (a, b) => b[1].rating - a[1].rating,
   );
 
   for (let i = 0; i < sortedRatings.length; i++) {
@@ -642,7 +642,7 @@ function printResults(result: BenchmarkResult): void {
   console.log(`\n=== Matchup Summary ===`);
   for (const matchup of result.matchups) {
     console.log(
-      `${matchup.playerA} vs ${matchup.playerB}: ${matchup.winsA}-${matchup.winsB}-${matchup.draws}`
+      `${matchup.playerA} vs ${matchup.playerB}: ${matchup.winsA}-${matchup.winsB}-${matchup.draws}`,
     );
   }
 }
@@ -654,10 +654,10 @@ function saveResults(result: BenchmarkResult, options: CliOptions): void {
     fs.mkdirSync(outputDir, { recursive: true });
   }
 
-  const timestamp = result.timestamp.replace(/[:.]/g, '-');
+  const timestamp = result.timestamp.replace(/[:.]/g, "-");
   const filename = `bench-${timestamp}`;
 
-  if (options.format === 'json') {
+  if (options.format === "json") {
     const filepath = path.join(outputDir, `${filename}.json`);
     fs.writeFileSync(filepath, JSON.stringify(result, null, 2));
     console.log(`\nResults saved to: ${filepath}`);
@@ -665,22 +665,22 @@ function saveResults(result: BenchmarkResult, options: CliOptions): void {
     const ratingsPath = path.join(outputDir, `${filename}-ratings.csv`);
     const matchupsPath = path.join(outputDir, `${filename}-matchups.csv`);
 
-    const ratingsHeader = 'player,rating,games,wins,losses,draws,winrate\n';
+    const ratingsHeader = "player,rating,games,wins,losses,draws,winrate\n";
     const ratingsRows = Object.entries(result.ratings)
       .map(([player, r]) => {
         const winRate = r.games > 0 ? (r.wins / r.games) * 100 : 0;
         return `${player},${r.rating.toFixed(1)},${r.games},${r.wins},${r.losses},${r.draws},${winRate.toFixed(1)}`;
       })
-      .join('\n');
+      .join("\n");
     fs.writeFileSync(ratingsPath, ratingsHeader + ratingsRows);
 
-    const matchupsHeader = 'playerA,playerB,winsA,winsB,draws,total\n';
+    const matchupsHeader = "playerA,playerB,winsA,winsB,draws,total\n";
     const matchupsRows = result.matchups
       .map(
-        m =>
-          `${m.playerA},${m.playerB},${m.winsA},${m.winsB},${m.draws},${m.total}`
+        (m) =>
+          `${m.playerA},${m.playerB},${m.winsA},${m.winsB},${m.draws},${m.total}`,
       )
-      .join('\n');
+      .join("\n");
     fs.writeFileSync(matchupsPath, matchupsHeader + matchupsRows);
 
     console.log(`\nResults saved to:`);
@@ -701,7 +701,7 @@ async function main(): Promise<void> {
   saveResults(result, options);
 }
 
-main().catch(err => {
+main().catch((err) => {
   console.error(err);
   process.exit(1);
 });

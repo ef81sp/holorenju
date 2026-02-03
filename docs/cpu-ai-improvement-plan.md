@@ -54,7 +54,7 @@ function evaluatePosition(
   row: number,
   col: number,
   color: StoneColor,
-  context: ThreatContext
+  context: ThreatContext,
 ): number {
   const dominated = canDominateOpponent(board, row, col, color);
   // dominated = 活四や四三を作れる（自分が先に勝てる）
@@ -100,12 +100,12 @@ function evaluatePosition(
 ```typescript
 function getDefenseMultiplier(threatLevel: ThreatLevel): number {
   switch (threatLevel) {
-    case 'openFour':
-    case 'openThree':
+    case "openFour":
+    case "openThree":
       return 1.0; // 必須防御ルールで処理するため係数は不要
-    case 'four':
+    case "four":
       return 0.7; // 止め四への防御
-    case 'three':
+    case "three":
       return 0.5; // 止め三への防御（現状維持）
     default:
       return 0.3;
@@ -125,7 +125,7 @@ function evaluateFour(
   board: BoardState,
   row: number,
   col: number,
-  color: StoneColor
+  color: StoneColor,
 ): number {
   const baseScore = PATTERN_SCORES.FOUR; // 1000
 
@@ -144,7 +144,7 @@ function hasFollowUpThreat(
   board: BoardState,
   row: number,
   col: number,
-  color: StoneColor
+  color: StoneColor,
 ): boolean {
   // 四を打った後の盤面で:
   // 1. 別の四が作れるか（四追い継続）

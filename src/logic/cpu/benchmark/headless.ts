@@ -10,6 +10,7 @@ import {
   DIFFICULTY_PARAMS,
   type CpuDifficulty,
   type DifficultyParams,
+  type RandomSelectionInfo,
 } from "../../../types/cpu.ts";
 import {
   checkDraw,
@@ -19,6 +20,7 @@ import {
   DRAW_MOVE_LIMIT,
 } from "../../renjuRules.ts";
 import { applyMove, countStones } from "../core/boardUtils.ts";
+import { evaluatePosition } from "../evaluation.ts";
 import { getOpeningMove, isOpeningPhase } from "../opening.ts";
 import { findBestMoveIterativeWithTT } from "../search/minimax.ts";
 
@@ -55,6 +57,20 @@ export interface SearchStatsRecord {
 }
 
 /**
+ * ベンチマーク用候補手情報（CandidateMoveの簡略版）
+ */
+export interface CandidateInfo {
+  /** 着手位置 */
+  position: Position;
+  /** 即時評価スコア */
+  score: number;
+  /** 探索スコア */
+  searchScore: number;
+  /** 順位（1始まり） */
+  rank: number;
+}
+
+/**
  * 着手記録（Position を拡張）
  */
 export interface MoveRecord {
@@ -70,6 +86,14 @@ export interface MoveRecord {
   depth?: number;
   /** 探索統計（開局時は undefined） */
   stats?: SearchStatsRecord;
+  /** 選択された手のスコア */
+  score?: number;
+  /** 上位候補手（最大5手） */
+  candidates?: CandidateInfo[];
+  /** 選択された手の順位（1始まり） */
+  selectedRank?: number;
+  /** ランダム選択情報 */
+  randomSelection?: RandomSelectionInfo;
 }
 
 /**
@@ -179,6 +203,11 @@ export function runHeadlessGame(
 
     // 通常の探索
     let stats: SearchStatsRecord | undefined = undefined;
+    let score: number | undefined = undefined;
+    let candidates: CandidateInfo[] | undefined = undefined;
+    let selectedRank: number | undefined = undefined;
+    let randomSelection: RandomSelectionInfo | undefined = undefined;
+
     if (!move) {
       const result = findBestMoveIterativeWithTT(
         board,
@@ -191,6 +220,38 @@ export function runHeadlessGame(
       );
       move = result.position;
       depth = result.completedDepth;
+      ({ score } = result);
+
+      // 候補手情報を記録（最大5手）
+      if (result.candidates && result.candidates.length > 0) {
+        candidates = result.candidates.slice(0, 5).map((c, index) => ({
+          position: c.move,
+          score: evaluatePosition(
+            board,
+            c.move.row,
+            c.move.col,
+            currentColor,
+            params.evaluationOptions,
+          ),
+          searchScore: c.score,
+          rank: index + 1,
+        }));
+
+        // 選択された手の順位を計算
+        selectedRank = candidates.findIndex(
+          (c) => c.position.row === move?.row && c.position.col === move?.col,
+        );
+        selectedRank = selectedRank >= 0 ? selectedRank + 1 : 1;
+      }
+
+      // ランダム選択情報を記録（randomFactorを追加）
+      if (result.randomSelection) {
+        randomSelection = {
+          ...result.randomSelection,
+          randomFactor: params.randomFactor,
+        };
+      }
+
       stats = {
         nodes: result.stats.nodes,
         ttHits: result.stats.ttHits,
@@ -234,6 +295,10 @@ export function runHeadlessGame(
           isOpening,
           depth,
           stats,
+          score,
+          candidates,
+          selectedRank,
+          randomSelection,
         };
         return {
           playerA: playerA.id,
@@ -257,6 +322,10 @@ export function runHeadlessGame(
       isOpening,
       depth,
       stats,
+      score,
+      candidates,
+      selectedRank,
+      randomSelection,
     });
     moveCount++;
 
