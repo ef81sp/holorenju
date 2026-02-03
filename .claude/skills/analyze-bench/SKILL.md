@@ -1,3 +1,8 @@
+---
+name: analyze-bench
+description: ベンチマーク結果を分析して戦術的洞察を提供
+---
+
 # 対局分析スキル
 
 ## 概要
@@ -17,30 +22,30 @@
 
 各着手（MoveRecord）には以下の情報が記録される:
 
-| フィールド       | 型                | 説明                                   |
-| ---------------- | ----------------- | -------------------------------------- |
-| row, col         | number            | 着手位置                               |
-| time             | number            | 思考時間（ms）                         |
-| isOpening        | boolean           | 開局定石かどうか                       |
-| depth            | number            | 到達探索深度                           |
-| score            | number            | 選択された手の探索スコア               |
-| stats            | SearchStatsRecord | 探索統計（nodes, ttHits, etc.）        |
-| candidates       | CandidateMove[]   | 上位5候補手（詳細情報付き）            |
-| selectedRank     | number            | 選択された手の順位                     |
-| randomSelection  | RandomSelectionInfo | ランダム選択情報                     |
-| depthHistory     | DepthResult[]     | 深度別最善手履歴                       |
+| フィールド      | 型                  | 説明                            |
+| --------------- | ------------------- | ------------------------------- |
+| row, col        | number              | 着手位置                        |
+| time            | number              | 思考時間（ms）                  |
+| isOpening       | boolean             | 開局定石かどうか                |
+| depth           | number              | 到達探索深度                    |
+| score           | number              | 選択された手の探索スコア        |
+| stats           | SearchStatsRecord   | 探索統計（nodes, ttHits, etc.） |
+| candidates      | CandidateMove[]     | 上位5候補手（詳細情報付き）     |
+| selectedRank    | number              | 選択された手の順位              |
+| randomSelection | RandomSelectionInfo | ランダム選択情報                |
+| depthHistory    | DepthResult[]       | 深度別最善手履歴                |
 
 ### CandidateMove（候補手）に含まれる詳細情報
 
-| フィールド         | 説明                                       |
-| ------------------ | ------------------------------------------ |
-| position           | 着手位置                                   |
-| score              | 即時評価スコア（内訳の合計）               |
-| searchScore        | 探索スコア（順位の根拠）                   |
-| rank               | 順位（1始まり）                            |
-| breakdown          | スコア内訳（攻撃/防御パターン、ボーナス）  |
-| principalVariation | 予想手順（PV）                             |
-| leafEvaluation     | 探索末端での評価内訳                       |
+| フィールド         | 説明                                      |
+| ------------------ | ----------------------------------------- |
+| position           | 着手位置                                  |
+| score              | 即時評価スコア（内訳の合計）              |
+| searchScore        | 探索スコア（順位の根拠）                  |
+| rank               | 順位（1始まり）                           |
+| breakdown          | スコア内訳（攻撃/防御パターン、ボーナス） |
+| principalVariation | 予想手順（PV）                            |
+| leafEvaluation     | 探索末端での評価内訳                      |
 
 ### ScoreBreakdown（スコア内訳）の構造
 
@@ -75,6 +80,23 @@ leafEvaluation: {
 }
 ```
 
+## ゲームデータ構造
+
+ベンチマークJSONのゲーム構造:
+
+```
+games[]: {
+  playerA: string,        // 難易度名 (beginner, easy, medium, hard)
+  playerB: string,        // 難易度名
+  isABlack: boolean,      // playerAが黒番(先手)かどうか
+  winner: "A" | "B",      // 勝者
+  reason: "five" | "forbidden" | "draw",
+  moves: number,          // 総手数
+  duration: number,       // 対局時間(ms)
+  moveHistory: MoveRecord[]
+}
+```
+
 ## 分析手順
 
 ### 1. ファイル取得
@@ -95,6 +117,7 @@ ls -t bench-results/*.json | head -1
 ```
 
 出力内容:
+
 - レーティング結果
 - マッチアップ結果
 - 先手/後手勝敗表
@@ -108,25 +131,16 @@ ls -t bench-results/*.json | head -1
 以下の追加分析を行う:
 
 ```bash
-# 中断率の確認
-jq -r '
-  [.games[].moveHistory[] | select(.stats) |
-   {interrupted: .stats.interrupted}
-  ] | group_by(.interrupted) |
-  map({key: .[0].interrupted, count: length}) |
-  "中断率: \(([.[] | select(.key == true)] | .[0].count // 0) * 100 / (map(.count) | add))%"
-' "$FILE"
-
 # TTヒット率
 jq -r '
-  [.games[].moveHistory[] | select(.stats)] |
-  "平均TTヒット率: \(([.[].stats.ttHits] | add) * 100 / ([.[].stats.nodes] | add) | floor)%"
+  [.games[].moveHistory[] | select(.stats and .stats.nodes > 0)] |
+  "平均TTヒット率: \(([.[].stats.ttHits] | add) * 100 / ([.[].stats.nodes] | add) | . * 10 | floor / 10)%"
 ' "$FILE"
 
 # Beta cutoff率
 jq -r '
-  [.games[].moveHistory[] | select(.stats)] |
-  "平均Beta cutoff率: \(([.[].stats.betaCutoffs] | add) * 100 / ([.[].stats.nodes] | add) | floor)%"
+  [.games[].moveHistory[] | select(.stats and .stats.nodes > 0)] |
+  "平均Beta cutoff率: \(([.[].stats.betaCutoffs] | add) * 100 / ([.[].stats.nodes] | add) | . * 10 | floor / 10)%"
 ' "$FILE"
 ```
 
@@ -157,24 +171,27 @@ jq -r '
   "ランダム選択による悪手: \($count)回"
 ' "$FILE"
 
+# 難易度別ランダム悪手
+for level in beginner easy medium hard; do
+  jq -r --arg level "$level" '
+    [.games[] |
+     select(.playerA == $level or .playerB == $level) |
+     .moveHistory[] |
+     select(.randomSelection.wasRandom == true) |
+     select(.candidates and (.candidates | length) > 1) |
+     (.candidates[0].searchScore - .score) as $diff |
+     select($diff > 500)
+    ] | length
+  ' "$FILE" | xargs -I {} echo "  $level: {}回"
+done
+
 # 上位手を選ばなかった回数（selectedRank > 1）
 jq -r '
-  [.games[].moveHistory[] |
-   select(.selectedRank and .selectedRank > 1)
-  ] | length as $count |
-  "非最善手選択: \($count)回"
-' "$FILE"
-
-# 深度で最善手が変わった回数（depthHistory確認）
-jq -r '
-  [.games[].moveHistory[] |
-   select(.depthHistory and (.depthHistory | length) > 1) |
-   .depthHistory |
-   [range(1; length) as $i |
-    select(.[$i].position != .[($i-1)].position)
-   ] | length
-  ] | add as $count |
-  "深度変化による最善手変更: \($count)回"
+  [.games[].moveHistory[] | select(.selectedRank)] |
+  group_by(.selectedRank) |
+  map({rank: .[0].selectedRank, count: length}) |
+  sort_by(.rank) |
+  map("  Rank \(.rank): \(.count)回") | .[]
 ' "$FILE"
 
 # 単発四ペナルティが発生した着手
@@ -182,9 +199,17 @@ jq -r '
   [.games[].moveHistory[] |
    select(.candidates) |
    .candidates[] |
-   select(.breakdown.singleFourPenalty > 0)
+   select(.breakdown.singleFourPenalty and .breakdown.singleFourPenalty > 0)
   ] | length as $count |
   "単発四ペナルティ発生: \($count)回"
+' "$FILE"
+
+# 禁手負けのゲーム詳細
+jq -r '
+  .games | to_entries | .[] |
+  select(.value.reason == "forbidden") |
+  .value as $g |
+  "  game \(.key): \($g.playerA)(black=\($g.isABlack)) vs \($g.playerB) - winner: \($g.winner)"
 ' "$FILE"
 ```
 
@@ -262,24 +287,55 @@ jq '.games[0].moveHistory | map(select(.depthHistory and (.depthHistory | length
 `--game <n>` オプションで特定のゲームを詳細分析:
 
 ```bash
-# ゲーム番号nの棋譜を取得
-jq -r ".games[$n]" "$FILE"
+# ゲーム番号nの基本情報
+jq -r ".games[$n] | {playerA, playerB, isABlack, winner, reason, moves}" "$FILE"
 
 # 特定ゲームの全着手の候補手情報
-jq '.games[0].moveHistory | map(select(.candidates)) | map({
-  move: "\(.row),\(.col)",
+jq ".games[$n].moveHistory | map(select(.candidates)) | map({
+  move: \"\(.row),\(.col)\",
   score: .score,
   selectedRank: .selectedRank,
-  topCandidate: .candidates[0] | {pos: "\(.position.row),\(.position.col)", searchScore, score},
+  topCandidate: .candidates[0] | {pos: \"\(.position.row),\(.position.col)\", searchScore, score},
   depthChanges: (.depthHistory | if . then length else 0 end)
-})' "$FILE"
+})" "$FILE"
 ```
 
 出力内容:
+
 - 対局情報（プレイヤー、勝敗、手数）
 - 全着手の詳細（位置、スコア、候補手、内訳）
 - 問題のある着手のハイライト
 - 各着手の予想手順（PV）と末端評価
+
+## 追加分析項目
+
+### ゲーム長・思考時間統計
+
+```bash
+# 平均ゲーム長
+jq -r '
+  [.games[].moves] |
+  "平均手数: \((add / length) | floor), 最短: \(min), 最長: \(max)"
+' "$FILE"
+
+# 難易度別平均思考時間
+for level in beginner easy medium hard; do
+  jq -r --arg level "$level" '
+    [.games[] |
+     (if .isABlack then
+       (if .playerA == $level then [.moveHistory | to_entries | .[] | select(.key % 2 == 0) | .value.time]
+        elif .playerB == $level then [.moveHistory | to_entries | .[] | select(.key % 2 == 1) | .value.time]
+        else [] end)
+      else
+       (if .playerA == $level then [.moveHistory | to_entries | .[] | select(.key % 2 == 1) | .value.time]
+        elif .playerB == $level then [.moveHistory | to_entries | .[] | select(.key % 2 == 0) | .value.time]
+        else [] end)
+      end)
+    ] | flatten |
+    if length > 0 then (add / length | floor) else 0 end
+  ' "$FILE" | xargs -I {} echo "  $level: {}ms"
+done
+```
 
 ## 関連ファイル
 

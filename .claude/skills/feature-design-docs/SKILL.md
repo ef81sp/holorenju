@@ -1,3 +1,8 @@
+---
+name: feature-design-docs
+description: 機能設計ドキュメントの書き方ガイド
+---
+
 # 機能設計ドキュメントの書き方
 
 ## 概要
