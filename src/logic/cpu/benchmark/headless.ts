@@ -4,7 +4,7 @@
  * GUI なしで CPU同士の対局を実行する
  */
 
-import type { BoardState, Position, StoneColor } from "../../../types/game.ts";
+import type { BoardState, Position } from "../../../types/game.ts";
 
 import {
   DIFFICULTY_PARAMS,

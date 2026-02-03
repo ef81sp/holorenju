@@ -148,6 +148,19 @@ function findVCFMoveRecursive(
 
   const fourMoves = findFourMoves(board, color);
 
+  // 最優先: 即座に五連を作れる手を探す
+  for (const move of fourMoves) {
+    const testBoard = copyBoard(board);
+    const testRow = testBoard[move.row];
+    if (testRow) {
+      testRow[move.col] = color;
+    }
+    if (checkFive(testBoard, move.row, move.col, color)) {
+      return move;
+    }
+  }
+
+  // 通常のVCF探索
   for (const move of fourMoves) {
     // 四を作る
     const afterFour = copyBoard(board);
@@ -156,7 +169,7 @@ function findVCFMoveRecursive(
       afterFourRow[move.col] = color;
     }
 
-    // 五連チェック
+    // 五連チェック（上で既にチェック済みなのでスキップ可能だが、念のため残す）
     if (checkFive(afterFour, move.row, move.col, color)) {
       return move;
     }
@@ -218,14 +231,14 @@ export function findFourMoves(
         continue;
       }
 
+      // 五連が作れる場合は最優先で候補に含める
+      if (checkFive(board, row, col, color)) {
+        moves.push({ row, col });
+        continue;
+      }
+
       // 黒の禁手チェック
       if (color === "black") {
-        // 五連が作れる場合は禁手でも候補に含める
-        if (checkFive(board, row, col, "black")) {
-          moves.push({ row, col });
-          continue;
-        }
-
         const forbidden = checkForbiddenMove(board, row, col);
         if (forbidden.isForbidden) {
           continue;

@@ -213,6 +213,41 @@ describe("findVCFMove", () => {
     const move = findVCFMove(board, "black");
     expect(move).not.toBeNull();
   });
+
+  it("五連を作れる手は他のVCF手より優先される", () => {
+    // 白がE7-E8-E9-E10の四連を持ち、E11で五連が作れる状況
+    // E12も四を作れるが、E11（即勝ち）が優先されるべき
+    const board = createBoardWithStones([
+      // 白の縦四連（E列: row 5,6,7,8 = E10,E9,E8,E7）
+      { row: 5, col: 4, color: "white" }, // E10
+      { row: 6, col: 4, color: "white" }, // E9
+      { row: 7, col: 4, color: "white" }, // E8
+      { row: 8, col: 4, color: "white" }, // E7
+      // 黒がE6をブロック
+      { row: 9, col: 4, color: "black" }, // E6
+    ]);
+    const move = findVCFMove(board, "white");
+    expect(move).not.toBeNull();
+    // E11 (row=4, col=4) で五連が作れるのでこれが返されるべき
+    expect(move?.row).toBe(4);
+    expect(move?.col).toBe(4);
+  });
+
+  it("findFourMovesは五連を作る手も含む（白番）", () => {
+    // 白が四連を持つ状態
+    const board = createBoardWithStones([
+      { row: 5, col: 4, color: "white" },
+      { row: 6, col: 4, color: "white" },
+      { row: 7, col: 4, color: "white" },
+      { row: 8, col: 4, color: "white" },
+    ]);
+    const moves = findFourMoves(board, "white");
+    // E11 (row=4) とE6 (row=9) の両方が五連を作る手として含まれるべき
+    const hasE11 = moves.some((m) => m.row === 4 && m.col === 4);
+    const hasE6 = moves.some((m) => m.row === 9 && m.col === 4);
+    expect(hasE11).toBe(true);
+    expect(hasE6).toBe(true);
+  });
 });
 
 describe("countLine（内部関数）", () => {
