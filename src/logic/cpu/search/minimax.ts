@@ -6,9 +6,11 @@
 
 import type { BoardState, Position, StoneColor } from "@/types/game";
 
-import { checkWin } from "@/logic/renjuRules";
+import { checkJumpFour, checkWin } from "@/logic/renjuRules";
 
 import { applyMove, countStones, getOppositeColor } from "../core/boardUtils";
+import { DIRECTION_INDICES, DIRECTIONS } from "../core/constants";
+import { checkEnds, countLine } from "../core/lineAnalysis";
 import {
   DEFAULT_EVAL_OPTIONS,
   detectOpponentThreats,
@@ -88,6 +90,76 @@ const LMR_MIN_DEPTH = 3;
 
 /** LMRによる探索深度の削減量 */
 const LMR_REDUCTION = 1;
+
+/**
+ * 四を作る手かどうかをチェック（LMR除外用）
+ *
+ * 連珠では一手で形勢が激変するため、四を作る手にLMRを適用すると
+ * 重要な手を見逃すリスクがある。この関数で四を作る手を検出し、
+ * LMRから除外する。
+ *
+ * @param board 盤面
+ * @param move 着手位置
+ * @param color 石の色
+ * @returns 四を作る手ならtrue
+ */
+function isTacticalMove(
+  board: BoardState,
+  move: Position,
+  color: "black" | "white",
+): boolean {
+  const row = board[move.row];
+  if (!row) {
+    return false;
+  }
+
+  // 盤面を一時的に変更（copyBoardを避けて高速化）
+  // 候補手の位置は常に空きなので、復元時はnullに戻す
+  row[move.col] = color;
+
+  let isTactical = false;
+
+  // 4方向をチェック
+  for (let i = 0; i < DIRECTIONS.length; i++) {
+    const direction = DIRECTIONS[i];
+    if (!direction) {
+      continue;
+    }
+    const [dr, dc] = direction;
+
+    // 連続四をチェック（count === 4 で片端以上が開いている）
+    const count = countLine(board, move.row, move.col, dr, dc, color);
+    if (count === 4) {
+      const { end1Open, end2Open } = checkEnds(
+        board,
+        move.row,
+        move.col,
+        dr,
+        dc,
+        color,
+      );
+      if (end1Open || end2Open) {
+        isTactical = true;
+        break;
+      }
+    }
+
+    // 跳び四をチェック（連続四でない場合のみ）
+    // DIRECTION_INDICES[i] で 8方向のインデックスに変換
+    const dirIndex = DIRECTION_INDICES[i];
+    if (dirIndex !== undefined && count !== 4) {
+      if (checkJumpFour(board, move.row, move.col, dirIndex, color)) {
+        isTactical = true;
+        break;
+      }
+    }
+  }
+
+  // 盤面を復元（候補手の位置は常に空きだったのでnullに戻す）
+  row[move.col] = null;
+
+  return isTactical;
+}
 
 // =============================================================================
 // Aspiration Windows パラメータ
@@ -759,10 +831,12 @@ export function minimaxWithTT(
 
     // LMR (Late Move Reductions)
     // 後半の候補手は浅く探索し、有望なら再探索
+    // ただし、四を作る手（タクティカルな手）は除外
     const canApplyLMR =
       moveIndex >= LMR_MOVE_THRESHOLD &&
       depth >= LMR_MIN_DEPTH &&
-      bestScore > -PATTERN_SCORES.FIVE + 1000; // 負けが確定していない
+      bestScore > -PATTERN_SCORES.FIVE + 1000 && // 負けが確定していない
+      !isTacticalMove(board, move, currentColor); // 四を作る手は除外
 
     if (canApplyLMR) {
       // 浅い探索
