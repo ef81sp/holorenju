@@ -6,11 +6,9 @@
 
 import type { BoardState, Position, StoneColor } from "@/types/game";
 
-import { checkJumpFour, checkWin } from "@/logic/renjuRules";
+import { checkWin } from "@/logic/renjuRules";
 
-import { applyMove, countStones, getOppositeColor } from "../core/boardUtils";
-import { DIRECTION_INDICES, DIRECTIONS } from "../core/constants";
-import { checkEnds, countLine } from "../core/lineAnalysis";
+import { applyMove, getOppositeColor } from "../core/boardUtils";
 import {
   DEFAULT_EVAL_OPTIONS,
   detectOpponentThreats,
@@ -20,260 +18,52 @@ import {
   type EvaluationOptions,
 } from "../evaluation";
 import {
-  createHistoryTable,
-  createKillerMoves,
   generateMoves,
   generateSortedMoves,
   recordKillerMove,
   updateHistory,
-  type HistoryTable,
-  type KillerMoves,
 } from "../moveGenerator";
-import {
-  globalTT,
-  TranspositionTable,
-  type ScoreType,
-} from "../transpositionTable";
+import { globalTT, type ScoreType } from "../transpositionTable";
 import { computeBoardHash, updateHash } from "../zobrist";
+import {
+  createSearchContext,
+  type SearchContext,
+  type SearchStats,
+} from "./context";
+import {
+  extractPV,
+  type DepthHistoryEntry,
+  type IterativeDeepingResult,
+  type MinimaxResult,
+  type MoveScoreEntry,
+} from "./results";
+import {
+  ASPIRATION_WINDOW,
+  calculateDynamicTimeLimit,
+  DEFAULT_ABSOLUTE_TIME_LIMIT,
+  INFINITY,
+  isTacticalMove,
+  LMR_MIN_DEPTH,
+  LMR_MOVE_THRESHOLD,
+  LMR_REDUCTION,
+} from "./techniques";
 import { findVCFMove } from "./vcf";
 
-/** 無限大の代わりに使う大きな値 */
-const INFINITY = 1000000;
-
-// =============================================================================
-// 動的時間配分
-// =============================================================================
-
-/**
- * 動的時間配分の計算
- *
- * @param baseTimeLimit 基本時間制限（ms）
- * @param board 盤面
- * @param moveCount 候補手の数
- * @returns 調整後の時間制限（ms）
- */
-function calculateDynamicTimeLimit(
-  baseTimeLimit: number,
-  board: BoardState,
-  moveCount: number,
-): number {
-  // 唯一の候補手なら即座に返す
-  if (moveCount <= 1) {
-    return 0;
-  }
-
-  const stones = countStones(board);
-
-  // 序盤（6手以下）: 時間を短縮
-  if (stones <= 6) {
-    return Math.floor(baseTimeLimit * 0.5);
-  }
-
-  // 候補手が少ない（緊急手の可能性）: 時間を短縮
-  if (moveCount <= 3) {
-    return Math.floor(baseTimeLimit * 0.3);
-  }
-
-  // 通常
-  return baseTimeLimit;
-}
-
-// =============================================================================
-// LMR (Late Move Reductions) パラメータ
-// =============================================================================
-
-/** LMRを適用する候補手のインデックス閾値（この値以上のインデックスで適用） */
-const LMR_MOVE_THRESHOLD = 4;
-
-/** LMRを適用する最小探索深度 */
-const LMR_MIN_DEPTH = 3;
-
-/** LMRによる探索深度の削減量 */
-const LMR_REDUCTION = 1;
-
-/**
- * 四を作る手かどうかをチェック（LMR除外用）
- *
- * 連珠では一手で形勢が激変するため、四を作る手にLMRを適用すると
- * 重要な手を見逃すリスクがある。この関数で四を作る手を検出し、
- * LMRから除外する。
- *
- * @param board 盤面
- * @param move 着手位置
- * @param color 石の色
- * @returns 四を作る手ならtrue
- */
-function isTacticalMove(
-  board: BoardState,
-  move: Position,
-  color: "black" | "white",
-): boolean {
-  const row = board[move.row];
-  if (!row) {
-    return false;
-  }
-
-  // 盤面を一時的に変更（copyBoardを避けて高速化）
-  // 候補手の位置は常に空きなので、復元時はnullに戻す
-  row[move.col] = color;
-
-  let isTactical = false;
-
-  // 4方向をチェック
-  for (let i = 0; i < DIRECTIONS.length; i++) {
-    const direction = DIRECTIONS[i];
-    if (!direction) {
-      continue;
-    }
-    const [dr, dc] = direction;
-
-    // 連続四をチェック（count === 4 で片端以上が開いている）
-    const count = countLine(board, move.row, move.col, dr, dc, color);
-    if (count === 4) {
-      const { end1Open, end2Open } = checkEnds(
-        board,
-        move.row,
-        move.col,
-        dr,
-        dc,
-        color,
-      );
-      if (end1Open || end2Open) {
-        isTactical = true;
-        break;
-      }
-    }
-
-    // 跳び四をチェック（連続四でない場合のみ）
-    // DIRECTION_INDICES[i] で 8方向のインデックスに変換
-    const dirIndex = DIRECTION_INDICES[i];
-    if (dirIndex !== undefined && count !== 4) {
-      if (checkJumpFour(board, move.row, move.col, dirIndex, color)) {
-        isTactical = true;
-        break;
-      }
-    }
-  }
-
-  // 盤面を復元（候補手の位置は常に空きだったのでnullに戻す）
-  row[move.col] = null;
-
-  return isTactical;
-}
-
-// =============================================================================
-// Aspiration Windows パラメータ
-// =============================================================================
-
-/** Aspiration Windowの初期幅 */
-const ASPIRATION_WINDOW = 50;
-
-/**
- * 候補手のスコア情報
- */
-export interface MoveScoreEntry {
-  /** 着手位置 */
-  move: Position;
-  /** 評価スコア */
-  score: number;
-  /** Principal Variation（予想手順） */
-  pv?: Position[];
-  /** PV末端の盤面（評価内訳計算用） */
-  pvLeafBoard?: BoardState;
-  /** PV末端での手番（評価内訳計算用） */
-  pvLeafColor?: "black" | "white";
-}
-
-/**
- * PV抽出結果
- */
-export interface PVExtractionResult {
-  /** Principal Variation（予想手順） */
-  pv: Position[];
-  /** PV末端の盤面 */
-  leafBoard: BoardState;
-  /** PV末端での手番 */
-  leafColor: "black" | "white";
-}
-
-/**
- * TranspositionTableからPrincipal Variation（予想手順）を抽出
- *
- * TTに保存されたbestMoveを辿って、予想される手順を復元する
- *
- * @param board 現在の盤面
- * @param startHash 開始盤面のハッシュ
- * @param firstMove 最初の手（候補手）
- * @param color 最初の手番の色
- * @param tt TranspositionTable
- * @param maxLength 最大手数（デフォルト: 10）
- * @returns PV抽出結果（予想手順、末端盤面、末端での手番）
- */
-export function extractPV(
-  board: BoardState,
-  startHash: bigint,
-  firstMove: Position,
-  color: "black" | "white",
-  tt: TranspositionTable,
-  maxLength = 10,
-): PVExtractionResult {
-  const pv: Position[] = [firstMove];
-  let currentBoard = applyMove(board, firstMove, color);
-  let currentHash = updateHash(startHash, firstMove.row, firstMove.col, color);
-  let currentColor: "black" | "white" = getOppositeColor(color);
-
-  // TTエントリを辿ってPVを復元
-  for (let i = 1; i < maxLength; i++) {
-    const entry = tt.probe(currentHash);
-    if (!entry?.bestMove) {
-      break;
-    }
-
-    const move = entry.bestMove;
-
-    // 盤面の有効性チェック
-    if (currentBoard[move.row]?.[move.col] !== null) {
-      break;
-    }
-
-    pv.push(move);
-    currentBoard = applyMove(currentBoard, move, currentColor);
-    currentHash = updateHash(currentHash, move.row, move.col, currentColor);
-    currentColor = getOppositeColor(currentColor);
-  }
-
-  return {
-    pv,
-    leafBoard: currentBoard,
-    leafColor: currentColor,
-  };
-}
-
-/**
- * ランダム選択情報
- */
-export interface RandomSelectionResult {
-  /** ランダム選択が発生したか */
-  wasRandom: boolean;
-  /** 選択された手の元の順位（1始まり） */
-  originalRank: number;
-  /** 選択対象の候補数 */
-  candidateCount: number;
-}
-
-/**
- * Minimax探索結果
- */
-export interface MinimaxResult {
-  /** 最善手の位置 */
-  position: Position;
-  /** 評価スコア */
-  score: number;
-  /** 候補手のスコアリスト（ソート済み） */
-  candidates?: MoveScoreEntry[];
-  /** ランダム選択情報 */
-  randomSelection?: RandomSelectionResult;
-}
+// Re-export types and functions for backward compatibility
+export {
+  createSearchContext,
+  type SearchContext,
+  type SearchStats,
+} from "./context";
+export {
+  extractPV,
+  type DepthHistoryEntry,
+  type IterativeDeepingResult,
+  type MinimaxResult,
+  type MoveScoreEntry,
+  type PVExtractionResult,
+  type RandomSelectionResult,
+} from "./results";
 
 /**
  * 終端条件をチェック
@@ -510,32 +300,6 @@ export function findBestMove(
 }
 
 /**
- * 深度別の最善手情報
- */
-export interface DepthHistoryEntry {
-  /** 探索深度 */
-  depth: number;
-  /** 最善手の位置 */
-  position: Position;
-  /** 評価スコア */
-  score: number;
-}
-
-/**
- * Iterative Deepening結果
- */
-export interface IterativeDeepingResult extends MinimaxResult {
-  /** 実際に完了した探索深度 */
-  completedDepth: number;
-  /** 時間切れで中断したか */
-  interrupted: boolean;
-  /** 経過時間（ミリ秒） */
-  elapsedTime: number;
-  /** 深度別の最善手履歴 */
-  depthHistory?: DepthHistoryEntry[];
-}
-
-/**
  * Iterative Deepeningで最善手を探索
  *
  * 深さ1から始めて、時間制限内で可能な限り深く探索する。
@@ -606,70 +370,13 @@ export function findBestMoveIterative(
 // =============================================================================
 
 /**
- * 探索コンテキスト
- *
- * 探索中に使用するデータ構造を一元管理
+ * Aspiration Windows用オプション
  */
-export interface SearchContext {
-  /** Transposition Table */
-  tt: TranspositionTable;
-  /** History Table */
-  history: HistoryTable;
-  /** Killer Moves */
-  killers: KillerMoves;
-  /** 探索統計 */
-  stats: SearchStats;
-  /** 評価オプション */
-  evaluationOptions: EvaluationOptions;
-  /** 探索開始時刻（時間制限用） */
-  startTime?: number;
-  /** 時間制限（ミリ秒） */
-  timeLimit?: number;
-  /** 時間切れフラグ */
-  timeoutFlag?: boolean;
-  /** ノード数上限 */
-  maxNodes?: number;
-  /** ノード数上限超過フラグ */
-  nodeCountExceeded?: boolean;
-  /** 絶対時間制限（ミリ秒）- これを超えたら強制終了 */
-  absoluteTimeLimit?: number;
-  /** 絶対時間制限超過フラグ */
-  absoluteTimeLimitExceeded?: boolean;
-}
-
-/**
- * 探索統計
- */
-export interface SearchStats {
-  /** 探索ノード数 */
-  nodes: number;
-  /** TTヒット数 */
-  ttHits: number;
-  /** TTカットオフ数 */
-  ttCutoffs: number;
-  /** Beta剪定数 */
-  betaCutoffs: number;
-}
-
-/**
- * SearchContextを作成
- */
-export function createSearchContext(
-  tt: TranspositionTable = globalTT,
-  evaluationOptions: EvaluationOptions = DEFAULT_EVAL_OPTIONS,
-): SearchContext {
-  return {
-    tt,
-    history: createHistoryTable(),
-    killers: createKillerMoves(),
-    stats: {
-      nodes: 0,
-      ttHits: 0,
-      ttCutoffs: 0,
-      betaCutoffs: 0,
-    },
-    evaluationOptions,
-  };
+interface AspirationOptions {
+  /** 前回のスコア（Aspiration Windowsの中心） */
+  previousScore?: number;
+  /** ウィンドウ幅 */
+  windowSize?: number;
 }
 
 /**
@@ -923,16 +630,6 @@ export function minimaxWithTT(
 }
 
 /**
- * Aspiration Windows用オプション
- */
-interface AspirationOptions {
-  /** 前回のスコア（Aspiration Windowsの中心） */
-  previousScore?: number;
-  /** ウィンドウ幅 */
-  windowSize?: number;
-}
-
-/**
  * 最善手を探索（TT統合版）
  *
  * @param board 盤面
@@ -1106,9 +803,6 @@ export function findBestMoveWithTT(
   };
 }
 
-/** デフォルトの絶対時間制限（10秒） */
-const DEFAULT_ABSOLUTE_TIME_LIMIT = 10000;
-
 /**
  * Iterative Deepeningで最善手を探索（TT統合版）
  *
@@ -1185,7 +879,7 @@ export function findBestMoveIterativeWithTT(
 
   // 相手の活四があれば止める（実際には止められないが）
   if (threats.openFours.length > 0) {
-    const defensePos = threats.openFours[0];
+    const [defensePos] = threats.openFours;
     if (defensePos) {
       return {
         position: defensePos,
@@ -1201,7 +895,7 @@ export function findBestMoveIterativeWithTT(
   // 相手の止め四があれば止める（止めないと負け）
   // 四三の場合も、まず四を止める（どうせ負けだが）
   if (threats.fours.length > 0) {
-    const defensePos = threats.fours[0];
+    const [defensePos] = threats.fours;
     if (defensePos) {
       return {
         position: defensePos,
