@@ -391,6 +391,32 @@ function analyzeJumpPatterns(
     hasValidOpenThree: false,
   };
 
+  // まず各方向の跳び四を先にチェックして記録
+  // 同じ方向に跳び四がある場合、連続三を活三としてカウントしないため
+  const jumpFourDirections = new Set<number>();
+
+  for (let i = 0; i < DIRECTION_INDICES.length; i++) {
+    const dirIndex = DIRECTION_INDICES[i];
+    if (dirIndex === undefined) {
+      continue;
+    }
+
+    const direction = DIRECTIONS[i];
+    if (!direction) {
+      continue;
+    }
+    const [dr, dc] = direction;
+    const pattern = analyzeDirection(board, row, col, dr, dc, color);
+
+    // 連続四がなく、跳び四がある場合を記録
+    if (
+      pattern.count !== 4 &&
+      checkJumpFour(board, row, col, dirIndex, color)
+    ) {
+      jumpFourDirections.add(i);
+    }
+  }
+
   for (let i = 0; i < DIRECTION_INDICES.length; i++) {
     const dirIndex = DIRECTION_INDICES[i];
     if (dirIndex === undefined) {
@@ -414,7 +440,9 @@ function analyzeJumpPatterns(
     }
 
     // 連続三をチェック（活三）
-    if (pattern.count === 3) {
+    // ただし、同じ方向に跳び四がある場合は活三としてカウントしない
+    // （その方向は「四を作る」方向であり「活三を作る」方向ではない）
+    if (pattern.count === 3 && !jumpFourDirections.has(i)) {
       if (pattern.end1 === "empty" && pattern.end2 === "empty") {
         if (
           color === "white" ||
@@ -426,10 +454,7 @@ function analyzeJumpPatterns(
     }
 
     // 跳び四をチェック（連続四がない場合のみ）
-    if (
-      pattern.count !== 4 &&
-      checkJumpFour(board, row, col, dirIndex, color)
-    ) {
+    if (jumpFourDirections.has(i)) {
       result.hasFour = true;
       result.jumpFourCount++;
       // 跳び四は両端開の形がないので、常に止め四扱い

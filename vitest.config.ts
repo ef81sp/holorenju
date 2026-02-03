@@ -25,6 +25,7 @@ export default defineConfig({
           include: ["src/**/*.test.ts"],
           exclude: ["src/**/*.browser.test.ts"],
           environment: "node",
+          includeSource: ["src/**/*.ts"],
         },
       },
       {
