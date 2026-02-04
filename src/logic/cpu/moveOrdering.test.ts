@@ -6,7 +6,6 @@ import { describe, expect, it } from "vitest";
 
 import { createEmptyBoard } from "@/logic/renjuRules";
 
-import { placeStonesOnBoard } from "./testUtils";
 import {
   clearHistoryTable,
   createHistoryTable,
@@ -17,6 +16,7 @@ import {
   sortMoves,
   updateHistory,
 } from "./moveOrdering";
+import { placeStonesOnBoard } from "./testUtils";
 
 describe("KillerMoves", () => {
   it("初期状態は空", () => {
@@ -181,7 +181,9 @@ describe("sortMoves", () => {
     });
 
     // Historyスコアが高い手が上位
-    const highHistoryIndex = sorted.findIndex((m) => m.row === 7 && m.col === 6);
+    const highHistoryIndex = sorted.findIndex(
+      (m) => m.row === 7 && m.col === 6,
+    );
     expect(highHistoryIndex).toBe(0);
   });
 

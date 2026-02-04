@@ -10,11 +10,7 @@ import { createEmptyBoard } from "@/logic/renjuRules";
 
 import { DEFAULT_EVAL_OPTIONS, PATTERN_SCORES } from "../evaluation";
 import { placeStonesOnBoard } from "../testUtils";
-
-import {
-  findBestMoveIterative,
-  findBestMoveIterativeWithTT,
-} from "./minimax";
+import { findBestMoveIterative, findBestMoveIterativeWithTT } from "./minimax";
 
 describe("findBestMoveIterative", () => {
   it("深さ1から開始して有効な手を返す", () => {

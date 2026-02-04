@@ -10,7 +10,6 @@ import { createEmptyBoard } from "@/logic/renjuRules";
 
 import { DEFAULT_EVAL_OPTIONS, PATTERN_SCORES } from "../evaluation";
 import { placeStonesOnBoard } from "../testUtils";
-
 import { findBestMoveIterativeWithTT } from "./minimax";
 
 describe("LMR タクティカルムーブ除外", () => {

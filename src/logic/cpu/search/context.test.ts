@@ -6,7 +6,6 @@ import { describe, expect, it } from "vitest";
 
 import { DEFAULT_EVAL_OPTIONS, FULL_EVAL_OPTIONS } from "../evaluation";
 import { TranspositionTable } from "../transpositionTable";
-
 import { createSearchContext } from "./context";
 
 describe("createSearchContext", () => {

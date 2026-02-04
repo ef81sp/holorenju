@@ -7,7 +7,6 @@ import { describe, expect, it } from "vitest";
 import { createEmptyBoard } from "@/logic/renjuRules";
 
 import { placeStonesOnBoard } from "../testUtils";
-
 import {
   analyzeDirection,
   countInDirection,
@@ -102,7 +101,11 @@ describe("getPatternScore", () => {
   });
 
   it("止め四はFOURスコア", () => {
-    const score = getPatternScore({ count: 4, end1: "empty", end2: "opponent" });
+    const score = getPatternScore({
+      count: 4,
+      end1: "empty",
+      end2: "opponent",
+    });
     expect(score).toBe(PATTERN_SCORES.FOUR);
   });
 
@@ -131,7 +134,11 @@ describe("getPatternScore", () => {
   });
 
   it("止め二はTWOスコア", () => {
-    const score = getPatternScore({ count: 2, end1: "empty", end2: "opponent" });
+    const score = getPatternScore({
+      count: 2,
+      end1: "empty",
+      end2: "opponent",
+    });
     expect(score).toBe(PATTERN_SCORES.TWO);
   });
 

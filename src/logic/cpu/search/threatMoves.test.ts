@@ -7,7 +7,6 @@ import { describe, expect, it } from "vitest";
 import { createEmptyBoard } from "@/logic/renjuRules";
 
 import { placeStonesOnBoard } from "../testUtils";
-
 import { createsFour, createsOpenThree } from "./threatMoves";
 
 describe("createsFour", () => {

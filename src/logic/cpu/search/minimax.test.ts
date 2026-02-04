@@ -13,7 +13,6 @@ import { createEmptyBoard } from "@/logic/renjuRules";
 
 import { PATTERN_SCORES } from "../evaluation";
 import { placeStonesOnBoard } from "../testUtils";
-
 import { findBestMove, minimax } from "./minimax";
 
 describe("minimax", () => {
