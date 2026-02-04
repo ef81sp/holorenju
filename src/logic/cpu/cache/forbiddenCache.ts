@@ -5,7 +5,11 @@
  * 同一盤面・同一位置の禁手判定を高速化する。
  */
 
-import type { ForbiddenMoveResult } from "@/types/game";
+import type { BoardState, ForbiddenMoveResult } from "@/types/game";
+
+import { checkForbiddenMove } from "@/logic/renjuRules";
+
+import { computeBoardHash } from "../zobrist";
 
 /**
  * キャッシュエントリ
@@ -26,6 +30,9 @@ const forbiddenCache = new Map<string, CacheEntry>();
 /** キャッシュの最大エントリ数 */
 const MAX_CACHE_SIZE = 100000;
 
+/** 現在の盤面ハッシュ（computeBoardHashの呼び出しを最小化） */
+let currentBoardHash: bigint | null = null;
+
 /**
  * 位置からキーを生成
  */
@@ -40,6 +47,16 @@ function positionKey(row: number, col: number): string {
  */
 export function clearForbiddenCache(): void {
   forbiddenCache.clear();
+  currentBoardHash = null;
+}
+
+/**
+ * 現在の盤面ハッシュを設定
+ *
+ * 探索中に盤面が変わるたびに呼び出す
+ */
+export function setCurrentBoardHash(hash: bigint): void {
+  currentBoardHash = hash;
 }
 
 /**
@@ -94,4 +111,40 @@ export function setForbiddenResult(
  */
 export function getForbiddenCacheSize(): number {
   return forbiddenCache.size;
+}
+
+/**
+ * 禁手判定（キャッシュ付き）
+ *
+ * 同一盤面・同一位置の判定結果をキャッシュして高速化。
+ * Zobristハッシュが提供されていない場合は計算する。
+ *
+ * @param board 盤面
+ * @param row 行
+ * @param col 列
+ * @param hash オプションのZobristハッシュ（提供されない場合は計算）
+ * @returns 禁手判定結果
+ */
+export function checkForbiddenMoveWithCache(
+  board: BoardState,
+  row: number,
+  col: number,
+  hash?: bigint,
+): ForbiddenMoveResult {
+  // ハッシュを取得（提供されていない場合は現在のハッシュを使用、なければ計算）
+  const boardHash = hash ?? currentBoardHash ?? computeBoardHash(board);
+
+  // キャッシュから取得を試みる
+  const cached = getForbiddenResult(boardHash, row, col);
+  if (cached !== undefined) {
+    return cached;
+  }
+
+  // キャッシュミス：通常の禁手判定を実行
+  const result = checkForbiddenMove(board, row, col);
+
+  // 結果をキャッシュに保存
+  setForbiddenResult(boardHash, row, col, result);
+
+  return result;
 }

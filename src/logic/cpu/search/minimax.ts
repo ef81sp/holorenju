@@ -9,6 +9,10 @@ import type { BoardState, Position, StoneColor } from "@/types/game";
 import { checkWin } from "@/logic/renjuRules";
 
 import {
+  clearForbiddenCache,
+  setCurrentBoardHash,
+} from "../cache/forbiddenCache";
+import {
   applyMove,
   applyMoveInPlace,
   getOppositeColor,
@@ -584,6 +588,9 @@ export function minimaxWithTT(
     applyMoveInPlace(board, move, currentColor);
     const newHash = updateHash(hash, move.row, move.col, currentColor);
 
+    // 禁手キャッシュ用に現在の盤面ハッシュを更新
+    setCurrentBoardHash(newHash);
+
     let score = 0;
 
     // LMR (Late Move Reductions)
@@ -636,6 +643,9 @@ export function minimaxWithTT(
 
     // 石を元に戻す（Undo）
     undoMove(board, move);
+
+    // 禁手キャッシュ用に盤面ハッシュを元に戻す
+    setCurrentBoardHash(hash);
 
     if (isMaximizing) {
       if (score > bestScore) {
@@ -882,6 +892,13 @@ export function findBestMoveIterativeWithTT(
 
   // プロファイリングカウンターをリセット
   resetCounters();
+
+  // 禁手判定キャッシュをクリア
+  clearForbiddenCache();
+
+  // 初期盤面のハッシュを計算して設定
+  const initialHash = computeBoardHash(board);
+  setCurrentBoardHash(initialHash);
 
   // 新しい探索開始
   ctx.tt.newGeneration();

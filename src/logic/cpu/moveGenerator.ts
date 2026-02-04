@@ -7,12 +7,9 @@
 import type { BoardState, Position, StoneColor } from "@/types/game";
 
 import { BOARD_SIZE } from "@/constants";
-import {
-  checkFive,
-  checkForbiddenMove,
-  isValidPosition,
-} from "@/logic/renjuRules";
+import { checkFive, isValidPosition } from "@/logic/renjuRules";
 
+import { checkForbiddenMoveWithCache } from "./cache/forbiddenCache";
 import { sortMoves, type MoveOrderingOptions } from "./moveOrdering";
 
 // Re-export from moveOrdering for backward compatibility
@@ -120,8 +117,8 @@ export function generateMoves(
           continue;
         }
 
-        // 禁手チェック
-        const forbiddenResult = checkForbiddenMove(board, row, col);
+        // 禁手チェック（キャッシュ付き）
+        const forbiddenResult = checkForbiddenMoveWithCache(board, row, col);
         if (forbiddenResult.isForbidden) {
           continue;
         }
