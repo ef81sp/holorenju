@@ -219,21 +219,24 @@ export function runHeadlessGame(
 
       // 候補手情報を記録（最大5手、breakdown/PV/leafEvaluation含む）
       if (result.candidates && result.candidates.length > 0) {
+        // ループ外変数をキャプチャ（no-loop-func対策）
+        const capturedBoard = board;
+        const capturedColor = currentColor;
         candidates = result.candidates.slice(0, 5).map((entry, index) => {
           // 即時評価の内訳を計算
           const { score: breakdownScore, breakdown } =
             evaluatePositionWithBreakdown(
-              board,
+              capturedBoard,
               entry.move.row,
               entry.move.col,
-              currentColor,
+              capturedColor,
               params.evaluationOptions,
             );
 
           // 探索末端の評価内訳を計算（PVがある場合）
           const leafEvaluation =
             entry.pvLeafBoard && entry.pvLeafColor
-              ? evaluateBoardWithBreakdown(entry.pvLeafBoard, currentColor)
+              ? evaluateBoardWithBreakdown(entry.pvLeafBoard, capturedColor)
               : undefined;
 
           return {
