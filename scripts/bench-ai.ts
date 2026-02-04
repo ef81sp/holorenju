@@ -187,7 +187,7 @@ function writeStatus(message: string): void {
  * ステータス行をクリアして改行
  */
 function clearStatus(): void {
-  process.stdout.write("\r" + " ".repeat(80) + "\r");
+  process.stdout.write(`\r${" ".repeat(80)}\r`);
 }
 
 function runBenchmarkSequential(options: CliOptions): BenchmarkResult {
