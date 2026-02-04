@@ -1,10 +1,23 @@
 // ミセ手問題のデバッグ用テスト
 import { describe, expect, it } from "vitest";
 
+import type { StoneColor } from "@/types/game";
+
 import { createEmptyBoard, copyBoard } from "@/logic/renjuRules";
 
 import { evaluatePosition } from "./evaluation";
 import { hasVCF, findFourMoves, findVCFMove } from "./search/vcf";
+
+/** セルの値を表示用文字に変換 */
+function cellToChar(cell: StoneColor | null): string {
+  if (cell === "black") {
+    return "● ";
+  }
+  if (cell === "white") {
+    return "○ ";
+  }
+  return ". ";
+}
 
 describe("ミセ手デバッグ", () => {
   it("白が(5,5)に置いた後にVCFがあるか確認", () => {
@@ -36,10 +49,10 @@ describe("ミセ手デバッグ", () => {
     // 盤面表示
     console.log("=== 15手目後の盤面（白の番）===");
     for (let r = 4; r < 11; r++) {
-      let row = String(r).padStart(2) + ": ";
+      let row = `${String(r).padStart(2)}: `;
       for (let c = 3; c < 11; c++) {
         const cell = board[r][c];
-        row += cell === "black" ? "● " : cell === "white" ? "○ " : ". ";
+        row += cellToChar(cell);
       }
       console.log(row);
     }
@@ -51,10 +64,10 @@ describe("ミセ手デバッグ", () => {
 
     console.log("\n=== 白(5,5)を置いた後 ===");
     for (let r = 4; r < 11; r++) {
-      let row = String(r).padStart(2) + ": ";
+      let row = `${String(r).padStart(2)}: `;
       for (let c = 3; c < 11; c++) {
         const cell = boardAfter55[r][c];
-        row += cell === "black" ? "● " : cell === "white" ? "○ " : ". ";
+        row += cellToChar(cell);
       }
       console.log(row);
     }
@@ -83,10 +96,10 @@ describe("ミセ手デバッグ", () => {
       board1[vcfMove.row][vcfMove.col] = "white";
       console.log(`白(${vcfMove.row},${vcfMove.col})後:`);
       for (let r = 4; r < 11; r++) {
-        let row = String(r).padStart(2) + ": ";
+        let row = `${String(r).padStart(2)}: `;
         for (let c = 2; c < 11; c++) {
           const cell = board1[r][c];
-          row += cell === "black" ? "● " : cell === "white" ? "○ " : ". ";
+          row += cellToChar(cell);
         }
         console.log(row);
       }
@@ -97,10 +110,10 @@ describe("ミセ手デバッグ", () => {
       board1[blackDefense.row][blackDefense.col] = "black";
       console.log(`\n黒が(${blackDefense.row},${blackDefense.col})で止めた後:`);
       for (let r = 4; r < 11; r++) {
-        let row = String(r).padStart(2) + ": ";
+        let row = `${String(r).padStart(2)}: `;
         for (let c = 2; c < 11; c++) {
           const cell = board1[r][c];
-          row += cell === "black" ? "● " : cell === "white" ? "○ " : ". ";
+          row += cellToChar(cell);
         }
         console.log(row);
       }
@@ -122,10 +135,10 @@ describe("ミセ手デバッグ", () => {
         board2[7][5] = "white";
         console.log("\n白(7,5)後（縦の四）:");
         for (let r = 4; r < 11; r++) {
-          let row = String(r).padStart(2) + ": ";
+          let row = `${String(r).padStart(2)}: `;
           for (let c = 2; c < 11; c++) {
             const cell = board2[r][c];
-            row += cell === "black" ? "● " : cell === "white" ? "○ " : ". ";
+            row += cellToChar(cell);
           }
           console.log(row);
         }
