@@ -9,9 +9,11 @@ import { createEmptyBoard } from "@/logic/renjuRules";
 import { placeStonesOnBoard } from "../testUtils";
 import {
   applyMove,
+  applyMoveInPlace,
   countStones,
   getOppositeColor,
   selectRandom,
+  undoMove,
 } from "./boardUtils";
 
 describe("getOppositeColor", () => {
@@ -86,5 +88,50 @@ describe("selectRandom", () => {
     expect(selectRandom(array, () => 0.99)).toBe(5);
     // 常に0.5を返すランダム関数 → 中央の要素
     expect(selectRandom(array, () => 0.5)).toBe(3);
+  });
+});
+
+describe("applyMoveInPlace", () => {
+  it("盤面を直接変更する", () => {
+    const board = createEmptyBoard();
+    applyMoveInPlace(board, { row: 7, col: 7 }, "black");
+
+    expect(board[7]?.[7]).toBe("black");
+  });
+
+  it("既存の石を上書きできる", () => {
+    const board = createEmptyBoard();
+    placeStonesOnBoard(board, [{ row: 7, col: 7, color: "black" }]);
+
+    applyMoveInPlace(board, { row: 7, col: 7 }, "white");
+
+    expect(board[7]?.[7]).toBe("white");
+  });
+});
+
+describe("undoMove", () => {
+  it("石を除去する", () => {
+    const board = createEmptyBoard();
+    placeStonesOnBoard(board, [{ row: 7, col: 7, color: "black" }]);
+
+    undoMove(board, { row: 7, col: 7 });
+
+    expect(board[7]?.[7]).toBeNull();
+  });
+
+  it("applyMoveInPlaceと組み合わせて元の状態に戻せる", () => {
+    const board = createEmptyBoard();
+    placeStonesOnBoard(board, [{ row: 7, col: 7, color: "black" }]);
+
+    // 石を追加
+    applyMoveInPlace(board, { row: 7, col: 8 }, "white");
+    expect(board[7]?.[8]).toBe("white");
+    expect(countStones(board)).toBe(2);
+
+    // 石を戻す
+    undoMove(board, { row: 7, col: 8 });
+    expect(board[7]?.[8]).toBeNull();
+    expect(countStones(board)).toBe(1);
+    expect(board[7]?.[7]).toBe("black"); // 元の石は残っている
   });
 });

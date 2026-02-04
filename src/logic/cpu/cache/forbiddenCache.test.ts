@@ -1,5 +1,7 @@
 import { describe, expect, it, beforeEach } from "vitest";
 
+import type { ForbiddenMoveResult } from "@/types/game";
+
 import {
   clearForbiddenCache,
   getForbiddenResult,
@@ -20,7 +22,11 @@ describe("forbiddenCache", () => {
 
     it("保存した結果を取得できる", () => {
       const hash = 12345n;
-      const forbiddenResult = { isForbidden: true, type: "double-three" as const, positions: [{ row: 7, col: 7 }] };
+      const forbiddenResult: ForbiddenMoveResult = {
+        isForbidden: true,
+        type: "double-three",
+        positions: [{ row: 7, col: 7 }],
+      };
 
       setForbiddenResult(hash, 7, 7, forbiddenResult);
       const retrieved = getForbiddenResult(hash, 7, 7);
@@ -30,8 +36,12 @@ describe("forbiddenCache", () => {
 
     it("異なる位置は異なるエントリとして保存される", () => {
       const hash = 12345n;
-      const result1 = { isForbidden: true, type: "double-three" as const, positions: [{ row: 7, col: 7 }] };
-      const result2 = { isForbidden: false, type: null };
+      const result1: ForbiddenMoveResult = {
+        isForbidden: true,
+        type: "double-three",
+        positions: [{ row: 7, col: 7 }],
+      };
+      const result2: ForbiddenMoveResult = { isForbidden: false, type: null };
 
       setForbiddenResult(hash, 7, 7, result1);
       setForbiddenResult(hash, 7, 8, result2);
@@ -43,7 +53,11 @@ describe("forbiddenCache", () => {
     it("同じ位置でもハッシュが異なる場合はキャッシュミス", () => {
       const hash1 = 12345n;
       const hash2 = 54321n;
-      const result = { isForbidden: true, type: "double-four" as const, positions: [{ row: 7, col: 7 }] };
+      const result: ForbiddenMoveResult = {
+        isForbidden: true,
+        type: "double-four",
+        positions: [{ row: 7, col: 7 }],
+      };
 
       setForbiddenResult(hash1, 7, 7, result);
 
@@ -57,7 +71,7 @@ describe("forbiddenCache", () => {
   describe("clearForbiddenCache", () => {
     it("キャッシュをクリアする", () => {
       const hash = 12345n;
-      const result = { isForbidden: false, type: null };
+      const result: ForbiddenMoveResult = { isForbidden: false, type: null };
 
       setForbiddenResult(hash, 7, 7, result);
       expect(getForbiddenCacheSize()).toBe(1);
@@ -72,7 +86,7 @@ describe("forbiddenCache", () => {
   describe("キャッシュサイズ", () => {
     it("エントリ数を正しく返す", () => {
       const hash = 12345n;
-      const result = { isForbidden: false, type: null };
+      const result: ForbiddenMoveResult = { isForbidden: false, type: null };
 
       expect(getForbiddenCacheSize()).toBe(0);
 

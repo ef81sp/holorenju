@@ -8,7 +8,12 @@ import type { BoardState, Position, StoneColor } from "@/types/game";
 
 import { checkWin } from "@/logic/renjuRules";
 
-import { applyMove, getOppositeColor } from "../core/boardUtils";
+import {
+  applyMove,
+  applyMoveInPlace,
+  getOppositeColor,
+  undoMove,
+} from "../core/boardUtils";
 import {
   DEFAULT_EVAL_OPTIONS,
   detectOpponentThreats,
@@ -568,7 +573,15 @@ export function minimaxWithTT(
       continue;
     }
 
-    const newBoard = applyMove(board, move, currentColor);
+    // LMR判定は石を置く前に行う（isTacticalMoveが元の盤面を参照するため）
+    const canApplyLMR =
+      moveIndex >= LMR_MOVE_THRESHOLD &&
+      depth >= LMR_MIN_DEPTH &&
+      bestScore > -PATTERN_SCORES.FIVE + 1000 && // 負けが確定していない
+      !isTacticalMove(board, move, currentColor); // 四を作る手は除外
+
+    // 石を配置（インプレース変更）
+    applyMoveInPlace(board, move, currentColor);
     const newHash = updateHash(hash, move.row, move.col, currentColor);
 
     let score = 0;
@@ -576,16 +589,10 @@ export function minimaxWithTT(
     // LMR (Late Move Reductions)
     // 後半の候補手は浅く探索し、有望なら再探索
     // ただし、四を作る手（タクティカルな手）は除外
-    const canApplyLMR =
-      moveIndex >= LMR_MOVE_THRESHOLD &&
-      depth >= LMR_MIN_DEPTH &&
-      bestScore > -PATTERN_SCORES.FIVE + 1000 && // 負けが確定していない
-      !isTacticalMove(board, move, currentColor); // 四を作る手は除外
-
     if (canApplyLMR) {
       // 浅い探索
       score = minimaxWithTT(
-        newBoard,
+        board,
         newHash,
         depth - 1 - LMR_REDUCTION,
         !isMaximizing,
@@ -601,7 +608,7 @@ export function minimaxWithTT(
 
       if (needsResearch) {
         score = minimaxWithTT(
-          newBoard,
+          board,
           newHash,
           depth - 1,
           !isMaximizing,
@@ -615,7 +622,7 @@ export function minimaxWithTT(
     } else {
       // 通常の探索
       score = minimaxWithTT(
-        newBoard,
+        board,
         newHash,
         depth - 1,
         !isMaximizing,
@@ -626,6 +633,9 @@ export function minimaxWithTT(
         ctx,
       );
     }
+
+    // 石を元に戻す（Undo）
+    undoMove(board, move);
 
     if (isMaximizing) {
       if (score > bestScore) {

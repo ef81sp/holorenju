@@ -53,6 +53,41 @@ export function applyMove(
 }
 
 /**
+ * 盤面に石を配置（インプレース変更）
+ *
+ * 盤面を直接変更するため、探索後に必ずundoMoveを呼ぶこと。
+ *
+ * @param board 盤面（直接変更される）
+ * @param move 配置位置
+ * @param color 石の色
+ */
+export function applyMoveInPlace(
+  board: BoardState,
+  move: Position,
+  color: StoneColor,
+): void {
+  const row = board[move.row];
+  if (row) {
+    row[move.col] = color;
+  }
+}
+
+/**
+ * 盤面から石を除去（インプレース変更）
+ *
+ * applyMoveInPlaceで配置した石を戻すために使用。
+ *
+ * @param board 盤面（直接変更される）
+ * @param move 除去位置
+ */
+export function undoMove(board: BoardState, move: Position): void {
+  const row = board[move.row];
+  if (row) {
+    row[move.col] = null;
+  }
+}
+
+/**
  * 配列からランダムに1要素を選択
  *
  * @param array 選択対象の配列
