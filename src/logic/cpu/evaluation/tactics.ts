@@ -4,7 +4,7 @@
  * 禁手追い込み・ミセ手・フクミ手などの戦術的評価
  */
 
-import type { BoardState } from "@/types/game";
+import type { BoardState, Position } from "@/types/game";
 
 import {
   checkForbiddenMove,
@@ -21,6 +21,34 @@ import { hasVCF } from "../search/vcf";
 import { analyzeDirection } from "./directionAnalysis";
 import { analyzeJumpPatterns } from "./jumpPatterns";
 import { PATTERN_SCORES } from "./patternScores";
+
+/**
+ * 達四点の禁手追い込みをチェック
+ * 片方だけが禁手なら勝ち確定（黒は禁手でない方を止めるしかないが、白は禁手側から四を作れる）
+ */
+function checkForbiddenTrap(
+  board: BoardState,
+  straightFourPoints: Position[],
+): number {
+  if (straightFourPoints.length !== 2) {
+    return 0;
+  }
+  const [pos0, pos1] = straightFourPoints;
+  if (!pos0 || !pos1) {
+    return 0;
+  }
+
+  const forbidden0 = checkForbiddenMove(board, pos0.row, pos0.col);
+  const forbidden1 = checkForbiddenMove(board, pos1.row, pos1.col);
+
+  if (
+    (forbidden0.isForbidden && !forbidden1.isForbidden) ||
+    (!forbidden0.isForbidden && forbidden1.isForbidden)
+  ) {
+    return PATTERN_SCORES.FORBIDDEN_TRAP_STRONG;
+  }
+  return 0;
+}
 
 /**
  * 四に対する防御位置を取得
@@ -171,21 +199,7 @@ export function evaluateForbiddenTrap(
           dirIndex,
           "white",
         );
-        if (straightFourPoints.length === 2) {
-          const pos0 = straightFourPoints[0];
-          const pos1 = straightFourPoints[1];
-          if (pos0 && pos1) {
-            const forbidden0 = checkForbiddenMove(board, pos0.row, pos0.col);
-            const forbidden1 = checkForbiddenMove(board, pos1.row, pos1.col);
-            // 片方だけが禁手なら勝ち確定（黒は禁手でない方を止めるしかないが、白は禁手側から四を作れる）
-            if (
-              (forbidden0.isForbidden && !forbidden1.isForbidden) ||
-              (!forbidden0.isForbidden && forbidden1.isForbidden)
-            ) {
-              trapScore += PATTERN_SCORES.FORBIDDEN_TRAP_STRONG;
-            }
-          }
-        }
+        trapScore += checkForbiddenTrap(board, straightFourPoints);
       }
     }
 
