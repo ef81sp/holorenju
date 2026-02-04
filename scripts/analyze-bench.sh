@@ -31,6 +31,16 @@ jq -r '
 ' "$FILE"
 echo ""
 
+# レーティング差
+echo "【レーティング差（隣接難易度間）】"
+jq -r '
+  .ratings | to_entries | sort_by(-.value.rating) |
+  . as $sorted |
+  range(0; length - 1) |
+  "\($sorted[.].key) - \($sorted[. + 1].key): \(($sorted[.].value.rating - $sorted[. + 1].value.rating) | floor)"
+' "$FILE" | while read line; do echo "  $line"; done
+echo ""
+
 # マッチアップ（リスト形式）
 echo "【マッチアップ結果】"
 jq -r '
@@ -189,5 +199,111 @@ for player in $(jq -r '.options.players[]' "$FILE"); do
   ' "$FILE" 2>/dev/null || echo "(データなし)"
 done
 echo ""
+
+# 難易度別探索効率
+echo "【難易度別探索効率】"
+for player in $(jq -r '.options.players[]' "$FILE"); do
+  jq -r --arg p "$player" '
+    [.games[] |
+      . as $g |
+      range(0; .moveHistory | length) as $i |
+      .moveHistory[$i] |
+      select(.stats and .stats.nodes > 0) |
+      select(
+        (if ($i % 2 == 0) == $g.isABlack then $g.playerA else $g.playerB end) == $p
+      )
+    ] |
+    if length > 0 then
+      "  \($p): TTヒット \(([.[].stats.ttHits] | add) * 100 / ([.[].stats.nodes] | add) | . * 10 | floor / 10)%, Beta cutoff \(([.[].stats.betaCutoffs] | add) * 100 / ([.[].stats.nodes] | add) | . * 10 | floor / 10)%"
+    else
+      "  \($p): (データなし)"
+    end
+  ' "$FILE"
+done
+echo ""
+
+# 難易度別選択順位分布
+echo "【難易度別選択順位分布】"
+for player in $(jq -r '.options.players[]' "$FILE"); do
+  echo -n "  $player: "
+  jq -r --arg p "$player" '
+    [.games[] |
+      . as $g |
+      range(0; .moveHistory | length) as $i |
+      .moveHistory[$i] |
+      select(
+        (if ($i % 2 == 0) == $g.isABlack then $g.playerA else $g.playerB end) == $p
+      ) |
+      select(.candidates) |
+      {selectedRank: (.selectedRank // "out")}
+    ] |
+    if length > 0 then
+      group_by(.selectedRank) |
+      map(
+        if .[0].selectedRank == "out" then "候補外:\(length)"
+        else "R\(.[0].selectedRank):\(length)"
+        end
+      ) |
+      join(", ")
+    else
+      "(データなし)"
+    end
+  ' "$FILE"
+done
+echo ""
+
+# 難易度別ランダム選択による悪手
+echo "【難易度別ランダム悪手（スコア差500以上）】"
+for player in $(jq -r '.options.players[]' "$FILE"); do
+  count=$(jq -r --arg p "$player" '
+    [.games[] |
+      . as $g |
+      range(0; .moveHistory | length) as $i |
+      .moveHistory[$i] |
+      select(.randomSelection.wasRandom == true) |
+      select(.candidates and (.candidates | length) > 1) |
+      select((.candidates[0].searchScore - .score) > 500) |
+      select(
+        (if ($i % 2 == 0) == $g.isABlack then $g.playerA else $g.playerB end) == $p
+      )
+    ] | length
+  ' "$FILE")
+  echo "  $player: ${count}回"
+done
+echo ""
+
+# 難易度別禁手負け
+echo "【難易度別禁手負け】"
+for player in $(jq -r '.options.players[]' "$FILE"); do
+  count=$(jq -r --arg p "$player" '
+    [.games[] |
+      select(.reason == "forbidden") |
+      select(
+        (.isABlack and .playerA == $p and .winner == "B") or
+        ((.isABlack | not) and .playerB == $p and .winner == "A")
+      )
+    ] | length
+  ' "$FILE")
+  echo "  $player: ${count}回"
+done
+echo ""
+
+# 禁手負け詳細
+FORBIDDEN_COUNT=$(jq '[.games[] | select(.reason == "forbidden")] | length' "$FILE")
+if [ "$FORBIDDEN_COUNT" -gt 0 ]; then
+  echo "【禁手負けの詳細】"
+  jq -r '
+    .games | to_entries | .[] |
+    select(.value.reason == "forbidden") |
+    .value as $g |
+    (if $g.isABlack then
+      (if $g.winner == "B" then $g.playerA else $g.playerB end)
+    else
+      (if $g.winner == "A" then $g.playerB else $g.playerA end)
+    end) as $loser |
+    "  game \(.key): \($loser)が禁手負け (\($g.playerA) vs \($g.playerB), \($g.moves)手)"
+  ' "$FILE"
+  echo ""
+fi
 
 echo "=== 分析完了 ==="

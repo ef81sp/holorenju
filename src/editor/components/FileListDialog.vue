@@ -152,7 +152,6 @@ const handleDeleteConfirm = async (): Promise<void> => {
   } catch (error) {
     console.error("ファイルの削除に失敗しました:", error);
 
-     
     alert(`ファイルの削除に失敗しました: ${(error as Error).message}`);
   } finally {
     isDeleting.value = false;

@@ -86,7 +86,7 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
       enableMultiThreat: false,
       enableCounterFour: false,
       enableVCT: false,
-      enableMandatoryDefense: false, // 防御を甘くして弱体化
+      enableMandatoryDefense: true, // 致命的ミスを減らす
       enableSingleFourPenalty: false,
       singleFourPenaltyMultiplier: 1.0, // ペナルティなし（四を打ちがち）
       enableMiseThreat: false,
@@ -94,9 +94,9 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
     scoreThreshold: 400, // beginnerより狭い範囲（致命的ミスを減らす）
   },
   medium: {
-    depth: 4,
+    depth: 3,
     timeLimit: 4000,
-    randomFactor: 0.25, // hardとの差を広げる
+    randomFactor: 0.15, // hardとの差を広げる
     maxNodes: 200000,
     evaluationOptions: {
       enableFukumi: false, // 探索効率を優先
@@ -104,7 +104,7 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
       enableForbiddenTrap: false,
       enableMultiThreat: true,
       enableCounterFour: true,
-      enableVCT: false,
+      enableVCT: true,
       enableMandatoryDefense: true,
       enableSingleFourPenalty: true,
       singleFourPenaltyMultiplier: 0.3, // 70%減点に緩和（単独四にも価値を認める）
@@ -113,7 +113,7 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
     scoreThreshold: 200, // 現状維持
   },
   hard: {
-    depth: 5,
+    depth: 4,
     timeLimit: 8000,
     randomFactor: 0,
     maxNodes: 600000,

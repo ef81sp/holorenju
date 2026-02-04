@@ -250,11 +250,11 @@ export function runHeadlessGame(
           };
         });
 
-        // 選択された手の順位を計算
-        selectedRank = candidates.findIndex(
+        // 選択された手の順位を計算（上位5候補内の場合のみ）
+        const rankIndex = candidates.findIndex(
           (c) => c.position.row === move?.row && c.position.col === move?.col,
         );
-        selectedRank = selectedRank >= 0 ? selectedRank + 1 : 1;
+        selectedRank = rankIndex >= 0 ? rankIndex + 1 : undefined;
       }
 
       // ランダム選択情報を記録（randomFactorを追加）
