@@ -4,7 +4,7 @@
  * 相手の活四・止め四・活三などの脅威を検出
  */
 
-import type { BoardState } from "@/types/game";
+import type { BoardState, Position } from "@/types/game";
 
 import {
   checkJumpFour,
@@ -18,6 +18,16 @@ import { analyzeDirection } from "./directionAnalysis";
 import { isValidConsecutiveThree, isValidJumpThree } from "./jumpPatterns";
 import { type ThreatInfo, PATTERN_SCORES } from "./patternScores";
 import { createsFourThree } from "./tactics";
+
+/**
+ * 配列に重複しない位置を追加するヘルパー関数
+ */
+function addUniquePosition(positions: Position[], pos: Position): void {
+  const exists = positions.some((p) => p.row === pos.row && p.col === pos.col);
+  if (!exists) {
+    positions.push(pos);
+  }
+}
 
 /**
  * 複数方向に脅威（活三以上）がある数をカウント
@@ -296,14 +306,7 @@ export function detectOpponentThreats(
             opponentColor,
           );
           for (const pos of defensePositions) {
-            // 重複チェック
-            if (
-              !result.openFours.some(
-                (p) => p.row === pos.row && p.col === pos.col,
-              )
-            ) {
-              result.openFours.push(pos);
-            }
+            addUniquePosition(result.openFours, pos);
           }
         }
 
@@ -323,12 +326,7 @@ export function detectOpponentThreats(
             opponentColor,
           );
           for (const pos of defensePositions) {
-            // 重複チェック
-            if (
-              !result.fours.some((p) => p.row === pos.row && p.col === pos.col)
-            ) {
-              result.fours.push(pos);
-            }
+            addUniquePosition(result.fours, pos);
           }
         }
 
@@ -349,14 +347,7 @@ export function detectOpponentThreats(
             opponentColor,
           );
           if (gapPos) {
-            // 重複チェック
-            if (
-              !result.fours.some(
-                (p) => p.row === gapPos.row && p.col === gapPos.col,
-              )
-            ) {
-              result.fours.push(gapPos);
-            }
+            addUniquePosition(result.fours, gapPos);
           }
         }
 
@@ -376,14 +367,7 @@ export function detectOpponentThreats(
             opponentColor,
           );
           for (const pos of defensePositions) {
-            // 重複チェック
-            if (
-              !result.openThrees.some(
-                (p) => p.row === pos.row && p.col === pos.col,
-              )
-            ) {
-              result.openThrees.push(pos);
-            }
+            addUniquePosition(result.openThrees, pos);
           }
         }
 
@@ -398,14 +382,7 @@ export function detectOpponentThreats(
             opponentColor,
           );
           for (const pos of jumpDefensePositions) {
-            // 重複チェック
-            if (
-              !result.openThrees.some(
-                (p) => p.row === pos.row && p.col === pos.col,
-              )
-            ) {
-              result.openThrees.push(pos);
-            }
+            addUniquePosition(result.openThrees, pos);
           }
         }
       }
