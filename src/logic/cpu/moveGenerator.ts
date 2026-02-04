@@ -64,15 +64,30 @@ export function isNearExistingStone(
 }
 
 /**
+ * 候補手生成オプション
+ */
+export interface GenerateMovesOptions {
+  /**
+   * 禁手判定をスキップするか
+   *
+   * trueの場合、黒番でも禁手判定を行わない。
+   * 探索時に遅延禁手判定を行う場合に使用。
+   */
+  skipForbiddenCheck?: boolean;
+}
+
+/**
  * 候補手を生成
  *
  * @param board 盤面
  * @param color 手番の色
+ * @param options オプション
  * @returns 候補手の配列
  */
 export function generateMoves(
   board: BoardState,
   color: StoneColor,
+  options: GenerateMovesOptions = {},
 ): Position[] {
   const moves: Position[] = [];
   const isBlack = color === "black";
@@ -109,8 +124,8 @@ export function generateMoves(
         continue;
       }
 
-      // 黒番の場合は禁手チェック
-      if (isBlack) {
+      // 黒番の場合は禁手チェック（スキップオプションがない場合）
+      if (isBlack && !options.skipForbiddenCheck) {
         // 五連が作れる場合は禁手でも候補に含める
         if (checkFive(board, row, col, "black")) {
           moves.push({ row, col });
@@ -131,6 +146,12 @@ export function generateMoves(
   return moves;
 }
 
+/** ソート済み候補手生成オプション（MoveOrderingOptions + GenerateMovesOptions） */
+export interface SortedMovesOptions extends MoveOrderingOptions {
+  /** 禁手判定をスキップするか */
+  skipForbiddenCheck?: boolean;
+}
+
 /**
  * ソート済み候補手を生成
  *
@@ -144,9 +165,11 @@ export function generateMoves(
 export function generateSortedMoves(
   board: BoardState,
   color: StoneColor,
-  options: MoveOrderingOptions = {},
+  options: SortedMovesOptions = {},
 ): Position[] {
-  const moves = generateMoves(board, color);
+  const moves = generateMoves(board, color, {
+    skipForbiddenCheck: options.skipForbiddenCheck,
+  });
 
   // 候補が0〜1個の場合はソート不要
   if (moves.length <= 1) {

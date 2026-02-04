@@ -6,9 +6,10 @@
 
 import type { BoardState, Position, StoneColor } from "@/types/game";
 
-import { checkWin } from "@/logic/renjuRules";
+import { checkFive, checkWin } from "@/logic/renjuRules";
 
 import {
+  checkForbiddenMoveWithCache,
   clearForbiddenCache,
   setCurrentBoardHash,
 } from "../cache/forbiddenCache";
@@ -542,6 +543,7 @@ export function minimaxWithTT(
   // ソート済み候補手生成（Lazy Evaluation: 深さに応じて動的調整）
   // depth 1では静的評価をスキップ（リーフノードはevaluateBoardで評価されるため不要）
   // 深いノードほど評価数を減らして高速化
+  // 黒番の禁手判定は遅延評価（実際に探索する手のみチェック）
   const useStaticEval = depth > 1;
   const getMaxStaticEvalCount = (d: number): number => {
     if (d >= 4) {
@@ -553,6 +555,7 @@ export function minimaxWithTT(
     return 8;
   };
   const maxStaticEvalCount = getMaxStaticEvalCount(depth);
+  const isBlackTurn = currentColor === "black";
   const moves = generateSortedMoves(board, currentColor, {
     ttMove,
     killers: ctx.killers,
@@ -561,6 +564,8 @@ export function minimaxWithTT(
     useStaticEval,
     evaluationOptions: ctx.evaluationOptions,
     maxStaticEvalCount,
+    // 黒番の禁手判定を遅延（Alpha-Beta枝刈りで探索されない手はチェック不要）
+    skipForbiddenCheck: isBlackTurn,
   });
 
   if (moves.length === 0) {
@@ -575,6 +580,23 @@ export function minimaxWithTT(
     const move = moves[moveIndex];
     if (!move) {
       continue;
+    }
+
+    // 遅延禁手判定（黒番の場合）
+    // Alpha-Beta枝刈りで探索されない手は禁手チェック不要なため、ここで判定
+    if (isBlackTurn) {
+      // 五連が作れる場合は禁手でも打てる
+      if (!checkFive(board, move.row, move.col, "black")) {
+        const forbiddenResult = checkForbiddenMoveWithCache(
+          board,
+          move.row,
+          move.col,
+          hash,
+        );
+        if (forbiddenResult.isForbidden) {
+          continue; // 禁手はスキップ
+        }
+      }
     }
 
     // LMR判定は石を置く前に行う（isTacticalMoveが元の盤面を参照するため）
