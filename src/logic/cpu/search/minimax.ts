@@ -200,6 +200,7 @@ export function minimax(
  * @param color 手番の色
  * @param depth 探索深度
  * @param randomFactor ランダム要素（0-1）
+ * @param scoreThreshold ランダム選択時の許容スコア差
  * @returns 最善手と評価スコア
  */
 export function findBestMove(
@@ -207,6 +208,7 @@ export function findBestMove(
   color: "black" | "white",
   depth: number,
   randomFactor = 0,
+  scoreThreshold = 200,
 ): MinimaxResult {
   const moves = generateMoves(board, color);
 
@@ -266,9 +268,8 @@ export function findBestMove(
     Math.random() < randomFactor &&
     moveScores.length > 1
   ) {
-    // スコア差ベースでランダム選択範囲を制限（ベストから200点以内）
+    // スコア差ベースでランダム選択範囲を制限（ベストからscoreThreshold点以内）
     const bestScore = moveScores[0]?.score ?? 0;
-    const scoreThreshold = 200;
     const validMoves = moveScores.filter(
       (m) => m.score >= bestScore - scoreThreshold,
     );
@@ -310,6 +311,7 @@ export function findBestMove(
  * @param maxDepth 最大探索深度
  * @param timeLimit 時間制限（ミリ秒）
  * @param randomFactor ランダム要素（0-1）
+ * @param scoreThreshold ランダム選択時の許容スコア差
  * @returns 最善手と探索情報
  */
 export function findBestMoveIterative(
@@ -318,11 +320,12 @@ export function findBestMoveIterative(
   maxDepth: number,
   timeLimit: number,
   randomFactor = 0,
+  scoreThreshold = 200,
 ): IterativeDeepingResult {
   const startTime = performance.now();
 
   // 初期結果（深さ1で必ず結果を得る）
-  let bestResult = findBestMove(board, color, 1, randomFactor);
+  let bestResult = findBestMove(board, color, 1, randomFactor, scoreThreshold);
   let completedDepth = 1;
   let interrupted = false;
 
@@ -339,7 +342,13 @@ export function findBestMoveIterative(
     }
 
     // 深さdで探索
-    const result = findBestMove(board, color, depth, randomFactor);
+    const result = findBestMove(
+      board,
+      color,
+      depth,
+      randomFactor,
+      scoreThreshold,
+    );
 
     // 探索完了後の時間チェック
     const currentTime = performance.now() - startTime;
@@ -418,10 +427,7 @@ export function minimaxWithTT(
 
   // 時間制限チェック（一定ノード数ごと）
   // 毎回チェックするとオーバーヘッドが大きいため、一定間隔でチェック
-  if (
-    ctx.startTime !== undefined &&
-    (ctx.stats.nodes & 0x3) === 0 // 4ノードごとにチェック（ビット演算で高速化）
-  ) {
+  if (ctx.startTime !== undefined && ctx.stats.nodes % 4 === 0) {
     const elapsed = performance.now() - ctx.startTime;
     // 通常の時間制限チェック
     if (!ctx.timeoutFlag && ctx.timeLimit !== undefined) {
@@ -506,15 +512,28 @@ export function minimaxWithTT(
     return score;
   }
 
-  // ソート済み候補手生成（Lazy Evaluation: 上位8手のみ静的評価）
+  // ソート済み候補手生成（Lazy Evaluation: 深さに応じて動的調整）
+  // depth 1では静的評価をスキップ（リーフノードはevaluateBoardで評価されるため不要）
+  // 深いノードほど評価数を減らして高速化
+  const useStaticEval = depth > 1;
+  const getMaxStaticEvalCount = (d: number): number => {
+    if (d >= 4) {
+      return 3;
+    }
+    if (d >= 3) {
+      return 5;
+    }
+    return 8;
+  };
+  const maxStaticEvalCount = getMaxStaticEvalCount(depth);
   const moves = generateSortedMoves(board, currentColor, {
     ttMove,
     killers: ctx.killers,
     depth,
     history: ctx.history,
-    useStaticEval: true,
+    useStaticEval,
     evaluationOptions: ctx.evaluationOptions,
-    maxStaticEvalCount: 8,
+    maxStaticEvalCount,
   });
 
   if (moves.length === 0) {
@@ -638,6 +657,8 @@ export function minimaxWithTT(
  * @param randomFactor ランダム要素（0-1）
  * @param ctx 探索コンテキスト（省略時は新規作成）
  * @param aspiration Aspiration Windowsオプション
+ * @param restrictedMoves 候補手の制限
+ * @param scoreThreshold ランダム選択時の許容スコア差
  * @returns 最善手と評価スコア
  */
 export function findBestMoveWithTT(
@@ -648,6 +669,7 @@ export function findBestMoveWithTT(
   ctx: SearchContext = createSearchContext(),
   aspiration?: AspirationOptions,
   restrictedMoves?: Position[],
+  scoreThreshold = 200,
 ): MinimaxResult & { ctx: SearchContext } {
   const hash = computeBoardHash(board);
 
@@ -753,9 +775,8 @@ export function findBestMoveWithTT(
     Math.random() < randomFactor &&
     moveScores.length > 1
   ) {
-    // スコア差ベースでランダム選択範囲を制限（ベストから200点以内）
+    // スコア差ベースでランダム選択範囲を制限（ベストからscoreThreshold点以内）
     const bestScore = moveScores[0]?.score ?? 0;
-    const scoreThreshold = 200;
     const validMoves = moveScores.filter(
       (m) => m.score >= bestScore - scoreThreshold,
     );
@@ -814,6 +835,7 @@ export function findBestMoveWithTT(
  * @param evaluationOptions 評価オプション
  * @param maxNodes ノード数上限（省略時は無制限）
  * @param absoluteTimeLimit 絶対時間制限（ミリ秒、デフォルト: 10000ms）
+ * @param scoreThreshold ランダム選択時の許容スコア差（デフォルト: 200）
  * @returns 最善手と探索情報
  */
 export function findBestMoveIterativeWithTT(
@@ -825,6 +847,7 @@ export function findBestMoveIterativeWithTT(
   evaluationOptions: EvaluationOptions = DEFAULT_EVAL_OPTIONS,
   maxNodes?: number,
   absoluteTimeLimit: number = DEFAULT_ABSOLUTE_TIME_LIMIT,
+  scoreThreshold = 200,
 ): IterativeDeepingResult & { stats: SearchStats } {
   const startTime = performance.now();
   const ctx = createSearchContext(globalTT, evaluationOptions);
@@ -992,6 +1015,7 @@ export function findBestMoveIterativeWithTT(
     ctx,
     undefined,
     moves,
+    scoreThreshold,
   );
   let completedDepth = 1;
   let interrupted = false;
@@ -1037,6 +1061,7 @@ export function findBestMoveIterativeWithTT(
         windowSize: ASPIRATION_WINDOW,
       },
       moves,
+      scoreThreshold,
     );
 
     // 探索中にタイムアウト、ノード数上限、または絶対時間制限に達した場合は前の結果を使用
@@ -1062,6 +1087,7 @@ export function findBestMoveIterativeWithTT(
         ctx,
         undefined,
         moves,
+        scoreThreshold,
       );
 
       // 再探索中にタイムアウト、ノード数上限、または絶対時間制限に達した場合
