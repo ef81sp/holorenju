@@ -14,6 +14,7 @@ import {
   incrementBoardCopies,
   incrementForbiddenCheckCalls,
 } from "@/logic/cpu/profiling/counters";
+import { updateHash } from "@/logic/cpu/zobrist";
 
 // =============================================================================
 // 引き分けルール
@@ -37,11 +38,25 @@ export function checkDraw(moveCount: number): boolean {
 /**
  * 禁手判定の再帰的コンテキスト
  * - inProgress: 現在判定中の点のSet（循環参照検出用）
- * - cache: 計算済みの禁手判定結果のキャッシュ
+ * - cache: 計算済みの禁手判定結果のキャッシュ（ローカル）
+ * - globalGet/globalSet: グローバルキャッシュへのアクセス関数（依存性注入）
+ * - boardHash: 現在の盤面のZobristハッシュ（グローバルキャッシュ用）
  */
 interface ForbiddenCheckContext {
   inProgress: Set<string>;
   cache: Map<string, ForbiddenMoveResult>;
+  globalGet?: (
+    hash: bigint,
+    row: number,
+    col: number,
+  ) => ForbiddenMoveResult | undefined;
+  globalSet?: (
+    hash: bigint,
+    row: number,
+    col: number,
+    result: ForbiddenMoveResult,
+  ) => void;
+  boardHash?: bigint;
 }
 
 /** 位置をキー文字列に変換 */
@@ -564,22 +579,48 @@ export function checkJumpThree(
  * 達四点（三を達四にできる点）のいずれかが禁点でなければ、三として有効
  * すべての達四点が禁点なら「ウソの三」として無効
  *
+ * 重要: 達四点の禁手判定は「元の位置（三三を作る位置）に石がある状態」で行う。
+ * これにより、元の石との組み合わせで発生する禁手も正しく検出できる。
+ *
  * @param board 盤面
  * @param straightFourPoints 達四点の配列
  * @param context 再帰的判定コンテキスト
+ * @param originalRow 元の三三判定位置の行
+ * @param originalCol 元の三三判定位置の列
  * @returns 三が有効ならtrue
  */
 function isValidThree(
   board: BoardState,
   straightFourPoints: Position[],
   context: ForbiddenCheckContext,
+  originalRow: number,
+  originalCol: number,
 ): boolean {
   // 達四点がなければ無効
   if (straightFourPoints.length === 0) {
     return false;
   }
 
+  // 元の位置に黒石を仮に置く（達四点チェックのため）
+  const rowArray = board[originalRow];
+  const originalValue = rowArray?.[originalCol] ?? null;
+  if (rowArray) {
+    rowArray[originalCol] = "black";
+  }
+
+  // boardHashを差分更新（黒石を追加）
+  const savedHash = context.boardHash;
+  if (context.boardHash !== undefined) {
+    context.boardHash = updateHash(
+      context.boardHash,
+      originalRow,
+      originalCol,
+      "black",
+    );
+  }
+
   // いずれかの達四点が禁点でなければ有効
+  let hasValidPoint = false;
   for (const pos of straightFourPoints) {
     const result = checkForbiddenMoveRecursive(
       board,
@@ -588,12 +629,18 @@ function isValidThree(
       context,
     );
     if (!result.isForbidden) {
-      return true;
+      hasValidPoint = true;
+      break;
     }
   }
 
-  // すべての達四点が禁点なら無効（ウソの三）
-  return false;
+  // 元に戻す（Undo）
+  if (rowArray) {
+    rowArray[originalCol] = originalValue;
+  }
+  context.boardHash = savedHash;
+
+  return hasValidPoint;
 }
 
 /**
@@ -658,7 +705,7 @@ function checkDoubleThree(
   // ウソの三を除外して有効な三をカウント
   let validThreeCount = 0;
   for (const three of threes) {
-    if (isValidThree(board, three.straightFourPoints, context)) {
+    if (isValidThree(board, three.straightFourPoints, context, row, col)) {
       validThreeCount++;
     }
   }
@@ -668,6 +715,9 @@ function checkDoubleThree(
 
 /**
  * 再帰的な禁手判定（循環参照検出付き）
+ *
+ * グローバルキャッシュ → ローカルキャッシュの順でチェックし、
+ * 計算結果は両方のキャッシュに保存する。
  *
  * @param board 盤面
  * @param row 行
@@ -688,10 +738,20 @@ function checkForbiddenMoveRecursive(
     return { isForbidden: false, type: null };
   }
 
-  // キャッシュ確認
-  const cached = context.cache.get(key);
-  if (cached) {
-    return cached;
+  // ローカルキャッシュ確認（再帰呼び出し中の同一位置を高速に検出）
+  const localCached = context.cache.get(key);
+  if (localCached) {
+    return localCached;
+  }
+
+  // グローバルキャッシュ確認（盤面ハッシュが必要）
+  if (context.globalGet && context.boardHash !== undefined) {
+    const globalCached = context.globalGet(context.boardHash, row, col);
+    if (globalCached !== undefined) {
+      // ローカルキャッシュにも保存
+      context.cache.set(key, globalCached);
+      return globalCached;
+    }
   }
 
   // 判定中としてマーク
@@ -703,8 +763,13 @@ function checkForbiddenMoveRecursive(
   // 判定完了
   context.inProgress.delete(key);
 
-  // キャッシュに保存
+  // ローカルキャッシュに保存
   context.cache.set(key, result);
+
+  // グローバルキャッシュにも保存
+  if (context.globalSet && context.boardHash !== undefined) {
+    context.globalSet(context.boardHash, row, col, result);
+  }
 
   return result;
 }
@@ -932,6 +997,56 @@ export function checkForbiddenMove(
   const context: ForbiddenCheckContext = {
     inProgress: new Set(),
     cache: new Map(),
+  };
+
+  return checkForbiddenMoveRecursive(board, row, col, context);
+}
+
+/**
+ * グローバルキャッシュを活用した禁手判定のオプション
+ */
+export interface ForbiddenCheckOptions {
+  /** グローバルキャッシュからの取得関数 */
+  globalGet: (
+    hash: bigint,
+    row: number,
+    col: number,
+  ) => ForbiddenMoveResult | undefined;
+  /** グローバルキャッシュへの保存関数 */
+  globalSet: (
+    hash: bigint,
+    row: number,
+    col: number,
+    result: ForbiddenMoveResult,
+  ) => void;
+  /** 現在の盤面のZobristハッシュ */
+  boardHash: bigint;
+}
+
+/**
+ * 禁じ手判定（グローバルキャッシュ活用版）
+ *
+ * グローバルキャッシュ（Zobristハッシュベース）を活用することで、
+ * 再帰的な禁手判定でも同一盤面・同一位置の判定結果を再利用できる。
+ *
+ * @returns 禁じ手判定の結果
+ */
+export function checkForbiddenMoveWithContext(
+  board: BoardState,
+  row: number,
+  col: number,
+  options: ForbiddenCheckOptions,
+): ForbiddenMoveResult {
+  // プロファイリング: 禁手判定回数をカウント
+  incrementForbiddenCheckCalls();
+
+  // グローバルキャッシュへのアクセス関数を含むコンテキストを作成
+  const context: ForbiddenCheckContext = {
+    inProgress: new Set(),
+    cache: new Map(),
+    globalGet: options.globalGet,
+    globalSet: options.globalSet,
+    boardHash: options.boardHash,
   };
 
   return checkForbiddenMoveRecursive(board, row, col, context);

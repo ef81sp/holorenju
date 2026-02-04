@@ -7,7 +7,7 @@
 
 import type { BoardState, ForbiddenMoveResult } from "@/types/game";
 
-import { checkForbiddenMove } from "@/logic/renjuRules";
+import { checkForbiddenMoveWithContext } from "@/logic/renjuRules";
 
 import { computeBoardHash } from "../zobrist";
 
@@ -117,7 +117,8 @@ export function getForbiddenCacheSize(): number {
  * 禁手判定（キャッシュ付き）
  *
  * 同一盤面・同一位置の判定結果をキャッシュして高速化。
- * Zobristハッシュが提供されていない場合は計算する。
+ * グローバルキャッシュを依存性注入することで、再帰的な禁手判定
+ * （isValidThree → checkForbiddenMoveRecursive）でもキャッシュを活用できる。
  *
  * @param board 盤面
  * @param row 行
@@ -140,10 +141,16 @@ export function checkForbiddenMoveWithCache(
     return cached;
   }
 
-  // キャッシュミス：通常の禁手判定を実行
-  const result = checkForbiddenMove(board, row, col);
+  // キャッシュミス：グローバルキャッシュを注入して禁手判定を実行
+  // 再帰呼び出し（isValidThree）でもグローバルキャッシュを活用できる
+  const result = checkForbiddenMoveWithContext(board, row, col, {
+    globalGet: getForbiddenResult,
+    globalSet: setForbiddenResult,
+    boardHash,
+  });
 
-  // 結果をキャッシュに保存
+  // トップレベルの結果もキャッシュに保存
+  // （checkForbiddenMoveWithContext内でも保存されるが、念のため）
   setForbiddenResult(boardHash, row, col, result);
 
   return result;

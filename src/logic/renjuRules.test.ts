@@ -4,6 +4,7 @@ import {
   checkDraw,
   checkFive,
   checkForbiddenMove,
+  checkForbiddenMoveWithContext,
   checkJumpFour,
   checkJumpThree,
   checkWin,
@@ -1183,5 +1184,147 @@ describe("checkJumpThree 色パラメータ", () => {
     // 同様に (6,6) でも誤検出しない
     const result2 = checkJumpThree(board, 6, 6, 3, "white");
     expect(result2).toBe(false);
+  });
+});
+
+describe("checkForbiddenMoveWithContext（グローバルキャッシュ活用版）", () => {
+  // テスト用のキャッシュヘルパーを作成
+  type ForbiddenMoveType = "double-three" | "double-four" | "overline" | null;
+  interface TestForbiddenResult {
+    isForbidden: boolean;
+    type: ForbiddenMoveType;
+    positions?: { row: number; col: number }[];
+  }
+
+  function createTestCache() {
+    const cache = new Map<string, TestForbiddenResult>();
+    return {
+      cache,
+      get: (hash: bigint, row: number, col: number) => {
+        const key = `${hash}:${row},${col}`;
+        return cache.get(key);
+      },
+      set: (
+        hash: bigint,
+        row: number,
+        col: number,
+        result: TestForbiddenResult,
+      ) => {
+        const key = `${hash}:${row},${col}`;
+        cache.set(key, result);
+      },
+    };
+  }
+
+  it("checkForbiddenMoveと同じ結果を返す（禁手なし）", () => {
+    const board = createEmptyBoard();
+    board[7][7] = "black";
+    board[7][8] = "black";
+
+    const { get: globalGet, set: globalSet } = createTestCache();
+
+    const result = checkForbiddenMoveWithContext(board, 7, 6, {
+      globalGet,
+      globalSet,
+      boardHash: 12345n,
+    });
+    const expected = checkForbiddenMove(board, 7, 6);
+
+    expect(result.isForbidden).toBe(expected.isForbidden);
+    expect(result.type).toBe(expected.type);
+  });
+
+  it("checkForbiddenMoveと同じ結果を返す（三三）", () => {
+    const board = createEmptyBoard();
+    // 三三パターンを作成
+    // ・・○○○・・
+    // ・・・●・・・
+    // ・・・●・・・
+    // ○●●★●●○
+    // ・・・●・・・
+    // ・・・●・・・
+    // ・・○○○・・
+    board[5][7] = "black";
+    board[6][7] = "black";
+    board[7][5] = "black";
+    board[7][6] = "black";
+    board[7][8] = "black";
+    board[7][9] = "black";
+    board[8][7] = "black";
+    board[9][7] = "black";
+
+    const { get: globalGet, set: globalSet } = createTestCache();
+
+    const result = checkForbiddenMoveWithContext(board, 7, 7, {
+      globalGet,
+      globalSet,
+      boardHash: 12345n,
+    });
+    const expected = checkForbiddenMove(board, 7, 7);
+
+    expect(result.isForbidden).toBe(expected.isForbidden);
+    expect(result.type).toBe(expected.type);
+  });
+
+  it("グローバルキャッシュに結果を保存する", () => {
+    const board = createEmptyBoard();
+    board[7][7] = "black";
+
+    const { get: globalGet, set: globalSet } = createTestCache();
+
+    checkForbiddenMoveWithContext(board, 7, 8, {
+      globalGet,
+      globalSet,
+      boardHash: 12345n,
+    });
+
+    // キャッシュに保存されたか確認
+    const cached = globalGet(12345n, 7, 8);
+    expect(cached).toBeDefined();
+    expect(cached?.isForbidden).toBe(false);
+  });
+
+  it("グローバルキャッシュからヒットする", () => {
+    const board = createEmptyBoard();
+    board[7][7] = "black";
+
+    let getCalled = 0;
+
+    const { cache: globalCache } = createTestCache();
+    const globalGet = (hash: bigint, row: number, col: number) => {
+      getCalled++;
+      const key = `${hash}:${row},${col}`;
+      return globalCache.get(key);
+    };
+    const globalSet = (
+      hash: bigint,
+      row: number,
+      col: number,
+      result: TestForbiddenResult,
+    ) => {
+      const key = `${hash}:${row},${col}`;
+      globalCache.set(key, result);
+    };
+
+    // 1回目の呼び出し
+    checkForbiddenMoveWithContext(board, 7, 8, {
+      globalGet,
+      globalSet,
+      boardHash: 12345n,
+    });
+
+    expect(getCalled).toBe(1); // 最初のgetで1回
+
+    // 2回目の呼び出し（キャッシュヒット）
+    const result = checkForbiddenMoveWithContext(board, 7, 8, {
+      globalGet,
+      globalSet,
+      boardHash: 12345n,
+    });
+
+    expect(getCalled).toBe(2); // 2回目のgetで+1
+    // キャッシュヒット時はcheckForbiddenMoveWithContext内部では
+    // setは呼ばれない（ヒットしたらそのまま返す）
+    expect(result.isForbidden).toBe(false);
   });
 });
