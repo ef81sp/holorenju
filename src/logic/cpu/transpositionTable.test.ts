@@ -7,7 +7,7 @@ import { describe, expect, it, beforeEach } from "vitest";
 import { TranspositionTable, type ScoreType } from "./transpositionTable";
 
 describe("TranspositionTable", () => {
-  let tt: TranspositionTable;
+  let tt: TranspositionTable = new TranspositionTable(100);
 
   beforeEach(() => {
     tt = new TranspositionTable(100);

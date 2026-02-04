@@ -9,7 +9,7 @@ import { describe, expect, it } from "vitest";
 import { checkForbiddenMove, createEmptyBoard } from "@/logic/renjuRules";
 
 import { evaluatePosition, evaluateStonePatterns } from "../evaluation";
-import { createBoardWithStones, placeStonesOnBoard } from "../testUtils";
+import { createBoardWithStones } from "../testUtils";
 import { PATTERN_SCORES } from "./patternScores";
 
 describe("四三ボーナス", () => {

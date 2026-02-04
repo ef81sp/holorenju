@@ -10,7 +10,6 @@ import { createEmptyBoard } from "@/logic/renjuRules";
 
 import { detectOpponentThreats, evaluatePosition } from "../evaluation";
 import { placeStonesOnBoard } from "../testUtils";
-import { PATTERN_SCORES } from "./patternScores";
 
 describe("detectOpponentThreats - ミセ手", () => {
   it("次に四三が作れる位置を検出する", () => {

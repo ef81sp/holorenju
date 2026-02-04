@@ -19,7 +19,7 @@ import {
   evaluateStonePatterns,
   PATTERN_SCORES,
 } from "./evaluation";
-import { createBoardWithStones, placeStonesOnBoard } from "./testUtils";
+import { placeStonesOnBoard } from "./testUtils";
 
 describe("evaluateStonePatterns", () => {
   it("単独の石は0スコア", () => {
