@@ -9,7 +9,6 @@ import { createEmptyBoard } from "@/logic/renjuRules";
 import { placeStonesOnBoard } from "../testUtils";
 import { TranspositionTable } from "../transpositionTable";
 import { computeBoardHash } from "../zobrist";
-
 import { extractPV } from "./results";
 
 describe("extractPV", () => {
@@ -39,7 +38,7 @@ describe("extractPV", () => {
     const board1 = createEmptyBoard();
     placeStonesOnBoard(board1, [{ row: 7, col: 7, color: "black" }]);
     const hash2 = computeBoardHash(board1);
-    tt.store(hash2, 5, 100, "exact", { row: 7, col: 8 });
+    tt.store(hash2, 5, 100, "EXACT", { row: 7, col: 8 });
 
     // 3手目のTTエントリを設定: (7,6)に黒
     const board2 = createEmptyBoard();
@@ -48,7 +47,7 @@ describe("extractPV", () => {
       { row: 7, col: 8, color: "white" },
     ]);
     const hash3 = computeBoardHash(board2);
-    tt.store(hash3, 4, 50, "exact", { row: 7, col: 6 });
+    tt.store(hash3, 4, 50, "EXACT", { row: 7, col: 6 });
 
     const result = extractPV(board, hash1, firstMove, "black", tt);
 
@@ -73,7 +72,7 @@ describe("extractPV", () => {
       { row: 7, col: 7, color: "black" },
     ]);
     const hash2 = computeBoardHash(board1);
-    tt.store(hash2, 5, 100, "exact", { row: 7, col: 8 }); // 既に石がある
+    tt.store(hash2, 5, 100, "EXACT", { row: 7, col: 8 }); // 既に石がある
 
     const result = extractPV(board, hash, firstMove, "black", tt);
 
@@ -82,7 +81,7 @@ describe("extractPV", () => {
   });
 
   it("maxLengthで制限", () => {
-    const board = createEmptyBoard();
+    const _board = createEmptyBoard();
     const tt = new TranspositionTable(1000);
 
     // 多くのTTエントリを設定
@@ -90,7 +89,7 @@ describe("extractPV", () => {
     for (let i = 0; i < 20; i++) {
       const hash = computeBoardHash(currentBoard);
       const move = { row: 7, col: i };
-      tt.store(hash, 10, 100, "exact", move);
+      tt.store(hash, 10, 100, "EXACT", move);
       placeStonesOnBoard(currentBoard, [
         { row: 7, col: i, color: i % 2 === 0 ? "black" : "white" },
       ]);

@@ -4,6 +4,8 @@ import {
   checkDraw,
   checkFive,
   checkForbiddenMove,
+  checkJumpFour,
+  checkJumpThree,
   checkWin,
   copyBoard,
   createEmptyBoard,
