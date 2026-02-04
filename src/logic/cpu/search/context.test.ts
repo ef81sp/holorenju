@@ -20,6 +20,10 @@ describe("createSearchContext", () => {
       ttHits: 0,
       ttCutoffs: 0,
       betaCutoffs: 0,
+      forbiddenCheckCalls: 0,
+      boardCopies: 0,
+      threatDetectionCalls: 0,
+      evaluationCalls: 0,
     });
     expect(ctx.evaluationOptions).toEqual(DEFAULT_EVAL_OPTIONS);
   });

@@ -60,6 +60,14 @@ export interface SearchStatsRecord {
   completedDepth: number;
   /** 中断されたか */
   interrupted: boolean;
+  /** 禁手判定回数 */
+  forbiddenCheckCalls: number;
+  /** 盤面コピー回数 */
+  boardCopies: number;
+  /** 脅威検出回数 */
+  threatDetectionCalls: number;
+  /** 評価関数呼び出し回数 */
+  evaluationCalls: number;
 }
 
 /**
@@ -280,6 +288,10 @@ export function runHeadlessGame(
         maxDepth: params.depth,
         completedDepth: result.completedDepth,
         interrupted: result.interrupted,
+        forbiddenCheckCalls: result.stats.forbiddenCheckCalls,
+        boardCopies: result.stats.boardCopies,
+        threatDetectionCalls: result.stats.threatDetectionCalls,
+        evaluationCalls: result.stats.evaluationCalls,
       };
     }
 

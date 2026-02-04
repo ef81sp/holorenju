@@ -222,6 +222,39 @@ for player in $(jq -r '.options.players[]' "$FILE"); do
 done
 echo ""
 
+# 難易度別詳細プロファイリング
+echo "【難易度別詳細プロファイリング】"
+for player in $(jq -r '.options.players[]' "$FILE"); do
+  echo "  --- $player ---"
+  jq -r --arg p "$player" '
+    [.games[] |
+      . as $g |
+      range(0; .moveHistory | length) as $i |
+      .moveHistory[$i] |
+      select(.stats and .stats.nodes > 0) |
+      select(
+        (if ($i % 2 == 0) == $g.isABlack then $g.playerA else $g.playerB end) == $p
+      )
+    ] |
+    if length > 0 then
+      (
+        ([.[].stats.forbiddenCheckCalls // 0] | add) as $forbidden |
+        ([.[].stats.boardCopies // 0] | add) as $copies |
+        ([.[].stats.threatDetectionCalls // 0] | add) as $threats |
+        ([.[].stats.evaluationCalls // 0] | add) as $evals |
+        ([.[].stats.nodes] | add) as $nodes |
+        "    禁手判定: \($forbidden) (ノード比: \(if $nodes > 0 then ($forbidden * 10 / $nodes | floor / 10) else 0 end))",
+        "    盤面コピー: \($copies) (ノード比: \(if $nodes > 0 then ($copies * 10 / $nodes | floor / 10) else 0 end))",
+        "    脅威検出: \($threats) (ノード比: \(if $nodes > 0 then ($threats * 10 / $nodes | floor / 10) else 0 end))",
+        "    評価関数: \($evals) (ノード比: \(if $nodes > 0 then ($evals * 10 / $nodes | floor / 10) else 0 end))"
+      )
+    else
+      "    (データなし)"
+    end
+  ' "$FILE" 2>/dev/null || echo "    (データなし)"
+done
+echo ""
+
 # 難易度別選択順位分布
 echo "【難易度別選択順位分布】"
 for player in $(jq -r '.options.players[]' "$FILE"); do

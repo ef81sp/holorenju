@@ -6,6 +6,7 @@
 
 import type { BoardState, StoneColor } from "@/types/game";
 
+import { incrementEvaluationCalls } from "@/logic/cpu/profiling/counters";
 import { checkFive, copyBoard } from "@/logic/renjuRules";
 
 import { DIRECTIONS } from "../core/constants";
@@ -187,6 +188,9 @@ export function evaluatePosition(
   color: StoneColor,
   options: EvaluationOptions = DEFAULT_EVAL_OPTIONS,
 ): number {
+  // プロファイリング: 評価関数呼び出し回数をカウント
+  incrementEvaluationCalls();
+
   if (color === null) {
     return 0;
   }

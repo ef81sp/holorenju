@@ -23,6 +23,7 @@ import {
   recordKillerMove,
   updateHistory,
 } from "../moveGenerator";
+import { getCounters, resetCounters } from "../profiling/counters";
 import { globalTT, type ScoreType } from "../transpositionTable";
 import { computeBoardHash, updateHash } from "../zobrist";
 import {
@@ -64,6 +65,23 @@ export {
   type PVExtractionResult,
   type RandomSelectionResult,
 } from "./results";
+
+/**
+ * プロファイリングカウンターの値をSearchStatsにマージ
+ *
+ * @param stats 探索統計
+ * @returns カウンター値がマージされた統計
+ */
+function mergeProfilingCounters(stats: SearchStats): SearchStats {
+  const counters = getCounters();
+  return {
+    ...stats,
+    forbiddenCheckCalls: counters.forbiddenCheckCalls,
+    boardCopies: counters.boardCopies,
+    threatDetectionCalls: counters.threatDetectionCalls,
+    evaluationCalls: counters.evaluationCalls,
+  };
+}
 
 /**
  * 終端条件をチェック
@@ -852,6 +870,9 @@ export function findBestMoveIterativeWithTT(
   const startTime = performance.now();
   const ctx = createSearchContext(globalTT, evaluationOptions);
 
+  // プロファイリングカウンターをリセット
+  resetCounters();
+
   // 新しい探索開始
   ctx.tt.newGeneration();
 
@@ -879,7 +900,7 @@ export function findBestMoveIterativeWithTT(
       completedDepth: 0,
       interrupted: true,
       elapsedTime: performance.now() - startTime,
-      stats: ctx.stats,
+      stats: mergeProfilingCounters(ctx.stats),
     };
   }
 
@@ -892,7 +913,7 @@ export function findBestMoveIterativeWithTT(
       completedDepth: 0,
       interrupted: false,
       elapsedTime: performance.now() - startTime,
-      stats: ctx.stats,
+      stats: mergeProfilingCounters(ctx.stats),
     };
   }
 
@@ -910,7 +931,7 @@ export function findBestMoveIterativeWithTT(
         completedDepth: 0,
         interrupted: false,
         elapsedTime: performance.now() - startTime,
-        stats: ctx.stats,
+        stats: mergeProfilingCounters(ctx.stats),
       };
     }
   }
@@ -926,7 +947,7 @@ export function findBestMoveIterativeWithTT(
         completedDepth: 0,
         interrupted: false,
         elapsedTime: performance.now() - startTime,
-        stats: ctx.stats,
+        stats: mergeProfilingCounters(ctx.stats),
       };
     }
   }
@@ -998,7 +1019,7 @@ export function findBestMoveIterativeWithTT(
       completedDepth: 0,
       interrupted: false,
       elapsedTime: performance.now() - startTime,
-      stats: ctx.stats,
+      stats: mergeProfilingCounters(ctx.stats),
     };
   }
 
@@ -1129,6 +1150,6 @@ export function findBestMoveIterativeWithTT(
     interrupted,
     elapsedTime: performance.now() - startTime,
     depthHistory,
-    stats: ctx.stats,
+    stats: mergeProfilingCounters(ctx.stats),
   };
 }

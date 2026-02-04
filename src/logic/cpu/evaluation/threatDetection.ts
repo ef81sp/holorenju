@@ -6,6 +6,7 @@
 
 import type { BoardState, Position } from "@/types/game";
 
+import { incrementThreatDetectionCalls } from "@/logic/cpu/profiling/counters";
 import {
   checkJumpFour,
   checkJumpThree,
@@ -259,6 +260,9 @@ export function detectOpponentThreats(
   board: BoardState,
   opponentColor: "black" | "white",
 ): ThreatInfo {
+  // プロファイリング: 脅威検出回数をカウント
+  incrementThreatDetectionCalls();
+
   const result: ThreatInfo = {
     openFours: [],
     fours: [],

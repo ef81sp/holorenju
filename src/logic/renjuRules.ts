@@ -10,6 +10,11 @@ import type {
   StoneColor,
 } from "@/types/game";
 
+import {
+  incrementBoardCopies,
+  incrementForbiddenCheckCalls,
+} from "@/logic/cpu/profiling/counters";
+
 // =============================================================================
 // 引き分けルール
 // =============================================================================
@@ -894,6 +899,9 @@ export function checkForbiddenMove(
   row: number,
   col: number,
 ): ForbiddenMoveResult {
+  // プロファイリング: 禁手判定回数をカウント
+  incrementForbiddenCheckCalls();
+
   // 新しいコンテキストを作成して再帰的判定を開始
   const context: ForbiddenCheckContext = {
     inProgress: new Set(),
@@ -1001,5 +1009,7 @@ export function createEmptyBoard(): BoardState {
  * @returns コピーされた盤面状態
  */
 export function copyBoard(board: BoardState): BoardState {
+  // プロファイリング: 盤面コピー回数をカウント
+  incrementBoardCopies();
   return board.map((row: StoneColor[]) => [...row]);
 }

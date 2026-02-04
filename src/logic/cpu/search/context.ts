@@ -25,6 +25,14 @@ export interface SearchStats {
   ttCutoffs: number;
   /** Beta剪定数 */
   betaCutoffs: number;
+  /** 禁手判定回数 */
+  forbiddenCheckCalls: number;
+  /** 盤面コピー回数 */
+  boardCopies: number;
+  /** 脅威検出回数 */
+  threatDetectionCalls: number;
+  /** 評価関数呼び出し回数 */
+  evaluationCalls: number;
 }
 
 /**
@@ -75,6 +83,10 @@ export function createSearchContext(
       ttHits: 0,
       ttCutoffs: 0,
       betaCutoffs: 0,
+      forbiddenCheckCalls: 0,
+      boardCopies: 0,
+      threatDetectionCalls: 0,
+      evaluationCalls: 0,
     },
     evaluationOptions,
   };
