@@ -189,33 +189,38 @@ function checkOpenPattern(
     return { open3: false, open4: false, four: false };
   }
 
-  // 仮想的に石を置く
-  const testBoard = board.map((r: StoneColor[]) => [...r]);
-  const testRow = testBoard[row];
-  if (testRow) {
-    testRow[col] = color;
+  // 仮想的に石を置く（Undo方式: 盤面コピーなし）
+  const boardRow = board[row];
+  const originalValue = boardRow?.[col];
+  if (boardRow) {
+    boardRow[col] = color;
   }
 
   // 両方向の連続数と端の状態をチェック
   let count1 = 0;
   let r1 = row + dir1.dr;
   let c1 = col + dir1.dc;
-  while (isValidPosition(r1, c1) && testBoard[r1]?.[c1] === color) {
+  while (isValidPosition(r1, c1) && board[r1]?.[c1] === color) {
     count1++;
     r1 += dir1.dr;
     c1 += dir1.dc;
   }
-  const end1Open = isValidPosition(r1, c1) && testBoard[r1]?.[c1] === null;
+  const end1Open = isValidPosition(r1, c1) && board[r1]?.[c1] === null;
 
   let count2 = 0;
   let r2 = row + dir2.dr;
   let c2 = col + dir2.dc;
-  while (isValidPosition(r2, c2) && testBoard[r2]?.[c2] === color) {
+  while (isValidPosition(r2, c2) && board[r2]?.[c2] === color) {
     count2++;
     r2 += dir2.dr;
     c2 += dir2.dc;
   }
-  const end2Open = isValidPosition(r2, c2) && testBoard[r2]?.[c2] === null;
+  const end2Open = isValidPosition(r2, c2) && board[r2]?.[c2] === null;
+
+  // 石を元に戻す
+  if (boardRow) {
+    boardRow[col] = originalValue ?? null;
+  }
 
   const total = count1 + count2 + 1;
 
@@ -262,18 +267,18 @@ export function getConsecutiveThreeStraightFourPoints(
     return [];
   }
 
-  // 仮想的に石を置く
-  const testBoard = board.map((r: StoneColor[]) => [...r]);
-  const testRow = testBoard[row];
-  if (testRow) {
-    testRow[col] = color;
+  // 仮想的に石を置く（Undo方式: 盤面コピーなし）
+  const boardRow = board[row];
+  const originalValue = boardRow?.[col];
+  if (boardRow) {
+    boardRow[col] = color;
   }
 
   // 両方向の連続数と端の位置をチェック
   let count1 = 0;
   let r1 = row + dir1.dr;
   let c1 = col + dir1.dc;
-  while (isValidPosition(r1, c1) && testBoard[r1]?.[c1] === color) {
+  while (isValidPosition(r1, c1) && board[r1]?.[c1] === color) {
     count1++;
     r1 += dir1.dr;
     c1 += dir1.dc;
@@ -282,13 +287,19 @@ export function getConsecutiveThreeStraightFourPoints(
   let count2 = 0;
   let r2 = row + dir2.dr;
   let c2 = col + dir2.dc;
-  while (isValidPosition(r2, c2) && testBoard[r2]?.[c2] === color) {
+  while (isValidPosition(r2, c2) && board[r2]?.[c2] === color) {
     count2++;
     r2 += dir2.dr;
     c2 += dir2.dc;
   }
 
   const total = count1 + count2 + 1;
+
+  // 石を元に戻す
+  if (boardRow) {
+    boardRow[col] = originalValue ?? null;
+  }
+
   if (total !== 3) {
     return [];
   }
@@ -296,12 +307,12 @@ export function getConsecutiveThreeStraightFourPoints(
   const points: Position[] = [];
 
   // 端1が空いていれば達四点
-  if (isValidPosition(r1, c1) && testBoard[r1]?.[c1] === null) {
+  if (isValidPosition(r1, c1) && board[r1]?.[c1] === null) {
     points.push({ row: r1, col: c1 });
   }
 
   // 端2が空いていれば達四点
-  if (isValidPosition(r2, c2) && testBoard[r2]?.[c2] === null) {
+  if (isValidPosition(r2, c2) && board[r2]?.[c2] === null) {
     points.push({ row: r2, col: c2 });
   }
 
@@ -332,11 +343,11 @@ export function getJumpThreeStraightFourPoints(
     return [];
   }
 
-  // 仮想的に石を置く
-  const testBoard = board.map((r: StoneColor[]) => [...r]);
-  const testRow = testBoard[row];
-  if (testRow) {
-    testRow[col] = color;
+  // 仮想的に石を置く（Undo方式: 盤面コピーなし）
+  const boardRow = board[row];
+  const originalValue = boardRow?.[col];
+  if (boardRow) {
+    boardRow[col] = color;
   }
 
   // ラインを取得（置いた位置を中心に両方向に5マスずつ）
@@ -348,7 +359,7 @@ export function getJumpThreeStraightFourPoints(
     const pr = row + dir2.dr * i;
     const pc = col + dir2.dc * i;
     if (isValidPosition(pr, pc)) {
-      lineStones.push(testBoard[pr]?.[pc] ?? null);
+      lineStones.push(board[pr]?.[pc] ?? null);
       linePositions.push({ row: pr, col: pc });
     } else {
       lineStones.push("out");
@@ -365,12 +376,17 @@ export function getJumpThreeStraightFourPoints(
     const pr = row + dir1.dr * i;
     const pc = col + dir1.dc * i;
     if (isValidPosition(pr, pc)) {
-      lineStones.push(testBoard[pr]?.[pc] ?? null);
+      lineStones.push(board[pr]?.[pc] ?? null);
       linePositions.push({ row: pr, col: pc });
     } else {
       lineStones.push("out");
       linePositions.push(null);
     }
+  }
+
+  // 石を元に戻す
+  if (boardRow) {
+    boardRow[col] = originalValue ?? null;
   }
 
   const placedIndex = 5;
@@ -447,11 +463,11 @@ export function checkJumpThree(
     return false;
   }
 
-  // 仮想的に石を置く
-  const testBoard = board.map((r: StoneColor[]) => [...r]);
-  const testRow = testBoard[row];
-  if (testRow) {
-    testRow[col] = color;
+  // 仮想的に石を置く（Undo方式: 盤面コピーなし）
+  const boardRow = board[row];
+  const originalValue = boardRow?.[col];
+  if (boardRow) {
+    boardRow[col] = color;
   }
 
   // 置いた後、その方向のライン全体をスキャンして飛び三パターンを探す
@@ -463,7 +479,7 @@ export function checkJumpThree(
     const pr = row + dir2.dr * i;
     const pc = col + dir2.dc * i;
     if (isValidPosition(pr, pc)) {
-      lineStones.push(testBoard[pr]?.[pc] ?? null);
+      lineStones.push(board[pr]?.[pc] ?? null);
     } else {
       lineStones.push("out");
     }
@@ -477,10 +493,15 @@ export function checkJumpThree(
     const pr = row + dir1.dr * i;
     const pc = col + dir1.dc * i;
     if (isValidPosition(pr, pc)) {
-      lineStones.push(testBoard[pr]?.[pc] ?? null);
+      lineStones.push(board[pr]?.[pc] ?? null);
     } else {
       lineStones.push("out");
     }
+  }
+
+  // 石を元に戻す
+  if (boardRow) {
+    boardRow[col] = originalValue ?? null;
   }
 
   // ライン内で飛び三パターンを探す
@@ -767,11 +788,11 @@ export function checkJumpFour(
     return false;
   }
 
-  // 仮想的に石を置く
-  const testBoard = board.map((r: StoneColor[]) => [...r]);
-  const testRow = testBoard[row];
-  if (testRow) {
-    testRow[col] = color;
+  // 仮想的に石を置く（Undo方式: 盤面コピーなし）
+  const boardRow = board[row];
+  const originalValue = boardRow?.[col];
+  if (boardRow) {
+    boardRow[col] = color;
   }
 
   // ラインを取得（置いた位置を中心に両方向に5マスずつ）
@@ -782,7 +803,7 @@ export function checkJumpFour(
     const pr = row + dir2.dr * i;
     const pc = col + dir2.dc * i;
     if (isValidPosition(pr, pc)) {
-      lineStones.push(testBoard[pr]?.[pc] ?? null);
+      lineStones.push(board[pr]?.[pc] ?? null);
     } else {
       lineStones.push("out");
     }
@@ -796,10 +817,15 @@ export function checkJumpFour(
     const pr = row + dir1.dr * i;
     const pc = col + dir1.dc * i;
     if (isValidPosition(pr, pc)) {
-      lineStones.push(testBoard[pr]?.[pc] ?? null);
+      lineStones.push(board[pr]?.[pc] ?? null);
     } else {
       lineStones.push("out");
     }
+  }
+
+  // 石を元に戻す
+  if (boardRow) {
+    boardRow[col] = originalValue ?? null;
   }
 
   const placedIndex = 5;
