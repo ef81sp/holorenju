@@ -42,6 +42,8 @@ export interface DifficultyParams {
   maxNodes: number;
   /** 評価オプション（重い機能の有効/無効） */
   evaluationOptions: EvaluationOptions;
+  /** スコア閾値（ランダム選択時の許容スコア差） */
+  scoreThreshold: number;
 }
 
 /**
@@ -56,7 +58,7 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
   beginner: {
     depth: 1,
     timeLimit: 1000,
-    randomFactor: 0.45, // 悪手率を上げて弱体化
+    randomFactor: 0.7, // 70%で悪手（大幅弱体化）
     maxNodes: 10000,
     evaluationOptions: {
       enableFukumi: false,
@@ -70,11 +72,12 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
       singleFourPenaltyMultiplier: 1.0, // ペナルティなし（初心者らしく四を打ちがち）
       enableMiseThreat: false,
     },
+    scoreThreshold: 1000, // 活四と止め四の差程度まで悪手候補に
   },
   easy: {
     depth: 2,
     timeLimit: 2000,
-    randomFactor: 0.4, // 悪手率を上げて弱体化
+    randomFactor: 0.5, // 50%で悪手（beginnerより低く）
     maxNodes: 50000,
     evaluationOptions: {
       enableFukumi: false,
@@ -88,11 +91,12 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
       singleFourPenaltyMultiplier: 1.0, // ペナルティなし（四を打ちがち）
       enableMiseThreat: false,
     },
+    scoreThreshold: 400, // beginnerより狭い範囲（致命的ミスを減らす）
   },
   medium: {
     depth: 4,
     timeLimit: 4000,
-    randomFactor: 0.15, // hardとの差をつける
+    randomFactor: 0.25, // hardとの差を広げる
     maxNodes: 200000,
     evaluationOptions: {
       enableFukumi: false, // 探索効率を優先
@@ -106,10 +110,11 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
       singleFourPenaltyMultiplier: 0.3, // 70%減点に緩和（単独四にも価値を認める）
       enableMiseThreat: true,
     },
+    scoreThreshold: 200, // 現状維持
   },
   hard: {
     depth: 5,
-    timeLimit: 6000,
+    timeLimit: 8000,
     randomFactor: 0,
     maxNodes: 600000,
     evaluationOptions: {
@@ -124,6 +129,7 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
       singleFourPenaltyMultiplier: 0.0, // 100%減点（単独四は完全に無価値）
       enableMiseThreat: true,
     },
+    scoreThreshold: 0, // 常に最善手（使用しない）
   },
 };
 

@@ -75,6 +75,8 @@ self.onmessage = (event: MessageEvent<CpuRequest>) => {
       params.randomFactor,
       params.evaluationOptions,
       params.maxNodes,
+      undefined, // absoluteTimeLimit: デフォルト値を使用
+      params.scoreThreshold,
     );
 
     const endTime = performance.now();
