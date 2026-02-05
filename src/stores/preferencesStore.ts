@@ -19,6 +19,9 @@ interface Preferences {
   display: {
     textSize: TextSize;
   };
+  cpu: {
+    fastMove: boolean;
+  };
   debug: {
     showCpuInfo: boolean;
   };
@@ -32,6 +35,9 @@ const defaultPreferences: Preferences = {
   },
   display: {
     textSize: "normal",
+  },
+  cpu: {
+    fastMove: false,
   },
   debug: {
     showCpuInfo: false,
@@ -85,6 +91,9 @@ interface OldPreferences {
   display?: {
     textSize?: TextSize;
   };
+  cpu?: {
+    fastMove?: boolean;
+  };
   debug?: {
     showCpuInfo?: boolean;
   };
@@ -102,6 +111,7 @@ function migrateFromOldFormat(parsed: OldPreferences): Preferences {
         effectSpeed: animation.effectSpeed,
       },
       display: { ...defaultPreferences.display, ...parsed.display },
+      cpu: { ...defaultPreferences.cpu, ...parsed.cpu },
       debug: { ...defaultPreferences.debug, ...parsed.debug },
     };
   }
@@ -132,6 +142,7 @@ function migrateFromOldFormat(parsed: OldPreferences): Preferences {
       effectSpeed: newEffectSpeed,
     },
     display: { ...defaultPreferences.display, ...parsed.display },
+    cpu: { ...defaultPreferences.cpu, ...parsed.cpu },
     debug: { ...defaultPreferences.debug, ...parsed.debug },
   };
 }
@@ -182,6 +193,11 @@ export const usePreferencesStore = defineStore("preferences", () => {
   const textSize = computed({
     get: () => preferences.value.display.textSize,
     set: (v) => (preferences.value.display.textSize = v),
+  });
+
+  const fastCpuMove = computed({
+    get: () => preferences.value.cpu.fastMove,
+    set: (v) => (preferences.value.cpu.fastMove = v),
   });
 
   const showCpuInfo = computed({
@@ -248,6 +264,7 @@ export const usePreferencesStore = defineStore("preferences", () => {
     speed,
     effectSpeed,
     textSize,
+    fastCpuMove,
     showCpuInfo,
     // 速度倍率
     speedMultiplier,

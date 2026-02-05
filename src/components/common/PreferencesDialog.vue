@@ -143,6 +143,21 @@ defineExpose({
           </div>
         </section>
 
+        <!-- CPU対戦 -->
+        <section class="settings-section">
+          <h3 class="section-title">CPU対戦</h3>
+          <div class="settings-group">
+            <label class="setting-row">
+              <span class="setting-label">可能な限り早く着手</span>
+              <input
+                v-model="preferencesStore.fastCpuMove"
+                type="checkbox"
+                class="checkbox"
+              />
+            </label>
+          </div>
+        </section>
+
         <!-- データ管理 -->
         <section class="settings-section">
           <h3 class="section-title">データ管理</h3>

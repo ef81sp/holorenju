@@ -169,6 +169,7 @@ async function cpuMove(): Promise<void> {
     boardStore.board,
     cpuGameStore.currentTurn,
     cpuGameStore.difficulty,
+    preferencesStore.fastCpuMove,
   );
 
   // 石を配置

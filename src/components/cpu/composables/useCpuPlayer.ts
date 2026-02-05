@@ -12,6 +12,9 @@ import type { BoardState } from "@/types/game";
 // Viteの?workerサフィックスでWorkerをインポート
 import CpuWorker from "@/logic/cpu/cpu.worker?worker";
 
+/** CPUの着手を待つ最小時間（ミリ秒） */
+const MIN_CPU_WAIT_MS = 2500;
+
 /**
  * useCpuPlayerの戻り値
  */
@@ -25,6 +28,7 @@ export interface UseCpuPlayerReturn {
     board: BoardState,
     currentTurn: "black" | "white",
     difficulty: CpuDifficulty,
+    skipMinWait?: boolean,
   ) => Promise<CpuResponse>;
   /** Workerを終了 */
   terminate: () => void;
@@ -86,13 +90,15 @@ export function useCpuPlayer(): UseCpuPlayerReturn {
 
   /**
    * CPUに着手をリクエスト
+   * @param skipMinWait trueの場合、最小待機時間をスキップして即座に結果を返す
    */
   function requestMove(
     board: BoardState,
     currentTurn: "black" | "white",
     difficulty: CpuDifficulty,
+    skipMinWait = false,
   ): Promise<CpuResponse> {
-    return new Promise((resolve) => {
+    const workerPromise = new Promise<CpuResponse>((resolve) => {
       const w = initWorker();
       isThinking.value = true;
       pendingResolve = resolve;
@@ -105,6 +111,20 @@ export function useCpuPlayer(): UseCpuPlayerReturn {
 
       w.postMessage(request);
     });
+
+    // 設定で待機スキップ時はWorkerの結果のみ待つ
+    if (skipMinWait) {
+      return workerPromise;
+    }
+
+    // 両方完了するまで待つ = 遅い方まで待つ
+    const minWaitPromise = new Promise<void>((resolve) => {
+      setTimeout(resolve, MIN_CPU_WAIT_MS);
+    });
+
+    return Promise.all([workerPromise, minWaitPromise]).then(
+      ([response]) => response,
+    );
   }
 
   /**
