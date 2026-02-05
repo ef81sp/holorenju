@@ -229,13 +229,16 @@ export function evaluatePosition(
     const threats =
       options.precomputedThreats ?? detectOpponentThreats(board, opponentColor);
 
-    // 自分が先に勝てるかチェック（活四、四三）
-    // 注: VCF判定(isFukumiMove)は計算コストが高いため、ルートレベルでのみ行う
-    const canWinFirst =
-      attackScore >= PATTERN_SCORES.OPEN_FOUR || fourThreeBonus > 0;
+    // 自分が活四を持っているか（相手の四があっても勝てる唯一の手段）
+    // 相手に四がある場合、自分の活四のみが例外（四三でも相手の四を止められない）
+    const hasMyOpenFour = attackScore >= PATTERN_SCORES.OPEN_FOUR;
 
-    // 相手の活四を止めない手は除外
-    if (threats.openFours.length > 0 && !canWinFirst) {
+    // 自分が先に勝てるかチェック（活四または四三）
+    // 注: これは相手の活三・ミセに対してのみ有効。相手の四に対しては活四のみが例外
+    const canWinFirst = hasMyOpenFour || fourThreeBonus > 0;
+
+    // 相手の活四を止めない手は除外（例外: 自分の活四のみ）
+    if (threats.openFours.length > 0 && !hasMyOpenFour) {
       const isDefendingOpenFour = threats.openFours.some(
         (p) => p.row === row && p.col === col,
       );
@@ -244,11 +247,12 @@ export function evaluatePosition(
       }
     }
 
-    // 相手の止め四を止めない手は除外（活四がある場合は活四優先）
+    // 相手の止め四を止めない手は除外（例外: 自分の活四のみ）
+    // 四三でも相手の止め四より先に勝てない（止め四は次に五連になる）
     if (
       threats.fours.length > 0 &&
       threats.openFours.length === 0 &&
-      !canWinFirst
+      !hasMyOpenFour
     ) {
       const isDefendingFour = threats.fours.some(
         (p) => p.row === row && p.col === col,

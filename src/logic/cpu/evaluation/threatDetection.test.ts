@@ -6,6 +6,7 @@
 
 import { describe, expect, it } from "vitest";
 
+import { createBoardFromRecord, formatMove } from "@/logic/gameRecordParser";
 import { createEmptyBoard } from "@/logic/renjuRules";
 
 import { detectOpponentThreats, evaluatePosition } from "../evaluation";
@@ -206,7 +207,7 @@ describe("必須防御ルール", () => {
     expect(defenseScore).toBeGreaterThan(-Infinity);
   });
 
-  it("自分が四三を作れる場合は防御不要", () => {
+  it("自分が四三を作れる場合は防御不要（相手が活三の場合）", () => {
     const board = createEmptyBoard();
     // 白の活三がある
     // 黒が四三を作れる配置
@@ -233,6 +234,79 @@ describe("必須防御ルール", () => {
     );
     // 四三を作れるので防御不要、有効な手
     expect(score).toBeGreaterThan(-Infinity);
+  });
+
+  it("自分が四三を作れても、相手に止め四がある場合は防御必須", () => {
+    const board = createEmptyBoard();
+    // 白の止め四がある（盤端 x○○○○-）
+    // 黒が四三を作れる配置
+    placeStonesOnBoard(board, [
+      // 白の止め四: 盤端から4連 (row=7に配置して盤端を使う)
+      { row: 7, col: 0, color: "white" },
+      { row: 7, col: 1, color: "white" },
+      { row: 7, col: 2, color: "white" },
+      { row: 7, col: 3, color: "white" },
+      // 黒の四三準備: 横止め三（白で塞がれた）+ 縦二
+      { row: 10, col: 6, color: "white" }, // 横の止め三を作る
+      { row: 10, col: 7, color: "black" },
+      { row: 10, col: 8, color: "black" },
+      { row: 10, col: 9, color: "black" },
+      { row: 8, col: 10, color: "black" },
+      { row: 9, col: 10, color: "black" },
+    ]);
+
+    // 白の止め四を確認
+    const threats = detectOpponentThreats(board, "white");
+    expect(threats.fours.length).toBe(1);
+    expect(threats.fours[0]).toEqual({ row: 7, col: 4 });
+
+    // (10,10)は止め四+活三を作る手（四三）だが、相手に止め四があるので防御必須
+    // 四三でも相手の止め四より先に勝てない
+    const fourThreeScore = evaluatePosition(
+      board,
+      10,
+      10,
+      "black",
+      enableMandatoryDefenseOptions,
+    );
+    expect(fourThreeScore).toBe(-Infinity);
+
+    // 止め四を防御する手は有効
+    const defenseScore = evaluatePosition(
+      board,
+      7,
+      4,
+      "black",
+      enableMandatoryDefenseOptions,
+    );
+    expect(defenseScore).toBeGreaterThan(-Infinity);
+  });
+
+  it("自分が活四を持っている場合は相手の止め四があっても防御不要", () => {
+    const board = createEmptyBoard();
+    // 白の止め四がある
+    // 黒の活四準備（置くと両端空きの4連になる）
+    placeStonesOnBoard(board, [
+      // 白の止め四: 盤端から4連
+      { row: 0, col: 0, color: "white" },
+      { row: 0, col: 1, color: "white" },
+      { row: 0, col: 2, color: "white" },
+      { row: 0, col: 3, color: "white" },
+      // 黒の活四準備: -●●●- (両端空き) - 中央配置
+      { row: 10, col: 5, color: "black" },
+      { row: 10, col: 6, color: "black" },
+      { row: 10, col: 7, color: "black" },
+    ]);
+
+    // (10,8)は活四を作る手なので、相手に止め四があっても勝てる
+    const openFourScore = evaluatePosition(
+      board,
+      10,
+      8,
+      "black",
+      enableMandatoryDefenseOptions,
+    );
+    expect(openFourScore).toBeGreaterThan(-Infinity);
   });
 
   it("enableMandatoryDefense=falseなら通常評価", () => {
@@ -308,6 +382,67 @@ describe("evaluatePosition - 止め四防御", () => {
     );
 
     expect(score).toBeGreaterThan(-Infinity);
+  });
+});
+
+describe("evaluatePosition - 止め四防御（実戦棋譜）", () => {
+  const enableMandatoryDefenseOptions = {
+    enableFukumi: false,
+    enableMise: false,
+    enableForbiddenTrap: false,
+    enableMultiThreat: false,
+    enableCounterFour: false,
+    enableVCT: false,
+    enableMandatoryDefense: true,
+    enableSingleFourPenalty: false,
+    singleFourPenaltyMultiplier: 1.0,
+    enableMiseThreat: false,
+  };
+
+  it("黒の止め四があるとき、白は四三を優先せず防御する", () => {
+    // 報告されたバグ再現: H8 G7 I7 H6 F8 G9 I8 G8 G6 G10 G11 H7 H10 I6 F9 F7 H9 E7 D7 H11 D8 K4 J5 H12 D10 D9 F10 F12 E12 E9 E6 C8 J8 E10 F11 J7 I5 E11 E8 B7 A6 H4 L8 H5 K8
+    // 43手目: 黒L8（止め四）
+    // 44手目: 白H5（四三）← バグ: これを選んでしまう
+    // 正解: 白は黒の止め四を防御すべき
+
+    const gameRecord =
+      "H8 G7 I7 H6 F8 G9 I8 G8 G6 G10 G11 H7 H10 I6 F9 F7 H9 E7 D7 H11 D8 K4 J5 H12 D10 D9 F10 F12 E12 E9 E6 C8 J8 E10 F11 J7 I5 E11 E8 B7 A6 H4 L8";
+    const { board } = createBoardFromRecord(gameRecord, 43);
+
+    // 43手目後の盤面で黒の止め四を確認
+    const threats = detectOpponentThreats(board, "black");
+    expect(threats.fours.length).toBeGreaterThan(0);
+
+    // 防御位置を取得
+    const defensePositions = threats.fours.map((p) => formatMove(p));
+    console.log("黒の止め四の防御位置:", defensePositions);
+
+    // 白がH5に置くと-Infinity（止め四を止めていない）
+    const h5Score = evaluatePosition(
+      board,
+      10, // H5 = row 10
+      7, // H5 = col 7
+      "white",
+      enableMandatoryDefenseOptions,
+    );
+
+    // H5が防御位置でない場合は-Infinity
+    const isH5Defense = threats.fours.some((p) => p.row === 10 && p.col === 7);
+    if (!isH5Defense) {
+      expect(h5Score).toBe(-Infinity);
+    }
+
+    // 止め四の防御位置は有効なスコア
+    for (const pos of threats.fours) {
+      const defenseScore = evaluatePosition(
+        board,
+        pos.row,
+        pos.col,
+        "white",
+        enableMandatoryDefenseOptions,
+      );
+      expect(defenseScore).toBeGreaterThan(-Infinity);
+    }
   });
 });
 
