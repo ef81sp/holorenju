@@ -209,4 +209,69 @@ describe("cpuGameStore", () => {
       expect(store.isPlayerTurn).toBe(true);
     });
   });
+
+  describe("lastCpuMovePosition", () => {
+    it("初期状態ではnull", () => {
+      const store = useCpuGameStore();
+      store.startGame("medium", true);
+
+      expect(store.lastCpuMovePosition).toBeNull();
+    });
+
+    it("プレイヤー先手: CPUが打った後はその位置を返す", () => {
+      const store = useCpuGameStore();
+      store.startGame("medium", true); // プレイヤー=黒, CPU=白
+
+      // プレイヤー（黒）が打つ
+      store.addMove({ row: 7, col: 7 }, "black");
+      expect(store.lastCpuMovePosition).toBeNull(); // CPUのターン
+
+      // CPU（白）が打つ
+      store.addMove({ row: 7, col: 8 }, "white");
+      expect(store.lastCpuMovePosition).toEqual({ row: 7, col: 8 });
+    });
+
+    it("プレイヤー後手: CPUが打った後はその位置を返す", () => {
+      const store = useCpuGameStore();
+      store.startGame("medium", false); // プレイヤー=白, CPU=黒
+
+      // CPU（黒）が打つ
+      store.addMove({ row: 7, col: 7 }, "black");
+      expect(store.lastCpuMovePosition).toEqual({ row: 7, col: 7 });
+
+      // プレイヤー（白）が打つ
+      store.addMove({ row: 7, col: 8 }, "white");
+      expect(store.lastCpuMovePosition).toBeNull(); // CPUのターン
+    });
+
+    it("プレイヤーが打った直後はnull", () => {
+      const store = useCpuGameStore();
+      store.startGame("medium", true);
+
+      store.addMove({ row: 7, col: 7 }, "black");
+      store.addMove({ row: 7, col: 8 }, "white");
+      store.addMove({ row: 8, col: 7 }, "black");
+
+      // プレイヤーが打った直後 = CPUのターン
+      expect(store.lastCpuMovePosition).toBeNull();
+    });
+
+    it("待ったで戻すと更新される", () => {
+      const store = useCpuGameStore();
+      store.startGame("medium", true);
+
+      store.addMove({ row: 7, col: 7 }, "black");
+      store.addMove({ row: 7, col: 8 }, "white");
+      store.addMove({ row: 8, col: 7 }, "black");
+      store.addMove({ row: 8, col: 8 }, "white");
+
+      expect(store.lastCpuMovePosition).toEqual({ row: 8, col: 8 });
+
+      // 2手戻す
+      store.undoMoves(2);
+
+      // プレイヤーのターンに戻り、前のCPUの手が最後
+      expect(store.lastCpuMovePosition).toEqual({ row: 7, col: 8 });
+    });
+  });
 });

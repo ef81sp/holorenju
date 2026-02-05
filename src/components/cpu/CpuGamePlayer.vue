@@ -50,8 +50,26 @@ const { cpuCharacter, currentEmotion, showDialogue, initCharacter } =
 // 禁手マーク表示
 const { showForbiddenMark, clearForbiddenMark } = useForbiddenMark();
 
-/** CPUの着手マーク用のdialogueIndex */
-const CPU_MOVE_MARK_DIALOGUE_INDEX = -2;
+// CPUの着手マークを宣言的に計算
+// boardStore.marksには禁手マークが含まれるため、それと結合
+import type { Mark } from "@/stores/boardStore";
+
+const displayMarks = computed<Mark[]>(() => {
+  const marks: Mark[] = [...boardStore.marks];
+
+  // CPUの最後の着手位置があれば、circleマークを追加
+  const cpuPos = cpuGameStore.lastCpuMovePosition;
+  if (cpuPos) {
+    marks.push({
+      id: "cpu-last-move",
+      positions: [cpuPos],
+      markType: "circle",
+      placedAtDialogueIndex: -2,
+    });
+  }
+
+  return marks;
+});
 
 // 対戦記録ダイアログ
 const recordDialogRef = ref<InstanceType<typeof CpuRecordDialog> | null>(null);
@@ -137,9 +155,8 @@ function handlePlaceStone(position: Position): void {
     }
   }
 
-  // 既存のマークをクリア（禁手マーク、CPUの着手マーク）
+  // 禁手マークをクリア
   clearForbiddenMark();
-  boardStore.clearMarks();
 
   // 石を配置
   cpuGameStore.addMove(position, cpuGameStore.currentTurn);
@@ -178,12 +195,6 @@ async function cpuMove(): Promise<void> {
 
   // 石を配置
   cpuGameStore.addMove(response.position, cpuGameStore.currentTurn);
-
-  // CPUの着手位置にcircleマークを表示
-  boardStore.addMarks(
-    [{ positions: [response.position], markType: "circle" }],
-    CPU_MOVE_MARK_DIALOGUE_INDEX,
-  );
 
   // 勝敗判定
   if (cpuGameStore.isGameOver) {
@@ -229,7 +240,7 @@ function handleUndo(): void {
     return;
   }
   cpuGameStore.undoMoves(2);
-  boardStore.clearMarks();
+  clearForbiddenMark();
 }
 
 // もう一度
@@ -237,7 +248,6 @@ function handleRematch(): void {
   if (appStore.cpuDifficulty && appStore.cpuPlayerFirst !== null) {
     cpuGameStore.startGame(appStore.cpuDifficulty, appStore.cpuPlayerFirst);
     clearForbiddenMark();
-    boardStore.clearMarks();
     hideCutin();
 
     // キャラクター初期化とゲーム開始セリフ
@@ -308,6 +318,7 @@ const gameEndMessage = computed(() => {
           :stage-size="boardSize"
           :player-color="playerColor"
           :board-state="boardStore.board"
+          :marks="displayMarks"
           @place-stone="handlePlaceStone"
         />
         <CutinOverlay

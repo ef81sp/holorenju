@@ -51,6 +51,21 @@ export const useCpuGameStore = defineStore("cpuGame", () => {
   /** 盤面（boardStoreから参照） */
   const board = computed(() => boardStore.board);
 
+  /**
+   * 最後のCPU着手位置
+   * CPUのターンでない場合（=プレイヤーのターン）かつ履歴があれば、最後の手はCPUの手
+   */
+  const lastCpuMovePosition = computed<Position | null>(() => {
+    if (moveHistory.value.length === 0) {
+      return null;
+    }
+    // プレイヤーのターン = 直前はCPUの手
+    if (isPlayerTurn.value) {
+      return moveHistory.value[moveHistory.value.length - 1] ?? null;
+    }
+    return null;
+  });
+
   // ========== Actions ==========
 
   /**
@@ -146,6 +161,7 @@ export const useCpuGameStore = defineStore("cpuGame", () => {
     moveCount,
     isPlayerTurn,
     board,
+    lastCpuMovePosition,
     // Actions
     startGame,
     addMove,
