@@ -97,6 +97,8 @@ export interface MoveRecord {
   randomSelection?: RandomSelectionInfo;
   /** 深度別の最善手履歴 */
   depthHistory?: DepthResult[];
+  /** 禁手追い込みで勝った場合true（最終手のみ） */
+  forcedForbidden?: boolean;
 }
 
 /**
@@ -402,6 +404,14 @@ export function runHeadlessGame(
             log(
               `${config.id} wins by forbidden trap! Defense position (${defensePos.row}, ${defensePos.col}) is ${forbiddenResult.type}`,
             );
+            // 最終手にforcedForbidden: trueを追加
+            const lastMove = moveHistory[moveHistory.length - 1];
+            const updatedMoveHistory = lastMove
+              ? [
+                  ...moveHistory.slice(0, -1),
+                  { ...lastMove, forcedForbidden: true },
+                ]
+              : moveHistory;
             return {
               playerA: playerA.id,
               playerB: playerB.id,
@@ -409,7 +419,7 @@ export function runHeadlessGame(
               reason: "forbidden",
               moves: moveCount,
               duration: performance.now() - startTime,
-              moveHistory,
+              moveHistory: updatedMoveHistory,
               isABlack: true,
             };
           }

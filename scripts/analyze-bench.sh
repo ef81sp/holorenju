@@ -329,12 +329,23 @@ if [ "$FORBIDDEN_COUNT" -gt 0 ]; then
     .games | to_entries | .[] |
     select(.value.reason == "forbidden") |
     .value as $g |
-    (if $g.isABlack then
-      (if $g.winner == "B" then $g.playerA else $g.playerB end)
-    else
-      (if $g.winner == "A" then $g.playerB else $g.playerA end)
-    end) as $loser |
-    "  game \(.key): \($loser)が禁手負け (\($g.playerA) vs \($g.playerB), \($g.moves)手)"
+    # 黒番（禁手負け側）を特定
+    (if $g.isABlack then $g.playerA else $g.playerB end) as $loser |
+    # 白番（勝者）を特定
+    (if $g.isABlack then $g.playerB else $g.playerA end) as $winner |
+    # 最終手のforcedForbiddenをチェック
+    ($g.moveHistory[-1].forcedForbidden // false) as $forced |
+    (if $forced then "禁手追い込み" else "自滅" end) as $type |
+    "  game \(.key): \($winner)が\($type)で勝利 (\($g.playerA) vs \($g.playerB), \($g.moves)手)"
+  ' "$FILE"
+  echo ""
+
+  # 禁手追い込み成功数を表示
+  jq -r '
+    [.games[] | select(.reason == "forbidden")] as $forbidden |
+    [$forbidden[] | select(.moveHistory[-1].forcedForbidden == true)] | length as $forced |
+    $forbidden | length as $total |
+    "  禁手追い込み成功: \($forced)/\($total)件"
   ' "$FILE"
   echo ""
 fi
