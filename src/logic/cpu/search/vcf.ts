@@ -12,7 +12,6 @@ import {
   checkFive,
   checkForbiddenMove,
   checkJumpFour,
-  copyBoard,
   isValidPosition,
 } from "@/logic/renjuRules";
 
@@ -72,48 +71,69 @@ export function hasVCF(
   // 四を作れる位置を列挙
   const fourMoves = findFourMoves(board, color);
 
+  const opponentColor = color === "black" ? "white" : "black";
+
   for (const move of fourMoves) {
-    // 四を作る
-    const afterFour = copyBoard(board);
-    const afterFourRow = afterFour[move.row];
-    if (afterFourRow) {
-      afterFourRow[move.col] = color;
+    // 四を作る（インプレース）
+    const moveRow = board[move.row];
+    if (moveRow) {
+      moveRow[move.col] = color;
     }
 
     // 五連チェック
-    if (checkFive(afterFour, move.row, move.col, color)) {
+    if (checkFive(board, move.row, move.col, color)) {
+      // 元に戻す（Undo）
+      if (moveRow) {
+        moveRow[move.col] = null;
+      }
       return true;
     }
 
     // 相手の応手（四を止める）
-    const defensePos = getFourDefensePosition(afterFour, move, color);
+    const defensePos = getFourDefensePosition(board, move, color);
 
     if (!defensePos) {
       // 止められない = 勝利
+      // 元に戻す（Undo）
+      if (moveRow) {
+        moveRow[move.col] = null;
+      }
       return true;
     }
 
     // 白番の場合、黒の防御位置が禁手ならVCF成立
     if (color === "white") {
       const forbiddenResult = checkForbiddenMove(
-        afterFour,
+        board,
         defensePos.row,
         defensePos.col,
       );
       if (forbiddenResult.isForbidden) {
+        // 元に戻す（Undo）
+        if (moveRow) {
+          moveRow[move.col] = null;
+        }
         return true;
       }
     }
 
-    // 相手が止めた後の局面で再帰
-    const afterDefense = copyBoard(afterFour);
-    const opponentColor = color === "black" ? "white" : "black";
-    const afterDefenseRow = afterDefense[defensePos.row];
-    if (afterDefenseRow) {
-      afterDefenseRow[defensePos.col] = opponentColor;
+    // 相手が止めた後の局面で再帰（インプレース）
+    const defenseRow = board[defensePos.row];
+    if (defenseRow) {
+      defenseRow[defensePos.col] = opponentColor;
     }
 
-    if (hasVCF(afterDefense, color, depth + 1, limiter)) {
+    const result = hasVCF(board, color, depth + 1, limiter);
+
+    // 元に戻す（Undo）- 逆順
+    if (defenseRow) {
+      defenseRow[defensePos.col] = null;
+    }
+    if (moveRow) {
+      moveRow[move.col] = null;
+    }
+
+    if (result) {
       return true;
     }
   }
@@ -148,62 +168,89 @@ function findVCFMoveRecursive(
   }
 
   const fourMoves = findFourMoves(board, color);
+  const opponentColor = color === "black" ? "white" : "black";
 
   // 最優先: 即座に五連を作れる手を探す
   for (const move of fourMoves) {
-    const testBoard = copyBoard(board);
-    const testRow = testBoard[move.row];
-    if (testRow) {
-      testRow[move.col] = color;
+    // 石を置く（インプレース）
+    const moveRow = board[move.row];
+    if (moveRow) {
+      moveRow[move.col] = color;
     }
-    if (checkFive(testBoard, move.row, move.col, color)) {
+
+    const isFive = checkFive(board, move.row, move.col, color);
+
+    // 元に戻す（Undo）
+    if (moveRow) {
+      moveRow[move.col] = null;
+    }
+
+    if (isFive) {
       return move;
     }
   }
 
   // 通常のVCF探索
   for (const move of fourMoves) {
-    // 四を作る
-    const afterFour = copyBoard(board);
-    const afterFourRow = afterFour[move.row];
-    if (afterFourRow) {
-      afterFourRow[move.col] = color;
+    // 四を作る（インプレース）
+    const moveRow = board[move.row];
+    if (moveRow) {
+      moveRow[move.col] = color;
     }
 
     // 五連チェック（上で既にチェック済みなのでスキップ可能だが、念のため残す）
-    if (checkFive(afterFour, move.row, move.col, color)) {
+    if (checkFive(board, move.row, move.col, color)) {
+      // 元に戻す（Undo）
+      if (moveRow) {
+        moveRow[move.col] = null;
+      }
       return move;
     }
 
     // 相手の応手（四を止める）
-    const defensePos = getFourDefensePosition(afterFour, move, color);
+    const defensePos = getFourDefensePosition(board, move, color);
 
     if (!defensePos) {
       // 止められない = 勝利
+      // 元に戻す（Undo）
+      if (moveRow) {
+        moveRow[move.col] = null;
+      }
       return move;
     }
 
     // 白番の場合、黒の防御位置が禁手ならVCF成立
     if (color === "white") {
       const forbiddenResult = checkForbiddenMove(
-        afterFour,
+        board,
         defensePos.row,
         defensePos.col,
       );
       if (forbiddenResult.isForbidden) {
+        // 元に戻す（Undo）
+        if (moveRow) {
+          moveRow[move.col] = null;
+        }
         return move;
       }
     }
 
-    // 相手が止めた後の局面で再帰
-    const afterDefense = copyBoard(afterFour);
-    const opponentColor = color === "black" ? "white" : "black";
-    const afterDefenseRow = afterDefense[defensePos.row];
-    if (afterDefenseRow) {
-      afterDefenseRow[defensePos.col] = opponentColor;
+    // 相手が止めた後の局面で再帰（インプレース）
+    const defenseRow = board[defensePos.row];
+    if (defenseRow) {
+      defenseRow[defensePos.col] = opponentColor;
     }
 
-    const vcfMove = findVCFMoveRecursive(afterDefense, color, depth + 1);
+    const vcfMove = findVCFMoveRecursive(board, color, depth + 1);
+
+    // 元に戻す（Undo）- 逆順
+    if (defenseRow) {
+      defenseRow[defensePos.col] = null;
+    }
+    if (moveRow) {
+      moveRow[move.col] = null;
+    }
+
     if (vcfMove !== null) {
       // depth=0の場合は最初の手を返す
       return depth === 0 ? move : vcfMove;
@@ -246,13 +293,20 @@ export function findFourMoves(
         }
       }
 
-      // 四が作れるかチェック（仮想的に石を置いて判定）
-      const testBoard = copyBoard(board);
-      const testRow = testBoard[row];
-      if (testRow) {
-        testRow[col] = color;
+      // 四が作れるかチェック（インプレース + Undo）
+      const rowArray = board[row];
+      if (rowArray) {
+        rowArray[col] = color;
       }
-      if (createsFour(testBoard, row, col, color)) {
+
+      const isFour = createsFour(board, row, col, color);
+
+      // 元に戻す（Undo）
+      if (rowArray) {
+        rowArray[col] = null;
+      }
+
+      if (isFour) {
         moves.push({ row, col });
       }
     }
