@@ -5,7 +5,7 @@
  * 調査対象: なぜ13手目から探索がスキップされたか
  */
 
-import { describe, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { createBoardFromRecord, formatMove } from "@/logic/gameRecordParser";
 import { checkForbiddenMove, copyBoard } from "@/logic/renjuRules";
@@ -188,7 +188,9 @@ describe("Game31 禁手負け分析", () => {
     const forbiddenMoves: { move: string; type: string }[] = [];
     for (let row = 0; row < 15; row++) {
       for (let col = 0; col < 15; col++) {
-        if (board[row]?.[col] !== null) {continue;}
+        if (board[row]?.[col] !== null) {
+          continue;
+        }
         const result = checkForbiddenMove(board, row, col);
         if (!result.isForbidden) {
           validMoves.push(formatMove({ row, col }));
@@ -206,5 +208,33 @@ describe("Game31 禁手負け分析", () => {
     for (const fm of forbiddenMoves) {
       console.log(`  ${fm.move}: ${fm.type}`);
     }
+  });
+
+  it("14手目後に禁手追い込みが正しく検出される", () => {
+    // 14手目まで: H8 G8 J7 L9 I7 G9 G7 F7 J8 H9 I10 F9 E9 J9
+    const record14 = "H8 G8 J7 L9 I7 G9 G7 F7 J8 H9 I10 F9 E9 J9";
+    const { board } = createBoardFromRecord(record14, 14);
+
+    // 白の脅威を検出
+    const whiteThreats = detectOpponentThreats(board, "white");
+
+    // 白の止め四があること
+    expect(whiteThreats.fours.length).toBeGreaterThan(0);
+
+    // 防御位置（I9）が禁手であること
+    const [defensePos] = whiteThreats.fours;
+    expect(defensePos).toBeDefined();
+    expect(defensePos!.row).toBe(6); // I9 = row 6
+    expect(defensePos!.col).toBe(8); // I9 = col 8
+
+    const forbiddenResult = checkForbiddenMove(
+      board,
+      defensePos!.row,
+      defensePos!.col,
+    );
+    expect(forbiddenResult.isForbidden).toBe(true);
+    expect(forbiddenResult.type).toBe("double-three");
+
+    console.log("✓ 禁手追い込みが正しく検出された");
   });
 });

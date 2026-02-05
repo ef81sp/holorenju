@@ -27,6 +27,7 @@ import {
   evaluateBoardWithBreakdown,
   evaluatePositionWithBreakdown,
 } from "../evaluation.ts";
+import { detectOpponentThreats } from "../evaluation/threatDetection.ts";
 import { getOpeningMove, isOpeningPhase } from "../opening.ts";
 import { findBestMoveIterativeWithTT } from "../search/minimax.ts";
 
@@ -378,6 +379,42 @@ export function runHeadlessGame(
         moveHistory,
         isABlack: true,
       };
+    }
+
+    // 禁手追い込み判定（白が着手した後、黒の防御位置が禁手なら白の勝ち）
+    if (currentColor === "white") {
+      const whiteThreats = detectOpponentThreats(board, "white");
+      // 白の活四または止め四があるか
+      const defensePosArray =
+        whiteThreats.openFours.length > 0
+          ? whiteThreats.openFours
+          : whiteThreats.fours;
+
+      if (defensePosArray.length > 0) {
+        const defensePos = defensePosArray[0];
+        if (defensePos) {
+          const forbiddenResult = checkForbiddenMove(
+            board,
+            defensePos.row,
+            defensePos.col,
+          );
+          if (forbiddenResult.isForbidden) {
+            log(
+              `${config.id} wins by forbidden trap! Defense position (${defensePos.row}, ${defensePos.col}) is ${forbiddenResult.type}`,
+            );
+            return {
+              playerA: playerA.id,
+              playerB: playerB.id,
+              winner: "B", // 白（後手）の勝ち
+              reason: "forbidden",
+              moves: moveCount,
+              duration: performance.now() - startTime,
+              moveHistory,
+              isABlack: true,
+            };
+          }
+        }
+      }
     }
 
     // 引き分け判定（ゲームルールとして70手で引き分け）
