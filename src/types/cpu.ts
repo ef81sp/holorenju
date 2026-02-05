@@ -77,7 +77,7 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
   easy: {
     depth: 2,
     timeLimit: 2000,
-    randomFactor: 0.5, // 50%で悪手（beginnerより低く）
+    randomFactor: 0.6, // 60%で悪手（medium-easy差を広げる）
     maxNodes: 50000,
     evaluationOptions: {
       enableFukumi: false,
@@ -91,12 +91,12 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
       singleFourPenaltyMultiplier: 1.0, // ペナルティなし（四を打ちがち）
       enableMiseThreat: false,
     },
-    scoreThreshold: 400, // beginnerより狭い範囲（致命的ミスを減らす）
+    scoreThreshold: 500, // 弱い手も選択肢に（medium-easy差を広げる）
   },
   medium: {
     depth: 3,
     timeLimit: 4000,
-    randomFactor: 0.15, // hardとの差を広げる
+    randomFactor: 0.1, // 10%で悪手（medium-easy差を広げる）
     maxNodes: 200000,
     evaluationOptions: {
       enableFukumi: false, // 探索効率を優先
@@ -110,7 +110,7 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
       singleFourPenaltyMultiplier: 0.3, // 70%減点に緩和（単独四にも価値を認める）
       enableMiseThreat: true,
     },
-    scoreThreshold: 200, // 現状維持
+    scoreThreshold: 150, // より最善手寄りに（medium-easy差を広げる）
   },
   hard: {
     depth: 4,
