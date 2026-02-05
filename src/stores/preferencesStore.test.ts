@@ -51,6 +51,11 @@ describe("preferencesStore", () => {
       const store = usePreferencesStore();
       expect(store.textSize).toBe("normal");
     });
+
+    it("cpu.fastMoveがfalse", () => {
+      const store = usePreferencesStore();
+      expect(store.fastCpuMove).toBe(false);
+    });
   });
 
   describe("localStorage読み込み", () => {
@@ -60,6 +65,7 @@ describe("preferencesStore", () => {
         JSON.stringify({
           animation: { enabled: false, speed: "fast", effectSpeed: "slow" },
           display: { textSize: "large" },
+          cpu: { fastMove: true },
         }),
       );
       setActivePinia(createPinia());
@@ -70,6 +76,23 @@ describe("preferencesStore", () => {
       expect(store.speed).toBe("fast");
       expect(store.effectSpeed).toBe("slow");
       expect(store.textSize).toBe("large");
+      expect(store.fastCpuMove).toBe(true);
+    });
+
+    it("cpuセクションがない旧データでもデフォルト値が適用される", () => {
+      localStorageMock.setItem(
+        "holorenju_preferences",
+        JSON.stringify({
+          animation: { enabled: true, speed: "normal", effectSpeed: "normal" },
+          display: { textSize: "normal" },
+          // cpuセクションなし
+        }),
+      );
+      setActivePinia(createPinia());
+
+      const store = usePreferencesStore();
+
+      expect(store.fastCpuMove).toBe(false);
     });
 
     it("部分的なデータでもデフォルト値とマージする", () => {
@@ -194,6 +217,14 @@ describe("preferencesStore", () => {
       store.textSize = "large";
 
       expect(store.textSize).toBe("large");
+    });
+
+    it("fastCpuMoveを変更できる", () => {
+      const store = usePreferencesStore();
+
+      store.fastCpuMove = true;
+
+      expect(store.fastCpuMove).toBe(true);
     });
 
     it("変更時に自動保存される", async () => {
@@ -388,6 +419,7 @@ describe("preferencesStore", () => {
       store.speed = "normal";
       store.effectSpeed = "normal";
       store.textSize = "normal";
+      store.fastCpuMove = false;
 
       expect(store.preferences).toEqual({
         animation: {
@@ -397,6 +429,9 @@ describe("preferencesStore", () => {
         },
         display: {
           textSize: "normal",
+        },
+        cpu: {
+          fastMove: false,
         },
         debug: {
           showCpuInfo: false,

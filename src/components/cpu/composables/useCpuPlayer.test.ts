@@ -78,7 +78,7 @@ describe("useCpuPlayer", () => {
     const { isThinking, requestMove } = useCpuPlayer();
     const board: BoardState = createEmptyBoard();
 
-    const promise = requestMove(board, "black", "beginner");
+    const promise = requestMove(board, "black", "beginner", true);
 
     // リクエスト直後はthinking中
     expect(isThinking.value).toBe(true);
@@ -96,7 +96,7 @@ describe("useCpuPlayer", () => {
     const { requestMove } = useCpuPlayer();
     const board: BoardState = createEmptyBoard();
 
-    const promise = requestMove(board, "black", "easy");
+    const promise = requestMove(board, "black", "easy", true);
     await vi.advanceTimersByTimeAsync(20);
     const response = await promise;
 
@@ -112,7 +112,7 @@ describe("useCpuPlayer", () => {
     const { lastResponse, requestMove } = useCpuPlayer();
     const board: BoardState = createEmptyBoard();
 
-    const promise = requestMove(board, "black", "medium");
+    const promise = requestMove(board, "black", "medium", true);
     await vi.advanceTimersByTimeAsync(20);
     await promise;
 
@@ -125,7 +125,7 @@ describe("useCpuPlayer", () => {
     const board: BoardState = createEmptyBoard();
 
     // リクエスト開始（Promiseは無視）
-    requestMove(board, "black", "hard").catch(() => {
+    requestMove(board, "black", "hard", true).catch(() => {
       // Workerが終了されるためエラーになる可能性がある
     });
     expect(isThinking.value).toBe(true);
@@ -140,17 +140,83 @@ describe("useCpuPlayer", () => {
     const board: BoardState = createEmptyBoard();
 
     // 1回目
-    const promise1 = requestMove(board, "black", "beginner");
+    const promise1 = requestMove(board, "black", "beginner", true);
     await vi.advanceTimersByTimeAsync(20);
     await promise1;
 
     expect(lastResponse.value?.depth).toBe(2);
 
     // 2回目
-    const promise2 = requestMove(board, "white", "medium");
+    const promise2 = requestMove(board, "white", "medium", true);
     await vi.advanceTimersByTimeAsync(20);
     await promise2;
 
     expect(lastResponse.value?.depth).toBe(2);
+  });
+
+  describe("最小待機時間", () => {
+    it("skipMinWait=trueの場合、思考完了後すぐに結果が返る", async () => {
+      const { requestMove } = useCpuPlayer();
+      const board: BoardState = createEmptyBoard();
+
+      const startTime = Date.now();
+      const promise = requestMove(board, "black", "beginner", true);
+
+      // Workerのレスポンス時間（10ms）だけ進める
+      await vi.advanceTimersByTimeAsync(20);
+      await promise;
+
+      // 2.5秒待機しないことを確認（タイマーを進めた時間が短い）
+      const elapsed = Date.now() - startTime;
+      expect(elapsed).toBeLessThan(100);
+    });
+
+    it("skipMinWait=falseの場合、最小2秒待機する", async () => {
+      const { requestMove } = useCpuPlayer();
+      const board: BoardState = createEmptyBoard();
+
+      const promise = requestMove(board, "black", "beginner", false);
+
+      // Workerは10msで完了するが、まだPromiseは解決しない
+      await vi.advanceTimersByTimeAsync(20);
+
+      let resolved = false;
+      promise.then(() => {
+        resolved = true;
+      });
+
+      // 1秒経過時点ではまだ解決しない
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(resolved).toBe(false);
+
+      // 2秒経過すると解決する
+      await vi.advanceTimersByTimeAsync(1000);
+      await promise;
+      expect(resolved).toBe(true);
+    });
+
+    it("デフォルトでskipMinWait=falseとして動作する", async () => {
+      const { requestMove } = useCpuPlayer();
+      const board: BoardState = createEmptyBoard();
+
+      const promise = requestMove(board, "black", "beginner");
+
+      // Workerは10msで完了するが、まだPromiseは解決しない
+      await vi.advanceTimersByTimeAsync(20);
+
+      let resolved = false;
+      promise.then(() => {
+        resolved = true;
+      });
+
+      // 1秒経過時点ではまだ解決しない
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(resolved).toBe(false);
+
+      // 2秒経過すると解決する
+      await vi.advanceTimersByTimeAsync(1000);
+      await promise;
+      expect(resolved).toBe(true);
+    });
   });
 });

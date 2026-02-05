@@ -13,7 +13,7 @@ import type { BoardState } from "@/types/game";
 import CpuWorker from "@/logic/cpu/cpu.worker?worker";
 
 /** CPUの着手を待つ最小時間（ミリ秒） */
-const MIN_CPU_WAIT_MS = 2500;
+const MIN_CPU_WAIT_MS = 2000;
 
 /**
  * useCpuPlayerの戻り値
