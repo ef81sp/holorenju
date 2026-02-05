@@ -50,6 +50,9 @@ const { cpuCharacter, currentEmotion, showDialogue, initCharacter } =
 // 禁手マーク表示
 const { showForbiddenMark, clearForbiddenMark } = useForbiddenMark();
 
+/** CPUの着手マーク用のdialogueIndex */
+const CPU_MOVE_MARK_DIALOGUE_INDEX = -2;
+
 // 対戦記録ダイアログ
 const recordDialogRef = ref<InstanceType<typeof CpuRecordDialog> | null>(null);
 
@@ -134,8 +137,9 @@ function handlePlaceStone(position: Position): void {
     }
   }
 
-  // 既存の禁手マークをクリア
+  // 既存のマークをクリア（禁手マーク、CPUの着手マーク）
   clearForbiddenMark();
+  boardStore.clearMarks();
 
   // 石を配置
   cpuGameStore.addMove(position, cpuGameStore.currentTurn);
@@ -174,6 +178,12 @@ async function cpuMove(): Promise<void> {
 
   // 石を配置
   cpuGameStore.addMove(response.position, cpuGameStore.currentTurn);
+
+  // CPUの着手位置にcircleマークを表示
+  boardStore.addMarks(
+    [{ positions: [response.position], markType: "circle" }],
+    CPU_MOVE_MARK_DIALOGUE_INDEX,
+  );
 
   // 勝敗判定
   if (cpuGameStore.isGameOver) {
@@ -219,6 +229,7 @@ function handleUndo(): void {
     return;
   }
   cpuGameStore.undoMoves(2);
+  boardStore.clearMarks();
 }
 
 // もう一度
@@ -226,6 +237,7 @@ function handleRematch(): void {
   if (appStore.cpuDifficulty && appStore.cpuPlayerFirst !== null) {
     cpuGameStore.startGame(appStore.cpuDifficulty, appStore.cpuPlayerFirst);
     clearForbiddenMark();
+    boardStore.clearMarks();
     hideCutin();
 
     // キャラクター初期化とゲーム開始セリフ
