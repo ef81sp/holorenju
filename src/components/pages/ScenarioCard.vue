@@ -61,8 +61,8 @@ const handleStart = (): void => {
 }
 
 .scenario-card.completed {
-  background: linear-gradient(135deg, #fff 0%, #f0fff4 100%);
-  border-color: #68d391;
+  background: linear-gradient(135deg, #fff 0%, var(--color-success-light) 100%);
+  border-color: var(--color-success);
 }
 
 .scenario-index {
@@ -85,7 +85,7 @@ const handleStart = (): void => {
   position: absolute;
   top: calc(-1 * var(--size-20));
   left: calc(-1 * var(--size-8));
-  background: #48bb78;
+  background: var(--color-success);
   color: white;
   font-size: var(--size-12);
   padding: var(--size-5) var(--size-10);
@@ -104,13 +104,13 @@ const handleStart = (): void => {
 .card-title {
   font-size: var(--size-16);
   font-weight: bold;
-  color: #333;
+  color: var(--color-text-primary);
   margin: 0;
 }
 
 .card-description {
   font-size: var(--size-12);
-  color: #666;
+  color: var(--color-text-secondary);
   margin: 0;
   line-height: 1.4;
   word-break: auto-phrase;
@@ -140,6 +140,6 @@ const handleStart = (): void => {
 }
 
 .scenario-card.completed .start-button {
-  background: linear-gradient(135deg, #68d391 0%, #38b2ac 100%);
+  background: linear-gradient(135deg, var(--color-success) 0%, #38b2ac 100%);
 }
 </style>

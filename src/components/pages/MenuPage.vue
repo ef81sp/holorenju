@@ -120,7 +120,11 @@ const handleSelectEditor = (): void => {
 .menu-button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-  background: linear-gradient(135deg, #999 0%, #666 100%);
+  background: linear-gradient(
+    135deg,
+    var(--color-border-heavy) 0%,
+    var(--color-text-secondary) 100%
+  );
 }
 
 .button-icon {
@@ -152,7 +156,7 @@ const handleSelectEditor = (): void => {
   position: absolute;
   right: var(--size-8);
   top: var(--size-8);
-  background: #ff6b6b;
+  background: var(--color-error);
   color: white;
   font-size: var(--size-12);
   padding: var(--size-5) var(--size-8);

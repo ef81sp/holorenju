@@ -181,7 +181,7 @@ const handleBack = (): void => {
 }
 
 .error {
-  color: #dc2626;
+  color: var(--color-error);
 }
 
 .difficulty-grid {
@@ -225,7 +225,7 @@ const handleBack = (): void => {
   gap: var(--size-10);
   font-weight: 700;
   font-size: var(--size-18);
-  color: #1f2937;
+  color: var(--color-text-primary);
 }
 
 .card-ordinal {
@@ -249,7 +249,7 @@ const handleBack = (): void => {
 
 .card-description {
   margin: 0;
-  color: #374151;
+  color: var(--color-text-secondary);
   line-height: 1.5;
   font-size: var(--size-13);
 }
@@ -262,7 +262,7 @@ const handleBack = (): void => {
 
 .progress-text {
   font-size: var(--size-12);
-  color: #111827;
+  color: var(--color-text-primary);
   font-weight: 600;
 }
 

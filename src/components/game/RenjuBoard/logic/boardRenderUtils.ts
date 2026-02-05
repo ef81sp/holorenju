@@ -1,5 +1,7 @@
 import type { Position } from "@/types/game";
 
+import { BOARD_COLORS } from "@/constants/colors";
+
 // グリッド線の生成
 export function generateGridLines(
   BOARD_SIZE: number,
@@ -18,7 +20,7 @@ export function generateGridLines(
         PADDING + (BOARD_SIZE - 1) * CELL_SIZE,
         PADDING + i * CELL_SIZE,
       ],
-      stroke: "#000",
+      stroke: BOARD_COLORS.grid,
       strokeWidth: GRID_STROKE_WIDTH,
     });
 
@@ -30,7 +32,7 @@ export function generateGridLines(
         PADDING + i * CELL_SIZE,
         PADDING + (BOARD_SIZE - 1) * CELL_SIZE,
       ],
-      stroke: "#000",
+      stroke: BOARD_COLORS.grid,
       strokeWidth: GRID_STROKE_WIDTH,
     });
   }
@@ -118,7 +120,7 @@ export function generateCursorCorners(
   const cornerPadding = CELL_SIZE * 0.1; // セルの四隅からのpadding
   const cornerLength = CELL_SIZE * 0.35; // コーナー線の長さ
   const cornerWidth = 3;
-  const color = "#37abdf";
+  const color = BOARD_COLORS.cursorCorner;
 
   // セルの四隅座標（paddingを適用）
   const left = x - halfCell - cornerPadding;

@@ -46,7 +46,7 @@ defineEmits<{
 .back-button {
   padding: var(--size-8) var(--size-16);
   background: rgba(255, 255, 255, 0.9);
-  border: var(--size-2) solid #ddd;
+  border: var(--size-2) solid var(--color-border);
   border-radius: var(--size-8);
   cursor: pointer;
   font-size: var(--size-14);
@@ -56,7 +56,7 @@ defineEmits<{
 
   &:hover {
     background: white;
-    border-color: #999;
+    border-color: var(--color-border-heavy);
   }
 }
 </style>

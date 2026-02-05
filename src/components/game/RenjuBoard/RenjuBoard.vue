@@ -12,6 +12,7 @@ import {
   generateCoordinateLabels,
   STAR_POINTS,
 } from "./logic/boardRenderUtils";
+import { BOARD_COLORS } from "@/constants/colors";
 
 // Props
 interface Props {
@@ -203,7 +204,7 @@ onBeforeUnmount(() => {
             y: 0,
             width: layout.STAGE_WIDTH.value,
             height: layout.STAGE_HEIGHT.value,
-            fill: '#DEB887',
+            fill: BOARD_COLORS.background,
           }"
         />
 
@@ -226,7 +227,7 @@ onBeforeUnmount(() => {
             text: label.text,
             fontSize: coordinateLabels.fontSize,
             fontFamily: 'monospace',
-            fill: '#333',
+            fill: BOARD_COLORS.label,
             align: 'center',
             verticalAlign: 'middle',
           }"
@@ -244,7 +245,7 @@ onBeforeUnmount(() => {
             text: label.text,
             fontSize: coordinateLabels.fontSize,
             fontFamily: 'monospace',
-            fill: '#333',
+            fill: BOARD_COLORS.label,
             align: 'center',
             verticalAlign: 'middle',
           }"
@@ -258,7 +259,7 @@ onBeforeUnmount(() => {
             x: layout.positionToPixels(star.row, star.col).x,
             y: layout.positionToPixels(star.row, star.col).y,
             radius: 4,
-            fill: '#000',
+            fill: BOARD_COLORS.starPoint,
           }"
         />
 
@@ -270,13 +271,19 @@ onBeforeUnmount(() => {
             x: layout.positionToPixels(stone.row, stone.col).x,
             y: layout.positionToPixels(stone.row, stone.col).y,
             radius: layout.STONE_RADIUS.value,
-            fill: stone.color === 'black' ? '#000' : '#fff',
-            stroke: stone.color === 'white' ? '#000' : undefined,
+            fill:
+              stone.color === 'black'
+                ? BOARD_COLORS.stoneBlack
+                : BOARD_COLORS.stoneWhite,
+            stroke:
+              stone.color === 'white'
+                ? BOARD_COLORS.stoneWhiteStroke
+                : undefined,
             strokeWidth: stone.color === 'white' ? 1 : 0,
           }"
         />
 
-        <!-- シナリオ用の石（boardStore.stonesから） -->
+        <!-- シナリオ用の石（boardStore.stonesFrom） -->
         <v-circle
           v-for="stone in scenarioStones"
           :key="stone.id"
@@ -294,8 +301,14 @@ onBeforeUnmount(() => {
             y: layout.positionToPixels(stone.position.row, stone.position.col)
               .y,
             radius: layout.STONE_RADIUS.value,
-            fill: stone.color === 'black' ? '#000' : '#fff',
-            stroke: stone.color === 'white' ? '#000' : undefined,
+            fill:
+              stone.color === 'black'
+                ? BOARD_COLORS.stoneBlack
+                : BOARD_COLORS.stoneWhite,
+            stroke:
+              stone.color === 'white'
+                ? BOARD_COLORS.stoneWhiteStroke
+                : undefined,
             strokeWidth: stone.color === 'white' ? 1 : 0,
             opacity: animationStore.isAnimating(stone.id) ? 0 : 1,
             scaleX: animationStore.isAnimating(stone.id) ? 0.8 : 1,
@@ -318,8 +331,14 @@ onBeforeUnmount(() => {
               interaction.hoveredPosition.value.col,
             ).y,
             radius: layout.STONE_RADIUS.value,
-            fill: props.playerColor === 'black' ? '#000' : '#fff',
-            stroke: props.playerColor === 'white' ? '#555' : undefined,
+            fill:
+              props.playerColor === 'black'
+                ? BOARD_COLORS.stoneBlack
+                : BOARD_COLORS.stoneWhite,
+            stroke:
+              props.playerColor === 'white'
+                ? BOARD_COLORS.stoneWhiteStroke
+                : undefined,
             strokeWidth: props.playerColor === 'white' ? 2 : 0,
             opacity: 0.4,
           }"
@@ -340,9 +359,9 @@ onBeforeUnmount(() => {
             radius: layout.STONE_RADIUS.value,
             fill:
               interaction.previewStone.value.color === 'black'
-                ? '#000'
-                : '#fff',
-            stroke: '#FFD700',
+                ? BOARD_COLORS.stoneBlack
+                : BOARD_COLORS.stoneWhite,
+            stroke: BOARD_COLORS.previewStroke,
             strokeWidth: 3,
             opacity: 0.7,
           }"
@@ -381,7 +400,7 @@ onBeforeUnmount(() => {
               layout.positionToPixels(line.toPosition.row, line.toPosition.col)
                 .y,
             ],
-            stroke: '#37abdf',
+            stroke: BOARD_COLORS.markAccent,
             strokeWidth: 3,
             dash: line.style === 'dashed' ? [10, 5] : undefined,
             opacity: animationStore.isAnimating(line.id) ? 0 : 1,
@@ -420,8 +439,8 @@ onBeforeUnmount(() => {
                 x: layout.positionToPixels(pos.row, pos.col).x,
                 y: layout.positionToPixels(pos.row, pos.col).y,
                 radius: layout.STONE_RADIUS.value,
-                stroke: '#37abdf',
-                fill: 'rgba(95, 222, 236, 0.3)',
+                stroke: BOARD_COLORS.markAccent,
+                fill: BOARD_COLORS.markFill,
                 strokeWidth: 3,
               }"
             />
@@ -439,7 +458,7 @@ onBeforeUnmount(() => {
                     layout.positionToPixels(pos.row, pos.col).y +
                       layout.STONE_RADIUS.value * 0.5,
                   ],
-                  stroke: '#37abdf',
+                  stroke: BOARD_COLORS.markAccent,
                   strokeWidth: 3,
                 }"
               />
@@ -455,7 +474,7 @@ onBeforeUnmount(() => {
                     layout.positionToPixels(pos.row, pos.col).y +
                       layout.STONE_RADIUS.value * 0.5,
                   ],
-                  stroke: '#37abdf',
+                  stroke: BOARD_COLORS.markAccent,
                   strokeWidth: 3,
                 }"
               />
@@ -472,7 +491,7 @@ onBeforeUnmount(() => {
                   layout.positionToPixels(pos.row, pos.col).y +
                     layout.STONE_RADIUS.value * 0.8,
                 ],
-                stroke: '#37abdf',
+                stroke: BOARD_COLORS.markAccent,
                 strokeWidth: 3,
                 pointerLength: 10,
                 pointerWidth: 10,

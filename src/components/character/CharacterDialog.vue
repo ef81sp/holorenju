@@ -46,6 +46,41 @@ const handleChoiceClick = (choiceId: string): void => {
   emit("choiceSelected", choiceId);
 };
 
+// キャラクター設定（CSS変数参照）
+const CHARACTER_CONFIG: Record<
+  "fubuki" | "miko",
+  {
+    avatarBg: string;
+    borderColor: string;
+    nameColor: string;
+    name: string;
+  }
+> = {
+  fubuki: {
+    avatarBg: "var(--color-fubuki-bg)",
+    borderColor: "var(--color-fubuki-primary)",
+    nameColor: "var(--color-fubuki-name)",
+    name: "フブキ先生",
+  },
+  miko: {
+    avatarBg: "var(--color-miko-bg)",
+    borderColor: "var(--color-miko-primary)",
+    nameColor: "var(--color-miko-name)",
+    name: "みこ",
+  },
+};
+
+// キャラクターのアバター背景色を取得
+const getAvatarBg = (character: CharacterType, isActive: boolean): string => {
+  if (!isActive) {
+    return "var(--color-inactive)";
+  }
+  if (character === "fubuki" || character === "miko") {
+    return CHARACTER_CONFIG[character].avatarBg;
+  }
+  return "var(--color-inactive)";
+};
+
 // 吹き出し用キャラクター情報
 const messageCharacterInfo = computed(() => {
   if (!props.message) {
@@ -53,18 +88,7 @@ const messageCharacterInfo = computed(() => {
   }
 
   const charType = props.message.character as "fubuki" | "miko";
-  return {
-    fubuki: {
-      avatarBg: "#77DFFF",
-      color: "#54C7EA",
-      name: "フブキ先生",
-    },
-    miko: {
-      avatarBg: "#FF9CB4",
-      color: "#FE4B74",
-      name: "みこ",
-    },
-  }[charType];
+  return CHARACTER_CONFIG[charType];
 });
 </script>
 
@@ -80,11 +104,10 @@ const messageCharacterInfo = computed(() => {
       <div
         class="avatar"
         :style="{
-          backgroundColor: leftCharacter.isActive
-            ? leftCharacter.character === 'fubuki'
-              ? '#77DFFF'
-              : '#FF9CB4'
-            : '#CCCCCC',
+          backgroundColor: getAvatarBg(
+            leftCharacter.character,
+            leftCharacter.isActive,
+          ),
         }"
       >
         <CharacterSprite
@@ -100,13 +123,13 @@ const messageCharacterInfo = computed(() => {
       <div
         v-if="message"
         class="dialog-bubble"
-        :style="{ borderColor: messageCharacterInfo?.color }"
+        :style="{ borderColor: messageCharacterInfo?.borderColor }"
         @click="() => emit('dialogClicked')"
       >
         <div class="character-name-container">
           <div
             class="character-name"
-            :style="{ color: messageCharacterInfo?.color }"
+            :style="{ color: messageCharacterInfo?.nameColor }"
           >
             {{ messageCharacterInfo?.name }}
           </div>
@@ -166,11 +189,10 @@ const messageCharacterInfo = computed(() => {
       <div
         class="avatar"
         :style="{
-          backgroundColor: rightCharacter.isActive
-            ? rightCharacter.character === 'fubuki'
-              ? '#77DFFF'
-              : '#FF9CB4'
-            : '#CCCCCC',
+          backgroundColor: getAvatarBg(
+            rightCharacter.character,
+            rightCharacter.isActive,
+          ),
         }"
       >
         <CharacterSprite

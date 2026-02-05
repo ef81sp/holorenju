@@ -216,7 +216,7 @@ const isCompleted = (scenarioId: string): boolean =>
   bottom: var(--size-20);
   right: var(--size-20);
   font-size: var(--size-16);
-  color: #666;
+  color: var(--color-text-secondary);
   background: rgba(255, 255, 255, 0.8);
   padding: var(--size-8) var(--size-16);
   border-radius: var(--size-8);
@@ -242,7 +242,7 @@ const isCompleted = (scenarioId: string): boolean =>
 }
 
 .error {
-  color: #dc2626;
+  color: var(--color-error);
 }
 
 .scenarios-grid {
@@ -336,7 +336,7 @@ const isCompleted = (scenarioId: string): boolean =>
 .page-button:disabled {
   opacity: 0.2;
   cursor: not-allowed;
-  background: #ccc;
+  background: var(--color-disabled-bg);
 }
 
 .page-button-left {
@@ -356,7 +356,7 @@ const isCompleted = (scenarioId: string): boolean =>
   width: var(--size-12);
   height: var(--size-12);
   border-radius: 50%;
-  background: #ddd;
+  background: var(--color-border);
   cursor: pointer;
   transition: all 0.2s ease;
 }
@@ -367,6 +367,6 @@ const isCompleted = (scenarioId: string): boolean =>
 }
 
 .dot:hover {
-  background: #999;
+  background: var(--color-border-heavy);
 }
 </style>
