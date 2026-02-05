@@ -443,6 +443,33 @@ describe("findDefenseForJumpFour（内部関数）", () => {
   });
 });
 
+describe("四三後に相手が無視した場合", () => {
+  it("四が残っている状態で五を作る手を最優先で返す", () => {
+    // CPUが四三を作った後、相手が無視した状態をシミュレート
+    // 縦方向に四（row 5-8, col 4）
+    // 横方向に三（row 7, col 5-7）← 四三の三の部分
+    const board = createBoardWithStones([
+      // 縦方向の四
+      { row: 5, col: 4, color: "white" },
+      { row: 6, col: 4, color: "white" },
+      { row: 7, col: 4, color: "white" },
+      { row: 8, col: 4, color: "white" },
+      // 横方向の三（四三の三の部分）
+      { row: 7, col: 5, color: "white" },
+      { row: 7, col: 6, color: "white" },
+      // 黒が無視して別の場所に打った
+      { row: 10, col: 10, color: "black" },
+    ]);
+
+    const move = findVCFMove(board, "white");
+    expect(move).not.toBeNull();
+    // 四を五にする手（row=4 or row=9, col=4）が返されるべき
+    // 三を伸ばす手（row=7, col=7）ではない
+    expect(move?.col).toBe(4);
+    expect([4, 9]).toContain(move?.row);
+  });
+});
+
 describe("VCFゴールデンテスト", () => {
   // 既存の振る舞いを保証するスナップショットテスト
   const testCases = [

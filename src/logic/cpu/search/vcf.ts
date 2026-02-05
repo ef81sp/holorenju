@@ -280,7 +280,15 @@ export function findFourMoves(
       }
 
       // 五連が作れる場合は最優先で候補に含める
-      if (checkFive(board, row, col, color)) {
+      const fiveCheckRow = board[row];
+      if (fiveCheckRow) {
+        fiveCheckRow[col] = color;
+      }
+      const isFive = checkFive(board, row, col, color);
+      if (fiveCheckRow) {
+        fiveCheckRow[col] = null;
+      }
+      if (isFive) {
         moves.push({ row, col });
         continue;
       }
