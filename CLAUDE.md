@@ -60,6 +60,7 @@ pnpm build         # Production build
 - Use `pnpm` for package management
 - Don't use `npx`. Run scripts via `pnpm <script>`.
 - Write a README document near any component or module with non-trivial logic.
+- **Don't use `rm` command directly** - it triggers confirmation prompts. Use `git clean` or ask the user.
 
 ### Vue/TypeScript
 
