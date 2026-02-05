@@ -48,8 +48,7 @@ const handleSelectEditor = (): void => {
           </div>
         </button>
         <button
-          class="menu-button"
-          style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%)"
+          class="menu-button menu-button--secondary"
           @click="handleSelectEditor"
         >
           <div class="button-icon">⚙️</div>
@@ -92,7 +91,7 @@ const handleSelectEditor = (): void => {
 .menu-button {
   flex: 1;
   padding: var(--size-24);
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--gradient-button-primary);
   border: var(--size-2) solid rgba(255, 255, 255, 0.3);
   border-radius: var(--size-16);
   cursor: pointer;
@@ -103,6 +102,10 @@ const handleSelectEditor = (): void => {
   align-items: center;
   gap: var(--size-12);
   position: relative;
+}
+
+.menu-button--secondary {
+  background: var(--gradient-button-secondary);
 }
 
 .menu-button:hover:not(:disabled) {
@@ -139,7 +142,7 @@ const handleSelectEditor = (): void => {
 
 .button-description {
   font-size: var(--size-12);
-  color: #eeeeee;
+  color: var(--color-text-secondary);
   margin: 0;
   padding: 0;
   word-break: auto-phrase;

@@ -67,7 +67,7 @@ const DIFFICULTY_COLORS: Record<ScenarioDifficulty, string> = {
   renju_intermediate: "linear-gradient(135deg, #ff9f7f, #ffd3a5)",
   renju_advanced: "linear-gradient(135deg, #6fd3a7, #3fbfb9)",
   renju_expert:
-    "linear-gradient(135deg, var(--color-miko-primary), var(--color-holo-purple))",
+    "linear-gradient(135deg, var(--color-miko-300), var(--color-miko-500))",
 };
 
 const getDifficultyColor = (difficulty: ScenarioDifficulty): string =>

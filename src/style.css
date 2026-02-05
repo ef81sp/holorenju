@@ -23,7 +23,6 @@
   /* ブランドカラー */
   --color-holo-cyan: #5fdeec;
   --color-holo-blue: #37abdf;
-  --color-holo-purple: #764ba2;
 
   /* カラースケール - 白上フブキ (H: 194, S: 78%) */
   --color-fubuki-100: hsl(194, 78%, 95%);
@@ -92,11 +91,55 @@
   --color-border-light: var(--color-border);
 
   /* ブロック背景用カラー */
-  --color-block-bg: #764ba233;
+  --color-block-bg: rgba(95, 222, 236, 0.2);
 
   /* グラデーション */
   --gradient-main: linear-gradient(135deg, #5fdeec 0%, #46c0ef 100%);
   --gradient-accent: linear-gradient(90deg, #4caf50, #8bc34a);
+
+  /* ボタン用グラデーション */
+  --gradient-button-primary: linear-gradient(
+    135deg,
+    var(--color-cyan-300) 0%,
+    var(--color-blue-400) 100%
+  );
+  --gradient-button-secondary: linear-gradient(
+    135deg,
+    var(--color-cyan-200) 0%,
+    var(--color-blue-300) 100%
+  );
+
+  /* 難易度グラデーション（薄い→濃い） */
+  --gradient-difficulty-1: linear-gradient(
+    135deg,
+    var(--color-cyan-100) 0%,
+    var(--color-cyan-200) 100%
+  );
+  --gradient-difficulty-2: linear-gradient(
+    135deg,
+    var(--color-cyan-200) 0%,
+    var(--color-cyan-300) 100%
+  );
+  --gradient-difficulty-3: linear-gradient(
+    135deg,
+    var(--color-blue-400) 0%,
+    var(--color-blue-500) 100%
+  );
+  --gradient-difficulty-4: linear-gradient(
+    135deg,
+    var(--color-blue-500) 0%,
+    var(--color-blue-600) 100%
+  );
+  --gradient-difficulty-5: linear-gradient(
+    135deg,
+    var(--color-blue-500) 0%,
+    var(--color-blue-600) 100%
+  );
+  --gradient-difficulty-6: linear-gradient(
+    135deg,
+    var(--color-blue-600) 0%,
+    var(--color-blue-700) 100%
+  );
 
   /* テキストサイズ倍率 */
   --text-size-multiplier: 1;

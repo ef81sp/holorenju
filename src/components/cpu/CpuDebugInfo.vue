@@ -707,21 +707,21 @@ function isDepthChanged(index: number): boolean {
 }
 
 .candidate-item:hover {
-  background: rgba(102, 126, 234, 0.1);
+  background: rgba(95, 222, 236, 0.1);
   border-radius: var(--size-4);
   padding: var(--size-2) var(--size-4);
   margin: 0 calc(var(--size-4) * -1);
 }
 
 .candidate-item.selected {
-  background: rgba(102, 126, 234, 0.15);
+  background: rgba(95, 222, 236, 0.15);
   border-radius: var(--size-4);
   padding: var(--size-2) var(--size-4);
   margin: 0 calc(var(--size-4) * -1);
 }
 
 .candidate-item.hovered {
-  background: rgba(102, 126, 234, 0.2);
+  background: rgba(95, 222, 236, 0.2);
 }
 
 .candidate-rank {
@@ -890,7 +890,7 @@ function isDepthChanged(index: number): boolean {
 }
 
 .pv-self {
-  background: rgba(102, 126, 234, 0.15);
+  background: rgba(95, 222, 236, 0.15);
   color: var(--color-primary);
 }
 

@@ -56,7 +56,7 @@ const handleStart = (): void => {
 
   &:hover {
     box-shadow: 0 var(--size-8) var(--size-20) rgba(0, 0, 0, 0.15);
-    border-color: #667eea;
+    border-color: var(--color-cyan-400);
   }
 }
 
@@ -132,7 +132,7 @@ const handleStart = (): void => {
 
   &:hover {
     transform: scale(1.05);
-    box-shadow: 0 var(--size-5) var(--size-12) rgba(102, 126, 234, 0.4);
+    box-shadow: 0 var(--size-5) var(--size-12) rgba(95, 222, 236, 0.4);
   }
   &:active {
     transform: scale(0.98);

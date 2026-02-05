@@ -139,7 +139,7 @@ const emits = defineEmits<{
 
 .answer-button:not(:disabled):hover {
   transform: scale(1.02);
-  box-shadow: 0 var(--size-5) var(--size-12) rgba(102, 126, 234, 0.4);
+  box-shadow: 0 var(--size-5) var(--size-12) rgba(95, 222, 236, 0.4);
 }
 
 .answer-button:not(:disabled):active {
@@ -163,7 +163,7 @@ const emits = defineEmits<{
 
 .next-button:hover {
   transform: scale(1.02);
-  box-shadow: 0 var(--size-5) var(--size-12) rgba(102, 126, 234, 0.4);
+  box-shadow: 0 var(--size-5) var(--size-12) rgba(95, 222, 236, 0.4);
   animation: none;
 }
 

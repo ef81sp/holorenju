@@ -24,7 +24,6 @@ interface ProgressInfo {
 interface DifficultyCard {
   key: ScenarioDifficulty;
   label: string;
-  icon: string;
   gradient: string;
   description: string;
 }
@@ -33,43 +32,37 @@ const difficultyCards: DifficultyCard[] = [
   {
     key: "gomoku_beginner",
     label: "五目並べ:入門",
-    icon: "🌱",
-    gradient: "linear-gradient(135deg, #d2f6c5 0%, #f9f7d9 100%)",
+    gradient: "var(--gradient-difficulty-1)",
     description: "五目並べの遊び方と連珠との違いからスタート",
   },
   {
     key: "gomoku_intermediate",
     label: "五目並べ:初級",
-    icon: "⭐",
-    gradient: "linear-gradient(135deg, #ffecd2 0%, #f6d365 100%)",
+    gradient: "var(--gradient-difficulty-2)",
     description: "五目並べの基本戦術をひと通り固めるステップ",
   },
   {
     key: "renju_beginner",
     label: "連珠:入門",
-    icon: "🎋",
-    gradient: "linear-gradient(135deg, #cfd9df 0%, #e2ebf0 100%)",
+    gradient: "var(--gradient-difficulty-3)",
     description: "禁手ルールや連珠ならではの基礎を確認",
   },
   {
     key: "renju_intermediate",
     label: "連珠:初級",
-    icon: "🧭",
-    gradient: "linear-gradient(135deg, #ffd3a5 0%, #fd6585 100%)",
+    gradient: "var(--gradient-difficulty-4)",
     description: "基本形の活用や攻守の組み立てを学ぶ",
   },
   {
     key: "renju_advanced",
     label: "連珠:中級",
-    icon: "🔥",
-    gradient: "linear-gradient(135deg, #d4fc79 0%, #96e6a1 100%)",
+    gradient: "var(--gradient-difficulty-5)",
     description: "実戦を意識した応用手筋と読みの強化",
   },
   {
     key: "renju_expert",
     label: "連珠:上級",
-    icon: "👑",
-    gradient: "linear-gradient(135deg, #89f7fe 0%, #66a6ff 100%)",
+    gradient: "var(--gradient-difficulty-6)",
     description: "終盤力と緻密な布石運びで頂点を目指す",
   },
 ];
@@ -136,12 +129,12 @@ const handleBack = (): void => {
           v-for="(card, index) in difficultyCards"
           :key="card.key"
           class="difficulty-card"
+          :class="{ 'difficulty-card--renju': card.key.startsWith('renju') }"
           :style="{ background: card.gradient }"
           @click="handleSelectDifficulty(card.key)"
         >
           <div class="card-header">
             <span class="card-ordinal">{{ index + 1 }}</span>
-            <span class="card-icon">{{ card.icon }}</span>
             <span class="card-label">{{ card.label }}</span>
           </div>
           <p class="card-description">{{ card.description }}</p>
@@ -249,10 +242,6 @@ const handleBack = (): void => {
   flex-shrink: 0;
 }
 
-.card-icon {
-  font-size: var(--size-28);
-}
-
 .card-label {
   line-height: 1.3;
   flex: 1;
@@ -302,6 +291,36 @@ const handleBack = (): void => {
   background: rgba(17, 24, 39, 0.7);
   border-radius: var(--size-6);
   transition: width 0.3s ease;
+}
+
+/* 連珠カード用スタイル（白文字） */
+.difficulty-card--renju .card-header {
+  color: #ffffff;
+}
+
+.difficulty-card--renju .card-ordinal {
+  background: rgba(255, 255, 255, 0.25);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.difficulty-card--renju .card-description {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.difficulty-card--renju .progress-text {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.difficulty-card--renju .progress-bar::-webkit-progress-bar {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.difficulty-card--renju .progress-bar::-webkit-progress-value {
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.difficulty-card--renju .progress-bar::-moz-progress-bar {
+  background: rgba(255, 255, 255, 0.8);
 }
 
 @media (max-width: 1000px) {

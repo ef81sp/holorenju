@@ -305,12 +305,12 @@ const handleBack = (): void => {
 
 .start-button {
   padding: var(--size-12) var(--size-24);
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--gradient-button-primary);
   border: none;
   border-radius: var(--size-10);
   font-size: var(--size-16);
   font-weight: 500;
-  color: white;
+  color: var(--color-text-primary);
   cursor: pointer;
   transition: all 0.2s ease;
 }
@@ -329,12 +329,12 @@ const handleBack = (): void => {
   100% {
     box-shadow:
       0 0 0 1px var(--color-primary),
-      0 0 0 var(--size-2) rgba(102, 126, 234, 0.4);
+      0 0 0 var(--size-2) rgba(95, 222, 236, 0.4);
   }
   50% {
     box-shadow:
       0 0 0 var(--size-2) var(--color-primary),
-      0 0 0 var(--size-6) rgba(102, 126, 234, 0.2);
+      0 0 0 var(--size-6) rgba(95, 222, 236, 0.2);
   }
 }
 </style>

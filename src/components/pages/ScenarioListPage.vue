@@ -329,7 +329,7 @@ const isCompleted = (scenarioId: string): boolean =>
 
 .page-button:hover:not(:disabled) {
   opacity: 0.9;
-  box-shadow: 0 var(--size-5) var(--size-12) rgba(102, 126, 234, 0.4);
+  box-shadow: 0 var(--size-5) var(--size-12) rgba(95, 222, 236, 0.4);
   transform: scale(1.1);
 }
 
@@ -362,7 +362,7 @@ const isCompleted = (scenarioId: string): boolean =>
 }
 
 .dot.active {
-  background: #667eea;
+  background: var(--color-cyan-400);
   transform: scale(1.3);
 }
 
