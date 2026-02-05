@@ -36,6 +36,7 @@ interface CliOptions {
   verbose: boolean;
   parallel: boolean;
   workers: number;
+  self: boolean; // 同じ難易度同士の対戦モード
 }
 
 interface MatchupResult {
@@ -86,6 +87,7 @@ function parseArgs(): CliOptions {
     verbose: false,
     parallel: false,
     workers: Math.max(1, cpuCount - 1),
+    self: false,
   };
 
   for (const arg of args) {
@@ -121,6 +123,8 @@ function parseArgs(): CliOptions {
         options.workers = value;
         options.parallel = true;
       }
+    } else if (arg === "--self" || arg === "-s") {
+      options.self = true;
     } else if (arg === "--help" || arg === "-h") {
       printHelp();
       process.exit(0);
@@ -148,6 +152,8 @@ Options:
   --parallel, -p     Enable parallel execution using worker threads
   --workers=<n>      Number of worker threads. Default: ${cpuCount - 1}
                      (implies --parallel)
+  --self, -s         Self-play mode: each difficulty plays against itself
+                     (to measure black/white balance)
   --help, -h         Show this help message
 
 Examples:
@@ -155,20 +161,30 @@ Examples:
   pnpm bench:ai --players=medium,hard --games=20
   pnpm bench:ai --parallel --workers=4
   pnpm bench:ai --verbose --format=csv
+  pnpm bench:ai --self --players=hard --games=100   # hard vs hard (self-play)
 `);
 }
 
 function generateMatchups(
   players: CpuDifficulty[],
+  selfPlay: boolean = false,
 ): [CpuDifficulty, CpuDifficulty][] {
   const matchups: [CpuDifficulty, CpuDifficulty][] = [];
 
-  for (let i = 0; i < players.length; i++) {
-    for (let j = i + 1; j < players.length; j++) {
-      const playerA = players[i];
-      const playerB = players[j];
-      if (playerA !== undefined && playerB !== undefined) {
-        matchups.push([playerA, playerB]);
+  if (selfPlay) {
+    // 自己対戦モード: 各難易度が自分自身と対戦
+    for (const player of players) {
+      matchups.push([player, player]);
+    }
+  } else {
+    // 通常モード: 異なる難易度間の総当たり
+    for (let i = 0; i < players.length; i++) {
+      for (let j = i + 1; j < players.length; j++) {
+        const playerA = players[i];
+        const playerB = players[j];
+        if (playerA !== undefined && playerB !== undefined) {
+          matchups.push([playerA, playerB]);
+        }
       }
     }
   }
@@ -191,11 +207,16 @@ function clearStatus(): void {
 }
 
 function runBenchmarkSequential(options: CliOptions): BenchmarkResult {
-  const { players, games, verbose } = options;
+  const { players, games, verbose, self: selfPlay } = options;
 
-  console.log(`\n=== CPU AI Benchmark (Sequential) ===`);
+  console.log(
+    `\n=== CPU AI Benchmark (Sequential${selfPlay ? ", Self-Play" : ""}) ===`,
+  );
   console.log(`Players: ${players.join(", ")}`);
   console.log(`Games per matchup: ${games}`);
+  if (selfPlay) {
+    console.log(`Mode: Self-play (measuring black/white balance)`);
+  }
   console.log();
 
   const ratings: Record<string, EloRating> = {};
@@ -203,7 +224,7 @@ function runBenchmarkSequential(options: CliOptions): BenchmarkResult {
     ratings[player] = createInitialRating();
   }
 
-  const matchups = generateMatchups(players);
+  const matchups = generateMatchups(players, selfPlay);
   const matchupResults: MatchupResult[] = [];
   const allGames: GameResult[] = [];
 
@@ -356,14 +377,25 @@ function runBenchmarkSequential(options: CliOptions): BenchmarkResult {
 async function runBenchmarkParallel(
   options: CliOptions,
 ): Promise<BenchmarkResult> {
-  const { players, games, verbose, workers: numWorkers } = options;
+  const {
+    players,
+    games,
+    verbose,
+    workers: numWorkers,
+    self: selfPlay,
+  } = options;
 
-  console.log(`\n=== CPU AI Benchmark (Parallel: ${numWorkers} workers) ===`);
+  console.log(
+    `\n=== CPU AI Benchmark (Parallel: ${numWorkers} workers${selfPlay ? ", Self-Play" : ""}) ===`,
+  );
   console.log(`Players: ${players.join(", ")}`);
   console.log(`Games per matchup: ${games}`);
+  if (selfPlay) {
+    console.log(`Mode: Self-play (measuring black/white balance)`);
+  }
   console.log();
 
-  const matchups = generateMatchups(players);
+  const matchups = generateMatchups(players, selfPlay);
   const totalMatchups = matchups.length;
   const totalGames = totalMatchups * games;
 

@@ -279,14 +279,16 @@ export function findFourMoves(
         continue;
       }
 
+      // 行配列を取得（このセル操作で共通利用）
+      const rowArray = board[row];
+
       // 五連が作れる場合は最優先で候補に含める
-      const fiveCheckRow = board[row];
-      if (fiveCheckRow) {
-        fiveCheckRow[col] = color;
+      if (rowArray) {
+        rowArray[col] = color;
       }
       const isFive = checkFive(board, row, col, color);
-      if (fiveCheckRow) {
-        fiveCheckRow[col] = null;
+      if (rowArray) {
+        rowArray[col] = null;
       }
       if (isFive) {
         moves.push({ row, col });
@@ -302,7 +304,6 @@ export function findFourMoves(
       }
 
       // 四が作れるかチェック（インプレース + Undo）
-      const rowArray = board[row];
       if (rowArray) {
         rowArray[col] = color;
       }
