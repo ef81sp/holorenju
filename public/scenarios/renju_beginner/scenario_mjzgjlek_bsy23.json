@@ -598,6 +598,87 @@
           }
         ]
       }
+    },
+    {
+      "id": "section_3",
+      "type": "question",
+      "title": "問題セクション",
+      "initialBoard": [
+        "---------------",
+        "---------------",
+        "---------------",
+        "-----------x---",
+        "----------o----",
+        "----o-o--x-----",
+        "-----x--x------",
+        "------ox-x-----",
+        "---ooxoox------",
+        "------o-o------",
+        "------x--x-----",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------"
+      ],
+      "description": [
+        {
+          "type": "text",
+          "content": "三三禁に該当するのはどこでしょう"
+        }
+      ],
+      "dialogues": [
+        {
+          "id": "dialogue_1",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "ごちゃごちゃしてるねぇ"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        }
+      ],
+      "successOperator": "or",
+      "successConditions": [
+        {
+          "type": "position",
+          "positions": [
+            {
+              "row": 6,
+              "col": 6
+            }
+          ],
+          "color": "black"
+        }
+      ],
+      "feedback": {
+        "success": [
+          {
+            "character": "fubuki",
+            "text": [
+              {
+                "type": "text",
+                "content": "ないすー！"
+              }
+            ],
+            "emotion": 37
+          }
+        ],
+        "failure": [
+          {
+            "character": "miko",
+            "text": [
+              {
+                "type": "text",
+                "content": "おうおうおう……"
+              }
+            ],
+            "emotion": 34
+          }
+        ]
+      }
     }
   ]
 }

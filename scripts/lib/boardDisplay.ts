@@ -24,7 +24,11 @@ export function boardToAscii(
   board: BoardState,
   options: DisplayOptions = {},
 ): string {
-  const { highlightMove, showCoordinates = true, showMoveNumbers } = options;
+  const {
+    highlightMove,
+    showCoordinates = true,
+    showMoveNumbers: _showMoveNumbers,
+  } = options;
   const lines: string[] = [];
 
   // ヘッダー行（列座標）

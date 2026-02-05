@@ -1196,11 +1196,28 @@ describe("checkForbiddenMoveWithContext（グローバルキャッシュ活用�
     positions?: { row: number; col: number }[];
   }
 
-  function createTestCache() {
+  function createTestCache(): {
+    cache: Map<string, TestForbiddenResult>;
+    get: (
+      hash: bigint,
+      row: number,
+      col: number,
+    ) => TestForbiddenResult | undefined;
+    set: (
+      hash: bigint,
+      row: number,
+      col: number,
+      result: TestForbiddenResult,
+    ) => void;
+  } {
     const cache = new Map<string, TestForbiddenResult>();
     return {
       cache,
-      get: (hash: bigint, row: number, col: number) => {
+      get: (
+        hash: bigint,
+        row: number,
+        col: number,
+      ): TestForbiddenResult | undefined => {
         const key = `${hash}:${row},${col}`;
         return cache.get(key);
       },
@@ -1209,7 +1226,7 @@ describe("checkForbiddenMoveWithContext（グローバルキャッシュ活用�
         row: number,
         col: number,
         result: TestForbiddenResult,
-      ) => {
+      ): void => {
         const key = `${hash}:${row},${col}`;
         cache.set(key, result);
       },
@@ -1291,7 +1308,11 @@ describe("checkForbiddenMoveWithContext（グローバルキャッシュ活用�
     let getCalled = 0;
 
     const { cache: globalCache } = createTestCache();
-    const globalGet = (hash: bigint, row: number, col: number) => {
+    const globalGet = (
+      hash: bigint,
+      row: number,
+      col: number,
+    ): TestForbiddenResult | undefined => {
       getCalled++;
       const key = `${hash}:${row},${col}`;
       return globalCache.get(key);
@@ -1301,7 +1322,7 @@ describe("checkForbiddenMoveWithContext（グローバルキャッシュ活用�
       row: number,
       col: number,
       result: TestForbiddenResult,
-    ) => {
+    ): void => {
       const key = `${hash}:${row},${col}`;
       globalCache.set(key, result);
     };

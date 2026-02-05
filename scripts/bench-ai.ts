@@ -167,7 +167,7 @@ Examples:
 
 function generateMatchups(
   players: CpuDifficulty[],
-  selfPlayOnly: boolean = false,
+  selfPlayOnly = false,
 ): [CpuDifficulty, CpuDifficulty][] {
   const matchups: [CpuDifficulty, CpuDifficulty][] = [];
 

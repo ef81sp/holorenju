@@ -26,7 +26,7 @@ import { useCutinDisplay } from "@/composables/useCutinDisplay";
 import { useAppStore } from "@/stores/appStore";
 import { useCpuGameStore } from "@/stores/cpuGameStore";
 import { useCpuRecordStore } from "@/stores/cpuRecordStore";
-import { useBoardStore } from "@/stores/boardStore";
+import { useBoardStore, type Mark } from "@/stores/boardStore";
 import { useDialogStore } from "@/stores/dialogStore";
 import { usePreferencesStore } from "@/stores/preferencesStore";
 import { checkForbiddenMove } from "@/logic/renjuRules";
@@ -52,8 +52,6 @@ const { showForbiddenMark, clearForbiddenMark } = useForbiddenMark();
 
 // CPUの着手マークを宣言的に計算
 // boardStore.marksには禁手マークが含まれるため、それと結合
-import type { Mark } from "@/stores/boardStore";
-
 const displayMarks = computed<Mark[]>(() => {
   const marks: Mark[] = [...boardStore.marks];
 
