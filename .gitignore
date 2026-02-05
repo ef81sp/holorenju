@@ -32,3 +32,5 @@ dist-ssr
 # Benchmark results
 bench-results/*
 !bench-results/.gitkeep
+# ベンチマークレポート
+docs/bench-reports/
