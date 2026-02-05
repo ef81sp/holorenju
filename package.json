@@ -19,7 +19,9 @@
     "type-check": "vue-tsc -b",
     "check-fix": "pnpm run type-check && pnpm run format && pnpm run lint:fix",
     "check": "pnpm run type-check && pnpm run format:check && pnpm run lint",
-    "bench": "node --experimental-strip-types --disable-warning=ExperimentalWarning --import ./scripts/register-loader.mjs scripts/bench-ai.ts"
+    "bench": "node --experimental-strip-types --disable-warning=ExperimentalWarning --import ./scripts/register-loader.mjs scripts/bench-ai.ts",
+    "analyze:games": "node --experimental-strip-types --disable-warning=ExperimentalWarning --import ./scripts/register-loader.mjs scripts/analyze-games.ts",
+    "browse:games": "node --experimental-strip-types --disable-warning=ExperimentalWarning --import ./scripts/register-loader.mjs scripts/browse-games.ts"
   },
   "dependencies": {
     "@vueuse/core": "^14.1.0",

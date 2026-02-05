@@ -34,3 +34,5 @@ bench-results/*
 !bench-results/.gitkeep
 # ベンチマークレポート
 docs/bench-reports/
+# 分析結果
+analyzed-games/
