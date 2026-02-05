@@ -294,6 +294,7 @@ const gameEndMessage = computed(() => {
           :disabled="isBoardDisabled"
           :stage-size="boardSize"
           :player-color="playerColor"
+          :board-state="boardStore.board"
           @place-stone="handlePlaceStone"
         />
         <CutinOverlay
