@@ -65,25 +65,24 @@ echo ""
 for row in $PLAYERS; do
   printf "  %10s" "$row"
   for col in $PLAYERS; do
-    if [ "$row" = "$col" ]; then
-      printf " %10s" "-"
-    else
-      result=$(jq -r --arg black "$row" --arg white "$col" '
-        [.games[] |
-          select(
-            ((.isABlack and .playerA == $black and .playerB == $white) or
-             ((.isABlack | not) and .playerB == $black and .playerA == $white))
-          )
-        ] |
+    result=$(jq -r --arg black "$row" --arg white "$col" '
+      [.games[] |
+        select(
+          ((.isABlack and .playerA == $black and .playerB == $white) or
+           ((.isABlack | not) and .playerB == $black and .playerA == $white))
+        )
+      ] |
+      if length == 0 then "-"
+      else
         {
           blackWins: [.[] | select((.isABlack and .winner == "A") or ((.isABlack | not) and .winner == "B"))] | length,
           whiteWins: [.[] | select((.isABlack and .winner == "B") or ((.isABlack | not) and .winner == "A"))] | length,
           draws: [.[] | select(.winner == "draw")] | length
         } |
         "\(.blackWins)-\(.whiteWins)-\(.draws)"
-      ' "$FILE")
-      printf " %10s" "$result"
-    fi
+      end
+    ' "$FILE")
+    printf " %10s" "$result"
   done
   echo ""
 done
@@ -102,25 +101,24 @@ echo ""
 for row in $PLAYERS; do
   printf "  %10s" "$row"
   for col in $PLAYERS; do
-    if [ "$row" = "$col" ]; then
-      printf " %10s" "-"
-    else
-      result=$(jq -r --arg white "$row" --arg black "$col" '
-        [.games[] |
-          select(
-            ((.isABlack and .playerA == $black and .playerB == $white) or
-             ((.isABlack | not) and .playerB == $black and .playerA == $white))
-          )
-        ] |
+    result=$(jq -r --arg white "$row" --arg black "$col" '
+      [.games[] |
+        select(
+          ((.isABlack and .playerA == $black and .playerB == $white) or
+           ((.isABlack | not) and .playerB == $black and .playerA == $white))
+        )
+      ] |
+      if length == 0 then "-"
+      else
         {
           whiteWins: [.[] | select((.isABlack and .winner == "B") or ((.isABlack | not) and .winner == "A"))] | length,
           blackWins: [.[] | select((.isABlack and .winner == "A") or ((.isABlack | not) and .winner == "B"))] | length,
           draws: [.[] | select(.winner == "draw")] | length
         } |
         "\(.whiteWins)-\(.blackWins)-\(.draws)"
-      ' "$FILE")
-      printf " %10s" "$result"
-    fi
+      end
+    ' "$FILE")
+    printf " %10s" "$result"
   done
   echo ""
 done
@@ -139,6 +137,42 @@ jq -r '
   "  引分け: \(.draw)"
 ' "$FILE"
 echo ""
+
+# 同じ難易度同士の先手/後手バランス
+SELF_PLAY_COUNT=$(jq '[.games[] | select(.playerA == .playerB)] | length' "$FILE")
+if [ "$SELF_PLAY_COUNT" -gt 0 ]; then
+  echo "【同難易度対戦の先手(黒)/後手(白)バランス】"
+  jq -r '
+    [.games[] | select(.playerA == .playerB)] |
+    {
+      black: [.[] | select((.isABlack and .winner == "A") or ((.isABlack | not) and .winner == "B"))] | length,
+      white: [.[] | select((.isABlack and .winner == "B") or ((.isABlack | not) and .winner == "A"))] | length,
+      draw: [.[] | select(.winner == "draw")] | length
+    } |
+    "  黒勝利: \(.black) (\(if (.black + .white + .draw) > 0 then .black * 100 / (.black + .white + .draw) | floor else 0 end)%)",
+    "  白勝利: \(.white) (\(if (.black + .white + .draw) > 0 then .white * 100 / (.black + .white + .draw) | floor else 0 end)%)",
+    "  引分け: \(.draw)"
+  ' "$FILE"
+  echo ""
+  echo "  難易度別内訳:"
+  for player in $(jq -r '.options.players[]' "$FILE"); do
+    result=$(jq -r --arg p "$player" '
+      [.games[] | select(.playerA == $p and .playerB == $p)] |
+      if length > 0 then
+        {
+          black: [.[] | select((.isABlack and .winner == "A") or ((.isABlack | not) and .winner == "B"))] | length,
+          white: [.[] | select((.isABlack and .winner == "B") or ((.isABlack | not) and .winner == "A"))] | length,
+          draw: [.[] | select(.winner == "draw")] | length
+        } |
+        "\(.black)-\(.white)-\(.draw) (黒\(if (.black + .white + .draw) > 0 then .black * 100 / (.black + .white + .draw) | floor else 0 end)%)"
+      else
+        "(対戦なし)"
+      end
+    ' "$FILE")
+    echo "    $player: $result"
+  done
+  echo ""
+fi
 
 # 勝利理由
 echo "【勝利理由】"

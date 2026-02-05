@@ -152,8 +152,8 @@ Options:
   --parallel, -p     Enable parallel execution using worker threads
   --workers=<n>      Number of worker threads. Default: ${cpuCount - 1}
                      (implies --parallel)
-  --self, -s         Self-play mode: each difficulty plays against itself
-                     (to measure black/white balance)
+  --self, -s         Self-play only mode: each difficulty plays only against
+                     itself (excludes cross-difficulty matchups)
   --help, -h         Show this help message
 
 Examples:
@@ -167,17 +167,22 @@ Examples:
 
 function generateMatchups(
   players: CpuDifficulty[],
-  selfPlay: boolean = false,
+  selfPlayOnly: boolean = false,
 ): [CpuDifficulty, CpuDifficulty][] {
   const matchups: [CpuDifficulty, CpuDifficulty][] = [];
 
-  if (selfPlay) {
-    // 自己対戦モード: 各難易度が自分自身と対戦
+  if (selfPlayOnly) {
+    // 自己対戦のみモード: 各難易度が自分自身と対戦
     for (const player of players) {
       matchups.push([player, player]);
     }
   } else {
-    // 通常モード: 異なる難易度間の総当たり
+    // 標準モード: 同じ難易度同士 + 異なる難易度間の総当たり
+    // まず同じ難易度同士（先手/後手バランス測定用）
+    for (const player of players) {
+      matchups.push([player, player]);
+    }
+    // 次に異なる難易度間
     for (let i = 0; i < players.length; i++) {
       for (let j = i + 1; j < players.length; j++) {
         const playerA = players[i];
@@ -210,12 +215,14 @@ function runBenchmarkSequential(options: CliOptions): BenchmarkResult {
   const { players, games, verbose, self: selfPlay } = options;
 
   console.log(
-    `\n=== CPU AI Benchmark (Sequential${selfPlay ? ", Self-Play" : ""}) ===`,
+    `\n=== CPU AI Benchmark (Sequential${selfPlay ? ", Self-Play Only" : ""}) ===`,
   );
   console.log(`Players: ${players.join(", ")}`);
   console.log(`Games per matchup: ${games}`);
   if (selfPlay) {
-    console.log(`Mode: Self-play (measuring black/white balance)`);
+    console.log(`Mode: Self-play only (excludes cross-difficulty matchups)`);
+  } else {
+    console.log(`Mode: Standard (includes same-difficulty + cross-difficulty)`);
   }
   console.log();
 
@@ -386,12 +393,14 @@ async function runBenchmarkParallel(
   } = options;
 
   console.log(
-    `\n=== CPU AI Benchmark (Parallel: ${numWorkers} workers${selfPlay ? ", Self-Play" : ""}) ===`,
+    `\n=== CPU AI Benchmark (Parallel: ${numWorkers} workers${selfPlay ? ", Self-Play Only" : ""}) ===`,
   );
   console.log(`Players: ${players.join(", ")}`);
   console.log(`Games per matchup: ${games}`);
   if (selfPlay) {
-    console.log(`Mode: Self-play (measuring black/white balance)`);
+    console.log(`Mode: Self-play only (excludes cross-difficulty matchups)`);
+  } else {
+    console.log(`Mode: Standard (includes same-difficulty + cross-difficulty)`);
   }
   console.log();
 
