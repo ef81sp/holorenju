@@ -974,14 +974,37 @@ export function findBestMoveIterativeWithTT(
   if (threats.openFours.length > 0) {
     const [defensePos] = threats.openFours;
     if (defensePos) {
-      return {
-        position: defensePos,
-        score: -PATTERN_SCORES.FIVE, // 負け確定
-        completedDepth: 0,
-        interrupted: false,
-        elapsedTime: performance.now() - startTime,
-        stats: mergeProfilingCounters(ctx.stats),
-      };
+      // 黒番で防御位置が禁手の場合は通常探索に任せる
+      const isBlack = color === "black";
+      if (isBlack) {
+        const forbiddenResult = checkForbiddenMoveWithCache(
+          board,
+          defensePos.row,
+          defensePos.col,
+        );
+        if (forbiddenResult.isForbidden) {
+          // 禁手追い込み: 防御できないので通常探索で禁手以外の手を選ぶ
+          // （どうせ負けるが、禁手を打つよりマシ）
+        } else {
+          return {
+            position: defensePos,
+            score: -PATTERN_SCORES.FIVE, // 負け確定
+            completedDepth: 0,
+            interrupted: false,
+            elapsedTime: performance.now() - startTime,
+            stats: mergeProfilingCounters(ctx.stats),
+          };
+        }
+      } else {
+        return {
+          position: defensePos,
+          score: -PATTERN_SCORES.FIVE, // 負け確定
+          completedDepth: 0,
+          interrupted: false,
+          elapsedTime: performance.now() - startTime,
+          stats: mergeProfilingCounters(ctx.stats),
+        };
+      }
     }
   }
 
@@ -990,14 +1013,37 @@ export function findBestMoveIterativeWithTT(
   if (threats.fours.length > 0) {
     const [defensePos] = threats.fours;
     if (defensePos) {
-      return {
-        position: defensePos,
-        score: threats.openThrees.length > 0 ? -PATTERN_SCORES.FIVE : 0, // 四三なら負け
-        completedDepth: 0,
-        interrupted: false,
-        elapsedTime: performance.now() - startTime,
-        stats: mergeProfilingCounters(ctx.stats),
-      };
+      // 黒番で防御位置が禁手の場合は通常探索に任せる
+      const isBlack = color === "black";
+      if (isBlack) {
+        const forbiddenResult = checkForbiddenMoveWithCache(
+          board,
+          defensePos.row,
+          defensePos.col,
+        );
+        if (forbiddenResult.isForbidden) {
+          // 禁手追い込み: 防御できないので通常探索で禁手以外の手を選ぶ
+          // （どうせ負けるが、禁手を打つよりマシ）
+        } else {
+          return {
+            position: defensePos,
+            score: threats.openThrees.length > 0 ? -PATTERN_SCORES.FIVE : 0,
+            completedDepth: 0,
+            interrupted: false,
+            elapsedTime: performance.now() - startTime,
+            stats: mergeProfilingCounters(ctx.stats),
+          };
+        }
+      } else {
+        return {
+          position: defensePos,
+          score: threats.openThrees.length > 0 ? -PATTERN_SCORES.FIVE : 0,
+          completedDepth: 0,
+          interrupted: false,
+          elapsedTime: performance.now() - startTime,
+          stats: mergeProfilingCounters(ctx.stats),
+        };
+      }
     }
   }
 
