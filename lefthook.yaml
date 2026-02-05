@@ -1,0 +1,12 @@
+# lefthook.yaml
+# https://github.com/evilmartians/lefthook
+
+pre-commit:
+  parallel: true
+  commands:
+    check-fix:
+      run: pnpm check-fix
+      stage_fixed: true
+
+    test:
+      run: pnpm test:browser:headless
