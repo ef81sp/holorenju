@@ -68,7 +68,9 @@ export function createBoardFromRecord(
 
   for (let i = 0; i < count && i < moves.length; i++) {
     const move = moves[i];
-    if (!move) {continue;}
+    if (!move) {
+      continue;
+    }
     const { position, color } = move;
     const boardRow = board[position.row];
     if (boardRow) {
