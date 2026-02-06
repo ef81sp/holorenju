@@ -227,35 +227,51 @@ describe("getOpeningPatternInfo", () => {
     expect(getOpeningPatternInfo(board)).toBe(null);
   });
 
-  it("寒星パターンを認識する", () => {
+  it("斜月パターンを認識する（間接打ち）", () => {
     const board = createEmptyBoard();
     placeStonesOnBoard(board, [
       { row: 7, col: 7, color: "black" }, // 天元
-      { row: 8, col: 8, color: "white" }, // 斜め
-      { row: 6, col: 6, color: "black" }, // 寒星（白と反対の斜め）
+      { row: 8, col: 8, color: "white" }, // 右下斜め（間接打ち）
+      { row: 6, col: 6, color: "black" }, // 斜月（白と反対の斜め）
     ]);
 
     const info = getOpeningPatternInfo(board);
     expect(info).not.toBe(null);
     if (info) {
-      expect(info.name).toBe("寒星");
+      expect(info.name).toBe("斜月");
       expect(info.type).toBe("diagonal");
     }
   });
 
-  it("花月パターンを認識する", () => {
+  it("花月パターンを認識する（直接打ち）", () => {
     const board = createEmptyBoard();
     placeStonesOnBoard(board, [
       { row: 7, col: 7, color: "black" }, // 天元
-      { row: 8, col: 8, color: "white" }, // 斜め
-      { row: 6, col: 7, color: "black" }, // 花月（天元から縦方向）
+      { row: 8, col: 7, color: "white" }, // 下（直接打ち）
+      { row: 8, col: 8, color: "black" }, // 花月
     ]);
 
     const info = getOpeningPatternInfo(board);
     expect(info).not.toBe(null);
     if (info) {
       expect(info.name).toBe("花月");
-      expect(info.type).toBe("diagonal");
+      expect(info.type).toBe("orthogonal");
+    }
+  });
+
+  it("寒星パターンを認識する（直接打ち）", () => {
+    const board = createEmptyBoard();
+    placeStonesOnBoard(board, [
+      { row: 7, col: 7, color: "black" }, // 天元
+      { row: 8, col: 7, color: "white" }, // 下（直接打ち）
+      { row: 9, col: 7, color: "black" }, // 寒星
+    ]);
+
+    const info = getOpeningPatternInfo(board);
+    expect(info).not.toBe(null);
+    if (info) {
+      expect(info.name).toBe("寒星");
+      expect(info.type).toBe("orthogonal");
     }
   });
 
@@ -329,33 +345,41 @@ describe("JUSHU_EVALUATION", () => {
   });
 
   it("全26種類の珠型が定義されている", () => {
-    const expectedPatterns = [
-      "花月",
-      "浦月",
-      "疎星",
-      "流星",
-      "金星",
-      "松月",
-      "溪月",
-      "峡月",
-      "雲月",
-      "名月",
-      "瑞星",
-      "遊星",
-      "彗星",
-      "水月",
-      "山月",
-      "岩月",
-      "銀月",
+    // 直接打ち（ORTHOGONAL_PATTERNS）13種
+    const orthogonalPatterns = [
       "寒星",
+      "渓月",
+      "疎星",
+      "花月",
       "残月",
-      "明星",
-      "雨月",
+      "松月",
       "丘月",
       "新月",
-      "恒星",
+      "雨月",
+      "金星",
+      "瑞星",
+      "山月",
+      "遊星",
     ];
-    for (const name of expectedPatterns) {
+    // 間接打ち（DIAGONAL_PATTERNS）13種
+    const diagonalPatterns = [
+      "彗星",
+      "名月",
+      "明星",
+      "嵐月",
+      "流星",
+      "斜月",
+      "銀月",
+      "浦月",
+      "水月",
+      "雲月",
+      "恒星",
+      "峡月",
+      "長星",
+    ];
+    const allPatterns = [...orthogonalPatterns, ...diagonalPatterns];
+    expect(allPatterns.length).toBe(26);
+    for (const name of allPatterns) {
       expect(JUSHU_EVALUATION[name]).toBeDefined();
     }
   });
@@ -364,11 +388,11 @@ describe("JUSHU_EVALUATION", () => {
 describe("getOpeningEvaluation", () => {
   it("花月は黒有利として評価", () => {
     const board = createEmptyBoard();
-    // 花月の配置（直打ち）
+    // 花月の配置（直接打ち）
     placeStonesOnBoard(board, [
       { row: 7, col: 7, color: "black" }, // 天元
-      { row: 8, col: 8, color: "white" }, // 右下斜め
-      { row: 6, col: 7, color: "black" }, // 花月（縦方向）
+      { row: 8, col: 7, color: "white" }, // 下（直接打ち）
+      { row: 8, col: 8, color: "black" }, // 花月
     ]);
 
     const blackEval = getOpeningEvaluation(board, "black");
@@ -380,11 +404,11 @@ describe("getOpeningEvaluation", () => {
 
   it("寒星は白有利として評価", () => {
     const board = createEmptyBoard();
-    // 寒星の配置（直打ち）
+    // 寒星の配置（直接打ち）
     placeStonesOnBoard(board, [
       { row: 7, col: 7, color: "black" }, // 天元
-      { row: 8, col: 8, color: "white" }, // 右下斜め
-      { row: 6, col: 6, color: "black" }, // 寒星（白と反対側の斜め）
+      { row: 8, col: 7, color: "white" }, // 下（直接打ち）
+      { row: 9, col: 7, color: "black" }, // 寒星
     ]);
 
     const blackEval = getOpeningEvaluation(board, "black");
@@ -438,5 +462,130 @@ describe("getOpeningEvaluation", () => {
     ]);
 
     expect(getOpeningEvaluation(board, "black")).toBe(0);
+  });
+});
+
+describe("全26珠型の検出", () => {
+  // 天元の座標
+  const TENGEN_ROW = 7;
+  const TENGEN_COL = 7;
+
+  /**
+   * 珠型検出のヘルパー関数
+   */
+  function detectJushu(
+    whiteOffset: { dr: number; dc: number },
+    blackOffset: { dr: number; dc: number },
+  ): { name: string; type: "diagonal" | "orthogonal" } | null {
+    const board = createEmptyBoard();
+    placeStonesOnBoard(board, [
+      { row: TENGEN_ROW, col: TENGEN_COL, color: "black" },
+      {
+        row: TENGEN_ROW + whiteOffset.dr,
+        col: TENGEN_COL + whiteOffset.dc,
+        color: "white",
+      },
+      {
+        row: TENGEN_ROW + blackOffset.dr,
+        col: TENGEN_COL + blackOffset.dc,
+        color: "black",
+      },
+    ]);
+    return getOpeningPatternInfo(board);
+  }
+
+  describe("直接打ち（縦横）13種", () => {
+    // 白が下(+1,0)に置いた場合を基準
+    const whiteOffset = { dr: 1, dc: 0 };
+
+    it.each([
+      [{ dr: -2, dc: 0 }, "瑞星"],
+      [{ dr: -2, dc: 1 }, "山月"],
+      [{ dr: -2, dc: 2 }, "遊星"],
+      [{ dr: -1, dc: 0 }, "松月"],
+      [{ dr: -1, dc: 1 }, "丘月"],
+      [{ dr: -1, dc: 2 }, "新月"],
+      [{ dr: 0, dc: 1 }, "雨月"],
+      [{ dr: 0, dc: 2 }, "金星"],
+      [{ dr: 1, dc: 1 }, "花月"],
+      [{ dr: 1, dc: 2 }, "残月"],
+      [{ dr: 2, dc: 0 }, "寒星"],
+      [{ dr: 2, dc: 1 }, "渓月"],
+      [{ dr: 2, dc: 2 }, "疎星"],
+    ])("黒が(%o)に置くと「%s」", (blackOffset, expectedName) => {
+      const info = detectJushu(whiteOffset, blackOffset);
+      expect(info).not.toBe(null);
+      expect(info?.name).toBe(expectedName);
+      expect(info?.type).toBe("orthogonal");
+    });
+  });
+
+  describe("間接打ち（斜め）13種", () => {
+    // 白が右下(+1,+1)に置いた場合を基準
+    const whiteOffset = { dr: 1, dc: 1 };
+
+    it.each([
+      [{ dr: -2, dc: -2 }, "彗星"],
+      [{ dr: -2, dc: -1 }, "名月"],
+      [{ dr: -2, dc: 0 }, "明星"],
+      [{ dr: -2, dc: 1 }, "嵐月"],
+      [{ dr: -2, dc: 2 }, "流星"],
+      [{ dr: -1, dc: -1 }, "斜月"],
+      [{ dr: -1, dc: 0 }, "銀月"],
+      [{ dr: -1, dc: 1 }, "浦月"],
+      [{ dr: -1, dc: 2 }, "水月"],
+      [{ dr: 0, dc: 1 }, "雲月"],
+      [{ dr: 0, dc: 2 }, "恒星"],
+      [{ dr: 1, dc: 2 }, "峡月"],
+      [{ dr: 2, dc: 2 }, "長星"],
+    ])("黒が(%o)に置くと「%s」", (blackOffset, expectedName) => {
+      const info = detectJushu(whiteOffset, blackOffset);
+      expect(info).not.toBe(null);
+      expect(info?.name).toBe(expectedName);
+      expect(info?.type).toBe("diagonal");
+    });
+  });
+
+  it("全26珠型がユニークに検出される", () => {
+    const detectedNames = new Set<string>();
+
+    // 直接打ち（縦横）: 白が上下左右4方向
+    const orthogonalOffsets = [
+      { dr: -1, dc: 0 },
+      { dr: 1, dc: 0 },
+      { dr: 0, dc: -1 },
+      { dr: 0, dc: 1 },
+    ];
+
+    // 間接打ち（斜め）: 白が斜め4方向
+    const diagonalOffsets = [
+      { dr: -1, dc: -1 },
+      { dr: -1, dc: 1 },
+      { dr: 1, dc: -1 },
+      { dr: 1, dc: 1 },
+    ];
+
+    // 黒3手目の候補位置（天元から-2～+2の範囲）
+    for (let dr = -2; dr <= 2; dr++) {
+      for (let dc = -2; dc <= 2; dc++) {
+        if (dr === 0 && dc === 0) {
+          continue;
+        }
+
+        for (const whiteOffset of [...orthogonalOffsets, ...diagonalOffsets]) {
+          // 白と同じ位置は除外
+          if (whiteOffset.dr === dr && whiteOffset.dc === dc) {
+            continue;
+          }
+
+          const info = detectJushu(whiteOffset, { dr, dc });
+          if (info) {
+            detectedNames.add(info.name);
+          }
+        }
+      }
+    }
+
+    expect(detectedNames.size).toBe(26);
   });
 });
