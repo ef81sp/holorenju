@@ -208,16 +208,25 @@ function getOpeningInfo(
   };
 }
 
+/** VCF検出結果 */
+interface VcfResult {
+  /** VCF開始インデックス */
+  startIndex: number;
+  /** VCFの手数（勝者の手のみカウント） */
+  vcfLength: number;
+}
+
 /**
  * 四追い勝ち（VCF）を検出
  *
  * 勝者の最後の数手を遡り、四→四→...→四三/五連のパターンを検出
+ * @returns VCF結果（開始インデックスと手数）、VCFでなければnull
  */
 function detectVcfWin(
   moves: MoveAnalysis[],
   winner: "A" | "B" | "draw",
   reason: string,
-): number | null {
+): VcfResult | null {
   if (winner === "draw" || reason !== "five") {
     return null;
   }
@@ -271,7 +280,10 @@ function detectVcfWin(
 
     // 2手以上の四追いならVCF
     if (vcfMoves.length >= 2) {
-      return vcfStartIndex;
+      return {
+        startIndex: vcfStartIndex,
+        vcfLength: vcfMoves.length,
+      };
     }
   }
 
@@ -308,11 +320,11 @@ export function analyzeGame(
   }
 
   // 四追い勝ち（VCF）の検出
-  const vcfStartIndex = detectVcfWin(moves, game.winner, game.reason);
-  if (vcfStartIndex !== null) {
+  const vcfResult = detectVcfWin(moves, game.winner, game.reason);
+  if (vcfResult !== null) {
     // VCF開始手以降にタグを付与
     const winnerColor = game.winner === "A" ? "black" : "white";
-    for (let i = vcfStartIndex; i < moves.length; i++) {
+    for (let i = vcfResult.startIndex; i < moves.length; i++) {
       const move = moves[i];
       if (
         move &&
@@ -323,6 +335,8 @@ export function analyzeGame(
       }
     }
     gameTags.push("vcf-win");
+    // VCF手数タグを追加（例: vcf-3 = 3手のVCF）
+    gameTags.push(`vcf-${vcfResult.vcfLength}` as Tag);
   }
 
   // 禁手負けの検出
