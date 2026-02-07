@@ -54,7 +54,10 @@ const layoutRef = ref<InstanceType<typeof GamePlayerLayout> | null>(null);
 
 // カットイン
 const cutinRef = ref<InstanceType<typeof CutinOverlay> | null>(null);
-const cutinType = ref<"correct" | "wrong" | "practice">("correct");
+const cutinType = ref<"correct" | "wrong" | "practice" | "clear">("correct");
+
+// クリアカットイン表示のためのフラグ
+const hasShownClearCutin = ref(false);
 const { isCutinVisible, showCutin } = useCutinDisplay(cutinRef);
 
 // ターナリー条件：セクションの完了時コールバック
@@ -129,6 +132,53 @@ watch(
       cutinType.value = "practice";
       await nextTick();
       showCutin("practice");
+    }
+  },
+);
+
+// デモのみシナリオの完了を検知してクリアカットインを表示
+watch(
+  () => scenarioNav.isScenarioDone.value,
+  (isDone) => {
+    if (!isDone || hasShownClearCutin.value) {
+      return;
+    }
+
+    // デモのみシナリオ（最後のセクションがデモ）の場合
+    const lastSection = scenarioNav.currentSection.value;
+    if (lastSection?.type === "demo") {
+      setTimeout(() => {
+        if (!hasShownClearCutin.value) {
+          hasShownClearCutin.value = true;
+          cutinType.value = "clear";
+          showCutin("clear");
+        }
+      }, 1000);
+    }
+  },
+);
+
+// 正解カットインが消えた後のクリアカットイン表示
+watch(
+  () => isCutinVisible.value,
+  (isVisible, wasVisible) => {
+    // カットインが消えた瞬間を検知
+    if (wasVisible && !isVisible) {
+      // 最後の問題セクションで正解カットインだった場合
+      if (
+        scenarioNav.isScenarioDone.value &&
+        scenarioNav.currentSection.value?.type === "question" &&
+        cutinType.value === "correct" &&
+        !hasShownClearCutin.value
+      ) {
+        setTimeout(() => {
+          if (!hasShownClearCutin.value) {
+            hasShownClearCutin.value = true;
+            cutinType.value = "clear";
+            showCutin("clear");
+          }
+        }, 1000);
+      }
     }
   },
 );

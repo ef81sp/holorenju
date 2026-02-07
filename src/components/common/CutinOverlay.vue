@@ -7,7 +7,8 @@ export type CutinType =
   | "win"
   | "draw"
   | "lose"
-  | "practice";
+  | "practice"
+  | "clear";
 
 interface Props {
   type: CutinType;
@@ -44,6 +45,10 @@ const iconSrc = computed(() => {
       "@/assets/question-result/holorenju-renshumondai.svg",
       import.meta.url,
     ).href,
+    clear: new URL(
+      "@/assets/question-result/holorenju-clear.svg",
+      import.meta.url,
+    ).href,
   };
   return imageMap[props.type];
 });
@@ -56,6 +61,7 @@ const altText = computed(() => {
     draw: "ひきわけ",
     lose: "ざんねん",
     practice: "れんしゅうもんだい",
+    clear: "クリア",
   };
   return altMap[props.type];
 });
