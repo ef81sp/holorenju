@@ -460,7 +460,7 @@ onBeforeUnmount(() => {
                       layout.STONE_RADIUS.value * 0.7,
                   ],
                   stroke: BOARD_COLORS.markAccent,
-                  strokeWidth: 3,
+                  strokeWidth: 5,
                 }"
               />
               <v-line
@@ -476,7 +476,7 @@ onBeforeUnmount(() => {
                       layout.STONE_RADIUS.value * 0.7,
                   ],
                   stroke: BOARD_COLORS.markAccent,
-                  strokeWidth: 3,
+                  strokeWidth: 5,
                 }"
               />
             </template>
