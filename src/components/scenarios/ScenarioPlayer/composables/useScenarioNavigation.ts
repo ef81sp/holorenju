@@ -322,6 +322,7 @@ export const useScenarioNavigation = (
           boardStore.setBoard(boardState, "initial");
           boardStore.clearMarks();
           boardStore.clearLines();
+          demoDescriptionNodes.value = [];
           currentSectionIndex.value = mapping.sectionIndex;
           isSectionCompleted.value = false;
 
