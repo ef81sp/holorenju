@@ -36,6 +36,29 @@ export function parseInlineTextFromString(raw: string): InlineTextNode[] {
       }
     }
 
+    // リンク検出: [text](url)
+    if (raw[i] === "[") {
+      const linkMatch = raw.slice(i).match(/^\[([^\]]*)\]\(([^)]+)\)/);
+      const [, linkText, url] = linkMatch ?? [];
+      // セキュリティ: http:// または https:// のみ許可
+      const isValidLink =
+        linkMatch && linkText !== undefined && url && /^https?:\/\//.test(url);
+
+      if (isValidLink) {
+        if (buffer) {
+          nodes.push({ type: "text", content: buffer });
+          buffer = "";
+        }
+
+        // リンクテキスト内を再帰的にパース
+        const innerNodes = parseInlineTextFromString(linkText);
+        nodes.push({ type: "link", content: innerNodes, url });
+        i += linkMatch[0].length;
+        continue;
+      }
+      // 不正なURLはプレーンテキストとして扱う（continueしない）
+    }
+
     // ルビ検出: {base|ruby}
     if (raw[i] === "{") {
       if (buffer) {
@@ -182,6 +205,10 @@ function stringifyInline(nodes: InlineTextNode[]): string {
       }
       if (node.type === "ruby") {
         return `{${node.base}|${node.ruby}}`;
+      }
+      if (node.type === "link") {
+        const content = stringifyInline(node.content);
+        return `[${content}](${node.url})`;
       }
       return "";
     })

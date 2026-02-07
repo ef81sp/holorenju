@@ -16,6 +16,10 @@ function inlineNodesToText(nodes: InlineTextNode[]): string {
         const content = inlineNodesToText(node.content);
         return `**${content}**`;
       }
+      if (node.type === "link") {
+        const content = inlineNodesToText(node.content);
+        return `[${content}](${node.url})`;
+      }
       return "";
     })
     .join("");

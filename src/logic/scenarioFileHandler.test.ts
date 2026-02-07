@@ -438,6 +438,28 @@ describe("scenarioFileHandler", () => {
         ];
         expect(countDisplayCharacters(nodes)).toBe(2);
       });
+
+      it("リンクは表示テキストのみカウント（URLを除外）", () => {
+        const nodes: TextNode[] = [
+          {
+            type: "link",
+            content: [{ type: "text", content: "こちら" }],
+            url: "https://example.com",
+          },
+        ];
+        expect(countDisplayCharacters(nodes)).toBe(3);
+      });
+
+      it("リンク内のルビを正しくカウント", () => {
+        const nodes: TextNode[] = [
+          {
+            type: "link",
+            content: [{ type: "ruby", base: "連珠", ruby: "れんじゅ" }],
+            url: "https://example.com",
+          },
+        ];
+        expect(countDisplayCharacters(nodes)).toBe(2);
+      });
     });
 
     describe("countDisplayCharactersPerLine", () => {

@@ -625,7 +625,7 @@ function validateTextNode(item: unknown, path: string): TextNode {
   const type = validateEnum(
     item,
     "type",
-    ["text", "ruby", "emphasis", "lineBreak", "list"],
+    ["text", "ruby", "emphasis", "link", "lineBreak", "list"],
     `${path}.type`,
   );
 
@@ -660,6 +660,25 @@ function validateTextNode(item: unknown, path: string): TextNode {
     return { type: "emphasis", content } as TextNode;
   }
 
+  if (type === "link") {
+    const url = validateString(item, "url", `${path}.url`, true);
+    const contentRaw = item.content;
+    // eslint-disable-next-line init-declarations
+    let content: InlineTextNode[];
+
+    if (typeof contentRaw === "string") {
+      content = parseInlineTextFromString(contentRaw);
+    } else if (Array.isArray(contentRaw)) {
+      content = contentRaw.map((node, nodeIndex) =>
+        validateInlineNode(node, `${path}.content[${nodeIndex}]`),
+      );
+    } else {
+      throw new Error(`${path}.content must be string or array`);
+    }
+
+    return { type: "link", content, url } as TextNode;
+  }
+
   if (type === "lineBreak") {
     return { type: "lineBreak" } as TextNode;
   }
@@ -687,7 +706,7 @@ function validateInlineNode(item: unknown, path: string): InlineTextNode {
   const type = validateEnum(
     item,
     "type",
-    ["text", "ruby", "emphasis"],
+    ["text", "ruby", "emphasis", "link"],
     `${path}.type`,
   );
   if (type === "text") {
@@ -699,20 +718,24 @@ function validateInlineNode(item: unknown, path: string): InlineTextNode {
     const ruby = validateString(item, "ruby", `${path}.ruby`, true);
     return { type: "ruby", base, ruby } as InlineTextNode;
   }
+
   const contentRaw = item.content;
   // eslint-disable-next-line init-declarations
   let content: InlineTextNode[];
 
   if (typeof contentRaw === "string") {
-    // 旧形式: string
     content = parseInlineTextFromString(contentRaw);
   } else if (Array.isArray(contentRaw)) {
-    // 新形式: InlineTextNode[]
     content = contentRaw.map((node, nodeIndex) =>
       validateInlineNode(node, `${path}.content[${nodeIndex}]`),
     );
   } else {
     throw new Error(`${path}.content must be string or array`);
+  }
+
+  if (type === "link") {
+    const url = validateString(item, "url", `${path}.url`, true);
+    return { type: "link", content, url } as InlineTextNode;
   }
 
   return { type: "emphasis", content } as InlineTextNode;

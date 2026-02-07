@@ -63,6 +63,112 @@ describe("parseInlineTextFromString", () => {
 
     expect(result).toEqual([{ type: "text", content: "{unclosed" }]);
   });
+
+  it("parses link", () => {
+    const result = parseInlineTextFromString("[リンク](https://example.com)");
+
+    expect(result).toEqual([
+      {
+        type: "link",
+        content: [{ type: "text", content: "リンク" }],
+        url: "https://example.com",
+      },
+    ]);
+  });
+
+  it("parses link with ruby inside", () => {
+    const result = parseInlineTextFromString(
+      "[{連珠|れんじゅ}](https://example.com)",
+    );
+
+    expect(result).toEqual([
+      {
+        type: "link",
+        content: [{ type: "ruby", base: "連珠", ruby: "れんじゅ" }],
+        url: "https://example.com",
+      },
+    ]);
+  });
+
+  it("parses link with emphasis inside", () => {
+    const result = parseInlineTextFromString("[**重要**](https://example.com)");
+
+    expect(result).toEqual([
+      {
+        type: "link",
+        content: [
+          { type: "emphasis", content: [{ type: "text", content: "重要" }] },
+        ],
+        url: "https://example.com",
+      },
+    ]);
+  });
+
+  it("parses link in mixed text", () => {
+    const result = parseInlineTextFromString(
+      "詳しくは[こちら](https://example.com)をご覧ください",
+    );
+
+    expect(result).toEqual([
+      { type: "text", content: "詳しくは" },
+      {
+        type: "link",
+        content: [{ type: "text", content: "こちら" }],
+        url: "https://example.com",
+      },
+      { type: "text", content: "をご覧ください" },
+    ]);
+  });
+
+  it("rejects javascript: URL as plain text", () => {
+    const result = parseInlineTextFromString(
+      "[click](javascript:alert('xss'))",
+    );
+
+    expect(result).toEqual([
+      { type: "text", content: "[click](javascript:alert('xss'))" },
+    ]);
+  });
+
+  it("rejects data: URL as plain text", () => {
+    const result = parseInlineTextFromString("[click](data:text/html,<h1>x)");
+
+    expect(result).toEqual([
+      { type: "text", content: "[click](data:text/html,<h1>x)" },
+    ]);
+  });
+
+  it("rejects relative URL as plain text", () => {
+    const result = parseInlineTextFromString("[click](/path/to/page)");
+
+    expect(result).toEqual([
+      { type: "text", content: "[click](/path/to/page)" },
+    ]);
+  });
+
+  it("allows http:// URL", () => {
+    const result = parseInlineTextFromString("[link](http://example.com)");
+
+    expect(result).toEqual([
+      {
+        type: "link",
+        content: [{ type: "text", content: "link" }],
+        url: "http://example.com",
+      },
+    ]);
+  });
+
+  it("parses link with empty text", () => {
+    const result = parseInlineTextFromString("[](https://example.com)");
+
+    expect(result).toEqual([
+      {
+        type: "link",
+        content: [],
+        url: "https://example.com",
+      },
+    ]);
+  });
 });
 
 describe("parseText", () => {
@@ -202,6 +308,9 @@ describe("round-trip", () => {
     "line1\nline2",
     "- item1\n- item2",
     "**{連珠|れんじゅ}**は面白い",
+    "[リンク](https://example.com)",
+    "[{連珠|れんじゅ}](https://example.com)",
+    "詳しくは[こちら](https://example.com)をご覧ください",
   ];
 
   testCases.forEach((input) => {

@@ -116,6 +116,9 @@ export function countDisplayCharacters(nodes: TextNode[]): number {
       case "emphasis":
         count += countDisplayCharacters(node.content);
         break;
+      case "link":
+        count += countDisplayCharacters(node.content);
+        break;
       case "lineBreak":
         // 改行は文字数としてカウントしない（行分割に使用）
         break;

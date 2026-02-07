@@ -103,7 +103,6 @@ const emits = defineEmits<{
   overflow-y: auto;
   box-shadow: none;
   font-size: var(--font-size-14);
-  word-break: auto-phrase;
 }
 
 .controls {

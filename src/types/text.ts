@@ -3,7 +3,7 @@
  */
 
 // インラインノード（行内要素）
-type InlineTextNode = TextSegment | RubyNode | EmphasisNode;
+type InlineTextNode = TextSegment | RubyNode | EmphasisNode | LinkNode;
 
 // 行・ブロックも含めた統一テキストノード
 type TextNode = InlineTextNode | LineBreakNode | BulletListNode;
@@ -27,6 +27,13 @@ interface EmphasisNode {
   content: InlineTextNode[];
 }
 
+// リンク（例：[テキスト](https://example.com)）
+interface LinkNode {
+  type: "link";
+  content: InlineTextNode[]; // リンクテキスト（ルビや強調を含む可能性あり）
+  url: string;
+}
+
 // 改行
 interface LineBreakNode {
   type: "lineBreak";
@@ -44,6 +51,7 @@ export type {
   TextSegment,
   RubyNode,
   EmphasisNode,
+  LinkNode,
   LineBreakNode,
   BulletListNode,
 };
