@@ -1,7 +1,13 @@
 <script setup lang="ts">
 import { computed, useTemplateRef } from "vue";
 
-export type CutinType = "correct" | "wrong" | "win" | "draw" | "lose";
+export type CutinType =
+  | "correct"
+  | "wrong"
+  | "win"
+  | "draw"
+  | "lose"
+  | "practice";
 
 interface Props {
   type: CutinType;
@@ -34,6 +40,10 @@ const iconSrc = computed(() => {
       "@/assets/question-result/holorenju-zannen.svg",
       import.meta.url,
     ).href,
+    practice: new URL(
+      "@/assets/question-result/holorenju-renshumondai.svg",
+      import.meta.url,
+    ).href,
   };
   return imageMap[props.type];
 });
@@ -45,6 +55,7 @@ const altText = computed(() => {
     win: "あっぱれ",
     draw: "ひきわけ",
     lose: "ざんねん",
+    practice: "れんしゅうもんだい",
   };
   return altMap[props.type];
 });

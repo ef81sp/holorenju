@@ -54,7 +54,7 @@ const layoutRef = ref<InstanceType<typeof GamePlayerLayout> | null>(null);
 
 // カットイン
 const cutinRef = ref<InstanceType<typeof CutinOverlay> | null>(null);
-const cutinType = ref<"correct" | "wrong">("correct");
+const cutinType = ref<"correct" | "wrong" | "practice">("correct");
 const { isCutinVisible, showCutin } = useCutinDisplay(cutinRef);
 
 // ターナリー条件：セクションの完了時コールバック
@@ -105,25 +105,51 @@ const keyboardNav = useKeyboardNavigation(
   isKeyboardDisabled,
 );
 
-// セクション変更時にカーソルアクティベーションをリセット
+// セクション変更時にカーソルアクティベーションをリセット＆デモ→問題遷移時はカットインを表示
 watch(
   () => scenarioNav.currentSectionIndex.value,
-  () => {
+  async (newIndex, oldIndex) => {
     keyboardNav.resetCursorActivation();
+
+    // セクション遷移がない場合はスキップ
+    if (oldIndex === undefined || oldIndex === newIndex) {
+      return;
+    }
+
+    const sections = scenarioNav.scenario.value?.sections;
+    if (!sections) {
+      return;
+    }
+
+    const prevSection = sections[oldIndex];
+    const newSection = sections[newIndex];
+
+    // デモ→問題への遷移時のみカットインを表示
+    if (prevSection?.type === "demo" && newSection?.type === "question") {
+      cutinType.value = "practice";
+      await nextTick();
+      showCutin("practice");
+    }
   },
 );
 
-// カーソル非表示条件
-const isBoardDisabled = computed(() => {
-  // デモセクションまたはセクション完了時は無効化（現行動作）
-  if (
+// ボード無効化条件（デモセクションまたはセクション完了時のみ）
+const isBoardDisabled = computed(
+  () =>
     scenarioNav.currentSection.value?.type === "demo" ||
-    scenarioNav.isSectionCompleted.value
-  ) {
-    return true;
+    scenarioNav.isSectionCompleted.value,
+);
+
+// カーソル表示条件（問題セクションでWASDキーを押した場合のみ表示）
+const cursorPositionForBoard = computed(() => {
+  if (isBoardDisabled.value) {
+    return undefined;
   }
-  // 問題セクションでWASDキーを押していない場合はカーソル非表示
-  return !keyboardNav.isCursorActivated.value;
+  // カーソルが有効化されていない場合は非表示
+  if (!keyboardNav.isCursorActivated.value) {
+    return undefined;
+  }
+  return keyboardNav.cursorPosition.value;
 });
 
 // Lifecycle
@@ -242,7 +268,7 @@ const handleGoToList = (): void => {
       <RenjuBoard
         :disabled="isBoardDisabled"
         :stage-size="boardSize"
-        :cursor-position="keyboardNav.cursorPosition.value"
+        :cursor-position="cursorPositionForBoard"
         :player-color="playerColor"
         @place-stone="handlePlaceStone"
       />
