@@ -69,7 +69,7 @@ const emits = defineEmits<{
 <style scoped>
 .info-section {
   display: grid;
-  grid-template-rows: 1fr 6fr 2fr;
+  grid-template-rows: auto 1fr auto;
   gap: 0;
   height: 100%;
 }
@@ -102,7 +102,7 @@ const emits = defineEmits<{
   border-radius: 8px 8px 0 0;
   overflow-y: auto;
   box-shadow: none;
-  font-size: calc(var(--size-18) * var(--text-size-multiplier));
+  font-size: calc(var(--size-14) * var(--text-size-multiplier));
   word-break: auto-phrase;
 }
 

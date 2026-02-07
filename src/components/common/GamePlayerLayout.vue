@@ -3,7 +3,7 @@
  * ゲームプレイヤー共通レイアウト
  *
  * ScenarioPlayerとCpuGamePlayerで共通のグリッドレイアウトを提供。
- * grid-template-columns: 4fr 7fr 5fr
+ * grid-template-columns: 4fr 8fr 4fr
  * grid-template-rows: 7fr 2fr
  */
 
@@ -36,7 +36,7 @@ defineExpose({
       <slot name="control-info" />
     </div>
 
-    <!-- 連珠盤セクション（中央 7×7）-->
+    <!-- 連珠盤セクション（中央 8×7）-->
     <div
       id="board-anchor"
       ref="boardFrameRef"
@@ -49,12 +49,12 @@ defineExpose({
       />
     </div>
 
-    <!-- 説明・コントロール部（右側 5×9）-->
+    <!-- 説明・コントロール部（右側 4×7）-->
     <div class="info-section-slot">
       <slot name="info" />
     </div>
 
-    <!-- セリフ部（左下 11×2）-->
+    <!-- セリフ部（下段全幅、中央寄せ）-->
     <div class="dialog-section-slot">
       <slot name="dialog" />
     </div>
@@ -66,12 +66,13 @@ defineExpose({
   width: 100%;
   height: 100%;
   display: grid;
-  grid-template-columns: 4fr 7fr 5fr;
+  grid-template-columns: 4fr 8fr 4fr;
   grid-template-rows: 7fr 2fr;
   padding: var(--size-14);
   gap: var(--size-14);
   box-sizing: border-box;
   position: relative;
+  overflow: hidden;
 }
 
 .control-section-slot {
@@ -109,13 +110,16 @@ defineExpose({
 
 .info-section-slot {
   grid-column: 3;
-  grid-row: 1 / 3;
+  grid-row: 1;
   overflow-y: auto;
 }
 
 .dialog-section-slot {
-  grid-column: 1 / 3;
+  grid-column: 1 / -1;
   grid-row: 2;
-  overflow-y: auto;
+  display: flex;
+  justify-content: center;
+  min-height: 0;
+  overflow: clip;
 }
 </style>

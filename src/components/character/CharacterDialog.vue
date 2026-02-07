@@ -207,28 +207,31 @@ const messageCharacterInfo = computed(() => {
 
 <style scoped>
 .character-dialog {
-  display: flex;
+  display: grid;
+  grid-template-columns: 4fr 8fr 4fr;
   gap: var(--size-12);
   align-items: stretch;
-  padding-block: var(--size-5);
+  width: 100%;
   height: 100%;
+  box-sizing: border-box;
+  overflow: clip;
 }
 
 .character-slot {
-  flex-shrink: 0;
-  width: var(--size-100);
   display: flex;
-  justify-content: center;
   align-items: flex-start;
+  min-height: 0;
   animation: fadeIn var(--duration-character) ease-in;
 }
 
 .character-slot.left-slot {
-  order: 1;
+  grid-column: 1;
+  justify-content: flex-end;
 }
 
 .character-slot.right-slot {
-  order: 3;
+  grid-column: 3;
+  justify-content: flex-start;
 }
 
 .character-slot .avatar {
@@ -252,15 +255,14 @@ const messageCharacterInfo = computed(() => {
 }
 
 .dialog-content {
-  flex: 1;
-  order: 2;
+  grid-column: 2;
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
 }
 
 .avatar {
-  width: 100%;
+  height: calc(100% - var(--size-8));
   aspect-ratio: 1;
   border-radius: 8px;
   display: flex;
@@ -268,10 +270,6 @@ const messageCharacterInfo = computed(() => {
   justify-content: center;
   box-shadow: 0 var(--size-5) var(--size-5) rgba(0, 0, 0, 0.1);
   border: var(--size-2) solid var(--color-border);
-}
-
-.avatar-icon {
-  font-size: var(--size-32);
 }
 
 .dialog-bubble {
@@ -350,7 +348,7 @@ const messageCharacterInfo = computed(() => {
 }
 
 .dialog-text-wrapper {
-  font-size: calc(var(--size-20) * var(--text-size-multiplier));
+  font-size: calc(var(--size-16) * var(--text-size-multiplier));
 }
 
 .choices {

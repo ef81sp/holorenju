@@ -544,7 +544,7 @@ const gameEndMessage = computed(() => {
   padding: var(--size-12);
   background: var(--color-background-secondary);
   border-radius: var(--size-8);
-  width: 100%;
+  text-align: center;
 }
 
 .help-text p {
@@ -554,17 +554,21 @@ const gameEndMessage = computed(() => {
 }
 
 .character-dialog {
-  display: flex;
+  display: grid;
+  grid-template-columns: 4fr 8fr 4fr;
   gap: var(--size-12);
   align-items: stretch;
-  padding-block: var(--size-5);
   width: 100%;
   height: 100%;
+  box-sizing: border-box;
+  overflow: clip;
 }
 
 .dialog-avatar {
-  flex-shrink: 0;
-  width: var(--size-100);
+  grid-column: 1;
+  justify-self: end;
+  align-self: flex-start;
+  height: calc(100% - var(--size-8));
   aspect-ratio: 1;
   border-radius: var(--size-8);
   border: var(--size-2) solid var(--color-border);
@@ -576,7 +580,7 @@ const gameEndMessage = computed(() => {
 }
 
 .dialog-bubble {
-  flex: 1;
+  grid-column: 2;
   height: 100%;
   padding: var(--size-8);
   background: white;
@@ -592,6 +596,6 @@ const gameEndMessage = computed(() => {
 }
 
 .dialog-text-wrapper {
-  font-size: calc(var(--size-20) * var(--text-size-multiplier));
+  font-size: calc(var(--size-16) * var(--text-size-multiplier));
 }
 </style>
