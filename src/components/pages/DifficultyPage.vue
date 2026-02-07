@@ -175,7 +175,7 @@ const handleBack = (): void => {
 
 .loading,
 .error {
-  font-size: var(--size-20);
+  font-size: var(--font-size-20);
   color: var(--color-text-secondary);
   text-align: center;
 }
@@ -224,7 +224,7 @@ const handleBack = (): void => {
   align-items: center;
   gap: var(--size-10);
   font-weight: 700;
-  font-size: var(--size-18);
+  font-size: var(--font-size-18);
   color: var(--color-text-primary);
 }
 
@@ -237,7 +237,7 @@ const handleBack = (): void => {
   border-radius: 50%;
   background: rgba(0, 0, 0, 0.15);
   color: rgba(0, 0, 0, 0.7);
-  font-size: var(--size-14);
+  font-size: var(--font-size-14);
   font-weight: 700;
   flex-shrink: 0;
 }
@@ -251,7 +251,7 @@ const handleBack = (): void => {
   margin: 0;
   color: var(--color-text-secondary);
   line-height: 1.5;
-  font-size: var(--size-13);
+  font-size: var(--font-size-12);
 }
 
 .progress-info {
@@ -261,7 +261,7 @@ const handleBack = (): void => {
 }
 
 .progress-text {
-  font-size: var(--size-12);
+  font-size: var(--font-size-12);
   color: var(--color-text-primary);
   font-weight: 600;
 }

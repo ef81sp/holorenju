@@ -8,7 +8,7 @@ import { computed, ref, watch } from "vue";
 const STORAGE_KEY = "holorenju_preferences";
 
 export type AnimationSpeed = "slowest" | "slow" | "normal" | "fast" | "fastest";
-export type TextSize = "small" | "normal" | "large";
+export type TextSize = "normal" | "large";
 
 interface Preferences {
   animation: {

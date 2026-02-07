@@ -36,7 +36,7 @@ defineEmits<{
 }
 
 .page-header h1 {
-  font-size: var(--size-40);
+  font-size: var(--font-size-48);
   font-weight: bold;
   color: var(--color-text-primary);
   margin: 0;
@@ -49,7 +49,7 @@ defineEmits<{
   border: var(--size-2) solid var(--color-border);
   border-radius: var(--size-8);
   cursor: pointer;
-  font-size: var(--size-14);
+  font-size: var(--font-size-14);
   font-weight: bold;
   transition: all 0.2s ease;
   white-space: nowrap;

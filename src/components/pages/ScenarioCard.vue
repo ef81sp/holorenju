@@ -77,7 +77,7 @@ const handleStart = (): void => {
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  font-size: var(--size-12);
+  font-size: var(--font-size-12);
   font-weight: bold;
 }
 
@@ -87,7 +87,7 @@ const handleStart = (): void => {
   left: calc(-1 * var(--size-8));
   background: var(--color-success);
   color: white;
-  font-size: var(--size-12);
+  font-size: var(--font-size-12);
   padding: var(--size-5) var(--size-10);
   border-radius: var(--size-12);
   font-weight: bold;
@@ -102,14 +102,14 @@ const handleStart = (): void => {
 }
 
 .card-title {
-  font-size: var(--size-16);
+  font-size: var(--font-size-16);
   font-weight: bold;
   color: var(--color-text-primary);
   margin: 0;
 }
 
 .card-description {
-  font-size: var(--size-12);
+  font-size: var(--font-size-12);
   color: var(--color-text-secondary);
   margin: 0;
   line-height: 1.4;
@@ -125,7 +125,7 @@ const handleStart = (): void => {
   color: var(--color-text-primary);
   border: none;
   border-radius: var(--size-6);
-  font-size: var(--size-12);
+  font-size: var(--font-size-12);
   font-weight: bold;
   cursor: pointer;
   transition: all 0.2s ease;

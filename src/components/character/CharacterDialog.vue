@@ -318,7 +318,7 @@ const messageCharacterInfo = computed(() => {
 
 .character-name {
   font-weight: 500;
-  font-size: var(--size-14);
+  font-size: var(--font-size-14);
 }
 
 .dialogue-nav-buttons {
@@ -331,7 +331,7 @@ const messageCharacterInfo = computed(() => {
   background: transparent;
   border: none;
   cursor: pointer;
-  font-size: var(--size-12);
+  font-size: var(--font-size-12);
   font-weight: 500;
   color: var(--color-text-secondary);
   transition: color 0.2s;
@@ -348,7 +348,7 @@ const messageCharacterInfo = computed(() => {
 }
 
 .dialog-text-wrapper {
-  font-size: calc(var(--size-16) * var(--text-size-multiplier));
+  font-size: var(--font-size-16);
 }
 
 .choices {
@@ -364,7 +364,7 @@ const messageCharacterInfo = computed(() => {
   border: 2px solid var(--color-border);
   border-radius: var(--size-8);
   cursor: pointer;
-  font-size: var(--size-14);
+  font-size: var(--font-size-14);
   transition: all 0.2s;
   text-align: left;
 }

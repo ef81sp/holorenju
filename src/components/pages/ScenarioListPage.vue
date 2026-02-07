@@ -215,7 +215,7 @@ const isCompleted = (scenarioId: string): boolean =>
   position: absolute;
   bottom: var(--size-20);
   right: var(--size-20);
-  font-size: var(--size-16);
+  font-size: var(--font-size-16);
   color: var(--color-text-secondary);
   background: rgba(255, 255, 255, 0.8);
   padding: var(--size-8) var(--size-16);
@@ -236,7 +236,7 @@ const isCompleted = (scenarioId: string): boolean =>
 .loading,
 .error {
   grid-column: 1 / -1;
-  font-size: var(--size-20);
+  font-size: var(--font-size-20);
   color: var(--color-text-secondary);
   text-align: center;
 }

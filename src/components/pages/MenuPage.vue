@@ -128,7 +128,7 @@ const handleSelectEditor = (): void => {
 }
 
 .button-icon {
-  font-size: var(--size-32);
+  font-size: var(--font-size-32);
 }
 
 .button-text-area {
@@ -139,13 +139,13 @@ const handleSelectEditor = (): void => {
 }
 
 .button-text {
-  font-size: var(--size-20);
+  font-size: var(--font-size-20);
   font-weight: bold;
   color: var(--color-text-primary);
 }
 
 .button-description {
-  font-size: var(--size-12);
+  font-size: var(--font-size-12);
   color: var(--color-text-secondary);
   margin: 0;
   padding: 0;
@@ -158,7 +158,7 @@ const handleSelectEditor = (): void => {
   top: var(--size-8);
   background: var(--color-error);
   color: white;
-  font-size: var(--size-12);
+  font-size: var(--font-size-12);
   padding: var(--size-5) var(--size-8);
   border-radius: var(--size-8);
   font-weight: bold;

@@ -165,7 +165,7 @@ const getDifficultyLabel = (difficulty: ScenarioDifficulty): string =>
 
 .loading,
 .error {
-  font-size: var(--size-20);
+  font-size: var(--font-size-20);
   color: var(--color-text-secondary);
   text-align: center;
   padding: var(--size-40);
@@ -182,22 +182,22 @@ const getDifficultyLabel = (difficulty: ScenarioDifficulty): string =>
   align-items: start;
   margin-bottom: var(--size-40);
   color: var(--color-text-primary);
-  font-size: var(--size32);
+  font-size: var(--font-size-32);
   line-height: var(--size-32);
   & small {
-    font-size: var(--size-16);
+    font-size: var(--font-size-16);
     opacity: 0.8;
   }
 }
 
 .header h1 {
-  font-size: var(--size-48);
+  font-size: var(--font-size-48);
   margin: 0;
   text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 .subtitle {
-  font-size: var(--size-20);
+  font-size: var(--font-size-20);
   margin: 0 0 var(--size-30);
   opacity: 0.9;
 }
@@ -238,20 +238,21 @@ const getDifficultyLabel = (difficulty: ScenarioDifficulty): string =>
 .card-header h3 {
   margin: 0;
   color: var(--color-text-primary);
-  font-size: var(--size-24);
+  font-size: var(--font-size-24);
   flex: 1;
 }
 
 .difficulty-badge {
-  padding: 0.625vw var(--size-12); /* 6px 12px */
+  padding: var(--size-6) var(--size-12);
   border-radius: 6px;
   color: white;
-  font-size: var(--size-12);
+  font-size: var(--font-size-12);
   font-weight: 500;
 }
 
 .description {
   color: var(--color-text-secondary);
+  font-size: var(--font-size-14);
   line-height: 1.6;
   margin-bottom: var(--size-20);
 }
@@ -269,7 +270,7 @@ const getDifficultyLabel = (difficulty: ScenarioDifficulty): string =>
 .completed-badge {
   color: var(--color-fubuki-primary);
   font-weight: 500;
-  font-size: var(--size-14);
+  font-size: var(--font-size-14);
 }
 
 .start-button {
@@ -278,7 +279,7 @@ const getDifficultyLabel = (difficulty: ScenarioDifficulty): string =>
   color: var(--color-text-primary);
   border: none;
   border-radius: 8px;
-  font-size: var(--size-14);
+  font-size: var(--font-size-14);
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
@@ -292,11 +293,11 @@ const getDifficultyLabel = (difficulty: ScenarioDifficulty): string =>
 
 @media (max-width: 768px) {
   .header h1 {
-    font-size: var(--size-32);
+    font-size: var(--font-size-32);
   }
 
   .subtitle {
-    font-size: var(--size-16);
+    font-size: var(--font-size-16);
   }
 
   .scenario-list {

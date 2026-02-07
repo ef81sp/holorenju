@@ -59,7 +59,7 @@ withDefaults(defineProps<Props>(), {
   border: 2px solid var(--color-fubuki-primary);
   padding: var(--size-12) var(--size-16);
   border-radius: 8px;
-  font-size: var(--size-12);
+  font-size: var(--font-size-12);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   flex-shrink: 1;
   min-width: 0;
@@ -70,7 +70,7 @@ withDefaults(defineProps<Props>(), {
   font-weight: 500;
   color: var(--color-fubuki-primary);
   margin-bottom: var(--size-12);
-  font-size: var(--size-14);
+  font-size: var(--font-size-14);
 }
 
 .control-section {
@@ -85,13 +85,13 @@ withDefaults(defineProps<Props>(), {
   font-weight: 500;
   color: #666;
   margin-bottom: var(--size-4);
-  font-size: var(--size-12);
+  font-size: var(--font-size-12);
 }
 
 .control-keys {
   margin-bottom: var(--size-4);
   color: #666;
-  font-size: var(--size-12);
+  font-size: var(--font-size-12);
 }
 
 .key {
@@ -101,7 +101,7 @@ withDefaults(defineProps<Props>(), {
   border: 1px solid #ccc;
   border-radius: 3px;
   font-family: monospace;
-  font-size: var(--size-12);
+  font-size: var(--font-size-12);
   font-weight: 500;
   margin-right: var(--size-4);
 }
@@ -113,6 +113,6 @@ withDefaults(defineProps<Props>(), {
   font-family: monospace;
   color: #333;
   font-weight: 500;
-  font-size: var(--size-12);
+  font-size: var(--font-size-12);
 }
 </style>

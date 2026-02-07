@@ -6,6 +6,11 @@
   line-height: 1.5;
   font-weight: 300;
 
+  /* ブラウザの最小フォントサイズ設定を上書き */
+  -webkit-text-size-adjust: none;
+  -moz-text-size-adjust: none;
+  text-size-adjust: none;
+
   /* フォント */
   --font-weight-normal: 300;
   --font-weight-bold: 500;
@@ -159,8 +164,8 @@
     var(--color-blue-800) 100%
   );
 
-  /* テキストサイズ倍率 */
-  --text-size-multiplier: 1;
+  /* テキストサイズ倍率（デフォルト=標準=1.15） */
+  --text-size-multiplier: 1.15;
 
   /* 演出速度倍率（JSからセット） */
   --effect-speed-multiplier: 1;
@@ -180,39 +185,94 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 
+  /* 有効ビューポート幅: #appの実際の幅に連動（16:9制限を反映） */
+  --effective-vw: min(100vw, calc(100svh * 16 / 9));
+
   /* 960px基準の相対値変数 (960px = 100vw, 540px = 100svh) - clamp()で最小値・最大値を設定 */
-  --size-2: clamp(1.5px, 0.208vw, 3px); /* 2px */
-  --size-4: clamp(3px, 0.417vw, 5px); /* 4px */
-  --size-5: clamp(3px, 0.521vw, 7px); /* 5px */
-  --size-6: clamp(4px, 0.625vw, 8px); /* 6px */
-  --size-8: clamp(5px, 0.833vw, 11px); /* 8px */
-  --size-10: clamp(7px, 1.042vw, 14px); /* 10px */
-  --size-12: clamp(8px, 1.25vw, 16px); /* 12px */
-  --size-14: clamp(10px, 1.458vw, 18px); /* 14px */
-  --size-16: clamp(11px, 1.667vw, 21px); /* 16px */
-  --size-18: clamp(13px, 1.875vw, 23px); /* 18px */
-  --size-20: clamp(14px, 2.083vw, 26px); /* 20px */
-  --size-24: clamp(16px, 2.5vw, 32px); /* 24px */
-  --size-28: clamp(19px, 2.917vw, 37px); /* 28px */
-  --size-30: clamp(20px, 3.125vw, 40px); /* 30px */
-  --size-32: clamp(22px, 3.333vw, 42px); /* 32px */
-  --size-40: clamp(28px, 4.167vw, 53px); /* 40px */
-  --size-48: clamp(33px, 5vw, 64px); /* 48px */
-  --size-56: clamp(39px, 5.833vw, 74px); /* 56px */
-  --size-60: clamp(42px, 6.25vw, 80px); /* 60px */
-  --size-64: clamp(44px, 6.667vw, 88px); /* 64px */
-  --size-80: clamp(56px, 8.333vw, 106px); /* 80px */
-  --size-100: clamp(70px, 10.417vw, 133px); /* 100px */
-  --size-120: clamp(84px, 12.5vw, 160px); /* 120px */
-  --size-150: clamp(105px, 15.625vw, 200px); /* 150px */
-  --size-180: clamp(126px, 18.75vw, 240px); /* 180px */
-  --size-200: clamp(140px, 20.833vw, 266px); /* 200px */
-  --size-250: clamp(175px, 26.042vw, 333px); /* 250px */
-  --size-300: clamp(210px, 31.25vw, 400px); /* 300px */
-  --size-350: clamp(245px, 36.458vw, 466px); /* 350px */
-  --size-500: clamp(350px, 52.083vw, 666px); /* 500px */
-  --size-600: clamp(420px, 62.5vw, 800px); /* 600px */
-  --size-1200: clamp(840px, 125vw, 1600px); /* 1200px */
+  --size-2: clamp(1.5px, calc(var(--effective-vw) * 0.00208), 3px); /* 2px */
+  --size-4: clamp(3px, calc(var(--effective-vw) * 0.00417), 5px); /* 4px */
+  --size-5: clamp(3px, calc(var(--effective-vw) * 0.00521), 7px); /* 5px */
+  --size-6: clamp(4px, calc(var(--effective-vw) * 0.00625), 8px); /* 6px */
+  --size-8: clamp(5px, calc(var(--effective-vw) * 0.00833), 11px); /* 8px */
+  --size-10: clamp(7px, calc(var(--effective-vw) * 0.01042), 14px); /* 10px */
+  --size-12: clamp(8px, calc(var(--effective-vw) * 0.0125), 16px); /* 12px */
+  --size-14: clamp(10px, calc(var(--effective-vw) * 0.01458), 18px); /* 14px */
+  --size-16: clamp(11px, calc(var(--effective-vw) * 0.01667), 21px); /* 16px */
+  --size-18: clamp(13px, calc(var(--effective-vw) * 0.01875), 23px); /* 18px */
+  --size-20: clamp(14px, calc(var(--effective-vw) * 0.02083), 26px); /* 20px */
+  --size-24: clamp(16px, calc(var(--effective-vw) * 0.025), 32px); /* 24px */
+  --size-28: clamp(19px, calc(var(--effective-vw) * 0.02917), 37px); /* 28px */
+  --size-30: clamp(20px, calc(var(--effective-vw) * 0.03125), 40px); /* 30px */
+  --size-32: clamp(22px, calc(var(--effective-vw) * 0.03333), 42px); /* 32px */
+  --size-40: clamp(28px, calc(var(--effective-vw) * 0.04167), 53px); /* 40px */
+  --size-48: clamp(33px, calc(var(--effective-vw) * 0.05), 64px); /* 48px */
+  --size-56: clamp(39px, calc(var(--effective-vw) * 0.05833), 74px); /* 56px */
+  --size-60: clamp(42px, calc(var(--effective-vw) * 0.0625), 80px); /* 60px */
+  --size-64: clamp(44px, calc(var(--effective-vw) * 0.06667), 88px); /* 64px */
+  --size-80: clamp(56px, calc(var(--effective-vw) * 0.08333), 106px); /* 80px */
+  --size-100: clamp(
+    70px,
+    calc(var(--effective-vw) * 0.10417),
+    133px
+  ); /* 100px */
+  --size-120: clamp(84px, calc(var(--effective-vw) * 0.125), 160px); /* 120px */
+  --size-150: clamp(
+    105px,
+    calc(var(--effective-vw) * 0.15625),
+    200px
+  ); /* 150px */
+  --size-180: clamp(
+    126px,
+    calc(var(--effective-vw) * 0.1875),
+    240px
+  ); /* 180px */
+  --size-200: clamp(
+    140px,
+    calc(var(--effective-vw) * 0.20833),
+    266px
+  ); /* 200px */
+  --size-250: clamp(
+    175px,
+    calc(var(--effective-vw) * 0.26042),
+    333px
+  ); /* 250px */
+  --size-300: clamp(
+    210px,
+    calc(var(--effective-vw) * 0.3125),
+    400px
+  ); /* 300px */
+  --size-350: clamp(
+    245px,
+    calc(var(--effective-vw) * 0.36458),
+    466px
+  ); /* 350px */
+  --size-500: clamp(
+    350px,
+    calc(var(--effective-vw) * 0.52083),
+    666px
+  ); /* 500px */
+  --size-600: clamp(
+    420px,
+    calc(var(--effective-vw) * 0.625),
+    800px
+  ); /* 600px */
+  --size-1200: clamp(
+    840px,
+    calc(var(--effective-vw) * 1.25),
+    1600px
+  ); /* 1200px */
+
+  /* テキストサイズ用変数（--text-size-multiplier適用） */
+  --font-size-10: calc(var(--size-10) * var(--text-size-multiplier));
+  --font-size-12: calc(var(--size-12) * var(--text-size-multiplier));
+  --font-size-14: calc(var(--size-14) * var(--text-size-multiplier));
+  --font-size-16: calc(var(--size-16) * var(--text-size-multiplier));
+  --font-size-18: calc(var(--size-18) * var(--text-size-multiplier));
+  --font-size-20: calc(var(--size-20) * var(--text-size-multiplier));
+  --font-size-24: calc(var(--size-24) * var(--text-size-multiplier));
+  --font-size-28: calc(var(--size-28) * var(--text-size-multiplier));
+  --font-size-32: calc(var(--size-32) * var(--text-size-multiplier));
+  --font-size-48: calc(var(--size-48) * var(--text-size-multiplier));
 }
 
 /* UA スタイルシートをリセット */
@@ -348,11 +408,9 @@ h1 {
   overflow: hidden;
 }
 
-/* テキストサイズ設定 */
-:root[data-text-size="small"] {
-  --text-size-multiplier: 0.85;
-}
+/* テキストサイズ設定（normalが基準=1.15） */
+/* normal は :root のデフォルト値 1.15 を使用 */
 
 :root[data-text-size="large"] {
-  --text-size-multiplier: 1.15;
+  --text-size-multiplier: 1.3;
 }

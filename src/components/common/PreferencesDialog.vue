@@ -21,7 +21,6 @@ const speedLabels = {
 } as const;
 
 const textSizeLabels = {
-  small: "小",
   normal: "標準",
   large: "大",
 } as const;
@@ -135,7 +134,6 @@ defineExpose({
                 v-model="preferencesStore.textSize"
                 class="select"
               >
-                <option value="small">{{ textSizeLabels.small }}</option>
                 <option value="normal">{{ textSizeLabels.normal }}</option>
                 <option value="large">{{ textSizeLabels.large }}</option>
               </select>
@@ -252,7 +250,8 @@ defineExpose({
 .dialog-content {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  max-height: calc(80svh - var(--size-32));
+  overflow: hidden;
 }
 
 .dialog-header {
@@ -295,6 +294,8 @@ defineExpose({
 .dialog-body {
   padding: var(--size-24);
   overflow-y: auto;
+  flex: 1;
+  min-height: 0;
 }
 
 .settings-section {

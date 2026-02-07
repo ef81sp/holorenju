@@ -85,14 +85,14 @@ const emits = defineEmits<{
 .title-block h2 {
   margin: 0 0 var(--size-8);
   color: #333;
-  font-size: var(--size-20);
+  font-size: var(--font-size-20);
   font-weight: var(--font-weight-bold);
 }
 
 .section-info {
   margin: 0;
   color: #666;
-  font-size: var(--size-14);
+  font-size: var(--font-size-14);
 }
 
 .description {
@@ -102,7 +102,7 @@ const emits = defineEmits<{
   border-radius: 8px 8px 0 0;
   overflow-y: auto;
   box-shadow: none;
-  font-size: calc(var(--size-14) * var(--text-size-multiplier));
+  font-size: var(--font-size-14);
   word-break: auto-phrase;
 }
 
@@ -121,7 +121,7 @@ const emits = defineEmits<{
   padding: var(--size-12) var(--size-20);
   border: none;
   border-radius: 8px;
-  font-size: var(--size-14);
+  font-size: var(--font-size-14);
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
@@ -150,7 +150,7 @@ const emits = defineEmits<{
   padding: var(--size-12) var(--size-20);
   border: 2px solid transparent;
   border-radius: 8px;
-  font-size: var(--size-14);
+  font-size: var(--font-size-14);
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
