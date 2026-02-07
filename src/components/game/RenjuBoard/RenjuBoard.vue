@@ -450,13 +450,13 @@ onBeforeUnmount(() => {
                 :config="{
                   points: [
                     layout.positionToPixels(pos.row, pos.col).x -
-                      layout.STONE_RADIUS.value * 0.5,
+                      layout.STONE_RADIUS.value * 0.7,
                     layout.positionToPixels(pos.row, pos.col).y -
-                      layout.STONE_RADIUS.value * 0.5,
+                      layout.STONE_RADIUS.value * 0.7,
                     layout.positionToPixels(pos.row, pos.col).x +
-                      layout.STONE_RADIUS.value * 0.5,
+                      layout.STONE_RADIUS.value * 0.7,
                     layout.positionToPixels(pos.row, pos.col).y +
-                      layout.STONE_RADIUS.value * 0.5,
+                      layout.STONE_RADIUS.value * 0.7,
                   ],
                   stroke: BOARD_COLORS.markAccent,
                   strokeWidth: 3,
@@ -466,13 +466,13 @@ onBeforeUnmount(() => {
                 :config="{
                   points: [
                     layout.positionToPixels(pos.row, pos.col).x +
-                      layout.STONE_RADIUS.value * 0.5,
+                      layout.STONE_RADIUS.value * 0.7,
                     layout.positionToPixels(pos.row, pos.col).y -
-                      layout.STONE_RADIUS.value * 0.5,
+                      layout.STONE_RADIUS.value * 0.7,
                     layout.positionToPixels(pos.row, pos.col).x -
-                      layout.STONE_RADIUS.value * 0.5,
+                      layout.STONE_RADIUS.value * 0.7,
                     layout.positionToPixels(pos.row, pos.col).y +
-                      layout.STONE_RADIUS.value * 0.5,
+                      layout.STONE_RADIUS.value * 0.7,
                   ],
                   stroke: BOARD_COLORS.markAccent,
                   strokeWidth: 3,
