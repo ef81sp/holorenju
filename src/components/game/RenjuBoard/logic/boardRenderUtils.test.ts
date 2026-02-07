@@ -68,7 +68,7 @@ describe("generateGridLines", () => {
     );
 
     lines.forEach((line) => {
-      expect(line.stroke).toBe("#000");
+      expect(line.stroke).toBe("#000000");
       expect(line.strokeWidth).toBe(STROKE_WIDTH);
     });
   });
