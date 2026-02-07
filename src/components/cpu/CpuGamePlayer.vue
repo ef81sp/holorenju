@@ -77,7 +77,7 @@ const layoutRef = ref<InstanceType<typeof GamePlayerLayout> | null>(null);
 
 // カットイン
 const cutinRef = ref<InstanceType<typeof CutinOverlay> | null>(null);
-const cutinType = ref<"correct" | "wrong">("correct");
+const cutinType = ref<"win" | "draw" | "lose">("win");
 const { isCutinVisible, showCutin, hideCutin } = useCutinDisplay(cutinRef);
 
 // 戻る確認ダイアログ
@@ -210,13 +210,14 @@ function handleGameEnd(): void {
 
   if (winner === null) {
     result = "draw";
+    cutinType.value = "draw";
   } else if (winner === cpuGameStore.playerColor) {
     result = "win";
-    cutinType.value = "correct";
+    cutinType.value = "win";
     showDialogue("playerWin");
   } else {
     result = "lose";
-    cutinType.value = "wrong";
+    cutinType.value = "lose";
     showDialogue("cpuWin");
   }
 

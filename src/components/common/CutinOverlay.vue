@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, useTemplateRef } from "vue";
 
-export type CutinType = "correct" | "wrong";
+export type CutinType = "correct" | "wrong" | "win" | "draw" | "lose";
 
 interface Props {
   type: CutinType;
@@ -12,13 +12,42 @@ const props = defineProps<Props>();
 
 const popoverRef = useTemplateRef("popoverRef");
 
-const iconSrc = computed(() =>
-  props.type === "correct"
-    ? new URL("@/assets/question-result/holorenju-seikai.svg", import.meta.url)
-        .href
-    : new URL("@/assets/question-result/holorenju-zannen.svg", import.meta.url)
-        .href,
-);
+const iconSrc = computed(() => {
+  const imageMap: Record<CutinType, string> = {
+    correct: new URL(
+      "@/assets/question-result/holorenju-seikai.svg",
+      import.meta.url,
+    ).href,
+    wrong: new URL(
+      "@/assets/question-result/holorenju-zannen.svg",
+      import.meta.url,
+    ).href,
+    win: new URL(
+      "@/assets/question-result/holorenju-appare.svg",
+      import.meta.url,
+    ).href,
+    draw: new URL(
+      "@/assets/question-result/holorenju-hikiwake.svg",
+      import.meta.url,
+    ).href,
+    lose: new URL(
+      "@/assets/question-result/holorenju-zannen.svg",
+      import.meta.url,
+    ).href,
+  };
+  return imageMap[props.type];
+});
+
+const altText = computed(() => {
+  const altMap: Record<CutinType, string> = {
+    correct: "せいかい",
+    wrong: "ざんねん",
+    win: "あっぱれ",
+    draw: "ひきわけ",
+    lose: "ざんねん",
+  };
+  return altMap[props.type];
+});
 
 const showPopover = (): void => {
   popoverRef.value?.showPopover();
@@ -47,7 +76,7 @@ defineExpose({
       <img
         :src="iconSrc"
         class="cutin-icon"
-        :alt="type === 'correct' ? 'せいかい' : 'ざんねん'"
+        :alt="altText"
       />
     </div>
   </div>
