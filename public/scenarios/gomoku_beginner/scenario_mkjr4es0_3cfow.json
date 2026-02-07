@@ -64,7 +64,7 @@
             },
             {
               "type": "text",
-              "content": "改めてどんなゲームか確認してみようかねぇ。"
+              "content": "改めてどんなゲームか確認してみようか。"
             }
           ],
           "emotion": 0,
@@ -88,8 +88,16 @@
           "text": [
             {
               "type": "text",
-              "content": "五目並べは、先手の黒と後手の白に分かれて、交互に石を置き、"
-            },
+              "content": "五目並べは、先手の黒と後手の白に分かれて、交互に石を置く。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_6",
+          "character": "fubuki",
+          "text": [
             {
               "type": "emphasis",
               "content": [
@@ -104,11 +112,11 @@
               "content": "のゲームだよ。"
             }
           ],
-          "emotion": 0,
+          "emotion": 1,
           "boardActions": []
         },
         {
-          "id": "dialogue_6",
+          "id": "dialogue_7",
           "character": "fubuki",
           "text": [
             {
@@ -120,7 +128,7 @@
             },
             {
               "type": "text",
-              "content": "並べ方は3つあって、縦・横・斜めどれでもOKだ。"
+              "content": "並べ方は、縦・横・斜めどれでもOKだ。"
             }
           ],
           "emotion": 0,
@@ -148,12 +156,12 @@
           ]
         },
         {
-          "id": "dialogue_7",
+          "id": "dialogue_8",
           "character": "fubuki",
           "text": [
             {
               "type": "text",
-              "content": "とりあえず遊ぶにはこれだけわかってればOK。"
+              "content": "とりあえずこれだけわかってればOK。"
             },
             {
               "type": "lineBreak"
@@ -167,7 +175,7 @@
           "boardActions": []
         },
         {
-          "id": "dialogue_8",
+          "id": "dialogue_9",
           "character": "miko",
           "text": [
             {
@@ -179,7 +187,7 @@
           "boardActions": []
         },
         {
-          "id": "dialogue_9",
+          "id": "dialogue_10",
           "character": "fubuki",
           "text": [
             {
@@ -191,16 +199,28 @@
           "boardActions": []
         },
         {
-          "id": "dialogue_10",
+          "id": "dialogue_11",
           "character": "fubuki",
           "text": [
             {
               "type": "text",
               "content": "囲碁っぽいなって思うかも知れないけど、微妙に違うんだ。"
-            },
-            {
-              "type": "lineBreak"
-            },
+            }
+          ],
+          "emotion": 0,
+          "description": {
+            "text": [
+              {
+                "type": "lineBreak"
+              }
+            ]
+          },
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_12",
+          "character": "fubuki",
+          "text": [
             {
               "type": "text",
               "content": "五目並べでは"
@@ -225,6 +245,7 @@
             }
           ],
           "emotion": 0,
+          "boardActions": [],
           "description": {
             "text": [
               {
@@ -249,16 +270,15 @@
                 "content": "五目並べを本格的にやりたくなったら、15路の「連珠盤」を買おう。"
               }
             ]
-          },
-          "boardActions": []
+          }
         },
         {
-          "id": "dialogue_11",
+          "id": "dialogue_13",
           "character": "fubuki",
           "text": [
             {
               "type": "text",
-              "content": "さて、五目並べは、みこさんが最初に負けちゃったときみたいに、ちょっと油断するとあっという間に負けちゃうんだ"
+              "content": "さて、五目並べは、ちょっと油断するとあっという間に負けちゃうんだ。"
             }
           ],
           "emotion": 1,
@@ -273,7 +293,19 @@
           ]
         },
         {
-          "id": "dialogue_12",
+          "id": "dialogue_14",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "みこさんが最初に負けちゃったときみたいにね。"
+            }
+          ],
+          "emotion": 35,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_15",
           "character": "miko",
           "text": [
             {
@@ -285,7 +317,7 @@
           "boardActions": []
         },
         {
-          "id": "dialogue_13",
+          "id": "dialogue_16",
           "character": "fubuki",
           "text": [
             {
@@ -303,14 +335,14 @@
             },
             {
               "type": "text",
-              "content": "を学んでいこうね"
+              "content": "を学んでいこう。"
             }
           ],
           "emotion": 0,
           "boardActions": []
         },
         {
-          "id": "dialogue_14",
+          "id": "dialogue_17",
           "character": "miko",
           "text": [
             {

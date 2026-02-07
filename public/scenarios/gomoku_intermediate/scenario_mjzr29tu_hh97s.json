@@ -172,14 +172,7 @@
           "text": [
             {
               "type": "text",
-              "content": "そうだね。"
-            },
-            {
-              "type": "lineBreak"
-            },
-            {
-              "type": "text",
-              "content": "ところで、この流れを相手が妨害してくるわけだ。"
+              "content": "そうだね。ところで、この流れを相手が妨害してくるわけだ。"
             }
           ],
           "emotion": 0,
@@ -211,10 +204,15 @@
             {
               "type": "text",
               "content": "そう、自由には作らせてもらえないんだ。"
-            },
-            {
-              "type": "lineBreak"
-            },
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_15",
+          "character": "fubuki",
+          "text": [
             {
               "type": "text",
               "content": "そこで、"
@@ -233,11 +231,11 @@
               "content": "を目指すわけだ。"
             }
           ],
-          "emotion": 0,
+          "emotion": 1,
           "boardActions": []
         },
         {
-          "id": "dialogue_15",
+          "id": "dialogue_16",
           "character": "miko",
           "text": [
             {
@@ -249,7 +247,7 @@
           "boardActions": []
         },
         {
-          "id": "dialogue_16",
+          "id": "dialogue_17",
           "character": "fubuki",
           "text": [
             {
@@ -297,14 +295,7 @@
           "text": [
             {
               "type": "text",
-              "content": "四には2種類ある。"
-            },
-            {
-              "type": "lineBreak"
-            },
-            {
-              "type": "text",
-              "content": "両端が空いている四と、片方が止められている四。"
+              "content": "四には2種類ある。両端が空いている四と、片方が止められている四。"
             }
           ],
           "emotion": 0,
@@ -328,14 +319,7 @@
           "text": [
             {
               "type": "text",
-              "content": "そうだね。"
-            },
-            {
-              "type": "lineBreak"
-            },
-            {
-              "type": "text",
-              "content": "で、特に、両端が空いている四のことを"
+              "content": "そうだね。で、特に、両端が空いている四のことを"
             },
             {
               "type": "emphasis",
@@ -391,10 +375,19 @@
             {
               "type": "text",
               "content": "三を止めないと負ける。それは棒四ができちゃうから。"
-            },
+            }
+          ],
+          "emotion": 0,
+          "boardActions": [
             {
-              "type": "lineBreak"
-            },
+              "type": "resetAll"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_6",
+          "character": "fubuki",
+          "text": [
             {
               "type": "text",
               "content": "棒四は"
@@ -413,15 +406,11 @@
               "content": "んだったよね。"
             }
           ],
-          "emotion": 0,
-          "boardActions": [
-            {
-              "type": "resetAll"
-            }
-          ]
+          "emotion": 1,
+          "boardActions": []
         },
         {
-          "id": "dialogue_6",
+          "id": "dialogue_7",
           "character": "fubuki",
           "text": [
             {
@@ -454,7 +443,7 @@
           ]
         },
         {
-          "id": "dialogue_7",
+          "id": "dialogue_8",
           "character": "miko",
           "text": [
             {
@@ -466,7 +455,7 @@
           "boardActions": []
         },
         {
-          "id": "dialogue_8",
+          "id": "dialogue_9",
           "character": "fubuki",
           "text": [
             {
@@ -487,7 +476,7 @@
           ]
         },
         {
-          "id": "dialogue_9",
+          "id": "dialogue_10",
           "character": "fubuki",
           "text": [
             {
@@ -501,14 +490,7 @@
             },
             {
               "type": "text",
-              "content": "しても棒四にはならない。"
-            },
-            {
-              "type": "lineBreak"
-            },
-            {
-              "type": "text",
-              "content": "止められて、五にはならないよね。"
+              "content": "しても棒四にならない。止められて、五にならないよね。"
             }
           ],
           "emotion": 0,
@@ -545,7 +527,7 @@
           ]
         },
         {
-          "id": "dialogue_10",
+          "id": "dialogue_11",
           "character": "miko",
           "text": [
             {
@@ -557,19 +539,12 @@
           "boardActions": []
         },
         {
-          "id": "dialogue_11",
+          "id": "dialogue_12",
           "character": "fubuki",
           "text": [
             {
               "type": "text",
-              "content": "そうなんだ。"
-            },
-            {
-              "type": "lineBreak"
-            },
-            {
-              "type": "text",
-              "content": "だから、"
+              "content": "そうなんだ。だから、"
             },
             {
               "type": "emphasis",
@@ -589,7 +564,7 @@
           "boardActions": []
         },
         {
-          "id": "dialogue_12",
+          "id": "dialogue_13",
           "character": "miko",
           "text": [
             {
@@ -685,16 +660,21 @@
             {
               "type": "text",
               "content": "そう。四と三を同時に作る。"
-            },
-            {
-              "type": "lineBreak"
-            },
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_5",
+          "character": "fubuki",
+          "text": [
             {
               "type": "text",
               "content": "じゃあこんな盤面があるとしよう。みこさん白だ。どうする？"
             }
           ],
-          "emotion": 0,
+          "emotion": 1,
           "boardActions": [
             {
               "type": "setBoard",
@@ -719,7 +699,7 @@
           ]
         },
         {
-          "id": "dialogue_5",
+          "id": "dialogue_6",
           "character": "miko",
           "text": [
             {
@@ -755,7 +735,7 @@
           ]
         },
         {
-          "id": "dialogue_6",
+          "id": "dialogue_7",
           "character": "fubuki",
           "text": [
             {
@@ -783,7 +763,7 @@
           ]
         },
         {
-          "id": "dialogue_7",
+          "id": "dialogue_8",
           "character": "miko",
           "text": [
             {
@@ -804,19 +784,12 @@
           ]
         },
         {
-          "id": "dialogue_8",
+          "id": "dialogue_9",
           "character": "fubuki",
           "text": [
             {
               "type": "text",
-              "content": "そうだね。"
-            },
-            {
-              "type": "lineBreak"
-            },
-            {
-              "type": "text",
-              "content": "ところで、さっきの黒番で、四と三を同時に作っていたんだ。"
+              "content": "そうだね。ところで、さっきの黒番で、四と三を同時に作っていたんだ。"
             }
           ],
           "emotion": 1,
@@ -834,15 +807,12 @@
           ]
         },
         {
-          "id": "dialogue_9",
+          "id": "dialogue_10",
           "character": "fubuki",
           "text": [
             {
               "type": "text",
               "content": "白は四を止めないと即座に負けちゃうから、"
-            },
-            {
-              "type": "lineBreak"
             },
             {
               "type": "emphasis",
@@ -862,7 +832,7 @@
           "boardActions": []
         },
         {
-          "id": "dialogue_10",
+          "id": "dialogue_11",
           "character": "miko",
           "text": [
             {
@@ -874,7 +844,7 @@
           "boardActions": []
         },
         {
-          "id": "dialogue_11",
+          "id": "dialogue_12",
           "character": "fubuki",
           "text": [
             {
@@ -895,7 +865,7 @@
           ]
         },
         {
-          "id": "dialogue_12",
+          "id": "dialogue_13",
           "character": "fubuki",
           "text": [
             {
@@ -944,7 +914,7 @@
           ]
         },
         {
-          "id": "dialogue_13",
+          "id": "dialogue_14",
           "character": "miko",
           "text": [
             {
@@ -956,34 +926,39 @@
           "boardActions": []
         },
         {
-          "id": "dialogue_14",
+          "id": "dialogue_15",
           "character": "fubuki",
           "text": [
             {
               "type": "text",
-              "content": "じゃあ四三を作るにはどうすればいいの？"
-            },
-            {
-              "type": "lineBreak"
-            },
-            {
-              "type": "text",
-              "content": "っていうのは、別のセクションでやっていくよ。"
+              "content": "じゃあ四三を作るにはどうすればいいの？っていうのは、別の項目でやっていくよ。"
             }
           ],
           "emotion": 0,
           "boardActions": []
         },
         {
-          "id": "dialogue_15",
+          "id": "dialogue_16",
           "character": "fubuki",
           "text": [
             {
               "type": "text",
-              "content": "この形ができそうなところを探しながら対局するだけでも、ひとつレベルアップするよ。がんばろう。"
+              "content": "この形ができそうなところを探しながら対局するだけでも、ひとつレベルアップするよ。"
             }
           ],
           "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_17",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "がんばろう！"
+            }
+          ],
+          "emotion": 1,
           "boardActions": []
         }
       ]

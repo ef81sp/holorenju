@@ -34,19 +34,19 @@
         },
         {
           "id": "scenario_mkpnojq9_pacbt",
-          "title": "何をすればいいの？(1)",
+          "title": "何をすれば？1",
           "description": "ざっくりとした方針を学びます。闇雲に三や四を作らない。",
           "path": "gomoku_intermediate/scenario_mkpnojq9_pacbt.json"
         },
         {
           "id": "scenario_mkrv3oyt_80m86",
-          "title": "何をすればいいの？(2)",
+          "title": "何をすれば？2",
           "description": "複数の連を作る",
           "path": "gomoku_intermediate/scenario_mkrv3oyt_80m86.json"
         },
         {
           "id": "scenario_mks7it0d_3v7gb",
-          "title": "何をすればいいの？(3)",
+          "title": "何をすれば？3",
           "description": "相手の連を止めることを学びます。",
           "path": "gomoku_intermediate/scenario_mks7it0d_3v7gb.json"
         }
@@ -64,8 +64,26 @@
         {
           "id": "scenario_mjzgjlek_bsy23",
           "title": "黒の制限1: 三三禁",
-          "description": "三三禁、四四禁、長連について",
+          "description": "禁手と三三禁について",
           "path": "renju_beginner/scenario_mjzgjlek_bsy23.json"
+        },
+        {
+          "id": "scenario_mlaunns1_wyury",
+          "title": "黒の制限2: 四四禁と長連",
+          "description": "黒の制限、四四禁と長連について",
+          "path": "renju_beginner/scenario_mlaunns1_wyury.json"
+        },
+        {
+          "id": "scenario_mlbxwgw2_a4l03",
+          "title": "珠型概説",
+          "description": "最初の3手は形が決められています。",
+          "path": "renju_beginner/scenario_mlbxwgw2_a4l03.json"
+        },
+        {
+          "id": "scenario_mlbzqn68_71jtz",
+          "title": "EX: 珠型一覧",
+          "description": "珠型の細かい説明と全パターンを紹介します",
+          "path": "renju_beginner/scenario_mlbzqn68_71jtz.json"
         }
       ]
     },

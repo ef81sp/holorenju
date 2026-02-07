@@ -71,7 +71,7 @@
           "text": [
             {
               "type": "text",
-              "content": "簡単に言うと、3手目までの流れが決まっていて、その分岐ごとに名前がついているんだ。"
+              "content": "3手目までの流れが決まっていて、その分岐ごとに名前がついているんだ。"
             }
           ],
           "emotion": 0,
@@ -159,14 +159,27 @@
             }
           ],
           "emotion": 0,
+          "description": {
+            "text": [
+              {
+                "type": "text",
+                "content": "厳密には、黒石の真上(白から見ると真下)、もしくは黒石の右上(白から見ると左下)に置くと定まっているのですが、そうしなくても反則ではありません。"
+              },
+              {
+                "type": "lineBreak"
+              },
+              {
+                "type": "lineBreak"
+              },
+              {
+                "type": "text",
+                "content": "どこにおいても、90度ずつぐるりと回した形になります。"
+              }
+            ]
+          },
           "boardActions": [
             {
               "type": "mark",
-              "position": {
-                "row": 7,
-                "col": 7
-              },
-              "color": "black",
               "positions": [
                 {
                   "row": 6,
@@ -204,25 +217,7 @@
               "markType": "circle",
               "action": "draw"
             }
-          ],
-          "description": {
-            "text": [
-              {
-                "type": "text",
-                "content": "厳密には、黒石の真上(白から見ると真下)、もしくは黒石の右上(白から見ると左下)に置くと定まっているのですが、そうしなくても反則ではありません。"
-              },
-              {
-                "type": "lineBreak"
-              },
-              {
-                "type": "lineBreak"
-              },
-              {
-                "type": "text",
-                "content": "どこにおいても、90度ずつぐるりと回した形になります。"
-              }
-            ]
-          }
+          ]
         },
         {
           "id": "dialogue_8",
@@ -248,12 +243,7 @@
           "emotion": 9,
           "boardActions": [
             {
-              "type": "resetMarkLine",
-              "position": {
-                "row": 7,
-                "col": 7
-              },
-              "color": "black"
+              "type": "resetMarkLine"
             },
             {
               "type": "place",
@@ -275,14 +265,13 @@
             }
           ],
           "emotion": 0,
+          "description": {
+            "text": [],
+            "clear": true
+          },
           "boardActions": [
             {
               "type": "mark",
-              "position": {
-                "row": 7,
-                "col": 7
-              },
-              "color": "black",
               "positions": [
                 {
                   "row": 5,
@@ -380,11 +369,7 @@
               "markType": "circle",
               "action": "draw"
             }
-          ],
-          "description": {
-            "text": [],
-            "clear": true
-          }
+          ]
         },
         {
           "id": "dialogue_11",
@@ -410,12 +395,7 @@
           "emotion": 1,
           "boardActions": [
             {
-              "type": "resetMarkLine",
-              "position": {
-                "row": 7,
-                "col": 7
-              },
-              "color": "black"
+              "type": "resetMarkLine"
             },
             {
               "type": "place",
@@ -501,10 +481,22 @@
           "text": [
             {
               "type": "text",
-              "content": "ひとまずこれだけ覚えておけば、対局はできる。ほかの珠型を見てみたかったら、次のシナリオで見てみよう。"
+              "content": "ひとまずこれだけ覚えておけば、対局はできる。"
             }
           ],
           "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_17",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "ほかの珠型を見てみたかったら、次のシナリオで見てみよう。"
+            }
+          ],
+          "emotion": 1,
           "boardActions": []
         }
       ]

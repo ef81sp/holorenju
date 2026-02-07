@@ -8,7 +8,7 @@
     {
       "id": "section_1",
       "type": "demo",
-      "title": "どうなると負ける？",
+      "title": "負ける条件",
       "initialBoard": [
         "---------------",
         "---------------",
@@ -273,14 +273,7 @@
           "text": [
             {
               "type": "text",
-              "content": "じゃあ考え方を変えてみよう。"
-            },
-            {
-              "type": "lineBreak"
-            },
-            {
-              "type": "text",
-              "content": "逆に、片方止まった四なら、妨害が間に合うわけだ。"
+              "content": "じゃあ考え方を変えてみよう。逆に、片方止まった四なら、妨害が間に合うわけだ。"
             }
           ],
           "emotion": 8,
@@ -347,10 +340,15 @@
             {
               "type": "text",
               "content": "そうだね。じゃあ、ちょっと巻き戻して考えてみよう。"
-            },
-            {
-              "type": "lineBreak"
-            },
+            }
+          ],
+          "emotion": 1,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_7",
+          "character": "fubuki",
+          "text": [
             {
               "type": "text",
               "content": "みこさん白だから、その前に黒が打ってるわけだよね。"
@@ -385,7 +383,7 @@
           ]
         },
         {
-          "id": "dialogue_7",
+          "id": "dialogue_8",
           "character": "miko",
           "text": [
             {
@@ -397,7 +395,7 @@
           "boardActions": []
         },
         {
-          "id": "dialogue_8",
+          "id": "dialogue_9",
           "character": "fubuki",
           "text": [
             {
@@ -430,12 +428,12 @@
           ]
         },
         {
-          "id": "dialogue_9",
+          "id": "dialogue_10",
           "character": "fubuki",
           "text": [
             {
               "type": "text",
-              "content": "みこさんが白をここに置いたから、黒が四を作ったときに片方塞がった状態になる、ということだ。"
+              "content": "みこさんが白をここに置いたから、黒が四を作ったときに片方塞がった状態になる。"
             }
           ],
           "emotion": 0,
@@ -464,12 +462,24 @@
           ]
         },
         {
-          "id": "dialogue_10",
+          "id": "dialogue_11",
           "character": "fubuki",
           "text": [
             {
               "type": "text",
-              "content": "更に巻き戻すよ。つまり、このときに、"
+              "content": "更に巻き戻すよ。"
+            }
+          ],
+          "emotion": 1,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_12",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "つまり、このときに、"
             },
             {
               "type": "emphasis",
@@ -510,7 +520,7 @@
           ]
         },
         {
-          "id": "dialogue_11",
+          "id": "dialogue_13",
           "character": "miko",
           "text": [
             {
@@ -522,7 +532,7 @@
           "boardActions": []
         },
         {
-          "id": "dialogue_12",
+          "id": "dialogue_14",
           "character": "miko",
           "text": [
             {
@@ -534,7 +544,7 @@
           "boardActions": []
         },
         {
-          "id": "dialogue_13",
+          "id": "dialogue_15",
           "character": "fubuki",
           "text": [
             {
@@ -546,7 +556,7 @@
           "boardActions": []
         },
         {
-          "id": "dialogue_14",
+          "id": "dialogue_16",
           "character": "miko",
           "text": [
             {
@@ -570,7 +580,7 @@
           ]
         },
         {
-          "id": "dialogue_15",
+          "id": "dialogue_17",
           "character": "fubuki",
           "text": [
             {
@@ -591,7 +601,7 @@
           ]
         },
         {
-          "id": "dialogue_16",
+          "id": "dialogue_18",
           "character": "miko",
           "text": [
             {
@@ -615,7 +625,7 @@
           ]
         },
         {
-          "id": "dialogue_17",
+          "id": "dialogue_19",
           "character": "fubuki",
           "text": [
             {
@@ -633,7 +643,7 @@
             },
             {
               "type": "text",
-              "content": "のが負けないコツだね。"
+              "content": "のが負けないコツ。"
             },
             {
               "type": "lineBreak"
@@ -651,7 +661,7 @@
     {
       "id": "section_3",
       "type": "question",
-      "title": "三を止める(1)",
+      "title": "問題セクション",
       "initialBoard": [
         "---------------",
         "---------------",
@@ -736,7 +746,7 @@
     {
       "id": "section_4",
       "type": "question",
-      "title": "三を止める(2)",
+      "title": "問題セクション",
       "initialBoard": [
         "---------------",
         "---------------",
@@ -825,7 +835,7 @@
     {
       "id": "section_5",
       "type": "question",
-      "title": "三を止める(3)",
+      "title": "問題セクション",
       "initialBoard": [
         "---------------",
         "---------------",
@@ -1042,7 +1052,7 @@
             },
             {
               "type": "text",
-              "content": "という名前がついてるけど、こんなものもあるよ、ってくらいの紹介だ。きちんと覚えるのは後で大丈夫だよ。"
+              "content": "という名前がついてるけど、こんなものもあるよ、ってくらいの紹介だ。"
             }
           ],
           "emotion": 0,
@@ -1054,6 +1064,18 @@
           "text": [
             {
               "type": "text",
+              "content": "きちんと覚えるのは後で大丈夫だよ。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_6",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
               "content": "とにかく三は止める！"
             }
           ],
@@ -1061,7 +1083,7 @@
           "boardActions": []
         },
         {
-          "id": "dialogue_6",
+          "id": "dialogue_7",
           "character": "miko",
           "text": [
             {

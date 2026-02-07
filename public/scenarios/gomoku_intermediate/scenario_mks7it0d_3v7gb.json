@@ -1,6 +1,6 @@
 {
   "id": "scenario_mks7it0d_3v7gb",
-  "title": "何をすればいいの？(3)",
+  "title": "何をすれば？3",
   "difficulty": "gomoku_intermediate",
   "description": "相手の連を止めることを学びます。",
   "objectives": [],
@@ -209,7 +209,7 @@
             },
             {
               "type": "text",
-              "content": "のが理想なわけだ。それを踏まえると？"
+              "content": "のが理想なわけだ。"
             }
           ],
           "emotion": 0,
@@ -217,6 +217,18 @@
         },
         {
           "id": "dialogue_12",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "それを踏まえると？"
+            }
+          ],
+          "emotion": 8,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_13",
           "character": "miko",
           "text": [
             {
@@ -236,7 +248,7 @@
           ]
         },
         {
-          "id": "dialogue_13",
+          "id": "dialogue_14",
           "character": "miko",
           "text": [
             {
@@ -257,7 +269,7 @@
           ]
         },
         {
-          "id": "dialogue_14",
+          "id": "dialogue_15",
           "character": "fubuki",
           "text": [
             {
@@ -269,7 +281,7 @@
           "boardActions": []
         },
         {
-          "id": "dialogue_15",
+          "id": "dialogue_16",
           "character": "fubuki",
           "text": [
             {
@@ -296,14 +308,26 @@
             },
             {
               "type": "text",
-              "content": "ことが重要だね。練習問題で慣れてみよう！"
+              "content": "ことが重要だね。"
             }
           ],
           "emotion": 0,
           "boardActions": []
         },
         {
-          "id": "dialogue_16",
+          "id": "dialogue_17",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "練習問題で慣れてみよう！"
+            }
+          ],
+          "emotion": 1,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_18",
           "character": "miko",
           "text": [
             {

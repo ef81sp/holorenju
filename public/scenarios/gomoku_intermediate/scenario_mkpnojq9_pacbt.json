@@ -1,6 +1,6 @@
 {
   "id": "scenario_mkpnojq9_pacbt",
-  "title": "何をすればいいの？(1)",
+  "title": "何をすれば？1",
   "difficulty": "gomoku_intermediate",
   "description": "ざっくりとした方針を学びます。闇雲に三や四を作らない。",
   "objectives": [],
@@ -8,7 +8,7 @@
     {
       "id": "section_1",
       "type": "demo",
-      "title": "闇雲に三や四を作らない",
+      "title": "闇雲に攻めない",
       "initialBoard": [
         "---------------",
         "---------------",
@@ -82,10 +82,15 @@
             {
               "type": "text",
               "content": "相手が見落としをしない限り、四と三を同時に作らないと勝てないよね。"
-            },
-            {
-              "type": "lineBreak"
-            },
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_6",
+          "character": "fubuki",
+          "text": [
             {
               "type": "text",
               "content": "だから、"
@@ -104,11 +109,11 @@
               "content": "んだ。"
             }
           ],
-          "emotion": 0,
+          "emotion": 1,
           "boardActions": []
         },
         {
-          "id": "dialogue_6",
+          "id": "dialogue_7",
           "character": "miko",
           "text": [
             {
@@ -120,7 +125,7 @@
           "boardActions": []
         },
         {
-          "id": "dialogue_7",
+          "id": "dialogue_8",
           "character": "fubuki",
           "text": [
             {
@@ -132,7 +137,7 @@
           "boardActions": []
         },
         {
-          "id": "dialogue_8",
+          "id": "dialogue_9",
           "character": "miko",
           "text": [
             {
@@ -153,7 +158,7 @@
           ]
         },
         {
-          "id": "dialogue_9",
+          "id": "dialogue_10",
           "character": "fubuki",
           "text": [
             {
@@ -174,7 +179,7 @@
           ]
         },
         {
-          "id": "dialogue_10",
+          "id": "dialogue_11",
           "character": "miko",
           "text": [
             {
@@ -195,7 +200,7 @@
           ]
         },
         {
-          "id": "dialogue_11",
+          "id": "dialogue_12",
           "character": "fubuki",
           "text": [
             {
@@ -216,7 +221,7 @@
           ]
         },
         {
-          "id": "dialogue_12",
+          "id": "dialogue_13",
           "character": "miko",
           "text": [
             {
@@ -237,7 +242,7 @@
           ]
         },
         {
-          "id": "dialogue_13",
+          "id": "dialogue_14",
           "character": "fubuki",
           "text": [
             {
@@ -258,7 +263,7 @@
           ]
         },
         {
-          "id": "dialogue_14",
+          "id": "dialogue_15",
           "character": "miko",
           "text": [
             {
@@ -279,7 +284,7 @@
           ]
         },
         {
-          "id": "dialogue_15",
+          "id": "dialogue_16",
           "character": "fubuki",
           "text": [
             {
@@ -300,7 +305,7 @@
           ]
         },
         {
-          "id": "dialogue_16",
+          "id": "dialogue_17",
           "character": "miko",
           "text": [
             {
@@ -321,7 +326,7 @@
           ]
         },
         {
-          "id": "dialogue_17",
+          "id": "dialogue_18",
           "character": "fubuki",
           "text": [
             {
@@ -350,7 +355,7 @@
           ]
         },
         {
-          "id": "dialogue_18",
+          "id": "dialogue_19",
           "character": "miko",
           "text": [
             {
@@ -375,7 +380,7 @@
           ]
         },
         {
-          "id": "dialogue_19",
+          "id": "dialogue_20",
           "character": "fubuki",
           "text": [
             {
@@ -396,7 +401,7 @@
           ]
         },
         {
-          "id": "dialogue_20",
+          "id": "dialogue_21",
           "character": "miko",
           "text": [
             {
@@ -425,7 +430,7 @@
           ]
         },
         {
-          "id": "dialogue_21",
+          "id": "dialogue_22",
           "character": "fubuki",
           "text": [
             {
@@ -446,7 +451,7 @@
           ]
         },
         {
-          "id": "dialogue_22",
+          "id": "dialogue_23",
           "character": "miko",
           "text": [
             {
@@ -458,18 +463,12 @@
           "boardActions": []
         },
         {
-          "id": "dialogue_23",
+          "id": "dialogue_24",
           "character": "fubuki",
           "text": [
             {
               "type": "text",
               "content": "……というように、単体で三や四を作っても相手に止められてしまう。"
-            },
-            {
-              "type": "lineBreak"
-            },
-            {
-              "type": "lineBreak"
             }
           ],
           "emotion": 0,
@@ -480,7 +479,7 @@
           "boardActions": []
         },
         {
-          "id": "dialogue_24",
+          "id": "dialogue_25",
           "character": "fubuki",
           "text": [
             {
@@ -492,7 +491,7 @@
           "boardActions": []
         },
         {
-          "id": "dialogue_25",
+          "id": "dialogue_26",
           "character": "miko",
           "text": [
             {
@@ -504,19 +503,12 @@
           "boardActions": []
         },
         {
-          "id": "dialogue_26",
+          "id": "dialogue_27",
           "character": "fubuki",
           "text": [
             {
               "type": "text",
               "content": "四三をつくるには、繋がってる石のまとまりが、少なくとも2つ必要だよね。"
-            },
-            {
-              "type": "lineBreak"
-            },
-            {
-              "type": "text",
-              "content": "四と三を同時に作るわけだから。"
             }
           ],
           "emotion": 0,
@@ -527,24 +519,12 @@
           ]
         },
         {
-          "id": "dialogue_27",
-          "character": "miko",
-          "text": [
-            {
-              "type": "text",
-              "content": "うん"
-            }
-          ],
-          "emotion": 0,
-          "boardActions": []
-        },
-        {
           "id": "dialogue_28",
           "character": "fubuki",
           "text": [
             {
               "type": "text",
-              "content": "だから、石の繋がりを複数作って、それを連携させないといけないんだ。"
+              "content": "四と三を同時に作るわけだからさ。"
             }
           ],
           "emotion": 0,
@@ -556,6 +536,43 @@
           "text": [
             {
               "type": "text",
+              "content": "うん"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_30",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "だから、"
+            },
+            {
+              "type": "emphasis",
+              "content": [
+                {
+                  "type": "text",
+                  "content": "石の繋がりを複数作って、それを連携"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "content": "させないといけないんだ。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_31",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
               "content": "イメージわかないなぁ"
             }
           ],
@@ -563,7 +580,7 @@
           "boardActions": []
         },
         {
-          "id": "dialogue_30",
+          "id": "dialogue_32",
           "character": "fubuki",
           "text": [
             {
@@ -575,7 +592,7 @@
           "boardActions": []
         },
         {
-          "id": "dialogue_31",
+          "id": "dialogue_33",
           "character": "miko",
           "text": [
             {
@@ -587,19 +604,19 @@
           "boardActions": []
         },
         {
-          "id": "dialogue_32",
+          "id": "dialogue_34",
           "character": "fubuki",
           "text": [
             {
               "type": "text",
-              "content": "だから、三や四を連続で作ることで、最終的に四三を作るのが、基本的にやりたいことになるんだ。"
+              "content": "だから、三や四を連続で作ることで、最終的に四三を作るのが、やりたいことなんだ。"
             }
           ],
           "emotion": 0,
           "boardActions": []
         },
         {
-          "id": "dialogue_33",
+          "id": "dialogue_35",
           "character": "miko",
           "text": [
             {
@@ -611,12 +628,12 @@
           "boardActions": []
         },
         {
-          "id": "dialogue_34",
+          "id": "dialogue_36",
           "character": "fubuki",
           "text": [
             {
               "type": "text",
-              "content": "そのためには、三をいきなり作ると止められちゃうから、その手前の"
+              "content": "そのためには、その手前の"
             },
             {
               "type": "emphasis",
@@ -630,13 +647,6 @@
             {
               "type": "text",
               "content": "んだ。"
-            },
-            {
-              "type": "lineBreak"
-            },
-            {
-              "type": "text",
-              "content": "そうすると、三を連続で作りやすくなる。"
             }
           ],
           "emotion": 0,
@@ -664,7 +674,19 @@
           ]
         },
         {
-          "id": "dialogue_35",
+          "id": "dialogue_37",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "三をいきなり作ると止められちゃうからね。複数の連を連携させる。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_38",
           "character": "miko",
           "text": [
             {
@@ -676,7 +698,7 @@
           "boardActions": []
         },
         {
-          "id": "dialogue_36",
+          "id": "dialogue_39",
           "character": "fubuki",
           "text": [
             {
@@ -726,7 +748,7 @@
           "boardActions": []
         },
         {
-          "id": "dialogue_37",
+          "id": "dialogue_40",
           "character": "miko",
           "text": [
             {
@@ -738,19 +760,43 @@
           "boardActions": []
         },
         {
-          "id": "dialogue_38",
+          "id": "dialogue_41",
           "character": "fubuki",
           "text": [
             {
               "type": "text",
-              "content": "闇雲に三や四を作るよりは、連を複数作る。それを連携させて、連続で三や四を作って、最終的に四三を作る。これが理想なんだ。"
+              "content": "闇雲に三や四を作るよりは、連を複数作る。"
             }
           ],
           "emotion": 0,
           "boardActions": []
         },
         {
-          "id": "dialogue_39",
+          "id": "dialogue_42",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "それを連携させて、連続で三や四を作って、最終的に四三を作る。"
+            }
+          ],
+          "emotion": 17,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_43",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "これが理想なんだ。"
+            }
+          ],
+          "emotion": 1,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_44",
           "character": "fubuki",
           "text": [
             {
@@ -762,7 +808,7 @@
           "boardActions": []
         },
         {
-          "id": "dialogue_40",
+          "id": "dialogue_45",
           "character": "miko",
           "text": [
             {

@@ -1,6 +1,6 @@
 {
   "id": "scenario_mlbzqn68_71jtz",
-  "title": "EX: 珠型一覧",
+  "title": "EX:珠型一覧",
   "difficulty": "renju_beginner",
   "description": "珠型の細かい説明と全パターンを紹介します",
   "objectives": [],
@@ -8,7 +8,7 @@
     {
       "id": "section_1",
       "type": "demo",
-      "title": "2手目の位置と呼び方",
+      "title": "2手目の位置",
       "initialBoard": [
         "---------------",
         "---------------",
@@ -443,7 +443,7 @@
           "text": [
             {
               "type": "text",
-              "content": "だけど、名前がついているのは、"
+              "content": "だけど、名前があるのは、"
             },
             {
               "type": "emphasis",
@@ -581,7 +581,7 @@
           "text": [
             {
               "type": "text",
-              "content": "では珠型の一覧を見ていこう。珠型には名前がついていると言ったが、通し番号もついている。"
+              "content": "では珠型の一覧を見ていこう。"
             }
           ],
           "emotion": 0,
@@ -593,10 +593,10 @@
           "text": [
             {
               "type": "text",
-              "content": "日本語では「直接1号」とか「間接2号」とか書かれるよ。"
+              "content": "珠型には名前がついていると言ったが、通し番号もついている。"
             }
           ],
-          "emotion": 1,
+          "emotion": 0,
           "boardActions": []
         },
         {
@@ -605,10 +605,22 @@
           "text": [
             {
               "type": "text",
-              "content": "連珠は国際的に遊ばれているから、海外では直接打ちは「D1」、間接打ちは「I2」とか書かれる。"
+              "content": "日本語では「直接1号」とか「間接2号」とか書かれるよ。"
             }
           ],
           "emotion": 1,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_4",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "ところで連珠は国際的に遊ばれている。"
+            }
+          ],
+          "emotion": 8,
           "description": {
             "text": [
               {
@@ -630,7 +642,19 @@
           "boardActions": []
         },
         {
-          "id": "dialogue_4",
+          "id": "dialogue_5",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "海外では直接打ちは「D1」、間接打ちは「I2」とか書かれるんだ。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_6",
           "character": "fubuki",
           "text": [
             {

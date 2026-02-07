@@ -1,6 +1,6 @@
 {
   "id": "scenario_mkrv3oyt_80m86",
-  "title": "何をすればいいの？(2)",
+  "title": "何をすれば？2",
   "difficulty": "gomoku_intermediate",
   "description": "複数の連を作る",
   "objectives": [],
@@ -46,7 +46,7 @@
             },
             {
               "type": "text",
-              "content": "作って、相手に守らせてる間に四三を作りきってしまうのがいい。"
+              "content": "作る。"
             }
           ],
           "emotion": 0,
@@ -58,14 +58,19 @@
           "text": [
             {
               "type": "text",
-              "content": "三や四を連続で作るには、そのタネである二が複数必要だ。"
-            },
-            {
-              "type": "lineBreak"
-            },
+              "content": "そうして、相手に守らせてる間に四三を作りきってしまうのがいい。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_3",
+          "character": "fubuki",
+          "text": [
             {
               "type": "text",
-              "content": "二のことは"
+              "content": "三や四を連続で作るには、そのタネである二が複数必要だ。二のことは"
             },
             {
               "type": "emphasis",
@@ -110,7 +115,7 @@
           "boardActions": []
         },
         {
-          "id": "dialogue_3",
+          "id": "dialogue_4",
           "character": "miko",
           "text": [
             {
@@ -122,7 +127,7 @@
           "boardActions": []
         },
         {
-          "id": "dialogue_4",
+          "id": "dialogue_5",
           "character": "fubuki",
           "text": [
             {
@@ -134,7 +139,7 @@
           "boardActions": []
         },
         {
-          "id": "dialogue_5",
+          "id": "dialogue_6",
           "character": "miko",
           "text": [
             {
@@ -146,12 +151,12 @@
           "boardActions": []
         },
         {
-          "id": "dialogue_6",
+          "id": "dialogue_7",
           "character": "fubuki",
           "text": [
             {
               "type": "text",
-              "content": "あっちょっとまってね……こんな形からやってみよう。極端だけど、連が複数あると一気に勝てるという例をお見せしよう。"
+              "content": "あっちょっとまってね……こんな形からやってみよう。"
             }
           ],
           "emotion": 0,
@@ -187,7 +192,19 @@
           ]
         },
         {
-          "id": "dialogue_7",
+          "id": "dialogue_8",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "極端だけど、連が複数あると一気に勝てるという例をお見せしよう。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_9",
           "character": "fubuki",
           "text": [
             {
@@ -199,7 +216,7 @@
           "boardActions": []
         },
         {
-          "id": "dialogue_8",
+          "id": "dialogue_10",
           "character": "miko",
           "text": [
             {
@@ -220,7 +237,7 @@
           ]
         },
         {
-          "id": "dialogue_9",
+          "id": "dialogue_11",
           "character": "fubuki",
           "text": [
             {
@@ -239,7 +256,7 @@
           "boardActions": []
         },
         {
-          "id": "dialogue_10",
+          "id": "dialogue_12",
           "character": "miko",
           "text": [
             {
@@ -251,7 +268,7 @@
           "boardActions": []
         },
         {
-          "id": "dialogue_11",
+          "id": "dialogue_13",
           "character": "fubuki",
           "text": [
             {
@@ -303,7 +320,7 @@
           ]
         },
         {
-          "id": "dialogue_12",
+          "id": "dialogue_14",
           "character": "miko",
           "text": [
             {
@@ -315,7 +332,7 @@
           "boardActions": []
         },
         {
-          "id": "dialogue_13",
+          "id": "dialogue_15",
           "character": "fubuki",
           "text": [
             {
@@ -339,19 +356,31 @@
           ]
         },
         {
-          "id": "dialogue_14",
+          "id": "dialogue_16",
           "character": "fubuki",
           "text": [
             {
               "type": "text",
-              "content": "さて、この状態だと黒が三と四を連続させて勝てるんだ。連が複数ある状態の強さをお見せしよう。"
+              "content": "さて、この状態だと黒が三と四を連続させて勝てるんだ。"
             }
           ],
           "emotion": 0,
           "boardActions": []
         },
         {
-          "id": "dialogue_15",
+          "id": "dialogue_17",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "連が複数ある状態の強さをお見せしよう。"
+            }
+          ],
+          "emotion": 8,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_18",
           "character": "fubuki",
           "text": [
             {
@@ -375,7 +404,7 @@
           ]
         },
         {
-          "id": "dialogue_16",
+          "id": "dialogue_19",
           "character": "miko",
           "text": [
             {
@@ -407,7 +436,7 @@
           ]
         },
         {
-          "id": "dialogue_17",
+          "id": "dialogue_20",
           "character": "fubuki",
           "text": [
             {
@@ -439,7 +468,7 @@
           ]
         },
         {
-          "id": "dialogue_18",
+          "id": "dialogue_21",
           "character": "miko",
           "text": [
             {
@@ -471,7 +500,7 @@
           ]
         },
         {
-          "id": "dialogue_19",
+          "id": "dialogue_22",
           "character": "fubuki",
           "text": [
             {
@@ -510,7 +539,7 @@
           ]
         },
         {
-          "id": "dialogue_20",
+          "id": "dialogue_23",
           "character": "fubuki",
           "text": [
             {
@@ -552,7 +581,7 @@
           ]
         },
         {
-          "id": "dialogue_21",
+          "id": "dialogue_24",
           "character": "miko",
           "text": [
             {
@@ -576,7 +605,7 @@
           ]
         },
         {
-          "id": "dialogue_22",
+          "id": "dialogue_25",
           "character": "fubuki",
           "text": [
             {
@@ -608,7 +637,7 @@
           ]
         },
         {
-          "id": "dialogue_23",
+          "id": "dialogue_26",
           "character": "miko",
           "text": [
             {
@@ -632,7 +661,7 @@
           ]
         },
         {
-          "id": "dialogue_24",
+          "id": "dialogue_27",
           "character": "fubuki",
           "text": [
             {
@@ -664,7 +693,7 @@
           ]
         },
         {
-          "id": "dialogue_25",
+          "id": "dialogue_28",
           "character": "miko",
           "text": [
             {
@@ -688,7 +717,7 @@
           ]
         },
         {
-          "id": "dialogue_26",
+          "id": "dialogue_29",
           "character": "fubuki",
           "text": [
             {
@@ -700,7 +729,7 @@
           "boardActions": []
         },
         {
-          "id": "dialogue_27",
+          "id": "dialogue_30",
           "character": "miko",
           "text": [
             {
@@ -712,7 +741,7 @@
           "boardActions": []
         },
         {
-          "id": "dialogue_28",
+          "id": "dialogue_31",
           "character": "fubuki",
           "text": [
             {
@@ -724,7 +753,7 @@
           "boardActions": []
         },
         {
-          "id": "dialogue_29",
+          "id": "dialogue_32",
           "character": "miko",
           "text": [
             {
@@ -763,7 +792,7 @@
           ]
         },
         {
-          "id": "dialogue_30",
+          "id": "dialogue_33",
           "character": "miko",
           "text": [
             {
@@ -775,19 +804,19 @@
           "boardActions": []
         },
         {
-          "id": "dialogue_31",
+          "id": "dialogue_34",
           "character": "fubuki",
           "text": [
             {
               "type": "text",
-              "content": "連が複数あると、今みたいに三や四を連続して、相手に何もさせずに勝ち切ることができるんだ。"
+              "content": "連が複数あると、三や四を連続して、相手に何もさせずに勝ち切ることができるんだ。"
             }
           ],
           "emotion": 0,
           "boardActions": []
         },
         {
-          "id": "dialogue_32",
+          "id": "dialogue_35",
           "character": "fubuki",
           "text": [
             {
@@ -799,7 +828,7 @@
           "boardActions": []
         },
         {
-          "id": "dialogue_33",
+          "id": "dialogue_36",
           "character": "miko",
           "text": [
             {
@@ -811,7 +840,7 @@
           "boardActions": []
         },
         {
-          "id": "dialogue_34",
+          "id": "dialogue_37",
           "character": "fubuki",
           "text": [
             {
