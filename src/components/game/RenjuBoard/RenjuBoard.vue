@@ -195,6 +195,7 @@ onBeforeUnmount(() => {
       @mousedown="interaction.handleStageClick"
       @mousemove="interaction.handleStageMouseMove"
       @mouseleave="interaction.handleStageMouseLeave"
+      @touchstart="interaction.handleStageClick"
     >
       <v-layer>
         <!-- 背景 -->
@@ -514,6 +515,7 @@ onBeforeUnmount(() => {
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
   overflow: hidden;
   cursor: pointer;
+  touch-action: none;
 }
 
 .renju-board.disabled {
