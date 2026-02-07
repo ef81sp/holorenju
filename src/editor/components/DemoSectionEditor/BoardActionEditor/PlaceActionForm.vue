@@ -10,7 +10,6 @@ const props = defineProps<{
 const emit = defineEmits<{
   "update-position": [field: "row" | "col", value: number];
   "update-color": [color: "black" | "white"];
-  "update-highlight": [highlight: boolean];
 }>();
 
 const position = computed(() => props.action.position);
@@ -18,11 +17,6 @@ const position = computed(() => props.action.position);
 const color = computed({
   get: (): "black" | "white" => props.action.color,
   set: (value: "black" | "white") => emit("update-color", value),
-});
-
-const highlight = computed({
-  get: (): boolean => props.action.highlight ?? false,
-  set: (value: boolean) => emit("update-highlight", value),
 });
 
 const handlePositionUpdate = (field: "row" | "col", value: number): void => {
@@ -62,16 +56,6 @@ const handlePositionUpdate = (field: "row" | "col", value: number): void => {
         </label>
       </div>
     </div>
-
-    <label class="field checkbox-field">
-      <span>ハイライト</span>
-      <div class="checkbox-inline">
-        <input
-          v-model="highlight"
-          type="checkbox"
-        />
-      </div>
-    </label>
   </div>
 </template>
 
@@ -110,19 +94,5 @@ const handlePositionUpdate = (field: "row" | "col", value: number): void => {
   gap: var(--size-2);
   font-size: var(--size-12);
   cursor: pointer;
-}
-
-.checkbox-field {
-  flex: 0 0 auto;
-  min-width: var(--size-100);
-  align-items: center;
-}
-
-.checkbox-inline {
-  display: flex;
-  align-items: center;
-  gap: var(--size-2);
-  font-size: var(--size-11);
-  height: var(--size-16);
 }
 </style>

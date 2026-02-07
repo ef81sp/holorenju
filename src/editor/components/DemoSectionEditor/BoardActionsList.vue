@@ -17,7 +17,6 @@ const {
   updateBoardActionInArray,
   updateBoardActionPosition,
   updateBoardActionColor,
-  updateBoardActionHighlight,
   updateBoardActionBoard,
   addBoardActionMarkPosition,
   updateBoardActionMarkPosition,
@@ -66,13 +65,6 @@ const handleUpdateColor = (
   color: "black" | "white",
 ): void => {
   updateBoardActionColor(props.dialogueIndex, actionIndex, color);
-};
-
-const handleUpdateHighlight = (
-  actionIndex: number,
-  highlight: boolean,
-): void => {
-  updateBoardActionHighlight(props.dialogueIndex, actionIndex, highlight);
 };
 
 const handleUpdateBoard = (actionIndex: number, board: string[]): void => {
@@ -183,9 +175,6 @@ const handleUpdateType = (
                 handleUpdatePosition(actionIndex, key, field, value)
             "
             @update-color="(color) => handleUpdateColor(actionIndex, color)"
-            @update-highlight="
-              (highlight) => handleUpdateHighlight(actionIndex, highlight)
-            "
             @update-board="(board) => handleUpdateBoard(actionIndex, board)"
             @add-mark-position="() => handleAddMarkPosition(actionIndex)"
             @update-mark-position="

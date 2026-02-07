@@ -61,7 +61,6 @@ describe("useBoardActions", () => {
         type: "place",
         position: { row: 7, col: 7 },
         color: "black",
-        highlight: false,
       });
     });
 
@@ -156,7 +155,6 @@ describe("useBoardActions", () => {
             type: "place",
             position: { row: 7, col: 7 },
             color: "black",
-            highlight: false,
           },
         ],
       });
@@ -342,30 +340,6 @@ describe("useBoardActions", () => {
       updateBoardActionColor(0, 0, "white");
 
       expect(updateDialogue).not.toHaveBeenCalled();
-    });
-  });
-
-  describe("updateBoardActionHighlight", () => {
-    it("placeアクションのhighlightを更新", () => {
-      mockSection.dialogues[0] = createDialogue([
-        {
-          type: "place",
-          position: { row: 0, col: 0 },
-          color: "black",
-          highlight: false,
-        },
-      ]);
-
-      const { updateBoardActionHighlight } = useBoardActions(
-        getCurrentSection,
-        updateDialogue,
-      );
-
-      updateBoardActionHighlight(0, 0, true);
-
-      const [[, callArgs]] = updateDialogue.mock.calls;
-      const action = callArgs.boardActions[0] as PlaceMoveAction;
-      expect(action.highlight).toBe(true);
     });
   });
 

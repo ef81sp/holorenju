@@ -31,7 +31,6 @@ const emit = defineEmits<{
     value: number,
   ];
   "update-color": [color: "black" | "white"];
-  "update-highlight": [highlight: boolean];
   "update-board": [board: string[]];
   "add-mark-position": [];
   "update-mark-position": [
@@ -167,7 +166,6 @@ const handleLineStyleUpdate = (style: "solid" | "dashed"): void => {
       :action="placeAction"
       @update-position="handlePlacePositionUpdate"
       @update-color="(color) => emit('update-color', color)"
-      @update-highlight="(highlight) => emit('update-highlight', highlight)"
     />
 
     <RemoveActionForm

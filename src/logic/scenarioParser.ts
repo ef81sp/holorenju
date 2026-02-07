@@ -300,8 +300,7 @@ function validateBoardAction(data: unknown, path: string): BoardAction {
         ["black", "white"],
         `${path}.color`,
       );
-      const highlight = data.highlight ? Boolean(data.highlight) : undefined;
-      return { type: "place", position, color, highlight };
+      return { type: "place", position, color };
     }
 
     case "remove": {

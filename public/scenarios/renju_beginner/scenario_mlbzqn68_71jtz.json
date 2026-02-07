@@ -1,0 +1,2176 @@
+{
+  "id": "scenario_mlbzqn68_71jtz",
+  "title": "EX: 珠型一覧",
+  "difficulty": "renju_beginner",
+  "description": "珠型の細かい説明と全パターンを紹介します",
+  "objectives": [],
+  "sections": [
+    {
+      "id": "section_1",
+      "type": "demo",
+      "title": "2手目の位置と呼び方",
+      "initialBoard": [
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------"
+      ],
+      "dialogues": [
+        {
+          "id": "dialogue_1",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "zzz..."
+            }
+          ],
+          "emotion": 35,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_2",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "み、みこさん……"
+            }
+          ],
+          "emotion": 29,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_3",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "……まぁいいか。"
+            }
+          ],
+          "emotion": 0,
+          "description": {
+            "text": [
+              {
+                "type": "text",
+                "content": "いいのか"
+              }
+            ]
+          },
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_4",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "珠型に関する細かい説明をしていこう。"
+            }
+          ],
+          "emotion": 0,
+          "description": {
+            "text": [],
+            "clear": true
+          },
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_5",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "今更だけど、下側に黒、上側に白が座っているという前提で進めるよ。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_6",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "白の2手目は、厳密には位置が2種類に定められている。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_7",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "1つ目はこの位置。白にとっては黒石の下。これを"
+            },
+            {
+              "type": "emphasis",
+              "content": [
+                {
+                  "type": "text",
+                  "content": "直接打ち"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "content": "と呼ぶよ。"
+            }
+          ],
+          "emotion": 0,
+          "description": {
+            "text": [
+              {
+                "type": "text",
+                "content": "盤の下側に黒、上側に白が座っている"
+              }
+            ]
+          },
+          "boardActions": [
+            {
+              "type": "place",
+              "position": {
+                "row": 7,
+                "col": 7
+              },
+              "color": "black"
+            },
+            {
+              "type": "place",
+              "position": {
+                "row": 6,
+                "col": 7
+              },
+              "color": "white"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_8",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "2つ目はこの位置。白にとっては黒石の左下。これを"
+            },
+            {
+              "type": "emphasis",
+              "content": [
+                {
+                  "type": "text",
+                  "content": "間接打ち"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "content": "と呼ぶよ。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": [
+            {
+              "type": "resetAll"
+            },
+            {
+              "type": "place",
+              "position": {
+                "row": 7,
+                "col": 7
+              },
+              "color": "black"
+            },
+            {
+              "type": "place",
+              "position": {
+                "row": 6,
+                "col": 8
+              },
+              "color": "white"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_9",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "90度ずつ回しても一緒だから、黒のひとつ周りに打つ分にはどこでもOKだ。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_10",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "でも、基準は今見た2つの位置だよ。ここに黒を足した形に名前がついている。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        }
+      ]
+    },
+    {
+      "id": "section_2",
+      "type": "demo",
+      "title": "3手目の位置",
+      "initialBoard": [
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "-------o-------",
+        "-------x-------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------"
+      ],
+      "dialogues": [
+        {
+          "id": "dialogue_1",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "さて、白石の位置は2つだったけど、黒石は天元から2つ隣までならどこでもOKだ。"
+            }
+          ],
+          "emotion": 0,
+          "description": {
+            "text": [
+              {
+                "type": "ruby",
+                "base": "天元",
+                "ruby": "てんげん"
+              },
+              {
+                "type": "text",
+                "content": ": 中央の星のこと。ど真ん中。"
+              },
+              {
+                "type": "lineBreak"
+              },
+              {
+                "type": "lineBreak"
+              },
+              {
+                "type": "ruby",
+                "base": "星",
+                "ruby": "ほし"
+              },
+              {
+                "type": "text",
+                "content": ": 黒いポッチのこと。"
+              }
+            ]
+          },
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_2",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "そうすると打てる場所は23通りある。間接打ちも合わせると46通りだ。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": [
+            {
+              "type": "line",
+              "fromPosition": {
+                "row": 5,
+                "col": 5
+              },
+              "toPosition": {
+                "row": 5,
+                "col": 9
+              },
+              "action": "draw",
+              "style": "solid"
+            },
+            {
+              "type": "line",
+              "fromPosition": {
+                "row": 6,
+                "col": 5
+              },
+              "toPosition": {
+                "row": 6,
+                "col": 9
+              },
+              "action": "draw",
+              "style": "solid"
+            },
+            {
+              "type": "line",
+              "fromPosition": {
+                "row": 7,
+                "col": 5
+              },
+              "toPosition": {
+                "row": 7,
+                "col": 9
+              },
+              "action": "draw",
+              "style": "solid"
+            },
+            {
+              "type": "line",
+              "fromPosition": {
+                "row": 8,
+                "col": 5
+              },
+              "toPosition": {
+                "row": 8,
+                "col": 9
+              },
+              "action": "draw",
+              "style": "solid"
+            },
+            {
+              "type": "line",
+              "fromPosition": {
+                "row": 9,
+                "col": 5
+              },
+              "toPosition": {
+                "row": 9,
+                "col": 9
+              },
+              "action": "draw",
+              "style": "solid"
+            },
+            {
+              "type": "line",
+              "fromPosition": {
+                "row": 5,
+                "col": 5
+              },
+              "toPosition": {
+                "row": 9,
+                "col": 5
+              },
+              "action": "draw",
+              "style": "solid"
+            },
+            {
+              "type": "line",
+              "fromPosition": {
+                "row": 5,
+                "col": 6
+              },
+              "toPosition": {
+                "row": 9,
+                "col": 6
+              },
+              "action": "draw",
+              "style": "solid"
+            },
+            {
+              "type": "line",
+              "fromPosition": {
+                "row": 5,
+                "col": 7
+              },
+              "toPosition": {
+                "row": 9,
+                "col": 7
+              },
+              "action": "draw",
+              "style": "solid"
+            },
+            {
+              "type": "line",
+              "fromPosition": {
+                "row": 5,
+                "col": 8
+              },
+              "toPosition": {
+                "row": 9,
+                "col": 8
+              },
+              "action": "draw",
+              "style": "solid"
+            },
+            {
+              "type": "line",
+              "fromPosition": {
+                "row": 5,
+                "col": 9
+              },
+              "toPosition": {
+                "row": 9,
+                "col": 9
+              },
+              "action": "draw",
+              "style": "solid"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_3",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "だけど、名前がついているのは、"
+            },
+            {
+              "type": "emphasis",
+              "content": [
+                {
+                  "type": "text",
+                  "content": "直接打ち13通り"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "content": "、"
+            },
+            {
+              "type": "emphasis",
+              "content": [
+                {
+                  "type": "text",
+                  "content": "間接打ち13通り"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "content": "の"
+            },
+            {
+              "type": "emphasis",
+              "content": [
+                {
+                  "type": "text",
+                  "content": "合計26通り"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "content": "だ。"
+            }
+          ],
+          "emotion": 0,
+          "description": {
+            "text": [
+              {
+                "type": "lineBreak"
+              }
+            ]
+          },
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_4",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "これは線対称の関係にあるものを同じものとして扱うからだね。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": [
+            {
+              "type": "resetMarkLine"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_5",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "黒3をG9に打ってもI9に打っても、ひっくり返しただけで、実質同じ形だ。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": [
+            {
+              "type": "mark",
+              "positions": [
+                {
+                  "row": 6,
+                  "col": 6
+                },
+                {
+                  "row": 6,
+                  "col": 8
+                }
+              ],
+              "markType": "circle",
+              "action": "draw"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_6",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "その分を省略すると、直接打ち・間接打ちでそれぞれ13通りになるわけだね。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        }
+      ]
+    },
+    {
+      "id": "section_3",
+      "type": "demo",
+      "title": "珠型と通し番号",
+      "initialBoard": [
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------"
+      ],
+      "dialogues": [
+        {
+          "id": "dialogue_1",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "では珠型の一覧を見ていこう。珠型には名前がついていると言ったが、通し番号もついている。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_2",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "日本語では「直接1号」とか「間接2号」とか書かれるよ。"
+            }
+          ],
+          "emotion": 1,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_3",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "連珠は国際的に遊ばれているから、海外では直接打ちは「D1」、間接打ちは「I2」とか書かれる。"
+            }
+          ],
+          "emotion": 1,
+          "description": {
+            "text": [
+              {
+                "type": "text",
+                "content": "D: Direct"
+              },
+              {
+                "type": "lineBreak"
+              },
+              {
+                "type": "lineBreak"
+              },
+              {
+                "type": "text",
+                "content": "I: Indirect"
+              }
+            ]
+          },
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_4",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "今回は海外の通し番号と一緒に紹介するよ。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        }
+      ]
+    },
+    {
+      "id": "section_4",
+      "type": "demo",
+      "title": "直接打ち一覧",
+      "initialBoard": [
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "-------o-------",
+        "-------x-------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------"
+      ],
+      "dialogues": [
+        {
+          "id": "dialogue_1",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "では直接打ちの珠型を見ていこう。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_2",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "直接打ちの3手目で名前がついているのはこれらだね。あとは線対称の部分だ。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": [
+            {
+              "type": "mark",
+              "positions": [
+                {
+                  "row": 5,
+                  "col": 7
+                },
+                {
+                  "row": 5,
+                  "col": 8
+                },
+                {
+                  "row": 5,
+                  "col": 9
+                },
+                {
+                  "row": 6,
+                  "col": 8
+                },
+                {
+                  "row": 6,
+                  "col": 9
+                },
+                {
+                  "row": 7,
+                  "col": 8
+                },
+                {
+                  "row": 7,
+                  "col": 9
+                },
+                {
+                  "row": 8,
+                  "col": 7
+                },
+                {
+                  "row": 8,
+                  "col": 8
+                },
+                {
+                  "row": 8,
+                  "col": 9
+                },
+                {
+                  "row": 9,
+                  "col": 7
+                },
+                {
+                  "row": 9,
+                  "col": 8
+                },
+                {
+                  "row": 9,
+                  "col": 9
+                }
+              ],
+              "markType": "circle",
+              "action": "draw"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_3",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "ruby",
+              "base": "寒星",
+              "ruby": "かんせい"
+            },
+            {
+              "type": "text",
+              "content": " (D1)"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": [
+            {
+              "type": "place",
+              "position": {
+                "row": 5,
+                "col": 7
+              },
+              "color": "black"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_4",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "ruby",
+              "base": "渓月",
+              "ruby": "けいげつ"
+            },
+            {
+              "type": "text",
+              "content": " (D2)"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": [
+            {
+              "type": "remove",
+              "position": {
+                "row": 5,
+                "col": 7
+              }
+            },
+            {
+              "type": "place",
+              "position": {
+                "row": 5,
+                "col": 8
+              },
+              "color": "black"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_5",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "ruby",
+              "base": "疎星",
+              "ruby": "そせい"
+            },
+            {
+              "type": "text",
+              "content": " (D3)"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": [
+            {
+              "type": "remove",
+              "position": {
+                "row": 5,
+                "col": 8
+              }
+            },
+            {
+              "type": "place",
+              "position": {
+                "row": 5,
+                "col": 9
+              },
+              "color": "black"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_6",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "ruby",
+              "base": "花月",
+              "ruby": "かげつ"
+            },
+            {
+              "type": "text",
+              "content": " (D4)"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": [
+            {
+              "type": "remove",
+              "position": {
+                "row": 5,
+                "col": 9
+              }
+            },
+            {
+              "type": "place",
+              "position": {
+                "row": 6,
+                "col": 8
+              },
+              "color": "black"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_7",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "花月は初心者にオススメと言われているよ。ナナメの連ができて黒が打ちやすいんだ。"
+            }
+          ],
+          "emotion": 1,
+          "description": {
+            "text": [
+              {
+                "type": "text",
+                "content": "花月には黒の必勝定石があるので、上級者同士ではあまり打たれません。"
+              }
+            ]
+          },
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_8",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "つづいて"
+            },
+            {
+              "type": "ruby",
+              "base": "残月",
+              "ruby": "ざんげつ"
+            },
+            {
+              "type": "text",
+              "content": " (D5)"
+            }
+          ],
+          "emotion": 0,
+          "description": {
+            "text": [],
+            "clear": true
+          },
+          "boardActions": [
+            {
+              "type": "remove",
+              "position": {
+                "row": 6,
+                "col": 8
+              }
+            },
+            {
+              "type": "place",
+              "position": {
+                "row": 6,
+                "col": 9
+              },
+              "color": "black"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_9",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "ruby",
+              "base": "雨月",
+              "ruby": "うげつ"
+            },
+            {
+              "type": "text",
+              "content": " (D6)"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": [
+            {
+              "type": "remove",
+              "position": {
+                "row": 6,
+                "col": 9
+              }
+            },
+            {
+              "type": "place",
+              "position": {
+                "row": 7,
+                "col": 8
+              },
+              "color": "black"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_10",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "ruby",
+              "base": "金星",
+              "ruby": "きんせい"
+            },
+            {
+              "type": "text",
+              "content": " (D7)"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": [
+            {
+              "type": "remove",
+              "position": {
+                "row": 7,
+                "col": 8
+              }
+            },
+            {
+              "type": "place",
+              "position": {
+                "row": 7,
+                "col": 9
+              },
+              "color": "black"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_11",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "ruby",
+              "base": "松月",
+              "ruby": "しょうげつ"
+            },
+            {
+              "type": "text",
+              "content": " (D8)"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": [
+            {
+              "type": "remove",
+              "position": {
+                "row": 7,
+                "col": 9
+              }
+            },
+            {
+              "type": "place",
+              "position": {
+                "row": 8,
+                "col": 7
+              },
+              "color": "black"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_12",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "ruby",
+              "base": "丘月",
+              "ruby": "きゅうげつ"
+            },
+            {
+              "type": "text",
+              "content": " (D9)"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": [
+            {
+              "type": "remove",
+              "position": {
+                "row": 8,
+                "col": 7
+              }
+            },
+            {
+              "type": "place",
+              "position": {
+                "row": 8,
+                "col": 8
+              },
+              "color": "black"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_13",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "ruby",
+              "base": "新月",
+              "ruby": "しんげつ"
+            },
+            {
+              "type": "text",
+              "content": " (D10)"
+            }
+          ],
+          "emotion": 0,
+          "description": {
+            "text": []
+          },
+          "boardActions": [
+            {
+              "type": "remove",
+              "position": {
+                "row": 8,
+                "col": 8
+              }
+            },
+            {
+              "type": "place",
+              "position": {
+                "row": 8,
+                "col": 9
+              },
+              "color": "black"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_14",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "ruby",
+              "base": "瑞星",
+              "ruby": "ずいせい"
+            },
+            {
+              "type": "text",
+              "content": " (D11)"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": [
+            {
+              "type": "remove",
+              "position": {
+                "row": 8,
+                "col": 9
+              }
+            },
+            {
+              "type": "place",
+              "position": {
+                "row": 9,
+                "col": 7
+              },
+              "color": "black"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_15",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "ruby",
+              "base": "山月",
+              "ruby": "さんげつ"
+            },
+            {
+              "type": "text",
+              "content": " (D12)"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": [
+            {
+              "type": "remove",
+              "position": {
+                "row": 9,
+                "col": 7
+              }
+            },
+            {
+              "type": "place",
+              "position": {
+                "row": 9,
+                "col": 8
+              },
+              "color": "black"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_16",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "最後は"
+            },
+            {
+              "type": "ruby",
+              "base": "遊星",
+              "ruby": "ゆうせい"
+            },
+            {
+              "type": "text",
+              "content": " (D13)"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": [
+            {
+              "type": "remove",
+              "position": {
+                "row": 9,
+                "col": 8
+              }
+            },
+            {
+              "type": "place",
+              "position": {
+                "row": 9,
+                "col": 9
+              },
+              "color": "black"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_17",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "以上、直接打ちの13珠型でした。"
+            }
+          ],
+          "emotion": 1,
+          "description": {
+            "text": [
+              {
+                "type": "ruby",
+                "base": "寒星",
+                "ruby": "かんせい"
+              },
+              {
+                "type": "text",
+                "content": "(D1) / "
+              },
+              {
+                "type": "ruby",
+                "base": "渓月",
+                "ruby": "けいげつ"
+              },
+              {
+                "type": "text",
+                "content": "(D2)"
+              },
+              {
+                "type": "lineBreak"
+              },
+              {
+                "type": "ruby",
+                "base": "疎星",
+                "ruby": "そせい"
+              },
+              {
+                "type": "text",
+                "content": "(D3) / "
+              },
+              {
+                "type": "ruby",
+                "base": "花月",
+                "ruby": "かげつ"
+              },
+              {
+                "type": "text",
+                "content": "(D4)"
+              },
+              {
+                "type": "lineBreak"
+              },
+              {
+                "type": "ruby",
+                "base": "残月",
+                "ruby": "ざんげつ"
+              },
+              {
+                "type": "text",
+                "content": "(D5) / "
+              },
+              {
+                "type": "ruby",
+                "base": "雨月",
+                "ruby": "うげつ"
+              },
+              {
+                "type": "text",
+                "content": "(D6)"
+              },
+              {
+                "type": "lineBreak"
+              },
+              {
+                "type": "ruby",
+                "base": "金星",
+                "ruby": "きんせい"
+              },
+              {
+                "type": "text",
+                "content": "(D7) / "
+              },
+              {
+                "type": "ruby",
+                "base": "松月",
+                "ruby": "しょうげつ"
+              },
+              {
+                "type": "text",
+                "content": "(D8)"
+              },
+              {
+                "type": "lineBreak"
+              },
+              {
+                "type": "ruby",
+                "base": "丘月",
+                "ruby": "きゅうげつ"
+              },
+              {
+                "type": "text",
+                "content": "(D9) / "
+              },
+              {
+                "type": "ruby",
+                "base": "新月",
+                "ruby": "しんげつ"
+              },
+              {
+                "type": "text",
+                "content": "(D10)"
+              },
+              {
+                "type": "lineBreak"
+              },
+              {
+                "type": "ruby",
+                "base": "瑞星",
+                "ruby": "ずいせい"
+              },
+              {
+                "type": "text",
+                "content": "(D11) / "
+              },
+              {
+                "type": "ruby",
+                "base": "山月",
+                "ruby": "さんげつ"
+              },
+              {
+                "type": "text",
+                "content": "(D12)"
+              },
+              {
+                "type": "lineBreak"
+              },
+              {
+                "type": "ruby",
+                "base": "遊星",
+                "ruby": "ゆうせい"
+              },
+              {
+                "type": "text",
+                "content": "(D13)"
+              },
+              {
+                "type": "lineBreak"
+              },
+              {
+                "type": "lineBreak"
+              }
+            ]
+          },
+          "boardActions": []
+        }
+      ]
+    },
+    {
+      "id": "section_5",
+      "type": "demo",
+      "title": "間接打ち一覧",
+      "initialBoard": [
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "--------o------",
+        "-------x-------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------"
+      ],
+      "dialogues": [
+        {
+          "id": "dialogue_1",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "ぐごごご……"
+            }
+          ],
+          "emotion": 35,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_2",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "……ぐっすりだねぇ"
+            }
+          ],
+          "emotion": 11,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_3",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "続いて間接打ち一覧といこう。"
+            }
+          ],
+          "emotion": 0,
+          "description": {
+            "text": []
+          },
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_4",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "直接打ちと同じように線対称を同じものとして、13箇所に名前がついている。"
+            }
+          ],
+          "emotion": 1,
+          "boardActions": [
+            {
+              "type": "mark",
+              "positions": [
+                {
+                  "row": 5,
+                  "col": 9
+                },
+                {
+                  "row": 6,
+                  "col": 9
+                },
+                {
+                  "row": 7,
+                  "col": 9
+                },
+                {
+                  "row": 8,
+                  "col": 9
+                },
+                {
+                  "row": 9,
+                  "col": 9
+                },
+                {
+                  "row": 7,
+                  "col": 8
+                },
+                {
+                  "row": 8,
+                  "col": 8
+                },
+                {
+                  "row": 9,
+                  "col": 8
+                },
+                {
+                  "row": 8,
+                  "col": 7
+                },
+                {
+                  "row": 9,
+                  "col": 7
+                },
+                {
+                  "row": 8,
+                  "col": 6
+                },
+                {
+                  "row": 9,
+                  "col": 6
+                },
+                {
+                  "row": 9,
+                  "col": 5
+                }
+              ],
+              "markType": "circle",
+              "action": "draw"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_5",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "順番に見ていこう。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_6",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "ruby",
+              "base": "長星",
+              "ruby": "ちょうせい"
+            },
+            {
+              "type": "text",
+              "content": " (I1)"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": [
+            {
+              "type": "place",
+              "position": {
+                "row": 5,
+                "col": 9
+              },
+              "color": "black"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_7",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "ruby",
+              "base": "峡月",
+              "ruby": "きょうげつ"
+            },
+            {
+              "type": "text",
+              "content": " (I2)"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": [
+            {
+              "type": "remove",
+              "position": {
+                "row": 5,
+                "col": 9
+              }
+            },
+            {
+              "type": "place",
+              "position": {
+                "row": 6,
+                "col": 9
+              },
+              "color": "black"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_8",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "ruby",
+              "base": "恒星",
+              "ruby": "こうせい"
+            },
+            {
+              "type": "text",
+              "content": " (I3)"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": [
+            {
+              "type": "remove",
+              "position": {
+                "row": 6,
+                "col": 9
+              }
+            },
+            {
+              "type": "place",
+              "position": {
+                "row": 7,
+                "col": 9
+              },
+              "color": "black"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_9",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "ruby",
+              "base": "水月",
+              "ruby": "すいげつ"
+            },
+            {
+              "type": "text",
+              "content": " (I4)"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": [
+            {
+              "type": "remove",
+              "position": {
+                "row": 7,
+                "col": 9
+              }
+            },
+            {
+              "type": "place",
+              "position": {
+                "row": 8,
+                "col": 9
+              },
+              "color": "black"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_10",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "ruby",
+              "base": "流星",
+              "ruby": "りゅうせい"
+            },
+            {
+              "type": "text",
+              "content": " (I5)"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": [
+            {
+              "type": "remove",
+              "position": {
+                "row": 8,
+                "col": 9
+              }
+            },
+            {
+              "type": "place",
+              "position": {
+                "row": 9,
+                "col": 9
+              },
+              "color": "black"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_11",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "ruby",
+              "base": "雲月",
+              "ruby": "うんげつ"
+            },
+            {
+              "type": "text",
+              "content": " (I6)"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": [
+            {
+              "type": "remove",
+              "position": {
+                "row": 9,
+                "col": 9
+              }
+            },
+            {
+              "type": "place",
+              "position": {
+                "row": 7,
+                "col": 8
+              },
+              "color": "black"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_12",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "ruby",
+              "base": "浦月",
+              "ruby": "ほげつ"
+            },
+            {
+              "type": "text",
+              "content": " (I7)"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": [
+            {
+              "type": "remove",
+              "position": {
+                "row": 7,
+                "col": 8
+              }
+            },
+            {
+              "type": "place",
+              "position": {
+                "row": 8,
+                "col": 8
+              },
+              "color": "black"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_13",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "ruby",
+              "base": "浦月",
+              "ruby": "ほげつ"
+            },
+            {
+              "type": "text",
+              "content": "も初心者にオススメの珠型だ。黒のナナメの連ができていて打ちやすいよ。"
+            }
+          ],
+          "emotion": 0,
+          "description": {
+            "text": [
+              {
+                "type": "text",
+                "content": "浦月にも黒の必勝定石があり、上級者には打たれません"
+              }
+            ]
+          },
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_14",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "つづいて"
+            },
+            {
+              "type": "ruby",
+              "base": "嵐月",
+              "ruby": "らんげつ"
+            },
+            {
+              "type": "text",
+              "content": " (I8)"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": [
+            {
+              "type": "remove",
+              "position": {
+                "row": 8,
+                "col": 8
+              }
+            },
+            {
+              "type": "place",
+              "position": {
+                "row": 9,
+                "col": 8
+              },
+              "color": "black"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_15",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "ruby",
+              "base": "銀月",
+              "ruby": "ぎんげつ"
+            },
+            {
+              "type": "text",
+              "content": " (I9)"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": [
+            {
+              "type": "remove",
+              "position": {
+                "row": 9,
+                "col": 8
+              }
+            },
+            {
+              "type": "place",
+              "position": {
+                "row": 8,
+                "col": 7
+              },
+              "color": "black"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_16",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "ruby",
+              "base": "明星",
+              "ruby": "みょうじょう"
+            },
+            {
+              "type": "text",
+              "content": " (I10)"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": [
+            {
+              "type": "remove",
+              "position": {
+                "row": 8,
+                "col": 7
+              }
+            },
+            {
+              "type": "place",
+              "position": {
+                "row": 9,
+                "col": 7
+              },
+              "color": "black"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_17",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "ruby",
+              "base": "斜月",
+              "ruby": "しゃげつ"
+            },
+            {
+              "type": "text",
+              "content": " (I11)"
+            }
+          ],
+          "emotion": 0,
+          "description": {
+            "text": [],
+            "clear": true
+          },
+          "boardActions": [
+            {
+              "type": "remove",
+              "position": {
+                "row": 9,
+                "col": 7
+              }
+            },
+            {
+              "type": "place",
+              "position": {
+                "row": 8,
+                "col": 6
+              },
+              "color": "black"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_18",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "ruby",
+              "base": "名月",
+              "ruby": "めいげつ"
+            },
+            {
+              "type": "text",
+              "content": " (I12)"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": [
+            {
+              "type": "remove",
+              "position": {
+                "row": 8,
+                "col": 6
+              }
+            },
+            {
+              "type": "place",
+              "position": {
+                "row": 9,
+                "col": 6
+              },
+              "color": "black"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_19",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "最後に"
+            },
+            {
+              "type": "ruby",
+              "base": "彗星",
+              "ruby": "すいせい"
+            },
+            {
+              "type": "text",
+              "content": " (I13)"
+            }
+          ],
+          "emotion": 0,
+          "description": {
+            "text": [
+              {
+                "type": "lineBreak"
+              }
+            ]
+          },
+          "boardActions": [
+            {
+              "type": "remove",
+              "position": {
+                "row": 9,
+                "col": 6
+              }
+            },
+            {
+              "type": "place",
+              "position": {
+                "row": 9,
+                "col": 5
+              },
+              "color": "black"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_20",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "……すいちゃん……"
+            }
+          ],
+          "emotion": 35,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_21",
+          "character": "fubuki",
+          "text": [],
+          "emotion": 29,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_22",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "……てぇてぇなぁ……"
+            }
+          ],
+          "emotion": 35,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_23",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "なにはともあれ、以上間接打ち13珠型でした。"
+            }
+          ],
+          "emotion": 0,
+          "description": {
+            "text": [
+              {
+                "type": "ruby",
+                "base": "長星",
+                "ruby": "ちょうせい"
+              },
+              {
+                "type": "text",
+                "content": "(I1) / "
+              },
+              {
+                "type": "ruby",
+                "base": "峡月",
+                "ruby": "きょうげつ"
+              },
+              {
+                "type": "text",
+                "content": "(I2)"
+              },
+              {
+                "type": "lineBreak"
+              },
+              {
+                "type": "ruby",
+                "base": "恒星",
+                "ruby": "こうせい"
+              },
+              {
+                "type": "text",
+                "content": "(I3) / "
+              },
+              {
+                "type": "ruby",
+                "base": "水月",
+                "ruby": "すいげつ"
+              },
+              {
+                "type": "text",
+                "content": "(I4)"
+              },
+              {
+                "type": "lineBreak"
+              },
+              {
+                "type": "ruby",
+                "base": "流星",
+                "ruby": "りゅうせい"
+              },
+              {
+                "type": "text",
+                "content": "(I5) / "
+              },
+              {
+                "type": "ruby",
+                "base": "雲月",
+                "ruby": "うんげつ"
+              },
+              {
+                "type": "text",
+                "content": "(I6)"
+              },
+              {
+                "type": "lineBreak"
+              },
+              {
+                "type": "ruby",
+                "base": "浦月",
+                "ruby": "ほげつ"
+              },
+              {
+                "type": "text",
+                "content": "(I7) / "
+              },
+              {
+                "type": "ruby",
+                "base": "嵐月",
+                "ruby": "らんげつ"
+              },
+              {
+                "type": "text",
+                "content": "(I8)"
+              },
+              {
+                "type": "lineBreak"
+              },
+              {
+                "type": "ruby",
+                "base": "銀月",
+                "ruby": "ぎんげつ"
+              },
+              {
+                "type": "text",
+                "content": "(I9) / "
+              },
+              {
+                "type": "ruby",
+                "base": "明星",
+                "ruby": "みょうじょう"
+              },
+              {
+                "type": "text",
+                "content": "(I10)"
+              },
+              {
+                "type": "lineBreak"
+              },
+              {
+                "type": "ruby",
+                "base": "斜月",
+                "ruby": "しゃげつ"
+              },
+              {
+                "type": "text",
+                "content": "(I11) / "
+              },
+              {
+                "type": "ruby",
+                "base": "名月",
+                "ruby": "めいげつ"
+              },
+              {
+                "type": "text",
+                "content": "(I12)"
+              },
+              {
+                "type": "lineBreak"
+              },
+              {
+                "type": "ruby",
+                "base": "彗星",
+                "ruby": "すいせい"
+              },
+              {
+                "type": "text",
+                "content": "(I13)"
+              }
+            ]
+          },
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_24",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "基礎を学んだあとは、各珠型の定石を勉強してみてもいいかもね。"
+            }
+          ],
+          "emotion": 1,
+          "boardActions": []
+        }
+      ]
+    }
+  ]
+}

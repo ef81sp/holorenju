@@ -34,11 +34,6 @@ export function useBoardActions(
     actionIndex: number,
     color: "black" | "white",
   ) => void;
-  updateBoardActionHighlight: (
-    dialogueIndex: number,
-    actionIndex: number,
-    highlight: boolean,
-  ) => void;
   updateBoardActionBoard: (
     dialogueIndex: number,
     actionIndex: number,
@@ -84,7 +79,6 @@ export function useBoardActions(
           type: "place",
           position: { row: 7, col: 7 },
           color: "black",
-          highlight: false,
         };
       case "remove":
         return {
@@ -292,29 +286,6 @@ export function useBoardActions(
     updateBoardActionInArray(dialogueIndex, actionIndex, { color });
   };
 
-  const updateBoardActionHighlight = (
-    dialogueIndex: number,
-    actionIndex: number,
-    highlight: boolean,
-  ): void => {
-    const section = getCurrentSection();
-    if (!section) {
-      return;
-    }
-
-    const dialogue = section.dialogues[dialogueIndex];
-    if (!dialogue || !dialogue.boardActions[actionIndex]) {
-      return;
-    }
-
-    const action = dialogue.boardActions[actionIndex];
-    if (action.type !== "place") {
-      return;
-    }
-
-    updateBoardActionInArray(dialogueIndex, actionIndex, { highlight });
-  };
-
   // ===== SetBoard アクション用 =====
   const updateBoardActionBoard = (
     dialogueIndex: number,
@@ -473,7 +444,6 @@ export function useBoardActions(
     updateBoardActionInArray,
     updateBoardActionPosition,
     updateBoardActionColor,
-    updateBoardActionHighlight,
     updateBoardActionBoard,
     addBoardActionMarkPosition,
     updateBoardActionMarkPosition,

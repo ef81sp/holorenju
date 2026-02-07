@@ -108,7 +108,6 @@ interface PlaceMoveAction {
   type: "place";
   position: Position;
   color: "black" | "white";
-  highlight?: boolean;
 }
 
 interface RemoveMoveAction {

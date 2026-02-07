@@ -1,0 +1,513 @@
+{
+  "id": "scenario_mlbxwgw2_a4l03",
+  "title": "珠型概説",
+  "difficulty": "renju_beginner",
+  "description": "最初の3手は形が決められています。",
+  "objectives": [],
+  "sections": [
+    {
+      "id": "section_1",
+      "type": "demo",
+      "title": "珠型とは",
+      "initialBoard": [
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------"
+      ],
+      "dialogues": [
+        {
+          "id": "dialogue_1",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "もうひとつ、連珠が五目並べと違う点は、"
+            },
+            {
+              "type": "emphasis",
+              "content": [
+                {
+                  "type": "ruby",
+                  "base": "珠型",
+                  "ruby": "しゅけい"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "content": "があることだよ。"
+            }
+          ],
+          "emotion": 1,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_2",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "しゅけい？"
+            }
+          ],
+          "emotion": 4,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_3",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "簡単に言うと、3手目までの流れが決まっていて、その分岐ごとに名前がついているんだ。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_4",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "ほえー"
+            }
+          ],
+          "emotion": 4,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_5",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "黒の1手目は、必ず"
+            },
+            {
+              "type": "emphasis",
+              "content": [
+                {
+                  "type": "ruby",
+                  "base": "天元",
+                  "ruby": "てんげん"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "content": "に打つ。ど真ん中だね。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": [
+            {
+              "type": "place",
+              "position": {
+                "row": 7,
+                "col": 7
+              },
+              "color": "black"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_6",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "好きなところに打っちゃだめなんだ"
+            }
+          ],
+          "emotion": 4,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_7",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "そうなんだよー。で、次の白は、"
+            },
+            {
+              "type": "emphasis",
+              "content": [
+                {
+                  "type": "text",
+                  "content": "黒の隣のどこか"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "content": "に打つ。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": [
+            {
+              "type": "mark",
+              "position": {
+                "row": 7,
+                "col": 7
+              },
+              "color": "black",
+              "positions": [
+                {
+                  "row": 6,
+                  "col": 6
+                },
+                {
+                  "row": 6,
+                  "col": 7
+                },
+                {
+                  "row": 6,
+                  "col": 8
+                },
+                {
+                  "row": 7,
+                  "col": 6
+                },
+                {
+                  "row": 7,
+                  "col": 8
+                },
+                {
+                  "row": 8,
+                  "col": 6
+                },
+                {
+                  "row": 8,
+                  "col": 7
+                },
+                {
+                  "row": 8,
+                  "col": 8
+                }
+              ],
+              "markType": "circle",
+              "action": "draw"
+            }
+          ],
+          "description": {
+            "text": [
+              {
+                "type": "text",
+                "content": "厳密には、黒石の真上(白から見ると真下)、もしくは黒石の右上(白から見ると左下)に置くと定まっているのですが、そうしなくても反則ではありません。"
+              },
+              {
+                "type": "lineBreak"
+              },
+              {
+                "type": "lineBreak"
+              },
+              {
+                "type": "text",
+                "content": "どこにおいても、90度ずつぐるりと回した形になります。"
+              }
+            ]
+          }
+        },
+        {
+          "id": "dialogue_8",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "みこさんどこにする？"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_9",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "おっ……じゃあ……上に。"
+            }
+          ],
+          "emotion": 9,
+          "boardActions": [
+            {
+              "type": "resetMarkLine",
+              "position": {
+                "row": 7,
+                "col": 7
+              },
+              "color": "black"
+            },
+            {
+              "type": "place",
+              "position": {
+                "row": 6,
+                "col": 7
+              },
+              "color": "white"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_10",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "OK。で次の黒は、最初の黒の2つ隣までのどこかに打つ。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": [
+            {
+              "type": "mark",
+              "position": {
+                "row": 7,
+                "col": 7
+              },
+              "color": "black",
+              "positions": [
+                {
+                  "row": 5,
+                  "col": 5
+                },
+                {
+                  "row": 5,
+                  "col": 6
+                },
+                {
+                  "row": 5,
+                  "col": 7
+                },
+                {
+                  "row": 5,
+                  "col": 8
+                },
+                {
+                  "row": 5,
+                  "col": 9
+                },
+                {
+                  "row": 6,
+                  "col": 5
+                },
+                {
+                  "row": 6,
+                  "col": 6
+                },
+                {
+                  "row": 6,
+                  "col": 8
+                },
+                {
+                  "row": 6,
+                  "col": 9
+                },
+                {
+                  "row": 7,
+                  "col": 5
+                },
+                {
+                  "row": 7,
+                  "col": 6
+                },
+                {
+                  "row": 7,
+                  "col": 8
+                },
+                {
+                  "row": 7,
+                  "col": 9
+                },
+                {
+                  "row": 8,
+                  "col": 5
+                },
+                {
+                  "row": 8,
+                  "col": 6
+                },
+                {
+                  "row": 8,
+                  "col": 7
+                },
+                {
+                  "row": 8,
+                  "col": 8
+                },
+                {
+                  "row": 8,
+                  "col": 9
+                },
+                {
+                  "row": 9,
+                  "col": 5
+                },
+                {
+                  "row": 9,
+                  "col": 6
+                },
+                {
+                  "row": 9,
+                  "col": 7
+                },
+                {
+                  "row": 9,
+                  "col": 8
+                },
+                {
+                  "row": 9,
+                  "col": 9
+                }
+              ],
+              "markType": "circle",
+              "action": "draw"
+            }
+          ],
+          "description": {
+            "text": [],
+            "clear": true
+          }
+        },
+        {
+          "id": "dialogue_11",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "どうする？"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_12",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "じゃあ……ここに。"
+            }
+          ],
+          "emotion": 1,
+          "boardActions": [
+            {
+              "type": "resetMarkLine",
+              "position": {
+                "row": 7,
+                "col": 7
+              },
+              "color": "black"
+            },
+            {
+              "type": "place",
+              "position": {
+                "row": 6,
+                "col": 8
+              },
+              "color": "black"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_13",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "これは"
+            },
+            {
+              "type": "emphasis",
+              "content": [
+                {
+                  "type": "ruby",
+                  "base": "花月",
+                  "ruby": "かげつ"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "content": "という"
+            },
+            {
+              "type": "ruby",
+              "base": "珠型",
+              "ruby": "しゅけい"
+            },
+            {
+              "type": "text",
+              "content": "だね。"
+            }
+          ],
+          "emotion": 35,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_14",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "次の白からは、自由に打っていいんだ。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_15",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "emphasis",
+              "content": [
+                {
+                  "type": "text",
+                  "content": "最初は真ん中、次の白はひとつ隣まで、次の黒はふたつ隣まで"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "content": "、と覚えておこう。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_16",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "ひとまずこれだけ覚えておけば、対局はできる。ほかの珠型を見てみたかったら、次のシナリオで見てみよう。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        }
+      ]
+    }
+  ]
+}
