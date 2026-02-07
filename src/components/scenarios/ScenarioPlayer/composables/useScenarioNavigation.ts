@@ -125,8 +125,11 @@ export const useScenarioNavigation = (
     if (currentSection.value?.type === "demo") {
       return currentDialogueIndex.value >= allDialogues.value.length - 1;
     }
-    // 問題セクション: 正解済み
-    return isSectionCompleted.value;
+    // 問題セクション: 正解済み（現在または過去に完了）
+    return (
+      isSectionCompleted.value ||
+      isSectionAlreadyCompleted(currentSectionIndex.value)
+    );
   });
 
   const canNavigatePrevious = computed(() => currentDialogueIndex.value > 0);

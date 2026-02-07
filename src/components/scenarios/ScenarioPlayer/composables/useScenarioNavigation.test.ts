@@ -841,5 +841,58 @@ describe("useScenarioNavigation", () => {
       await nav.nextDialogue();
       expect(nav.currentDialogueIndex.value).toBe(1);
     });
+
+    it("最後の問題セクション完了後、戻って進んでもisScenarioDoneはtrue", async () => {
+      const nav = useScenarioNavigation("test-scenario");
+      // デモ → 問題 の順で、最後が問題セクション
+      const testScenario = createTestScenario();
+
+      nav.scenario.value = testScenario;
+      nav.allDialogues.value = [
+        {
+          dialogue: testScenario.sections[0].dialogues[0],
+          sectionIndex: 0,
+          sectionDialogueIndex: 0,
+        },
+        {
+          dialogue: testScenario.sections[0].dialogues[1],
+          sectionIndex: 0,
+          sectionDialogueIndex: 1,
+        },
+        {
+          dialogue: testScenario.sections[1].dialogues[0],
+          sectionIndex: 1,
+          sectionDialogueIndex: 0,
+        },
+      ];
+
+      // 最後のセクション（問題セクション）に移動
+      nav.currentDialogueIndex.value = 2;
+      nav.currentSectionIndex.value = 1;
+
+      // 問題を完了する（watch がトリガーされてセクション1が記録される）
+      nav.isSectionCompleted.value = true;
+
+      // watch が発火するのを待つ
+      await vi.waitFor(() => {
+        expect(nav.isScenarioDone.value).toBe(true);
+      });
+
+      // 前のダイアログに戻る
+      nav.previousDialogue();
+      expect(nav.currentDialogueIndex.value).toBe(1);
+      expect(nav.currentSectionIndex.value).toBe(0);
+
+      // 戻ったので isSectionCompleted は false にリセット
+      nav.isSectionCompleted.value = false;
+
+      // 再度最後のセクションに進む
+      await nav.nextDialogue();
+      expect(nav.currentDialogueIndex.value).toBe(2);
+      expect(nav.currentSectionIndex.value).toBe(1);
+
+      // 完了済みとして記録されているので、isScenarioDone は true のまま
+      expect(nav.isScenarioDone.value).toBe(true);
+    });
   });
 });
