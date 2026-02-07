@@ -231,6 +231,17 @@ export const useEditorStore = defineStore("editor", () => {
   const setValidationErrors = (
     errors: { path: string; message: string }[],
   ): void => {
+    // 浅い比較：内容が同じなら更新しない（再レンダリング防止）
+    const current = validationErrors.value;
+    if (current.length === errors.length) {
+      const isSame = errors.every(
+        (e, i) =>
+          current[i]?.path === e.path && current[i]?.message === e.message,
+      );
+      if (isSame) {
+        return;
+      }
+    }
     validationErrors.value = errors;
   };
 

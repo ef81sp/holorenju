@@ -414,3 +414,23 @@ h1 {
 :root[data-text-size="large"] {
   --text-size-multiplier: 1.3;
 }
+
+/* ===== エディタ用インラインエラー・カウンター ===== */
+
+.inline-error {
+  color: var(--color-error);
+  font-size: var(--size-10);
+  margin-top: var(--size-2);
+}
+
+.char-counter {
+  font-size: var(--size-10);
+  color: var(--color-text-secondary);
+  text-align: right;
+  margin-top: var(--size-2);
+}
+
+.char-counter--over {
+  color: var(--color-error);
+  font-weight: var(--font-weight-bold);
+}

@@ -1,39 +1,60 @@
 <script setup lang="ts">
-import { computed, type PropType } from "vue";
+import { computed } from "vue";
+import { useEditorStore } from "@/editor/stores/editorStore";
+import { TITLE_MAX_LENGTH } from "@/logic/scenarioFileHandler";
 
-defineProps({
-  title: {
-    type: String,
-    required: true,
-  },
-  description: {
-    type: String,
-    default: "",
-  },
-  withDescription: {
-    type: Boolean,
-    default: true,
-  },
-});
+const props = defineProps<{
+  title: string;
+  description?: string;
+  withDescription?: boolean;
+  sectionIndex: number;
+}>();
 
 defineEmits<{
   "update:title": [value: string];
   "update:description": [value: string];
 }>();
+
+const editorStore = useEditorStore();
+
+// タイトルの文字数カウント
+const titleCharCount = computed(() => props.title.length);
+const isTitleOver = computed(() => titleCharCount.value > TITLE_MAX_LENGTH);
+
+// タイトルのバリデーションエラー
+const titleError = computed(() => {
+  const errorPath = `sections[${props.sectionIndex}].title`;
+  return editorStore.validationErrors.find((e) => e.path === errorPath);
+});
 </script>
 
 <template>
   <div class="section-meta-editor">
     <div class="form-group">
-      <label>セクションタイトル</label>
+      <div class="label-row">
+        <label>セクションタイトル</label>
+        <span
+          class="char-counter"
+          :class="{ 'char-counter--over': isTitleOver }"
+        >
+          {{ titleCharCount }}/{{ TITLE_MAX_LENGTH }}
+        </span>
+      </div>
       <input
         :value="title"
         type="text"
         class="form-input"
+        :class="{ 'input-error': isTitleOver }"
         @input="
           $emit('update:title', ($event.target as HTMLInputElement).value)
         "
       />
+      <span
+        v-if="titleError"
+        class="inline-error"
+      >
+        {{ titleError.message }}
+      </span>
     </div>
     <div
       v-if="withDescription"
@@ -87,6 +108,21 @@ defineEmits<{
     border-color: var(--border-focus);
     box-shadow: var(--shadow-focus);
   }
+
+  &.input-error {
+    border-color: var(--color-error);
+  }
+}
+
+.label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--size-4);
+}
+
+.label-row .char-counter {
+  margin-top: 0;
 }
 
 .form-textarea {

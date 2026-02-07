@@ -19,8 +19,10 @@ export function useScenarioExport(): UseScenarioExportReturn {
    */
   const handleSave = (): void => {
     console.warn("シナリオを保存します");
-    // バリデーション実行
-    const result = validateScenarioCompletely(editorStore.scenario);
+    // バリデーション実行（保存時は文字数チェックも行う）
+    const result = validateScenarioCompletely(editorStore.scenario, {
+      checkLength: true,
+    });
     editorStore.setValidationErrors(
       result.errors.map((e) => ({ path: e.path, message: e.message })),
     );

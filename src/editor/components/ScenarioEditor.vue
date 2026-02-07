@@ -47,7 +47,7 @@ watch(
       window.clearTimeout(validationTimer);
     }
     validationTimer = window.setTimeout(() => {
-      const result = validateScenarioCompletely(value);
+      const result = validateScenarioCompletely(value, { checkLength: true });
       editorStore.setValidationErrors(
         result.errors.map((e) => ({ path: e.path, message: e.message })),
       );

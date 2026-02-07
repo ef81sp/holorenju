@@ -86,8 +86,10 @@ export function useScenarioDirectory(): UseScenarioDirReturn {
       console.warn("💾 保存開始...");
       console.warn("📋 シナリオデータ:", editorStore.scenario);
 
-      // バリデーション実行
-      const result = validateScenarioCompletely(editorStore.scenario);
+      // バリデーション実行（保存時は文字数チェックも行う）
+      const result = validateScenarioCompletely(editorStore.scenario, {
+        checkLength: true,
+      });
       if (!result.isValid) {
         const errorMessages = result.errors
           .map((e) => `[${e.type}] ${e.path}: ${e.message}`)

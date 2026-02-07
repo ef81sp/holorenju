@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
 import type { Scenario } from "@/types/scenario";
+import type { TextNode } from "@/types/text";
 
 import {
   parseScenarioFromText,
@@ -20,12 +21,20 @@ import {
   setBoardCell,
   cycleBoardCell,
   downloadScenarioAsJSON,
+  validateTitleLength,
+  countDisplayCharacters,
+  countDisplayCharactersPerLine,
+  validateDialogueLength,
+  TITLE_MAX_LENGTH,
+  DIALOGUE_MAX_LENGTH_NO_NEWLINE,
+  DIALOGUE_MAX_LENGTH_PER_LINE,
+  DIALOGUE_MAX_LINES,
 } from "./scenarioFileHandler";
 
 describe("scenarioFileHandler", () => {
   const validScenario: Scenario = {
     id: "test-scenario",
-    title: "Test Scenario",
+    title: "テスト", // 3文字（7文字以内）
     difficulty: "gomoku_beginner",
     description: "A test scenario",
     objectives: ["Objective 1"],
@@ -33,7 +42,7 @@ describe("scenarioFileHandler", () => {
       {
         id: "section-1",
         type: "demo",
-        title: "Demo Section",
+        title: "デモ", // 2文字（7文字以内）
         initialBoard: Array(15).fill("-".repeat(15)),
         dialogues: [
           {
@@ -63,7 +72,7 @@ describe("scenarioFileHandler", () => {
       const result = parseScenarioFromText(text);
 
       expect(result.id).toBe("test-scenario");
-      expect(result.title).toBe("Test Scenario");
+      expect(result.title).toBe("テスト");
     });
 
     it("無効なJSONでエラー", () => {
@@ -352,6 +361,267 @@ describe("scenarioFileHandler", () => {
       expect(URL.revokeObjectURL).toHaveBeenCalled();
 
       vi.unstubAllGlobals();
+    });
+  });
+
+  describe("文字数バリデーション", () => {
+    describe("validateTitleLength", () => {
+      it("7文字以内はnullを返す", () => {
+        expect(validateTitleLength("1234567")).toBeNull();
+        expect(validateTitleLength("タイトル")).toBeNull();
+        expect(validateTitleLength("")).toBeNull();
+      });
+
+      it("8文字以上はエラーメッセージを返す", () => {
+        const result = validateTitleLength("12345678");
+        expect(result).not.toBeNull();
+        expect(result).toContain("7文字以内");
+        expect(result).toContain("8文字");
+      });
+
+      it("定数TITLE_MAX_LENGTHが7", () => {
+        expect(TITLE_MAX_LENGTH).toBe(7);
+      });
+    });
+
+    describe("countDisplayCharacters", () => {
+      it("プレーンテキストの文字数をカウント", () => {
+        const nodes: TextNode[] = [{ type: "text", content: "こんにちは" }];
+        expect(countDisplayCharacters(nodes)).toBe(5);
+      });
+
+      it("ルビはbaseのみカウント", () => {
+        const nodes: TextNode[] = [
+          { type: "ruby", base: "漢字", ruby: "かんじ" },
+        ];
+        expect(countDisplayCharacters(nodes)).toBe(2);
+      });
+
+      it("強調は中身のみカウント（マークダウン記号を除外）", () => {
+        const nodes: TextNode[] = [
+          {
+            type: "emphasis",
+            content: [{ type: "text", content: "太字" }],
+          },
+        ];
+        expect(countDisplayCharacters(nodes)).toBe(2);
+      });
+
+      it("複合ノードを正しくカウント", () => {
+        const nodes: TextNode[] = [
+          { type: "text", content: "これは" },
+          { type: "ruby", base: "連珠", ruby: "れんじゅ" },
+          { type: "text", content: "です" },
+        ];
+        // "これは"(3) + "連珠"(2) + "です"(2) = 7
+        expect(countDisplayCharacters(nodes)).toBe(7);
+      });
+
+      it("改行は文字数としてカウントしない", () => {
+        const nodes: TextNode[] = [
+          { type: "text", content: "abc" },
+          { type: "lineBreak" },
+          { type: "text", content: "def" },
+        ];
+        expect(countDisplayCharacters(nodes)).toBe(6);
+      });
+
+      it("ネストした強調をカウント", () => {
+        const nodes: TextNode[] = [
+          {
+            type: "emphasis",
+            content: [
+              { type: "text", content: "太" },
+              { type: "ruby", base: "字", ruby: "じ" },
+            ],
+          },
+        ];
+        expect(countDisplayCharacters(nodes)).toBe(2);
+      });
+    });
+
+    describe("countDisplayCharactersPerLine", () => {
+      it("改行で分割して各行の文字数を返す", () => {
+        const nodes: TextNode[] = [
+          { type: "text", content: "12345" },
+          { type: "lineBreak" },
+          { type: "text", content: "abc" },
+        ];
+        expect(countDisplayCharactersPerLine(nodes)).toEqual([5, 3]);
+      });
+
+      it("改行がない場合は1行として返す", () => {
+        const nodes: TextNode[] = [{ type: "text", content: "hello" }];
+        expect(countDisplayCharactersPerLine(nodes)).toEqual([5]);
+      });
+
+      it("空の入力は空配列の1行を返す", () => {
+        const nodes: TextNode[] = [];
+        expect(countDisplayCharactersPerLine(nodes)).toEqual([0]);
+      });
+    });
+
+    describe("validateDialogueLength", () => {
+      it("改行なし40文字以内はnullを返す", () => {
+        const nodes: TextNode[] = [{ type: "text", content: "あ".repeat(40) }];
+        expect(validateDialogueLength(nodes)).toBeNull();
+      });
+
+      it("改行なし41文字以上はエラーを返す", () => {
+        const nodes: TextNode[] = [{ type: "text", content: "あ".repeat(41) }];
+        const result = validateDialogueLength(nodes);
+        expect(result).not.toBeNull();
+        expect(result).toContain("40文字以内");
+      });
+
+      it("改行あり2行以内・各行20文字以内はnullを返す", () => {
+        const nodes: TextNode[] = [
+          { type: "text", content: "あ".repeat(20) },
+          { type: "lineBreak" },
+          { type: "text", content: "い".repeat(20) },
+        ];
+        expect(validateDialogueLength(nodes)).toBeNull();
+      });
+
+      it("改行あり3行以上はエラーを返す", () => {
+        const nodes: TextNode[] = [
+          { type: "text", content: "a" },
+          { type: "lineBreak" },
+          { type: "text", content: "b" },
+          { type: "lineBreak" },
+          { type: "text", content: "c" },
+        ];
+        const result = validateDialogueLength(nodes);
+        expect(result).not.toBeNull();
+        expect(result).toContain("2行以内");
+      });
+
+      it("改行あり1行21文字以上はエラーを返す", () => {
+        const nodes: TextNode[] = [
+          { type: "text", content: "あ".repeat(21) },
+          { type: "lineBreak" },
+          { type: "text", content: "い".repeat(5) },
+        ];
+        const result = validateDialogueLength(nodes);
+        expect(result).not.toBeNull();
+        expect(result).toContain("20文字以内");
+        expect(result).toContain("1行目");
+      });
+
+      it("定数が正しい値を持つ", () => {
+        expect(DIALOGUE_MAX_LENGTH_NO_NEWLINE).toBe(40);
+        expect(DIALOGUE_MAX_LENGTH_PER_LINE).toBe(20);
+        expect(DIALOGUE_MAX_LINES).toBe(2);
+      });
+    });
+
+    describe("validateScenarioCompletely - 文字数チェック", () => {
+      it("checkLength: false（デフォルト）では文字数チェックしない", () => {
+        const scenario = {
+          ...validScenario,
+          title: "12345678", // 8文字（オーバー）
+        };
+        const result = validateScenarioCompletely(scenario);
+
+        expect(result.isValid).toBe(true);
+        expect(result.errors.some((e) => e.type === "length")).toBe(false);
+      });
+
+      it("checkLength: true でシナリオタイトルが8文字以上でエラー", () => {
+        const scenario = {
+          ...validScenario,
+          title: "12345678", // 8文字
+        };
+        const result = validateScenarioCompletely(scenario, {
+          checkLength: true,
+        });
+
+        expect(result.isValid).toBe(false);
+        expect(result.errors.some((e) => e.type === "length")).toBe(true);
+        expect(result.errors.some((e) => e.path === "title")).toBe(true);
+      });
+
+      it("checkLength: true でセクションタイトルが8文字以上でエラー", () => {
+        const scenario = {
+          ...validScenario,
+          sections: [
+            {
+              ...validScenario.sections[0],
+              title: "セクション名長すぎ", // 9文字
+            },
+          ],
+        };
+        const result = validateScenarioCompletely(scenario, {
+          checkLength: true,
+        });
+
+        expect(result.isValid).toBe(false);
+        expect(
+          result.errors.some(
+            (e) => e.type === "length" && e.path.includes("sections[0].title"),
+          ),
+        ).toBe(true);
+      });
+
+      it("checkLength: true でダイアログテキストが41文字以上でエラー", () => {
+        const scenario = {
+          ...validScenario,
+          sections: [
+            {
+              ...validScenario.sections[0],
+              dialogues: [
+                {
+                  id: "dialogue-1",
+                  character: "fubuki" as const,
+                  emotion: 0,
+                  text: [{ type: "text" as const, content: "あ".repeat(41) }],
+                  boardActions: [] as [],
+                },
+              ],
+            },
+          ],
+        };
+        const result = validateScenarioCompletely(scenario, {
+          checkLength: true,
+        });
+
+        expect(result.isValid).toBe(false);
+        expect(
+          result.errors.some(
+            (e) => e.type === "length" && e.path.includes("dialogues[0].text"),
+          ),
+        ).toBe(true);
+      });
+
+      it("checkLength: true ですべて有効な文字数の場合はエラーなし", () => {
+        const scenario = {
+          ...validScenario,
+          title: "タイトル", // 4文字
+          sections: [
+            {
+              ...validScenario.sections[0],
+              title: "セクション", // 5文字
+              dialogues: [
+                {
+                  id: "dialogue-1",
+                  character: "fubuki" as const,
+                  emotion: 0,
+                  text: [{ type: "text" as const, content: "短いテキスト" }],
+                  boardActions: [] as [],
+                },
+              ],
+            },
+          ],
+        };
+        const result = validateScenarioCompletely(scenario, {
+          checkLength: true,
+        });
+
+        expect(result.isValid).toBe(true);
+        expect(result.errors.filter((e) => e.type === "length")).toHaveLength(
+          0,
+        );
+      });
     });
   });
 });

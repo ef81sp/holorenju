@@ -4,6 +4,8 @@
  * JSONファイルの読み込み・保存・バリデーション
  */
 
+import type { TextNode } from "../types/text";
+
 import {
   DIFFICULTIES,
   type Scenario,
@@ -15,6 +17,13 @@ import {
   validateBoardState,
   DEFAULT_FEEDBACK,
 } from "./scenarioParser";
+
+// ===== 文字数制限定数 =====
+
+export const TITLE_MAX_LENGTH = 7;
+export const DIALOGUE_MAX_LENGTH_NO_NEWLINE = 40;
+export const DIALOGUE_MAX_LENGTH_PER_LINE = 20;
+export const DIALOGUE_MAX_LINES = 2;
 
 // ===== ファイル読み込み =====
 
@@ -70,16 +79,125 @@ export interface ValidationResult {
 }
 
 export interface ValidationError {
-  type: "parse" | "board";
+  type: "parse" | "board" | "length";
   path: string;
   message: string;
 }
 
+// ===== 文字数バリデーション =====
+
+/**
+ * タイトルの文字数をバリデーション
+ * @returns エラーメッセージ（有効な場合はnull）
+ */
+export function validateTitleLength(title: string): string | null {
+  if (title.length > TITLE_MAX_LENGTH) {
+    return `タイトルは${TITLE_MAX_LENGTH}文字以内にしてください（現在${title.length}文字）`;
+  }
+  return null;
+}
+
+/**
+ * TextNode[]から表示文字数をカウント
+ * - ルビ: baseのみカウント
+ * - 強調: 中身のみカウント
+ * - 改行: 改行としてカウント（行分割に使用）
+ */
+export function countDisplayCharacters(nodes: TextNode[]): number {
+  let count = 0;
+  for (const node of nodes) {
+    switch (node.type) {
+      case "text":
+        count += node.content.length;
+        break;
+      case "ruby":
+        count += node.base.length;
+        break;
+      case "emphasis":
+        count += countDisplayCharacters(node.content);
+        break;
+      case "lineBreak":
+        // 改行は文字数としてカウントしない（行分割に使用）
+        break;
+      case "list":
+        // リストはダイアログでは通常使用しないが、念のため対応
+        for (const item of node.items) {
+          count += countDisplayCharacters(item);
+        }
+        break;
+    }
+  }
+  return count;
+}
+
+/**
+ * TextNode[]を行ごとに分割して各行の文字数を取得
+ */
+export function countDisplayCharactersPerLine(nodes: TextNode[]): number[] {
+  const lines: TextNode[][] = [[]];
+
+  for (const node of nodes) {
+    if (node.type === "lineBreak") {
+      lines.push([]);
+    } else {
+      const currentLine = lines[lines.length - 1];
+      if (currentLine) {
+        currentLine.push(node);
+      }
+    }
+  }
+
+  return lines.map((line) => countDisplayCharacters(line));
+}
+
+/**
+ * ダイアログテキストの文字数をバリデーション
+ * @returns エラーメッセージ（有効な場合はnull）
+ */
+export function validateDialogueLength(nodes: TextNode[]): string | null {
+  const hasLineBreak = nodes.some((n) => n.type === "lineBreak");
+
+  if (!hasLineBreak) {
+    // 改行なし: 40文字まで
+    const count = countDisplayCharacters(nodes);
+    if (count > DIALOGUE_MAX_LENGTH_NO_NEWLINE) {
+      return `ダイアログは${DIALOGUE_MAX_LENGTH_NO_NEWLINE}文字以内にしてください（現在${count}文字）`;
+    }
+  } else {
+    // 改行あり: 1行あたり20文字 × 最大2行
+    const lineCounts = countDisplayCharactersPerLine(nodes);
+
+    if (lineCounts.length > DIALOGUE_MAX_LINES) {
+      return `ダイアログは${DIALOGUE_MAX_LINES}行以内にしてください（現在${lineCounts.length}行）`;
+    }
+
+    for (let i = 0; i < lineCounts.length; i++) {
+      const lineCount = lineCounts[i];
+      if (lineCount !== undefined && lineCount > DIALOGUE_MAX_LENGTH_PER_LINE) {
+        return `ダイアログの各行は${DIALOGUE_MAX_LENGTH_PER_LINE}文字以内にしてください（${i + 1}行目: ${lineCount}文字）`;
+      }
+    }
+  }
+
+  return null;
+}
+
+export interface ValidationOptions {
+  /** 文字数チェックを行うか（デフォルト: false） */
+  checkLength?: boolean;
+}
+
 /**
  * シナリオ全体をバリデーション
+ * @param data バリデーション対象のデータ
+ * @param options バリデーションオプション
  * @returns バリデーション結果
  */
-export function validateScenarioCompletely(data: unknown): ValidationResult {
+export function validateScenarioCompletely(
+  data: unknown,
+  options: ValidationOptions = {},
+): ValidationResult {
+  const { checkLength = false } = options;
   const errors: ValidationError[] = [];
 
   // 1. パース時のエラーをキャッチ
@@ -106,7 +224,19 @@ export function validateScenarioCompletely(data: unknown): ValidationResult {
     };
   }
 
-  // 2. 盤面のバリデーション
+  // 2. シナリオタイトルの文字数チェック（オプション）
+  if (checkLength) {
+    const scenarioTitleError = validateTitleLength(scenario.title);
+    if (scenarioTitleError) {
+      errors.push({
+        type: "length",
+        path: "title",
+        message: scenarioTitleError,
+      });
+    }
+  }
+
+  // 3. 盤面のバリデーション + セクションタイトル + ダイアログの文字数チェック
   for (
     let sectionIndex = 0;
     sectionIndex < scenario.sections.length;
@@ -116,6 +246,8 @@ export function validateScenarioCompletely(data: unknown): ValidationResult {
     if (!section) {
       continue;
     }
+
+    // 盤面チェック
     const boardErrors = validateBoardState(section.initialBoard);
     for (const msg of boardErrors) {
       errors.push({
@@ -123,6 +255,41 @@ export function validateScenarioCompletely(data: unknown): ValidationResult {
         path: `sections[${sectionIndex}].initialBoard`,
         message: msg,
       });
+    }
+
+    // セクションタイトルの文字数チェック（オプション）
+    if (checkLength) {
+      const sectionTitleError = validateTitleLength(section.title);
+      if (sectionTitleError) {
+        errors.push({
+          type: "length",
+          path: `sections[${sectionIndex}].title`,
+          message: sectionTitleError,
+        });
+      }
+    }
+
+    // ダイアログの文字数チェック（オプション）
+    if (checkLength) {
+      const { dialogues } = section;
+      for (
+        let dialogueIndex = 0;
+        dialogueIndex < dialogues.length;
+        dialogueIndex += 1
+      ) {
+        const dialogue = dialogues[dialogueIndex];
+        if (!dialogue) {
+          continue;
+        }
+        const dialogueError = validateDialogueLength(dialogue.text);
+        if (dialogueError) {
+          errors.push({
+            type: "length",
+            path: `sections[${sectionIndex}].dialogues[${dialogueIndex}].text`,
+            message: dialogueError,
+          });
+        }
+      }
     }
   }
 

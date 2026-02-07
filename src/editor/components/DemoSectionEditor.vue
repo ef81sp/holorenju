@@ -68,6 +68,7 @@ const handleSplitHere = (dialogueIndex: number): void => {
         <SectionMetaEditor
           :title="currentSection.title"
           :with-description="false"
+          :section-index="editorStore.selectedSectionIndex ?? 0"
           @update:title="updateSectionTitle"
         />
       </div>
@@ -119,6 +120,7 @@ const handleSplitHere = (dialogueIndex: number): void => {
               :dialogue="dialogue"
               :dialogue-index="index"
               :dialogue-count="currentSection.dialogues.length"
+              :section-index="editorStore.selectedSectionIndex ?? 0"
               :get-current-section="getCurrentSection"
               :update-dialogue="updateDialogue"
               @move-up="editorStore.moveDialogueUp(index)"

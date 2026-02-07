@@ -1,11 +1,19 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, computed, useId } from "vue";
 import type { DemoDialogue } from "@/types/scenario";
 import type { CharacterType, EmotionId } from "@/types/character";
 import CharacterSprite from "@/components/character/CharacterSprite.vue";
 import EmotionPickerDialog from "../EmotionPickerDialog.vue";
 import { astToText } from "@/editor/logic/textUtils";
 import { parseDialogueText } from "@/logic/textParser";
+import { useEditorStore } from "@/editor/stores/editorStore";
+import {
+  countDisplayCharacters,
+  countDisplayCharactersPerLine,
+  DIALOGUE_MAX_LENGTH_NO_NEWLINE,
+  DIALOGUE_MAX_LENGTH_PER_LINE,
+  DIALOGUE_MAX_LINES,
+} from "@/logic/scenarioFileHandler";
 
 const CHARACTERS: CharacterType[] = ["fubuki", "miko", "narration"];
 
@@ -14,8 +22,11 @@ const emotionPickerRefs = ref<Record<number, unknown>>({});
 // 表情ピッカーで選択中のダイアログインデックス
 const selectedDialogueIndex = ref<number | null>(null);
 
+const editorStore = useEditorStore();
+
 const props = defineProps<{
   dialogues: DemoDialogue[];
+  sectionIndex: number;
 }>();
 
 const emit = defineEmits<{
@@ -24,6 +35,48 @@ const emit = defineEmits<{
   update: [index: number, updates: Partial<DemoDialogue>];
   remove: [index: number];
 }>();
+
+// 文字数情報の型
+type CharCountInfo =
+  | { type: "singleline"; count: number; isOver: boolean }
+  | { type: "multiline"; lines: number[]; isOver: boolean };
+
+// 各ダイアログの文字数情報をcomputedでキャッシュ
+const charCountInfoMap = computed(() =>
+  props.dialogues.map((dialogue): CharCountInfo => {
+    const hasLineBreak = dialogue.text.some((n) => n.type === "lineBreak");
+    if (hasLineBreak) {
+      const lineCounts = countDisplayCharactersPerLine(dialogue.text);
+      return {
+        type: "multiline" as const,
+        lines: lineCounts,
+        isOver:
+          lineCounts.length > DIALOGUE_MAX_LINES ||
+          lineCounts.some((c) => c > DIALOGUE_MAX_LENGTH_PER_LINE),
+      };
+    }
+    const count = countDisplayCharacters(dialogue.text);
+    return {
+      type: "singleline" as const,
+      count,
+      isOver: count > DIALOGUE_MAX_LENGTH_NO_NEWLINE,
+    };
+  }),
+);
+
+// 各ダイアログのバリデーションエラーをcomputedでキャッシュ
+const dialogueErrorMap = computed(() =>
+  props.dialogues.map((_, dialogueIndex) => {
+    const errorPath = `sections[${props.sectionIndex}].dialogues[${dialogueIndex}].text`;
+    return editorStore.validationErrors.find((e) => e.path === errorPath);
+  }),
+);
+
+// コンポーネントレベルのIDベース
+const baseId = useId();
+
+// 各ダイアログ用のIDを生成
+const getTextareaId = (index: number) => `dialogue-text-${baseId}-${index}`;
 
 const openEmotionPicker = (index: number): void => {
   selectedDialogueIndex.value = index;
@@ -141,9 +194,33 @@ const handleEmotionSelect = (emotionId: EmotionId): void => {
             </button>
           </div>
         </div>
+        <div class="field-header">
+          <label :for="getTextareaId(index)">テキスト</label>
+          <span
+            class="char-counter"
+            :class="{ 'char-counter--over': charCountInfoMap[index]?.isOver }"
+          >
+            <template v-if="charCountInfoMap[index]?.type === 'singleline'">
+              {{ (charCountInfoMap[index] as { count: number }).count }}/{{
+                DIALOGUE_MAX_LENGTH_NO_NEWLINE
+              }}
+            </template>
+            <template v-else>
+              {{
+                (charCountInfoMap[index] as { lines: number[] }).lines.length
+              }}行 ({{
+                (charCountInfoMap[index] as { lines: number[] }).lines.join(
+                  ", ",
+                )
+              }}) / 各{{ DIALOGUE_MAX_LENGTH_PER_LINE }}文字
+            </template>
+          </span>
+        </div>
         <textarea
+          :id="getTextareaId(index)"
           :value="astToText(dialogue.text)"
           class="form-textarea"
+          :class="{ 'input-error': charCountInfoMap[index]?.isOver }"
           placeholder="台詞を入力"
           rows="3"
           @input="
@@ -155,6 +232,12 @@ const handleEmotionSelect = (emotionId: EmotionId): void => {
               })
           "
         />
+        <span
+          v-if="dialogueErrorMap[index]"
+          class="inline-error"
+        >
+          {{ dialogueErrorMap[index]?.message }}
+        </span>
         <!-- 表情ピッカーダイアログ -->
         <EmotionPickerDialog
           v-if="dialogue.character"
@@ -285,6 +368,27 @@ const handleEmotionSelect = (emotionId: EmotionId): void => {
 
 .form-textarea {
   resize: vertical;
+}
+
+.form-textarea.input-error {
+  border-color: var(--color-error);
+}
+
+.field-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--size-4);
+  margin-bottom: var(--size-2);
+}
+
+.field-header label {
+  font-weight: 600;
+  font-size: var(--size-12);
+}
+
+.field-header .char-counter {
+  margin-top: 0;
 }
 
 .emotion-selector-button {

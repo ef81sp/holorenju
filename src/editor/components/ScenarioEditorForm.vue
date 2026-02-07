@@ -1,9 +1,20 @@
 <script setup lang="ts">
+import { computed } from "vue";
 import { DIFFICULTY_LABELS } from "@/editor/logic/indexFileHandler";
 import { useEditorStore } from "@/editor/stores/editorStore";
 import { DIFFICULTIES } from "@/types/scenario";
+import { TITLE_MAX_LENGTH } from "@/logic/scenarioFileHandler";
 
 const editorStore = useEditorStore();
+
+// タイトルの文字数カウント
+const titleCharCount = computed(() => editorStore.scenario.title.length);
+const isTitleOver = computed(() => titleCharCount.value > TITLE_MAX_LENGTH);
+
+// タイトルのバリデーションエラー
+const titleError = computed(() =>
+  editorStore.validationErrors.find((e) => e.path === "title"),
+);
 
 const difficultyOptions = DIFFICULTIES.map((difficulty) => ({
   value: difficulty,
@@ -53,17 +64,32 @@ const updateObjective = (index: number, value: string): void => {
 
     <!-- Title -->
     <div class="form-group">
-      <label for="scenario-title">タイトル</label>
+      <div class="label-row">
+        <label for="scenario-title">タイトル</label>
+        <span
+          class="char-counter"
+          :class="{ 'char-counter--over': isTitleOver }"
+        >
+          {{ titleCharCount }}/{{ TITLE_MAX_LENGTH }}
+        </span>
+      </div>
       <input
         id="scenario-title"
         type="text"
         :value="editorStore.scenario.title"
         class="form-input"
+        :class="{ 'input-error': isTitleOver }"
         @input="
           (e) =>
             updateScenarioInfo('title', (e.target as HTMLInputElement).value)
         "
       />
+      <span
+        v-if="titleError"
+        class="inline-error"
+      >
+        {{ titleError.message }}
+      </span>
     </div>
 
     <!-- Difficulty -->
@@ -180,6 +206,21 @@ const updateObjective = (index: number, value: string): void => {
   outline: none;
   border-color: #4a90e2;
   box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.05);
+}
+
+.form-input.input-error {
+  border-color: var(--color-error);
+}
+
+.label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--size-4);
+}
+
+.label-row .char-counter {
+  margin-top: 0;
 }
 
 .form-textarea {

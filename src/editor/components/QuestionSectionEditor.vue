@@ -102,6 +102,7 @@ const updateSuccessOperator = (operator: "or" | "and"): void => {
         <!-- ダイアログ -->
         <DialogueListEditor
           :dialogues="currentSection.dialogues"
+          :section-index="editorStore.selectedSectionIndex ?? 0"
           @add="addDialogue"
           @add-after="insertDialogueAfter"
           @update="updateDialogue"

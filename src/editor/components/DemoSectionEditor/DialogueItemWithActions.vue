@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { DemoSection, DemoDialogue } from "@/types/scenario";
 import type { CharacterType, EmotionId } from "@/types/character";
-import { computed, ref, watch } from "vue";
+import { computed, ref, watch, useId } from "vue";
 import CharacterSprite from "@/components/character/CharacterSprite.vue";
 import EmotionPickerDialog from "../EmotionPickerDialog.vue";
 import BoardActionsList from "./BoardActionsList.vue";
@@ -11,6 +11,14 @@ import {
   stringifyText,
   parseText,
 } from "@/logic/textParser";
+import { useEditorStore } from "@/editor/stores/editorStore";
+import {
+  countDisplayCharacters,
+  countDisplayCharactersPerLine,
+  DIALOGUE_MAX_LENGTH_NO_NEWLINE,
+  DIALOGUE_MAX_LENGTH_PER_LINE,
+  DIALOGUE_MAX_LINES,
+} from "@/logic/scenarioFileHandler";
 
 const CHARACTERS: CharacterType[] = ["fubuki", "miko", "narration"];
 
@@ -28,11 +36,46 @@ const props = defineProps<{
   dialogue: DemoDialogue;
   dialogueIndex: number;
   dialogueCount: number;
+  sectionIndex: number;
   getCurrentSection: () => DemoSection | null;
   updateDialogue: (index: number, updates: Partial<DemoDialogue>) => void;
 }>();
 
+const editorStore = useEditorStore();
+
+// 改行の有無を判定
+const hasLineBreak = computed(() =>
+  props.dialogue.text.some((n) => n.type === "lineBreak"),
+);
+
+// 文字数カウント情報
+const charCountInfo = computed(() => {
+  if (hasLineBreak.value) {
+    const lineCounts = countDisplayCharactersPerLine(props.dialogue.text);
+    return {
+      type: "multiline" as const,
+      lines: lineCounts,
+      isOver:
+        lineCounts.length > DIALOGUE_MAX_LINES ||
+        lineCounts.some((c) => c > DIALOGUE_MAX_LENGTH_PER_LINE),
+    };
+  }
+  const count = countDisplayCharacters(props.dialogue.text);
+  return {
+    type: "singleline" as const,
+    count,
+    isOver: count > DIALOGUE_MAX_LENGTH_NO_NEWLINE,
+  };
+});
+
+// バリデーションエラー
+const dialogueError = computed(() => {
+  const errorPath = `sections[${props.sectionIndex}].dialogues[${props.dialogueIndex}].text`;
+  return editorStore.validationErrors.find((e) => e.path === errorPath);
+});
+
 const dialogueText = ref<string>(astToText(props.dialogue.text));
+const textareaId = useId();
 
 const descriptionText = computed(() =>
   stringifyText(props.dialogue.description?.text || []),
@@ -229,15 +272,38 @@ const handleSplitHere = (): void => {
             />
           </label>
 
-          <label class="field field-text">
-            <span>テキスト</span>
+          <div class="field field-text">
+            <div class="field-header">
+              <label :for="textareaId">テキスト</label>
+              <span
+                class="char-counter"
+                :class="{ 'char-counter--over': charCountInfo.isOver }"
+              >
+                <template v-if="charCountInfo.type === 'singleline'">
+                  {{ charCountInfo.count }}/{{ DIALOGUE_MAX_LENGTH_NO_NEWLINE }}
+                </template>
+                <template v-else>
+                  {{ charCountInfo.lines.length }}行 ({{
+                    charCountInfo.lines.join(", ")
+                  }}) / 各{{ DIALOGUE_MAX_LENGTH_PER_LINE }}文字
+                </template>
+              </span>
+            </div>
             <textarea
+              :id="textareaId"
               v-model="dialogueText"
               placeholder="ダイアログテキストを入力"
               rows="3"
+              :class="{ 'input-error': charCountInfo.isOver }"
               @change="handleTextChange"
             />
-          </label>
+            <span
+              v-if="dialogueError"
+              class="inline-error"
+            >
+              {{ dialogueError.message }}
+            </span>
+          </div>
         </div>
       </div>
     </div>
@@ -392,9 +458,26 @@ const handleSplitHere = (): void => {
   gap: var(--size-2);
 }
 
-.field span {
+.field label,
+.field > span:first-child {
   font-weight: var(--font-weight-bold);
   font-size: var(--size-12);
+}
+
+.field-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--size-4);
+}
+
+.field-header label {
+  font-weight: var(--font-weight-bold);
+  font-size: var(--size-12);
+}
+
+.field-header .char-counter {
+  margin-top: 0;
 }
 
 .field-text {
@@ -446,6 +529,26 @@ textarea:focus {
 textarea {
   font-family: monospace;
   resize: vertical;
+}
+
+textarea.input-error {
+  border-color: var(--color-error);
+}
+
+.input-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--size-4);
+  margin-top: var(--size-2);
+}
+
+.input-footer .inline-error {
+  flex: 1;
+}
+
+.input-footer .char-counter {
+  flex-shrink: 0;
 }
 
 .emotion-selector {
