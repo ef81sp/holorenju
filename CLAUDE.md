@@ -80,6 +80,15 @@ pnpm build         # Production build
 - Scoped styles don't inherit across component boundaries; put utilities in `style.css`
 - Never set `display` directly on `<dialog>` or popover elements
 
+### Icons
+
+- Use **Material Symbols Outlined** (weight 400) for all UI icons (Apache-2.0)
+- SVG files in `src/assets/icons/` with `fill="currentColor"`
+- Import as component: `import InfoIcon from "@/assets/icons/info.svg?component"`
+- Use in template: `<InfoIcon />`
+- Source: https://github.com/google/material-design-icons/tree/master/symbols/web
+- To add new icons, use the `/download-icon` skill
+
 ### Konva
 
 - Use Vue Konva components (`v-stage`, `v-layer`, `v-circle`, etc.)

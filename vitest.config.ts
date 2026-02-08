@@ -1,10 +1,11 @@
 import vue from "@vitejs/plugin-vue";
 import { playwright } from "@vitest/browser-playwright";
 import { URL, fileURLToPath } from "node:url";
+import svgLoader from "vite-svg-loader";
 import { defineConfig } from "vitest/config";
 
 const baseConfig = {
-  plugins: [vue()],
+  plugins: [vue(), svgLoader()],
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url)),

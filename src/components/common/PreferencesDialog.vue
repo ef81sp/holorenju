@@ -4,6 +4,7 @@ import { usePreferencesStore } from "@/stores/preferencesStore";
 import { useProgressStore } from "@/stores/progressStore";
 // oxlint-disable-next-line consistent-type-imports
 import ConfirmDialog from "./ConfirmDialog.vue";
+import CloseIcon from "@/assets/icons/close.svg?component";
 
 const preferencesStore = usePreferencesStore();
 const progressStore = useProgressStore();
@@ -55,28 +56,7 @@ defineExpose({
           aria-label="閉じる"
           @click="dialogRef?.close()"
         >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <line
-              x1="18"
-              y1="6"
-              x2="6"
-              y2="18"
-            />
-            <line
-              x1="6"
-              y1="6"
-              x2="18"
-              y2="18"
-            />
-          </svg>
+          <CloseIcon />
         </button>
       </div>
 

@@ -12,6 +12,7 @@ import type { Position } from "@/types/game";
 import { formatMove } from "@/logic/gameRecordParser";
 import { getQualityLabel, getQualityColor } from "@/logic/reviewLogic";
 import ReviewEvalHelpDialog from "./ReviewEvalHelpDialog.vue";
+import VisibilityIcon from "@/assets/icons/visibility.svg?component";
 import {
   getLeafBreakdownItems,
   formatScore as formatScoreUtil,
@@ -505,21 +506,7 @@ function isPlayed(candidate: { position: Position }): boolean {
               aria-label="読み筋を盤面に表示"
               @click="togglePvLine('best', bestPVLine)"
             >
-              <svg
-                viewBox="0 0 16 16"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path d="M1 8s3-5 7-5 7 5 7 5-3 5-7 5S1 8 1 8z" />
-                <circle
-                  cx="8"
-                  cy="8"
-                  r="2"
-                />
-              </svg>
+              <VisibilityIcon />
             </button>
           </div>
           <div class="pv-sequence">
@@ -556,21 +543,7 @@ function isPlayed(candidate: { position: Position }): boolean {
               aria-label="読み筋を盤面に表示"
               @click="togglePvLine('played', playedPVLine)"
             >
-              <svg
-                viewBox="0 0 16 16"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path d="M1 8s3-5 7-5 7 5 7 5-3 5-7 5S1 8 1 8z" />
-                <circle
-                  cx="8"
-                  cy="8"
-                  r="2"
-                />
-              </svg>
+              <VisibilityIcon />
             </button>
           </div>
           <div class="pv-sequence">
