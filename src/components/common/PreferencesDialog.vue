@@ -86,15 +86,22 @@ defineExpose({
           <h3 class="section-title">アニメーション</h3>
           <div class="settings-group">
             <label class="setting-row">
-              <span class="setting-label">アニメーション有効</span>
+              <span class="setting-text">
+                <span class="setting-label">アニメーション有効</span>
+                <span class="setting-description">動きを滑らかに表示</span>
+              </span>
               <input
                 v-model="preferencesStore.animationEnabled"
                 type="checkbox"
                 class="checkbox"
               />
             </label>
+            <hr class="setting-divider" />
             <label class="setting-row">
-              <span class="setting-label">アニメーション速度</span>
+              <span class="setting-text">
+                <span class="setting-label">アニメーション速度</span>
+                <span class="setting-description">石の配置の速さ</span>
+              </span>
               <select
                 v-model="preferencesStore.speed"
                 class="select"
@@ -107,8 +114,12 @@ defineExpose({
                 <option value="fastest">{{ speedLabels.fastest }}</option>
               </select>
             </label>
+            <hr class="setting-divider" />
             <label class="setting-row">
-              <span class="setting-label">演出速度</span>
+              <span class="setting-text">
+                <span class="setting-label">演出速度</span>
+                <span class="setting-description">キャラクター演出の速さ</span>
+              </span>
               <select
                 v-model="preferencesStore.effectSpeed"
                 class="select"
@@ -129,7 +140,10 @@ defineExpose({
           <h3 class="section-title">表示</h3>
           <div class="settings-group">
             <label class="setting-row">
-              <span class="setting-label">テキストサイズ</span>
+              <span class="setting-text">
+                <span class="setting-label">テキストサイズ</span>
+                <span class="setting-description">セリフの大きさ</span>
+              </span>
               <select
                 v-model="preferencesStore.textSize"
                 class="select"
@@ -146,7 +160,10 @@ defineExpose({
           <h3 class="section-title">CPU対戦</h3>
           <div class="settings-group">
             <label class="setting-row">
-              <span class="setting-label">可能な限り早く着手</span>
+              <span class="setting-text">
+                <span class="setting-label">可能な限り早く着手</span>
+                <span class="setting-description">思考時間を短縮</span>
+              </span>
               <input
                 v-model="preferencesStore.fastCpuMove"
                 type="checkbox"
@@ -161,7 +178,10 @@ defineExpose({
           <h3 class="section-title">データ管理</h3>
           <div class="settings-group">
             <div class="setting-row">
-              <span class="setting-label">学習の進度をリセット</span>
+              <span class="setting-text">
+                <span class="setting-label">学習の進度をリセット</span>
+                <span class="setting-description">元に戻せません</span>
+              </span>
               <button
                 type="button"
                 class="btn btn-danger"
@@ -178,7 +198,10 @@ defineExpose({
           <h3 class="section-title">開発者向け</h3>
           <div class="settings-group">
             <label class="setting-row">
-              <span class="setting-label">コンピュータ分析を表示</span>
+              <span class="setting-text">
+                <span class="setting-label">コンピュータ分析を表示</span>
+                <span class="setting-description">デバッグ情報を表示</span>
+              </span>
               <input
                 v-model="preferencesStore.showCpuInfo"
                 type="checkbox"
@@ -213,8 +236,8 @@ defineExpose({
   padding: 0;
   box-shadow: 0 var(--size-10) var(--size-32) rgba(0, 0, 0, 0.2);
   width: var(--size-500);
-  max-height: 80%;
-  overflow: hidden;
+  /* 16:9画面に収まるよう高さを制限（effective-vwから高さを計算） */
+  max-height: calc(var(--effective-vw) * 9 / 16 * 0.85);
 
   transition:
     opacity 0.15s ease-out,
@@ -250,8 +273,7 @@ defineExpose({
 .dialog-content {
   display: flex;
   flex-direction: column;
-  max-height: calc(80svh - var(--size-32));
-  overflow: hidden;
+  max-height: 100%;
 }
 
 .dialog-header {
@@ -321,17 +343,32 @@ defineExpose({
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: var(--size-16);
   padding: var(--size-12) 0;
   cursor: pointer;
+}
 
-  &:not(:last-child) {
-    border-bottom: 1px solid var(--color-border);
-  }
+.setting-text {
+  flex: 1;
+  min-width: 0;
 }
 
 .setting-label {
+  display: block;
   font-size: var(--size-14);
   color: var(--color-text-primary);
+}
+
+.setting-description {
+  display: block;
+  font-size: var(--size-12);
+  color: var(--color-text-secondary);
+}
+
+.setting-divider {
+  border: none;
+  border-top: 1px solid var(--color-border);
+  margin: 0;
 }
 
 .checkbox {
