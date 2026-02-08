@@ -39,12 +39,33 @@ export interface VCFTimeLimiter {
 }
 
 /**
+ * VCF探索オプション（外部からパラメータを設定可能）
+ */
+export interface VCFSearchOptions {
+  /** 最大探索深度（デフォルト: VCF_MAX_DEPTH = 8） */
+  maxDepth?: number;
+  /** 時間制限（ミリ秒、デフォルト: VCF_TIME_LIMIT = 150） */
+  timeLimit?: number;
+}
+
+/**
+ * VCF手順の探索結果
+ */
+export interface VCFSequenceResult {
+  /** 最初の手 */
+  firstMove: Position;
+  /** 手順 [攻撃1, 防御1, 攻撃2, 防御2, ..., 攻撃N] */
+  sequence: Position[];
+}
+
+/**
  * VCFが成立するかチェック
  *
  * @param board 盤面
  * @param color 手番
  * @param depth 現在の探索深度
  * @param timeLimiter 時間制限コンテキスト（ルート呼び出し時は省略可）
+ * @param options 探索オプション（深度・時間制限のカスタマイズ）
  * @returns VCFが成立する場合true
  */
 export function hasVCF(
@@ -52,11 +73,15 @@ export function hasVCF(
   color: "black" | "white",
   depth = 0,
   timeLimiter?: VCFTimeLimiter,
+  options?: VCFSearchOptions,
 ): boolean {
+  const maxDepth = options?.maxDepth ?? VCF_MAX_DEPTH;
+  const timeLimitMs = options?.timeLimit ?? VCF_TIME_LIMIT;
+
   // 時間制限の初期化（ルート呼び出し時）
   const limiter = timeLimiter ?? {
     startTime: performance.now(),
-    timeLimit: VCF_TIME_LIMIT,
+    timeLimit: timeLimitMs,
   };
 
   // 時間制限チェック
@@ -64,7 +89,7 @@ export function hasVCF(
     return false;
   }
 
-  if (depth >= VCF_MAX_DEPTH) {
+  if (depth >= maxDepth) {
     return false;
   }
 
@@ -123,7 +148,7 @@ export function hasVCF(
       defenseRow[defensePos.col] = opponentColor;
     }
 
-    const result = hasVCF(board, color, depth + 1, limiter);
+    const result = hasVCF(board, color, depth + 1, limiter, options);
 
     // 元に戻す（Undo）- 逆順
     if (defenseRow) {
@@ -146,13 +171,20 @@ export function hasVCF(
  *
  * @param board 盤面
  * @param color 手番
+ * @param options 探索オプション
  * @returns VCFの最初の四追い手、なければnull
  */
 export function findVCFMove(
   board: BoardState,
   color: "black" | "white",
+  options?: VCFSearchOptions,
 ): Position | null {
-  return findVCFMoveRecursive(board, color, 0);
+  const timeLimitMs = options?.timeLimit ?? VCF_TIME_LIMIT;
+  const limiter: VCFTimeLimiter = {
+    startTime: performance.now(),
+    timeLimit: timeLimitMs,
+  };
+  return findVCFMoveRecursive(board, color, 0, limiter, options);
 }
 
 /**
@@ -162,8 +194,17 @@ function findVCFMoveRecursive(
   board: BoardState,
   color: "black" | "white",
   depth: number,
+  limiter: VCFTimeLimiter,
+  options?: VCFSearchOptions,
 ): Position | null {
-  if (depth >= VCF_MAX_DEPTH) {
+  const maxDepth = options?.maxDepth ?? VCF_MAX_DEPTH;
+
+  if (depth >= maxDepth) {
+    return null;
+  }
+
+  // 時間制限チェック
+  if (performance.now() - limiter.startTime >= limiter.timeLimit) {
     return null;
   }
 
@@ -272,7 +313,13 @@ function findVCFMoveRecursive(
       defenseRow[defensePos.col] = opponentColor;
     }
 
-    const vcfMove = findVCFMoveRecursive(board, color, depth + 1);
+    const vcfMove = findVCFMoveRecursive(
+      board,
+      color,
+      depth + 1,
+      limiter,
+      options,
+    );
 
     // 元に戻す（Undo）- 逆順
     if (defenseRow) {
@@ -474,4 +521,190 @@ export function findDefenseForJumpFour(
   color: "black" | "white",
 ): Position | null {
   return findJumpGapPosition(board, row, col, dr, dc, color);
+}
+
+/**
+ * VCF手順を返す
+ *
+ * @param board 盤面
+ * @param color 手番
+ * @param options 探索オプション
+ * @returns VCF手順（見つからない場合はnull）
+ */
+export function findVCFSequence(
+  board: BoardState,
+  color: "black" | "white",
+  options?: VCFSearchOptions,
+): VCFSequenceResult | null {
+  const timeLimitMs = options?.timeLimit ?? VCF_TIME_LIMIT;
+  const limiter: VCFTimeLimiter = {
+    startTime: performance.now(),
+    timeLimit: timeLimitMs,
+  };
+  const sequence: Position[] = [];
+  const result = findVCFSequenceRecursive(
+    board,
+    color,
+    0,
+    limiter,
+    sequence,
+    options,
+  );
+  if (!result || !sequence[0]) {
+    return null;
+  }
+  return { firstMove: sequence[0], sequence };
+}
+
+/**
+ * VCF手順の再帰探索
+ */
+function findVCFSequenceRecursive(
+  board: BoardState,
+  color: "black" | "white",
+  depth: number,
+  limiter: VCFTimeLimiter,
+  sequence: Position[],
+  options?: VCFSearchOptions,
+): boolean {
+  const maxDepth = options?.maxDepth ?? VCF_MAX_DEPTH;
+
+  if (depth >= maxDepth) {
+    return false;
+  }
+
+  if (performance.now() - limiter.startTime >= limiter.timeLimit) {
+    return false;
+  }
+
+  const fourMoves = findFourMoves(board, color);
+  const opponentColor = color === "black" ? "white" : "black";
+
+  // 最優先: 即座に五連を作れる手
+  for (const move of fourMoves) {
+    const moveRow = board[move.row];
+    if (moveRow) {
+      moveRow[move.col] = color;
+    }
+
+    const isFive = checkFive(board, move.row, move.col, color);
+
+    if (moveRow) {
+      moveRow[move.col] = null;
+    }
+
+    if (isFive) {
+      sequence.push(move);
+      return true;
+    }
+  }
+
+  // 第2優先: 止められない四（活四）
+  for (const move of fourMoves) {
+    const moveRow = board[move.row];
+    if (moveRow) {
+      moveRow[move.col] = color;
+    }
+
+    let isWin = false;
+    const defensePos = getFourDefensePosition(board, move, color);
+    if (!defensePos) {
+      isWin = true;
+    } else if (color === "white") {
+      const forbiddenResult = checkForbiddenMove(
+        board,
+        defensePos.row,
+        defensePos.col,
+      );
+      if (forbiddenResult.isForbidden) {
+        isWin = true;
+      }
+    }
+
+    if (moveRow) {
+      moveRow[move.col] = null;
+    }
+
+    if (isWin) {
+      sequence.push(move);
+      return true;
+    }
+  }
+
+  // 通常VCF探索
+  for (const move of fourMoves) {
+    const moveRow = board[move.row];
+    if (moveRow) {
+      moveRow[move.col] = color;
+    }
+
+    if (checkFive(board, move.row, move.col, color)) {
+      if (moveRow) {
+        moveRow[move.col] = null;
+      }
+      sequence.push(move);
+      return true;
+    }
+
+    const defensePos = getFourDefensePosition(board, move, color);
+
+    if (!defensePos) {
+      if (moveRow) {
+        moveRow[move.col] = null;
+      }
+      sequence.push(move);
+      return true;
+    }
+
+    if (color === "white") {
+      const forbiddenResult = checkForbiddenMove(
+        board,
+        defensePos.row,
+        defensePos.col,
+      );
+      if (forbiddenResult.isForbidden) {
+        if (moveRow) {
+          moveRow[move.col] = null;
+        }
+        sequence.push(move);
+        return true;
+      }
+    }
+
+    // 相手が止めた後の局面で再帰
+    const defenseRow = board[defensePos.row];
+    if (defenseRow) {
+      defenseRow[defensePos.col] = opponentColor;
+    }
+
+    const seqLen = sequence.length;
+    sequence.push(move);
+    sequence.push(defensePos);
+
+    const found = findVCFSequenceRecursive(
+      board,
+      color,
+      depth + 1,
+      limiter,
+      sequence,
+      options,
+    );
+
+    // Undo - 逆順
+    if (defenseRow) {
+      defenseRow[defensePos.col] = null;
+    }
+    if (moveRow) {
+      moveRow[move.col] = null;
+    }
+
+    if (found) {
+      return true;
+    }
+
+    // 手順を巻き戻し
+    sequence.length = seqLen;
+  }
+
+  return false;
 }

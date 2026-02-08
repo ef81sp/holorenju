@@ -21,12 +21,35 @@ import type { MoveScoreEntry } from "./search/results";
 import {
   evaluatePositionWithBreakdown,
   evaluateBoardWithBreakdown,
+  PATTERN_SCORES,
 } from "./evaluation";
 import { findBestMoveIterativeWithTT } from "./search/minimax";
+import { findVCFSequence, type VCFSearchOptions } from "./search/vcf";
+import {
+  findVCTSequence,
+  isVCTFirstMove,
+  type VCTSearchOptions,
+} from "./search/vct";
 
 /** 振り返り用パラメータ（hard準拠） */
 const REVIEW_TIME_LIMIT = DIFFICULTY_PARAMS.hard.timeLimit;
 const REVIEW_MAX_NODES = DIFFICULTY_PARAMS.hard.maxNodes;
+
+/** 振り返り用VCT探索パラメータ */
+const REVIEW_VCT_OPTIONS: VCTSearchOptions = {
+  maxDepth: 6,
+  timeLimit: 3000,
+  vcfOptions: {
+    maxDepth: 16,
+    timeLimit: 3000,
+  },
+};
+
+/** 振り返り用VCF探索パラメータ */
+const REVIEW_VCF_OPTIONS: VCFSearchOptions = {
+  maxDepth: 16,
+  timeLimit: 1500,
+};
 
 self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
   const { moveHistory, moveIndex, playerFirst: _playerFirst } = event.data;
@@ -42,7 +65,12 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
     const color = nextColor as "black" | "white";
     const hardParams = DIFFICULTY_PARAMS.hard;
 
-    // 最善手の探索
+    // 拡張VCF/VCT探索（高速パス）
+    const forcedWin =
+      findVCFSequence(board, color, REVIEW_VCF_OPTIONS) ??
+      findVCTSequence(board, color, REVIEW_VCT_OPTIONS);
+
+    // 通常探索（候補手比較データ用）
     const result = findBestMoveIterativeWithTT(
       board,
       color,
@@ -79,9 +107,8 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
       };
     };
 
-    // 実際の手のスコアを取得（候補手リストから検索）
+    // 実際の手の座標を解析
     const playedMoveStr = moves[moveIndex];
-    let playedScore = result.score; // デフォルトは最善手スコア
     let playedRow = -1;
     let playedCol = -1;
 
@@ -89,51 +116,143 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
       playedCol = playedMoveStr.charCodeAt(0) - "A".charCodeAt(0);
       const playedRowNum = parseInt(playedMoveStr.slice(1), 10);
       playedRow = 15 - playedRowNum;
+    }
 
-      if (result.candidates) {
+    // VCT/VCF検出時のスコア・候補手オーバーライド
+    if (forcedWin) {
+      const bestScore = PATTERN_SCORES.FIVE;
+      const bestMove = forcedWin.firstMove;
+
+      // 実際の手のスコア判定
+      let playedScore: number = bestScore;
+      if (
+        playedRow >= 0 &&
+        !(playedRow === bestMove.row && playedCol === bestMove.col)
+      ) {
+        // 別の追い詰め開始手かチェック
+        if (
+          isVCTFirstMove(
+            board,
+            { row: playedRow, col: playedCol },
+            color,
+            REVIEW_VCT_OPTIONS,
+          )
+        ) {
+          playedScore = PATTERN_SCORES.FIVE;
+        } else {
+          // minimax候補から探す
+          const minimaxEntry = result.candidates?.find(
+            (c) => c.move.row === playedRow && c.move.col === playedCol,
+          );
+          playedScore = minimaxEntry?.score ?? result.score - 2000;
+        }
+      }
+
+      // 候補手リスト構築
+      const candidates: ReviewCandidate[] = [];
+
+      // 追い詰め開始手をFIVEスコアで追加
+      const { score: fwBreakdownScore, breakdown: fwBreakdown } =
+        evaluatePositionWithBreakdown(
+          board,
+          bestMove.row,
+          bestMove.col,
+          color,
+          hardParams.evaluationOptions,
+        );
+      candidates.push({
+        position: bestMove,
+        score: Math.round(fwBreakdownScore),
+        searchScore: PATTERN_SCORES.FIVE,
+        breakdown: fwBreakdown as ScoreBreakdown,
+        principalVariation: forcedWin.sequence,
+      });
+
+      // minimaxの候補手をマージ
+      const minimaxCandidates = (result.candidates ?? [])
+        .slice(0, 5)
+        .filter(
+          (e) => !(e.move.row === bestMove.row && e.move.col === bestMove.col),
+        )
+        .map((entry) => {
+          const candidate = buildCandidate(entry);
+          if (isVCTFirstMove(board, entry.move, color, REVIEW_VCT_OPTIONS)) {
+            candidate.searchScore = PATTERN_SCORES.FIVE;
+          }
+          return candidate;
+        });
+      candidates.push(...minimaxCandidates);
+
+      // 実際の手が候補に入っていなければ追加
+      if (
+        playedRow >= 0 &&
+        !candidates.some(
+          (c) => c.position.row === playedRow && c.position.col === playedCol,
+        )
+      ) {
+        const playedEntry = result.candidates?.find(
+          (c) => c.move.row === playedRow && c.move.col === playedCol,
+        );
+        if (playedEntry) {
+          candidates.push(buildCandidate(playedEntry));
+        }
+      }
+
+      const response: ReviewWorkerResult = {
+        moveIndex,
+        bestMove,
+        bestScore,
+        playedScore,
+        candidates,
+        completedDepth: result.completedDepth,
+      };
+
+      self.postMessage(response);
+    } else {
+      // 通常の評価フロー（VCT/VCFなし）
+      let playedScore = result.score;
+
+      if (playedRow >= 0 && result.candidates) {
         const played = result.candidates.find(
           (c) => c.move.row === playedRow && c.move.col === playedCol,
         );
         if (played) {
           playedScore = played.score;
         } else {
-          // 候補手にない場合: 最善手スコアから大きな差をつける
           playedScore = result.score - 2000;
         }
       }
-    }
 
-    // 上位候補手（5手まで）- 内訳付き
-    const candidates = (result.candidates ?? [])
-      .slice(0, 5)
-      .map(buildCandidate);
+      const candidates = (result.candidates ?? [])
+        .slice(0, 5)
+        .map(buildCandidate);
 
-    // 実際の手が上位5に入っていなければ追加
-    if (
-      playedRow >= 0 &&
-      !candidates.some(
-        (c) => c.position.row === playedRow && c.position.col === playedCol,
-      )
-    ) {
-      const allCandidates = result.candidates ?? [];
-      const playedEntry = allCandidates.find(
-        (c) => c.move.row === playedRow && c.move.col === playedCol,
-      );
-      if (playedEntry) {
-        candidates.push(buildCandidate(playedEntry));
+      if (
+        playedRow >= 0 &&
+        !candidates.some(
+          (c) => c.position.row === playedRow && c.position.col === playedCol,
+        )
+      ) {
+        const allCandidates = result.candidates ?? [];
+        const playedEntry = allCandidates.find(
+          (c) => c.move.row === playedRow && c.move.col === playedCol,
+        );
+        if (playedEntry) {
+          candidates.push(buildCandidate(playedEntry));
+        }
       }
+
+      const response: ReviewWorkerResult = {
+        moveIndex,
+        bestMove: result.position,
+        bestScore: result.score,
+        playedScore,
+        candidates,
+        completedDepth: result.completedDepth,
+      };
+
+      self.postMessage(response);
     }
-
-    const response: ReviewWorkerResult = {
-      moveIndex,
-      bestMove: result.position,
-      bestScore: result.score,
-      playedScore,
-      candidates,
-      completedDepth: result.completedDepth,
-    };
-
-    self.postMessage(response);
   } catch (error) {
     console.error("Review Worker error:", error);
     // エラー時はデフォルト結果を返す

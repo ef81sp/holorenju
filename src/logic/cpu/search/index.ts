@@ -10,9 +10,12 @@
 export {
   hasVCF,
   findVCFMove,
+  findVCFSequence,
   findFourMoves,
   findDefenseForConsecutiveFour,
   findDefenseForJumpFour,
+  type VCFSearchOptions,
+  type VCFSequenceResult,
   // 後方互換性のため
   checkEnds,
   countLine,
@@ -21,7 +24,12 @@ export {
 // VCT
 export {
   hasVCT,
+  findVCTMove,
+  findVCTSequence,
+  isVCTFirstMove,
   VCT_STONE_THRESHOLD,
+  type VCTSearchOptions,
+  type VCTSequenceResult,
   // 後方互換性のため
   countStones,
 } from "./vct";

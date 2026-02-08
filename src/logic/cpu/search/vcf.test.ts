@@ -14,6 +14,7 @@ import {
   findDefenseForJumpFour,
   findFourMoves,
   findVCFMove,
+  findVCFSequence,
   hasVCF,
 } from "./vcf";
 
@@ -565,5 +566,89 @@ describe("VCFゴールデンテスト", () => {
       const board = createBoardWithStones(stones);
       expect(hasVCF(board, color)).toBe(expected);
     });
+  });
+});
+
+describe("VCFSearchOptions付きテスト", () => {
+  it("拡張深度・時間制限でhasVCFが動作する", () => {
+    const board = createBoardWithStones([
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+    ]);
+    expect(
+      hasVCF(board, "black", 0, undefined, { maxDepth: 16, timeLimit: 1000 }),
+    ).toBe(true);
+  });
+
+  it("深度0ではVCFなし", () => {
+    const board = createBoardWithStones([
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+    ]);
+    expect(hasVCF(board, "black", 0, undefined, { maxDepth: 0 })).toBe(false);
+  });
+
+  it("拡張オプション付きfindVCFMoveが動作する", () => {
+    const board = createBoardWithStones([
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+    ]);
+    const move = findVCFMove(board, "black", { maxDepth: 16, timeLimit: 1000 });
+    expect(move).not.toBeNull();
+    expect(move?.row).toBe(7);
+  });
+});
+
+describe("findVCFSequence", () => {
+  it("活三からVCF手順を返す", () => {
+    const board = createBoardWithStones([
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+    ]);
+    const result = findVCFSequence(board, "black");
+    expect(result).not.toBeNull();
+    expect(result?.firstMove.row).toBe(7);
+    expect([4, 8]).toContain(result?.firstMove.col);
+    expect(result?.sequence.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("VCFなしの場合はnullを返す", () => {
+    const board = createBoardWithStones([{ row: 7, col: 7, color: "black" }]);
+    expect(findVCFSequence(board, "black")).toBeNull();
+  });
+
+  it("拡張オプション付きで動作する", () => {
+    const board = createBoardWithStones([
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+    ]);
+    const result = findVCFSequence(board, "black", {
+      maxDepth: 16,
+      timeLimit: 1000,
+    });
+    expect(result).not.toBeNull();
+  });
+
+  it("止め四連鎖のVCF手順が正しい", () => {
+    // 2方向に三がある形（四追い勝ち）
+    const board = createBoardWithStones([
+      // 横に三
+      { row: 7, col: 5, color: "white" },
+      { row: 7, col: 6, color: "white" },
+      { row: 7, col: 7, color: "white" },
+      // 縦に三
+      { row: 4, col: 8, color: "white" },
+      { row: 5, col: 8, color: "white" },
+      { row: 6, col: 8, color: "white" },
+    ]);
+    const result = findVCFSequence(board, "white");
+    expect(result).not.toBeNull();
+    // 手順は攻撃と防御が交互に含まれる
+    expect(result?.sequence.length).toBeGreaterThanOrEqual(1);
   });
 });
