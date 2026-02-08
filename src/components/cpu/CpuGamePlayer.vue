@@ -272,6 +272,14 @@ function handleRematch(): void {
   }
 }
 
+// 振り返りを開く
+function handleOpenReview(): void {
+  const [latestRecord] = cpuRecordStore.records;
+  if (latestRecord?.moveHistory) {
+    appStore.openCpuReview(latestRecord.id);
+  }
+}
+
 // 戻る確認ダイアログを表示
 function showBackConfirmDialog(): void {
   // ゲーム終了後は確認不要
@@ -367,6 +375,13 @@ const gameEndMessage = computed(() => {
               @click="handleRematch"
             >
               もう一度
+            </button>
+            <button
+              v-if="cpuGameStore.isGameOver"
+              class="control-button"
+              @click="handleOpenReview"
+            >
+              振り返り
             </button>
           </div>
 

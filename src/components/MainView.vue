@@ -10,6 +10,7 @@ import ConfirmDialog from "./common/ConfirmDialog.vue";
 import ScenarioEditor from "@/editor/components/ScenarioEditor.vue";
 import CpuSetupPage from "./cpu/CpuSetupPage.vue";
 import CpuGamePlayer from "./cpu/CpuGamePlayer.vue";
+import CpuReviewPlayer from "./cpu/CpuReviewPlayer.vue";
 
 const appStore = useAppStore();
 const confirmDialogRef = ref<InstanceType<typeof ConfirmDialog> | null>(null);
@@ -101,6 +102,7 @@ onUnmounted(() => {
       />
       <CpuSetupPage v-else-if="currentScene === 'cpuSetup'" />
       <CpuGamePlayer v-else-if="currentScene === 'cpuPlay'" />
+      <CpuReviewPlayer v-else-if="currentScene === 'cpuReview'" />
       <ScenarioEditor v-else-if="currentScene === 'editor'" />
     </Transition>
   </div>

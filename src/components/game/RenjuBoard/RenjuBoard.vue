@@ -14,6 +14,15 @@ import {
 } from "./logic/boardRenderUtils";
 import { BOARD_COLORS } from "@/constants/colors";
 
+/**
+ * 石の上に表示するラベル
+ * key: "row,col" 形式
+ */
+export interface StoneLabel {
+  text: string;
+  color: string;
+}
+
 // Props
 interface Props {
   boardState?: BoardState;
@@ -24,6 +33,7 @@ interface Props {
   marks?: Mark[];
   lines?: Line[];
   playerColor?: "black" | "white";
+  stoneLabels?: Map<string, StoneLabel>;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -36,6 +46,7 @@ const props = withDefaults(defineProps<Props>(), {
   marks: undefined,
   lines: undefined,
   playerColor: "black",
+  stoneLabels: undefined,
 });
 
 // Emits
@@ -282,6 +293,34 @@ onBeforeUnmount(() => {
                 : undefined,
             strokeWidth: stone.color === 'white' ? 1 : 0,
           }"
+        />
+
+        <!-- 石の上のラベル（通し番号など） -->
+        <v-text
+          v-for="stone in placedStones"
+          :key="`stone-label-${stone.row}-${stone.col}`"
+          :config="
+            (() => {
+              const label = props.stoneLabels?.get(`${stone.row},${stone.col}`);
+              if (!label) return { visible: false };
+              const pos = layout.positionToPixels(stone.row, stone.col);
+              const fontSize = layout.CELL_SIZE.value * 0.45;
+              return {
+                x: pos.x - layout.STONE_RADIUS.value,
+                y: pos.y - fontSize / 2,
+                width: layout.STONE_RADIUS.value * 2,
+                height: fontSize,
+                text: label.text,
+                fontSize,
+                fontFamily: 'monospace',
+                fontStyle: 'bold',
+                fill: label.color,
+                align: 'center',
+                verticalAlign: 'middle',
+                listening: false,
+              };
+            })()
+          "
         />
 
         <!-- シナリオ用の石（boardStore.stonesFrom） -->

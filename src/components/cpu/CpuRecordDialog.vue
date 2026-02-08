@@ -7,9 +7,11 @@
 
 import { computed, ref } from "vue";
 
+import { useAppStore } from "@/stores/appStore";
 import { useCpuRecordStore } from "@/stores/cpuRecordStore";
 import type { BattleResult, CpuDifficulty } from "@/types/cpu";
 
+const appStore = useAppStore();
 const cpuRecordStore = useCpuRecordStore();
 
 const dialogRef = ref<HTMLDialogElement | null>(null);
@@ -45,6 +47,12 @@ function formatDate(timestamp: number): string {
 // 統計を2x2グリッドで表示するため配列を分割
 const topStats = computed(() => cpuRecordStore.allStats.slice(0, 2));
 const bottomStats = computed(() => cpuRecordStore.allStats.slice(2, 4));
+
+// 振り返りを開く
+function handleOpenReview(recordId: string): void {
+  dialogRef.value?.close();
+  appStore.openCpuReview(recordId);
+}
 
 // 閉じる
 function handleClose(): void {
@@ -149,6 +157,13 @@ defineExpose({
               {{ resultLabels[record.result] }}
             </span>
             <span class="record-moves">{{ record.moves }}手</span>
+            <button
+              v-if="record.moveHistory"
+              class="review-button"
+              @click="handleOpenReview(record.id)"
+            >
+              振り返り
+            </button>
           </li>
         </ul>
       </section>
@@ -356,5 +371,21 @@ defineExpose({
   color: var(--color-text-secondary);
   min-width: var(--size-40);
   text-align: right;
+}
+
+.review-button {
+  padding: var(--size-2) var(--size-6);
+  background: var(--color-fubuki-primary);
+  border: none;
+  border-radius: var(--size-4);
+  font-size: var(--size-10);
+  font-weight: 500;
+  color: white;
+  cursor: pointer;
+  transition: opacity 0.2s;
+
+  &:hover {
+    opacity: 0.8;
+  }
 }
 </style>

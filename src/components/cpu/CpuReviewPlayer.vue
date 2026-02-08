@@ -1,0 +1,375 @@
+<script setup lang="ts">
+/**
+ * CPU対戦振り返り画面
+ *
+ * 棋譜を手順ごとに再生し、各手の評価をフブキのコメント付きで表示
+ */
+
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+
+import RenjuBoard, {
+  type StoneLabel,
+} from "@/components/game/RenjuBoard/RenjuBoard.vue";
+import SettingsControl from "@/components/common/SettingsControl.vue";
+import GamePlayerLayout from "@/components/common/GamePlayerLayout.vue";
+import DialogText from "@/components/common/DialogText.vue";
+import CharacterSprite from "@/components/character/CharacterSprite.vue";
+import CpuCharacterPanel from "./CpuCharacterPanel.vue";
+import ReviewControls from "./ReviewControls.vue";
+import ReviewStatus from "./ReviewStatus.vue";
+import { useReviewEvaluator } from "./composables/useReviewEvaluator";
+import { useReviewDialogue } from "./composables/useReviewDialogue";
+import { buildEvaluatedMove } from "@/logic/reviewLogic";
+import { useAppStore } from "@/stores/appStore";
+import { useCpuReviewStore } from "@/stores/cpuReviewStore";
+import { useCpuRecordStore } from "@/stores/cpuRecordStore";
+import { useDialogStore } from "@/stores/dialogStore";
+import type { Mark } from "@/stores/boardStore";
+
+const appStore = useAppStore();
+const reviewStore = useCpuReviewStore();
+const cpuRecordStore = useCpuRecordStore();
+const dialogStore = useDialogStore();
+
+const layoutRef = ref<InstanceType<typeof GamePlayerLayout> | null>(null);
+
+// Composables
+const evaluator = useReviewEvaluator();
+const dialogue = useReviewDialogue();
+
+// 初期化
+onMounted(() => {
+  const recordId = appStore.reviewRecordId;
+  if (!recordId) {
+    appStore.goToCpuSetup();
+    return;
+  }
+
+  const record = cpuRecordStore.records.find((r) => r.id === recordId);
+  if (!record?.moveHistory) {
+    appStore.goToCpuSetup();
+    return;
+  }
+
+  reviewStore.openReview(record);
+  dialogue.showInitialDialogue();
+
+  // キャッシュがなければ評価を開始
+  if (reviewStore.evaluatedMoves.length === 0) {
+    startEvaluation();
+  }
+
+  window.addEventListener("keydown", handleKeyDown);
+});
+
+onUnmounted(() => {
+  window.removeEventListener("keydown", handleKeyDown);
+  evaluator.cancel();
+  reviewStore.closeReview();
+  dialogStore.reset();
+});
+
+// 評価を開始
+async function startEvaluation(): Promise<void> {
+  const record = reviewStore.currentRecord;
+  if (!record?.moveHistory) {
+    return;
+  }
+
+  reviewStore.isEvaluating = true;
+  dialogue.showEvaluatingDialogue();
+
+  const { moveHistory } = record;
+  const results = await evaluator.evaluate(moveHistory, record.playerFirst);
+
+  // 結果を変換
+  const evaluated = results.map((r) =>
+    buildEvaluatedMove(r, moveHistory, record.playerFirst),
+  );
+
+  reviewStore.setEvaluationResults(evaluated);
+  reviewStore.isEvaluating = false;
+
+  const accuracy = reviewStore.playerAccuracy;
+  dialogue.showEvaluationCompleteDialogue(accuracy ?? 100);
+}
+
+// 評価進捗を同期
+watch(
+  () => evaluator.progress.value,
+  (val) => {
+    reviewStore.evaluationProgress = val;
+  },
+);
+
+// 手数変更時にセリフを更新
+watch(
+  () => reviewStore.currentMoveIndex,
+  () => {
+    const evaluation = reviewStore.currentEvaluation;
+    if (evaluation?.isPlayerMove) {
+      dialogue.showQualityDialogue(evaluation.quality, evaluation.bestMove);
+    } else if (evaluation) {
+      dialogue.clearDialogue();
+    }
+  },
+);
+
+// 石のラベル（通し番号）
+const stoneLabels = computed(() => {
+  const labels = new Map<string, StoneLabel>();
+  for (let i = 0; i < reviewStore.currentMoveIndex; i++) {
+    const move = reviewStore.moves[i];
+    if (!move) {
+      continue;
+    }
+    labels.set(`${move.position.row},${move.position.col}`, {
+      text: String(i + 1),
+      color: move.color === "black" ? "#ffffff" : "#000000",
+    });
+  }
+  return labels;
+});
+
+// マーク（現在の手 + 最善手）
+const displayMarks = computed<Mark[]>(() => {
+  const marks: Mark[] = [];
+
+  // 現在の手をcircleマークで表示
+  if (reviewStore.currentMoveIndex > 0) {
+    const lastMove = reviewStore.moves[reviewStore.currentMoveIndex - 1];
+    if (lastMove) {
+      marks.push({
+        id: "review-current",
+        positions: [lastMove.position],
+        markType: "circle",
+        placedAtDialogueIndex: -2,
+      });
+    }
+  }
+
+  // 評価がinaccuracy以上の場合、最善手をcrossマークで表示
+  const evaluation = reviewStore.currentEvaluation;
+  if (
+    evaluation?.isPlayerMove &&
+    (evaluation.quality === "inaccuracy" ||
+      evaluation.quality === "mistake" ||
+      evaluation.quality === "blunder")
+  ) {
+    marks.push({
+      id: "review-best",
+      positions: [evaluation.bestMove],
+      markType: "cross",
+      placedAtDialogueIndex: -2,
+    });
+  }
+
+  return marks;
+});
+
+// キーボード操作
+function handleKeyDown(event: KeyboardEvent): void {
+  switch (event.key) {
+    case "ArrowLeft":
+      event.preventDefault();
+      reviewStore.prevMove();
+      break;
+    case "ArrowRight":
+      event.preventDefault();
+      reviewStore.nextMove();
+      break;
+    case "Home":
+      event.preventDefault();
+      reviewStore.goToStart();
+      break;
+    case "End":
+      event.preventDefault();
+      reviewStore.goToEnd();
+      break;
+    case "Escape":
+      event.preventDefault();
+      handleBack();
+      break;
+    default:
+      break;
+  }
+}
+
+// 戻る
+function handleBack(): void {
+  appStore.goToCpuSetup();
+}
+</script>
+
+<template>
+  <div class="cpu-review-player">
+    <GamePlayerLayout ref="layoutRef">
+      <template #back-button>
+        <button
+          class="back-button"
+          @click="handleBack"
+        >
+          ← 戻る
+        </button>
+      </template>
+
+      <template #header-controls>
+        <SettingsControl />
+      </template>
+
+      <template #control-info>
+        <ReviewStatus
+          v-if="reviewStore.currentRecord"
+          :is-evaluating="evaluator.isEvaluating.value"
+          :completed-count="evaluator.completedCount.value"
+          :total-count="evaluator.totalCount.value"
+          :accuracy="reviewStore.playerAccuracy"
+          :critical-errors="reviewStore.criticalErrors"
+          :difficulty="reviewStore.currentRecord.difficulty"
+          :move-count="reviewStore.currentRecord.moves"
+          :player-first="reviewStore.currentRecord.playerFirst"
+        />
+      </template>
+
+      <template #board="{ boardSize }">
+        <RenjuBoard
+          :disabled="true"
+          :stage-size="boardSize"
+          :board-state="reviewStore.boardAtCurrentMove"
+          :marks="displayMarks"
+          :stone-labels="stoneLabels"
+        />
+      </template>
+
+      <template #info>
+        <div class="info-content">
+          <CpuCharacterPanel
+            character="fubuki"
+            :emotion-id="dialogue.currentEmotion.value"
+          />
+
+          <ReviewControls
+            :current-move-index="reviewStore.currentMoveIndex"
+            :total-moves="reviewStore.moves.length"
+            :evaluated-moves="reviewStore.evaluatedMoves"
+            @go-to-move="reviewStore.goToMove"
+            @go-to-start="reviewStore.goToStart"
+            @go-to-end="reviewStore.goToEnd"
+            @prev-move="reviewStore.prevMove"
+            @next-move="reviewStore.nextMove"
+          />
+        </div>
+      </template>
+
+      <template #dialog>
+        <div
+          v-if="dialogStore.currentMessage"
+          class="character-dialog"
+        >
+          <div
+            class="dialog-avatar"
+            :style="{ backgroundColor: 'var(--color-fubuki-bg)' }"
+          >
+            <CharacterSprite
+              character="fubuki"
+              :emotion-id="dialogue.currentEmotion.value"
+              :is-active="true"
+            />
+          </div>
+          <div
+            class="dialog-bubble"
+            :style="{ borderColor: 'var(--color-fubuki-primary)' }"
+          >
+            <div
+              class="dialog-character-name"
+              :style="{ color: 'var(--color-fubuki-primary)' }"
+            >
+              フブキ
+            </div>
+            <div class="dialog-text-wrapper">
+              <DialogText :nodes="dialogStore.currentMessage.text" />
+            </div>
+          </div>
+        </div>
+      </template>
+    </GamePlayerLayout>
+  </div>
+</template>
+
+<style scoped>
+.cpu-review-player {
+  width: 100%;
+  height: 100%;
+}
+
+.back-button {
+  width: fit-content;
+  padding: var(--size-10) var(--size-20);
+  background: white;
+  border: 2px solid #ddd;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: var(--size-16);
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.back-button:hover {
+  background: #f5f5f5;
+  border-color: #4a9eff;
+}
+
+.info-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-16);
+  padding: var(--size-12);
+  height: 100%;
+}
+
+.character-dialog {
+  display: grid;
+  grid-template-columns: 4fr 8fr 4fr;
+  gap: var(--size-12);
+  align-items: stretch;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  overflow: clip;
+}
+
+.dialog-avatar {
+  grid-column: 1;
+  justify-self: end;
+  align-self: flex-start;
+  height: calc(100% - var(--size-8));
+  aspect-ratio: 1;
+  border-radius: var(--size-8);
+  border: var(--size-2) solid var(--color-border);
+  box-shadow: 0 var(--size-5) var(--size-5) rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.dialog-bubble {
+  grid-column: 2;
+  height: 100%;
+  padding: var(--size-8);
+  background: white;
+  border-radius: var(--size-12);
+  border: var(--size-2) solid;
+  box-shadow: 0 var(--size-5) var(--size-8) rgba(0, 0, 0, 0.1);
+  position: relative;
+}
+
+.dialog-character-name {
+  font-weight: 500;
+  font-size: var(--size-14);
+}
+
+.dialog-text-wrapper {
+  font-size: calc(var(--size-16) * var(--text-size-multiplier));
+}
+</style>
