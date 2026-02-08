@@ -64,7 +64,10 @@ const handleCancelBack = (): void => {
       selectedDifficulty: appStore.selectedDifficulty,
       currentPage: appStore.currentPage,
       selectedScenarioId: appStore.selectedScenarioId,
-    } as AppState,
+      cpuDifficulty: appStore.cpuDifficulty,
+      cpuPlayerFirst: appStore.cpuPlayerFirst,
+      reviewRecordId: appStore.reviewRecordId,
+    } satisfies AppState,
     "",
     `#${appStore.scene}`,
   );

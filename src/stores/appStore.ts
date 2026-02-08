@@ -10,7 +10,8 @@ export type Scene =
   | "scenarioPlay"
   | "editor"
   | "cpuSetup"
-  | "cpuPlay";
+  | "cpuPlay"
+  | "cpuReview";
 export type Mode = "training" | "cpu";
 export type Difficulty = ScenarioDifficulty;
 export type TransitionDirection = "forward" | "back";
@@ -23,6 +24,7 @@ export interface AppState {
   selectedScenarioId: string | null;
   cpuDifficulty: CpuDifficulty | null;
   cpuPlayerFirst: boolean | null;
+  reviewRecordId: string | null;
 }
 
 interface AppStoreState extends AppState {
@@ -39,6 +41,7 @@ export const useAppStore = defineStore("app", {
     transitionDirection: "forward",
     cpuDifficulty: null,
     cpuPlayerFirst: null,
+    reviewRecordId: null,
   }),
 
   actions: {
@@ -83,6 +86,7 @@ export const useAppStore = defineStore("app", {
       this.selectedScenarioId = null;
       this.cpuDifficulty = null;
       this.cpuPlayerFirst = null;
+      this.reviewRecordId = null;
       this.pushHistory();
     },
 
@@ -128,6 +132,13 @@ export const useAppStore = defineStore("app", {
       this.pushHistory();
     },
 
+    openCpuReview(recordId: string) {
+      this.transitionDirection = "forward";
+      this.reviewRecordId = recordId;
+      this.scene = "cpuReview";
+      this.pushHistory();
+    },
+
     setPage(page: number) {
       this.currentPage = page;
       this.pushHistory();
@@ -156,6 +167,9 @@ export const useAppStore = defineStore("app", {
       if (state.cpuPlayerFirst !== undefined) {
         this.cpuPlayerFirst = state.cpuPlayerFirst;
       }
+      if (state.reviewRecordId !== undefined) {
+        this.reviewRecordId = state.reviewRecordId;
+      }
     },
 
     restoreCpuState(state: Partial<AppState>) {
@@ -176,6 +190,7 @@ export const useAppStore = defineStore("app", {
         selectedScenarioId: this.selectedScenarioId,
         cpuDifficulty: this.cpuDifficulty,
         cpuPlayerFirst: this.cpuPlayerFirst,
+        reviewRecordId: this.reviewRecordId,
       };
       window.history.pushState(state, "", `#${this.scene}`);
     },
