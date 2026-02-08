@@ -67,6 +67,11 @@ export const useCpuRecordStore = defineStore("cpuRecord", () => {
     CPU_DIFFICULTIES.map((diff) => getStatsByDifficulty(diff)),
   );
 
+  /** 振り返り可能なレコード（moveHistoryが存在するもの） */
+  const reviewableRecords = computed(() =>
+    records.value.filter((r) => r.moveHistory),
+  );
+
   // ========== Watch ==========
   // 記録変更時にlocalStorageへ保存
   watch(
@@ -79,6 +84,9 @@ export const useCpuRecordStore = defineStore("cpuRecord", () => {
 
   // ========== Actions ==========
 
+  /** 棋譜を保持する最大件数 */
+  const MAX_MOVE_HISTORY_RECORDS = 50;
+
   /**
    * 記録を追加
    */
@@ -87,6 +95,7 @@ export const useCpuRecordStore = defineStore("cpuRecord", () => {
     playerFirst: boolean,
     result: BattleResult,
     moves: number,
+    moveHistory?: string,
   ): void {
     const record: CpuBattleRecord = {
       id: generateId(),
@@ -95,6 +104,7 @@ export const useCpuRecordStore = defineStore("cpuRecord", () => {
       playerFirst,
       result,
       moves,
+      moveHistory,
     };
 
     // 先頭に追加
@@ -103,6 +113,14 @@ export const useCpuRecordStore = defineStore("cpuRecord", () => {
     // 最大数を超えたら古い記録を削除
     if (records.value.length > MAX_RECORDS) {
       records.value = records.value.slice(0, MAX_RECORDS);
+    }
+
+    // 51件目以降のmoveHistoryを削除して容量節約
+    for (let i = MAX_MOVE_HISTORY_RECORDS; i < records.value.length; i++) {
+      const rec = records.value[i];
+      if (rec?.moveHistory) {
+        rec.moveHistory = undefined;
+      }
     }
   }
 
@@ -140,6 +158,7 @@ export const useCpuRecordStore = defineStore("cpuRecord", () => {
     records,
     // Computed
     recentRecords,
+    reviewableRecords,
     allStats,
     // Actions
     addRecord,

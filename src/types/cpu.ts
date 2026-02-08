@@ -346,6 +346,8 @@ export interface CpuBattleRecord {
   result: BattleResult;
   /** 手数 */
   moves: number;
+  /** 棋譜文字列（"H8 G7 I9 ..."形式、gameRecordParser互換） */
+  moveHistory?: string;
 }
 
 /**

@@ -30,6 +30,7 @@ import { useBoardStore, type Mark } from "@/stores/boardStore";
 import { useDialogStore } from "@/stores/dialogStore";
 import { usePreferencesStore } from "@/stores/preferencesStore";
 import { checkForbiddenMove } from "@/logic/renjuRules";
+import { formatMove } from "@/logic/gameRecordParser";
 import type { BattleResult } from "@/types/cpu";
 import type { Position } from "@/types/game";
 
@@ -221,12 +222,18 @@ function handleGameEnd(): void {
     showDialogue("cpuWin");
   }
 
+  // 棋譜を文字列化
+  const moveHistoryStr = cpuGameStore.moveHistory
+    .map((pos) => formatMove(pos))
+    .join(" ");
+
   // 記録を保存
   cpuRecordStore.addRecord(
     cpuGameStore.difficulty,
     cpuGameStore.playerFirst,
     result,
     cpuGameStore.moveCount,
+    moveHistoryStr,
   );
 
   // カットイン表示（自動消滅タイマー付き）
