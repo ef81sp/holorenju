@@ -238,8 +238,13 @@ function handleUndo(): void {
   if (cpuGameStore.moveCount < 2 || isThinking.value) {
     return;
   }
+  hideCutin();
   cpuGameStore.undoMoves(2);
   clearForbiddenMark();
+
+  if (!cpuGameStore.isPlayerTurn) {
+    cpuMove();
+  }
 }
 
 // もう一度

@@ -28,10 +28,12 @@ export const useCpuGameStore = defineStore("cpuGame", () => {
   const isGameOver = ref(false);
   /** 勝者 */
   const winner = ref<StoneColor>(null);
-  /** 現在のターン */
-  const currentTurn = ref<"black" | "white">("black");
 
   // ========== Computed ==========
+  /** 現在のターン（着手数から決定的に導出） */
+  const currentTurn = computed<"black" | "white">(() =>
+    moveHistory.value.length % 2 === 0 ? "black" : "white",
+  );
   /** プレイヤーの石色 */
   const playerColor = computed<"black" | "white">(() =>
     playerFirst.value ? "black" : "white",
@@ -78,7 +80,6 @@ export const useCpuGameStore = defineStore("cpuGame", () => {
     isGameOver.value = false;
     winner.value = null;
     moveHistory.value = [];
-    currentTurn.value = "black";
     boardStore.resetBoard();
   }
 
@@ -96,11 +97,7 @@ export const useCpuGameStore = defineStore("cpuGame", () => {
     if (checkWin(boardStore.board, position, color)) {
       isGameOver.value = true;
       winner.value = color;
-      return;
     }
-
-    // ターン交代
-    currentTurn.value = currentTurn.value === "black" ? "white" : "black";
   }
 
   /**
@@ -116,11 +113,6 @@ export const useCpuGameStore = defineStore("cpuGame", () => {
       }
     }
 
-    // ターンを調整
-    if (actualCount % 2 === 1) {
-      currentTurn.value = currentTurn.value === "black" ? "white" : "black";
-    }
-
     // ゲーム終了をリセット
     isGameOver.value = false;
     winner.value = null;
@@ -134,7 +126,6 @@ export const useCpuGameStore = defineStore("cpuGame", () => {
     isGameOver.value = false;
     winner.value = null;
     moveHistory.value = [];
-    currentTurn.value = "black";
     boardStore.resetBoard();
   }
 
@@ -154,8 +145,8 @@ export const useCpuGameStore = defineStore("cpuGame", () => {
     isGameStarted,
     isGameOver,
     winner,
-    currentTurn,
     // Computed
+    currentTurn,
     playerColor,
     cpuColor,
     moveCount,

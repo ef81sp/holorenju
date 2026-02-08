@@ -130,6 +130,62 @@ describe("cpuGameStore", () => {
       expect(store.currentTurn).toBe("black");
     });
 
+    it("CPU勝利後のundoでゲームが再開される", () => {
+      const store = useCpuGameStore();
+      store.startGame("medium", true); // プレイヤー=黒, CPU=白
+
+      // CPU（白）の五連を作る
+      store.addMove({ row: 7, col: 3 }, "black");
+      store.addMove({ row: 8, col: 3 }, "white");
+      store.addMove({ row: 7, col: 4 }, "black");
+      store.addMove({ row: 8, col: 4 }, "white");
+      store.addMove({ row: 7, col: 5 }, "black");
+      store.addMove({ row: 8, col: 5 }, "white");
+      store.addMove({ row: 7, col: 6 }, "black");
+      store.addMove({ row: 8, col: 6 }, "white");
+      store.addMove({ row: 0, col: 0 }, "black");
+      store.addMove({ row: 8, col: 7 }, "white"); // CPU勝利
+
+      expect(store.isGameOver).toBe(true);
+      expect(store.winner).toBe("white");
+
+      // 2手戻す
+      store.undoMoves(2);
+
+      expect(store.isGameOver).toBe(false);
+      expect(store.winner).toBeNull();
+      // 8手残り → 偶数 → 黒のターン（プレイヤーのターン）
+      expect(store.currentTurn).toBe("black");
+      expect(store.isPlayerTurn).toBe(true);
+    });
+
+    it("プレイヤー勝利後のundoでCPUのターンになる", () => {
+      const store = useCpuGameStore();
+      store.startGame("medium", true); // プレイヤー=黒, CPU=白
+
+      // プレイヤー（黒）の五連を作る
+      store.addMove({ row: 7, col: 3 }, "black");
+      store.addMove({ row: 8, col: 3 }, "white");
+      store.addMove({ row: 7, col: 4 }, "black");
+      store.addMove({ row: 8, col: 4 }, "white");
+      store.addMove({ row: 7, col: 5 }, "black");
+      store.addMove({ row: 8, col: 5 }, "white");
+      store.addMove({ row: 7, col: 6 }, "black");
+      store.addMove({ row: 8, col: 6 }, "white");
+      store.addMove({ row: 7, col: 7 }, "black"); // プレイヤー勝利
+
+      expect(store.isGameOver).toBe(true);
+      expect(store.winner).toBe("black");
+
+      // 2手戻す
+      store.undoMoves(2);
+
+      expect(store.isGameOver).toBe(false);
+      // 7手残り → 奇数 → 白のターン（CPUのターン）
+      expect(store.currentTurn).toBe("white");
+      expect(store.isPlayerTurn).toBe(false);
+    });
+
     it("履歴より多くの手数を戻そうとしても安全", () => {
       const store = useCpuGameStore();
       store.startGame("medium", true);
