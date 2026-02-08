@@ -108,6 +108,44 @@ const placedStones = computed<PlacedStone[]>(() => {
   return stones;
 });
 
+// 石のラベル描画データ（stoneLabels propから計算）
+interface StoneLabelConfig {
+  key: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  text: string;
+  fontSize: number;
+  fill: string;
+}
+
+const stoneLabelConfigs = computed<StoneLabelConfig[]>(() => {
+  if (!props.stoneLabels) {
+    return [];
+  }
+  const configs: StoneLabelConfig[] = [];
+  for (const stone of placedStones.value) {
+    const label = props.stoneLabels.get(`${stone.row},${stone.col}`);
+    if (!label) {
+      continue;
+    }
+    const pos = layout.positionToPixels(stone.row, stone.col);
+    const fontSize = layout.CELL_SIZE.value * 0.45;
+    configs.push({
+      key: `stone-label-${stone.row}-${stone.col}`,
+      x: pos.x - layout.STONE_RADIUS.value,
+      y: pos.y - fontSize / 2,
+      width: layout.STONE_RADIUS.value * 2,
+      height: fontSize,
+      text: label.text,
+      fontSize,
+      fill: label.color,
+    });
+  }
+  return configs;
+});
+
 // シナリオ用の石（boardStore.stonesから）
 const scenarioStones = computed(() => boardStore.stones);
 
@@ -297,30 +335,22 @@ onBeforeUnmount(() => {
 
         <!-- 石の上のラベル（通し番号など） -->
         <v-text
-          v-for="stone in placedStones"
-          :key="`stone-label-${stone.row}-${stone.col}`"
-          :config="
-            (() => {
-              const label = props.stoneLabels?.get(`${stone.row},${stone.col}`);
-              if (!label) return { visible: false };
-              const pos = layout.positionToPixels(stone.row, stone.col);
-              const fontSize = layout.CELL_SIZE.value * 0.45;
-              return {
-                x: pos.x - layout.STONE_RADIUS.value,
-                y: pos.y - fontSize / 2,
-                width: layout.STONE_RADIUS.value * 2,
-                height: fontSize,
-                text: label.text,
-                fontSize,
-                fontFamily: 'monospace',
-                fontStyle: 'bold',
-                fill: label.color,
-                align: 'center',
-                verticalAlign: 'middle',
-                listening: false,
-              };
-            })()
-          "
+          v-for="labelConfig in stoneLabelConfigs"
+          :key="labelConfig.key"
+          :config="{
+            x: labelConfig.x,
+            y: labelConfig.y,
+            width: labelConfig.width,
+            height: labelConfig.height,
+            text: labelConfig.text,
+            fontSize: labelConfig.fontSize,
+            fontFamily: 'monospace',
+            fontStyle: 'bold',
+            fill: labelConfig.fill,
+            align: 'center',
+            verticalAlign: 'middle',
+            listening: false,
+          }"
         />
 
         <!-- シナリオ用の石（boardStore.stonesFrom） -->
