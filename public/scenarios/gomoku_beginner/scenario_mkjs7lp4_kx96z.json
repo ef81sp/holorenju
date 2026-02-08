@@ -45,7 +45,7 @@
           "text": [
             {
               "type": "text",
-              "content": "5ができたら負け"
+              "content": "五ができたら負け"
             }
           ],
           "emotion": 0,
@@ -57,7 +57,20 @@
           "text": [
             {
               "type": "text",
-              "content": "そうだね。つまり、5を作らせたくないから妨害しないといけないんだ。"
+              "content": "そうだね。つまり、"
+            },
+            {
+              "type": "emphasis",
+              "content": [
+                {
+                  "type": "text",
+                  "content": "五を作らせたくないから妨害しないといけない"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "content": "んだ。"
             }
           ],
           "emotion": 0,

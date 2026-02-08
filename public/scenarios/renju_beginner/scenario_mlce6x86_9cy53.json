@@ -1,0 +1,340 @@
+{
+  "id": "scenario_mlce6x86_9cy53",
+  "title": "EX:開局規定",
+  "difficulty": "renju_beginner",
+  "description": "存在の紹介",
+  "objectives": [],
+  "sections": [
+    {
+      "id": "section_1",
+      "type": "demo",
+      "title": "開局規定って？",
+      "initialBoard": [
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------"
+      ],
+      "dialogues": [
+        {
+          "id": "dialogue_1",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "ごごごごご……"
+            }
+          ],
+          "emotion": 35,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_2",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "全然起きない……"
+            }
+          ],
+          "emotion": 28,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_3",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "対局の始め方についても紹介しておこうかな。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_4",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "連珠には"
+            },
+            {
+              "type": "emphasis",
+              "content": [
+                {
+                  "type": "ruby",
+                  "base": "開局規定",
+                  "ruby": "かいきょくきてい"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "content": "というものがある。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_5",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "珠型の選択も含め、最序盤の流れを定めたものだよ。"
+            }
+          ],
+          "emotion": 1,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_6",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "予め言っておくと、ここではその方法は説明しない。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_7",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "こんなものがあるよ、という紹介だね。"
+            }
+          ],
+          "emotion": 1,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_8",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "決まりを使わないものを"
+            },
+            {
+              "type": "emphasis",
+              "content": [
+                {
+                  "type": "text",
+                  "content": "自由打ち"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "content": "と言って、ホロ連珠で遊べるのもこれだよ。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_9",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "でもこれには欠点があって……"
+            }
+          ],
+          "emotion": 5,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_10",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "黒が"
+            },
+            {
+              "type": "emphasis",
+              "content": [
+                {
+                  "type": "text",
+                  "content": "圧倒的に有利"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "content": "なんですな。"
+            }
+          ],
+          "emotion": 11,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_11",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "というのは、黒には"
+            },
+            {
+              "type": "ruby",
+              "base": "花月",
+              "ruby": "かげつ"
+            },
+            {
+              "type": "text",
+              "content": "や"
+            },
+            {
+              "type": "ruby",
+              "base": "浦月",
+              "ruby": "ほげつ"
+            },
+            {
+              "type": "text",
+              "content": "といった必勝定石のある珠型がある。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_12",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "珠型は3手目、つまり黒が決めるよね。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_13",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "だから、必勝の珠型を選んでそのまま勝てちゃうわけですな。"
+            }
+          ],
+          "emotion": 1,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_14",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "必勝定石は長くて難しいものとはいえ、上級者なら打てちゃうわけで……"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_15",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "これじゃ競技にならん！ということで、いろんなルールが考えられたんだ。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_16",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "本当に色々なものがあるんだけど、やりたいことはどれも一緒で、"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_17",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "emphasis",
+              "content": [
+                {
+                  "type": "text",
+                  "content": "片方のプレイヤーが形を示して、もう片方のプレイヤーが黒か白か選ぶ"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "content": "、ということだ。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_18",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "本当に色々な種類があって、シンプルに珠型を示して黒白を選ぶだけのものから、"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_19",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "1つ打っては交替し1つ打っては交替しの複雑なものまで……"
+            }
+          ],
+          "emotion": 4,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_20",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "興味があったら調べてみてね。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        }
+      ]
+    }
+  ]
+}

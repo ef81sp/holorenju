@@ -63,14 +63,14 @@
         },
         {
           "id": "scenario_mjzgjlek_bsy23",
-          "title": "黒の制限1: 三三禁",
-          "description": "禁手と三三禁について",
+          "title": "黒の制限1",
+          "description": "禁手の概要と三三禁について",
           "path": "renju_beginner/scenario_mjzgjlek_bsy23.json"
         },
         {
           "id": "scenario_mlaunns1_wyury",
-          "title": "黒の制限2: 四四禁と長連",
-          "description": "黒の制限、四四禁と長連について",
+          "title": "黒の制限2",
+          "description": "四四禁と長連について",
           "path": "renju_beginner/scenario_mlaunns1_wyury.json"
         },
         {
@@ -81,7 +81,7 @@
         },
         {
           "id": "scenario_mlbzqn68_71jtz",
-          "title": "EX: 珠型一覧",
+          "title": "EX:珠型一覧",
           "description": "珠型の細かい説明と全パターンを紹介します",
           "path": "renju_beginner/scenario_mlbzqn68_71jtz.json"
         }

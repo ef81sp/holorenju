@@ -71,15 +71,14 @@
                 "type": "lineBreak"
               },
               {
-                "type": "text",
-                "content": "【 重大発表 】アソビ大全でホロメンに勝利して重大告知する！！！！！！！にぇ！！【ホロライブ/さくらみこ】"
-              },
-              {
-                "type": "lineBreak"
-              },
-              {
-                "type": "text",
-                "content": "https://www.youtube.com/live/JHk6PtljK74?si=Ac12ap9JygLlXzCe&t=3192"
+                "type": "link",
+                "content": [
+                  {
+                    "type": "text",
+                    "content": "【 重大発表 】アソビ大全でホロメンに勝利して重大告知する！！！！！！！にぇ！！【ホロライブ/さくらみこ】"
+                  }
+                ],
+                "url": "https://www.youtube.com/live/JHk6PtljK74?si=Ac12ap9JygLlXzCe&t=3192"
               }
             ]
           },

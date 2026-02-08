@@ -1777,7 +1777,7 @@
             "text": [
               {
                 "type": "text",
-                "content": "浦月にも黒の必勝定石があり、上級者には打たれません"
+                "content": "浦月にも黒の必勝定石があります"
               }
             ]
           },
@@ -1802,6 +1802,10 @@
             }
           ],
           "emotion": 0,
+          "description": {
+            "text": [],
+            "clear": true
+          },
           "boardActions": [
             {
               "type": "remove",
