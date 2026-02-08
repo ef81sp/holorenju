@@ -2,7 +2,25 @@
  * 振り返り（棋譜評価）関連の型定義
  */
 
+import type { LeafEvaluation, ScoreBreakdown } from "./cpu";
 import type { Position } from "./game";
+
+/**
+ * 候補手（内訳付き）
+ */
+export interface ReviewCandidate {
+  position: Position;
+  /** 即時評価スコア */
+  score: number;
+  /** 探索スコア（順位の根拠） */
+  searchScore: number;
+  /** 即時評価の内訳 */
+  breakdown?: ScoreBreakdown;
+  /** 予想手順 */
+  principalVariation?: Position[];
+  /** 探索末端の評価内訳 */
+  leafEvaluation?: LeafEvaluation;
+}
 
 /**
  * 手の品質分類
@@ -35,7 +53,9 @@ export interface EvaluatedMove {
   /** 最善手の位置 */
   bestMove: Position;
   /** 上位候補手 */
-  candidates: { position: Position; score: number }[];
+  candidates: ReviewCandidate[];
+  /** 探索が完了した深度 */
+  completedDepth?: number;
 }
 
 /**
@@ -75,5 +95,7 @@ export interface ReviewWorkerResult {
   /** 実際の手のスコア */
   playedScore: number;
   /** 上位候補手 */
-  candidates: { position: Position; score: number }[];
+  candidates: ReviewCandidate[];
+  /** 探索が完了した深度 */
+  completedDepth: number;
 }

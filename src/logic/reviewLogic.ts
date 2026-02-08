@@ -59,6 +59,7 @@ export function buildEvaluatedMove(
     scoreDiff,
     bestMove: result.bestMove,
     candidates: result.candidates,
+    completedDepth: result.completedDepth,
   };
 }
 

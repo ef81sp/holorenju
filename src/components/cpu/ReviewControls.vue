@@ -51,6 +51,7 @@ const moveDots = computed(() =>
     <div class="nav-buttons">
       <button
         class="nav-button"
+        aria-label="最初の手へ"
         :disabled="props.currentMoveIndex === 0"
         @click="emit('goToStart')"
       >
@@ -58,6 +59,7 @@ const moveDots = computed(() =>
       </button>
       <button
         class="nav-button"
+        aria-label="前の手へ"
         :disabled="props.currentMoveIndex === 0"
         @click="emit('prevMove')"
       >
@@ -68,6 +70,7 @@ const moveDots = computed(() =>
       </span>
       <button
         class="nav-button"
+        aria-label="次の手へ"
         :disabled="props.currentMoveIndex >= props.totalMoves"
         @click="emit('nextMove')"
       >
@@ -75,6 +78,7 @@ const moveDots = computed(() =>
       </button>
       <button
         class="nav-button"
+        aria-label="最後の手へ"
         :disabled="props.currentMoveIndex >= props.totalMoves"
         @click="emit('goToEnd')"
       >
@@ -113,6 +117,7 @@ const moveDots = computed(() =>
   display: flex;
   flex-direction: column;
   gap: var(--size-8);
+  min-height: 0;
 }
 
 .nav-buttons {
@@ -123,19 +128,22 @@ const moveDots = computed(() =>
 }
 
 .nav-button {
-  width: var(--size-36);
+  display: inline-block;
   height: var(--size-36);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  aspect-ratio: 1;
   background: var(--color-background-secondary);
   border: 2px solid var(--color-border-light);
   border-radius: var(--size-6);
   font-size: var(--size-14);
   font-weight: 500;
+  line-height: var(--size-36);
+  text-align: center;
   color: var(--color-text-primary);
   cursor: pointer;
   transition: all 0.2s;
+  padding: 0;
+  box-sizing: border-box;
+  width: 2rem;
 }
 
 .nav-button:hover:not(:disabled) {
@@ -165,8 +173,10 @@ const moveDots = computed(() =>
   display: flex;
   flex-wrap: wrap;
   gap: var(--size-2);
-  max-height: var(--size-80);
   overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  align-content: flex-start;
 }
 
 .move-dot {
@@ -183,6 +193,12 @@ const moveDots = computed(() =>
   cursor: pointer;
   transition: all 0.15s;
   padding: 0;
+
+  /* 品質色の背景がある場合、白文字にしてコントラスト確保 */
+  &[style*="background"] {
+    color: white;
+    border-color: transparent;
+  }
 }
 
 .move-dot:hover {

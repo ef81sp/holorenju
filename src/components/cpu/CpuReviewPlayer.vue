@@ -7,26 +7,27 @@
 
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 
-import RenjuBoard, {
-  type StoneLabel,
-} from "@/components/game/RenjuBoard/RenjuBoard.vue";
+import RenjuBoard from "@/components/game/RenjuBoard/RenjuBoard.vue";
 import SettingsControl from "@/components/common/SettingsControl.vue";
 import GamePlayerLayout from "@/components/common/GamePlayerLayout.vue";
 import DialogText from "@/components/common/DialogText.vue";
 import CharacterSprite from "@/components/character/CharacterSprite.vue";
-import CpuCharacterPanel from "./CpuCharacterPanel.vue";
 import ReviewControls from "./ReviewControls.vue";
 import ReviewStatus from "./ReviewStatus.vue";
+import ReviewEvalPanel from "./ReviewEvalPanel.vue";
 import { useReviewEvaluator } from "./composables/useReviewEvaluator";
 import { useReviewDialogue } from "./composables/useReviewDialogue";
+import { useReviewBoardOverlay } from "./composables/useReviewBoardOverlay";
 import { buildEvaluatedMove } from "@/logic/reviewLogic";
 import { useAppStore } from "@/stores/appStore";
 import { useCpuReviewStore } from "@/stores/cpuReviewStore";
 import { useCpuRecordStore } from "@/stores/cpuRecordStore";
 import { useDialogStore } from "@/stores/dialogStore";
-import type { Mark } from "@/stores/boardStore";
+import { useBoardStore } from "@/stores/boardStore";
+import type { Position } from "@/types/game";
 
 const appStore = useAppStore();
+const boardStore = useBoardStore();
 const reviewStore = useCpuReviewStore();
 const cpuRecordStore = useCpuRecordStore();
 const dialogStore = useDialogStore();
@@ -36,9 +37,13 @@ const layoutRef = ref<InstanceType<typeof GamePlayerLayout> | null>(null);
 // Composables
 const evaluator = useReviewEvaluator();
 const dialogue = useReviewDialogue();
+const overlay = useReviewBoardOverlay();
 
 // 初期化
 onMounted(() => {
+  // 対戦画面から遷移した場合、boardStoreに残っている石をクリア
+  boardStore.resetBoard();
+
   const recordId = appStore.reviewRecordId;
   if (!recordId) {
     appStore.goToCpuSetup();
@@ -102,10 +107,12 @@ watch(
   },
 );
 
-// 手数変更時にセリフを更新
+// 手数変更時にセリフを更新・プレビューをクリア
 watch(
   () => reviewStore.currentMoveIndex,
   () => {
+    overlay.clearPreview();
+
     const evaluation = reviewStore.currentEvaluation;
     if (evaluation?.isPlayerMove) {
       dialogue.showQualityDialogue(evaluation.quality, evaluation.bestMove);
@@ -115,56 +122,13 @@ watch(
   },
 );
 
-// 石のラベル（通し番号）
-const stoneLabels = computed(() => {
-  const labels = new Map<string, StoneLabel>();
-  for (let i = 0; i < reviewStore.currentMoveIndex; i++) {
-    const move = reviewStore.moves[i];
-    if (!move) {
-      continue;
-    }
-    labels.set(`${move.position.row},${move.position.col}`, {
-      text: String(i + 1),
-      color: move.color === "black" ? "#ffffff" : "#000000",
-    });
+// 現在の手の位置（CPU手の座標表示用）
+const currentMovePosition = computed<Position | null>(() => {
+  if (reviewStore.currentMoveIndex === 0) {
+    return null;
   }
-  return labels;
-});
-
-// マーク（現在の手 + 最善手）
-const displayMarks = computed<Mark[]>(() => {
-  const marks: Mark[] = [];
-
-  // 現在の手をcircleマークで表示
-  if (reviewStore.currentMoveIndex > 0) {
-    const lastMove = reviewStore.moves[reviewStore.currentMoveIndex - 1];
-    if (lastMove) {
-      marks.push({
-        id: "review-current",
-        positions: [lastMove.position],
-        markType: "circle",
-        placedAtDialogueIndex: -2,
-      });
-    }
-  }
-
-  // 評価がinaccuracy以上の場合、最善手をcrossマークで表示
-  const evaluation = reviewStore.currentEvaluation;
-  if (
-    evaluation?.isPlayerMove &&
-    (evaluation.quality === "inaccuracy" ||
-      evaluation.quality === "mistake" ||
-      evaluation.quality === "blunder")
-  ) {
-    marks.push({
-      id: "review-best",
-      positions: [evaluation.bestMove],
-      markType: "cross",
-      placedAtDialogueIndex: -2,
-    });
-  }
-
-  return marks;
+  const move = reviewStore.moves[reviewStore.currentMoveIndex - 1];
+  return move?.position ?? null;
 });
 
 // キーボード操作
@@ -218,36 +182,18 @@ function handleBack(): void {
       </template>
 
       <template #control-info>
-        <ReviewStatus
-          v-if="reviewStore.currentRecord"
-          :is-evaluating="evaluator.isEvaluating.value"
-          :completed-count="evaluator.completedCount.value"
-          :total-count="evaluator.totalCount.value"
-          :accuracy="reviewStore.playerAccuracy"
-          :critical-errors="reviewStore.criticalErrors"
-          :difficulty="reviewStore.currentRecord.difficulty"
-          :move-count="reviewStore.currentRecord.moves"
-          :player-first="reviewStore.currentRecord.playerFirst"
-        />
-      </template>
-
-      <template #board="{ boardSize }">
-        <RenjuBoard
-          :disabled="true"
-          :stage-size="boardSize"
-          :board-state="reviewStore.boardAtCurrentMove"
-          :marks="displayMarks"
-          :stone-labels="stoneLabels"
-        />
-      </template>
-
-      <template #info>
-        <div class="info-content">
-          <CpuCharacterPanel
-            character="fubuki"
-            :emotion-id="dialogue.currentEmotion.value"
+        <div class="control-info-content">
+          <ReviewStatus
+            v-if="reviewStore.currentRecord"
+            :is-evaluating="evaluator.isEvaluating.value"
+            :completed-count="evaluator.completedCount.value"
+            :total-count="evaluator.totalCount.value"
+            :accuracy="reviewStore.playerAccuracy"
+            :critical-errors="reviewStore.criticalErrors"
+            :difficulty="reviewStore.currentRecord.difficulty"
+            :move-count="reviewStore.currentRecord.moves"
+            :player-first="reviewStore.currentRecord.playerFirst"
           />
-
           <ReviewControls
             :current-move-index="reviewStore.currentMoveIndex"
             :total-moves="reviewStore.moves.length"
@@ -259,6 +205,30 @@ function handleBack(): void {
             @next-move="reviewStore.nextMove"
           />
         </div>
+      </template>
+
+      <template #board="{ boardSize }">
+        <RenjuBoard
+          :disabled="true"
+          :stage-size="boardSize"
+          :board-state="overlay.displayBoardState.value"
+          :marks="overlay.displayMarks.value"
+          :stone-labels="overlay.stoneLabels.value"
+        />
+      </template>
+
+      <template #info>
+        <ReviewEvalPanel
+          :evaluation="reviewStore.currentEvaluation ?? null"
+          :move-index="reviewStore.currentMoveIndex"
+          :current-position="currentMovePosition"
+          @hover-candidate="overlay.handleHoverCandidate"
+          @leave-candidate="overlay.handleLeaveCandidate"
+          @hover-pv-move="overlay.handleHoverPVMove"
+          @leave-pv-move="overlay.handleLeavePVMove"
+          @show-pv-line="overlay.handleShowPvLine"
+          @hide-pv-line="overlay.handleHidePvLine"
+        />
       </template>
 
       <template #dialog>
@@ -300,6 +270,15 @@ function handleBack(): void {
 .cpu-review-player {
   width: 100%;
   height: 100%;
+
+  /* 右パネルを縦ぶち抜き（4×9）にしてスクロール回避 */
+  :deep(.info-section-slot) {
+    grid-row: 1 / -1;
+  }
+
+  :deep(.dialog-section-slot) {
+    grid-column: 1 / span 2;
+  }
 }
 
 .back-button {
@@ -319,17 +298,17 @@ function handleBack(): void {
   border-color: #4a9eff;
 }
 
-.info-content {
+.control-info-content {
   display: flex;
   flex-direction: column;
-  gap: var(--size-16);
-  padding: var(--size-12);
-  height: 100%;
+  gap: var(--size-8);
+  flex: 1;
+  min-height: 0;
 }
 
 .character-dialog {
   display: grid;
-  grid-template-columns: 4fr 8fr 4fr;
+  grid-template-columns: 4fr 8fr;
   gap: var(--size-12);
   align-items: stretch;
   width: 100%;

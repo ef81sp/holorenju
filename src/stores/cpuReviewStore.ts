@@ -134,7 +134,7 @@ export const useCpuReviewStore = defineStore("cpuReview", () => {
     } else {
       moves.value = [];
     }
-    currentMoveIndex.value = moves.value.length; // 最終盤面から開始
+    currentMoveIndex.value = Math.min(1, moves.value.length); // 1手目から開始
     evaluatedMoves.value = [];
     isEvaluating.value = false;
     evaluationProgress.value = 0;

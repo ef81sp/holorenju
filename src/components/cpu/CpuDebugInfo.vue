@@ -11,10 +11,15 @@ import type {
   CpuResponse,
   CandidateMove,
   DepthResult,
-  PatternScoreDetail,
   SearchStats,
 } from "@/types/cpu";
 import { useBoardStore } from "@/stores/boardStore";
+import {
+  getNonZeroBreakdown as getNonZeroBreakdownFromBreakdown,
+  formatScore,
+  formatPatternScore,
+  getLeafBreakdownItems,
+} from "@/logic/cpu/evaluation/breakdownUtils";
 
 const props = defineProps<{
   /** 最後のCPUレスポンス */
@@ -42,16 +47,6 @@ function formatPosition(row: number, col: number): string {
 }
 
 /**
- * スコアを符号付きで表示
- */
-function formatScore(score: number): string {
-  if (score >= 0) {
-    return `+${score}`;
-  }
-  return String(score);
-}
-
-/**
  * PV（予想手順）をフォーマット
  * 各手を番号付きで表示（1. H8 2. G9 ...）
  */
@@ -67,170 +62,15 @@ function formatPV(
 }
 
 /**
- * 末端評価の内訳項目
+ * CandidateMove用のgetNonZeroBreakdownラッパー
  */
-interface LeafBreakdownItem {
-  key: string;
-  label: string;
-  score: number;
-}
-
-/**
- * 末端評価の内訳から非ゼロ項目を取得
- */
-function getLeafBreakdownItems(breakdown: {
-  five: number;
-  openFour: number;
-  four: number;
-  openThree: number;
-  three: number;
-  openTwo: number;
-  two: number;
-}): LeafBreakdownItem[] {
-  const items: LeafBreakdownItem[] = [];
-  if (breakdown.five !== 0) {
-    items.push({ key: "five", label: "五連", score: breakdown.five });
-  }
-  if (breakdown.openFour !== 0) {
-    items.push({ key: "openFour", label: "活四", score: breakdown.openFour });
-  }
-  if (breakdown.four !== 0) {
-    items.push({ key: "four", label: "四", score: breakdown.four });
-  }
-  if (breakdown.openThree !== 0) {
-    items.push({
-      key: "openThree",
-      label: "活三",
-      score: breakdown.openThree,
-    });
-  }
-  if (breakdown.three !== 0) {
-    items.push({ key: "three", label: "三", score: breakdown.three });
-  }
-  if (breakdown.openTwo !== 0) {
-    items.push({ key: "openTwo", label: "活二", score: breakdown.openTwo });
-  }
-  if (breakdown.two !== 0) {
-    items.push({ key: "two", label: "二", score: breakdown.two });
-  }
-  return items;
-}
-
-/**
- * パターン内訳のラベル
- */
-const patternLabels: Record<string, string> = {
-  five: "五連",
-  openFour: "活四",
-  four: "四",
-  openThree: "活三",
-  three: "三",
-  openTwo: "活二",
-  two: "二",
-};
-
-/**
- * ボーナス内訳項目のラベル
- */
-const bonusLabels: Record<string, string> = {
-  fourThree: "四三",
-  fukumi: "フクミ手",
-  mise: "ミセ手",
-  center: "中央",
-  multiThreat: "複数脅威",
-  singleFourPenalty: "単発四ペナ",
-  forbiddenTrap: "禁手追込",
-};
-
-/**
- * パターン内訳の項目
- */
-interface PatternItem {
-  key: string;
-  label: string;
-  detail: PatternScoreDetail;
-}
-
-/**
- * ボーナス内訳の項目
- */
-interface BonusItem {
-  key: string;
-  label: string;
-  value: number;
-}
-
-/**
- * 内訳の非ゼロ項目を取得（攻撃・防御・ボーナスを分離）
- */
-function getNonZeroBreakdown(candidate: CandidateMove): {
-  patterns: PatternItem[];
-  defense: PatternItem[];
-  bonuses: BonusItem[];
-} {
+function getNonZeroBreakdown(
+  candidate: CandidateMove,
+): ReturnType<typeof getNonZeroBreakdownFromBreakdown> {
   if (!candidate.breakdown) {
     return { patterns: [], defense: [], bonuses: [] };
   }
-
-  // 攻撃パターン内訳
-  const patterns = Object.entries(candidate.breakdown.pattern)
-    .filter(([, detail]) => (detail as PatternScoreDetail).final !== 0)
-    .map(([key, detail]) => ({
-      key,
-      label: patternLabels[key] ?? key,
-      detail: detail as PatternScoreDetail,
-    }));
-
-  // 防御パターン内訳
-  const defense = Object.entries(candidate.breakdown.defense)
-    .filter(([, detail]) => (detail as PatternScoreDetail).final !== 0)
-    .map(([key, detail]) => ({
-      key,
-      label: patternLabels[key] ?? key,
-      detail: detail as PatternScoreDetail,
-    }));
-
-  // ボーナス内訳
-  const bonuses = Object.entries(candidate.breakdown)
-    .filter(
-      ([key, value]) => key !== "pattern" && key !== "defense" && value !== 0,
-    )
-    .map(([key, value]) => ({
-      key,
-      label: bonusLabels[key] ?? key,
-      // ペナルティは減点なので符号を反転
-      value:
-        key === "singleFourPenalty" ? -(value as number) : (value as number),
-    }));
-
-  return { patterns, defense, bonuses };
-}
-
-/**
- * パターンスコアの表示文字列を生成
- * 倍率がある場合: "preMultiplier × multiplier = final"
- * 斜めボーナスがある場合: "base + bonus = final"
- * ない場合: "+final"
- */
-function formatPatternScore(detail: PatternScoreDetail): string {
-  // 倍率が適用されている場合（防御など）
-  if (detail.multiplier !== undefined && detail.preMultiplier !== undefined) {
-    if (detail.preMultiplier === 0) {
-      return formatScore(detail.final);
-    }
-    // 斜めボーナスもある場合: "(base + bonus) × multiplier = final"
-    if (detail.diagonalBonus !== 0) {
-      const preMultBase = Math.round(detail.base / detail.multiplier);
-      const preMultBonus = Math.round(detail.diagonalBonus / detail.multiplier);
-      return `(${preMultBase} + ${preMultBonus}) × ${detail.multiplier} = ${detail.final}`;
-    }
-    return `${detail.preMultiplier} × ${detail.multiplier} = ${detail.final}`;
-  }
-  // 斜めボーナスのみの場合
-  if (detail.diagonalBonus !== 0) {
-    return `${detail.base} + ${detail.diagonalBonus} = ${detail.final}`;
-  }
-  return formatScore(detail.final);
+  return getNonZeroBreakdownFromBreakdown(candidate.breakdown);
 }
 
 /**
