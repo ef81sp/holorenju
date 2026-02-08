@@ -443,6 +443,38 @@ describe("findDefenseForJumpFour（内部関数）", () => {
   });
 });
 
+describe("活四が跳び四VCFより優先される", () => {
+  it("活三を棒四（活四）にする手を跳び四より優先する", () => {
+    // row=2: 黒(2) 白(3,4) ・(5) 白(6)
+    //   col=5: 連続四(3,4,5,6) 端col=2が黒→止め四
+    //   col=7: 跳び四(4,(gap5),6,7) 黒がcol=5埋め→再帰でrow=7の活三から勝てる
+    //   ※スキャン順でrow=7より先に見つかる
+    // row=7: 白(7,8,9) 活三→col=6 or col=10で活四（即勝利）
+    //
+    // 修正前: Pass 3で跳び四(row=2)→再帰VCF成立→row=2を返す
+    // 修正後: Pass 2で活四(row=7)を先に発見→row=7を返す
+    const board = createBoardWithStones([
+      // row=2: 跳び四素材（スキャン順で先）
+      { row: 2, col: 3, color: "white" },
+      { row: 2, col: 4, color: "white" },
+      { row: 2, col: 6, color: "white" },
+      { row: 2, col: 2, color: "black" }, // 左端ブロック→col=5は止め四のみ
+
+      // row=7: 活三（両端空）
+      { row: 7, col: 7, color: "white" },
+      { row: 7, col: 8, color: "white" },
+      { row: 7, col: 9, color: "white" },
+    ]);
+
+    const move = findVCFMove(board, "white");
+    expect(move).not.toBeNull();
+    // 活四を作る手（row=7, col=6 or col=10）が返されるべき
+    // 跳び四の手（row=2, col=7）や止め四の手（row=2, col=5）ではない
+    expect(move?.row).toBe(7);
+    expect([6, 10]).toContain(move?.col);
+  });
+});
+
 describe("四三後に相手が無視した場合", () => {
   it("四が残っている状態で五を作る手を最優先で返す", () => {
     // CPUが四三を作った後、相手が無視した状態をシミュレート

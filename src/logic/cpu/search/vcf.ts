@@ -190,6 +190,37 @@ function findVCFMoveRecursive(
     }
   }
 
+  // 第2優先: 止められない四（活四）を作れる手を探す
+  for (const move of fourMoves) {
+    const moveRow2 = board[move.row];
+    if (moveRow2) {
+      moveRow2[move.col] = color;
+    }
+
+    let isWin = false;
+    const defensePos = getFourDefensePosition(board, move, color);
+    if (!defensePos) {
+      isWin = true;
+    } else if (color === "white") {
+      const forbiddenResult = checkForbiddenMove(
+        board,
+        defensePos.row,
+        defensePos.col,
+      );
+      if (forbiddenResult.isForbidden) {
+        isWin = true;
+      }
+    }
+
+    if (moveRow2) {
+      moveRow2[move.col] = null;
+    }
+
+    if (isWin) {
+      return move;
+    }
+  }
+
   // 通常のVCF探索
   for (const move of fourMoves) {
     // 四を作る（インプレース）
