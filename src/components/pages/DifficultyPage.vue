@@ -100,7 +100,7 @@ const handleBack = (): void => {
 <template>
   <div class="difficulty-page">
     <PageHeader
-      title="難易度を選択"
+      title="ステップを選択"
       show-back
       @back="handleBack"
     />
@@ -168,9 +168,8 @@ const handleBack = (): void => {
 
 .content {
   flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: grid;
+  place-items: center;
 }
 
 .loading,
@@ -321,19 +320,5 @@ const handleBack = (): void => {
 
 .difficulty-card--renju .progress-bar::-moz-progress-bar {
   background: rgba(255, 255, 255, 0.8);
-}
-
-@media (max-width: 1000px) {
-  .difficulty-grid {
-    grid-template-columns: repeat(2, 1fr);
-    grid-template-rows: repeat(3, 1fr);
-  }
-}
-
-@media (max-width: 640px) {
-  .difficulty-grid {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto;
-  }
 }
 </style>
