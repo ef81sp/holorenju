@@ -33,37 +33,37 @@ const difficultyCards: DifficultyCard[] = [
     key: "gomoku_beginner",
     label: "五目並べ:入門",
     gradient: "var(--gradient-difficulty-1)",
-    description: "五目並べの遊び方と連珠との違いからスタート",
+    description: "五目並べの遊び方",
   },
   {
     key: "gomoku_intermediate",
     label: "五目並べ:初級",
     gradient: "var(--gradient-difficulty-2)",
-    description: "五目並べの基本戦術をひと通り固めるステップ",
+    description: "五目並べの基本戦術をひと通り固める",
   },
   {
     key: "renju_beginner",
     label: "連珠:入門",
     gradient: "var(--gradient-difficulty-3)",
-    description: "禁手ルールや連珠ならではの基礎を確認",
+    description: "五目並べとの違い",
   },
   {
     key: "renju_intermediate",
     label: "連珠:初級",
     gradient: "var(--gradient-difficulty-4)",
-    description: "基本形の活用や攻守の組み立てを学ぶ",
+    description: "基本形な攻撃",
   },
   {
     key: "renju_advanced",
     label: "連珠:中級",
     gradient: "var(--gradient-difficulty-5)",
-    description: "実戦を意識した応用手筋と読みの強化",
+    description: "",
   },
   {
     key: "renju_expert",
     label: "連珠:上級",
     gradient: "var(--gradient-difficulty-6)",
-    description: "終盤力と緻密な布石運びで頂点を目指す",
+    description: "",
   },
 ];
 
@@ -131,13 +131,20 @@ const handleBack = (): void => {
           class="difficulty-card"
           :class="{ 'difficulty-card--renju': card.key.startsWith('renju') }"
           :style="{ background: card.gradient }"
+          :disabled="progressByDifficulty[card.key]?.total === 0"
           @click="handleSelectDifficulty(card.key)"
         >
           <div class="card-header">
             <span class="card-ordinal">{{ index + 1 }}</span>
             <span class="card-label">{{ card.label }}</span>
           </div>
-          <p class="card-description">{{ card.description }}</p>
+          <p class="card-description">
+            {{
+              progressByDifficulty[card.key]?.total === 0
+                ? "準備中"
+                : card.description
+            }}
+          </p>
           <div class="progress-info">
             <span class="progress-text">
               {{ progressByDifficulty[card.key]?.completed ?? 0 }} /
@@ -216,6 +223,13 @@ const handleBack = (): void => {
 
 .difficulty-card:active {
   transform: translateY(calc(-1 * var(--size-2)));
+}
+
+.difficulty-card:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 .card-header {
