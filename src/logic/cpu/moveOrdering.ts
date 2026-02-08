@@ -11,6 +11,7 @@ import { BOARD_SIZE } from "@/constants";
 
 import {
   DEFAULT_EVAL_OPTIONS,
+  detectOpponentThreats,
   evaluatePosition,
   type EvaluationOptions,
 } from "./evaluation";
@@ -294,6 +295,45 @@ export function sortMoves(
           evaluationOptions,
         );
         sm.staticEvalDone = true;
+      }
+    }
+  }
+
+  // Lazy Evaluation時、未評価の手に対しても必須防御チェックを適用
+  // 脅威を無視する手がTTに保存されることを防ぐ
+  if (
+    useStaticEval &&
+    color !== null &&
+    evaluationOptions.enableMandatoryDefense &&
+    maxStaticEvalCount !== undefined &&
+    maxStaticEvalCount < scoredMoves.length
+  ) {
+    const opponentColor = color === "black" ? "white" : "black";
+    const threats = detectOpponentThreats(board, opponentColor);
+    const hasThreats =
+      threats.openFours.length > 0 ||
+      threats.fours.length > 0 ||
+      threats.openThrees.length > 0;
+
+    if (hasThreats) {
+      // 防御位置のセットを構築
+      const allDefensePositions = [
+        ...threats.openFours,
+        ...threats.fours,
+        ...threats.openThrees,
+      ];
+      const defenseSet = new Set(
+        allDefensePositions.map((p) => `${p.row},${p.col}`),
+      );
+
+      // 未評価の手で防御位置にない手を-Infinityに
+      for (const sm of scoredMoves) {
+        if (
+          !sm.staticEvalDone &&
+          !defenseSet.has(`${sm.move.row},${sm.move.col}`)
+        ) {
+          sm.score = -Infinity;
+        }
       }
     }
   }

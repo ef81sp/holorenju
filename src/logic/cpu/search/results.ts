@@ -6,7 +6,12 @@
 
 import type { BoardState, Position } from "@/types/game";
 
+import { checkFive, copyBoard } from "@/logic/renjuRules";
+
 import { applyMove, getOppositeColor } from "../core/boardUtils";
+import { evaluateStonePatterns, PATTERN_SCORES } from "../evaluation";
+import { analyzeJumpPatterns } from "../evaluation/jumpPatterns";
+import { detectOpponentThreats } from "../evaluation/threatDetection";
 import { TranspositionTable } from "../transpositionTable";
 import { updateHash } from "../zobrist";
 
@@ -91,9 +96,94 @@ export interface IterativeDeepingResult extends MinimaxResult {
 }
 
 /**
+ * PVの手が必須防御ルールに違反していないかチェック
+ *
+ * 相手の脅威（活四・止め四・活三）を無視する手はPVとして不正
+ *
+ * @param board 現在の盤面（手を打つ前）
+ * @param move 検証する手
+ * @param color 手番の色
+ * @returns 手が妥当ならtrue
+ */
+export function isValidPVMove(
+  board: BoardState,
+  move: Position,
+  color: "black" | "white",
+): boolean {
+  // 五連が作れるなら常にOK
+  if (checkFive(board, move.row, move.col, color)) {
+    return true;
+  }
+
+  const opponentColor = getOppositeColor(color);
+  const threats = detectOpponentThreats(board, opponentColor);
+
+  // 仮想的に石を置いてパターンを評価（活四・四三の判定用）
+  const testBoard = copyBoard(board);
+  const testRow = testBoard[move.row];
+  if (testRow) {
+    testRow[move.col] = color;
+  }
+  const attackScore = evaluateStonePatterns(
+    testBoard,
+    move.row,
+    move.col,
+    color,
+  );
+  const hasMyOpenFour = attackScore >= PATTERN_SCORES.OPEN_FOUR;
+
+  // 四三の判定
+  const jumpResult = analyzeJumpPatterns(testBoard, move.row, move.col, color);
+  const hasFourThree = jumpResult.hasFour && jumpResult.hasValidOpenThree;
+  const canWinFirst = hasMyOpenFour || hasFourThree;
+
+  // 相手の活四を止めない手は不正（例外: 自分の活四のみ）
+  if (threats.openFours.length > 0 && !hasMyOpenFour) {
+    const isDefending = threats.openFours.some(
+      (p) => p.row === move.row && p.col === move.col,
+    );
+    if (!isDefending) {
+      return false;
+    }
+  }
+
+  // 相手の止め四を止めない手は不正（例外: 自分の活四のみ）
+  if (
+    threats.fours.length > 0 &&
+    threats.openFours.length === 0 &&
+    !hasMyOpenFour
+  ) {
+    const isDefending = threats.fours.some(
+      (p) => p.row === move.row && p.col === move.col,
+    );
+    if (!isDefending) {
+      return false;
+    }
+  }
+
+  // 相手の活三を止めない手は不正（例外: 活四・四三で先に勝てる場合）
+  if (
+    threats.openThrees.length > 0 &&
+    threats.openFours.length === 0 &&
+    threats.fours.length === 0 &&
+    !canWinFirst
+  ) {
+    const isDefending = threats.openThrees.some(
+      (p) => p.row === move.row && p.col === move.col,
+    );
+    if (!isDefending) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+/**
  * TranspositionTableからPrincipal Variation（予想手順）を抽出
  *
- * TTに保存されたbestMoveを辿って、予想される手順を復元する
+ * TTに保存されたbestMoveを辿って、予想される手順を復元する。
+ * 各手は必須防御ルールに対して検証され、違反する手でPVを打ち切る。
  *
  * @param board 現在の盤面
  * @param startHash 開始盤面のハッシュ
@@ -127,6 +217,11 @@ export function extractPV(
 
     // 盤面の有効性チェック
     if (currentBoard[move.row]?.[move.col] !== null) {
+      break;
+    }
+
+    // 必須防御ルール検証: 脅威を無視する手でPVを打ち切り
+    if (!isValidPVMove(currentBoard, move, currentColor)) {
       break;
     }
 

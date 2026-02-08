@@ -541,10 +541,13 @@ export function minimaxWithTT(
   }
 
   // ソート済み候補手生成（Lazy Evaluation: 深さに応じて動的調整）
-  // depth 1では静的評価をスキップ（リーフノードはevaluateBoardで評価されるため不要）
+  // depth 1では通常は静的評価をスキップ（リーフノードはevaluateBoardで評価されるため）
+  // ただし必須防御が有効な場合はdepth 1でも静的評価を実行
+  // （脅威を無視する手をTTに保存しないため）
   // 深いノードほど評価数を減らして高速化
   // 黒番の禁手判定は遅延評価（実際に探索する手のみチェック）
-  const useStaticEval = depth > 1;
+  const useStaticEval =
+    depth > 1 || ctx.evaluationOptions.enableMandatoryDefense;
   const getMaxStaticEvalCount = (d: number): number => {
     if (d >= 4) {
       return 3;
