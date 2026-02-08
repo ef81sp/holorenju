@@ -44,9 +44,8 @@ function formatDate(timestamp: number): string {
   return `${date.getMonth() + 1}/${date.getDate()}`;
 }
 
-// 統計を2x2グリッドで表示するため配列を分割
-const topStats = computed(() => cpuRecordStore.allStats.slice(0, 2));
-const bottomStats = computed(() => cpuRecordStore.allStats.slice(2, 4));
+// 統計を1行4列で表示
+const allStats = computed(() => cpuRecordStore.allStats);
 
 // 振り返りを開く
 function handleOpenReview(recordId: string): void {
@@ -87,28 +86,7 @@ defineExpose({
         <h3 class="section-title">難易度別成績</h3>
         <div class="stats-grid">
           <div
-            v-for="stat in topStats"
-            :key="stat.difficulty"
-            class="stats-card"
-          >
-            <div class="stats-label">
-              {{ difficultyLabels[stat.difficulty] }}
-            </div>
-            <div class="stats-value">
-              <span class="wins">{{ stat.wins }}勝</span>
-              <span class="losses">{{ stat.losses }}敗</span>
-              <span
-                v-if="stat.draws > 0"
-                class="draws"
-              >
-                {{ stat.draws }}分
-              </span>
-            </div>
-          </div>
-        </div>
-        <div class="stats-grid">
-          <div
-            v-for="stat in bottomStats"
+            v-for="stat in allStats"
             :key="stat.difficulty"
             class="stats-card"
           >
@@ -182,7 +160,7 @@ defineExpose({
   padding: var(--size-24);
   box-shadow: 0 var(--size-10) var(--size-32) rgba(0, 0, 0, 0.2);
   width: var(--size-500);
-  height: var(--size-300);
+  height: var(--size-350);
   overflow: hidden;
 
   transition:
@@ -262,19 +240,18 @@ defineExpose({
 .stats-section {
   display: flex;
   flex-direction: column;
-  gap: var(--size-8);
 }
 
 .stats-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--size-10);
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--size-6);
 }
 
 .stats-card {
   background: var(--color-background-secondary);
   border-radius: var(--size-8);
-  padding: var(--size-10);
+  padding: var(--size-6);
   text-align: center;
 }
 
@@ -285,11 +262,11 @@ defineExpose({
 }
 
 .stats-value {
-  font-size: var(--size-14);
+  font-size: var(--size-12);
   font-weight: 500;
   display: flex;
   justify-content: center;
-  gap: var(--size-8);
+  gap: var(--size-6);
 }
 
 .wins {
