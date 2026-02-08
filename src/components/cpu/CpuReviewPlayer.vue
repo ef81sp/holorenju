@@ -193,6 +193,7 @@ function handleBack(): void {
             :difficulty="reviewStore.currentRecord.difficulty"
             :move-count="reviewStore.currentRecord.moves"
             :player-first="reviewStore.currentRecord.playerFirst"
+            :move-history="reviewStore.currentRecord.moveHistory ?? null"
           />
           <ReviewControls
             :current-move-index="reviewStore.currentMoveIndex"
