@@ -43,6 +43,7 @@ import {
   countThreatDirections,
   detectOpponentThreats,
   evaluateMultiThreat,
+  hasDefenseThatBlocksBoth,
 } from "./threatDetection";
 
 // Re-export all types and constants
@@ -282,20 +283,12 @@ export function evaluatePosition(
         const isDefendingMise = threats.mises.some(
           (p) => p.row === row && p.col === col,
         );
-        if (!isDefendingMise) {
-          // 活三とミセ手の両方を止める手が存在するかチェック
-          const hasDefenseThatBlocksBoth = threats.openThrees.some(
-            (openThreePos) =>
-              threats.mises.some(
-                (misePos) =>
-                  openThreePos.row === misePos.row &&
-                  openThreePos.col === misePos.col,
-              ),
-          );
-          // 両方を止める手がある場合のみ、この手を除外
-          if (hasDefenseThatBlocksBoth) {
-            return -Infinity;
-          }
+        // ミセ手を止めていない、かつ両方を止める手が存在する場合のみ除外
+        if (
+          !isDefendingMise &&
+          hasDefenseThatBlocksBoth(threats.openThrees, threats.mises)
+        ) {
+          return -Infinity;
         }
       }
     }

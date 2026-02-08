@@ -31,6 +31,33 @@ function addUniquePosition(positions: Position[], pos: Position): void {
 }
 
 /**
+ * 配列に複数の重複しない位置を追加するヘルパー関数
+ */
+export function addUniquePositions(
+  positions: Position[],
+  newPositions: Position[],
+): void {
+  for (const pos of newPositions) {
+    addUniquePosition(positions, pos);
+  }
+}
+
+/**
+ * 活三とミセ手の両方を止める手が存在するかチェック
+ */
+export function hasDefenseThatBlocksBoth(
+  openThrees: Position[],
+  mises: Position[],
+): boolean {
+  return openThrees.some((openThreePos) =>
+    mises.some(
+      (misePos) =>
+        openThreePos.row === misePos.row && openThreePos.col === misePos.col,
+    ),
+  );
+}
+
+/**
  * 複数方向に脅威（活三以上）がある数をカウント
  *
  * @param board 盤面（石を置いた状態）
@@ -301,17 +328,10 @@ export function detectOpponentThreats(
           pattern.end2 === "empty"
         ) {
           // 両端の防御位置を追加
-          const defensePositions = getOpenFourDefensePositions(
-            board,
-            row,
-            col,
-            dr,
-            dc,
-            opponentColor,
+          addUniquePositions(
+            result.openFours,
+            getOpenFourDefensePositions(board, row, col, dr, dc, opponentColor),
           );
-          for (const pos of defensePositions) {
-            addUniquePosition(result.openFours, pos);
-          }
         }
 
         // 止め四をチェック（片側だけ空いている4連）
@@ -321,17 +341,10 @@ export function detectOpponentThreats(
             (pattern.end1 !== "empty" && pattern.end2 === "empty"))
         ) {
           // 空いている側の防御位置を追加（止め四は1点のみ）
-          const defensePositions = getOpenFourDefensePositions(
-            board,
-            row,
-            col,
-            dr,
-            dc,
-            opponentColor,
+          addUniquePositions(
+            result.fours,
+            getOpenFourDefensePositions(board, row, col, dr, dc, opponentColor),
           );
-          for (const pos of defensePositions) {
-            addUniquePosition(result.fours, pos);
-          }
         }
 
         // 跳び四をチェック（●●・●● など、連続4石以外のパターン）
@@ -350,6 +363,7 @@ export function detectOpponentThreats(
             dc,
             opponentColor,
           );
+          // eslint-disable-next-line max-depth
           if (gapPos) {
             addUniquePosition(result.fours, gapPos);
           }
@@ -362,32 +376,25 @@ export function detectOpponentThreats(
           pattern.end2 === "empty"
         ) {
           // 両端の防御位置を追加
-          const defensePositions = getOpenThreeDefensePositions(
-            board,
-            row,
-            col,
-            dr,
-            dc,
-            opponentColor,
+          addUniquePositions(
+            result.openThrees,
+            getOpenThreeDefensePositions(
+              board,
+              row,
+              col,
+              dr,
+              dc,
+              opponentColor,
+            ),
           );
-          for (const pos of defensePositions) {
-            addUniquePosition(result.openThrees, pos);
-          }
         }
 
         // 跳び三をチェック（連続3石以外のパターン）
         if (pattern.count < 3) {
-          const jumpDefensePositions = detectJumpThreePattern(
-            board,
-            row,
-            col,
-            dr,
-            dc,
-            opponentColor,
+          addUniquePositions(
+            result.openThrees,
+            detectJumpThreePattern(board, row, col, dr, dc, opponentColor),
           );
-          for (const pos of jumpDefensePositions) {
-            addUniquePosition(result.openThrees, pos);
-          }
         }
       }
     }

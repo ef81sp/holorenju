@@ -160,6 +160,37 @@ function calculateSummary(games: GameAnalysis[]): AnalysisSummary {
 }
 
 /**
+ * 分析結果からタグを集計
+ */
+function countTagsFromAnalyses(
+  analyses: GameAnalysis[],
+): Record<string, number> {
+  const tags: Record<string, number> = {};
+  for (const game of analyses) {
+    for (const tag of game.gameTags) {
+      tags[tag] = (tags[tag] ?? 0) + 1;
+    }
+  }
+  return tags;
+}
+
+/**
+ * 上位タグを表示
+ */
+function printTopTags(tags: Record<string, number>, limit = 10): void {
+  const sortedTags = Object.entries(tags)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit);
+
+  if (sortedTags.length > 0) {
+    console.log("  上位タグ:");
+    for (const [tag, count] of sortedTags) {
+      console.log(`    ${tag}: ${count}`);
+    }
+  }
+}
+
+/**
  * メイン処理
  */
 function main(): void {
@@ -195,25 +226,8 @@ function main(): void {
 
       if (options.verbose) {
         console.log(`  対局数: ${analyses.length}`);
-
-        // タグ集計（このファイルのみ）
-        const fileTags: Record<string, number> = {};
-        for (const game of analyses) {
-          for (const tag of game.gameTags) {
-            fileTags[tag] = (fileTags[tag] ?? 0) + 1;
-          }
-        }
-
-        const sortedTags = Object.entries(fileTags)
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, 10);
-
-        if (sortedTags.length > 0) {
-          console.log("  上位タグ:");
-          for (const [tag, count] of sortedTags) {
-            console.log(`    ${tag}: ${count}`);
-          }
-        }
+        const fileTags = countTagsFromAnalyses(analyses);
+        printTopTags(fileTags);
       }
     } catch (err) {
       console.error(`Error reading ${file}:`, err);

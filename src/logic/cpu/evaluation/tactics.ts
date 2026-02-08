@@ -23,6 +23,37 @@ import { analyzeJumpPatterns } from "./jumpPatterns";
 import { PATTERN_SCORES } from "./patternScores";
 
 /**
+ * 複数の位置に禁手と非禁手が混在するかチェック
+ * 禁手追い込みの判定に使用：片方だけが禁手なら勝ち確定
+ */
+export function hasMixedForbiddenPoints(
+  board: BoardState,
+  points: Position[],
+): boolean {
+  if (points.length === 0) {
+    return false;
+  }
+
+  let hasForbidden = false;
+  let hasNonForbidden = false;
+
+  for (const pos of points) {
+    const result = checkForbiddenMove(board, pos.row, pos.col);
+    if (result.isForbidden) {
+      hasForbidden = true;
+    } else {
+      hasNonForbidden = true;
+    }
+    // 両方見つかったら早期リターン
+    if (hasForbidden && hasNonForbidden) {
+      return true;
+    }
+  }
+
+  return hasForbidden && hasNonForbidden;
+}
+
+/**
  * 達四点の禁手追い込みをチェック
  * 片方だけが禁手なら勝ち確定（黒は禁手でない方を止めるしかないが、白は禁手側から四を作れる）
  */
@@ -212,21 +243,9 @@ export function evaluateForbiddenTrap(
         dirIndex,
         "white",
       );
-      if (straightFourPoints.length >= 1) {
-        let hasForbidden = false;
-        let hasNonForbidden = false;
-        for (const pos of straightFourPoints) {
-          const forbiddenResult = checkForbiddenMove(board, pos.row, pos.col);
-          if (forbiddenResult.isForbidden) {
-            hasForbidden = true;
-          } else {
-            hasNonForbidden = true;
-          }
-        }
-        // 片方だけが禁手なら勝ち確定（黒は禁手でない方を止めるしかないが、白は禁手側から四を作れる）
-        if (hasForbidden && hasNonForbidden) {
-          trapScore += PATTERN_SCORES.FORBIDDEN_TRAP_STRONG;
-        }
+      // 片方だけが禁手なら勝ち確定（黒は禁手でない方を止めるしかないが、白は禁手側から四を作れる）
+      if (hasMixedForbiddenPoints(board, straightFourPoints)) {
+        trapScore += PATTERN_SCORES.FORBIDDEN_TRAP_STRONG;
       }
     }
   }
@@ -380,6 +399,57 @@ export function isMiseMove(
 }
 
 /**
+ * 防御位置周辺で四を作れるかチェック
+ *
+ * @param board 盤面（防御後の状態）
+ * @param defensePos 防御位置
+ * @param color 攻撃側の色
+ * @returns 防御位置周辺に四を作れる場合true
+ */
+export function canContinueFourAfterDefense(
+  board: BoardState,
+  defensePos: Position,
+  color: "black" | "white",
+): boolean {
+  for (let searchDr = -1; searchDr <= 1; searchDr++) {
+    for (let searchDc = -1; searchDc <= 1; searchDc++) {
+      if (searchDr === 0 && searchDc === 0) {
+        continue;
+      }
+      const newRow = defensePos.row + searchDr;
+      const newCol = defensePos.col + searchDc;
+
+      if (!isValidPosition(newRow, newCol)) {
+        continue;
+      }
+      if (board[newRow]?.[newCol] !== null) {
+        continue;
+      }
+
+      // この位置に自分の石を直接置く
+      const testRow = board[newRow];
+      if (testRow) {
+        testRow[newCol] = color;
+      }
+
+      const jumpResult = analyzeJumpPatterns(board, newRow, newCol, color);
+
+      // 石を元に戻す
+      if (testRow) {
+        testRow[newCol] = null;
+      }
+
+      // 次の四を作れる（四追いの継続）
+      if (jumpResult.hasFour) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+/**
  * フクミ手判定
  * 次の手でVCF（四追い勝ち）があるかどうかをチェック
  *
@@ -458,56 +528,20 @@ export function hasFollowUpThreat(
           defenseRow[defensePos.col] = opponentColor;
         }
 
-        // 防御後、自分が四または活三を作れる位置があるかチェック
-        // 防御位置の周囲を探索
-        for (let searchDr = -1; searchDr <= 1; searchDr++) {
-          for (let searchDc = -1; searchDc <= 1; searchDc++) {
-            if (searchDr === 0 && searchDc === 0) {
-              continue;
-            }
-            const newRow = defensePos.row + searchDr;
-            const newCol = defensePos.col + searchDc;
-
-            if (!isValidPosition(newRow, newCol)) {
-              continue;
-            }
-            if (workBoard[newRow]?.[newCol] !== null) {
-              continue;
-            }
-
-            // この位置に自分の石を直接置く
-            const testRow = workBoard[newRow];
-            if (testRow) {
-              testRow[newCol] = color;
-            }
-
-            const jumpResult = analyzeJumpPatterns(
-              workBoard,
-              newRow,
-              newCol,
-              color,
-            );
-
-            // 石を元に戻す
-            if (testRow) {
-              testRow[newCol] = null;
-            }
-
-            // 次の四を作れる（四追いの継続）
-            // 活三のみでは四追いにならないので、四のみをチェック
-            if (jumpResult.hasFour) {
-              // 相手の防御も元に戻す（早期リターンのため）
-              if (defenseRow) {
-                defenseRow[defensePos.col] = null;
-              }
-              return true;
-            }
-          }
-        }
+        // 防御後、自分が四を作れる位置があるかチェック
+        const canContinue = canContinueFourAfterDefense(
+          workBoard,
+          defensePos,
+          color,
+        );
 
         // 相手の防御を元に戻す
         if (defenseRow) {
           defenseRow[defensePos.col] = null;
+        }
+
+        if (canContinue) {
+          return true;
         }
       }
     }

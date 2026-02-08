@@ -11,6 +11,82 @@ import { createEmptyBoard } from "@/logic/renjuRules";
 
 import { detectOpponentThreats, evaluatePosition } from "../evaluation";
 import { placeStonesOnBoard } from "../testUtils";
+import {
+  addUniquePositions,
+  hasDefenseThatBlocksBoth,
+} from "./threatDetection";
+
+describe("addUniquePositions", () => {
+  it("空配列に複数の位置を追加できる", () => {
+    const positions: { row: number; col: number }[] = [];
+    const newPositions = [
+      { row: 1, col: 2 },
+      { row: 3, col: 4 },
+    ];
+
+    addUniquePositions(positions, newPositions);
+
+    expect(positions).toHaveLength(2);
+    expect(positions).toContainEqual({ row: 1, col: 2 });
+    expect(positions).toContainEqual({ row: 3, col: 4 });
+  });
+
+  it("重複する位置は追加しない", () => {
+    const positions = [{ row: 1, col: 2 }];
+    const newPositions = [
+      { row: 1, col: 2 }, // 重複
+      { row: 3, col: 4 }, // 新規
+    ];
+
+    addUniquePositions(positions, newPositions);
+
+    expect(positions).toHaveLength(2);
+    expect(positions).toContainEqual({ row: 1, col: 2 });
+    expect(positions).toContainEqual({ row: 3, col: 4 });
+  });
+
+  it("空の配列を追加しても何も変わらない", () => {
+    const positions = [{ row: 1, col: 2 }];
+
+    addUniquePositions(positions, []);
+
+    expect(positions).toHaveLength(1);
+  });
+});
+
+describe("hasDefenseThatBlocksBoth", () => {
+  it("活三とミセ手に共通の防御位置がある場合はtrueを返す", () => {
+    const openThrees = [
+      { row: 7, col: 7 },
+      { row: 7, col: 3 },
+    ];
+    const mises = [
+      { row: 7, col: 7 }, // 共通
+      { row: 5, col: 5 },
+    ];
+
+    expect(hasDefenseThatBlocksBoth(openThrees, mises)).toBe(true);
+  });
+
+  it("活三とミセ手に共通の防御位置がない場合はfalseを返す", () => {
+    const openThrees = [
+      { row: 7, col: 7 },
+      { row: 7, col: 3 },
+    ];
+    const mises = [
+      { row: 5, col: 5 },
+      { row: 6, col: 6 },
+    ];
+
+    expect(hasDefenseThatBlocksBoth(openThrees, mises)).toBe(false);
+  });
+
+  it("空配列の場合はfalseを返す", () => {
+    expect(hasDefenseThatBlocksBoth([], [])).toBe(false);
+    expect(hasDefenseThatBlocksBoth([{ row: 7, col: 7 }], [])).toBe(false);
+    expect(hasDefenseThatBlocksBoth([], [{ row: 7, col: 7 }])).toBe(false);
+  });
+});
 
 describe("detectOpponentThreats - ミセ手", () => {
   it("次に四三が作れる位置を検出する", () => {

@@ -11,6 +11,102 @@ import { checkForbiddenMove, createEmptyBoard } from "@/logic/renjuRules";
 import { evaluatePosition, evaluateStonePatterns } from "../evaluation";
 import { createBoardWithStones } from "../testUtils";
 import { PATTERN_SCORES } from "./patternScores";
+import {
+  canContinueFourAfterDefense,
+  hasMixedForbiddenPoints,
+} from "./tactics";
+
+describe("hasMixedForbiddenPoints", () => {
+  it("禁手と非禁手の両方がある場合はtrueを返す", () => {
+    const board = createEmptyBoard();
+    // 三々禁になる位置と、禁手でない位置を用意
+    // 盤面の中央付近に三々を作れる配置
+    board[7][5] = "black";
+    board[7][6] = "black";
+    board[5][7] = "black";
+    board[6][7] = "black";
+
+    // (7,7) は三々禁 (横活三 + 縦活三)
+    // (7,8) は禁手でない
+    const points = [
+      { row: 7, col: 7 }, // 三々禁
+      { row: 7, col: 8 }, // 禁手でない
+    ];
+
+    const result = hasMixedForbiddenPoints(board, points);
+    expect(result).toBe(true);
+  });
+
+  it("全て禁手の場合はfalseを返す", () => {
+    const board = createEmptyBoard();
+    board[7][5] = "black";
+    board[7][6] = "black";
+    board[5][7] = "black";
+    board[6][7] = "black";
+    // 別の方向にも三を作って、複数の禁手点を用意
+    board[5][5] = "black";
+    board[6][6] = "black";
+
+    // (7,7) は三々禁
+    // (8,8) も三々禁（斜め）
+    const points = [
+      { row: 7, col: 7 }, // 三々禁
+    ];
+
+    const result = hasMixedForbiddenPoints(board, points);
+    expect(result).toBe(false);
+  });
+
+  it("全て非禁手の場合はfalseを返す", () => {
+    const board = createEmptyBoard();
+    const points = [
+      { row: 0, col: 0 },
+      { row: 0, col: 1 },
+    ];
+
+    const result = hasMixedForbiddenPoints(board, points);
+    expect(result).toBe(false);
+  });
+
+  it("空配列の場合はfalseを返す", () => {
+    const board = createEmptyBoard();
+    const result = hasMixedForbiddenPoints(board, []);
+    expect(result).toBe(false);
+  });
+});
+
+describe("canContinueFourAfterDefense", () => {
+  it("防御位置周辺に四を作れる位置がある場合はtrueを返す", () => {
+    const board = createEmptyBoard();
+    // 白の三連: (6,4), (6,5), (6,6)
+    // (6,3)で四になる
+    board[6][4] = "white";
+    board[6][5] = "white";
+    board[6][6] = "white";
+
+    // 防御位置 (7,4) の隣に (6,3) がある
+    const defensePos = { row: 7, col: 4 };
+    board[7][4] = "black";
+
+    // (6,3) は (7,4) の隣接マスで、四を作れる
+    const result = canContinueFourAfterDefense(board, defensePos, "white");
+    expect(result).toBe(true);
+  });
+
+  it("防御位置周辺に四を作れる位置がない場合はfalseを返す", () => {
+    const board = createEmptyBoard();
+    // 白の石が1つだけ
+    board[7][7] = "white";
+
+    // 黒が防御した位置
+    const defensePos = { row: 7, col: 6 };
+    board[7][6] = "black";
+
+    // 周辺に四を作れる位置がない
+    const result = canContinueFourAfterDefense(board, defensePos, "white");
+    expect(result).toBe(false);
+  });
+});
 
 describe("四三ボーナス", () => {
   it("四と活三を同時に作る手にボーナス加算", () => {
