@@ -8,12 +8,16 @@
 import { ref } from "vue";
 
 import PageHeader from "@/components/common/PageHeader.vue";
+// oxlint-disable-next-line consistent-type-imports
+import CpuRecordDialog from "./CpuRecordDialog.vue";
 import { getCharacterSpriteUrl } from "@/logic/characterSprites";
 import { useAppStore } from "@/stores/appStore";
 import type { CharacterType } from "@/types/character";
 import type { CpuDifficulty } from "@/types/cpu";
 
 const appStore = useAppStore();
+
+const recordDialogRef = ref<InstanceType<typeof CpuRecordDialog> | null>(null);
 
 // 選択状態
 const selectedDifficulty = ref<CpuDifficulty>("medium");
@@ -126,15 +130,25 @@ const handleBack = (): void => {
           </div>
         </fieldset>
 
-        <!-- 開始ボタン -->
-        <button
-          class="start-button"
-          @click="handleStartGame"
-        >
-          対戦開始
-        </button>
+        <!-- ボタン群 -->
+        <div class="action-buttons">
+          <button
+            class="start-button"
+            @click="handleStartGame"
+          >
+            対戦開始
+          </button>
+          <button
+            class="record-button"
+            @click="recordDialogRef?.showModal()"
+          >
+            対戦記録
+          </button>
+        </div>
       </div>
     </div>
+
+    <CpuRecordDialog ref="recordDialogRef" />
   </div>
 </template>
 
@@ -303,7 +317,13 @@ const handleBack = (): void => {
   color: var(--color-text-secondary);
 }
 
+.action-buttons {
+  display: flex;
+  gap: var(--size-8);
+}
+
 .start-button {
+  flex: 1;
   padding: var(--size-12) var(--size-24);
   background: var(--gradient-button-primary);
   border: none;
@@ -322,6 +342,24 @@ const handleBack = (): void => {
 
 .start-button:active {
   transform: translateY(0);
+}
+
+.record-button {
+  padding: var(--size-12) var(--size-16);
+  background: var(--color-background-secondary);
+  border: var(--size-2) solid var(--color-border-light);
+  border-radius: var(--size-10);
+  font-size: var(--size-14);
+  font-weight: 500;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.record-button:hover {
+  transform: translateY(calc(-1 * var(--size-2)));
+  border-color: var(--color-primary);
+  box-shadow: 0 var(--size-4) var(--size-12) rgba(0, 0, 0, 0.15);
 }
 
 @keyframes focus-pulse {

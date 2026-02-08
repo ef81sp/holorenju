@@ -17,7 +17,6 @@ import DialogText from "@/components/common/DialogText.vue";
 import CharacterSprite from "@/components/character/CharacterSprite.vue";
 import CpuGameStatus from "./CpuGameStatus.vue";
 import CpuCharacterPanel from "./CpuCharacterPanel.vue";
-import CpuRecordDialog from "./CpuRecordDialog.vue";
 import CpuDebugInfo from "./CpuDebugInfo.vue";
 import { useCpuPlayer } from "./composables/useCpuPlayer";
 import { useCpuDialogue } from "./composables/useCpuDialogue";
@@ -69,9 +68,6 @@ const displayMarks = computed<Mark[]>(() => {
 
   return marks;
 });
-
-// 対戦記録ダイアログ
-const recordDialogRef = ref<InstanceType<typeof CpuRecordDialog> | null>(null);
 
 // レイアウトコンポーネントの参照
 const layoutRef = ref<InstanceType<typeof GamePlayerLayout> | null>(null);
@@ -358,12 +354,6 @@ const gameEndMessage = computed(() => {
           <div class="game-controls">
             <button
               class="control-button"
-              @click="recordDialogRef?.showModal()"
-            >
-              対戦記録
-            </button>
-            <button
-              class="control-button"
               :disabled="cpuGameStore.moveCount < 2 || isThinking"
               @click="handleUndo"
             >
@@ -470,9 +460,6 @@ const gameEndMessage = computed(() => {
       cancel-text="続ける"
       @confirm="handleConfirmBack"
     />
-
-    <!-- 対戦記録ダイアログ -->
-    <CpuRecordDialog ref="recordDialogRef" />
   </div>
 </template>
 
