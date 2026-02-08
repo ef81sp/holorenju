@@ -18,6 +18,7 @@ import { DIFFICULTY_PARAMS, type ScoreBreakdown } from "@/types/cpu";
 
 import type { MoveScoreEntry } from "./search/results";
 
+import { countStones } from "./core/boardUtils";
 import {
   evaluatePositionWithBreakdown,
   evaluateBoardWithBreakdown,
@@ -28,6 +29,7 @@ import { findVCFSequence, type VCFSearchOptions } from "./search/vcf";
 import {
   findVCTSequence,
   isVCTFirstMove,
+  VCT_STONE_THRESHOLD,
   type VCTSearchOptions,
 } from "./search/vct";
 
@@ -66,9 +68,12 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
     const hardParams = DIFFICULTY_PARAMS.hard;
 
     // 拡張VCF/VCT探索（高速パス）
+    // VCFは高速なので常に実行。VCTは石数が閾値以上の終盤のみ実行。
     const forcedWin =
       findVCFSequence(board, color, REVIEW_VCF_OPTIONS) ??
-      findVCTSequence(board, color, REVIEW_VCT_OPTIONS);
+      (countStones(board) >= VCT_STONE_THRESHOLD
+        ? findVCTSequence(board, color, REVIEW_VCT_OPTIONS)
+        : null);
 
     // 通常探索（候補手比較データ用）
     const result = findBestMoveIterativeWithTT(
@@ -169,18 +174,14 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
       });
 
       // minimaxの候補手をマージ
+      // forcedWin.firstMoveがFIVEスコアの最善手として確定済みのため、
+      // 他候補のVCTチェックはランキングに影響しないため省略
       const minimaxCandidates = (result.candidates ?? [])
         .slice(0, 5)
         .filter(
           (e) => !(e.move.row === bestMove.row && e.move.col === bestMove.col),
         )
-        .map((entry) => {
-          const candidate = buildCandidate(entry);
-          if (isVCTFirstMove(board, entry.move, color, REVIEW_VCT_OPTIONS)) {
-            candidate.searchScore = PATTERN_SCORES.FIVE;
-          }
-          return candidate;
-        });
+        .map(buildCandidate);
       candidates.push(...minimaxCandidates);
 
       // 実際の手が候補に入っていなければ追加

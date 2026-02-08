@@ -375,9 +375,10 @@ function findVCTMoveRecursive(
     return null;
   }
 
-  // VCFチェック
-  if (hasVCF(board, color, 0, limiter, options?.vcfOptions)) {
-    return findVCFMove(board, color, options?.vcfOptions);
+  // VCFチェック（hasVCF→findVCFMoveの二重探索を統合）
+  const vcfMove = findVCFMove(board, color, options?.vcfOptions);
+  if (vcfMove) {
+    return vcfMove;
   }
 
   const threatMoves = findThreatMoves(board, color);
