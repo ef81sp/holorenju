@@ -392,37 +392,35 @@ export function runHeadlessGame(
           ? whiteThreats.openFours
           : whiteThreats.fours;
 
-      if (defensePosArray.length > 0) {
-        const defensePos = defensePosArray[0];
-        if (defensePos) {
-          const forbiddenResult = checkForbiddenMove(
-            board,
-            defensePos.row,
-            defensePos.col,
+      const [defensePos] = defensePosArray;
+      if (defensePos) {
+        const forbiddenResult = checkForbiddenMove(
+          board,
+          defensePos.row,
+          defensePos.col,
+        );
+        if (forbiddenResult.isForbidden) {
+          log(
+            `${config.id} wins by forbidden trap! Defense position (${defensePos.row}, ${defensePos.col}) is ${forbiddenResult.type}`,
           );
-          if (forbiddenResult.isForbidden) {
-            log(
-              `${config.id} wins by forbidden trap! Defense position (${defensePos.row}, ${defensePos.col}) is ${forbiddenResult.type}`,
-            );
-            // 最終手にforcedForbidden: trueを追加
-            const lastMove = moveHistory[moveHistory.length - 1];
-            const updatedMoveHistory = lastMove
-              ? [
-                  ...moveHistory.slice(0, -1),
-                  { ...lastMove, forcedForbidden: true },
-                ]
-              : moveHistory;
-            return {
-              playerA: playerA.id,
-              playerB: playerB.id,
-              winner: "B", // 白（後手）の勝ち
-              reason: "forbidden",
-              moves: moveCount,
-              duration: performance.now() - startTime,
-              moveHistory: updatedMoveHistory,
-              isABlack: true,
-            };
-          }
+          // 最終手にforcedForbidden: trueを追加
+          const lastMove = moveHistory[moveHistory.length - 1];
+          const updatedMoveHistory = lastMove
+            ? [
+                ...moveHistory.slice(0, -1),
+                { ...lastMove, forcedForbidden: true },
+              ]
+            : moveHistory;
+          return {
+            playerA: playerA.id,
+            playerB: playerB.id,
+            winner: "B", // 白（後手）の勝ち
+            reason: "forbidden",
+            moves: moveCount,
+            duration: performance.now() - startTime,
+            moveHistory: updatedMoveHistory,
+            isABlack: true,
+          };
         }
       }
     }

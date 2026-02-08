@@ -65,10 +65,10 @@ function parseArgs(): CliOptions {
     } else if (arg.startsWith("--moves=")) {
       const range = arg.slice("--moves=".length);
       const [min, max] = range.split("-").map(Number);
-      if (!isNaN(min!)) {
+      if (min !== undefined && !isNaN(min)) {
         options.filter.movesMin = min;
       }
-      if (!isNaN(max!)) {
+      if (max !== undefined && !isNaN(max)) {
         options.filter.movesMax = max;
       }
     } else if (arg.startsWith("--winner=")) {
@@ -130,9 +130,8 @@ function getLatestAnalysisFile(inputDir: string): string | null {
     .filter((f) => f.startsWith("analysis-") && f.endsWith(".json"))
     .sort();
 
-  return files.length > 0
-    ? path.join(inputDir, files[files.length - 1]!)
-    : null;
+  const lastFile = files[files.length - 1];
+  return lastFile ? path.join(inputDir, lastFile) : null;
 }
 
 /**
@@ -185,6 +184,26 @@ function matchesFilter(game: GameAnalysis, filter: BrowseFilter): boolean {
   return true;
 }
 
+/** 勝者文字列を取得 */
+function getWinnerString(winner: "A" | "B" | "draw"): string {
+  switch (winner) {
+    case "A":
+      return "B wins";
+    case "B":
+      return "W wins";
+    case "draw":
+    default:
+      return "draw";
+  }
+}
+
+/** スリープ用ユーティリティ */
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
 /**
  * 対局一覧を表示
  */
@@ -197,9 +216,11 @@ function showGameList(games: GameAnalysis[]): void {
   console.log(`Found ${games.length} games matching criteria:\n`);
 
   for (let i = 0; i < games.length; i++) {
-    const game = games[i]!;
-    const winnerStr =
-      game.winner === "A" ? "B wins" : game.winner === "B" ? "W wins" : "draw";
+    const game = games[i];
+    if (!game) {
+      continue;
+    }
+    const winnerStr = getWinnerString(game.winner);
     const tagsStr =
       game.gameTags.length > 0
         ? `[${game.gameTags.slice(0, 5).join(", ")}${game.gameTags.length > 5 ? "..." : ""}]`
@@ -216,148 +237,170 @@ function showGameList(games: GameAnalysis[]): void {
 /**
  * インタラクティブモードのメインループ
  */
-async function interactiveMode(
+function interactiveMode(
   games: GameAnalysis[],
-  startGame: number = 1,
-  startMove: number = 1,
+  startGame = 1,
+  startMove = 1,
 ): Promise<void> {
   if (games.length === 0) {
     console.log("条件に一致する対局がありません。");
-    return;
+    return Promise.resolve();
   }
 
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
-
-  let currentGameIndex = Math.max(0, Math.min(startGame - 1, games.length - 1));
-  let currentMoveIndex = Math.max(0, startMove - 1);
-
-  const showCurrentState = (): void => {
-    const game = games[currentGameIndex]!;
-    currentMoveIndex = Math.max(
-      0,
-      Math.min(currentMoveIndex, game.moves.length - 1),
-    );
-    const move = game.moves[currentMoveIndex]!;
-
-    console.clear();
-
-    // ヘッダー
-    console.log(
-      formatGameHeader(
-        currentGameIndex + 1,
-        game.matchup,
-        game.winner,
-        game.totalMoves,
-        game.reason,
-        game.gameTags,
-      ),
-    );
-    console.log();
-
-    // 手の情報
-    console.log(formatMoveInfo(move, game.totalMoves));
-    console.log();
-
-    // 盤面
-    console.log(gameRecordToAscii(game.moves, currentMoveIndex + 1));
-    console.log();
-
-    // コマンドヘルプ
-    console.log(
-      "[n]ext [p]rev [j]ump N [g]ame N [c]opy [l]ist [f]irst [L]ast [q]uit",
-    );
-  };
-
-  const prompt = (): void => {
-    rl.question("> ", async (input) => {
-      const cmd = input.trim().toLowerCase();
-
-      if (cmd === "q" || cmd === "quit") {
-        rl.close();
-        return;
-      }
-
-      if (cmd === "n" || cmd === "next" || cmd === "") {
-        // 次の手
-        const game = games[currentGameIndex]!;
-        if (currentMoveIndex < game.moves.length - 1) {
-          currentMoveIndex++;
-        } else if (currentGameIndex < games.length - 1) {
-          // 次の対局へ
-          currentGameIndex++;
-          currentMoveIndex = 0;
-        }
-      } else if (cmd === "p" || cmd === "prev") {
-        // 前の手
-        if (currentMoveIndex > 0) {
-          currentMoveIndex--;
-        } else if (currentGameIndex > 0) {
-          // 前の対局の最後へ
-          currentGameIndex--;
-          currentMoveIndex = games[currentGameIndex]!.moves.length - 1;
-        }
-      } else if (cmd.startsWith("j ") || cmd.startsWith("jump ")) {
-        // 指定手へジャンプ
-        const moveNum = parseInt(cmd.split(" ")[1] ?? "", 10);
-        if (!isNaN(moveNum) && moveNum >= 1) {
-          currentMoveIndex = Math.min(
-            moveNum - 1,
-            games[currentGameIndex]!.moves.length - 1,
-          );
-        }
-      } else if (cmd.startsWith("g ") || cmd.startsWith("game ")) {
-        // 指定対局へ
-        const gameNum = parseInt(cmd.split(" ")[1] ?? "", 10);
-        if (!isNaN(gameNum) && gameNum >= 1 && gameNum <= games.length) {
-          currentGameIndex = gameNum - 1;
-          currentMoveIndex = 0;
-        }
-      } else if (cmd === "c" || cmd === "copy") {
-        // クリップボードへコピー
-        const game = games[currentGameIndex]!;
-        const editorFormat = gameRecordToEditorFormat(
-          game.moves,
-          currentMoveIndex + 1,
-        );
-        const success = await copyToClipboard(editorFormat);
-        if (success) {
-          console.log("盤面をクリップボードにコピーしました");
-        } else {
-          console.log("クリップボードへのコピーに失敗しました");
-        }
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-      } else if (cmd === "l" || cmd === "list") {
-        // 対局リスト
-        console.clear();
-        showGameList(games);
-        rl.question("\nPress Enter to continue...", () => {
-          showCurrentState();
-          prompt();
-        });
-        return;
-      } else if (cmd === "f" || cmd === "first") {
-        // 最初の手へ
-        currentMoveIndex = 0;
-      } else if (cmd === "last" || cmd === "L") {
-        // 最後の手へ
-        currentMoveIndex = games[currentGameIndex]!.moves.length - 1;
-      } else if (cmd === "r" || cmd === "record") {
-        // 棋譜表示
-        const game = games[currentGameIndex]!;
-        console.log("\n棋譜:", game.gameRecord);
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-      }
-
-      showCurrentState();
-      prompt();
+  return new Promise((resolve) => {
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
     });
-  };
 
-  showCurrentState();
-  prompt();
+    rl.on("close", () => {
+      resolve();
+    });
+
+    let currentGameIndex = Math.max(
+      0,
+      Math.min(startGame - 1, games.length - 1),
+    );
+    let currentMoveIndex = Math.max(0, startMove - 1);
+
+    const showCurrentState = (): void => {
+      const game = games[currentGameIndex];
+      if (!game) {
+        return;
+      }
+      currentMoveIndex = Math.max(
+        0,
+        Math.min(currentMoveIndex, game.moves.length - 1),
+      );
+      const move = game.moves[currentMoveIndex];
+      if (!move) {
+        return;
+      }
+
+      console.clear();
+
+      // ヘッダー
+      console.log(
+        formatGameHeader(
+          currentGameIndex + 1,
+          game.matchup,
+          game.winner,
+          game.totalMoves,
+          game.reason,
+          game.gameTags,
+        ),
+      );
+      console.log();
+
+      // 手の情報
+      console.log(formatMoveInfo(move, game.totalMoves));
+      console.log();
+
+      // 盤面
+      console.log(gameRecordToAscii(game.moves, currentMoveIndex + 1));
+      console.log();
+
+      // コマンドヘルプ
+      console.log(
+        "[n]ext [p]rev [j]ump N [g]ame N [c]opy [l]ist [f]irst [L]ast [q]uit",
+      );
+    };
+
+    const prompt = (): void => {
+      rl.question("> ", async (input) => {
+        const cmd = input.trim().toLowerCase();
+
+        if (cmd === "q" || cmd === "quit") {
+          rl.close();
+          return;
+        }
+
+        if (cmd === "n" || cmd === "next" || cmd === "") {
+          // 次の手
+          const game = games[currentGameIndex];
+          if (game && currentMoveIndex < game.moves.length - 1) {
+            currentMoveIndex++;
+          } else if (currentGameIndex < games.length - 1) {
+            // 次の対局へ
+            currentGameIndex++;
+            currentMoveIndex = 0;
+          }
+        } else if (cmd === "p" || cmd === "prev") {
+          // 前の手
+          if (currentMoveIndex > 0) {
+            currentMoveIndex--;
+          } else if (currentGameIndex > 0) {
+            // 前の対局の最後へ
+            currentGameIndex--;
+            const prevGame = games[currentGameIndex];
+            currentMoveIndex = prevGame ? prevGame.moves.length - 1 : 0;
+          }
+        } else if (cmd.startsWith("j ") || cmd.startsWith("jump ")) {
+          // 指定手へジャンプ
+          const moveNum = parseInt(cmd.split(" ")[1] ?? "", 10);
+          const currentGame = games[currentGameIndex];
+          if (!isNaN(moveNum) && moveNum >= 1 && currentGame) {
+            currentMoveIndex = Math.min(
+              moveNum - 1,
+              currentGame.moves.length - 1,
+            );
+          }
+        } else if (cmd.startsWith("g ") || cmd.startsWith("game ")) {
+          // 指定対局へ
+          const gameNum = parseInt(cmd.split(" ")[1] ?? "", 10);
+          if (!isNaN(gameNum) && gameNum >= 1 && gameNum <= games.length) {
+            currentGameIndex = gameNum - 1;
+            currentMoveIndex = 0;
+          }
+        } else if (cmd === "c" || cmd === "copy") {
+          // クリップボードへコピー
+          const game = games[currentGameIndex];
+          if (game) {
+            const editorFormat = gameRecordToEditorFormat(
+              game.moves,
+              currentMoveIndex + 1,
+            );
+            const success = await copyToClipboard(editorFormat);
+            if (success) {
+              console.log("盤面をクリップボードにコピーしました");
+            } else {
+              console.log("クリップボードへのコピーに失敗しました");
+            }
+          }
+          await sleep(1000);
+        } else if (cmd === "l" || cmd === "list") {
+          // 対局リスト
+          console.clear();
+          showGameList(games);
+          rl.question("\nPress Enter to continue...", () => {
+            showCurrentState();
+            prompt();
+          });
+          return;
+        } else if (cmd === "f" || cmd === "first") {
+          // 最初の手へ
+          currentMoveIndex = 0;
+        } else if (cmd === "last" || cmd === "L") {
+          // 最後の手へ
+          const currentGame = games[currentGameIndex];
+          currentMoveIndex = currentGame ? currentGame.moves.length - 1 : 0;
+        } else if (cmd === "r" || cmd === "record") {
+          // 棋譜表示
+          const game = games[currentGameIndex];
+          if (game) {
+            console.log("\n棋譜:", game.gameRecord);
+          }
+          await sleep(2000);
+        }
+
+        showCurrentState();
+        prompt();
+      });
+    };
+
+    showCurrentState();
+    prompt();
+  });
 }
 
 /**

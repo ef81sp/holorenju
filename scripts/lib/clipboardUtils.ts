@@ -7,7 +7,7 @@ import { spawn } from "node:child_process";
 /**
  * テキストをクリップボードにコピー（macOS）
  */
-export async function copyToClipboard(text: string): Promise<boolean> {
+export function copyToClipboard(text: string): Promise<boolean> {
   return new Promise((resolve) => {
     const proc = spawn("pbcopy", []);
 

@@ -76,7 +76,8 @@ const dialogueErrorMap = computed(() =>
 const baseId = useId();
 
 // 各ダイアログ用のIDを生成
-const getTextareaId = (index: number) => `dialogue-text-${baseId}-${index}`;
+const getTextareaId = (index: number): string =>
+  `dialogue-text-${baseId}-${index}`;
 
 const openEmotionPicker = (index: number): void => {
   selectedDialogueIndex.value = index;

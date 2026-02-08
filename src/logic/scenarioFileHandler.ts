@@ -128,6 +128,9 @@ export function countDisplayCharacters(nodes: TextNode[]): number {
           count += countDisplayCharacters(item);
         }
         break;
+      default:
+        // 未知のノードタイプは無視
+        break;
     }
   }
   return count;
@@ -160,13 +163,7 @@ export function countDisplayCharactersPerLine(nodes: TextNode[]): number[] {
 export function validateDialogueLength(nodes: TextNode[]): string | null {
   const hasLineBreak = nodes.some((n) => n.type === "lineBreak");
 
-  if (!hasLineBreak) {
-    // 改行なし: 40文字まで
-    const count = countDisplayCharacters(nodes);
-    if (count > DIALOGUE_MAX_LENGTH_NO_NEWLINE) {
-      return `ダイアログは${DIALOGUE_MAX_LENGTH_NO_NEWLINE}文字以内にしてください（現在${count}文字）`;
-    }
-  } else {
+  if (hasLineBreak) {
     // 改行あり: 1行あたり20文字 × 最大2行
     const lineCounts = countDisplayCharactersPerLine(nodes);
 
@@ -180,8 +177,14 @@ export function validateDialogueLength(nodes: TextNode[]): string | null {
         return `ダイアログの各行は${DIALOGUE_MAX_LENGTH_PER_LINE}文字以内にしてください（${i + 1}行目: ${lineCount}文字）`;
       }
     }
+    return null;
   }
 
+  // 改行なし: 40文字まで
+  const count = countDisplayCharacters(nodes);
+  if (count > DIALOGUE_MAX_LENGTH_NO_NEWLINE) {
+    return `ダイアログは${DIALOGUE_MAX_LENGTH_NO_NEWLINE}文字以内にしてください（現在${count}文字）`;
+  }
   return null;
 }
 

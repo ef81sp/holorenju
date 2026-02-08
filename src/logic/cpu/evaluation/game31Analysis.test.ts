@@ -7,11 +7,37 @@
 
 import { describe, expect, it } from "vitest";
 
+import type { StoneColor } from "@/types/game";
+
 import { createBoardFromRecord, formatMove } from "@/logic/gameRecordParser";
 import { checkForbiddenMove, copyBoard } from "@/logic/renjuRules";
 
 import { analyzeDirection } from "./directionAnalysis";
 import { detectOpponentThreats } from "./threatDetection";
+
+/** セルを表示用文字に変換 */
+function cellToChar(cell: StoneColor | null | undefined): string {
+  switch (cell) {
+    case "black":
+      return "●";
+    case "white":
+      return "○";
+    default:
+      return "・";
+  }
+}
+
+/** セルを日本語表示に変換 */
+function cellToJa(cell: StoneColor | null | undefined): string {
+  switch (cell) {
+    case "black":
+      return "黒";
+    case "white":
+      return "白";
+    default:
+      return "空";
+  }
+}
 
 describe("Game31 禁手負け分析", () => {
   it("12手目後の盤面と脅威検出", () => {
@@ -24,7 +50,7 @@ describe("Game31 禁手負け分析", () => {
       let line = `${String(15 - row).padStart(2)}: `;
       for (let col = 0; col < 15; col++) {
         const cell = board12[row]?.[col];
-        line += cell === "black" ? "●" : cell === "white" ? "○" : "・";
+        line += cellToChar(cell);
       }
       console.log(line);
     }
@@ -61,7 +87,7 @@ describe("Game31 禁手負け分析", () => {
       let line = `${String(15 - row).padStart(2)}: `;
       for (let col = 0; col < 15; col++) {
         const cell = board13[row]?.[col];
-        line += cell === "black" ? "●" : cell === "white" ? "○" : "・";
+        line += cellToChar(cell);
       }
       console.log(line);
     }
@@ -130,7 +156,7 @@ describe("Game31 禁手負け分析", () => {
       let line = `${String(15 - row).padStart(2)}: `;
       for (let col = 0; col < 15; col++) {
         const cell = board[row]?.[col];
-        line += cell === "black" ? "●" : cell === "white" ? "○" : "・";
+        line += cellToChar(cell);
       }
       console.log(line);
     }
@@ -144,7 +170,10 @@ describe("Game31 禁手負け分析", () => {
 
     // I9に黒を置いた場合の各方向のパターンを確認
     const testBoard = copyBoard(board);
-    testBoard[6]![8] = "black";
+    const [, , , , , , row6] = testBoard;
+    if (row6) {
+      row6[8] = "black";
+    }
 
     console.log("\n=== I9に黒を置いた場合の各方向のパターン ===");
     const directions = [
@@ -166,7 +195,7 @@ describe("Game31 禁手負け分析", () => {
       let line = `${String(15 - row).padStart(2)}: `;
       for (let col = 0; col < 15; col++) {
         const cell = testBoard[row]?.[col];
-        line += cell === "black" ? "●" : cell === "white" ? "○" : "・";
+        line += cellToChar(cell);
       }
       console.log(line);
     }
@@ -177,9 +206,7 @@ describe("Game31 禁手負け分析", () => {
     for (let row = 4; row <= 10; row++) {
       const cell = testBoard[row]?.[8];
       const coord = `I${15 - row}`;
-      console.log(
-        `  ${coord} (row=${row}): ${cell === "black" ? "黒" : cell === "white" ? "白" : "空"}`,
-      );
+      console.log(`  ${coord} (row=${row}): ${cellToJa(cell)}`);
     }
 
     // 黒の有効な手を探す
@@ -192,13 +219,13 @@ describe("Game31 禁手負け分析", () => {
           continue;
         }
         const result = checkForbiddenMove(board, row, col);
-        if (!result.isForbidden) {
-          validMoves.push(formatMove({ row, col }));
-        } else {
+        if (result.isForbidden) {
           forbiddenMoves.push({
             move: formatMove({ row, col }),
             type: result.type ?? "unknown",
           });
+        } else {
+          validMoves.push(formatMove({ row, col }));
         }
       }
     }
@@ -224,13 +251,16 @@ describe("Game31 禁手負け分析", () => {
     // 防御位置（I9）が禁手であること
     const [defensePos] = whiteThreats.fours;
     expect(defensePos).toBeDefined();
-    expect(defensePos!.row).toBe(6); // I9 = row 6
-    expect(defensePos!.col).toBe(8); // I9 = col 8
+    if (!defensePos) {
+      throw new Error("defensePos should be defined");
+    }
+    expect(defensePos.row).toBe(6); // I9 = row 6
+    expect(defensePos.col).toBe(8); // I9 = col 8
 
     const forbiddenResult = checkForbiddenMove(
       board,
-      defensePos!.row,
-      defensePos!.col,
+      defensePos.row,
+      defensePos.col,
     );
     expect(forbiddenResult.isForbidden).toBe(true);
     expect(forbiddenResult.type).toBe("double-three");

@@ -7,6 +7,21 @@ import type { MoveAnalysis } from "../types/analysis.ts";
 
 import { createEmptyBoard } from "../../src/logic/renjuRules.ts";
 
+/** セル文字を取得 */
+function getCellChar(
+  stone: "black" | "white" | null | undefined,
+  isHighlight: boolean,
+): string {
+  switch (stone) {
+    case "black":
+      return isHighlight ? "X" : "x";
+    case "white":
+      return isHighlight ? "O" : "o";
+    default:
+      return isHighlight ? "*" : ".";
+  }
+}
+
 /** 盤面表示オプション */
 export interface DisplayOptions {
   /** 現在の手をハイライト */
@@ -33,7 +48,7 @@ export function boardToAscii(
 
   // ヘッダー行（列座標）
   if (showCoordinates) {
-    const header = "   " + "ABCDEFGHIJKLMNO".split("").join(" ");
+    const header = `   ${"ABCDEFGHIJKLMNO".split("").join(" ")}`;
     lines.push(header);
   }
 
@@ -41,7 +56,7 @@ export function boardToAscii(
   for (let row = 0; row < 15; row++) {
     const rowNum = 15 - row; // 棋譜表記では下から上
     const rowLabel = showCoordinates
-      ? String(rowNum).padStart(2, " ") + " "
+      ? `${String(rowNum).padStart(2, " ")} `
       : "";
 
     const cells: string[] = [];
@@ -50,14 +65,7 @@ export function boardToAscii(
       const isHighlight =
         highlightMove && highlightMove.row === row && highlightMove.col === col;
 
-      let cell: string;
-      if (stone === "black") {
-        cell = isHighlight ? "X" : "x";
-      } else if (stone === "white") {
-        cell = isHighlight ? "O" : "o";
-      } else {
-        cell = isHighlight ? "*" : ".";
-      }
+      const cell = getCellChar(stone, isHighlight);
 
       cells.push(cell);
     }
@@ -160,6 +168,19 @@ export function gameRecordToEditorFormat(
 /**
  * 対局情報のヘッダーを生成
  */
+/** 勝者文字列を取得 */
+function getWinnerStr(winner: "A" | "B" | "draw"): string {
+  switch (winner) {
+    case "A":
+      return "A wins";
+    case "B":
+      return "B wins";
+    case "draw":
+    default:
+      return "draw";
+  }
+}
+
 export function formatGameHeader(
   gameIndex: number,
   matchup: string,
@@ -168,8 +189,7 @@ export function formatGameHeader(
   reason: string,
   gameTags: string[],
 ): string {
-  const winnerStr =
-    winner === "A" ? "A wins" : winner === "B" ? "B wins" : "draw";
+  const winnerStr = getWinnerStr(winner);
 
   const lines = [
     `=== Game #${gameIndex}: ${matchup} (${winnerStr}, ${totalMoves}手, ${reason}) ===`,

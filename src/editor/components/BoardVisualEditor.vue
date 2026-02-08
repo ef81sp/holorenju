@@ -67,20 +67,20 @@ const parseBoardText = (text: string): string[] | null => {
     .filter((line) => line.length > 0);
 
   if (lines.length !== 15) {
-    alert(`盤面は15行である必要があります。現在: ${lines.length}行`);
+    console.warn(`盤面は15行である必要があります。現在: ${lines.length}行`);
     return null;
   }
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     if (!line || line.length !== 15) {
-      alert(
+      console.warn(
         `行${i + 1}: 各行は15文字である必要があります。現在: ${line?.length ?? 0}文字`,
       );
       return null;
     }
     if (!/^[-xo]{15}$/.test(line)) {
-      alert(
+      console.warn(
         `行${i + 1}: 無効な文字が含まれています。-(未指定), x(黒), o(白) のみ使用可能です。`,
       );
       return null;
