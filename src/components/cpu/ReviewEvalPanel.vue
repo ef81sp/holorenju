@@ -87,6 +87,20 @@ const qualityLabel = computed(() => {
   return getQualityLabel(props.evaluation.quality);
 });
 
+/** 必勝手順インジケーターのテキスト */
+const forcedWinLabel = computed(() => {
+  switch (props.evaluation?.forcedWinType) {
+    case "vcf":
+      return "四追";
+    case "vct":
+      return "追詰";
+    case "forbidden-trap":
+      return "禁手追込";
+    default:
+      return null;
+  }
+});
+
 /** ヘッダの座標表示 */
 const moveCoord = computed(() => {
   if (props.evaluation) {
@@ -400,6 +414,12 @@ function isPlayed(candidate: { position: Position }): boolean {
         >
           {{ qualityLabel }}
         </span>
+        <span
+          v-if="forcedWinLabel"
+          class="forced-win-badge"
+        >
+          {{ forcedWinLabel }}
+        </span>
         <button
           type="button"
           class="help-button"
@@ -706,6 +726,15 @@ function isPlayed(candidate: { position: Position }): boolean {
   color: white;
   font-size: var(--size-10);
   font-weight: 500;
+}
+
+.forced-win-badge {
+  padding: var(--size-1) var(--size-6);
+  border-radius: var(--size-4);
+  color: white;
+  font-size: var(--size-10);
+  font-weight: 500;
+  background-color: hsl(270, 50%, 55%);
 }
 
 /* スコア情報（2×2グリッド） */

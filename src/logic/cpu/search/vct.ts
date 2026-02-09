@@ -61,6 +61,8 @@ export interface VCTSequenceResult {
   firstMove: Position;
   /** 手順 [攻撃1, 防御1, 攻撃2, ..., 攻撃N] */
   sequence: Position[];
+  /** 禁手追い込みによる勝ちかどうか */
+  isForbiddenTrap: boolean;
 }
 
 /**
@@ -493,10 +495,15 @@ export function findVCTSequence(
   // VCFが先に成立する場合はVCF手順を返す
   const vcfSeq = findVCFSequence(board, color, options?.vcfOptions);
   if (vcfSeq) {
-    return { firstMove: vcfSeq.firstMove, sequence: vcfSeq.sequence };
+    return {
+      firstMove: vcfSeq.firstMove,
+      sequence: vcfSeq.sequence,
+      isForbiddenTrap: vcfSeq.isForbiddenTrap,
+    };
   }
 
   const sequence: Position[] = [];
+  const context = { isForbiddenTrap: false };
   const found = findVCTSequenceRecursive(
     board,
     color,
@@ -505,12 +512,17 @@ export function findVCTSequence(
     limiter,
     sequence,
     options,
+    context,
   );
 
   if (!found || !sequence[0]) {
     return null;
   }
-  return { firstMove: sequence[0], sequence };
+  return {
+    firstMove: sequence[0],
+    sequence,
+    isForbiddenTrap: context.isForbiddenTrap,
+  };
 }
 
 /**
@@ -523,7 +535,8 @@ function findVCTSequenceRecursive(
   maxDepth: number,
   limiter: VCFTimeLimiter,
   sequence: Position[],
-  options?: VCTSearchOptions,
+  options: VCTSearchOptions | undefined,
+  context: { isForbiddenTrap: boolean },
 ): boolean {
   if (depth >= maxDepth) {
     return false;
@@ -537,6 +550,9 @@ function findVCTSequenceRecursive(
   const vcfSeq = findVCFSequence(board, color, options?.vcfOptions);
   if (vcfSeq) {
     sequence.push(...vcfSeq.sequence);
+    if (vcfSeq.isForbiddenTrap) {
+      context.isForbiddenTrap = true;
+    }
     return true;
   }
 
@@ -604,6 +620,7 @@ function findVCTSequenceRecursive(
           limiter,
           subSequence,
           options,
+          context,
         );
         if (!found) {
           allDefenseLeadsToVCT = false;

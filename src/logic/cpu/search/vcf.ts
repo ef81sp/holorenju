@@ -56,6 +56,15 @@ export interface VCFSequenceResult {
   firstMove: Position;
   /** 手順 [攻撃1, 防御1, 攻撃2, 防御2, ..., 攻撃N] */
   sequence: Position[];
+  /** 禁手追い込みによる勝ちかどうか */
+  isForbiddenTrap: boolean;
+}
+
+/**
+ * VCF手順探索の内部コンテキスト
+ */
+interface VCFSearchContext {
+  isForbiddenTrap: boolean;
 }
 
 /**
@@ -493,6 +502,7 @@ export function findVCFSequence(
     timeLimit: timeLimitMs,
   };
   const sequence: Position[] = [];
+  const context: VCFSearchContext = { isForbiddenTrap: false };
   const result = findVCFSequenceRecursive(
     board,
     color,
@@ -500,11 +510,16 @@ export function findVCFSequence(
     limiter,
     sequence,
     options,
+    context,
   );
   if (!result || !sequence[0]) {
     return null;
   }
-  return { firstMove: sequence[0], sequence };
+  return {
+    firstMove: sequence[0],
+    sequence,
+    isForbiddenTrap: context.isForbiddenTrap,
+  };
 }
 
 /**
@@ -520,7 +535,8 @@ function findVCFSequenceRecursive(
   depth: number,
   limiter: VCFTimeLimiter,
   sequence: Position[],
-  options?: VCFSearchOptions,
+  options: VCFSearchOptions | undefined,
+  context: VCFSearchContext,
 ): boolean {
   const maxDepth = options?.maxDepth ?? VCF_MAX_DEPTH;
 
@@ -562,7 +578,7 @@ function findVCFSequenceRecursive(
       return true;
     }
 
-    // 白番: 黒の防御位置が禁手 → 即勝ち
+    // 白番: 黒の防御位置が禁手 → 即勝ち（禁手追い込み）
     if (color === "white") {
       const forbiddenResult = checkForbiddenMove(
         board,
@@ -571,6 +587,7 @@ function findVCFSequenceRecursive(
       );
       if (forbiddenResult.isForbidden) {
         sequence.push(move);
+        context.isForbiddenTrap = true;
         return true;
       }
     }
@@ -602,6 +619,7 @@ function findVCFSequenceRecursive(
       limiter,
       sequence,
       options,
+      context,
     );
 
     // Undo - 逆順

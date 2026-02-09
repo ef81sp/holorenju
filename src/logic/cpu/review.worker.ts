@@ -69,11 +69,20 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
 
     // 拡張VCF/VCT探索（高速パス）
     // VCFは高速なので常に実行。VCTは石数が閾値以上の終盤のみ実行。
+    const vcfResult = findVCFSequence(board, color, REVIEW_VCF_OPTIONS);
     const forcedWin =
-      findVCFSequence(board, color, REVIEW_VCF_OPTIONS) ??
+      vcfResult ??
       (countStones(board) >= VCT_STONE_THRESHOLD
         ? findVCTSequence(board, color, REVIEW_VCT_OPTIONS)
         : null);
+    let forcedWinType: "vcf" | "vct" | "forbidden-trap" | undefined = undefined;
+    if (forcedWin?.isForbiddenTrap) {
+      forcedWinType = "forbidden-trap";
+    } else if (vcfResult) {
+      forcedWinType = "vcf";
+    } else if (forcedWin) {
+      forcedWinType = "vct";
+    }
 
     // 通常探索（候補手比較データ用）
     const result = findBestMoveIterativeWithTT(
@@ -206,6 +215,7 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
         playedScore,
         candidates,
         completedDepth: result.completedDepth,
+        forcedWinType,
       };
 
       self.postMessage(response);
