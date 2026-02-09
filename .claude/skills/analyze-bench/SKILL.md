@@ -2,8 +2,8 @@
 name: analyze-bench
 description: ベンチマーク結果を分析して戦術的洞察を提供
 allowed-tools:
+  - Bash(pnpm analyze:bench:*)
   - Bash(jq:*)
-  - Bash(./scripts/analyze-bench.sh:*)
   - Bash(ls:*)
   - Write(docs/bench-reports/*.md)
 ---
@@ -150,49 +150,39 @@ ls docs/bench-reports/bench-report-2026-02-04-*.md 2>/dev/null | wc -l
 
 ## 分析手順
 
-### 1. ファイル取得
+### 重要: ツール呼び出しの最小化
+
+分析中のデータ取得は **なるべく少ないコマンド実行にまとめる**こと。
+jq を何回も呼ぶのではなく、`node -e` のワンショットスクリプトで複数の統計を一度に取得する。
+
+### 1. ファイル取得と基本統計（1コマンドで完了）
 
 ```bash
-# 最新ファイルを取得
-ls -t bench-results/*.json | head -1
-
-# または指定ファイルを使用
-```
-
-### 2. 基本統計の取得
-
-既存スクリプトを実行して基本統計を取得:
-
-```bash
-./scripts/analyze-bench.sh <file>
+pnpm analyze:bench <file>  # 引数なしで最新ファイルを自動選択
 ```
 
 出力内容:
 
-- レーティング結果
-- マッチアップ結果
-- 先手/後手勝敗表
-- 先手(黒)/後手(白)勝率
+- レーティング結果・レーティング差
+- マッチアップ結果・先手/後手勝敗表
+- 先手(黒)/後手(白)勝率・同難易度バランス
 - 勝利理由
-- 難易度別探索統計
-- 深度分布
+- 難易度別探索統計・深度分布・探索効率・プロファイリング
+- 選択順位分布・ランダム悪手・禁手負け詳細
+- ゲーム長統計（平均/最短/最長）
+- 異難易度対戦の先手/後手勝率
+- 単発四ペナルティ数
+- 深度変化（最善手の安定性）
 
-### 3. 詳細分析（jqで追加抽出）
+### 2. 追加分析（1回の node -e で全取得）
 
-以下の追加分析を行う:
+`pnpm analyze:bench` に含まれない追加統計を取得する場合、**1回のコマンド**にまとめる:
 
 ```bash
-# TTヒット率
-jq -r '
-  [.games[].moveHistory[] | select(.stats and .stats.nodes > 0)] |
-  "平均TTヒット率: \(([.[].stats.ttHits] | add) * 100 / ([.[].stats.nodes] | add) | . * 10 | floor / 10)%"
-' "$FILE"
-
-# Beta cutoff率
-jq -r '
-  [.games[].moveHistory[] | select(.stats and .stats.nodes > 0)] |
-  "平均Beta cutoff率: \(([.[].stats.betaCutoffs] | add) * 100 / ([.[].stats.nodes] | add) | . * 10 | floor / 10)%"
-' "$FILE"
+node -e "
+const data = JSON.parse(require('fs').readFileSync('<file>', 'utf-8'));
+// 必要な統計をすべて1パスで計算して出力
+"
 ```
 
 ### 4. 棋譜分析（問題パターン検出）
@@ -390,10 +380,11 @@ done
 
 ## 関連ファイル
 
-| ファイル                               | 役割                            |
-| -------------------------------------- | ------------------------------- |
-| `scripts/analyze-bench.sh`             | 基本統計スクリプト              |
-| `src/logic/cpu/benchmark/headless.ts`  | MoveRecord型定義                |
-| `src/types/cpu.ts`                     | CandidateMove, ScoreBreakdown等 |
-| `docs/renju-tactics-and-evaluation.md` | 戦術知識                        |
-| `docs/cpu-ai-algorithm.md`             | アルゴリズム知識                |
+| ファイル                               | 役割                             |
+| -------------------------------------- | -------------------------------- |
+| `scripts/analyze-bench.ts`             | 基本統計CLI                      |
+| `scripts/lib/benchStatistics.ts`       | 統計計算・フォーマットライブラリ |
+| `src/logic/cpu/benchmark/headless.ts`  | MoveRecord型定義                 |
+| `src/types/cpu.ts`                     | CandidateMove, ScoreBreakdown等  |
+| `docs/renju-tactics-and-evaluation.md` | 戦術知識                         |
+| `docs/cpu-ai-algorithm.md`             | アルゴリズム知識                 |
