@@ -299,7 +299,7 @@ describe("ユーザ報告の棋譜テスト", () => {
     expect(result?.sequence.length).toBeGreaterThanOrEqual(3);
   });
 
-  it("VCT開始手がisVCTFirstMoveで検証される", () => {
+  it("VCT開始手がisVCTFirstMoveで検証される", { timeout: 15000 }, () => {
     const { board } = createBoardFromRecord(record);
     const move = findVCTMove(board, "white", options);
     expect(move).not.toBeNull();

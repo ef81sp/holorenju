@@ -425,7 +425,7 @@ export function findFourMoves(
  * @param color 四を作った手番
  * @returns 防御位置（止められない場合はnull）
  */
-function getFourDefensePosition(
+export function getFourDefensePosition(
   board: BoardState,
   lastMove: Position,
   color: "black" | "white",

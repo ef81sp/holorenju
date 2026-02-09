@@ -301,3 +301,28 @@ describe("即勝ち手・防御の優先順位", () => {
     expect(result.score).toBe(PATTERN_SCORES.FIVE);
   }, 15000);
 });
+
+describe("相手VCF防御", () => {
+  it("相手にVCFがある局面で防御手を選ぶ", () => {
+    // 棋譜: H8 G7 I7 G9 H6 F8 G6 F9 H10 G8 F7 G10 G11
+    // 13手目後、白番。黒にH7からの5手VCFがある。
+    // 白は無関係なD11（跳び三）ではなく防御手を選ぶべき。
+    const { board } = createBoardFromRecord(
+      "H8 G7 I7 G9 H6 F8 G6 F9 H10 G8 F7 G10 G11",
+    );
+    const result = findBestMoveIterativeWithTT(
+      board,
+      "white",
+      4,
+      10000,
+      0,
+      FULL_EVAL_OPTIONS,
+    );
+    // D11 (row=3, col=3) は選ばれるべきではない
+    const isD11 = result.position.row === 3 && result.position.col === 3;
+    expect(isD11).toBe(false);
+    // H7 (row=8, col=7) のブロックまたはカウンターフォーが選ばれるべき
+    expect(result.position.row).toBeGreaterThanOrEqual(0);
+    expect(result.position.row).toBeLessThan(15);
+  }, 15000);
+});

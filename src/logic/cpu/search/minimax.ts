@@ -62,7 +62,12 @@ import {
   NMP_MIN_DEPTH,
   NMP_REDUCTION,
 } from "./techniques";
-import { findVCFMove, findWinningMove } from "./vcf";
+import {
+  findFourMoves,
+  findVCFMove,
+  findWinningMove,
+  getFourDefensePosition,
+} from "./vcf";
 
 // Re-export types and functions for backward compatibility
 export {
@@ -1126,6 +1131,35 @@ export function findBestMoveIterativeWithTT(
     };
   }
 
+  // 4. 相手のVCF（四追い勝ち）があれば候補手を防御手に制限
+  const opponentVCFMove = findVCFMove(board, opponentColor);
+  let vcfDefenseSet: Set<string> | null = null;
+  if (opponentVCFMove) {
+    vcfDefenseSet = new Set<string>();
+
+    // (a) カウンターフォー: 自分の四を作れる手（相手はVCFを中断して応手が必要）
+    const counterFours = findFourMoves(board, color);
+    for (const m of counterFours) {
+      vcfDefenseSet.add(`${m.row},${m.col}`);
+    }
+
+    // (b) ブロック: 相手VCF開始手をシミュレートし、四の防御位置を取得
+    const vcfRow = board[opponentVCFMove.row];
+    if (vcfRow) {
+      vcfRow[opponentVCFMove.col] = opponentColor;
+      const blockPos = getFourDefensePosition(
+        board,
+        opponentVCFMove,
+        opponentColor,
+      );
+      vcfRow[opponentVCFMove.col] = null;
+
+      if (blockPos) {
+        vcfDefenseSet.add(`${blockPos.row},${blockPos.col}`);
+      }
+    }
+  }
+
   // =========================================================================
   // 通常の探索
   // =========================================================================
@@ -1140,9 +1174,16 @@ export function findBestMoveIterativeWithTT(
     evaluationOptions,
   });
 
-  // 相手の活三があれば、防御位置のみを候補として探索
-  // （どの止め方がいいかは探索で決める）
-  if (threats.openThrees.length > 0) {
+  // 相手のVCF防御が活三防御より優先
+  if (vcfDefenseSet && vcfDefenseSet.size > 0) {
+    const vcfSet = vcfDefenseSet;
+    const defenseMoves = moves.filter((m) => vcfSet.has(`${m.row},${m.col}`));
+    if (defenseMoves.length > 0) {
+      moves = defenseMoves;
+    }
+  } else if (threats.openThrees.length > 0) {
+    // 相手の活三があれば、防御位置のみを候補として探索
+    // （どの止め方がいいかは探索で決める）
     const defenseSet = new Set(
       threats.openThrees.map((p) => `${p.row},${p.col}`),
     );
