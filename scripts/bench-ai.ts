@@ -585,7 +585,7 @@ function runTasksWithWorkers(
   const results: WorkerResult[] = [];
   const taskQueue = [...tasks];
   let completedGames = 0;
-  let lastProgress = 0;
+  const startTime = performance.now();
 
   const workerScript = path.join(__dirname, "game-worker.ts");
 
@@ -602,6 +602,7 @@ function runTasksWithWorkers(
       if (!task) {
         if (activeWorkers === 0) {
           finished = true;
+          clearStatus();
           resolve(results);
         }
         return;
@@ -628,14 +629,11 @@ function runTasksWithWorkers(
         results.push(result);
         completedGames++;
 
-        // 進捗表示（10%ごと）
-        const progress = Math.floor((completedGames / totalGames) * 10);
-        if (progress > lastProgress) {
-          lastProgress = progress;
-          console.log(
-            `  Progress: ${completedGames}/${totalGames} (${progress * 10}%)`,
-          );
-        }
+        const elapsed = ((performance.now() - startTime) / 1000).toFixed(0);
+        const pct = ((completedGames / totalGames) * 100).toFixed(1);
+        writeStatus(
+          `[${elapsed}s] Progress: ${completedGames}/${totalGames} (${pct}%)`,
+        );
 
         activeWorkers--;
         startWorker();
