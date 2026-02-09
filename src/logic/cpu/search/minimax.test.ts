@@ -9,6 +9,7 @@
 
 import { describe, expect, it } from "vitest";
 
+import { createBoardFromRecord } from "@/logic/gameRecordParser";
 import { createEmptyBoard } from "@/logic/renjuRules";
 
 import {
@@ -258,5 +259,45 @@ describe("Futility Pruning", () => {
     // 有効な手が選ばれること
     expect(result.position.row).toBeGreaterThanOrEqual(0);
     expect(result.position.row).toBeLessThan(15);
+  }, 15000);
+});
+
+describe("即勝ち手・防御の優先順位", () => {
+  it("相手の止め四がある局面ではVCFより防御を優先する", () => {
+    // 棋譜: H8 I9 I7 G9 H6 J8 J6 H9 F9 H10 K7 I11 F8 J12 K13 G11 F12 J9
+    // 18手目（白J9）でrow=6に白4連（G9-H9-I9-J9）の止め四が成立
+    // 黒はK9（row=6, col=10）で止める必要がある
+    const { board } = createBoardFromRecord(
+      "H8 I9 I7 G9 H6 J8 J6 H9 F9 H10 K7 I11 F8 J12 K13 G11 F12 J9",
+    );
+    const result = findBestMoveIterativeWithTT(
+      board,
+      "black",
+      4,
+      10000,
+      0,
+      FULL_EVAL_OPTIONS,
+    );
+    // K9（row=6, col=10）が返されるべき
+    expect(result.position).toEqual({ row: 6, col: 10 });
+  }, 15000);
+
+  it("自分の四がある局面では相手の四より五連完成を優先する", () => {
+    // 棋譜: H8 I7 G7 I9 H6 J8 H10 H9 G9 J7 H7 G8 I8 J9 J10 I10 F7 E7 G6 H5 F8 L9 K9 K8 I6 H11 F6
+    // 27手目後: 白にH11-K8の斜めの棒四がある
+    // 相手（黒）にもF6からの四があるが、自分の五連完成が最優先
+    const { board } = createBoardFromRecord(
+      "H8 I7 G7 I9 H6 J8 H10 H9 G9 J7 H7 G8 I8 J9 J10 I10 F7 E7 G6 H5 F8 L9 K9 K8 I6 H11 F6",
+    );
+    const result = findBestMoveIterativeWithTT(
+      board,
+      "white",
+      4,
+      10000,
+      0,
+      FULL_EVAL_OPTIONS,
+    );
+    // 白は五連を完成させる手を選ぶべき（FIVE スコア）
+    expect(result.score).toBe(PATTERN_SCORES.FIVE);
   }, 15000);
 });

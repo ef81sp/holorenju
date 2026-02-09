@@ -20,6 +20,7 @@ import type { MoveScoreEntry } from "./search/results";
 
 import { countStones } from "./core/boardUtils";
 import {
+  detectOpponentThreats,
   evaluatePositionWithBreakdown,
   evaluateBoardWithBreakdown,
   PATTERN_SCORES,
@@ -67,12 +68,20 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
     const color = nextColor as "black" | "white";
     const hardParams = DIFFICULTY_PARAMS.hard;
 
+    // 相手の脅威チェック（VCF/VCT探索より先に実行）
+    const opponentColor = color === "black" ? "white" : "black";
+    const opponentThreats = detectOpponentThreats(board, opponentColor);
+    const opponentHasFour =
+      opponentThreats.fours.length > 0 || opponentThreats.openFours.length > 0;
+
     // 拡張VCF/VCT探索（高速パス）
-    // VCFは高速なので常に実行。VCTは石数が閾値以上の終盤のみ実行。
-    const vcfResult = findVCFSequence(board, color, REVIEW_VCF_OPTIONS);
+    // 相手の四がある場合はVCF/VCTをスキップ（四を止めなければ即負け）
+    const vcfResult = opponentHasFour
+      ? null
+      : findVCFSequence(board, color, REVIEW_VCF_OPTIONS);
     const forcedWin =
       vcfResult ??
-      (countStones(board) >= VCT_STONE_THRESHOLD
+      (countStones(board) >= VCT_STONE_THRESHOLD && !opponentHasFour
         ? findVCTSequence(board, color, REVIEW_VCT_OPTIONS)
         : null);
     let forcedWinType: "vcf" | "vct" | "forbidden-trap" | undefined = undefined;

@@ -559,6 +559,77 @@ describe("四三後に相手が無視した場合", () => {
   });
 });
 
+describe("反復深化で最短VCFが優先される", () => {
+  it("四三（短いVCF）が長いVCFより優先される", () => {
+    // 棋譜: H8 G9 F9 H10 F8 G8 G7 F7 E8 H9 I10 I9 E9 H6 E10 E7 D10 C11 E11 E12 F12 G13
+    // 22手目まで再現、黒番でF10が四三（depth 1のVCF）
+    const board = createEmptyBoard();
+    placeStonesOnBoard(board, [
+      // 黒石（奇数手）
+      { row: 7, col: 7, color: "black" }, // H8
+      { row: 6, col: 5, color: "black" }, // F9
+      { row: 7, col: 5, color: "black" }, // F8
+      { row: 8, col: 6, color: "black" }, // G7
+      { row: 7, col: 4, color: "black" }, // E8
+      { row: 5, col: 8, color: "black" }, // I10
+      { row: 6, col: 4, color: "black" }, // E9
+      { row: 5, col: 4, color: "black" }, // E10
+      { row: 5, col: 3, color: "black" }, // D10
+      { row: 4, col: 4, color: "black" }, // E11
+      { row: 3, col: 5, color: "black" }, // F12
+      // 白石（偶数手）
+      { row: 6, col: 6, color: "white" }, // G9
+      { row: 5, col: 7, color: "white" }, // H10
+      { row: 7, col: 6, color: "white" }, // G8
+      { row: 8, col: 5, color: "white" }, // F7
+      { row: 6, col: 7, color: "white" }, // H9
+      { row: 6, col: 8, color: "white" }, // I9
+      { row: 9, col: 7, color: "white" }, // H6
+      { row: 8, col: 4, color: "white" }, // E7
+      { row: 4, col: 2, color: "white" }, // C11
+      { row: 3, col: 4, color: "white" }, // E12
+      { row: 2, col: 6, color: "white" }, // G13
+    ]);
+    const result = findVCFMove(board, "black");
+    // F10（row=5, col=5）が depth 1 の四三として選ばれるべき
+    expect(result).toEqual({ row: 5, col: 5 });
+  });
+
+  it("findVCFSequence も最短手順を返す", () => {
+    // 同じ盤面で findVCFSequence も最短手順を返す
+    const board = createEmptyBoard();
+    placeStonesOnBoard(board, [
+      { row: 7, col: 7, color: "black" },
+      { row: 6, col: 5, color: "black" },
+      { row: 7, col: 5, color: "black" },
+      { row: 8, col: 6, color: "black" },
+      { row: 7, col: 4, color: "black" },
+      { row: 5, col: 8, color: "black" },
+      { row: 6, col: 4, color: "black" },
+      { row: 5, col: 4, color: "black" },
+      { row: 5, col: 3, color: "black" },
+      { row: 4, col: 4, color: "black" },
+      { row: 3, col: 5, color: "black" },
+      { row: 6, col: 6, color: "white" },
+      { row: 5, col: 7, color: "white" },
+      { row: 7, col: 6, color: "white" },
+      { row: 8, col: 5, color: "white" },
+      { row: 6, col: 7, color: "white" },
+      { row: 6, col: 8, color: "white" },
+      { row: 9, col: 7, color: "white" },
+      { row: 8, col: 4, color: "white" },
+      { row: 4, col: 2, color: "white" },
+      { row: 3, col: 4, color: "white" },
+      { row: 2, col: 6, color: "white" },
+    ]);
+    const result = findVCFSequence(board, "black");
+    expect(result).not.toBeNull();
+    expect(result?.firstMove).toEqual({ row: 5, col: 5 });
+    // 四三: 攻撃(四を作る) → 防御(四を止める) → 攻撃(五連) の3手
+    expect(result?.sequence.length).toBe(3);
+  });
+});
+
 describe("VCFゴールデンテスト", () => {
   // 既存の振る舞いを保証するスナップショットテスト
   const testCases = [

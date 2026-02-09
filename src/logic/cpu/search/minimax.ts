@@ -62,7 +62,7 @@ import {
   NMP_MIN_DEPTH,
   NMP_REDUCTION,
 } from "./techniques";
-import { findVCFMove } from "./vcf";
+import { findVCFMove, findWinningMove } from "./vcf";
 
 // Re-export types and functions for backward compatibility
 export {
@@ -1018,12 +1018,12 @@ export function findBestMoveIterativeWithTT(
     };
   }
 
-  // 1. 四追い勝ち（VCF）があれば即座にその手を返す
-  const vcfMove = findVCFMove(board, color);
-  if (vcfMove) {
+  // 1. 自分の即勝ち手（五連完成）をチェック
+  const winMove = findWinningMove(board, color);
+  if (winMove) {
     return {
-      position: vcfMove,
-      score: PATTERN_SCORES.FIVE, // 勝利確定
+      position: winMove,
+      score: PATTERN_SCORES.FIVE,
       completedDepth: 0,
       interrupted: false,
       elapsedTime: performance.now() - startTime,
@@ -1110,6 +1110,20 @@ export function findBestMoveIterativeWithTT(
         };
       }
     }
+  }
+
+  // 3. 四追い勝ち（VCF）があれば即座にその手を返す
+  // （相手の四がある場合は上記で即return済みなのでここには到達しない）
+  const vcfMove = findVCFMove(board, color);
+  if (vcfMove) {
+    return {
+      position: vcfMove,
+      score: PATTERN_SCORES.FIVE, // 勝利確定
+      completedDepth: 0,
+      interrupted: false,
+      elapsedTime: performance.now() - startTime,
+      stats: mergeProfilingCounters(ctx.stats),
+    };
   }
 
   // =========================================================================

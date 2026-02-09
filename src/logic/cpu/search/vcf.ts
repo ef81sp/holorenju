@@ -188,12 +188,27 @@ export function findVCFMove(
   color: "black" | "white",
   options?: VCFSearchOptions,
 ): Position | null {
+  const maxDepth = options?.maxDepth ?? VCF_MAX_DEPTH;
   const timeLimitMs = options?.timeLimit ?? VCF_TIME_LIMIT;
   const limiter: VCFTimeLimiter = {
     startTime: performance.now(),
     timeLimit: timeLimitMs,
   };
-  return findVCFMoveRecursive(board, color, 0, limiter, options);
+
+  // 反復深化: 浅い深度から探索し、最短VCFを優先
+  for (let depth = 1; depth <= maxDepth; depth++) {
+    if (performance.now() - limiter.startTime >= limiter.timeLimit) {
+      return null;
+    }
+    const result = findVCFMoveRecursive(board, color, 0, limiter, {
+      ...options,
+      maxDepth: depth,
+    });
+    if (result) {
+      return result;
+    }
+  }
+  return null;
 }
 
 /**
@@ -295,6 +310,45 @@ function findVCFMoveRecursive(
 
     if (vcfMove !== null) {
       return depth === 0 ? move : vcfMove;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * 即勝ち手を探す（五連を完成できる位置）
+ *
+ * 自分の四（棒四・活四・跳び四）が盤上にある場合、
+ * 五を打てる位置を返す。見つからなければnull。
+ */
+export function findWinningMove(
+  board: BoardState,
+  color: "black" | "white",
+): Position | null {
+  for (let row = 0; row < BOARD_SIZE; row++) {
+    for (let col = 0; col < BOARD_SIZE; col++) {
+      if (board[row]?.[col] !== null) {
+        continue;
+      }
+      if (!isNearExistingStone(board, row, col)) {
+        continue;
+      }
+
+      const rowArray = board[row];
+      if (rowArray) {
+        rowArray[col] = color;
+      }
+
+      const isFive = checkFive(board, row, col, color);
+
+      if (rowArray) {
+        rowArray[col] = null;
+      }
+
+      if (isFive) {
+        return { row, col };
+      }
     }
   }
 
@@ -496,30 +550,38 @@ export function findVCFSequence(
   color: "black" | "white",
   options?: VCFSearchOptions,
 ): VCFSequenceResult | null {
+  const maxDepth = options?.maxDepth ?? VCF_MAX_DEPTH;
   const timeLimitMs = options?.timeLimit ?? VCF_TIME_LIMIT;
   const limiter: VCFTimeLimiter = {
     startTime: performance.now(),
     timeLimit: timeLimitMs,
   };
-  const sequence: Position[] = [];
-  const context: VCFSearchContext = { isForbiddenTrap: false };
-  const result = findVCFSequenceRecursive(
-    board,
-    color,
-    0,
-    limiter,
-    sequence,
-    options,
-    context,
-  );
-  if (!result || !sequence[0]) {
-    return null;
+
+  // 反復深化: 浅い深度から探索し、最短VCF手順を優先
+  for (let depth = 1; depth <= maxDepth; depth++) {
+    if (performance.now() - limiter.startTime >= limiter.timeLimit) {
+      return null;
+    }
+    const sequence: Position[] = [];
+    const context: VCFSearchContext = { isForbiddenTrap: false };
+    const result = findVCFSequenceRecursive(
+      board,
+      color,
+      0,
+      limiter,
+      sequence,
+      { ...options, maxDepth: depth },
+      context,
+    );
+    if (result && sequence[0]) {
+      return {
+        firstMove: sequence[0],
+        sequence,
+        isForbiddenTrap: context.isForbiddenTrap,
+      };
+    }
   }
-  return {
-    firstMove: sequence[0],
-    sequence,
-    isForbiddenTrap: context.isForbiddenTrap,
-  };
+  return null;
 }
 
 /**
