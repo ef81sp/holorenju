@@ -195,37 +195,65 @@ function findThreatMoves(
         continue;
       }
 
-      // 黒の禁手チェック
-      if (color === "black") {
-        // 五連が作れる場合は禁手でも候補に含める
-        if (checkFive(board, row, col, "black")) {
-          fourMoves.push({ row, col });
-          continue;
-        }
+      // 行配列を取得
+      const rowArray = board[row];
 
-        const forbidden = checkForbiddenMove(board, row, col);
-        if (forbidden.isForbidden) {
-          continue;
-        }
+      // インプレースで石を置いて五連・四・活三を一括チェック
+      if (rowArray) {
+        rowArray[col] = color;
       }
 
-      // 仮想的に石を置く
-      const testBoard = copyBoard(board);
-      const testRow = testBoard[row];
-      if (testRow) {
-        testRow[col] = color;
+      // 五連が作れる場合は最優先（禁手でもOK）
+      if (checkFive(board, row, col, color)) {
+        if (rowArray) {
+          rowArray[col] = null;
+        }
+        fourMoves.push({ row, col });
+        continue;
       }
 
       // 四が作れるかチェック
-      if (createsFour(testBoard, row, col, color)) {
+      const isFour = createsFour(board, row, col, color);
+
+      if (isFour) {
+        // 元に戻す（Undo）
+        if (rowArray) {
+          rowArray[col] = null;
+        }
+
+        // 禁手チェックは四を作る手だけに限定
+        if (
+          color === "black" &&
+          checkForbiddenMove(board, row, col).isForbidden
+        ) {
+          continue;
+        }
+
         fourMoves.push({ row, col });
         continue;
       }
 
       // 活三が作れるかチェック
-      if (createsOpenThree(testBoard, row, col, color)) {
-        openThreeMoves.push({ row, col });
+      const isOpenThree = createsOpenThree(board, row, col, color);
+
+      // 元に戻す（Undo）
+      if (rowArray) {
+        rowArray[col] = null;
       }
+
+      if (!isOpenThree) {
+        continue;
+      }
+
+      // 禁手チェックは活三を作る手だけに限定
+      if (
+        color === "black" &&
+        checkForbiddenMove(board, row, col).isForbidden
+      ) {
+        continue;
+      }
+
+      openThreeMoves.push({ row, col });
     }
   }
 

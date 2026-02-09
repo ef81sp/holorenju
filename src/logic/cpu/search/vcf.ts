@@ -314,20 +314,31 @@ export function findFourMoves(
       // 行配列を取得（このセル操作で共通利用）
       const rowArray = board[row];
 
-      // 五連が作れる場合は最優先で候補に含める
+      // 石を置いて五連・四を一括チェック（place/undoを1回に統合）
       if (rowArray) {
         rowArray[col] = color;
       }
+
       const isFive = checkFive(board, row, col, color);
-      if (rowArray) {
-        rowArray[col] = null;
-      }
       if (isFive) {
+        if (rowArray) {
+          rowArray[col] = null;
+        }
         moves.push({ row, col });
         continue;
       }
 
-      // 黒の禁手チェック
+      const isFour = createsFour(board, row, col, color);
+
+      if (rowArray) {
+        rowArray[col] = null;
+      }
+
+      if (!isFour) {
+        continue;
+      }
+
+      // 禁手チェックは四を作る手だけに限定
       if (color === "black") {
         const forbidden = checkForbiddenMove(board, row, col);
         if (forbidden.isForbidden) {
@@ -335,21 +346,7 @@ export function findFourMoves(
         }
       }
 
-      // 四が作れるかチェック（インプレース + Undo）
-      if (rowArray) {
-        rowArray[col] = color;
-      }
-
-      const isFour = createsFour(board, row, col, color);
-
-      // 元に戻す（Undo）
-      if (rowArray) {
-        rowArray[col] = null;
-      }
-
-      if (isFour) {
-        moves.push({ row, col });
-      }
+      moves.push({ row, col });
     }
   }
 

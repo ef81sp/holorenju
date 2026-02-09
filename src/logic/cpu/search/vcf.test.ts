@@ -344,21 +344,77 @@ describe("findFourMoves（内部関数）", () => {
     expect(moves.some((m) => m.row === 7 && m.col === 8)).toBe(true);
   });
 
-  it("禁手位置は除外される（黒番）", () => {
-    // 三三禁になる配置
+  it("三三禁の位置が四を作る手でも黒番では除外される", () => {
+    // (7,7)に置くと:
+    // 縦方向: (4,7),(5,7),(6,7),(7,7) → 四連 = 四を作る手
+    // 横方向: (7,5),(7,6),(7,7) → 三連（活三）
+    // 斜め方向: (5,5),(6,6),(7,7) → 三連（活三）
+    // → 三三禁（横三 + 斜め三）かつ縦方向で四を作れる
     const board = createBoardWithStones([
-      // 横に二
-      { row: 7, col: 5, color: "black" },
-      { row: 7, col: 6, color: "black" },
-      // 縦に二
+      // 縦方向: 三連（(7,7)に置くと四連）
+      { row: 4, col: 7, color: "black" },
       { row: 5, col: 7, color: "black" },
       { row: 6, col: 7, color: "black" },
+      // 横方向: 二連（(7,7)に置くと三連 = 活三）
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      // 斜め方向: 二連（(7,7)に置くと三連 = 活三）
+      { row: 5, col: 5, color: "black" },
+      { row: 6, col: 6, color: "black" },
     ]);
-    // (7,7) は三三禁になる可能性がある
     const moves = findFourMoves(board, "black");
-    // 禁手でも四が作れるならOK、五連になるならOK
-    // このテストは禁手ロジックが機能することを確認
-    expect(moves).toBeDefined();
+    // (7,7)は三三禁なので除外されるべき
+    expect(moves.some((m) => m.row === 7 && m.col === 7)).toBe(false);
+  });
+
+  it("白番では禁手フィルタなし", () => {
+    // 同じ盤面で白番なら(7,7)が候補に含まれる
+    const board = createBoardWithStones([
+      { row: 4, col: 7, color: "white" },
+      { row: 5, col: 7, color: "white" },
+      { row: 6, col: 7, color: "white" },
+      { row: 7, col: 5, color: "white" },
+      { row: 7, col: 6, color: "white" },
+      { row: 5, col: 5, color: "white" },
+      { row: 6, col: 6, color: "white" },
+    ]);
+    const moves = findFourMoves(board, "white");
+    // 白番では禁手チェックがないので(7,7)が含まれる
+    expect(moves.some((m) => m.row === 7 && m.col === 7)).toBe(true);
+  });
+
+  it("五連は三三禁の位置でも含まれる", () => {
+    // (7,7)に置くと:
+    // 縦方向: (3,7),(4,7),(5,7),(6,7),(7,7) → 五連
+    // 横方向: (7,5),(7,6),(7,7) → 三連（活三）
+    // 斜め方向: (5,5),(6,6),(7,7) → 三連（活三）
+    // → 三三禁だが五連なので除外しない
+    const board = createBoardWithStones([
+      { row: 3, col: 7, color: "black" },
+      { row: 4, col: 7, color: "black" },
+      { row: 5, col: 7, color: "black" },
+      { row: 6, col: 7, color: "black" },
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 5, col: 5, color: "black" },
+      { row: 6, col: 6, color: "black" },
+    ]);
+    const moves = findFourMoves(board, "black");
+    // 五連が作れるので(7,7)は候補に含まれるべき
+    expect(moves.some((m) => m.row === 7 && m.col === 7)).toBe(true);
+  });
+
+  it("呼び出し前後で盤面が変更されない", () => {
+    const board = createBoardWithStones([
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+    ]);
+    // 盤面のスナップショットを取得
+    const snapshot = JSON.stringify(board);
+    findFourMoves(board, "black");
+    // 盤面が変更されていないことを確認
+    expect(JSON.stringify(board)).toBe(snapshot);
   });
 });
 
