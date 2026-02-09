@@ -14,6 +14,7 @@ import {
 } from "@/logic/renjuRules";
 
 import { DIRECTION_INDICES, DIRECTIONS } from "../core/constants";
+import { isNearExistingStone } from "../moveGenerator";
 import { findJumpGapPosition } from "../patterns/threatAnalysis";
 import { analyzeDirection } from "./directionAnalysis";
 import { isValidConsecutiveThree, isValidJumpThree } from "./jumpPatterns";
@@ -401,9 +402,13 @@ export function detectOpponentThreats(
   }
 
   // 相手のミセ手（次に四三が作れる位置）を検出
+  // 四三を作るには同色石が近くに必要なので、石の近傍のみ走査
   for (let r = 0; r < 15; r++) {
     for (let c = 0; c < 15; c++) {
       if (board[r]?.[c] !== null) {
+        continue;
+      }
+      if (!isNearExistingStone(board, r, c)) {
         continue;
       }
       if (createsFourThree(board, r, c, opponentColor)) {

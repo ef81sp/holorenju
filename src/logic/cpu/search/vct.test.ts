@@ -5,7 +5,7 @@
 import { describe, expect, it } from "vitest";
 
 import { createBoardFromRecord } from "@/logic/gameRecordParser";
-import { createEmptyBoard } from "@/logic/renjuRules";
+import { copyBoard, createEmptyBoard } from "@/logic/renjuRules";
 
 import { createBoardWithStones } from "../testUtils";
 import {
@@ -306,5 +306,65 @@ describe("ユーザ報告の棋譜テスト", () => {
     if (move) {
       expect(isVCTFirstMove(board, move, "white", options)).toBe(true);
     }
+  });
+});
+
+describe("盤面不変性テスト", () => {
+  // VCTが成立する盤面（活三）
+  const vctStones = [
+    { row: 7, col: 5, color: "black" as const },
+    { row: 7, col: 6, color: "black" as const },
+    { row: 7, col: 7, color: "black" as const },
+  ];
+  // VCTが成立しない盤面
+  const noVctStones = [{ row: 7, col: 7, color: "black" as const }];
+  const options = { maxDepth: 4, timeLimit: 1000 };
+
+  it("hasVCT呼び出し前後で盤面が不変", () => {
+    const board = createBoardWithStones(vctStones);
+    const snapshot = copyBoard(board);
+    hasVCT(board, "black", 0, undefined, options);
+    expect(board).toEqual(snapshot);
+
+    const board2 = createBoardWithStones(noVctStones);
+    const snapshot2 = copyBoard(board2);
+    hasVCT(board2, "black", 0, undefined, options);
+    expect(board2).toEqual(snapshot2);
+  });
+
+  it("findVCTMove呼び出し前後で盤面が不変", () => {
+    const board = createBoardWithStones(vctStones);
+    const snapshot = copyBoard(board);
+    findVCTMove(board, "black", options);
+    expect(board).toEqual(snapshot);
+
+    const board2 = createBoardWithStones(noVctStones);
+    const snapshot2 = copyBoard(board2);
+    findVCTMove(board2, "black", options);
+    expect(board2).toEqual(snapshot2);
+  });
+
+  it("findVCTSequence呼び出し前後で盤面が不変", () => {
+    const board = createBoardWithStones(vctStones);
+    const snapshot = copyBoard(board);
+    findVCTSequence(board, "black", options);
+    expect(board).toEqual(snapshot);
+
+    const board2 = createBoardWithStones(noVctStones);
+    const snapshot2 = copyBoard(board2);
+    findVCTSequence(board2, "black", options);
+    expect(board2).toEqual(snapshot2);
+  });
+
+  it("isVCTFirstMove呼び出し前後で盤面が不変", () => {
+    const board = createBoardWithStones(vctStones);
+    const snapshot = copyBoard(board);
+    isVCTFirstMove(board, { row: 7, col: 4 }, "black", options);
+    expect(board).toEqual(snapshot);
+
+    const board2 = createBoardWithStones(noVctStones);
+    const snapshot2 = copyBoard(board2);
+    isVCTFirstMove(board2, { row: 0, col: 0 }, "black", options);
+    expect(board2).toEqual(snapshot2);
   });
 });

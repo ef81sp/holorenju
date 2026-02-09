@@ -13,7 +13,6 @@ import {
   checkForbiddenMove,
   checkJumpFour,
   checkJumpThree,
-  copyBoard,
 } from "@/logic/renjuRules";
 
 import { DIRECTION_INDICES, DIRECTIONS } from "../core/constants";
@@ -109,22 +108,27 @@ export function hasVCT(
   // 脅威（四・活三）を作れる位置を列挙
   const threatMoves = findThreatMoves(board, color);
 
+  const opponentColor = color === "black" ? "white" : "black";
+
   for (const move of threatMoves) {
-    // 脅威を作る
-    const afterThreat = copyBoard(board);
-    const afterThreatRow = afterThreat[move.row];
-    if (afterThreatRow) {
-      afterThreatRow[move.col] = color;
+    // 脅威を作る（インプレース）
+    const moveRow = board[move.row];
+    if (moveRow) {
+      moveRow[move.col] = color;
     }
 
     // 五連チェック
-    if (checkFive(afterThreat, move.row, move.col, color)) {
+    if (checkFive(board, move.row, move.col, color)) {
+      // 元に戻す（Undo）
+      if (moveRow) {
+        moveRow[move.col] = null;
+      }
       return true;
     }
 
     // 相手の防御位置を列挙
     const defensePositions = getThreatDefensePositions(
-      afterThreat,
+      board,
       move.row,
       move.col,
       color,
@@ -133,8 +137,16 @@ export function hasVCT(
     // 防御不可（活四など）= 勝利
     if (defensePositions.length === 0) {
       // 脅威が成立しているか再確認（四または活三）
-      if (isThreat(afterThreat, move.row, move.col, color)) {
+      if (isThreat(board, move.row, move.col, color)) {
+        // 元に戻す（Undo）
+        if (moveRow) {
+          moveRow[move.col] = null;
+        }
         return true;
+      }
+      // 元に戻す（Undo）
+      if (moveRow) {
+        moveRow[move.col] = null;
       }
       continue;
     }
@@ -145,7 +157,7 @@ export function hasVCT(
       // 白番の場合、黒の防御位置が禁手ならVCT成立
       if (color === "white") {
         const forbiddenResult = checkForbiddenMove(
-          afterThreat,
+          board,
           defensePos.row,
           defensePos.col,
         );
@@ -154,19 +166,29 @@ export function hasVCT(
         }
       }
 
-      // 相手が防御した後の局面
-      const afterDefense = copyBoard(afterThreat);
-      const opponentColor = color === "black" ? "white" : "black";
-      const afterDefenseRow = afterDefense[defensePos.row];
-      if (afterDefenseRow) {
-        afterDefenseRow[defensePos.col] = opponentColor;
+      // 相手が防御した後の局面（インプレース）
+      const defenseRow = board[defensePos.row];
+      if (defenseRow) {
+        defenseRow[defensePos.col] = opponentColor;
       }
 
       // 再帰的にVCTをチェック
-      if (!hasVCT(afterDefense, color, depth + 1, limiter, options)) {
+      const vctResult = hasVCT(board, color, depth + 1, limiter, options);
+
+      // 元に戻す（Undo）- 防御手
+      if (defenseRow) {
+        defenseRow[defensePos.col] = null;
+      }
+
+      if (!vctResult) {
         allDefenseLeadsToVCT = false;
         break;
       }
+    }
+
+    // 元に戻す（Undo）- 攻撃手
+    if (moveRow) {
+      moveRow[move.col] = null;
     }
 
     if (allDefenseLeadsToVCT && defensePositions.length > 0) {
@@ -412,28 +434,41 @@ function findVCTMoveRecursive(
   }
 
   const threatMoves = findThreatMoves(board, color);
+  const opponentColor = color === "black" ? "white" : "black";
 
   for (const move of threatMoves) {
-    const afterThreat = copyBoard(board);
-    const afterThreatRow = afterThreat[move.row];
-    if (afterThreatRow) {
-      afterThreatRow[move.col] = color;
+    // 脅威を作る（インプレース）
+    const moveRow = board[move.row];
+    if (moveRow) {
+      moveRow[move.col] = color;
     }
 
-    if (checkFive(afterThreat, move.row, move.col, color)) {
+    if (checkFive(board, move.row, move.col, color)) {
+      // 元に戻す（Undo）
+      if (moveRow) {
+        moveRow[move.col] = null;
+      }
       return move;
     }
 
     const defensePositions = getThreatDefensePositions(
-      afterThreat,
+      board,
       move.row,
       move.col,
       color,
     );
 
     if (defensePositions.length === 0) {
-      if (isThreat(afterThreat, move.row, move.col, color)) {
+      if (isThreat(board, move.row, move.col, color)) {
+        // 元に戻す（Undo）
+        if (moveRow) {
+          moveRow[move.col] = null;
+        }
         return move;
+      }
+      // 元に戻す（Undo）
+      if (moveRow) {
+        moveRow[move.col] = null;
       }
       continue;
     }
@@ -442,7 +477,7 @@ function findVCTMoveRecursive(
     for (const defensePos of defensePositions) {
       if (color === "white") {
         const forbiddenResult = checkForbiddenMove(
-          afterThreat,
+          board,
           defensePos.row,
           defensePos.col,
         );
@@ -451,17 +486,28 @@ function findVCTMoveRecursive(
         }
       }
 
-      const afterDefense = copyBoard(afterThreat);
-      const opponentColor = color === "black" ? "white" : "black";
-      const afterDefenseRow = afterDefense[defensePos.row];
-      if (afterDefenseRow) {
-        afterDefenseRow[defensePos.col] = opponentColor;
+      // 相手が防御した後の局面（インプレース）
+      const defenseRow = board[defensePos.row];
+      if (defenseRow) {
+        defenseRow[defensePos.col] = opponentColor;
       }
 
-      if (!hasVCT(afterDefense, color, depth + 1, limiter, options)) {
+      const vctResult = hasVCT(board, color, depth + 1, limiter, options);
+
+      // 元に戻す（Undo）- 防御手
+      if (defenseRow) {
+        defenseRow[defensePos.col] = null;
+      }
+
+      if (!vctResult) {
         allDefenseLeadsToVCT = false;
         break;
       }
+    }
+
+    // 元に戻す（Undo）- 攻撃手
+    if (moveRow) {
+      moveRow[move.col] = null;
     }
 
     if (allDefenseLeadsToVCT && defensePositions.length > 0) {
@@ -557,30 +603,43 @@ function findVCTSequenceRecursive(
   }
 
   const threatMoves = findThreatMoves(board, color);
+  const opponentColor = color === "black" ? "white" : "black";
 
   for (const move of threatMoves) {
-    const afterThreat = copyBoard(board);
-    const afterThreatRow = afterThreat[move.row];
-    if (afterThreatRow) {
-      afterThreatRow[move.col] = color;
+    // 脅威を作る（インプレース）
+    const moveRow = board[move.row];
+    if (moveRow) {
+      moveRow[move.col] = color;
     }
 
-    if (checkFive(afterThreat, move.row, move.col, color)) {
+    if (checkFive(board, move.row, move.col, color)) {
+      // 元に戻す（Undo）
+      if (moveRow) {
+        moveRow[move.col] = null;
+      }
       sequence.push(move);
       return true;
     }
 
     const defensePositions = getThreatDefensePositions(
-      afterThreat,
+      board,
       move.row,
       move.col,
       color,
     );
 
     if (defensePositions.length === 0) {
-      if (isThreat(afterThreat, move.row, move.col, color)) {
+      if (isThreat(board, move.row, move.col, color)) {
+        // 元に戻す（Undo）
+        if (moveRow) {
+          moveRow[move.col] = null;
+        }
         sequence.push(move);
         return true;
+      }
+      // 元に戻す（Undo）
+      if (moveRow) {
+        moveRow[move.col] = null;
       }
       continue;
     }
@@ -593,7 +652,7 @@ function findVCTSequenceRecursive(
     for (const defensePos of defensePositions) {
       if (color === "white") {
         const forbiddenResult = checkForbiddenMove(
-          afterThreat,
+          board,
           defensePos.row,
           defensePos.col,
         );
@@ -602,18 +661,17 @@ function findVCTSequenceRecursive(
         }
       }
 
-      const afterDefense = copyBoard(afterThreat);
-      const opponentColor = color === "black" ? "white" : "black";
-      const afterDefenseRow = afterDefense[defensePos.row];
-      if (afterDefenseRow) {
-        afterDefenseRow[defensePos.col] = opponentColor;
+      // 相手が防御した後の局面（インプレース）
+      const defenseRow = board[defensePos.row];
+      if (defenseRow) {
+        defenseRow[defensePos.col] = opponentColor;
       }
 
       if (firstDefenseSequence === null) {
         // 最初の防御: 手順を収集
         const subSequence: Position[] = [];
         const found = findVCTSequenceRecursive(
-          afterDefense,
+          board,
           color,
           depth + 1,
           maxDepth,
@@ -622,16 +680,36 @@ function findVCTSequenceRecursive(
           options,
           context,
         );
+
+        // 元に戻す（Undo）- 防御手
+        if (defenseRow) {
+          defenseRow[defensePos.col] = null;
+        }
+
         if (!found) {
           allDefenseLeadsToVCT = false;
           break;
         }
         firstDefenseSequence = [defensePos, ...subSequence];
-      } else if (!hasVCT(afterDefense, color, depth + 1, limiter, options)) {
-        // 2番目以降の防御: hasVCTでチェックのみ
-        allDefenseLeadsToVCT = false;
-        break;
+      } else {
+        const vctResult = hasVCT(board, color, depth + 1, limiter, options);
+
+        // 元に戻す（Undo）- 防御手
+        if (defenseRow) {
+          defenseRow[defensePos.col] = null;
+        }
+
+        if (!vctResult) {
+          // 2番目以降の防御: hasVCTでチェックのみ
+          allDefenseLeadsToVCT = false;
+          break;
+        }
       }
+    }
+
+    // 元に戻す（Undo）- 攻撃手
+    if (moveRow) {
+      moveRow[move.col] = null;
     }
 
     if (
@@ -669,26 +747,33 @@ export function isVCTFirstMove(
     timeLimit: timeLimitMs,
   };
 
-  // 手を置く
-  const afterMove = copyBoard(board);
-  const afterMoveRow = afterMove[move.row];
-  if (afterMoveRow) {
-    afterMoveRow[move.col] = color;
+  // 手を置く（インプレース）
+  const moveRow = board[move.row];
+  if (moveRow) {
+    moveRow[move.col] = color;
   }
 
   // 五連チェック
-  if (checkFive(afterMove, move.row, move.col, color)) {
+  if (checkFive(board, move.row, move.col, color)) {
+    // 元に戻す（Undo）
+    if (moveRow) {
+      moveRow[move.col] = null;
+    }
     return true;
   }
 
   // 脅威かチェック
-  if (!isThreat(afterMove, move.row, move.col, color)) {
+  if (!isThreat(board, move.row, move.col, color)) {
+    // 元に戻す（Undo）
+    if (moveRow) {
+      moveRow[move.col] = null;
+    }
     return false;
   }
 
   // 防御位置を列挙
   const defensePositions = getThreatDefensePositions(
-    afterMove,
+    board,
     move.row,
     move.col,
     color,
@@ -696,15 +781,20 @@ export function isVCTFirstMove(
 
   // 防御不可 = 勝利
   if (defensePositions.length === 0) {
+    // 元に戻す（Undo）
+    if (moveRow) {
+      moveRow[move.col] = null;
+    }
     return true;
   }
 
   // 全防御に対してVCTが継続するか
   const opponentColor = color === "black" ? "white" : "black";
+  let allDefenseLeadsToVCT = true;
   for (const defensePos of defensePositions) {
     if (color === "white") {
       const forbiddenResult = checkForbiddenMove(
-        afterMove,
+        board,
         defensePos.row,
         defensePos.col,
       );
@@ -713,18 +803,31 @@ export function isVCTFirstMove(
       }
     }
 
-    const afterDefense = copyBoard(afterMove);
-    const afterDefenseRow = afterDefense[defensePos.row];
-    if (afterDefenseRow) {
-      afterDefenseRow[defensePos.col] = opponentColor;
+    // 相手が防御した後の局面（インプレース）
+    const defenseRow = board[defensePos.row];
+    if (defenseRow) {
+      defenseRow[defensePos.col] = opponentColor;
     }
 
-    if (!hasVCT(afterDefense, color, 1, limiter, options)) {
-      return false;
+    const vctResult = hasVCT(board, color, 1, limiter, options);
+
+    // 元に戻す（Undo）- 防御手
+    if (defenseRow) {
+      defenseRow[defensePos.col] = null;
+    }
+
+    if (!vctResult) {
+      allDefenseLeadsToVCT = false;
+      break;
     }
   }
 
-  return true;
+  // 元に戻す（Undo）- 攻撃手
+  if (moveRow) {
+    moveRow[move.col] = null;
+  }
+
+  return allDefenseLeadsToVCT;
 }
 
 // 後方互換性のため core/boardUtils から再export
