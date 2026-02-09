@@ -32,7 +32,10 @@ const props = defineProps<{
 const emit = defineEmits<{
   hoverCandidate: [position: Position];
   leaveCandidate: [];
-  hoverPvMove: [position: Position, isSelf: boolean];
+  hoverPvMove: [
+    items: { position: Position; isSelf: boolean }[],
+    type: "best" | "played",
+  ];
   leavePvMove: [];
   showPvLine: [
     items: { position: Position; isSelf: boolean }[],
@@ -44,11 +47,15 @@ const emit = defineEmits<{
 /** アクティブなPVラインのトグル状態 */
 const activePvLine = ref<"best" | "played" | null>(null);
 
+/** クリック固定されたPV手 */
+const pinnedPv = ref<{ line: "best" | "played"; index: number } | null>(null);
+
 // 手数変更時にリセット
 watch(
   () => props.moveIndex,
   () => {
     activePvLine.value = null;
+    pinnedPv.value = null;
   },
 );
 
@@ -342,15 +349,74 @@ function handleCandidateLeave(): void {
   emit("leaveCandidate");
 }
 
-function handlePVMoveEnter(item: PVDisplayItem): void {
-  emit("hoverPvMove", item.position, item.isSelf);
+function emitPvSlice(
+  items: PVDisplayItem[],
+  index: number,
+  type: "best" | "played",
+): void {
+  emit(
+    "hoverPvMove",
+    items.slice(0, index + 1).map((item) => ({
+      position: item.position,
+      isSelf: item.isSelf,
+    })),
+    type,
+  );
+}
+
+function handlePVMoveEnter(
+  items: PVDisplayItem[],
+  index: number,
+  type: "best" | "played",
+): void {
+  if (pinnedPv.value) {
+    return;
+  }
+  emitPvSlice(items, index, type);
 }
 
 function handlePVMoveLeave(): void {
+  if (pinnedPv.value) {
+    return;
+  }
   emit("leavePvMove");
 }
 
+function handlePVMoveClick(
+  items: PVDisplayItem[],
+  index: number,
+  type: "best" | "played",
+): void {
+  // 同じ手をクリック → 固定解除
+  if (pinnedPv.value?.line === type && pinnedPv.value.index === index) {
+    pinnedPv.value = null;
+    emit("leavePvMove");
+    return;
+  }
+
+  // 目玉トグルが同じラインで有効なら解除
+  if (activePvLine.value === type) {
+    activePvLine.value = null;
+    emit("hidePvLine");
+  }
+
+  pinnedPv.value = { line: type, index };
+  emitPvSlice(items, index, type);
+}
+
+/** PV手が固定範囲内か */
+function isPvPinned(line: "best" | "played", index: number): boolean {
+  const pin = pinnedPv.value;
+  return pin !== null && pin.line === line && index <= pin.index;
+}
+
 function togglePvLine(line: "best" | "played", pvLine: PVLine): void {
+  // PV固定が同じラインで有効なら解除
+  if (pinnedPv.value?.line === line) {
+    pinnedPv.value = null;
+    emit("leavePvMove");
+  }
+
   if (activePvLine.value === line) {
     activePvLine.value = null;
     emit("hidePvLine");
@@ -530,22 +596,24 @@ function isPlayed(candidate: { position: Position }): boolean {
             </button>
           </div>
           <div class="pv-sequence">
-            <span
+            <button
               v-for="(item, idx) in bestPVLine.items"
               :key="`best-${idx}`"
+              type="button"
               class="pv-move"
               :class="{
                 'pv-self': item.isSelf,
                 'pv-opponent': !item.isSelf,
+                'pv-pinned': isPvPinned('best', idx),
               }"
-              tabindex="0"
-              @mouseenter="handlePVMoveEnter(item)"
+              @mouseenter="handlePVMoveEnter(bestPVLine.items, idx, 'best')"
               @mouseleave="handlePVMoveLeave"
-              @focus="handlePVMoveEnter(item)"
+              @focus="handlePVMoveEnter(bestPVLine.items, idx, 'best')"
               @blur="handlePVMoveLeave"
+              @click="handlePVMoveClick(bestPVLine.items, idx, 'best')"
             >
               {{ item.text }}
-            </span>
+            </button>
           </div>
         </template>
 
@@ -567,22 +635,24 @@ function isPlayed(candidate: { position: Position }): boolean {
             </button>
           </div>
           <div class="pv-sequence">
-            <span
+            <button
               v-for="(item, idx) in playedPVLine.items"
               :key="`played-${idx}`"
+              type="button"
               class="pv-move"
               :class="{
                 'pv-self': item.isSelf,
                 'pv-opponent': !item.isSelf,
+                'pv-pinned': isPvPinned('played', idx),
               }"
-              tabindex="0"
-              @mouseenter="handlePVMoveEnter(item)"
+              @mouseenter="handlePVMoveEnter(playedPVLine.items, idx, 'played')"
               @mouseleave="handlePVMoveLeave"
-              @focus="handlePVMoveEnter(item)"
+              @focus="handlePVMoveEnter(playedPVLine.items, idx, 'played')"
               @blur="handlePVMoveLeave"
+              @click="handlePVMoveClick(playedPVLine.items, idx, 'played')"
             >
               {{ item.text }}
-            </span>
+            </button>
           </div>
         </template>
 
@@ -1010,6 +1080,8 @@ function isPlayed(candidate: { position: Position }): boolean {
 }
 
 .pv-move {
+  border: none;
+  font: inherit;
   padding: 0 var(--size-2);
   border-radius: var(--size-2);
   cursor: pointer;
@@ -1030,6 +1102,11 @@ function isPlayed(candidate: { position: Position }): boolean {
 .pv-opponent {
   background: rgba(0, 0, 0, 0.08);
   color: var(--color-text-secondary);
+}
+
+.pv-pinned {
+  outline: 1px solid currentColor;
+  outline-offset: 0;
 }
 
 .pv-note {

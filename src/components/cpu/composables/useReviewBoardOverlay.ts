@@ -17,7 +17,10 @@ import { useCpuReviewStore } from "@/stores/cpuReviewStore";
 interface UseReviewBoardOverlayReturn {
   handleHoverCandidate: (position: Position) => void;
   handleLeaveCandidate: () => void;
-  handleHoverPVMove: (position: Position, isSelf: boolean) => void;
+  handleHoverPVMove: (
+    items: { position: Position; isSelf: boolean }[],
+    type: "best" | "played",
+  ) => void;
   handleLeavePVMove: () => void;
   handleShowPvLine: (
     items: { position: Position; isSelf: boolean }[],
@@ -38,11 +41,11 @@ export function useReviewBoardOverlay(): UseReviewBoardOverlayReturn {
   /** 候補手ホバー位置 */
   const hoveredCandidatePosition = ref<Position | null>(null);
 
-  /** PV手単発ホバーの仮石 */
-  const pvPreviewStone = ref<{
-    position: Position;
-    color: StoneColor;
-  } | null>(null);
+  /** PVホバーの仮石（複数手） */
+  const pvPreviewStones = ref<{ position: Position; color: StoneColor }[]>([]);
+
+  /** PVホバーの種別（"best" 時は現在手を除去） */
+  const pvHoverType = ref<"best" | "played" | null>(null);
 
   /** PVライン全体表示のアイテム */
   const pvLineItems = ref<{ position: Position; isSelf: boolean }[]>([]);
@@ -68,19 +71,25 @@ export function useReviewBoardOverlay(): UseReviewBoardOverlayReturn {
     hoveredCandidatePosition.value = null;
   }
 
-  function handleHoverPVMove(position: Position, isSelf: boolean): void {
+  function handleHoverPVMove(
+    items: { position: Position; isSelf: boolean }[],
+    type: "best" | "played",
+  ): void {
     const evalMove = reviewStore.moves[reviewStore.currentMoveIndex - 1];
     if (!evalMove?.color) {
       return;
     }
-    const color: StoneColor = isSelf
-      ? evalMove.color
-      : getOppositeColor(evalMove.color);
-    pvPreviewStone.value = { position, color };
+    const evalColor = evalMove.color;
+    pvPreviewStones.value = items.map((item) => ({
+      position: item.position,
+      color: item.isSelf ? evalColor : getOppositeColor(evalColor),
+    }));
+    pvHoverType.value = type;
   }
 
   function handleLeavePVMove(): void {
-    pvPreviewStone.value = null;
+    pvPreviewStones.value = [];
+    pvHoverType.value = null;
   }
 
   function handleShowPvLine(
@@ -98,7 +107,8 @@ export function useReviewBoardOverlay(): UseReviewBoardOverlayReturn {
 
   /** 手数変更時などにすべてのプレビューをクリア */
   function clearPreview(): void {
-    pvPreviewStone.value = null;
+    pvPreviewStones.value = [];
+    pvHoverType.value = null;
     pvLineItems.value = [];
     pvLineType.value = null;
   }
@@ -108,19 +118,20 @@ export function useReviewBoardOverlay(): UseReviewBoardOverlayReturn {
   /** PVプレビュー石を含む盤面 */
   const displayBoardState = computed<BoardState>(() => {
     const board = reviewStore.boardAtCurrentMove;
-    const preview = pvPreviewStone.value;
+    const previewStones = pvPreviewStones.value;
     const lineItems = pvLineItems.value;
 
-    if (!preview && lineItems.length === 0) {
+    if (previewStones.length === 0 && lineItems.length === 0) {
       return board;
     }
 
     const newBoard = board.map((row) => [...row]) as BoardState;
     const evalColor = getEvalMoveColor();
     const lineType = pvLineType.value;
+    const isBestMode = lineType === "best" || pvHoverType.value === "best";
 
-    // "best" PVライン表示時: 現在の手の石を除去
-    if (lineType === "best" && reviewStore.currentMoveIndex > 0) {
+    // "best" モード時: 現在の手の石を除去
+    if (isBestMode && reviewStore.currentMoveIndex > 0) {
       const currentMove = reviewStore.moves[reviewStore.currentMoveIndex - 1];
       if (currentMove) {
         const row = newBoard[currentMove.position.row];
@@ -144,11 +155,13 @@ export function useReviewBoardOverlay(): UseReviewBoardOverlayReturn {
       }
     }
 
-    // 単発ホバーの石を追加
-    if (preview && !newBoard[preview.position.row]?.[preview.position.col]) {
-      const row = newBoard[preview.position.row];
-      if (row) {
-        row[preview.position.col] = preview.color;
+    // PVホバーの石を追加
+    for (const stone of previewStones) {
+      if (!newBoard[stone.position.row]?.[stone.position.col]) {
+        const row = newBoard[stone.position.row];
+        if (row) {
+          row[stone.position.col] = stone.color;
+        }
       }
     }
 
@@ -161,14 +174,15 @@ export function useReviewBoardOverlay(): UseReviewBoardOverlayReturn {
   const stoneLabels = computed(() => {
     const labels = new Map<string, StoneLabel>();
     const lineType = pvLineType.value;
+    const isBestMode = lineType === "best" || pvHoverType.value === "best";
 
     for (let i = 0; i < reviewStore.currentMoveIndex; i++) {
       const move = reviewStore.moves[i];
       if (!move) {
         continue;
       }
-      // "best" PVライン表示時: 現在の手のラベルを除外
-      if (lineType === "best" && i === reviewStore.currentMoveIndex - 1) {
+      // "best" モード時: 現在の手のラベルを除外
+      if (isBestMode && i === reviewStore.currentMoveIndex - 1) {
         continue;
       }
       labels.set(`${move.position.row},${move.position.col}`, {
@@ -199,6 +213,24 @@ export function useReviewBoardOverlay(): UseReviewBoardOverlayReturn {
       }
     }
 
+    // PVホバー石の番号ラベル（PV内の通し番号）
+    const previewStones = pvPreviewStones.value;
+    if (previewStones.length > 0) {
+      for (let i = 0; i < previewStones.length; i++) {
+        const stone = previewStones[i];
+        if (!stone) {
+          continue;
+        }
+        const key = `${stone.position.row},${stone.position.col}`;
+        if (!labels.has(key)) {
+          labels.set(key, {
+            text: String(i + 1),
+            color: stone.color === "black" ? "#ffffff" : "#000000",
+          });
+        }
+      }
+    }
+
     return labels;
   });
 
@@ -208,9 +240,10 @@ export function useReviewBoardOverlay(): UseReviewBoardOverlayReturn {
   const displayMarks = computed<Mark[]>(() => {
     const marks: Mark[] = [];
     const lineType = pvLineType.value;
+    const isBestMode = lineType === "best" || pvHoverType.value === "best";
 
-    // 現在の手をcircleマークで表示（"best" PVライン時は非表示）
-    if (reviewStore.currentMoveIndex > 0 && lineType !== "best") {
+    // 現在の手をcircleマークで表示（"best" モード時は非表示）
+    if (reviewStore.currentMoveIndex > 0 && !isBestMode) {
       const lastMove = reviewStore.moves[reviewStore.currentMoveIndex - 1];
       if (lastMove) {
         marks.push({
@@ -222,10 +255,10 @@ export function useReviewBoardOverlay(): UseReviewBoardOverlayReturn {
       }
     }
 
-    // 評価がinaccuracy以上の場合、最善手をcrossマークで表示（"best" PVライン時は非表示）
+    // 評価がinaccuracy以上の場合、最善手をcrossマークで表示（"best" モード時は非表示）
     const evaluation = reviewStore.currentEvaluation;
     if (
-      lineType !== "best" &&
+      !isBestMode &&
       evaluation?.isPlayerMove &&
       (evaluation.quality === "inaccuracy" ||
         evaluation.quality === "mistake" ||
@@ -259,11 +292,11 @@ export function useReviewBoardOverlay(): UseReviewBoardOverlayReturn {
       });
     }
 
-    // PV手ホバー時のcircleマーク
-    if (pvPreviewStone.value) {
+    // PVホバー時のcircleマーク
+    for (const stone of pvPreviewStones.value) {
       marks.push({
-        id: "review-pv-preview",
-        positions: [pvPreviewStone.value.position],
+        id: `review-pv-preview-${stone.position.row}-${stone.position.col}`,
+        positions: [stone.position],
         markType: "circle",
         placedAtDialogueIndex: -2,
       });
