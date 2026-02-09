@@ -52,11 +52,15 @@ import {
   ASPIRATION_WINDOW,
   calculateDynamicTimeLimit,
   DEFAULT_ABSOLUTE_TIME_LIMIT,
+  FUTILITY_MARGINS,
+  hasImmediateThreat,
   INFINITY,
   isTacticalMove,
   LMR_MIN_DEPTH,
   LMR_MOVE_THRESHOLD,
   LMR_REDUCTION,
+  NMP_MIN_DEPTH,
+  NMP_REDUCTION,
 } from "./techniques";
 import { findVCFMove } from "./vcf";
 
@@ -441,6 +445,7 @@ export function minimaxWithTT(
   betaInit: number,
   lastMove: Position | null,
   ctx: SearchContext,
+  allowNullMove = true,
 ): number {
   ctx.stats.nodes++;
 
@@ -540,6 +545,34 @@ export function minimaxWithTT(
     return score;
   }
 
+  // =========================================================================
+  // Null Move Pruning (NMP)
+  // 手番をパス（何も打たない）して浅く探索し、それでも有利なら枝刈り
+  // =========================================================================
+  if (
+    ctx.evaluationOptions.enableNullMovePruning &&
+    allowNullMove &&
+    depth >= NMP_MIN_DEPTH &&
+    !hasImmediateThreat(board, getOppositeColor(currentColor))
+  ) {
+    const nmpScore = minimaxWithTT(
+      board,
+      hash,
+      depth - 1 - NMP_REDUCTION,
+      !isMaximizing,
+      perspective,
+      alpha,
+      beta,
+      lastMove,
+      ctx,
+      false, // 連続NMP防止
+    );
+    if (isMaximizing ? nmpScore >= beta : nmpScore <= alpha) {
+      ctx.stats.nullMoveCutoffs++;
+      return nmpScore;
+    }
+  }
+
   // ソート済み候補手生成（Lazy Evaluation: 深さに応じて動的調整）
   // depth 1では通常は静的評価をスキップ（リーフノードはevaluateBoardで評価されるため）
   // ただし必須防御が有効な場合はdepth 1でも静的評価を実行
@@ -599,6 +632,35 @@ export function minimaxWithTT(
         if (forbiddenResult.isForbidden) {
           continue; // 禁手はスキップ
         }
+      }
+    }
+
+    // Futility Pruning（depth 1-2 の非戦術手をスキップ）
+    // 静的評価＋マージンが alpha/beta を超えない手は探索不要
+    if (
+      ctx.evaluationOptions.enableFutilityPruning &&
+      depth >= 1 &&
+      depth <= 2 &&
+      moveIndex > 0 && // 最初の手はスキップしない
+      bestScore > -PATTERN_SCORES.FIVE + 5000 && // 勝ち/負け確定でない
+      bestScore < PATTERN_SCORES.FIVE - 5000 &&
+      !isTacticalMove(board, move, currentColor) // 四を作る手は除外
+    ) {
+      const futilityMargin = FUTILITY_MARGINS[depth] ?? 0;
+      const staticEval = evaluatePosition(
+        board,
+        move.row,
+        move.col,
+        currentColor,
+        ctx.evaluationOptions,
+      );
+      if (
+        isMaximizing
+          ? staticEval + futilityMargin <= alpha
+          : staticEval - futilityMargin >= beta
+      ) {
+        ctx.stats.futilityPrunes++;
+        continue;
       }
     }
 

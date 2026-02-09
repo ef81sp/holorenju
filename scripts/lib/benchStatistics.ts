@@ -54,6 +54,10 @@ interface PlayerMoveStats {
   thinkingTimeOverCount: number;
   /** 思考時間が長い着手の詳細（上位をゲーム走査後にソート） */
   slowMoves: SlowMoveInfo[];
+  /** Null Move Pruning によるカットオフ総数 */
+  totalNullMoveCutoffs: number;
+  /** Futility Pruning によるスキップ総数 */
+  totalFutilityPrunes: number;
 }
 
 interface SlowMoveInfo {
@@ -205,6 +209,8 @@ function initPlayerMoveStats(): PlayerMoveStats {
     thinkingTimeSum: 0,
     thinkingTimeOverCount: 0,
     slowMoves: [],
+    totalNullMoveCutoffs: 0,
+    totalFutilityPrunes: 0,
   };
 }
 
@@ -433,6 +439,8 @@ export function computeStats(data: BenchmarkDataFile): BenchStats {
           ps.totalBoardCopies += stats.boardCopies ?? 0;
           ps.totalThreatDetectionCalls += stats.threatDetectionCalls ?? 0;
           ps.totalEvaluationCalls += stats.evaluationCalls ?? 0;
+          ps.totalNullMoveCutoffs += stats.nullMoveCutoffs ?? 0;
+          ps.totalFutilityPrunes += stats.futilityPrunes ?? 0;
         }
       }
 
@@ -769,6 +777,12 @@ export function formatStats(stats: BenchStats, filename: string): string {
       ln(
         `    評価関数: ${ps.totalEvaluationCalls} (ノード比: ${fmtRatio(ps.totalEvaluationCalls)})`,
       );
+      if (ps.totalNullMoveCutoffs > 0) {
+        ln(`    NMPカットオフ: ${ps.totalNullMoveCutoffs}`);
+      }
+      if (ps.totalFutilityPrunes > 0) {
+        ln(`    Futilityスキップ: ${ps.totalFutilityPrunes}`);
+      }
     } else {
       ln("    (データなし)");
     }

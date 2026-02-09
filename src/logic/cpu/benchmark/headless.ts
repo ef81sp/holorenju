@@ -69,6 +69,10 @@ export interface SearchStatsRecord {
   threatDetectionCalls: number;
   /** 評価関数呼び出し回数 */
   evaluationCalls: number;
+  /** Null Move Pruning によるカットオフ数 */
+  nullMoveCutoffs?: number;
+  /** Futility Pruning によるスキップ数 */
+  futilityPrunes?: number;
 }
 
 /**
@@ -295,6 +299,8 @@ export function runHeadlessGame(
         boardCopies: result.stats.boardCopies,
         threatDetectionCalls: result.stats.threatDetectionCalls,
         evaluationCalls: result.stats.evaluationCalls,
+        nullMoveCutoffs: result.stats.nullMoveCutoffs,
+        futilityPrunes: result.stats.futilityPrunes,
       };
     }
 

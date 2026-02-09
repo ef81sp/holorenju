@@ -243,6 +243,8 @@ describe("複数方向脅威ボーナス", () => {
       enableSingleFourPenalty: false,
       singleFourPenaltyMultiplier: 1.0,
       enableMiseThreat: false,
+      enableNullMovePruning: false,
+      enableFutilityPruning: false,
     });
 
     // enableMultiThreat無効時のスコア
@@ -257,6 +259,8 @@ describe("複数方向脅威ボーナス", () => {
       enableSingleFourPenalty: false,
       singleFourPenaltyMultiplier: 1.0,
       enableMiseThreat: false,
+      enableNullMovePruning: false,
+      enableFutilityPruning: false,
     });
 
     // ボーナス有効時の方が高スコア
@@ -286,6 +290,8 @@ describe("複数方向脅威ボーナス", () => {
       enableSingleFourPenalty: false,
       singleFourPenaltyMultiplier: 1.0,
       enableMiseThreat: false,
+      enableNullMovePruning: false,
+      enableFutilityPruning: false,
     });
 
     const scoreWithoutBonus = evaluatePosition(board, 7, 8, "black", {
@@ -299,6 +305,8 @@ describe("複数方向脅威ボーナス", () => {
       enableSingleFourPenalty: false,
       singleFourPenaltyMultiplier: 1.0,
       enableMiseThreat: false,
+      enableNullMovePruning: false,
+      enableFutilityPruning: false,
     });
 
     // 1方向のみなので差がほぼ0
@@ -333,6 +341,8 @@ describe("カウンターフォー", () => {
       enableSingleFourPenalty: false,
       singleFourPenaltyMultiplier: 1.0,
       enableMiseThreat: false,
+      enableNullMovePruning: false,
+      enableFutilityPruning: false,
     });
 
     // enableCounterFour無効時のスコア
@@ -347,6 +357,8 @@ describe("カウンターフォー", () => {
       enableSingleFourPenalty: false,
       singleFourPenaltyMultiplier: 1.0,
       enableMiseThreat: false,
+      enableNullMovePruning: false,
+      enableFutilityPruning: false,
     });
 
     // カウンターフォー有効時の方が高スコア（防御スコアが1.5倍）
@@ -372,6 +384,8 @@ describe("カウンターフォー", () => {
       enableSingleFourPenalty: false,
       singleFourPenaltyMultiplier: 1.0,
       enableMiseThreat: false,
+      enableNullMovePruning: false,
+      enableFutilityPruning: false,
     });
 
     const scoreWithoutCounter = evaluatePosition(board, 5, 8, "black", {
@@ -385,6 +399,8 @@ describe("カウンターフォー", () => {
       enableSingleFourPenalty: false,
       singleFourPenaltyMultiplier: 1.0,
       enableMiseThreat: false,
+      enableNullMovePruning: false,
+      enableFutilityPruning: false,
     });
 
     // 自分が四を作らないのでスコアは同じ
@@ -459,6 +475,8 @@ describe("単発四ペナルティ", () => {
     enableSingleFourPenalty: true,
     singleFourPenaltyMultiplier: 0.0, // 100%減点
     enableMiseThreat: false,
+    enableNullMovePruning: false,
+    enableFutilityPruning: false,
   };
 
   it("後続脅威がない四は低評価される", () => {
@@ -584,6 +602,8 @@ describe("禁手追い込み三（FORBIDDEN_TRAP_THREE）", () => {
       enableSingleFourPenalty: false,
       singleFourPenaltyMultiplier: 1.0,
       enableMiseThreat: false,
+      enableNullMovePruning: false,
+      enableFutilityPruning: false,
     });
 
     // 10Fが禁手であることを確認
@@ -643,6 +663,8 @@ describe("禁手追い込み三（FORBIDDEN_TRAP_THREE）", () => {
       enableSingleFourPenalty: false,
       singleFourPenaltyMultiplier: 1.0,
       enableMiseThreat: false,
+      enableNullMovePruning: false,
+      enableFutilityPruning: false,
     });
 
     // 無関係な位置（追い込みにならない）
@@ -657,6 +679,8 @@ describe("禁手追い込み三（FORBIDDEN_TRAP_THREE）", () => {
       enableSingleFourPenalty: false,
       singleFourPenaltyMultiplier: 1.0,
       enableMiseThreat: false,
+      enableNullMovePruning: false,
+      enableFutilityPruning: false,
     });
 
     // 5Gに打つ手は追い込みボーナスで高スコアになるべき
@@ -683,6 +707,8 @@ describe("禁手追い込み三（FORBIDDEN_TRAP_THREE）", () => {
       enableSingleFourPenalty: false,
       singleFourPenaltyMultiplier: 1.0,
       enableMiseThreat: false,
+      enableNullMovePruning: false,
+      enableFutilityPruning: false,
     });
 
     // FORBIDDEN_TRAP_THREEボーナスは含まれないはず

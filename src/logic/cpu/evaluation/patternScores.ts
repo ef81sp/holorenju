@@ -78,6 +78,10 @@ export interface EvaluationOptions {
   singleFourPenaltyMultiplier: number;
   /** ミセ手脅威防御を有効にするか（相手のミセ手を止めない手を除外） */
   enableMiseThreat: boolean;
+  /** Null Move Pruning を有効にするか */
+  enableNullMovePruning: boolean;
+  /** Futility Pruning を有効にするか */
+  enableFutilityPruning: boolean;
   /** 事前計算された脅威情報（最適化用、ルートノードで計算して渡す） */
   precomputedThreats?: ThreatInfo;
 }
@@ -96,6 +100,8 @@ export const DEFAULT_EVAL_OPTIONS: EvaluationOptions = {
   enableSingleFourPenalty: false,
   singleFourPenaltyMultiplier: 1.0, // ペナルティ無効時は1.0（100%維持）
   enableMiseThreat: false,
+  enableNullMovePruning: false,
+  enableFutilityPruning: false,
 };
 
 /**
@@ -112,6 +118,8 @@ export const FULL_EVAL_OPTIONS: EvaluationOptions = {
   enableSingleFourPenalty: true,
   singleFourPenaltyMultiplier: 0.0, // 全機能有効時は0.0（単独四は完全に無価値）
   enableMiseThreat: true,
+  enableNullMovePruning: true,
+  enableFutilityPruning: true,
 };
 
 /**

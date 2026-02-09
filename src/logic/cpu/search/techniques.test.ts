@@ -11,6 +11,7 @@ import { createEmptyBoard } from "@/logic/renjuRules";
 import { DEFAULT_EVAL_OPTIONS, PATTERN_SCORES } from "../evaluation";
 import { placeStonesOnBoard } from "../testUtils";
 import { findBestMoveIterativeWithTT } from "./minimax";
+import { hasImmediateThreat } from "./techniques";
 
 describe("LMR タクティカルムーブ除外", () => {
   it("四を作る手が正しく検出される", () => {
@@ -101,6 +102,73 @@ describe("LMR タクティカルムーブ除外", () => {
     // 連続四: (7,3) または (7,7)
     // 跳び四: (7,8) で ●●●・●
     expect([3, 7, 8]).toContain(result.position.col);
+  });
+});
+
+describe("hasImmediateThreat", () => {
+  it("相手に四がある場合 true を返す", () => {
+    const board = createEmptyBoard();
+    // 白が4つ並んでいる（片端開き = 四）
+    placeStonesOnBoard(board, [
+      { row: 7, col: 4, color: "white" },
+      { row: 7, col: 5, color: "white" },
+      { row: 7, col: 6, color: "white" },
+      { row: 7, col: 7, color: "white" },
+    ]);
+    expect(hasImmediateThreat(board, "white")).toBe(true);
+  });
+
+  it("相手に四がない場合 false を返す", () => {
+    const board = createEmptyBoard();
+    // 白が3つだけ（活三だが四ではない）
+    placeStonesOnBoard(board, [
+      { row: 7, col: 5, color: "white" },
+      { row: 7, col: 6, color: "white" },
+      { row: 7, col: 7, color: "white" },
+    ]);
+    expect(hasImmediateThreat(board, "white")).toBe(false);
+  });
+
+  it("両端が塞がれた4連は脅威ではない", () => {
+    const board = createEmptyBoard();
+    // 白4連だが両端が黒で塞がれている
+    placeStonesOnBoard(board, [
+      { row: 7, col: 3, color: "black" },
+      { row: 7, col: 4, color: "white" },
+      { row: 7, col: 5, color: "white" },
+      { row: 7, col: 6, color: "white" },
+      { row: 7, col: 7, color: "white" },
+      { row: 7, col: 8, color: "black" },
+    ]);
+    expect(hasImmediateThreat(board, "white")).toBe(false);
+  });
+
+  it("空盤では脅威なし", () => {
+    const board = createEmptyBoard();
+    expect(hasImmediateThreat(board, "black")).toBe(false);
+    expect(hasImmediateThreat(board, "white")).toBe(false);
+  });
+
+  it("縦方向の四も検出する", () => {
+    const board = createEmptyBoard();
+    placeStonesOnBoard(board, [
+      { row: 4, col: 7, color: "black" },
+      { row: 5, col: 7, color: "black" },
+      { row: 6, col: 7, color: "black" },
+      { row: 7, col: 7, color: "black" },
+    ]);
+    expect(hasImmediateThreat(board, "black")).toBe(true);
+  });
+
+  it("斜め方向の四も検出する", () => {
+    const board = createEmptyBoard();
+    placeStonesOnBoard(board, [
+      { row: 4, col: 4, color: "white" },
+      { row: 5, col: 5, color: "white" },
+      { row: 6, col: 6, color: "white" },
+      { row: 7, col: 7, color: "white" },
+    ]);
+    expect(hasImmediateThreat(board, "white")).toBe(true);
   });
 });
 

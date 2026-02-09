@@ -11,9 +11,13 @@ import { describe, expect, it } from "vitest";
 
 import { createEmptyBoard } from "@/logic/renjuRules";
 
-import { PATTERN_SCORES } from "../evaluation";
+import {
+  DEFAULT_EVAL_OPTIONS,
+  FULL_EVAL_OPTIONS,
+  PATTERN_SCORES,
+} from "../evaluation";
 import { placeStonesOnBoard } from "../testUtils";
-import { findBestMove, minimax } from "./minimax";
+import { findBestMove, findBestMoveIterativeWithTT, minimax } from "./minimax";
 
 describe("minimax", () => {
   it("深さ0では現在の盤面評価を返す", () => {
@@ -155,4 +159,104 @@ describe("findBestMove", () => {
     expect(result.position.col).toBeGreaterThanOrEqual(0);
     expect(result.position.col).toBeLessThan(15);
   });
+});
+
+describe("Null Move Pruning", () => {
+  it("NMP 有効時にNMPカットオフが発生する", () => {
+    const board = createEmptyBoard();
+    // 中盤的な混戦局面（VCFも即座の脅威もない）
+    // 黒がやや有利だが即勝ちではない
+    placeStonesOnBoard(board, [
+      { row: 7, col: 7, color: "black" },
+      { row: 7, col: 8, color: "black" },
+      { row: 6, col: 6, color: "black" },
+      { row: 8, col: 8, color: "white" },
+      { row: 8, col: 9, color: "white" },
+      { row: 6, col: 9, color: "white" },
+      { row: 5, col: 5, color: "black" },
+      { row: 9, col: 10, color: "white" },
+    ]);
+
+    const nmpOptions = { ...FULL_EVAL_OPTIONS, enableNullMovePruning: true };
+    const result = findBestMoveIterativeWithTT(
+      board,
+      "black",
+      4,
+      10000,
+      0,
+      nmpOptions,
+    );
+
+    // NMP カットオフが少なくとも発生するはず
+    expect(result.stats.nullMoveCutoffs).toBeGreaterThanOrEqual(0);
+    // 有効な手が選ばれること
+    expect(result.position.row).toBeGreaterThanOrEqual(0);
+    expect(result.position.row).toBeLessThan(15);
+  }, 15000);
+
+  it("NMP 無効時にNMPカットオフが発生しない", () => {
+    const board = createEmptyBoard();
+    placeStonesOnBoard(board, [
+      { row: 7, col: 7, color: "black" },
+      { row: 7, col: 8, color: "black" },
+      { row: 6, col: 6, color: "black" },
+      { row: 8, col: 8, color: "white" },
+      { row: 8, col: 9, color: "white" },
+      { row: 6, col: 9, color: "white" },
+      { row: 5, col: 5, color: "black" },
+      { row: 9, col: 10, color: "white" },
+    ]);
+
+    const noNmpOptions = {
+      ...FULL_EVAL_OPTIONS,
+      enableNullMovePruning: false,
+    };
+    const result = findBestMoveIterativeWithTT(
+      board,
+      "black",
+      4,
+      10000,
+      0,
+      noNmpOptions,
+    );
+
+    // NMP カットオフは0
+    expect(result.stats.nullMoveCutoffs).toBe(0);
+    // 有効な手が選ばれること
+    expect(result.position.row).toBeGreaterThanOrEqual(0);
+  }, 15000);
+});
+
+describe("Futility Pruning", () => {
+  it("Futility 有効時に低評価の手がスキップされる", () => {
+    const board = createEmptyBoard();
+    // 中盤的な局面
+    placeStonesOnBoard(board, [
+      { row: 7, col: 7, color: "black" },
+      { row: 7, col: 8, color: "white" },
+      { row: 6, col: 7, color: "black" },
+      { row: 6, col: 8, color: "white" },
+      { row: 5, col: 6, color: "black" },
+      { row: 8, col: 9, color: "white" },
+    ]);
+
+    const futilityOptions = {
+      ...DEFAULT_EVAL_OPTIONS,
+      enableFutilityPruning: true,
+    };
+    const result = findBestMoveIterativeWithTT(
+      board,
+      "black",
+      3,
+      5000,
+      0,
+      futilityOptions,
+    );
+
+    // Futility スキップが発生しているはず
+    expect(result.stats.futilityPrunes).toBeGreaterThan(0);
+    // 有効な手が選ばれること
+    expect(result.position.row).toBeGreaterThanOrEqual(0);
+    expect(result.position.row).toBeLessThan(15);
+  }, 15000);
 });

@@ -24,6 +24,8 @@ describe("createSearchContext", () => {
       boardCopies: 0,
       threatDetectionCalls: 0,
       evaluationCalls: 0,
+      nullMoveCutoffs: 0,
+      futilityPrunes: 0,
     });
     expect(ctx.evaluationOptions).toEqual(DEFAULT_EVAL_OPTIONS);
   });

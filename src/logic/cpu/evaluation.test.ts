@@ -278,6 +278,8 @@ describe("evaluatePosition 盤面不変性", () => {
       enableSingleFourPenalty: true,
       singleFourPenaltyMultiplier: 0.0,
       enableMiseThreat: true,
+      enableNullMovePruning: false,
+      enableFutilityPruning: false,
     });
 
     expect(board).toEqual(snapshot);
@@ -302,6 +304,8 @@ describe("evaluatePosition 盤面不変性", () => {
       enableSingleFourPenalty: false,
       singleFourPenaltyMultiplier: 1.0,
       enableMiseThreat: false,
+      enableNullMovePruning: false,
+      enableFutilityPruning: false,
     });
 
     expect(board).toEqual(snapshot);

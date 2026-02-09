@@ -33,6 +33,10 @@ export interface SearchStats {
   threatDetectionCalls: number;
   /** 評価関数呼び出し回数 */
   evaluationCalls: number;
+  /** Null Move Pruning によるカットオフ数 */
+  nullMoveCutoffs: number;
+  /** Futility Pruning によるスキップ数 */
+  futilityPrunes: number;
 }
 
 /**
@@ -87,6 +91,8 @@ export function createSearchContext(
       boardCopies: 0,
       threatDetectionCalls: 0,
       evaluationCalls: 0,
+      nullMoveCutoffs: 0,
+      futilityPrunes: 0,
     },
     evaluationOptions,
   };

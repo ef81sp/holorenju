@@ -192,6 +192,8 @@ describe("ミセ手デバッグ", () => {
       enableMandatoryDefense: true,
       enableMise: true,
       enableMiseThreat: true,
+      enableNullMovePruning: false,
+      enableFutilityPruning: false,
       enableFukumi: true,
       enableForbiddenTrap: false,
       enableMultiThreat: false,

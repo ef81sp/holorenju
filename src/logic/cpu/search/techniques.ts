@@ -7,7 +7,8 @@
 
 import type { BoardState, Position } from "@/types/game";
 
-import { checkJumpFour } from "@/logic/renjuRules";
+import { BOARD_SIZE } from "@/constants";
+import { checkJumpFour, isValidPosition } from "@/logic/renjuRules";
 
 import { countStones } from "../core/boardUtils";
 import { DIRECTION_INDICES, DIRECTIONS } from "../core/constants";
@@ -146,3 +147,103 @@ export const DEFAULT_ABSOLUTE_TIME_LIMIT = 10000;
 
 /** 無限大の代わりに使う大きな値 */
 export const INFINITY = 1000000;
+
+// =============================================================================
+// Null Move Pruning パラメータ
+// =============================================================================
+
+/** NMP を適用する最小探索深度 */
+export const NMP_MIN_DEPTH = 3;
+
+/** NMP による探索深度の削減量 */
+export const NMP_REDUCTION = 2;
+
+// =============================================================================
+// Futility Pruning パラメータ
+// =============================================================================
+
+/** 深度別の Futility マージン（index = depth） */
+export const FUTILITY_MARGINS = [0, 500, 1500] as const;
+
+// =============================================================================
+// Null Move Pruning 用の軽量脅威チェック
+// =============================================================================
+
+/** 4方向ベクトル（横, 縦, 右下斜め, 右上斜め） */
+const NMP_DIRECTIONS: readonly [number, number][] = [
+  [0, 1],
+  [1, 0],
+  [1, 1],
+  [1, -1],
+];
+
+/**
+ * 指定位置から指定方向に四以上の連があるかチェック
+ *
+ * @returns 連続4個以上で片端以上が空いている場合 true
+ */
+function hasFourInDirection(
+  board: BoardState,
+  row: number,
+  col: number,
+  dr: number,
+  dc: number,
+  color: "black" | "white",
+): boolean {
+  // 重複カウント防止: 正方向の起点のみチェック
+  const prevR = row - dr;
+  const prevC = col - dc;
+  if (isValidPosition(prevR, prevC) && board[prevR]?.[prevC] === color) {
+    return false;
+  }
+
+  // 正方向に連続する石の数をカウント
+  let count = 1;
+  let r = row + dr;
+  let c = col + dc;
+  while (isValidPosition(r, c) && board[r]?.[c] === color) {
+    count++;
+    r += dr;
+    c += dc;
+  }
+
+  if (count < 4) {
+    return false;
+  }
+
+  // 4個以上の連続: 片端以上が空いていれば四（または五以上）
+  const end1Open = isValidPosition(r, c) && board[r]?.[c] === null;
+  const end2Open =
+    isValidPosition(prevR, prevC) && board[prevR]?.[prevC] === null;
+  return end1Open || end2Open;
+}
+
+/**
+ * 相手に即座の脅威（四: 連続4個で片端以上開き）があるかを軽量にチェック
+ *
+ * detectOpponentThreats より大幅に軽量（活三・ミセ手の検出なし）。
+ * NMP の適用条件判定に使用。
+ *
+ * @param board 盤面
+ * @param opponentColor 相手の色
+ * @returns 相手に四がある場合 true
+ */
+export function hasImmediateThreat(
+  board: BoardState,
+  opponentColor: "black" | "white",
+): boolean {
+  for (let row = 0; row < BOARD_SIZE; row++) {
+    for (let col = 0; col < BOARD_SIZE; col++) {
+      if (board[row]?.[col] !== opponentColor) {
+        continue;
+      }
+
+      for (const [dr, dc] of NMP_DIRECTIONS) {
+        if (hasFourInDirection(board, row, col, dr, dc, opponentColor)) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
