@@ -236,6 +236,24 @@ export function sortMoves(
   const killerMoves =
     killers && depth !== undefined ? getKillerMoves(killers, depth) : [];
 
+  // 必須防御用の脅威情報を事前計算（全evaluatePosition呼び出しで共有）
+  let effectiveEvalOptions = evaluationOptions;
+  let precomputedThreats: ReturnType<typeof detectOpponentThreats> | undefined =
+    undefined;
+  if (
+    useStaticEval &&
+    color !== null &&
+    evaluationOptions.enableMandatoryDefense &&
+    !evaluationOptions.precomputedThreats
+  ) {
+    const opponentColor = color === "black" ? "white" : "black";
+    precomputedThreats = detectOpponentThreats(board, opponentColor);
+    effectiveEvalOptions = {
+      ...evaluationOptions,
+      precomputedThreats,
+    };
+  }
+
   // === 第1パス: TT最善手 + Killer Moves + History でスコア付け ===
   for (const move of moves) {
     let score = 0;
@@ -279,7 +297,7 @@ export function sortMoves(
             sm.move.row,
             sm.move.col,
             color,
-            evaluationOptions,
+            effectiveEvalOptions,
           );
           sm.staticEvalDone = true;
         }
@@ -304,12 +322,15 @@ export function sortMoves(
   if (
     useStaticEval &&
     color !== null &&
-    evaluationOptions.enableMandatoryDefense &&
+    effectiveEvalOptions.enableMandatoryDefense &&
     maxStaticEvalCount !== undefined &&
     maxStaticEvalCount < scoredMoves.length
   ) {
-    const opponentColor = color === "black" ? "white" : "black";
-    const threats = detectOpponentThreats(board, opponentColor);
+    // 事前計算済みのthreatsを再利用（なければ計算）
+    const threats =
+      precomputedThreats ??
+      effectiveEvalOptions.precomputedThreats ??
+      detectOpponentThreats(board, color === "black" ? "white" : "black");
     const hasThreats =
       threats.openFours.length > 0 ||
       threats.fours.length > 0 ||

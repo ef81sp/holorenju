@@ -6,13 +6,18 @@
 
 import { describe, expect, it } from "vitest";
 
-import { checkForbiddenMove, createEmptyBoard } from "@/logic/renjuRules";
+import {
+  checkForbiddenMove,
+  copyBoard,
+  createEmptyBoard,
+} from "@/logic/renjuRules";
 
 import { evaluatePosition, evaluateStonePatterns } from "../evaluation";
 import { createBoardWithStones } from "../testUtils";
 import { PATTERN_SCORES } from "./patternScores";
 import {
   canContinueFourAfterDefense,
+  hasFollowUpThreat,
   hasMixedForbiddenPoints,
 } from "./tactics";
 
@@ -683,5 +688,34 @@ describe("禁手追い込み三（FORBIDDEN_TRAP_THREE）", () => {
     // FORBIDDEN_TRAP_THREEボーナスは含まれないはず
     // 活三のスコア（OPEN_THREE）と防御スコアのみ
     expect(scoreNormal).toBeLessThan(PATTERN_SCORES.FORBIDDEN_TRAP_THREE);
+  });
+});
+
+describe("hasFollowUpThreat 盤面不変性", () => {
+  it("呼び出し前後で盤面が変化しない（四あり）", () => {
+    // 白の四を作る配置
+    const board = createBoardWithStones([
+      { row: 7, col: 4, color: "white" },
+      { row: 7, col: 5, color: "white" },
+      { row: 7, col: 6, color: "white" },
+      { row: 7, col: 7, color: "white" },
+    ]);
+    const snapshot = copyBoard(board);
+
+    hasFollowUpThreat(board, 7, 7, "white");
+
+    expect(board).toEqual(snapshot);
+  });
+
+  it("呼び出し前後で盤面が変化しない（四なし）", () => {
+    const board = createBoardWithStones([
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+    ]);
+    const snapshot = copyBoard(board);
+
+    hasFollowUpThreat(board, 7, 6, "black");
+
+    expect(board).toEqual(snapshot);
   });
 });

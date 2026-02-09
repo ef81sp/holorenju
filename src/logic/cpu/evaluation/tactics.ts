@@ -10,7 +10,6 @@ import {
   checkForbiddenMove,
   checkJumpFour,
   checkJumpThree,
-  copyBoard,
   getConsecutiveThreeStraightFourPoints,
   getJumpThreeStraightFourPoints,
   isValidPosition,
@@ -466,7 +465,7 @@ export function isFukumiMove(
 
 /**
  * 四を置いた後に後続脅威があるかチェック
- * 最適化: copyBoardを1回のみ使用し、盤面を直接変更して元に戻す方式
+ * 最適化: boardを直接使用し、防御位置のin-place+undoで盤面を復元
  *
  * @param board 盤面（四を置いた状態）
  * @param row 四を置いた行
@@ -482,13 +481,10 @@ export function hasFollowUpThreat(
 ): boolean {
   const opponentColor = color === "black" ? "white" : "black";
 
-  // 1回だけコピーして、以降は直接変更→復元する
-  const workBoard = copyBoard(board);
-
   // 四の防御位置を見つける
   // 各方向で四を形成しているかチェック
   for (const [dr, dc] of DIRECTIONS) {
-    const pattern = analyzeDirection(workBoard, row, col, dr, dc, color);
+    const pattern = analyzeDirection(board, row, col, dr, dc, color);
 
     // 四を形成している場合
     if (
@@ -501,36 +497,36 @@ export function hasFollowUpThreat(
       // 正方向の端
       let r = row + dr;
       let c = col + dc;
-      while (isValidPosition(r, c) && workBoard[r]?.[c] === color) {
+      while (isValidPosition(r, c) && board[r]?.[c] === color) {
         r += dr;
         c += dc;
       }
-      if (isValidPosition(r, c) && workBoard[r]?.[c] === null) {
+      if (isValidPosition(r, c) && board[r]?.[c] === null) {
         defensePositions.push({ row: r, col: c });
       }
 
       // 負方向の端
       r = row - dr;
       c = col - dc;
-      while (isValidPosition(r, c) && workBoard[r]?.[c] === color) {
+      while (isValidPosition(r, c) && board[r]?.[c] === color) {
         r -= dr;
         c -= dc;
       }
-      if (isValidPosition(r, c) && workBoard[r]?.[c] === null) {
+      if (isValidPosition(r, c) && board[r]?.[c] === null) {
         defensePositions.push({ row: r, col: c });
       }
 
       // 各防御位置について、相手が防御した後も脅威があるかチェック
       for (const defensePos of defensePositions) {
         // 相手の防御を盤面に直接置く
-        const defenseRow = workBoard[defensePos.row];
+        const defenseRow = board[defensePos.row];
         if (defenseRow) {
           defenseRow[defensePos.col] = opponentColor;
         }
 
         // 防御後、自分が四を作れる位置があるかチェック
         const canContinue = canContinueFourAfterDefense(
-          workBoard,
+          board,
           defensePos,
           color,
         );

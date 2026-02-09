@@ -11,7 +11,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { createEmptyBoard } from "@/logic/renjuRules";
+import { copyBoard, createEmptyBoard } from "@/logic/renjuRules";
 
 import {
   evaluateBoard,
@@ -19,7 +19,7 @@ import {
   evaluateStonePatterns,
   PATTERN_SCORES,
 } from "./evaluation";
-import { placeStonesOnBoard } from "./testUtils";
+import { createBoardWithStones, placeStonesOnBoard } from "./testUtils";
 
 describe("evaluateStonePatterns", () => {
   it("単独の石は0スコア", () => {
@@ -241,5 +241,69 @@ describe("evaluateBoard", () => {
 
     const score = evaluateBoard(board, "black");
     expect(score).toBeGreaterThanOrEqual(PATTERN_SCORES.FIVE);
+  });
+});
+
+describe("evaluatePosition 盤面不変性", () => {
+  it("呼び出し前後で盤面が変化しない（基本評価）", () => {
+    const board = createBoardWithStones([
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+    ]);
+    const snapshot = copyBoard(board);
+
+    evaluatePosition(board, 7, 7, "black");
+
+    expect(board).toEqual(snapshot);
+  });
+
+  it("呼び出し前後で盤面が変化しない（全機能有効）", () => {
+    const board = createBoardWithStones([
+      { row: 7, col: 4, color: "black" },
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 5, col: 7, color: "white" },
+      { row: 6, col: 7, color: "white" },
+    ]);
+    const snapshot = copyBoard(board);
+
+    evaluatePosition(board, 7, 7, "black", {
+      enableFukumi: false,
+      enableMise: true,
+      enableForbiddenTrap: true,
+      enableMultiThreat: true,
+      enableCounterFour: true,
+      enableVCT: false,
+      enableMandatoryDefense: true,
+      enableSingleFourPenalty: true,
+      singleFourPenaltyMultiplier: 0.0,
+      enableMiseThreat: true,
+    });
+
+    expect(board).toEqual(snapshot);
+  });
+
+  it("呼び出し前後で盤面が変化しない（白番禁手追い込み）", () => {
+    const board = createBoardWithStones([
+      { row: 7, col: 5, color: "white" },
+      { row: 7, col: 6, color: "white" },
+      { row: 7, col: 7, color: "white" },
+    ]);
+    const snapshot = copyBoard(board);
+
+    evaluatePosition(board, 7, 8, "white", {
+      enableFukumi: false,
+      enableMise: false,
+      enableForbiddenTrap: true,
+      enableMultiThreat: false,
+      enableCounterFour: false,
+      enableVCT: false,
+      enableMandatoryDefense: false,
+      enableSingleFourPenalty: false,
+      singleFourPenaltyMultiplier: 1.0,
+      enableMiseThreat: false,
+    });
+
+    expect(board).toEqual(snapshot);
   });
 });

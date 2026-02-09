@@ -196,29 +196,47 @@ export function evaluatePosition(
     return 0;
   }
 
-  // 五連チェック（最優先）
+  // 五連チェック（最優先、盤面変更前に実行）
   if (checkFive(board, row, col, color)) {
     return PATTERN_SCORES.FIVE;
   }
 
-  // 仮想的に石を置いた盤面でパターンを評価（1回のコピーで使い回す）
-  const testBoard = copyBoard(board);
-  const testRow = testBoard[row];
-  if (testRow) {
-    testRow[col] = color;
+  // インプレースで石を配置
+  const boardRow = board[row];
+  if (boardRow) {
+    boardRow[col] = color;
   }
 
+  // 内部関数で全評価ロジックを実行（early returnが自由にできる）
+  const score = evaluatePositionCore(board, boardRow, row, col, color, options);
+
+  // 確実にUndoする（唯一のUndoポイント）
+  if (boardRow) {
+    boardRow[col] = null;
+  }
+  return score;
+}
+
+function evaluatePositionCore(
+  board: BoardState,
+  boardRow: (StoneColor | null)[] | undefined,
+  row: number,
+  col: number,
+  color: "black" | "white",
+  options: EvaluationOptions,
+): number {
+  const opponentColor = color === "black" ? "white" : "black";
+
   // 白の三三・四四チェック（白には禁手がないため即勝利）
-  if (color === "white" && checkWhiteWinningPattern(testBoard, row, col)) {
+  if (color === "white" && checkWhiteWinningPattern(board, row, col)) {
     return PATTERN_SCORES.FIVE;
   }
 
   // 攻撃スコア: 自分のパターン
-  const attackScore = evaluateStonePatterns(testBoard, row, col, color);
+  const attackScore = evaluateStonePatterns(board, row, col, color);
 
   // 四三ボーナス: 四と有効な活三を同時に作る手
-  const jumpResult = analyzeJumpPatterns(testBoard, row, col, color);
-  const opponentColor = color === "black" ? "white" : "black";
+  const jumpResult = analyzeJumpPatterns(board, row, col, color);
   let fourThreeBonus = 0;
   if (jumpResult.hasFour && jumpResult.hasValidOpenThree) {
     fourThreeBonus = PATTERN_SCORES.FOUR_THREE_BONUS;
@@ -227,8 +245,22 @@ export function evaluatePosition(
   // 必須防御ルール: 相手の活四・活三を止めない手は除外
   if (options.enableMandatoryDefense) {
     // 事前計算された脅威情報があればそれを使用（最適化）
-    const threats =
-      options.precomputedThreats ?? detectOpponentThreats(board, opponentColor);
+    let threats: ThreatInfo = options.precomputedThreats ?? {
+      openFours: [],
+      fours: [],
+      openThrees: [],
+      mises: [],
+    };
+    if (!options.precomputedThreats) {
+      // Undo → detectOpponentThreats → Redo（元の盤面で脅威を検出する必要がある）
+      if (boardRow) {
+        boardRow[col] = null;
+      }
+      threats = detectOpponentThreats(board, opponentColor);
+      if (boardRow) {
+        boardRow[col] = color;
+      }
+    }
 
     // 自分が活四を持っているか（相手の四があっても勝てる唯一の手段）
     // 相手に四がある場合、自分の活四のみが例外（四三でも相手の四を止められない）
@@ -315,12 +347,12 @@ export function evaluatePosition(
   // 禁手追い込みボーナス（白番のみ、オプションで有効時のみ）
   let forbiddenTrapBonus = 0;
   if (options.enableForbiddenTrap && color === "white") {
-    forbiddenTrapBonus = evaluateForbiddenTrap(testBoard, row, col);
+    forbiddenTrapBonus = evaluateForbiddenTrap(board, row, col);
   }
 
   // ミセ手ボーナス: 次に四三を作れる手（オプションで有効時のみ）
   let miseBonus = 0;
-  if (options.enableMise && isMiseMove(testBoard, row, col, color)) {
+  if (options.enableMise && isMiseMove(board, row, col, color)) {
     miseBonus = PATTERN_SCORES.MISE_BONUS;
   }
 
@@ -331,7 +363,7 @@ export function evaluatePosition(
   // 複数方向脅威ボーナス: 2方向以上で脅威を作る手（オプションで有効時のみ）
   let multiThreatBonus = 0;
   if (options.enableMultiThreat) {
-    const threatCount = countThreatDirections(testBoard, row, col, color);
+    const threatCount = countThreatDirections(board, row, col, color);
     multiThreatBonus = evaluateMultiThreat(threatCount);
   }
 
@@ -346,7 +378,7 @@ export function evaluatePosition(
     // 四を作るが四三ではない場合
     if (jumpResult.hasFour && !jumpResult.hasValidOpenThree) {
       // 後続脅威がない場合のみペナルティ
-      if (!hasFollowUpThreat(testBoard, row, col, color)) {
+      if (!hasFollowUpThreat(board, row, col, color)) {
         // FOURスコアにペナルティ適用（倍率は難易度で設定）
         // multiplier=0.0なら1000点全て減点、multiplier=0.1なら900点減点
         const fourCount =
@@ -363,19 +395,19 @@ export function evaluatePosition(
   let defenseScore = 0;
 
   // この位置に相手が置いた場合のスコアを計算（ブロック価値）
-  // testBoardを再利用: 自分の石を消して相手の石を置く
-  if (testRow) {
-    testRow[col] = opponentColor;
+  // boardを再利用: 自分の石を消して相手の石を置く
+  if (boardRow) {
+    boardRow[col] = opponentColor;
   }
   const opponentPatternScore = evaluateStonePatterns(
-    testBoard,
+    board,
     row,
     col,
     opponentColor,
   );
   // 元に戻す（自分の石を戻す）
-  if (testRow) {
-    testRow[col] = color;
+  if (boardRow) {
+    boardRow[col] = color;
   }
 
   // 相手の活三・活四をブロックする手は高評価
