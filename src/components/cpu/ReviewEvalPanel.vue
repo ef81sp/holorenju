@@ -12,7 +12,6 @@ import type { Position } from "@/types/game";
 import { formatMove } from "@/logic/gameRecordParser";
 import { getQualityLabel, getQualityColor } from "@/logic/reviewLogic";
 import ReviewEvalHelpDialog from "./ReviewEvalHelpDialog.vue";
-import VisibilityIcon from "@/assets/icons/visibility.svg?component";
 import {
   getLeafBreakdownItems,
   formatScore as formatScoreUtil,
@@ -37,15 +36,7 @@ const emit = defineEmits<{
     type: "best" | "played",
   ];
   leavePvMove: [];
-  showPvLine: [
-    items: { position: Position; isSelf: boolean }[],
-    type: "best" | "played",
-  ];
-  hidePvLine: [];
 }>();
-
-/** アクティブなPVラインのトグル状態 */
-const activePvLine = ref<"best" | "played" | null>(null);
 
 /** クリック固定されたPV手 */
 const pinnedPv = ref<{ line: "best" | "played"; index: number } | null>(null);
@@ -54,7 +45,6 @@ const pinnedPv = ref<{ line: "best" | "played"; index: number } | null>(null);
 watch(
   () => props.moveIndex,
   () => {
-    activePvLine.value = null;
     pinnedPv.value = null;
   },
 );
@@ -280,7 +270,11 @@ interface PVLine {
 }
 
 /** 候補手からPVデータを構築 */
-function buildPVLine(candidate: ReviewCandidate, label: string): PVLine | null {
+function buildPVLine(
+  candidate: ReviewCandidate,
+  label: string,
+  moveIndex: number,
+): PVLine | null {
   if (
     !candidate.principalVariation ||
     candidate.principalVariation.length <= 1
@@ -295,7 +289,7 @@ function buildPVLine(candidate: ReviewCandidate, label: string): PVLine | null {
       break;
     }
     items.push({
-      text: `${i + 1}.${formatMove(pos)}`,
+      text: `${moveIndex + i}.${formatMove(pos)}`,
       isSelf: i % 2 === 0,
       position: pos,
     });
@@ -311,7 +305,11 @@ const bestPVLine = computed<PVLine | null>(() => {
   if (!eval_ || !best) {
     return null;
   }
-  return buildPVLine(best, `最善 ${formatMove(eval_.bestMove)}`);
+  return buildPVLine(
+    best,
+    `最善 ${formatMove(eval_.bestMove)}`,
+    props.moveIndex,
+  );
 });
 
 /** 実際の手のPV+推移 */
@@ -321,7 +319,11 @@ const playedPVLine = computed<PVLine | null>(() => {
   if (!eval_ || !played) {
     return null;
   }
-  return buildPVLine(played, `実際 ${formatMove(eval_.position)}`);
+  return buildPVLine(
+    played,
+    `実際 ${formatMove(eval_.position)}`,
+    props.moveIndex,
+  );
 });
 
 /** 内訳比較表示が必要か */
@@ -394,12 +396,6 @@ function handlePVMoveClick(
     return;
   }
 
-  // 目玉トグルが同じラインで有効なら解除
-  if (activePvLine.value === type) {
-    activePvLine.value = null;
-    emit("hidePvLine");
-  }
-
   pinnedPv.value = { line: type, index };
   emitPvSlice(items, index, type);
 }
@@ -408,29 +404,6 @@ function handlePVMoveClick(
 function isPvPinned(line: "best" | "played", index: number): boolean {
   const pin = pinnedPv.value;
   return pin !== null && pin.line === line && index <= pin.index;
-}
-
-function togglePvLine(line: "best" | "played", pvLine: PVLine): void {
-  // PV固定が同じラインで有効なら解除
-  if (pinnedPv.value?.line === line) {
-    pinnedPv.value = null;
-    emit("leavePvMove");
-  }
-
-  if (activePvLine.value === line) {
-    activePvLine.value = null;
-    emit("hidePvLine");
-  } else {
-    activePvLine.value = line;
-    emit(
-      "showPvLine",
-      pvLine.items.map((item) => ({
-        position: item.position,
-        isSelf: item.isSelf,
-      })),
-      line,
-    );
-  }
 }
 
 function isPlayed(candidate: { position: Position }): boolean {
@@ -585,15 +558,6 @@ function isPlayed(candidate: { position: Position }): boolean {
             <span class="pv-search-score pv-best-score">
               {{ formatScore(bestPVLine.searchScore) }}
             </span>
-            <button
-              type="button"
-              class="pv-show-button"
-              :class="{ active: activePvLine === 'best' }"
-              aria-label="読み筋を盤面に表示"
-              @click="togglePvLine('best', bestPVLine)"
-            >
-              <VisibilityIcon />
-            </button>
           </div>
           <div class="pv-sequence">
             <button
@@ -624,15 +588,6 @@ function isPlayed(candidate: { position: Position }): boolean {
             <span class="pv-search-score">
               {{ formatScore(playedPVLine.searchScore) }}
             </span>
-            <button
-              type="button"
-              class="pv-show-button"
-              :class="{ active: activePvLine === 'played' }"
-              aria-label="読み筋を盤面に表示"
-              @click="togglePvLine('played', playedPVLine)"
-            >
-              <VisibilityIcon />
-            </button>
           </div>
           <div class="pv-sequence">
             <button
@@ -1040,35 +995,6 @@ function isPlayed(candidate: { position: Position }): boolean {
 
 .pv-best-score {
   color: hsl(186, 60%, 40%);
-}
-
-.pv-show-button {
-  margin-left: auto;
-  width: var(--size-14);
-  height: var(--size-14);
-  padding: 0;
-  background: transparent;
-  border: none;
-  border-radius: var(--size-2);
-  cursor: pointer;
-  color: var(--color-text-secondary);
-  opacity: 0.5;
-  transition: all 0.15s ease;
-  flex-shrink: 0;
-
-  &:hover {
-    opacity: 1;
-  }
-
-  &.active {
-    opacity: 1;
-    color: hsl(186, 60%, 40%);
-  }
-
-  svg {
-    width: 100%;
-    height: 100%;
-  }
 }
 
 .pv-sequence {

@@ -231,8 +231,6 @@ function handleBack(): void {
           @leave-candidate="overlay.handleLeaveCandidate"
           @hover-pv-move="overlay.handleHoverPVMove"
           @leave-pv-move="overlay.handleLeavePVMove"
-          @show-pv-line="overlay.handleShowPvLine"
-          @hide-pv-line="overlay.handleHidePvLine"
         />
       </template>
 

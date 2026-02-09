@@ -22,11 +22,6 @@ interface UseReviewBoardOverlayReturn {
     type: "best" | "played",
   ) => void;
   handleLeavePVMove: () => void;
-  handleShowPvLine: (
-    items: { position: Position; isSelf: boolean }[],
-    type: "best" | "played",
-  ) => void;
-  handleHidePvLine: () => void;
   clearPreview: () => void;
   displayBoardState: ComputedRef<BoardState>;
   stoneLabels: ComputedRef<Map<string, StoneLabel>>;
@@ -46,20 +41,6 @@ export function useReviewBoardOverlay(): UseReviewBoardOverlayReturn {
 
   /** PVホバーの種別（"best" 時は現在手を除去） */
   const pvHoverType = ref<"best" | "played" | null>(null);
-
-  /** PVライン全体表示のアイテム */
-  const pvLineItems = ref<{ position: Position; isSelf: boolean }[]>([]);
-
-  /** PVラインの種別（"best" 時は現在手を除去） */
-  const pvLineType = ref<"best" | "played" | null>(null);
-
-  // ========== Helpers ==========
-
-  /** 評価対象手の色を取得 */
-  function getEvalMoveColor(): "black" | "white" | null {
-    const evalMove = reviewStore.moves[reviewStore.currentMoveIndex - 1];
-    return evalMove?.color ?? null;
-  }
 
   // ========== Event handlers ==========
 
@@ -92,25 +73,10 @@ export function useReviewBoardOverlay(): UseReviewBoardOverlayReturn {
     pvHoverType.value = null;
   }
 
-  function handleShowPvLine(
-    items: { position: Position; isSelf: boolean }[],
-    type: "best" | "played",
-  ): void {
-    pvLineItems.value = items;
-    pvLineType.value = type;
-  }
-
-  function handleHidePvLine(): void {
-    pvLineItems.value = [];
-    pvLineType.value = null;
-  }
-
   /** 手数変更時などにすべてのプレビューをクリア */
   function clearPreview(): void {
     pvPreviewStones.value = [];
     pvHoverType.value = null;
-    pvLineItems.value = [];
-    pvLineType.value = null;
   }
 
   // ========== Computed: 盤面 ==========
@@ -119,16 +85,13 @@ export function useReviewBoardOverlay(): UseReviewBoardOverlayReturn {
   const displayBoardState = computed<BoardState>(() => {
     const board = reviewStore.boardAtCurrentMove;
     const previewStones = pvPreviewStones.value;
-    const lineItems = pvLineItems.value;
 
-    if (previewStones.length === 0 && lineItems.length === 0) {
+    if (previewStones.length === 0) {
       return board;
     }
 
     const newBoard = board.map((row) => [...row]) as BoardState;
-    const evalColor = getEvalMoveColor();
-    const lineType = pvLineType.value;
-    const isBestMode = lineType === "best" || pvHoverType.value === "best";
+    const isBestMode = pvHoverType.value === "best";
 
     // "best" モード時: 現在の手の石を除去
     if (isBestMode && reviewStore.currentMoveIndex > 0) {
@@ -137,20 +100,6 @@ export function useReviewBoardOverlay(): UseReviewBoardOverlayReturn {
         const row = newBoard[currentMove.position.row];
         if (row) {
           row[currentMove.position.col] = null;
-        }
-      }
-    }
-
-    // PVライン全体の石を追加
-    if (lineItems.length > 0 && evalColor) {
-      for (const item of lineItems) {
-        if (!newBoard[item.position.row]?.[item.position.col]) {
-          const row = newBoard[item.position.row];
-          if (row) {
-            row[item.position.col] = item.isSelf
-              ? evalColor
-              : getOppositeColor(evalColor);
-          }
         }
       }
     }
@@ -170,11 +119,10 @@ export function useReviewBoardOverlay(): UseReviewBoardOverlayReturn {
 
   // ========== Computed: ラベル ==========
 
-  /** 石の通し番号ラベル（PVライン石の番号含む） */
+  /** 石の通し番号ラベル（PVプレビュー石の番号含む） */
   const stoneLabels = computed(() => {
     const labels = new Map<string, StoneLabel>();
-    const lineType = pvLineType.value;
-    const isBestMode = lineType === "best" || pvHoverType.value === "best";
+    const isBestMode = pvHoverType.value === "best";
 
     for (let i = 0; i < reviewStore.currentMoveIndex; i++) {
       const move = reviewStore.moves[i];
@@ -191,29 +139,7 @@ export function useReviewBoardOverlay(): UseReviewBoardOverlayReturn {
       });
     }
 
-    // PVライン石の番号ラベル（currentMoveIndexから開始）
-    const lineItems = pvLineItems.value;
-    const evalColor = getEvalMoveColor();
-    if (lineItems.length > 0 && evalColor) {
-      for (let i = 0; i < lineItems.length; i++) {
-        const item = lineItems[i];
-        if (!item) {
-          continue;
-        }
-        const key = `${item.position.row},${item.position.col}`;
-        if (!labels.has(key)) {
-          const stoneColor = item.isSelf
-            ? evalColor
-            : getOppositeColor(evalColor);
-          labels.set(key, {
-            text: String(reviewStore.currentMoveIndex + i),
-            color: stoneColor === "black" ? "#ffffff" : "#000000",
-          });
-        }
-      }
-    }
-
-    // PVホバー石の番号ラベル（PV内の通し番号）
+    // PVホバー石の番号ラベル（手数ベース）
     const previewStones = pvPreviewStones.value;
     if (previewStones.length > 0) {
       for (let i = 0; i < previewStones.length; i++) {
@@ -224,7 +150,7 @@ export function useReviewBoardOverlay(): UseReviewBoardOverlayReturn {
         const key = `${stone.position.row},${stone.position.col}`;
         if (!labels.has(key)) {
           labels.set(key, {
-            text: String(i + 1),
+            text: String(reviewStore.currentMoveIndex + i),
             color: stone.color === "black" ? "#ffffff" : "#000000",
           });
         }
@@ -239,8 +165,7 @@ export function useReviewBoardOverlay(): UseReviewBoardOverlayReturn {
   /** 盤面マーク（現在手・最善手・ホバー・PVプレビュー） */
   const displayMarks = computed<Mark[]>(() => {
     const marks: Mark[] = [];
-    const lineType = pvLineType.value;
-    const isBestMode = lineType === "best" || pvHoverType.value === "best";
+    const isBestMode = pvHoverType.value === "best";
 
     // 現在の手をcircleマークで表示（"best" モード時は非表示）
     if (reviewStore.currentMoveIndex > 0 && !isBestMode) {
@@ -282,16 +207,6 @@ export function useReviewBoardOverlay(): UseReviewBoardOverlayReturn {
       });
     }
 
-    // PVライン全体表示時のcircleマーク
-    for (const item of pvLineItems.value) {
-      marks.push({
-        id: `review-pv-line-${item.position.row}-${item.position.col}`,
-        positions: [item.position],
-        markType: "circle",
-        placedAtDialogueIndex: -2,
-      });
-    }
-
     // PVホバー時のcircleマーク
     for (const stone of pvPreviewStones.value) {
       marks.push({
@@ -310,8 +225,6 @@ export function useReviewBoardOverlay(): UseReviewBoardOverlayReturn {
     handleLeaveCandidate,
     handleHoverPVMove,
     handleLeavePVMove,
-    handleShowPvLine,
-    handleHidePvLine,
     clearPreview,
     displayBoardState,
     stoneLabels,
