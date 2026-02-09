@@ -115,7 +115,11 @@ watch(
 
     const evaluation = reviewStore.currentEvaluation;
     if (evaluation?.isPlayerMove) {
-      dialogue.showQualityDialogue(evaluation.quality, evaluation.bestMove);
+      dialogue.showQualityDialogue(
+        evaluation.quality,
+        evaluation.bestMove,
+        evaluation.forcedWinType,
+      );
     } else if (evaluation) {
       dialogue.clearDialogue();
     }

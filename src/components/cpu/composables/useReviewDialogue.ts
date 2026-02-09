@@ -8,7 +8,7 @@ import { ref, type Ref } from "vue";
 
 import type { EmotionId } from "@/types/character";
 import type { Position } from "@/types/game";
-import type { MoveQuality } from "@/types/review";
+import type { EvaluatedMove, MoveQuality } from "@/types/review";
 
 import { formatMove } from "@/logic/gameRecordParser";
 import { parseText } from "@/logic/textParser";
@@ -44,6 +44,37 @@ const QUALITY_EMOTIONS: Record<MoveQuality, EmotionId> = {
   blunder: 11, // 心配
 };
 
+/** 強制勝ち種別の表示名 */
+const FORCED_WIN_LABELS: Record<
+  NonNullable<EvaluatedMove["forcedWinType"]>,
+  string
+> = {
+  vcf: "四追い",
+  vct: "追い詰め",
+  "forbidden-trap": "禁手追い込み",
+};
+
+/** 強制勝ち検出時の追加セリフ（品質別） */
+const FORCED_WIN_DIALOGUES: Record<MoveQuality, string[]> = {
+  excellent: [
+    "{forcedWin}を見つけたね！さすが！",
+    "{forcedWin}で決められる局面、ばっちり！",
+  ],
+  good: ["{forcedWin}がある局面だったよ", "ここは{forcedWin}で決められたね"],
+  inaccuracy: [
+    "実は{forcedWin}で決められたんだよ！{bestMove}から始まるよ",
+    "{forcedWin}があったね。{bestMove}が起点だよ",
+  ],
+  mistake: [
+    "{forcedWin}を逃しちゃった！{bestMove}から決まったよ",
+    "ここは{forcedWin}で勝てたね。{bestMove}がポイント！",
+  ],
+  blunder: [
+    "{forcedWin}があったのに！{bestMove}から一気に決まったよ",
+    "{forcedWin}を見逃しちゃったね...{bestMove}が急所！",
+  ],
+};
+
 /**
  * ランダムに要素を選択
  */
@@ -55,7 +86,11 @@ export interface UseReviewDialogueReturn {
   /** 現在の表情 */
   currentEmotion: Ref<EmotionId>;
   /** 品質に応じたセリフを表示 */
-  showQualityDialogue: (quality: MoveQuality, bestMove: Position) => void;
+  showQualityDialogue: (
+    quality: MoveQuality,
+    bestMove: Position,
+    forcedWinType?: EvaluatedMove["forcedWinType"],
+  ) => void;
   /** 初期セリフを表示 */
   showInitialDialogue: () => void;
   /** 評価中セリフを表示 */
@@ -87,10 +122,21 @@ export function useReviewDialogue(): UseReviewDialogueReturn {
     });
   }
 
-  function showQualityDialogue(quality: MoveQuality, bestMove: Position): void {
-    const templates = QUALITY_DIALOGUES[quality];
+  function showQualityDialogue(
+    quality: MoveQuality,
+    bestMove: Position,
+    forcedWinType?: EvaluatedMove["forcedWinType"],
+  ): void {
+    const templates = forcedWinType
+      ? FORCED_WIN_DIALOGUES[quality]
+      : QUALITY_DIALOGUES[quality];
     const template = randomChoice(templates);
-    const text = template.replace(/\{bestMove\}/g, formatMove(bestMove));
+    const forcedWinLabel = forcedWinType
+      ? FORCED_WIN_LABELS[forcedWinType]
+      : "";
+    const text = template
+      .replace(/\{bestMove\}/g, formatMove(bestMove))
+      .replace(/\{forcedWin\}/g, forcedWinLabel);
     showMessage(text, QUALITY_EMOTIONS[quality]);
   }
 
