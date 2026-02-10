@@ -36,3 +36,4 @@ bench-results/*
 docs/bench-reports/
 # 分析結果
 analyzed-games/
+weakness-reports/

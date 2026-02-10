@@ -27,6 +27,11 @@ import {
   evaluateBoardWithBreakdown,
   evaluatePositionWithBreakdown,
 } from "../evaluation.ts";
+import {
+  applyPatternScoreOverrides,
+  PATTERN_SCORES,
+  type PatternScoreValues,
+} from "../evaluation/patternScores.ts";
 import { detectOpponentThreats } from "../evaluation/threatDetection.ts";
 import { getOpeningMove, isOpeningPhase } from "../opening.ts";
 import { findBestMoveIterativeWithTT } from "../search/minimax.ts";
@@ -219,6 +224,20 @@ export function runHeadlessGame(
     let depthHistory: DepthResult[] | undefined = undefined;
 
     if (!move) {
+      // パターンスコアオーバーライドの適用（チューニング用）
+      const overrides = params.evaluationOptions.patternScoreOverrides;
+      let savedScores: Partial<PatternScoreValues> | undefined = undefined;
+      if (overrides) {
+        // 現在の値を保存
+        savedScores = {} as Partial<PatternScoreValues>;
+        for (const key of Object.keys(
+          overrides,
+        ) as (keyof PatternScoreValues)[]) {
+          (savedScores as Record<string, unknown>)[key] = PATTERN_SCORES[key];
+        }
+        applyPatternScoreOverrides(overrides);
+      }
+
       const result = findBestMoveIterativeWithTT(
         board,
         currentColor,
@@ -302,6 +321,11 @@ export function runHeadlessGame(
         nullMoveCutoffs: result.stats.nullMoveCutoffs,
         futilityPrunes: result.stats.futilityPrunes,
       };
+
+      // パターンスコアオーバーライドの復元
+      if (savedScores) {
+        applyPatternScoreOverrides(savedScores);
+      }
     }
 
     const moveTime = performance.now() - moveStartTime;

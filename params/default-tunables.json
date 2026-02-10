@@ -1,0 +1,60 @@
+{
+  "params": [
+    {
+      "name": "OPEN_FOUR",
+      "initial": 10000,
+      "min": 5000,
+      "max": 20000,
+      "step": 500
+    },
+    {
+      "name": "FOUR_THREE_BONUS",
+      "initial": 5000,
+      "min": 2000,
+      "max": 10000,
+      "step": 300
+    },
+    {
+      "name": "MISE_BONUS",
+      "initial": 1000,
+      "min": 300,
+      "max": 3000,
+      "step": 100
+    },
+    {
+      "name": "FOUR",
+      "initial": 1000,
+      "min": 300,
+      "max": 3000,
+      "step": 100
+    },
+    {
+      "name": "OPEN_THREE",
+      "initial": 1000,
+      "min": 300,
+      "max": 3000,
+      "step": 100
+    },
+    {
+      "name": "FORBIDDEN_TRAP_STRONG",
+      "initial": 8000,
+      "min": 4000,
+      "max": 15000,
+      "step": 500
+    },
+    {
+      "name": "MULTI_THREAT_BONUS",
+      "initial": 500,
+      "min": 100,
+      "max": 2000,
+      "step": 50
+    },
+    {
+      "name": "FUKUMI_BONUS",
+      "initial": 1500,
+      "min": 500,
+      "max": 4000,
+      "step": 150
+    }
+  ]
+}

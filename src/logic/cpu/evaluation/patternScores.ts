@@ -55,6 +55,50 @@ export const PATTERN_SCORES = {
 } as const;
 
 /**
+ * パターンスコアの値型（オーバーライド用）
+ */
+export type PatternScoreValues = {
+  [K in keyof typeof PATTERN_SCORES]: (typeof PATTERN_SCORES)[K];
+};
+
+/**
+ * 解決済みスコアオブジェクトを生成
+ *
+ * ゲーム開始時に1回だけ呼び出し、以降はこのオブジェクトを参照する。
+ * オーバーライドがなければ元の PATTERN_SCORES をそのまま返す（ゼロコスト）。
+ *
+ * @param overrides 部分的なオーバーライド値
+ * @returns 解決済みスコアオブジェクト
+ */
+export function resolveScores(
+  overrides?: Partial<PatternScoreValues>,
+): PatternScoreValues {
+  if (!overrides) {
+    return PATTERN_SCORES;
+  }
+  return { ...PATTERN_SCORES, ...overrides } as PatternScoreValues;
+}
+
+/**
+ * PATTERN_SCORES をランタイムでオーバーライドする（ベンチマーク/チューニング用）
+ *
+ * Worker スレッドは独立モジュールスコープなので、Worker 内でのみ影響する。
+ * メインスレッドでの呼び出しは全体に影響するため注意。
+ *
+ * @param overrides 部分的なオーバーライド値
+ */
+export function applyPatternScoreOverrides(
+  overrides: Partial<PatternScoreValues>,
+): void {
+  const mutable = PATTERN_SCORES as Record<string, unknown>;
+  for (const [key, value] of Object.entries(overrides)) {
+    if (key in PATTERN_SCORES) {
+      mutable[key] = value;
+    }
+  }
+}
+
+/**
  * 評価オプション
  * 重い評価処理を難易度に応じて有効/無効化する
  */
@@ -92,6 +136,8 @@ export interface EvaluationOptions {
   enableForbiddenVulnerability: boolean;
   /** 事前計算された脅威情報（最適化用、ルートノードで計算して渡す） */
   precomputedThreats?: ThreatInfo;
+  /** パターンスコアのオーバーライド値（SPSAチューニング用） */
+  patternScoreOverrides?: Partial<PatternScoreValues>;
 }
 
 /**
