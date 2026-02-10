@@ -8,7 +8,7 @@
     {
       "id": "section_1",
       "type": "demo",
-      "title": "デモセクション",
+      "title": "何もさせない！",
       "initialBoard": [
         "---------------",
         "---------------",
@@ -30,7 +30,716 @@
         {
           "id": "dialogue_1",
           "character": "fubuki",
-          "text": [],
+          "text": [
+            {
+              "type": "text",
+              "content": "さて、連珠の戦略の根幹となる技術を勉強していこう。"
+            }
+          ],
+          "emotion": 8,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_2",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "おお……"
+            }
+          ],
+          "emotion": 4,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_3",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "三や四を打たれたとき何をしなければならない？"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_4",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "とめる！"
+            }
+          ],
+          "emotion": 17,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_5",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "そう。ということは、その間は基本的に"
+            },
+            {
+              "type": "emphasis",
+              "content": [
+                {
+                  "type": "text",
+                  "content": "攻撃できない"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "content": "わけだ。"
+            }
+          ],
+          "emotion": 1,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_6",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "うん"
+            }
+          ],
+          "emotion": 2,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_7",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "その間に五を作っちゃえばいいんだ"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_8",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "わがんない"
+            }
+          ],
+          "emotion": 13,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_9",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "見てみよう。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": [
+            {
+              "type": "setBoard",
+              "position": {
+                "row": 7,
+                "col": 7
+              },
+              "color": "black",
+              "board": [
+                "---------------",
+                "---------------",
+                "-----o---------",
+                "------xx-------",
+                "------ox-------",
+                "-o-xoooox------",
+                "----oxox-------",
+                "---oxxox-------",
+                "--x--oxox------",
+                "---xoooxo------",
+                "---xoxxxoo-----",
+                "---ooox---x----",
+                "--x-x----------",
+                "---------------",
+                "---------------"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "dialogue_10",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "うわいっぱいあるな"
+            }
+          ],
+          "emotion": 9,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_11",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "そんなに身構えなくても大丈夫だよ。"
+            }
+          ],
+          "emotion": 35,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_12",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "四の連続の最後に四三ができることを確かめよう。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_13",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "J9に打つ。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": [
+            {
+              "type": "place",
+              "position": {
+                "row": 6,
+                "col": 9
+              },
+              "color": "black"
+            },
+            {
+              "type": "line",
+              "position": {
+                "row": 7,
+                "col": 7
+              },
+              "color": "black",
+              "fromPosition": {
+                "row": 3,
+                "col": 6
+              },
+              "toPosition": {
+                "row": 6,
+                "col": 9
+              },
+              "action": "draw",
+              "style": "solid"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_14",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "白は止める。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": [
+            {
+              "type": "resetMarkLine",
+              "position": {
+                "row": 7,
+                "col": 7
+              },
+              "color": "black"
+            },
+            {
+              "type": "place",
+              "position": {
+                "row": 7,
+                "col": 10
+              },
+              "color": "white"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_15",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "続いてK9。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": [
+            {
+              "type": "place",
+              "position": {
+                "row": 6,
+                "col": 10
+              },
+              "color": "black"
+            },
+            {
+              "type": "line",
+              "position": {
+                "row": 7,
+                "col": 7
+              },
+              "color": "black",
+              "fromPosition": {
+                "row": 6,
+                "col": 10
+              },
+              "toPosition": {
+                "row": 10,
+                "col": 6
+              },
+              "action": "draw",
+              "style": "solid"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_16",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "白は止める。"
+            }
+          ],
+          "emotion": 8,
+          "boardActions": [
+            {
+              "type": "resetMarkLine",
+              "position": {
+                "row": 7,
+                "col": 7
+              },
+              "color": "black"
+            },
+            {
+              "type": "place",
+              "position": {
+                "row": 7,
+                "col": 9
+              },
+              "color": "white"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_17",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "こんどはI9"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": [
+            {
+              "type": "place",
+              "position": {
+                "row": 6,
+                "col": 8
+              },
+              "color": "black"
+            },
+            {
+              "type": "line",
+              "position": {
+                "row": 7,
+                "col": 7
+              },
+              "color": "black",
+              "fromPosition": {
+                "row": 6,
+                "col": 7
+              },
+              "toPosition": {
+                "row": 6,
+                "col": 10
+              },
+              "action": "draw",
+              "style": "solid"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_18",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "当然白は止める。"
+            }
+          ],
+          "emotion": 1,
+          "boardActions": [
+            {
+              "type": "resetMarkLine",
+              "position": {
+                "row": 7,
+                "col": 7
+              },
+              "color": "black"
+            },
+            {
+              "type": "place",
+              "position": {
+                "row": 6,
+                "col": 11
+              },
+              "color": "white"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_19",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "みこさん。四三ができる場所はわかるかな？"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_20",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "うえっ！？んーとんーと"
+            }
+          ],
+          "emotion": 14,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_21",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "四と三が同時にできるところだから、四のある場所の近くを探すといいね"
+            }
+          ],
+          "emotion": 1,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_22",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "……"
+            }
+          ],
+          "emotion": 14,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_23",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "あっこごぉ！ (I11)"
+            }
+          ],
+          "emotion": 19,
+          "boardActions": [
+            {
+              "type": "place",
+              "position": {
+                "row": 4,
+                "col": 8
+              },
+              "color": "black"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_24",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "すーばーらーしい！縦の四と斜めの三ができるね！"
+            }
+          ],
+          "emotion": 37,
+          "boardActions": [
+            {
+              "type": "line",
+              "position": {
+                "row": 4,
+                "col": 7
+              },
+              "color": "black",
+              "fromPosition": {
+                "row": 4,
+                "col": 8
+              },
+              "toPosition": {
+                "row": 8,
+                "col": 8
+              },
+              "action": "draw",
+              "style": "solid"
+            },
+            {
+              "type": "line",
+              "position": {
+                "row": 7,
+                "col": 7
+              },
+              "color": "black",
+              "fromPosition": {
+                "row": 3,
+                "col": 7
+              },
+              "toPosition": {
+                "row": 6,
+                "col": 10
+              },
+              "action": "draw",
+              "style": "solid"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_25",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "一応最後までやりますか。っと……"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": [
+            {
+              "type": "resetMarkLine",
+              "position": {
+                "row": 7,
+                "col": 7
+              },
+              "color": "black"
+            },
+            {
+              "type": "place",
+              "position": {
+                "row": 7,
+                "col": 8
+              },
+              "color": "white"
+            },
+            {
+              "type": "place",
+              "position": {
+                "row": 5,
+                "col": 9
+              },
+              "color": "black"
+            },
+            {
+              "type": "place",
+              "position": {
+                "row": 7,
+                "col": 11
+              },
+              "color": "white"
+            },
+            {
+              "type": "place",
+              "position": {
+                "row": 2,
+                "col": 6
+              },
+              "color": "black"
+            },
+            {
+              "type": "line",
+              "position": {
+                "row": 7,
+                "col": 7
+              },
+              "color": "black",
+              "fromPosition": {
+                "row": 2,
+                "col": 6
+              },
+              "toPosition": {
+                "row": 6,
+                "col": 10
+              },
+              "action": "draw",
+              "style": "solid"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_26",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "注目してほしいのは、白が"
+            },
+            {
+              "type": "emphasis",
+              "content": [
+                {
+                  "type": "text",
+                  "content": "四を止めることしかできなかった"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "content": "ことだよ。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_27",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "四を打つと、相手にその四を止めさせることを"
+            },
+            {
+              "type": "emphasis",
+              "content": [
+                {
+                  "type": "text",
+                  "content": "強制"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "content": "できる。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_28",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "四を連続で打って、その最後に四三を作る。これを"
+            },
+            {
+              "type": "emphasis",
+              "content": [
+                {
+                  "type": "ruby",
+                  "base": "四追",
+                  "ruby": "しお"
+                },
+                {
+                  "type": "text",
+                  "content": "い"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "content": "と言うよ。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_29",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "連珠のほとんどは四追いで終わる！"
+            }
+          ],
+          "emotion": 19,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_30",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "……と言っても過言じゃないくらい超重要技術だよ。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_31",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "みこにできるかな……"
+            }
+          ],
+          "emotion": 9,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_32",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "ちょっとずつ慣れていけるといいね。"
+            }
+          ],
+          "emotion": 1,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_33",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "四追いは"
+            }
+          ],
           "emotion": 0,
           "boardActions": []
         }

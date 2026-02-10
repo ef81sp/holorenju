@@ -84,12 +84,25 @@
           "title": "EX:珠型一覧",
           "description": "珠型の細かい説明と全パターンを紹介します",
           "path": "renju_beginner/scenario_mlbzqn68_71jtz.json"
+        },
+        {
+          "id": "scenario_mlce6x86_9cy53",
+          "title": "EX:開局規定",
+          "description": "存在の紹介",
+          "path": "renju_beginner/scenario_mlce6x86_9cy53.json"
         }
       ]
     },
     "renju_intermediate": {
       "label": "連珠:初級",
-      "scenarios": []
+      "scenarios": [
+        {
+          "id": "scenario_mlcg64mu_c6bi1",
+          "title": "四追い",
+          "description": "最強の攻撃を学びます",
+          "path": "renju_intermediate/scenario_mlcg64mu_c6bi1.json"
+        }
+      ]
     },
     "renju_advanced": {
       "label": "連珠:中級",
