@@ -93,6 +93,8 @@ export interface IterativeDeepingResult extends MinimaxResult {
   elapsedTime: number;
   /** 深度別の最善手履歴 */
   depthHistory?: DepthHistoryEntry[];
+  /** 候補手が1つだけの強制手か（スコアは参考値） */
+  forcedMove?: boolean;
 }
 
 /**

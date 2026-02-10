@@ -135,6 +135,7 @@ self.onmessage = (event: MessageEvent<CpuRequest>) => {
         : undefined,
       depthHistory,
       searchStats: result.stats,
+      forcedMove: result.forcedMove,
     };
 
     self.postMessage(response);

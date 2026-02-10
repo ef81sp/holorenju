@@ -108,6 +108,8 @@ export interface MoveRecord {
   depthHistory?: DepthResult[];
   /** 禁手追い込みで勝った場合true（最終手のみ） */
   forcedForbidden?: boolean;
+  /** 強制手フラグ（候補手1つ、スコアは参考値） */
+  forcedMove?: boolean;
 }
 
 /**
@@ -222,6 +224,7 @@ export function runHeadlessGame(
     let selectedRank: number | undefined = undefined;
     let randomSelection: RandomSelectionInfo | undefined = undefined;
     let depthHistory: DepthResult[] | undefined = undefined;
+    let forcedMove: boolean | undefined = undefined;
 
     if (!move) {
       // パターンスコアオーバーライドの適用（チューニング用）
@@ -250,6 +253,7 @@ export function runHeadlessGame(
       move = result.position;
       depth = result.completedDepth;
       ({ score } = result);
+      ({ forcedMove } = result);
 
       // 候補手情報を記録（最大5手、breakdown/PV/leafEvaluation含む）
       if (result.candidates && result.candidates.length > 0) {
@@ -393,6 +397,7 @@ export function runHeadlessGame(
       selectedRank,
       randomSelection,
       depthHistory,
+      forcedMove,
     });
     moveCount++;
 

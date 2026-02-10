@@ -17,7 +17,7 @@ import {
   FULL_EVAL_OPTIONS,
   PATTERN_SCORES,
 } from "../evaluation";
-import { placeStonesOnBoard } from "../testUtils";
+import { createBoardWithStones, placeStonesOnBoard } from "../testUtils";
 import { findBestMove, findBestMoveIterativeWithTT, minimax } from "./minimax";
 
 describe("minimax", () => {
@@ -300,6 +300,49 @@ describe("即勝ち手・防御の優先順位", () => {
     // 白は五連を完成させる手を選ぶべき（FIVE スコア）
     expect(result.score).toBe(PATTERN_SCORES.FIVE);
   }, 15000);
+});
+
+describe("強制手フラグ", () => {
+  it("候補手が1つの場合、forcedMove=trueかつscore=0を返す", () => {
+    // ベンチマーク実データ: 12手目まで打った盤面で13手目（黒番）が強制手
+    // 棋譜: H8 G8 J6 G9 G7 I9 J7 J8 H7 I7 I8 J9
+    const { board } = createBoardFromRecord(
+      "H8 G8 J6 G9 G7 I9 J7 J8 H7 I7 I8 J9",
+    );
+
+    const result = findBestMoveIterativeWithTT(
+      board,
+      "black",
+      4,
+      5000,
+      0,
+      FULL_EVAL_OPTIONS,
+    );
+
+    // 候補手が1つに絞られ、forcedMoveフラグが立つ
+    expect(result.forcedMove).toBe(true);
+    expect(result.score).toBe(0);
+    expect(result.completedDepth).toBe(0);
+  });
+
+  it("複数候補手がある場合、forcedMoveは設定されない", () => {
+    const board = createBoardWithStones([
+      { row: 7, col: 7, color: "black" },
+      { row: 8, col: 8, color: "white" },
+    ]);
+
+    const result = findBestMoveIterativeWithTT(
+      board,
+      "black",
+      2,
+      5000,
+      0,
+      FULL_EVAL_OPTIONS,
+    );
+
+    expect(result.completedDepth).toBeGreaterThanOrEqual(1);
+    expect(result.forcedMove).toBeUndefined();
+  });
 });
 
 describe("相手VCF防御", () => {

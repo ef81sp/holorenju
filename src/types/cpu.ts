@@ -337,6 +337,8 @@ export interface CpuResponse {
   depthHistory?: DepthResult[];
   /** 探索統計（デバッグ用） */
   searchStats?: SearchStats;
+  /** 強制手フラグ（候補手1つ、スコアは参考値） */
+  forcedMove?: boolean;
 }
 
 /**

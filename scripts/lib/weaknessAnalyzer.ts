@@ -153,7 +153,9 @@ function detectMoveWeaknesses(
         const currentScore = move.score;
         const scoreDrop = prevScoreFromMyView - currentScore;
 
-        if (scoreDrop >= BLUNDER_THRESHOLD) {
+        // 強制手のスコアは参考値なのでblunder判定しない
+        const isForcedMove = move.forcedMove || prevMove.forcedMove;
+        if (scoreDrop >= BLUNDER_THRESHOLD && !isForcedMove) {
           const weakness: BlunderWeakness = {
             type: "blunder",
             gameIndex,

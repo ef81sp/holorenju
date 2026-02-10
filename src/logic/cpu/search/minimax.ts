@@ -1224,17 +1224,12 @@ export function findBestMoveIterativeWithTT(
   if (moves.length === 1 && moves[0]) {
     return {
       position: moves[0],
-      score: evaluatePosition(
-        board,
-        moves[0].row,
-        moves[0].col,
-        color,
-        evaluationOptions,
-      ),
+      score: 0,
       completedDepth: 0,
       interrupted: false,
       elapsedTime: performance.now() - startTime,
       stats: mergeProfilingCounters(ctx.stats),
+      forcedMove: true,
     };
   }
 
