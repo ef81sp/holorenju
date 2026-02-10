@@ -35,6 +35,7 @@ import {
 import {
   checkWhiteWinningPattern,
   evaluateForbiddenTrap,
+  evaluateForbiddenVulnerability,
   hasFollowUpThreat,
   isFukumiMove,
   isMiseMove,
@@ -350,6 +351,16 @@ function evaluatePositionCore(
     forbiddenTrapBonus = evaluateForbiddenTrap(board, row, col);
   }
 
+  // 禁手脆弱性ペナルティ（黒番のみ）
+  let forbiddenVulnerabilityPenalty = 0;
+  if (options.enableForbiddenVulnerability && color === "black") {
+    forbiddenVulnerabilityPenalty = evaluateForbiddenVulnerability(
+      board,
+      row,
+      col,
+    );
+  }
+
   // ミセ手ボーナス: 次に四三を作れる手（オプションで有効時のみ）
   let miseBonus = 0;
   if (options.enableMise && isMiseMove(board, row, col, color)) {
@@ -438,7 +449,8 @@ function evaluatePositionCore(
     fukumiBonus +
     multiThreatBonus +
     vctBonus -
-    singleFourPenalty
+    singleFourPenalty -
+    forbiddenVulnerabilityPenalty
   );
 }
 
@@ -463,6 +475,7 @@ export function evaluatePositionWithBreakdown(
     multiThreat: 0,
     singleFourPenalty: 0,
     forbiddenTrap: 0,
+    forbiddenVulnerability: 0,
   };
 
   if (color === null) {
@@ -557,6 +570,16 @@ export function evaluatePositionWithBreakdown(
     forbiddenTrapBonus = evaluateForbiddenTrap(testBoard, row, col);
   }
 
+  // 禁手脆弱性ペナルティ（黒番のみ）
+  let forbiddenVulnerabilityPenalty = 0;
+  if (options.enableForbiddenVulnerability && color === "black") {
+    forbiddenVulnerabilityPenalty = evaluateForbiddenVulnerability(
+      testBoard,
+      row,
+      col,
+    );
+  }
+
   // 単発四ペナルティ: 四を作るが四三ではなく、後続脅威もない場合
   let singleFourPenalty = 0;
   if (options.enableSingleFourPenalty) {
@@ -624,7 +647,8 @@ export function evaluatePositionWithBreakdown(
     fukumiBonus +
     multiThreatBonus +
     forbiddenTrapBonus -
-    singleFourPenalty;
+    singleFourPenalty -
+    forbiddenVulnerabilityPenalty;
 
   return {
     score: totalScore,
@@ -638,6 +662,7 @@ export function evaluatePositionWithBreakdown(
       multiThreat: multiThreatBonus,
       singleFourPenalty: singleFourPenalty,
       forbiddenTrap: forbiddenTrapBonus,
+      forbiddenVulnerability: forbiddenVulnerabilityPenalty,
     },
   };
 }

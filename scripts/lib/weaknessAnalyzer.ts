@@ -26,6 +26,7 @@ import type {
 } from "../types/weakness.ts";
 
 import { applyMove } from "../../src/logic/cpu/core/boardUtils.ts";
+import { detectOpponentThreats } from "../../src/logic/cpu/evaluation/threatDetection.ts";
 import { findVCFMove } from "../../src/logic/cpu/search/vcf.ts";
 import { createEmptyBoard } from "../../src/logic/renjuRules.ts";
 
@@ -41,6 +42,18 @@ const ADVANTAGE_THRESHOLD = 3000;
 
 /** VCF再探索の時間制限（分析用なので長め） */
 const VCF_ANALYSIS_TIME_LIMIT = 500;
+
+/**
+ * 敗者の色を正しく算出する
+ *
+ * headless.ts の runMultipleGames は先手/後手を交互に入れ替え、
+ * isABlack=false の場合 winner を反転して記録する。
+ * そのため winner="A" は必ずしも黒の勝利を意味しない。
+ */
+function getLoserColor(game: GameResult): "black" | "white" {
+  const winnerIsBlack = (game.winner === "A") === game.isABlack;
+  return winnerIsBlack ? "white" : "black";
+}
 
 // ============================================================================
 // ベンチマークファイル分析
@@ -237,7 +250,7 @@ function detectMissedVcf(
   }
 
   // 負けた側の色を特定
-  const loserColor: "black" | "white" = game.winner === "A" ? "white" : "black";
+  const loserColor = getLoserColor(game);
 
   // 盤面を再構築しながら、負けた側のターンでVCFがあるか検証
   let board: BoardState = createEmptyBoard();
@@ -253,23 +266,31 @@ function detectMissedVcf(
 
     // 負けた側のターンでVCFを探索
     if (color === loserColor && mi >= 4) {
-      const vcfMove = findVCFMove(board, color, {
-        timeLimit: VCF_ANALYSIS_TIME_LIMIT,
-      });
-      if (
-        vcfMove &&
-        (vcfMove.row !== position.row || vcfMove.col !== position.col)
-      ) {
-        weaknesses.push({
-          type: "missed-vcf",
-          gameIndex,
-          moveNumber: mi + 1,
-          color,
-          position,
-          vcfMove,
-          actualMove: position,
-          description: `手${mi + 1}: VCFが(${vcfMove.row},${vcfMove.col})にあったが(${position.row},${position.col})を選択`,
+      // 相手に止め四/活四がある場合、VCFは実行不可（防御が強制される）
+      const opponentColor = color === "black" ? "white" : "black";
+      const threats = detectOpponentThreats(board, opponentColor);
+      const hasForcedDefense =
+        threats.openFours.length > 0 || threats.fours.length > 0;
+
+      if (!hasForcedDefense) {
+        const vcfMove = findVCFMove(board, color, {
+          timeLimit: VCF_ANALYSIS_TIME_LIMIT,
         });
+        if (
+          vcfMove &&
+          (vcfMove.row !== position.row || vcfMove.col !== position.col)
+        ) {
+          weaknesses.push({
+            type: "missed-vcf",
+            gameIndex,
+            moveNumber: mi + 1,
+            color,
+            position,
+            vcfMove,
+            actualMove: position,
+            description: `手${mi + 1}: VCFが(${vcfMove.row},${vcfMove.col})にあったが(${position.row},${position.col})を選択`,
+          });
+        }
       }
     }
 
@@ -299,7 +320,7 @@ function detectAdvantageSquandered(
   }
 
   // 負けた側のピークスコアを追跡
-  const loserColor: "black" | "white" = game.winner === "A" ? "white" : "black";
+  const loserColor = getLoserColor(game);
   let peakScore = 0;
   let peakMoveNumber = 0;
 

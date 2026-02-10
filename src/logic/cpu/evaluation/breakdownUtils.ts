@@ -31,6 +31,7 @@ export const bonusLabels: Record<string, string> = {
   multiThreat: "複数脅威",
   singleFourPenalty: "単発四ペナ",
   forbiddenTrap: "禁手追込",
+  forbiddenVulnerability: "禁手脆弱",
 };
 
 /** パターン内訳の項目 */
@@ -90,7 +91,9 @@ export function getNonZeroBreakdown(breakdown: ScoreBreakdown): {
       label: bonusLabels[key] ?? key,
       // ペナルティは減点なので符号を反転
       value:
-        key === "singleFourPenalty" ? -(value as number) : (value as number),
+        key === "singleFourPenalty" || key === "forbiddenVulnerability"
+          ? -(value as number)
+          : (value as number),
     }));
 
   return { patterns, defense, bonuses };

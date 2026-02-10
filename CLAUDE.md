@@ -18,6 +18,10 @@ pnpm dev           # Dev server (usually already running)
 pnpm build         # Production build
 ```
 
+## Planning
+
+- Do TDD
+
 ## Architecture
 
 ### State Management (Pinia stores in `src/stores/`)

@@ -696,6 +696,169 @@ describe("VCFゴールデンテスト", () => {
   });
 });
 
+describe("カウンターフォー（防御者が四を作り返す）対応", () => {
+  it("防御者がカウンターフォーを作る場合、hasVCFはfalse", () => {
+    // 盤端利用: 白の止め三をrow=0端に配置
+    // 白(0,4),(0,5),(0,6) → 白(0,3)で止め四(0,3)-(0,6)
+    //   上端=盤外なので止め四確定、防御位置は(0,7)
+    // 白の縦止め三(1,7),(2,7),(3,7) + (4,7)黒ブロック
+    //   → 防御(0,7)後、白(0,7)で2段目は... (0,7)はもう埋まっている
+    //
+    // 別案: 完全にシンプルな形
+    // 白が止め四を2回作れる形（四追い2段）で、
+    // 1段目の防御位置にカウンターフォーがある
+    //
+    // 白A: 横(2,4),(2,5),(2,6) + (2,3)壁 → 白(2,7)止め四, 防御(2,8)
+    // 白B: 縦(3,8),(4,8),(5,8) + (6,8)壁 → 防御(2,8)後, 白(2,8)... 防御位置は既に埋まる
+    //
+    // 正しくは: 防御位置と2段目の四の延長が別の場所
+    // 白A: 横(7,1),(7,2),(7,3) 盤端で止め三 → 白(7,4)止め四, 防御(7,0)?
+    //   いや: (7,0)は盤端、(7,1)-(7,4)=4連, (7,0)空=止め四, 防御(7,5)?
+    //   countLine(board,7,4,0,1,"white") → (7,1)-(7,4)=4, end1=(7,5)空, end2=(7,0)空
+    //   両端空=活四→止められない！→即勝ち
+    //
+    // → 片端をブロックする必要あり
+    // 白(7,1),(7,2),(7,3) + (7,0)黒 → 白(7,4)止め四, (7,0)黒ブロック, 防御(7,5)
+    // 白(4,5),(5,5),(6,5) + (3,5)黒 → 白(7,5)止め四→五連
+    // → 防御(7,5)に黒を置くとカウンターフォー
+    // 黒の縦3連: (7,5)防御 + (8,5),(9,5),(10,5) → (7,5)で4連
+    //   ただし(7,5)にはまだ石がない段階で黒の3連は(8,5),(9,5),(10,5)
+    const board = createBoardWithStones([
+      // 白の横止め三（(7,4)で止め四、防御位置(7,5)）
+      { row: 7, col: 1, color: "white" },
+      { row: 7, col: 2, color: "white" },
+      { row: 7, col: 3, color: "white" },
+      { row: 7, col: 0, color: "black" }, // 左端ブロック
+
+      // 白の縦止め三（VCF2段目: 防御(7,5)後の位置で四追い）
+      { row: 4, col: 5, color: "white" },
+      { row: 5, col: 5, color: "white" },
+      { row: 6, col: 5, color: "white" },
+      { row: 3, col: 5, color: "black" }, // 上端ブロック
+
+      // 黒のカウンターフォー素材（防御位置(7,5)で縦4連）
+      { row: 8, col: 5, color: "black" },
+      { row: 9, col: 5, color: "black" },
+      { row: 10, col: 5, color: "black" },
+    ]);
+    // 白VCF: (7,4)横止め四→黒(7,5)防御→黒(7,5)カウンターフォー(縦4連)→中断
+    expect(hasVCF(board, "white")).toBe(false);
+    expect(findVCFMove(board, "white")).toBeNull();
+  });
+
+  it("防御者が五連を完成する場合、VCF不成立", () => {
+    const board = createBoardWithStones([
+      // 白の横止め三
+      { row: 7, col: 1, color: "white" },
+      { row: 7, col: 2, color: "white" },
+      { row: 7, col: 3, color: "white" },
+      { row: 7, col: 0, color: "black" }, // 左端ブロック
+
+      // 白の縦止め三（VCF2段目用）
+      { row: 4, col: 5, color: "white" },
+      { row: 5, col: 5, color: "white" },
+      { row: 6, col: 5, color: "white" },
+      { row: 3, col: 5, color: "black" }, // 上端ブロック
+
+      // 黒の五連素材（防御位置(7,5)で縦5連完成）
+      { row: 8, col: 5, color: "black" },
+      { row: 9, col: 5, color: "black" },
+      { row: 10, col: 5, color: "black" },
+      { row: 11, col: 5, color: "black" },
+    ]);
+    expect(hasVCF(board, "white")).toBe(false);
+    expect(findVCFMove(board, "white")).toBeNull();
+  });
+
+  it("findVCFSequenceもカウンターフォーでVCF不成立を返す", () => {
+    const board = createBoardWithStones([
+      // 白の横止め三
+      { row: 7, col: 1, color: "white" },
+      { row: 7, col: 2, color: "white" },
+      { row: 7, col: 3, color: "white" },
+      { row: 7, col: 0, color: "black" },
+
+      // 白の縦止め三（VCF2段目用）
+      { row: 4, col: 5, color: "white" },
+      { row: 5, col: 5, color: "white" },
+      { row: 6, col: 5, color: "white" },
+      { row: 3, col: 5, color: "black" },
+
+      // 黒のカウンターフォー素材
+      { row: 8, col: 5, color: "black" },
+      { row: 9, col: 5, color: "black" },
+      { row: 10, col: 5, color: "black" },
+    ]);
+    expect(findVCFSequence(board, "white")).toBeNull();
+  });
+
+  it("カウンターフォーがない2段VCFは成立する", () => {
+    // 同じ形だがカウンターフォー素材なし
+    const board = createBoardWithStones([
+      // 白の横止め三
+      { row: 7, col: 1, color: "white" },
+      { row: 7, col: 2, color: "white" },
+      { row: 7, col: 3, color: "white" },
+      { row: 7, col: 0, color: "black" },
+
+      // 白の縦止め三（VCF2段目用）
+      { row: 4, col: 5, color: "white" },
+      { row: 5, col: 5, color: "white" },
+      { row: 6, col: 5, color: "white" },
+      { row: 3, col: 5, color: "black" },
+    ]);
+    expect(hasVCF(board, "white")).toBe(true);
+  });
+
+  it("実戦game6手35: 白VCFが誤検出される（カウンターフォー未考慮）", () => {
+    // bench-2026-02-10T04-08 game6 の手35終了時点の盤面
+    // 手36で白がVCF検出(score=100000)→(10,3)に着手→手38で敗勢に
+    const board = createEmptyBoard();
+    placeStonesOnBoard(board, [
+      // 黒石（奇数手: 1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,33,35）
+      { row: 7, col: 7, color: "black" }, // 手1
+      { row: 5, col: 7, color: "black" }, // 手3
+      { row: 8, col: 6, color: "black" }, // 手5
+      { row: 6, col: 6, color: "black" }, // 手7
+      { row: 7, col: 5, color: "black" }, // 手9
+      { row: 9, col: 7, color: "black" }, // 手11
+      { row: 9, col: 5, color: "black" }, // 手13
+      { row: 8, col: 4, color: "black" }, // 手15
+      { row: 10, col: 8, color: "black" }, // 手17
+      { row: 8, col: 5, color: "black" }, // 手19
+      { row: 9, col: 8, color: "black" }, // 手21
+      { row: 7, col: 8, color: "black" }, // 手23
+      { row: 4, col: 3, color: "black" }, // 手25
+      { row: 10, col: 5, color: "black" }, // 手27
+      { row: 10, col: 4, color: "black" }, // 手29
+      { row: 10, col: 7, color: "black" }, // 手31
+      { row: 8, col: 9, color: "black" }, // 手33
+      { row: 11, col: 4, color: "black" }, // 手35
+      // 白石（偶数手: 2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34）
+      { row: 8, col: 8, color: "white" }, // 手2
+      { row: 8, col: 7, color: "white" }, // 手4
+      { row: 7, col: 9, color: "white" }, // 手6
+      { row: 7, col: 6, color: "white" }, // 手8
+      { row: 4, col: 8, color: "white" }, // 手10
+      { row: 6, col: 4, color: "white" }, // 手12
+      { row: 6, col: 8, color: "white" }, // 手14
+      { row: 9, col: 3, color: "white" }, // 手16
+      { row: 11, col: 9, color: "white" }, // 手18
+      { row: 6, col: 5, color: "white" }, // 手20
+      { row: 9, col: 6, color: "white" }, // 手22
+      { row: 5, col: 4, color: "white" }, // 手24
+      { row: 7, col: 3, color: "white" }, // 手26
+      { row: 11, col: 5, color: "white" }, // 手28
+      { row: 11, col: 3, color: "white" }, // 手30
+      { row: 10, col: 6, color: "white" }, // 手32
+      { row: 11, col: 6, color: "white" }, // 手34
+    ]);
+    // 手36で白はVCF成立と判定し(10,3)に着手したが、
+    // 黒のカウンターフォーにより実際はVCF不成立
+    expect(hasVCF(board, "white")).toBe(false);
+  });
+});
+
 describe("VCFSearchOptions付きテスト", () => {
   it("拡張深度・時間制限でhasVCFが動作する", () => {
     const board = createBoardWithStones([

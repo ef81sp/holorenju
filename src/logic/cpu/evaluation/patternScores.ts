@@ -276,6 +276,8 @@ export interface ScoreBreakdown {
   singleFourPenalty: number;
   /** 禁手追い込みボーナス（白番のみ） */
   forbiddenTrap: number;
+  /** 禁手脆弱性ペナルティ（黒番のみ、減点） */
+  forbiddenVulnerability: number;
 }
 
 /**

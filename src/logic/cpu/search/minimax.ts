@@ -27,7 +27,6 @@ import {
   PATTERN_SCORES,
   type EvaluationOptions,
 } from "../evaluation";
-import { evaluateForbiddenVulnerability } from "../evaluation/tactics";
 import {
   generateMoves,
   generateSortedMoves,
@@ -1220,32 +1219,6 @@ export function findBestMoveIterativeWithTT(
   // 理由: 深いノードでは手番が変わるため、ルートノードで計算した脅威情報が
   // 不適切に使われる問題がある。毎回detectOpponentThreatsを呼ぶようにする。
   // 将来的には、ルートノードの候補手評価にのみ適用する形で最適化可能。
-
-  // 黒番の禁手脆弱性ムーブオーダリング（ルートレベルのみ）
-  // VCF防御が有効でない場合のみ（VCF防御は生死に関わる緊急対応）
-  if (
-    color === "black" &&
-    evaluationOptions.enableForbiddenVulnerability &&
-    !vcfDefenseSet
-  ) {
-    const vulnerabilityMap = new Map<string, number>();
-    for (const move of moves) {
-      applyMoveInPlace(board, move, "black");
-      const penalty = evaluateForbiddenVulnerability(board, move.row, move.col);
-      undoMove(board, move);
-      if (penalty > 0) {
-        vulnerabilityMap.set(`${move.row},${move.col}`, penalty);
-      }
-    }
-    // ペナルティの大きい手を後方に移動（安定ソートでペナルティ0の手の順序を維持）
-    if (vulnerabilityMap.size > 0) {
-      moves.sort((a, b) => {
-        const pa = vulnerabilityMap.get(`${a.row},${a.col}`) ?? 0;
-        const pb = vulnerabilityMap.get(`${b.row},${b.col}`) ?? 0;
-        return pa - pb;
-      });
-    }
-  }
 
   // 唯一の候補手なら即座に返す
   if (moves.length === 1 && moves[0]) {

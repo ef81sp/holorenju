@@ -157,7 +157,22 @@ export function hasVCF(
       defenseRow[defensePos.col] = opponentColor;
     }
 
-    const result = hasVCF(board, color, depth + 1, limiter, options);
+    // 防御で五連完成 → 攻撃者の敗北、VCF不成立
+    // 防御でカウンターフォー → VCF中断（相手の四に対応必要）
+    const defenseWins = checkFive(
+      board,
+      defensePos.row,
+      defensePos.col,
+      opponentColor,
+    );
+    const defenseCounterFour =
+      !defenseWins &&
+      createsFour(board, defensePos.row, defensePos.col, opponentColor);
+
+    let result = false;
+    if (!defenseWins && !defenseCounterFour) {
+      result = hasVCF(board, color, depth + 1, limiter, options);
+    }
 
     // 元に戻す（Undo）- 逆順
     if (defenseRow) {
@@ -292,13 +307,21 @@ function findVCFMoveRecursive(
       defenseRow[defensePos.col] = opponentColor;
     }
 
-    const vcfMove = findVCFMoveRecursive(
+    // 防御で五連完成 or カウンターフォー → スキップ
+    const defenseWins = checkFive(
       board,
-      color,
-      depth + 1,
-      limiter,
-      options,
+      defensePos.row,
+      defensePos.col,
+      opponentColor,
     );
+    const defenseCounterFour =
+      !defenseWins &&
+      createsFour(board, defensePos.row, defensePos.col, opponentColor);
+
+    let vcfMove: Position | null = null;
+    if (!defenseWins && !defenseCounterFour) {
+      vcfMove = findVCFMoveRecursive(board, color, depth + 1, limiter, options);
+    }
 
     // Undo - 逆順
     if (defenseRow) {
@@ -670,19 +693,38 @@ function findVCFSequenceRecursive(
       defenseRow[defensePos.col] = opponentColor;
     }
 
-    const seqLen = sequence.length;
-    sequence.push(move);
-    sequence.push(defensePos);
-
-    const found = findVCFSequenceRecursive(
+    // 防御で五連完成 or カウンターフォー → スキップ
+    const defenseWins = checkFive(
       board,
-      color,
-      depth + 1,
-      limiter,
-      sequence,
-      options,
-      context,
+      defensePos.row,
+      defensePos.col,
+      opponentColor,
     );
+    const defenseCounterFour =
+      !defenseWins &&
+      createsFour(board, defensePos.row, defensePos.col, opponentColor);
+
+    let found = false;
+    if (!defenseWins && !defenseCounterFour) {
+      const seqLen = sequence.length;
+      sequence.push(move);
+      sequence.push(defensePos);
+
+      found = findVCFSequenceRecursive(
+        board,
+        color,
+        depth + 1,
+        limiter,
+        sequence,
+        options,
+        context,
+      );
+
+      if (!found) {
+        // 手順を巻き戻し
+        sequence.length = seqLen;
+      }
+    }
 
     // Undo - 逆順
     if (defenseRow) {
@@ -695,9 +737,6 @@ function findVCFSequenceRecursive(
     if (found) {
       return true;
     }
-
-    // 手順を巻き戻し
-    sequence.length = seqLen;
   }
 
   return false;

@@ -6,13 +6,19 @@
 
 import { describe, expect, it } from "vitest";
 
+import type { BoardState } from "@/types/game";
+
 import {
   checkForbiddenMove,
   copyBoard,
   createEmptyBoard,
 } from "@/logic/renjuRules";
 
-import { evaluatePosition, evaluateStonePatterns } from "../evaluation";
+import {
+  evaluatePosition,
+  evaluatePositionWithBreakdown,
+  evaluateStonePatterns,
+} from "../evaluation";
 import { createBoardWithStones } from "../testUtils";
 import { PATTERN_SCORES } from "./patternScores";
 import {
@@ -756,5 +762,132 @@ describe("hasFollowUpThreat 盤面不変性", () => {
     hasFollowUpThreat(board, 7, 6, "black");
 
     expect(board).toEqual(snapshot);
+  });
+});
+
+describe("禁手脆弱性ペナルティ（evaluatePosition統合）", () => {
+  // 黒の活三: (7,5),(7,6),(7,7) + 両端空き
+  // 斜め方向にも三を作って延長点が禁手になる配置:
+  // (5,5),(6,6) + (7,7) で斜め三、延長点(8,8)は通常
+  // (7,7) の横延長点(7,4)または(7,8)が三三禁になる配置
+  //
+  // より確実なアプローチ:
+  // 横: (7,5),(7,6),(7,7) → 活三、延長点(7,4)と(7,8)
+  // 斜め: (5,5),(6,6),(7,7) → 活三、延長点(4,4)と(8,8)
+  // (7,8)に黒を置くと横で三+斜めの別の三ができ三三禁になるように配置
+  //
+  // 実際のテスト:
+  // (7,5),(7,6) を黒で配置 → (7,7) に置くと横活三
+  // (5,5),(6,6) を黒で配置 → (7,7) に置くと斜め活三
+  // つまり (7,7) は三三禁 → (7,7)自体が禁手
+  // → 延長点が禁手になる別のパターンを使う
+  //
+  // パターン: 黒が (7,5),(7,6),(7,7) の横三を持ち、
+  // かつ延長点 (7,8) が別の三とぶつかり禁手になるように:
+  // (5,8),(6,8) を黒で追加 → (7,8) に置くと横四+縦三 = 四三で禁手ではない
+  // → 三三禁にするには (6,7),(5,6) 等で斜め三も作る
+  //
+  // シンプルに: 延長点が禁手（三三禁）になる盤面を構築
+  const baseOptions = {
+    enableFukumi: false,
+    enableMise: false,
+    enableForbiddenTrap: false,
+    enableMultiThreat: false,
+    enableCounterFour: false,
+    enableVCT: false,
+    enableMandatoryDefense: false,
+    enableSingleFourPenalty: false,
+    singleFourPenaltyMultiplier: 1.0,
+    enableMiseThreat: false,
+    enableNullMovePruning: false,
+    enableFutilityPruning: false,
+    enableForbiddenVulnerability: false,
+  };
+
+  // 盤面: (7,7)に黒を置くと横活三を作り、延長点のひとつが三三禁になる
+  // 横三: (7,5),(7,6) → (7,7)で活三、延長点(7,4)と(7,8)
+  // (7,8)を禁手にする: 縦二(5,8),(6,8) + 斜め二(6,9),(5,10)
+  // → (7,8)に置くと横四 + 縦三 + 斜め三 = 四三三 → 三三禁ではなく四がある
+  //
+  // 三三禁にするには四がない三×2が必要:
+  // 縦三: (5,8),(6,8) → (7,8)で縦三 （延長点(4,8)と(8,8)が空き）
+  // 斜め三: (6,9),(5,10) → (7,8)で斜め三
+  // 横三: (7,5),(7,6),(7,7)に置くと横活三→延長点(7,8)は上記の縦+斜めの交点
+  // → (7,8)は三三禁！
+  //
+  // 実際に配置:
+  // 黒: (7,5),(7,6) — 横二（(7,7)で活三に）
+  // 黒: (5,8),(6,8) — 縦二（(7,8)に置くと縦三に）
+  // 黒: (6,9),(5,10) — 斜め二（(7,8)に置くと斜め三に）
+  function createVulnerableBoard(): BoardState {
+    return createBoardWithStones([
+      // 横の二 → (7,7) で横活三
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      // 縦の二 → (7,8) に置くと縦三
+      { row: 5, col: 8, color: "black" },
+      { row: 6, col: 8, color: "black" },
+      // 斜め(右上→左下)の二 → (7,8) に置くと斜め三
+      { row: 6, col: 9, color: "black" },
+      { row: 5, col: 10, color: "black" },
+    ]);
+  }
+
+  it("enableForbiddenVulnerability=trueの黒番はスコアが低下する", () => {
+    const board = createVulnerableBoard();
+
+    // (7,7) に置くと横活三、延長点(7,8)が三三禁
+    // まず(7,8)が禁手であることを確認
+    board[7][7] = "black"; // 仮配置
+    const forbidden78 = checkForbiddenMove(board, 7, 8);
+    board[7][7] = null; // 元に戻す
+    expect(forbidden78.isForbidden).toBe(true);
+
+    const scoreWithVulnerability = evaluatePosition(board, 7, 7, "black", {
+      ...baseOptions,
+      enableForbiddenVulnerability: true,
+    });
+
+    const scoreWithoutVulnerability = evaluatePosition(board, 7, 7, "black", {
+      ...baseOptions,
+      enableForbiddenVulnerability: false,
+    });
+
+    // 禁手脆弱性ペナルティにより、有効時のスコアが低い
+    expect(scoreWithVulnerability).toBeLessThan(scoreWithoutVulnerability);
+  });
+
+  it("白番では禁手脆弱性ペナルティがない", () => {
+    const board = createVulnerableBoard();
+
+    const scoreWithVulnerability = evaluatePosition(board, 7, 7, "white", {
+      ...baseOptions,
+      enableForbiddenVulnerability: true,
+    });
+
+    const scoreWithoutVulnerability = evaluatePosition(board, 7, 7, "white", {
+      ...baseOptions,
+      enableForbiddenVulnerability: false,
+    });
+
+    // 白番は禁手がないので差がない
+    expect(scoreWithVulnerability).toBe(scoreWithoutVulnerability);
+  });
+
+  it("evaluatePositionWithBreakdownでforbiddenVulnerability > 0を確認", () => {
+    const board = createVulnerableBoard();
+
+    // 仮配置して禁手確認（テストの前提条件）
+    board[7][7] = "black";
+    const forbidden78 = checkForbiddenMove(board, 7, 8);
+    board[7][7] = null;
+    expect(forbidden78.isForbidden).toBe(true);
+
+    const { breakdown } = evaluatePositionWithBreakdown(board, 7, 7, "black", {
+      ...baseOptions,
+      enableForbiddenVulnerability: true,
+    });
+
+    expect(breakdown.forbiddenVulnerability).toBeGreaterThan(0);
   });
 });
