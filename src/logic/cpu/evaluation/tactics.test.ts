@@ -245,6 +245,7 @@ describe("複数方向脅威ボーナス", () => {
       enableMiseThreat: false,
       enableNullMovePruning: false,
       enableFutilityPruning: false,
+      enableForbiddenVulnerability: false,
     });
 
     // enableMultiThreat無効時のスコア
@@ -261,6 +262,7 @@ describe("複数方向脅威ボーナス", () => {
       enableMiseThreat: false,
       enableNullMovePruning: false,
       enableFutilityPruning: false,
+      enableForbiddenVulnerability: false,
     });
 
     // ボーナス有効時の方が高スコア
@@ -292,6 +294,7 @@ describe("複数方向脅威ボーナス", () => {
       enableMiseThreat: false,
       enableNullMovePruning: false,
       enableFutilityPruning: false,
+      enableForbiddenVulnerability: false,
     });
 
     const scoreWithoutBonus = evaluatePosition(board, 7, 8, "black", {
@@ -307,6 +310,7 @@ describe("複数方向脅威ボーナス", () => {
       enableMiseThreat: false,
       enableNullMovePruning: false,
       enableFutilityPruning: false,
+      enableForbiddenVulnerability: false,
     });
 
     // 1方向のみなので差がほぼ0
@@ -343,6 +347,7 @@ describe("カウンターフォー", () => {
       enableMiseThreat: false,
       enableNullMovePruning: false,
       enableFutilityPruning: false,
+      enableForbiddenVulnerability: false,
     });
 
     // enableCounterFour無効時のスコア
@@ -359,6 +364,7 @@ describe("カウンターフォー", () => {
       enableMiseThreat: false,
       enableNullMovePruning: false,
       enableFutilityPruning: false,
+      enableForbiddenVulnerability: false,
     });
 
     // カウンターフォー有効時の方が高スコア（防御スコアが1.5倍）
@@ -386,6 +392,7 @@ describe("カウンターフォー", () => {
       enableMiseThreat: false,
       enableNullMovePruning: false,
       enableFutilityPruning: false,
+      enableForbiddenVulnerability: false,
     });
 
     const scoreWithoutCounter = evaluatePosition(board, 5, 8, "black", {
@@ -401,6 +408,7 @@ describe("カウンターフォー", () => {
       enableMiseThreat: false,
       enableNullMovePruning: false,
       enableFutilityPruning: false,
+      enableForbiddenVulnerability: false,
     });
 
     // 自分が四を作らないのでスコアは同じ
@@ -477,6 +485,7 @@ describe("単発四ペナルティ", () => {
     enableMiseThreat: false,
     enableNullMovePruning: false,
     enableFutilityPruning: false,
+    enableForbiddenVulnerability: false,
   };
 
   it("後続脅威がない四は低評価される", () => {
@@ -604,6 +613,7 @@ describe("禁手追い込み三（FORBIDDEN_TRAP_THREE）", () => {
       enableMiseThreat: false,
       enableNullMovePruning: false,
       enableFutilityPruning: false,
+      enableForbiddenVulnerability: false,
     });
 
     // 10Fが禁手であることを確認
@@ -665,6 +675,7 @@ describe("禁手追い込み三（FORBIDDEN_TRAP_THREE）", () => {
       enableMiseThreat: false,
       enableNullMovePruning: false,
       enableFutilityPruning: false,
+      enableForbiddenVulnerability: false,
     });
 
     // 無関係な位置（追い込みにならない）
@@ -681,6 +692,7 @@ describe("禁手追い込み三（FORBIDDEN_TRAP_THREE）", () => {
       enableMiseThreat: false,
       enableNullMovePruning: false,
       enableFutilityPruning: false,
+      enableForbiddenVulnerability: false,
     });
 
     // 5Gに打つ手は追い込みボーナスで高スコアになるべき
@@ -709,6 +721,7 @@ describe("禁手追い込み三（FORBIDDEN_TRAP_THREE）", () => {
       enableMiseThreat: false,
       enableNullMovePruning: false,
       enableFutilityPruning: false,
+      enableForbiddenVulnerability: false,
     });
 
     // FORBIDDEN_TRAP_THREEボーナスは含まれないはず

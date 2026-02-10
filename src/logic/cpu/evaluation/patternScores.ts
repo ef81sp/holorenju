@@ -46,6 +46,12 @@ export const PATTERN_SCORES = {
   COUNTER_FOUR_MULTIPLIER: 1.5,
   /** 斜め方向ボーナス係数（斜め連は隣接空き点が多く効率が良い） */
   DIAGONAL_BONUS_MULTIPLIER: 1.05,
+  /** 禁手脆弱性（強）: 三の延長点が禁手で白の攻撃ライン上 */
+  FORBIDDEN_VULNERABILITY_STRONG: 800,
+  /** 禁手脆弱性（弱）: 三の延長点が禁手（白の攻撃なし） */
+  FORBIDDEN_VULNERABILITY_MILD: 300,
+  /** 禁手脆弱性ペナルティの合計上限 */
+  FORBIDDEN_VULNERABILITY_CAP: 1500,
 } as const;
 
 /**
@@ -82,6 +88,8 @@ export interface EvaluationOptions {
   enableNullMovePruning: boolean;
   /** Futility Pruning を有効にするか */
   enableFutilityPruning: boolean;
+  /** 黒番の禁手脆弱性評価を有効にするか（ルートレベル・ムーブオーダリング） */
+  enableForbiddenVulnerability: boolean;
   /** 事前計算された脅威情報（最適化用、ルートノードで計算して渡す） */
   precomputedThreats?: ThreatInfo;
 }
@@ -102,6 +110,7 @@ export const DEFAULT_EVAL_OPTIONS: EvaluationOptions = {
   enableMiseThreat: false,
   enableNullMovePruning: false,
   enableFutilityPruning: false,
+  enableForbiddenVulnerability: false,
 };
 
 /**
@@ -120,6 +129,7 @@ export const FULL_EVAL_OPTIONS: EvaluationOptions = {
   enableMiseThreat: true,
   enableNullMovePruning: true,
   enableFutilityPruning: true,
+  enableForbiddenVulnerability: true,
 };
 
 /**

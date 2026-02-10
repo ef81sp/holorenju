@@ -222,6 +222,7 @@ describe("必須防御ルール", () => {
     enableMiseThreat: false,
     enableNullMovePruning: false,
     enableFutilityPruning: false,
+    enableForbiddenVulnerability: false,
   };
 
   it("相手の活四を止めない手は-Infinityになる", () => {
@@ -422,6 +423,7 @@ describe("evaluatePosition - 止め四防御", () => {
     enableMiseThreat: false,
     enableNullMovePruning: false,
     enableFutilityPruning: false,
+    enableForbiddenVulnerability: false,
   };
 
   it("相手の止め四を止めない手は-Infinityを返す", () => {
@@ -479,6 +481,7 @@ describe("evaluatePosition - 止め四防御（実戦棋譜）", () => {
     enableMiseThreat: false,
     enableNullMovePruning: false,
     enableFutilityPruning: false,
+    enableForbiddenVulnerability: false,
   };
 
   it("黒の止め四があるとき、白は四三を優先せず防御する", () => {
@@ -542,6 +545,7 @@ describe("evaluatePosition - ミセ手防御", () => {
     enableMiseThreat: true,
     enableNullMovePruning: false,
     enableFutilityPruning: false,
+    enableForbiddenVulnerability: false,
   };
 
   it("相手のミセ手を止めない手は-Infinityを返す（他の脅威がない場合）", () => {

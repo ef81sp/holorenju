@@ -73,6 +73,7 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
       enableMiseThreat: false,
       enableNullMovePruning: false,
       enableFutilityPruning: false,
+      enableForbiddenVulnerability: false,
     },
     scoreThreshold: 1200, // 広いスコア差まで悪手候補に
   },
@@ -94,6 +95,7 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
       enableMiseThreat: false,
       enableNullMovePruning: false,
       enableFutilityPruning: false,
+      enableForbiddenVulnerability: false,
     },
     scoreThreshold: 200, // ランダム選択時もより良い手に限定
   },
@@ -115,6 +117,7 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
       enableMiseThreat: true,
       enableNullMovePruning: false,
       enableFutilityPruning: true, // depth 3 でも浅い末端の効率化に有用
+      enableForbiddenVulnerability: false,
     },
     scoreThreshold: 150, // より最善手寄りに（medium-easy差を広げる）
   },
@@ -136,6 +139,7 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
       enableMiseThreat: true,
       enableNullMovePruning: true, // depth 4 の中断率削減
       enableFutilityPruning: true,
+      enableForbiddenVulnerability: true, // 黒番の禁手脆弱性評価
     },
     scoreThreshold: 0, // 常に最善手（使用しない）
   },

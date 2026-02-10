@@ -280,6 +280,7 @@ describe("evaluatePosition 盤面不変性", () => {
       enableMiseThreat: true,
       enableNullMovePruning: false,
       enableFutilityPruning: false,
+      enableForbiddenVulnerability: false,
     });
 
     expect(board).toEqual(snapshot);
@@ -306,6 +307,7 @@ describe("evaluatePosition 盤面不変性", () => {
       enableMiseThreat: false,
       enableNullMovePruning: false,
       enableFutilityPruning: false,
+      enableForbiddenVulnerability: false,
     });
 
     expect(board).toEqual(snapshot);

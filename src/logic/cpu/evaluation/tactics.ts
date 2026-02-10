@@ -253,6 +253,165 @@ export function evaluateForbiddenTrap(
 }
 
 /**
+ * 黒の活三の延長点を取得（両端の空きマス）
+ *
+ * getExtensionPoints は白専用（white でトラバース）のため、
+ * 黒の石をトラバースするバリアントを用意する。
+ */
+function getBlackExtensionPoints(
+  board: BoardState,
+  row: number,
+  col: number,
+  dr: number,
+  dc: number,
+): Position[] {
+  const positions: Position[] = [];
+
+  // 正方向の端
+  let r = row + dr;
+  let c = col + dc;
+  while (isValidPosition(r, c) && board[r]?.[c] === "black") {
+    r += dr;
+    c += dc;
+  }
+  if (isValidPosition(r, c) && board[r]?.[c] === null) {
+    positions.push({ row: r, col: c });
+  }
+
+  // 負方向の端
+  r = row - dr;
+  c = col - dc;
+  while (isValidPosition(r, c) && board[r]?.[c] === "black") {
+    r -= dr;
+    c -= dc;
+  }
+  if (isValidPosition(r, c) && board[r]?.[c] === null) {
+    positions.push({ row: r, col: c });
+  }
+
+  return positions;
+}
+
+/**
+ * 延長点方向に白石があるかチェック
+ *
+ * 延長点の先に白石がある場合、白がその方向から攻撃する可能性が高い。
+ */
+function hasWhiteStoneNearExtension(
+  board: BoardState,
+  extRow: number,
+  extCol: number,
+  dr: number,
+  dc: number,
+): boolean {
+  // 延長点の先2マスをチェック
+  for (let step = 1; step <= 2; step++) {
+    const r = extRow + dr * step;
+    const c = extCol + dc * step;
+    if (!isValidPosition(r, c)) {
+      break;
+    }
+    if (board[r]?.[c] === "white") {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * 黒の禁手脆弱性を評価（ルートレベル専用）
+ *
+ * 黒の着手後、自分のパターン延長点が禁手かをチェック。
+ * 延長点が禁手 = 白の追い込みターゲットになりうる。
+ *
+ * @param board 盤面（黒の石を置いた状態）
+ * @param row 黒が置いた行
+ * @param col 黒が置いた列
+ * @returns 脆弱性ペナルティ（0以上、大きいほど危険）
+ */
+export function evaluateForbiddenVulnerability(
+  board: BoardState,
+  row: number,
+  col: number,
+): number {
+  let totalPenalty = 0;
+
+  for (let i = 0; i < DIRECTIONS.length; i++) {
+    const direction = DIRECTIONS[i];
+    if (!direction) {
+      continue;
+    }
+    const [dr, dc] = direction;
+    const dirIndex = DIRECTION_INDICES[i] ?? -1;
+
+    const pattern = analyzeDirection(board, row, col, dr, dc, "black");
+
+    // 連続三を検出した場合
+    if (
+      pattern.count === 3 &&
+      pattern.end1 === "empty" &&
+      pattern.end2 === "empty"
+    ) {
+      const extensionPoints = getBlackExtensionPoints(board, row, col, dr, dc);
+
+      for (const pos of extensionPoints) {
+        const forbiddenResult = checkForbiddenMove(board, pos.row, pos.col);
+        if (forbiddenResult.isForbidden) {
+          const hasWhite = hasWhiteStoneNearExtension(
+            board,
+            pos.row,
+            pos.col,
+            dr,
+            dc,
+          );
+          totalPenalty += hasWhite
+            ? PATTERN_SCORES.FORBIDDEN_VULNERABILITY_STRONG
+            : PATTERN_SCORES.FORBIDDEN_VULNERABILITY_MILD;
+        }
+      }
+    }
+
+    // 跳び三も検出（analyzeDirection は連続パターンのみ）
+    if (
+      dirIndex >= 0 &&
+      pattern.count !== 3 &&
+      checkJumpThree(board, row, col, dirIndex, "black")
+    ) {
+      const straightFourPoints = getJumpThreeStraightFourPoints(
+        board,
+        row,
+        col,
+        dirIndex,
+        "black",
+      );
+
+      for (const pos of straightFourPoints) {
+        const forbiddenResult = checkForbiddenMove(board, pos.row, pos.col);
+        if (forbiddenResult.isForbidden) {
+          const hasWhite = hasWhiteStoneNearExtension(
+            board,
+            pos.row,
+            pos.col,
+            dr,
+            dc,
+          );
+          totalPenalty += hasWhite
+            ? PATTERN_SCORES.FORBIDDEN_VULNERABILITY_STRONG
+            : PATTERN_SCORES.FORBIDDEN_VULNERABILITY_MILD;
+        }
+      }
+    }
+
+    // ペナルティ上限に達したら早期終了
+    if (totalPenalty >= PATTERN_SCORES.FORBIDDEN_VULNERABILITY_CAP) {
+      return PATTERN_SCORES.FORBIDDEN_VULNERABILITY_CAP;
+    }
+  }
+
+  return Math.min(totalPenalty, PATTERN_SCORES.FORBIDDEN_VULNERABILITY_CAP);
+}
+
+/**
  * 白の三三・四四パターンをチェック
  * 白には禁手がないため、三三・四四は即勝利となる
  *
