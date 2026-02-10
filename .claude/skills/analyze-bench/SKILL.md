@@ -3,7 +3,7 @@ name: analyze-bench
 description: ベンチマーク結果を分析して戦術的洞察を提供
 allowed-tools:
   - Bash(pnpm analyze:bench:*)
-  - Bash(jq:*)
+  - Bash(node --eval:*)
   - Bash(ls:*)
   - Write(docs/bench-reports/*.md)
 ---
@@ -24,28 +24,45 @@ allowed-tools:
 ```
 /analyze-bench                     # 最新ファイルを分析
 /analyze-bench <filename.json>     # 特定ファイルを分析
-/analyze-bench --compare 5         # 最新5件を比較
-/analyze-bench --game <n>          # 特定ゲームの棋譜を詳細分析
 ```
 
 ## MoveRecordに記録される情報
 
 各着手（MoveRecord）には以下の情報が記録される:
 
-| フィールド      | 型                  | 説明                            |
-| --------------- | ------------------- | ------------------------------- |
-| row, col        | number              | 着手位置                        |
-| time            | number              | 思考時間（ms）                  |
-| isOpening       | boolean             | 開局定石かどうか                |
-| depth           | number              | 到達探索深度                    |
-| score           | number              | 選択された手の探索スコア        |
-| stats           | SearchStatsRecord   | 探索統計（nodes, ttHits, etc.） |
-| candidates      | CandidateMove[]     | 上位5候補手（詳細情報付き）     |
-| selectedRank    | number              | 選択された手の順位              |
-| randomSelection | RandomSelectionInfo | ランダム選択情報                |
-| depthHistory    | DepthResult[]       | 深度別最善手履歴                |
+| フィールド      | 型                   | 説明                                       |
+| --------------- | -------------------- | ------------------------------------------ |
+| row, col        | number               | 着手位置                                   |
+| time            | number               | 思考時間（ms）                             |
+| isOpening       | boolean              | 開局定石かどうか                           |
+| depth           | number?              | 到達探索深度（開局時は undefined）         |
+| score           | number?              | 選択された手の探索スコア                   |
+| stats           | SearchStatsRecord?   | 探索統計（nodes, ttHits, etc.）            |
+| candidates      | CandidateMove[]?     | 上位5候補手（詳細情報付き）                |
+| selectedRank    | number?              | 選択された手の順位（1始まり）              |
+| randomSelection | RandomSelectionInfo? | ランダム選択情報                           |
+| depthHistory    | DepthResult[]?       | 深度別最善手履歴                           |
+| forcedForbidden | boolean?             | 禁手追い込みで勝った場合true（最終手のみ） |
 
-### CandidateMove（候補手）に含まれる詳細情報
+### SearchStatsRecord（探索統計）
+
+| フィールド           | 型      | 説明                               |
+| -------------------- | ------- | ---------------------------------- |
+| nodes                | number  | 探索ノード数                       |
+| ttHits               | number  | TTヒット数                         |
+| ttCutoffs            | number  | TTカットオフ数                     |
+| betaCutoffs          | number  | Beta剪定数                         |
+| maxDepth             | number  | 設定された最大探索深度             |
+| completedDepth       | number  | 実際に到達した探索深度             |
+| interrupted          | boolean | 中断されたか                       |
+| forbiddenCheckCalls  | number  | 禁手判定回数                       |
+| boardCopies          | number  | 盤面コピー回数                     |
+| threatDetectionCalls | number  | 脅威検出回数                       |
+| evaluationCalls      | number  | 評価関数呼び出し回数               |
+| nullMoveCutoffs      | number? | Null Move Pruning によるカットオフ |
+| futilityPrunes       | number? | Futility Pruning によるスキップ    |
+
+### CandidateMove（候補手）
 
 | フィールド         | 説明                                      |
 | ------------------ | ----------------------------------------- |
@@ -74,7 +91,8 @@ breakdown: {
   mise,              // ミセ手ボーナス
   center,            // 中央ボーナス
   multiThreat,       // 複数脅威ボーナス
-  singleFourPenalty  // 単発四ペナルティ
+  singleFourPenalty, // 単発四ペナルティ
+  forbiddenTrap      // 禁手追い込みボーナス（白番のみ）
 }
 ```
 
@@ -99,8 +117,8 @@ games[]: {
   playerA: string,        // 難易度名 (beginner, easy, medium, hard)
   playerB: string,        // 難易度名
   isABlack: boolean,      // playerAが黒番(先手)かどうか
-  winner: "A" | "B",      // 勝者
-  reason: "five" | "forbidden" | "draw",
+  winner: "A" | "B" | "draw",
+  reason: "five" | "forbidden" | "draw" | "move_limit",
   moves: number,          // 総手数
   duration: number,       // 対局時間(ms)
   moveHistory: MoveRecord[]
@@ -134,13 +152,21 @@ ls docs/bench-reports/bench-report-2026-02-04-*.md 2>/dev/null | wc -l
 2. 変更概要（パラメータ調整があれば）
 3. 難易度別レーティング結果（前回との比較があれば差分も）
 4. レーティング差（隣接難易度間）
-5. 難易度別探索統計（着手数、平均ノード、到達深度、中断率）
-6. 難易度別探索効率（TTヒット率、Beta cutoff率）
-7. 難易度別選択順位分布（R1:xxx, R2:xxx...）
-8. 難易度別ランダム悪手
-9. 難易度別禁手負け
-10. 問題点・改善提案
-11. 結論
+5. 先手(黒)/後手(白)勝率・同難易度バランス
+6. 勝利理由（five/forbidden/move_limit）
+7. 難易度別探索統計（着手数、平均ノード、最大ノード、到達深度、設定深度、中断率）
+8. 深度分布
+9. 難易度別探索効率（TTヒット率、Beta cutoff率）
+10. 難易度別詳細プロファイリング（禁手判定、盤面コピー、脅威検出、評価関数、NMP、Futility）
+11. 難易度別選択順位分布（R1:xxx, R2:xxx...、候補外）
+12. 難易度別ランダム悪手（スコア差500以上）
+13. 難易度別禁手負け・禁手負け詳細（禁手追い込み/自滅の区別）
+14. ゲーム長統計（平均/最短/最長）
+15. 単発四ペナルティ
+16. 深度変化（最善手の安定性）
+17. 難易度別思考時間（平均、p50、p90、p95、p99、max、timeLimit超過）
+18. 問題点・改善提案
+19. 結論
 
 ### 注意事項
 
@@ -152,135 +178,54 @@ ls docs/bench-reports/bench-report-2026-02-04-*.md 2>/dev/null | wc -l
 
 ### 重要: ツール呼び出しの最小化
 
-分析中のデータ取得は **なるべく少ないコマンド実行にまとめる**こと。
-jq を何回も呼ぶのではなく、`node -e` のワンショットスクリプトで複数の統計を一度に取得する。
+`pnpm analyze:bench` が全統計を1パスで出力するため、追加コマンドは基本的に不要。
+特定ゲームの深掘り分析が必要な場合のみ、Nodeワンショットスクリプトで個別データを取得する。
 
-### 1. ファイル取得と基本統計（1コマンドで完了）
+### 1. ファイル取得と全統計取得（1コマンドで完了）
 
 ```bash
 pnpm analyze:bench <file>  # 引数なしで最新ファイルを自動選択
 ```
 
-出力内容:
+このコマンドで以下の全セクションが出力される:
 
+- 基本情報（日時、ゲーム数、プレイヤー、マッチアップ数）
 - レーティング結果・レーティング差
-- マッチアップ結果・先手/後手勝敗表
-- 先手(黒)/後手(白)勝率・同難易度バランス
+- マッチアップ結果・先手/後手勝敗表（黒/白それぞれ）
+- 先手(黒)/後手(白)勝率・同難易度バランス（難易度別内訳付き）
 - 勝利理由
-- 難易度別探索統計・深度分布・探索効率・プロファイリング
-- 選択順位分布・ランダム悪手・禁手負け詳細
+- 難易度別探索統計・深度分布・探索効率
+- 難易度別詳細プロファイリング（禁手判定、盤面コピー、脅威検出、評価関数、NMPカットオフ、Futilityスキップ）
+- 選択順位分布・ランダム悪手・禁手負け詳細（禁手追い込み/自滅の区別付き）
 - ゲーム長統計（平均/最短/最長）
 - 異難易度対戦の先手/後手勝率
 - 単発四ペナルティ数
 - 深度変化（最善手の安定性）
+- 難易度別思考時間（平均、p50、p90、p95、p99、max、timeLimit超過の詳細上位5件）
 
-### 2. 追加分析（1回の node -e で全取得）
+### 2. 特定ゲームの深掘り分析（必要な場合のみ）
 
-`pnpm analyze:bench` に含まれない追加統計を取得する場合、**1回のコマンド**にまとめる:
+問題のあるゲームを詳細に調査する場合、`node --eval` でJSONを読み込んで必要な情報を抽出する。
+なるべく1回の呼び出しで必要な情報をまとめて取得すること。
 
-```bash
-node -e "
-const data = JSON.parse(require('fs').readFileSync('<file>', 'utf-8'));
-// 必要な統計をすべて1パスで計算して出力
-"
-```
+調査対象例:
 
-### 4. 棋譜分析（問題パターン検出）
+- 特定ゲームの基本情報と全着手の候補手・スコア内訳
+- 予想手順（PV）と末端評価
+- スコア逆転した着手、深度変化のある着手
 
-拡張されたMoveRecordを使って問題のある着手を検出:
+### 3. 戦術的観点からの洞察
 
-#### 検出対象パターン
+| 分析項目          | 観点                            | 正常範囲           | 参照ドキュメント                       |
+| ----------------- | ------------------------------- | ------------------ | -------------------------------------- |
+| 探索効率          | 中断率、TT利用率、深度到達率    | 中断率30%以下      | `docs/cpu-ai-algorithm.md`             |
+| 難易度バランス    | レーティング差の適切さ          | 隣接難易度差50-150 | `docs/cpu-ai-algorithm.md`             |
+| 先手/後手バランス | 黒勝率                          | 55-65%             | `docs/renju-tactics-and-evaluation.md` |
+| 勝利パターン      | five/forbidden/move_limitの比率 | forbidden < 5%     | `docs/renju-tactics-and-evaluation.md` |
+| 評価関数の安定性  | 深度による最善手変化率          | 変化率20%以下      | `docs/renju-tactics-and-evaluation.md` |
+| 思考時間          | timeLimit超過率、パーセンタイル | 超過率5%以下       | `docs/cpu-ai-algorithm.md`             |
 
-| 問題パターン           | 検出方法                                        | 戦術的意味         |
-| ---------------------- | ----------------------------------------------- | ------------------ |
-| ランダム選択による悪手 | `randomSelection.wasRandom=true` かつスコア差大 | 難易度調整の副作用 |
-| 深度依存の判断変化     | `depthHistory`で深度ごとに最善手が変化          | 評価関数の問題発見 |
-| スコア逆転局面         | 連続する手でスコアが大きく変動                  | 致命的なミス       |
-| 候補手との乖離         | `selectedRank > 1` で上位手とのスコア差大       | 意図せぬ悪手       |
-| 単発四の乱用           | `breakdown.singleFourPenalty`が頻繁に発生       | 戦術的問題         |
-
-#### 分析コード例
-
-```bash
-# ランダム選択で悪手を打った回数（スコア差500以上）
-jq -r '
-  [.games[].moveHistory[] |
-   select(.randomSelection.wasRandom == true) |
-   select(.candidates and (.candidates | length) > 1) |
-   select((.candidates[0].searchScore - .score) > 500)
-  ] | length as $count |
-  "ランダム選択による悪手: \($count)回"
-' "$FILE"
-
-# 難易度別ランダム悪手
-for level in beginner easy medium hard; do
-  jq -r --arg level "$level" '
-    [.games[] |
-     select(.playerA == $level or .playerB == $level) |
-     .moveHistory[] |
-     select(.randomSelection.wasRandom == true) |
-     select(.candidates and (.candidates | length) > 1) |
-     (.candidates[0].searchScore - .score) as $diff |
-     select($diff > 500)
-    ] | length
-  ' "$FILE" | xargs -I {} echo "  $level: {}回"
-done
-
-# 上位手を選ばなかった回数（selectedRank > 1）
-jq -r '
-  [.games[].moveHistory[] | select(.selectedRank)] |
-  group_by(.selectedRank) |
-  map({rank: .[0].selectedRank, count: length}) |
-  sort_by(.rank) |
-  map("  Rank \(.rank): \(.count)回") | .[]
-' "$FILE"
-
-# 単発四ペナルティが発生した着手
-jq -r '
-  [.games[].moveHistory[] |
-   select(.candidates) |
-   .candidates[] |
-   select(.breakdown.singleFourPenalty and .breakdown.singleFourPenalty > 0)
-  ] | length as $count |
-  "単発四ペナルティ発生: \($count)回"
-' "$FILE"
-
-# 禁手負けのゲーム詳細
-jq -r '
-  .games | to_entries | .[] |
-  select(.value.reason == "forbidden") |
-  .value as $g |
-  "  game \(.key): \($g.playerA)(black=\($g.isABlack)) vs \($g.playerB) - winner: \($g.winner)"
-' "$FILE"
-```
-
-### 5. 詳細な候補手分析
-
-```bash
-# 候補手のスコア内訳を確認（特定の手）
-jq '.games[0].moveHistory[5].candidates[0].breakdown' "$FILE"
-
-# 予想手順（PV）を確認
-jq '.games[0].moveHistory | map(select(.candidates)) | .[0].candidates[0].principalVariation' "$FILE"
-
-# 末端評価の内訳を確認
-jq '.games[0].moveHistory | map(select(.candidates)) | .[0].candidates[0].leafEvaluation' "$FILE"
-
-# 深度履歴を確認（最善手が変わった着手を特定）
-jq '.games[0].moveHistory | map(select(.depthHistory and (.depthHistory | length) > 1)) | .[0].depthHistory' "$FILE"
-```
-
-### 6. 戦術的観点からの洞察
-
-| 分析項目          | 観点                         | 正常範囲           | 参照ドキュメント                       |
-| ----------------- | ---------------------------- | ------------------ | -------------------------------------- |
-| 探索効率          | 中断率、TT利用率、深度到達率 | 中断率30%以下      | `docs/cpu-ai-algorithm.md`             |
-| 難易度バランス    | レーティング差の適切さ       | 隣接難易度差50-150 | `docs/cpu-ai-algorithm.md`             |
-| 先手/後手バランス | 黒勝率                       | 55-65%             | `docs/renju-tactics-and-evaluation.md` |
-| 勝利パターン      | five/forbidden/drawの比率    | forbidden < 5%     | `docs/renju-tactics-and-evaluation.md` |
-| 評価関数の安定性  | 深度による最善手変化率       | 変化率20%以下      | `docs/renju-tactics-and-evaluation.md` |
-
-### 7. 改善提案生成
+### 4. 改善提案生成
 
 分析結果に基づいて具体的な改善ポイントを提示:
 
@@ -291,6 +236,8 @@ jq '.games[0].moveHistory | map(select(.depthHistory and (.depthHistory | length
 - **先手勝率が偏っている場合**: 評価関数のバランス調整を検討
 - **深度による最善手変化が多い場合**: 評価関数の horizon effect を検討
 - **単発四ペナルティが頻発する場合**: singleFourPenaltyMultiplierの調整を検討
+- **timeLimit超過が多い場合**: timeLimitの増加、または枝刈りの強化を検討
+- **禁手追い込み率が低い場合**: forbiddenTrapボーナスの調整を検討
 
 ## 出力フォーマット例
 
@@ -298,84 +245,35 @@ jq '.games[0].moveHistory | map(select(.depthHistory and (.depthHistory | length
 ## ベンチマーク分析: bench-2026-02-02T15-13-14-895Z.json
 
 ### 基本統計
-（analyze-bench.shの出力を整形）
+（pnpm analyze:bench の出力を整形）
 
 ### 探索効率分析
-- 中断率: beginner 5%, easy 12%, medium 25%, hard 35%
-- TTヒット率: 平均42%
-- Beta cutoff率: 平均18%
-- 評価: hard の中断率が高め → timeLimit増加を検討
+- 中断率: beginner 0%, easy 0%, medium 0%, hard 4%
+- TTヒット率: beginner 30%, easy 30%, medium 25%, hard 17%
+- Beta cutoff率: beginner 0%, easy 22%, medium 32%, hard 31%
+- 評価: hard の中断率は低く正常
 
 ### 難易度バランス分析
-- レーティング差: beginner→easy +80, easy→medium +100, medium→hard +60
-- 評価: 適切な難易度階層
+- レーティング差: hard-medium +346, medium-easy +234, easy-beginner +186
+- 評価: 差が大きめ、mediumとeasyの間が広い
 
 ### 戦術的傾向
-- 先手勝率: 58%（正常範囲）
-- 勝利理由: five 95%, forbidden 3%, draw 2%
-- ランダム選択による悪手: 12回
-- 深度変化による最善手変更: 8回
-- 単発四ペナルティ発生: 45回
-- 評価: 正常
+- 先手勝率: 47%（やや低め）
+- 勝利理由: five 859, forbidden 126, move_limit 15
+- ランダム選択による悪手: 0回
+- 深度変化による最善手変更: 0回 (0%)
+- 単発四ペナルティ発生: 4204回
+- 禁手追い込み成功: 126/126件 (100%)
+- 評価: 禁手追い込みが完全に機能
+
+### 思考時間分析
+- hard: p95 5856ms, timeLimit超過 201回
+- medium: p95 1275ms, timeLimit超過 10回
+- 評価: hard の超過が多いため timeLimit 増加を検討
 
 ### 改善提案
-1. hardの探索中断率を下げるため timeLimit: 5000 → 6000 を検討
-2. beginnerのランダム悪手を減らすため randomFactor: 0.3 → 0.25 を検討
-```
-
-## 特定ゲームの詳細分析
-
-`--game <n>` オプションで特定のゲームを詳細分析:
-
-```bash
-# ゲーム番号nの基本情報
-jq -r ".games[$n] | {playerA, playerB, isABlack, winner, reason, moves}" "$FILE"
-
-# 特定ゲームの全着手の候補手情報
-jq ".games[$n].moveHistory | map(select(.candidates)) | map({
-  move: \"\(.row),\(.col)\",
-  score: .score,
-  selectedRank: .selectedRank,
-  topCandidate: .candidates[0] | {pos: \"\(.position.row),\(.position.col)\", searchScore, score},
-  depthChanges: (.depthHistory | if . then length else 0 end)
-})" "$FILE"
-```
-
-出力内容:
-
-- 対局情報（プレイヤー、勝敗、手数）
-- 全着手の詳細（位置、スコア、候補手、内訳）
-- 問題のある着手のハイライト
-- 各着手の予想手順（PV）と末端評価
-
-## 追加分析項目
-
-### ゲーム長・思考時間統計
-
-```bash
-# 平均ゲーム長
-jq -r '
-  [.games[].moves] |
-  "平均手数: \((add / length) | floor), 最短: \(min), 最長: \(max)"
-' "$FILE"
-
-# 難易度別平均思考時間
-for level in beginner easy medium hard; do
-  jq -r --arg level "$level" '
-    [.games[] |
-     (if .isABlack then
-       (if .playerA == $level then [.moveHistory | to_entries | .[] | select(.key % 2 == 0) | .value.time]
-        elif .playerB == $level then [.moveHistory | to_entries | .[] | select(.key % 2 == 1) | .value.time]
-        else [] end)
-      else
-       (if .playerA == $level then [.moveHistory | to_entries | .[] | select(.key % 2 == 1) | .value.time]
-        elif .playerB == $level then [.moveHistory | to_entries | .[] | select(.key % 2 == 0) | .value.time]
-        else [] end)
-      end)
-    ] | flatten |
-    if length > 0 then (add / length | floor) else 0 end
-  ' "$FILE" | xargs -I {} echo "  $level: {}ms"
-done
+1. hardのtimeLimit超過201回 → timeLimit: 8000 → 10000 を検討
+2. 先手勝率47%がやや低い → 黒番の評価バランス確認
 ```
 
 ## 関連ファイル
