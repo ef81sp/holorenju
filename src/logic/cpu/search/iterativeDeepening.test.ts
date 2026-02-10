@@ -4,13 +4,20 @@
  * findBestMoveIterative、ノード数制限、絶対時間制限のテスト
  */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { createEmptyBoard } from "@/logic/renjuRules";
 
 import { DEFAULT_EVAL_OPTIONS, PATTERN_SCORES } from "../evaluation";
 import { placeStonesOnBoard } from "../testUtils";
-import { findBestMoveIterative, findBestMoveIterativeWithTT } from "./minimax";
+import { computeBoardHash } from "../zobrist";
+import { createSearchContext } from "./context";
+import {
+  findBestMoveIterative,
+  findBestMoveIterativeWithTT,
+  minimaxWithTT,
+} from "./minimax";
+import { INFINITY } from "./techniques";
 
 describe("findBestMoveIterative", () => {
   it("深さ1から開始して有効な手を返す", () => {
@@ -226,5 +233,92 @@ describe("findBestMoveIterativeWithTT - 絶対時間制限", () => {
     // 有効な結果が返される
     expect(result.position.row).toBeGreaterThanOrEqual(0);
     expect(result.completedDepth).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe("deadline ベースの時間管理", () => {
+  it("deadline が過去なら timeoutFlag が立つ", () => {
+    vi.useFakeTimers();
+    const board = createEmptyBoard();
+    placeStonesOnBoard(board, [
+      { row: 7, col: 7, color: "black" },
+      { row: 7, col: 8, color: "white" },
+    ]);
+    const ctx = createSearchContext();
+    ctx.deadline = performance.now() - 1; // 過去
+    ctx.timeoutFlag = false;
+    const hash = computeBoardHash(board);
+    minimaxWithTT(
+      board,
+      hash,
+      2,
+      true,
+      "black",
+      -INFINITY,
+      INFINITY,
+      null,
+      ctx,
+    );
+    expect(ctx.timeoutFlag).toBe(true);
+    vi.useRealTimers();
+  });
+
+  it("absoluteDeadline が過去なら absoluteDeadlineExceeded が立つ", () => {
+    vi.useFakeTimers();
+    const board = createEmptyBoard();
+    placeStonesOnBoard(board, [
+      { row: 7, col: 7, color: "black" },
+      { row: 7, col: 8, color: "white" },
+    ]);
+    const ctx = createSearchContext();
+    ctx.deadline = performance.now() + 999999;
+    ctx.absoluteDeadline = performance.now() - 1; // 過去
+    ctx.absoluteDeadlineExceeded = false;
+    const hash = computeBoardHash(board);
+    minimaxWithTT(
+      board,
+      hash,
+      3,
+      true,
+      "black",
+      -INFINITY,
+      INFINITY,
+      null,
+      ctx,
+    );
+    expect(ctx.absoluteDeadlineExceeded).toBe(true);
+    vi.useRealTimers();
+  });
+
+  it("deadline が未来なら timeoutFlag は立たない", () => {
+    vi.useFakeTimers();
+    const board = createEmptyBoard();
+    placeStonesOnBoard(board, [
+      { row: 7, col: 7, color: "black" },
+      { row: 7, col: 8, color: "white" },
+    ]);
+    const ctx = createSearchContext();
+    ctx.deadline = performance.now() + 999999;
+    ctx.timeoutFlag = false;
+    const hash = computeBoardHash(board);
+    minimaxWithTT(
+      board,
+      hash,
+      1,
+      true,
+      "black",
+      -INFINITY,
+      INFINITY,
+      null,
+      ctx,
+    );
+    expect(ctx.timeoutFlag).toBe(false);
+    vi.useRealTimers();
+  });
+
+  it("deadline/absoluteDeadline は未設定", () => {
+    const ctx = createSearchContext();
+    expect(ctx.deadline).toBeUndefined();
+    expect(ctx.absoluteDeadline).toBeUndefined();
   });
 });

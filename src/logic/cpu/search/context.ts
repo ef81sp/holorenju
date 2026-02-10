@@ -55,20 +55,18 @@ export interface SearchContext {
   stats: SearchStats;
   /** 評価オプション */
   evaluationOptions: EvaluationOptions;
-  /** 探索開始時刻（時間制限用） */
-  startTime?: number;
-  /** 時間制限（ミリ秒） */
-  timeLimit?: number;
+  /** 探索停止タイムスタンプ（deadline ベース） */
+  deadline?: number;
   /** 時間切れフラグ */
   timeoutFlag?: boolean;
   /** ノード数上限 */
   maxNodes?: number;
   /** ノード数上限超過フラグ */
   nodeCountExceeded?: boolean;
-  /** 絶対時間制限（ミリ秒）- これを超えたら強制終了 */
-  absoluteTimeLimit?: number;
+  /** 絶対停止タイムスタンプ（deadline ベース） */
+  absoluteDeadline?: number;
   /** 絶対時間制限超過フラグ */
-  absoluteTimeLimitExceeded?: boolean;
+  absoluteDeadlineExceeded?: boolean;
 }
 
 /**

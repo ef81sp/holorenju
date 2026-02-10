@@ -70,8 +70,8 @@ describe("createSearchContext", () => {
   it("時間制限フラグは未設定", () => {
     const ctx = createSearchContext();
 
-    expect(ctx.startTime).toBeUndefined();
-    expect(ctx.timeLimit).toBeUndefined();
+    expect(ctx.deadline).toBeUndefined();
+    expect(ctx.absoluteDeadline).toBeUndefined();
     expect(ctx.timeoutFlag).toBeUndefined();
     expect(ctx.maxNodes).toBeUndefined();
     expect(ctx.nodeCountExceeded).toBeUndefined();

@@ -27,6 +27,7 @@ import {
   PATTERN_SCORES,
   type EvaluationOptions,
 } from "../evaluation";
+import { evaluateForbiddenVulnerability } from "../evaluation/tactics";
 import {
   generateMoves,
   generateSortedMoves,
@@ -465,19 +466,17 @@ export function minimaxWithTT(
 
   // 時間制限チェック（一定ノード数ごと）
   // 毎回チェックするとオーバーヘッドが大きいため、一定間隔でチェック
-  if (ctx.startTime !== undefined && ctx.stats.nodes % 4 === 0) {
-    const elapsed = performance.now() - ctx.startTime;
-    // 通常の時間制限チェック
-    if (!ctx.timeoutFlag && ctx.timeLimit !== undefined) {
-      if (elapsed >= ctx.timeLimit) {
-        ctx.timeoutFlag = true;
-      }
+  if (ctx.deadline !== undefined && ctx.stats.nodes % 4 === 0) {
+    const now = performance.now();
+    if (!ctx.timeoutFlag && now >= ctx.deadline) {
+      ctx.timeoutFlag = true;
     }
-    // 絶対時間制限チェック（通常のタイムアウトとは独立してチェック）
-    if (!ctx.absoluteTimeLimitExceeded && ctx.absoluteTimeLimit !== undefined) {
-      if (elapsed >= ctx.absoluteTimeLimit) {
-        ctx.absoluteTimeLimitExceeded = true;
-      }
+    if (
+      !ctx.absoluteDeadlineExceeded &&
+      ctx.absoluteDeadline !== undefined &&
+      now >= ctx.absoluteDeadline
+    ) {
+      ctx.absoluteDeadlineExceeded = true;
     }
   }
 
@@ -485,7 +484,7 @@ export function minimaxWithTT(
   if (
     ctx.timeoutFlag ||
     ctx.nodeCountExceeded ||
-    ctx.absoluteTimeLimitExceeded
+    ctx.absoluteDeadlineExceeded
   ) {
     return evaluateBoard(board, perspective, {
       singleFourPenaltyMultiplier:
@@ -864,7 +863,7 @@ export function findBestMoveWithTT(
     if (
       ctx.timeoutFlag ||
       ctx.nodeCountExceeded ||
-      ctx.absoluteTimeLimitExceeded
+      ctx.absoluteDeadlineExceeded
     ) {
       break;
     }
@@ -1000,8 +999,8 @@ export function findBestMoveIterativeWithTT(
   // =========================================================================
 
   // 絶対時間制限チェック（VCF探索前）
-  const elapsedBeforeVCF = performance.now() - startTime;
-  if (elapsedBeforeVCF >= absoluteTimeLimit) {
+  const absoluteDeadline = startTime + absoluteTimeLimit;
+  if (performance.now() >= absoluteDeadline) {
     // 時間がないので即座に簡易評価で返す（上位5手のみ評価）
     const moves = generateSortedMoves(board, color, {
       ttMove: null,
@@ -1132,7 +1131,8 @@ export function findBestMoveIterativeWithTT(
   }
 
   // 4. 相手のVCF（四追い勝ち）があれば候補手を防御手に制限
-  const opponentVCFMove = findVCFMove(board, opponentColor);
+  // 相手VCFは時間制限を短縮（メイン探索の時間予算を確保）
+  const opponentVCFMove = findVCFMove(board, opponentColor, { timeLimit: 80 });
   let vcfDefenseSet: Set<string> | null = null;
   if (opponentVCFMove) {
     vcfDefenseSet = new Set<string>();
@@ -1196,29 +1196,56 @@ export function findBestMoveIterativeWithTT(
     }
   }
 
+  // deadline ベースの時間設定
+  // VCF時間の特別扱いは撤廃: deadline = startTime + dynamicTimeLimit で
+  // VCF時間は自然に予算に含まれる
   const dynamicTimeLimit = calculateDynamicTimeLimit(
     timeLimit,
     board,
     moves.length,
   );
-
-  // 時間制限情報をコンテキストに設定
-  ctx.startTime = startTime;
-  ctx.timeLimit = dynamicTimeLimit;
+  const searchDeadline = startTime + dynamicTimeLimit;
+  ctx.deadline = searchDeadline;
   ctx.timeoutFlag = false;
 
   // ノード数上限を設定
   ctx.maxNodes = maxNodes;
   ctx.nodeCountExceeded = false;
 
-  // 絶対時間制限を設定
-  ctx.absoluteTimeLimit = absoluteTimeLimit;
-  ctx.absoluteTimeLimitExceeded = false;
+  // 絶対停止タイムスタンプを設定
+  ctx.absoluteDeadline = absoluteDeadline;
+  ctx.absoluteDeadlineExceeded = false;
 
   // NOTE: Phase 6の最適化（precomputedThreats）は一旦無効化
   // 理由: 深いノードでは手番が変わるため、ルートノードで計算した脅威情報が
   // 不適切に使われる問題がある。毎回detectOpponentThreatsを呼ぶようにする。
   // 将来的には、ルートノードの候補手評価にのみ適用する形で最適化可能。
+
+  // 黒番の禁手脆弱性ムーブオーダリング（ルートレベルのみ）
+  // VCF防御が有効でない場合のみ（VCF防御は生死に関わる緊急対応）
+  if (
+    color === "black" &&
+    evaluationOptions.enableForbiddenVulnerability &&
+    !vcfDefenseSet
+  ) {
+    const vulnerabilityMap = new Map<string, number>();
+    for (const move of moves) {
+      applyMoveInPlace(board, move, "black");
+      const penalty = evaluateForbiddenVulnerability(board, move.row, move.col);
+      undoMove(board, move);
+      if (penalty > 0) {
+        vulnerabilityMap.set(`${move.row},${move.col}`, penalty);
+      }
+    }
+    // ペナルティの大きい手を後方に移動（安定ソートでペナルティ0の手の順序を維持）
+    if (vulnerabilityMap.size > 0) {
+      moves.sort((a, b) => {
+        const pa = vulnerabilityMap.get(`${a.row},${a.col}`) ?? 0;
+        const pb = vulnerabilityMap.get(`${b.row},${b.col}`) ?? 0;
+        return pa - pb;
+      });
+    }
+  }
 
   // 唯一の候補手なら即座に返す
   if (moves.length === 1 && moves[0]) {
@@ -1264,23 +1291,21 @@ export function findBestMoveIterativeWithTT(
   });
 
   // 深さ2から開始して、時間制限内で可能な限り深く探索
+  // ループ内で使う deadline（0.8倍 = 残り20%の時間を確保）
+  const loopDeadline = startTime + dynamicTimeLimit * 0.8;
+
   for (let depth = 2; depth <= maxDepth; depth++) {
-    const elapsedTime = performance.now() - startTime;
+    const now = performance.now();
 
     // 絶対時間制限チェック
-    if (elapsedTime >= absoluteTimeLimit) {
-      ctx.absoluteTimeLimitExceeded = true;
+    if (now >= absoluteDeadline) {
+      ctx.absoluteDeadlineExceeded = true;
       interrupted = true;
       break;
     }
 
-    // 動的時間制限チェック（探索開始前）
-    // 0.8: 残り20%の時間を確保しつつ、より深い探索を許可
-    if (
-      elapsedTime > dynamicTimeLimit * 0.8 ||
-      ctx.timeoutFlag ||
-      ctx.nodeCountExceeded
-    ) {
+    // 動的時間制限チェック（deadline ベース）
+    if (now >= loopDeadline || ctx.timeoutFlag || ctx.nodeCountExceeded) {
       interrupted = true;
       break;
     }
@@ -1304,7 +1329,7 @@ export function findBestMoveIterativeWithTT(
     if (
       ctx.timeoutFlag ||
       ctx.nodeCountExceeded ||
-      ctx.absoluteTimeLimitExceeded
+      ctx.absoluteDeadlineExceeded
     ) {
       interrupted = true;
       break;
@@ -1330,7 +1355,7 @@ export function findBestMoveIterativeWithTT(
       if (
         ctx.timeoutFlag ||
         ctx.nodeCountExceeded ||
-        ctx.absoluteTimeLimitExceeded
+        ctx.absoluteDeadlineExceeded
       ) {
         interrupted = true;
         break;
@@ -1344,8 +1369,8 @@ export function findBestMoveIterativeWithTT(
       score: result.score,
     });
 
-    const currentTime = performance.now() - startTime;
-    if (currentTime >= dynamicTimeLimit) {
+    // ループ末尾の deadline チェック
+    if (performance.now() >= searchDeadline) {
       bestResult = result;
       completedDepth = depth;
       interrupted = true;
