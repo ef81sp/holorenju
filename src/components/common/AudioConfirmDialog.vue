@@ -1,0 +1,167 @@
+<script setup lang="ts">
+import { ref } from "vue";
+
+const emit = defineEmits<{
+  enable: [];
+  disable: [];
+}>();
+
+const dialogRef = ref<HTMLDialogElement | null>(null);
+
+const handleEnable = (): void => {
+  emit("enable");
+  dialogRef.value?.close();
+};
+
+const handleDisable = (): void => {
+  emit("disable");
+  dialogRef.value?.close();
+};
+
+defineExpose({
+  showModal: () => dialogRef.value?.showModal(),
+  close: () => dialogRef.value?.close(),
+});
+</script>
+
+<template>
+  <dialog
+    ref="dialogRef"
+    class="audio-confirm-dialog"
+  >
+    <div class="dialog-content">
+      <h2 class="dialog-title">サウンド設定</h2>
+      <p class="dialog-message">BGMや効果音を再生しますか？</p>
+      <p class="dialog-note">この設定は後から設定画面で変更できます</p>
+
+      <div class="dialog-buttons">
+        <button
+          type="button"
+          class="btn btn-secondary"
+          @click="handleDisable"
+        >
+          再生しない
+        </button>
+        <button
+          type="button"
+          class="btn btn-primary"
+          @click="handleEnable"
+        >
+          再生する
+        </button>
+      </div>
+    </div>
+  </dialog>
+</template>
+
+<style scoped>
+.audio-confirm-dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  border: none;
+  border-radius: var(--size-12);
+  padding: var(--size-24);
+  box-shadow: 0 var(--size-10) var(--size-32) rgba(0, 0, 0, 0.2);
+  width: var(--size-500);
+  height: var(--size-250);
+
+  transition:
+    opacity 0.15s ease-out,
+    transform 0.15s ease-out,
+    overlay 0.15s ease-out allow-discrete,
+    display 0.15s ease-out allow-discrete;
+
+  &[open] {
+    opacity: 1;
+
+    @starting-style {
+      opacity: 0;
+    }
+  }
+
+  &::backdrop {
+    background: rgba(0, 0, 0, 0.5);
+    transition:
+      opacity 0.15s ease-out,
+      overlay 0.15s ease-out allow-discrete,
+      display 0.15s ease-out allow-discrete;
+  }
+
+  &[open]::backdrop {
+    opacity: 1;
+
+    @starting-style {
+      opacity: 0;
+    }
+  }
+}
+
+.dialog-content {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  text-align: center;
+}
+
+.dialog-title {
+  margin: 0 0 var(--size-12) 0;
+  font-size: var(--size-20);
+  color: var(--color-text-primary);
+}
+
+.dialog-message {
+  margin: 0;
+  font-size: var(--size-14);
+  color: var(--color-text-secondary);
+}
+
+.dialog-note {
+  margin: 0;
+  font-size: var(--size-12);
+  color: var(--color-text-secondary);
+  opacity: 0.7;
+}
+
+.dialog-buttons {
+  display: flex;
+  gap: var(--size-20);
+  justify-content: center;
+}
+
+.btn {
+  padding: var(--size-10) var(--size-20);
+  border-radius: var(--size-8);
+  font-size: var(--size-14);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: var(--size-150);
+}
+
+.btn-primary {
+  background-color: var(--color-miko-bg);
+  color: var(--color-text-primary);
+  border: 2px solid color-mix(in srgb, var(--color-miko-primary) 90%, black);
+
+  &:hover {
+    filter: brightness(1.2);
+    transform: translateY(-1px);
+    box-shadow: 0 var(--size-4) var(--size-8) rgba(0, 0, 0, 0.15);
+  }
+}
+
+.btn-secondary {
+  background-color: var(--color-bg-gray);
+  color: var(--color-text-primary);
+  border: 2px solid var(--color-border);
+
+  &:hover {
+    filter: brightness(0.9);
+    transform: translateY(-1px);
+    box-shadow: 0 var(--size-4) var(--size-8) rgba(0, 0, 0, 0.15);
+  }
+}
+</style>

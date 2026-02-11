@@ -28,6 +28,7 @@ import { useCpuRecordStore } from "@/stores/cpuRecordStore";
 import { useBoardStore, type Mark } from "@/stores/boardStore";
 import { useDialogStore } from "@/stores/dialogStore";
 import { usePreferencesStore } from "@/stores/preferencesStore";
+import { useAudioStore } from "@/stores/audioStore";
 import { checkForbiddenMove } from "@/logic/renjuRules";
 import { formatMove } from "@/logic/gameRecordParser";
 import type { BattleResult } from "@/types/cpu";
@@ -39,6 +40,7 @@ const cpuRecordStore = useCpuRecordStore();
 const boardStore = useBoardStore();
 const dialogStore = useDialogStore();
 const preferencesStore = usePreferencesStore();
+const audioStore = useAudioStore();
 
 // CPU Player (Web Worker経由)
 const { isThinking, lastResponse, requestMove } = useCpuPlayer();
@@ -155,6 +157,7 @@ function handlePlaceStone(position: Position): void {
 
   // 石を配置
   cpuGameStore.addMove(position, cpuGameStore.currentTurn);
+  audioStore.playSfx("stone-place");
 
   // 勝敗判定
   if (cpuGameStore.isGameOver) {
@@ -190,6 +193,7 @@ async function cpuMove(): Promise<void> {
 
   // 石を配置
   cpuGameStore.addMove(response.position, cpuGameStore.currentTurn);
+  audioStore.playSfx("stone-place");
 
   // 勝敗判定
   if (cpuGameStore.isGameOver) {
@@ -212,10 +216,12 @@ function handleGameEnd(): void {
     result = "win";
     cutinType.value = "win";
     showDialogue("playerWin");
+    audioStore.playSfx("clear");
   } else {
     result = "lose";
     cutinType.value = "lose";
     showDialogue("cpuWin");
+    audioStore.playSfx("incorrect");
   }
 
   // 棋譜を文字列化

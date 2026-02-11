@@ -2,12 +2,14 @@
 import { ref } from "vue";
 import { usePreferencesStore } from "@/stores/preferencesStore";
 import { useProgressStore } from "@/stores/progressStore";
+import { useAudioStore } from "@/stores/audioStore";
 // oxlint-disable-next-line consistent-type-imports
 import ConfirmDialog from "./ConfirmDialog.vue";
 import CloseIcon from "@/assets/icons/close.svg?component";
 
 const preferencesStore = usePreferencesStore();
 const progressStore = useProgressStore();
+const audioStore = useAudioStore();
 
 const dialogRef = ref<HTMLDialogElement | null>(null);
 const confirmDialogRef = ref<InstanceType<typeof ConfirmDialog> | null>(null);
@@ -25,6 +27,19 @@ const textSizeLabels = {
   normal: "標準",
   large: "大",
 } as const;
+
+// オーディオ有効/無効の切り替え
+const handleAudioEnabledChange = (event: Event): void => {
+  const { checked } = event.target as HTMLInputElement;
+  preferencesStore.audioEnabled = checked;
+  preferencesStore.audioHasBeenAsked = true;
+  if (checked) {
+    audioStore.preloadSfx();
+    audioStore.playBgm();
+  } else {
+    audioStore.stopBgm();
+  }
+};
 
 // 進度リセット確認
 const handleResetClick = (): void => {
@@ -111,6 +126,98 @@ defineExpose({
                 <option value="fast">{{ speedLabels.fast }}</option>
                 <option value="fastest">{{ speedLabels.fastest }}</option>
               </select>
+            </label>
+          </div>
+        </section>
+
+        <!-- サウンド設定 -->
+        <section class="settings-section">
+          <h3 class="section-title">サウンド</h3>
+          <div class="settings-group">
+            <label class="setting-row">
+              <span class="setting-text">
+                <span class="setting-label">音を再生する</span>
+                <span class="setting-description">BGMと効果音を有効にする</span>
+              </span>
+              <input
+                :checked="preferencesStore.audioEnabled"
+                type="checkbox"
+                class="checkbox"
+                @change="handleAudioEnabledChange"
+              />
+            </label>
+            <hr class="setting-divider" />
+            <label class="setting-row">
+              <span class="setting-text">
+                <span class="setting-label">マスター音量</span>
+              </span>
+              <input
+                v-model.number="preferencesStore.masterVolume"
+                type="range"
+                class="range"
+                min="0"
+                max="1"
+                step="0.1"
+                :disabled="!preferencesStore.audioEnabled"
+              />
+            </label>
+            <hr class="setting-divider" />
+            <label class="setting-row">
+              <span class="setting-text">
+                <span class="setting-label">BGM</span>
+              </span>
+              <input
+                v-model="preferencesStore.bgmEnabled"
+                type="checkbox"
+                class="checkbox"
+                :disabled="!preferencesStore.audioEnabled"
+              />
+            </label>
+            <hr class="setting-divider" />
+            <label class="setting-row">
+              <span class="setting-text">
+                <span class="setting-label">BGM音量</span>
+              </span>
+              <input
+                v-model.number="preferencesStore.bgmVolume"
+                type="range"
+                class="range"
+                min="0"
+                max="1"
+                step="0.1"
+                :disabled="
+                  !preferencesStore.audioEnabled || !preferencesStore.bgmEnabled
+                "
+              />
+            </label>
+            <hr class="setting-divider" />
+            <label class="setting-row">
+              <span class="setting-text">
+                <span class="setting-label">効果音</span>
+              </span>
+              <input
+                v-model="preferencesStore.sfxEnabled"
+                type="checkbox"
+                class="checkbox"
+                :disabled="!preferencesStore.audioEnabled"
+              />
+            </label>
+            <hr class="setting-divider" />
+            <label class="setting-row">
+              <span class="setting-text">
+                <span class="setting-label">効果音音量</span>
+              </span>
+              <input
+                v-model.number="preferencesStore.sfxVolume"
+                type="range"
+                class="range"
+                min="0"
+                max="1"
+                step="0.1"
+                :disabled="
+                  !preferencesStore.audioEnabled || !preferencesStore.sfxEnabled
+                "
+              />
             </label>
           </div>
         </section>
@@ -364,6 +471,17 @@ defineExpose({
   border: 1px solid var(--color-border);
   border-radius: var(--size-6);
   background: var(--color-bg-white);
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.range {
+  width: var(--size-120);
+  accent-color: var(--color-holo-blue);
   cursor: pointer;
 
   &:disabled {

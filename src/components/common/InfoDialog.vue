@@ -50,6 +50,33 @@ defineExpose({
           </div>
         </section>
 
+        <!-- 利用規約 -->
+        <section class="info-section">
+          <h3 class="section-title">ご利用にあたって</h3>
+          <div class="section-content">
+            <ul>
+              <li>
+                このゲームは
+                <a
+                  href="https://hololivepro.com/terms/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  二次創作ガイドライン | ホロライブプロダクション
+                </a>
+                に基づく二次創作です。
+              </li>
+              <li>無料でご使用いただけます。</li>
+              <li>
+                配信等で、公序良俗を守った上でご自由にお使いください。収益化等に関しましては、ご自身でご判断ください。
+              </li>
+              <li>記述内容は予告なく変更される可能性があります。</li>
+              <li>このゲームの使用によるいかなる損害も責任を負いません。</li>
+            </ul>
+            <p class="disclaimer"></p>
+          </div>
+        </section>
+
         <!-- 画像出典 -->
         <section class="info-section">
           <h3 class="section-title">画像出典</h3>
@@ -78,28 +105,37 @@ defineExpose({
           </div>
         </section>
 
-        <!-- 利用規約 -->
         <section class="info-section">
-          <h3 class="section-title">ご利用にあたって</h3>
+          <h3 class="section-title">音楽出典</h3>
           <div class="section-content">
-            <ul>
-              <li>
-                このゲームは
-                <a
-                  href="https://hololivepro.com/terms/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  二次創作ガイドライン | ホロライブプロダクション
-                </a>
-                に基づく二次創作です。
-              </li>
-              <li>無料でご利用いただけます。</li>
-              <li>配信等で、公序良俗を守った上でご自由にお使いください。</li>
-              <li>記述内容は予告なく変更される可能性があります。</li>
-              <li>このゲームの使用によるいかなる損害も責任を負いません。</li>
-            </ul>
-            <p class="disclaimer"></p>
+            <p>
+              BGM:
+              <a
+                href="https://www.youtube.com/watch?v=0RG7iNERF4s"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                SUPERNOVA
+              </a>
+            </p>
+            <p>アーティスト: 白上フブキ</p>
+            <p>作曲: 小池竜暉</p>
+            <p>編曲: かみくず</p>
+          </div>
+          <div class="section-content">
+            <p>
+              ファンファーレ:
+              <a
+                href="https://www.youtube.com/watch?v=Kn066hDKjx4"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Shiny Smily Story
+              </a>
+            </p>
+            <p>アーティスト: hololive IDOL PROJECT</p>
+            <p>作曲: 中野領太</p>
+            <p>編曲: かみくず</p>
           </div>
         </section>
 

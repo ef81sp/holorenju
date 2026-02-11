@@ -16,6 +16,15 @@ interface Preferences {
     speed: AnimationSpeed; // 石・マーク・ライン
     effectSpeed: AnimationSpeed; // キャラクター・ダイアログ・カットイン
   };
+  audio: {
+    enabled: boolean; // マスタースイッチ（初回確認まではfalse）
+    hasBeenAsked: boolean; // 初回確認済みフラグ
+    masterVolume: number; // 0.0-1.0
+    bgmEnabled: boolean;
+    bgmVolume: number; // 0.0-1.0
+    sfxEnabled: boolean;
+    sfxVolume: number; // 0.0-1.0
+  };
   display: {
     textSize: TextSize;
   };
@@ -32,6 +41,15 @@ const defaultPreferences: Preferences = {
     enabled: true,
     speed: "normal",
     effectSpeed: "normal",
+  },
+  audio: {
+    enabled: false,
+    hasBeenAsked: false,
+    masterVolume: 0.8,
+    bgmEnabled: true,
+    bgmVolume: 0.3,
+    sfxEnabled: true,
+    sfxVolume: 0.7,
   },
   display: {
     textSize: "normal",
@@ -110,6 +128,12 @@ function migrateFromOldFormat(parsed: OldPreferences): Preferences {
         speed: animation.speed,
         effectSpeed: animation.effectSpeed,
       },
+      audio: {
+        ...defaultPreferences.audio,
+        ...((parsed as Record<string, unknown>).audio as
+          | Preferences["audio"]
+          | undefined),
+      },
       display: { ...defaultPreferences.display, ...parsed.display },
       cpu: { ...defaultPreferences.cpu, ...parsed.cpu },
       debug: { ...defaultPreferences.debug, ...parsed.debug },
@@ -141,6 +165,7 @@ function migrateFromOldFormat(parsed: OldPreferences): Preferences {
       speed: newSpeed,
       effectSpeed: newEffectSpeed,
     },
+    audio: { ...defaultPreferences.audio },
     display: { ...defaultPreferences.display, ...parsed.display },
     cpu: { ...defaultPreferences.cpu, ...parsed.cpu },
     debug: { ...defaultPreferences.debug, ...parsed.debug },
@@ -205,6 +230,55 @@ export const usePreferencesStore = defineStore("preferences", () => {
     set: (v) => (preferences.value.debug.showCpuInfo = v),
   });
 
+  // Audio getter/setter
+  const audioEnabled = computed({
+    get: () => preferences.value.audio.enabled,
+    set: (v) => (preferences.value.audio.enabled = v),
+  });
+
+  const audioHasBeenAsked = computed({
+    get: () => preferences.value.audio.hasBeenAsked,
+    set: (v) => (preferences.value.audio.hasBeenAsked = v),
+  });
+
+  const masterVolume = computed({
+    get: () => preferences.value.audio.masterVolume,
+    set: (v) => (preferences.value.audio.masterVolume = v),
+  });
+
+  const bgmEnabled = computed({
+    get: () => preferences.value.audio.bgmEnabled,
+    set: (v) => (preferences.value.audio.bgmEnabled = v),
+  });
+
+  const bgmVolume = computed({
+    get: () => preferences.value.audio.bgmVolume,
+    set: (v) => (preferences.value.audio.bgmVolume = v),
+  });
+
+  const sfxEnabled = computed({
+    get: () => preferences.value.audio.sfxEnabled,
+    set: (v) => (preferences.value.audio.sfxEnabled = v),
+  });
+
+  const sfxVolume = computed({
+    get: () => preferences.value.audio.sfxVolume,
+    set: (v) => (preferences.value.audio.sfxVolume = v),
+  });
+
+  // 実効音量
+  const effectiveBgmVolume = computed(() =>
+    preferences.value.audio.enabled && preferences.value.audio.bgmEnabled
+      ? preferences.value.audio.masterVolume * preferences.value.audio.bgmVolume
+      : 0,
+  );
+
+  const effectiveSfxVolume = computed(() =>
+    preferences.value.audio.enabled && preferences.value.audio.sfxEnabled
+      ? preferences.value.audio.masterVolume * preferences.value.audio.sfxVolume
+      : 0,
+  );
+
   // 速度倍率
   const speedMultiplier = computed(
     () => SPEED_MULTIPLIERS[preferences.value.animation.speed],
@@ -266,6 +340,16 @@ export const usePreferencesStore = defineStore("preferences", () => {
     textSize,
     fastCpuMove,
     showCpuInfo,
+    // Audio
+    audioEnabled,
+    audioHasBeenAsked,
+    masterVolume,
+    bgmEnabled,
+    bgmVolume,
+    sfxEnabled,
+    sfxVolume,
+    effectiveBgmVolume,
+    effectiveSfxVolume,
     // 速度倍率
     speedMultiplier,
     effectSpeedMultiplier,

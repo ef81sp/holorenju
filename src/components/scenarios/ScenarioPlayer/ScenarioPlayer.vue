@@ -24,6 +24,7 @@ import { useQuestionSolver } from "./composables/useQuestionSolver";
 import { useCutinDisplay } from "@/composables/useCutinDisplay";
 import { scenarioNavKey } from "./composables/useScenarioNavProvide";
 import { useDialogStore } from "@/stores/dialogStore";
+import { useAudioStore } from "@/stores/audioStore";
 
 import type { QuestionSection } from "@/types/scenario";
 import type { Position } from "@/types/game";
@@ -40,6 +41,7 @@ const props = defineProps<Props>();
 
 // Stores
 const dialogStore = useDialogStore();
+const audioStore = useAudioStore();
 
 // Composables
 const scenarioNav = useScenarioNavigation(props.scenarioId);
@@ -69,11 +71,13 @@ const onSectionComplete = (): void => {
 const showCorrectCutin = (): void => {
   cutinType.value = "correct";
   showCutin("correct");
+  audioStore.playSfx("correct");
 };
 
 const showIncorrectCutin = (): void => {
   cutinType.value = "wrong";
   showCutin("wrong");
+  audioStore.playSfx("incorrect");
 };
 
 const questionSolver = useQuestionSolver(
@@ -152,6 +156,7 @@ watch(
           hasShownClearCutin.value = true;
           cutinType.value = "clear";
           showCutin("clear");
+          audioStore.playSfx("clear");
         }
       }, 1000);
     }
@@ -176,6 +181,7 @@ watch(
             hasShownClearCutin.value = true;
             cutinType.value = "clear";
             showCutin("clear");
+            audioStore.playSfx("clear");
           }
         }, 1000);
       }

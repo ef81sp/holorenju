@@ -23,6 +23,7 @@ import { useAppStore } from "@/stores/appStore";
 import { useCpuReviewStore } from "@/stores/cpuReviewStore";
 import { useCpuRecordStore } from "@/stores/cpuRecordStore";
 import { useDialogStore } from "@/stores/dialogStore";
+import { useAudioStore } from "@/stores/audioStore";
 import { useBoardStore } from "@/stores/boardStore";
 import type { Position } from "@/types/game";
 
@@ -31,6 +32,7 @@ const boardStore = useBoardStore();
 const reviewStore = useCpuReviewStore();
 const cpuRecordStore = useCpuRecordStore();
 const dialogStore = useDialogStore();
+const audioStore = useAudioStore();
 
 const layoutRef = ref<InstanceType<typeof GamePlayerLayout> | null>(null);
 
@@ -135,6 +137,31 @@ const currentMovePosition = computed<Position | null>(() => {
   return move?.position ?? null;
 });
 
+// 手を進める操作のラッパー（SFX付き）
+function advanceMove(): void {
+  const before = reviewStore.currentMoveIndex;
+  reviewStore.nextMove();
+  if (reviewStore.currentMoveIndex > before) {
+    audioStore.playSfx("stone-place");
+  }
+}
+
+function advanceToMove(index: number): void {
+  const before = reviewStore.currentMoveIndex;
+  reviewStore.goToMove(index);
+  if (reviewStore.currentMoveIndex > before) {
+    audioStore.playSfx("stone-place");
+  }
+}
+
+function advanceToEnd(): void {
+  const before = reviewStore.currentMoveIndex;
+  reviewStore.goToEnd();
+  if (reviewStore.currentMoveIndex > before) {
+    audioStore.playSfx("stone-place");
+  }
+}
+
 // キーボード操作
 function handleKeyDown(event: KeyboardEvent): void {
   switch (event.key) {
@@ -144,7 +171,7 @@ function handleKeyDown(event: KeyboardEvent): void {
       break;
     case "ArrowRight":
       event.preventDefault();
-      reviewStore.nextMove();
+      advanceMove();
       break;
     case "Home":
       event.preventDefault();
@@ -152,7 +179,7 @@ function handleKeyDown(event: KeyboardEvent): void {
       break;
     case "End":
       event.preventDefault();
-      reviewStore.goToEnd();
+      advanceToEnd();
       break;
     case "Escape":
       event.preventDefault();
@@ -203,11 +230,11 @@ function handleBack(): void {
             :current-move-index="reviewStore.currentMoveIndex"
             :total-moves="reviewStore.moves.length"
             :evaluated-moves="reviewStore.evaluatedMoves"
-            @go-to-move="reviewStore.goToMove"
+            @go-to-move="advanceToMove"
             @go-to-start="reviewStore.goToStart"
-            @go-to-end="reviewStore.goToEnd"
+            @go-to-end="advanceToEnd"
             @prev-move="reviewStore.prevMove"
-            @next-move="reviewStore.nextMove"
+            @next-move="advanceMove"
           />
         </div>
       </template>

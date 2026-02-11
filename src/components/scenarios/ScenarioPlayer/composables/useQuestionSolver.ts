@@ -6,6 +6,7 @@ import type {
   SuccessOperator,
 } from "@/types/scenario";
 
+import { useAudioStore } from "@/stores/audioStore";
 import { useBoardStore, cloneBoard } from "@/stores/boardStore";
 import { useDialogStore } from "@/stores/dialogStore";
 import { useProgressStore } from "@/stores/progressStore";
@@ -48,6 +49,7 @@ export const useQuestionSolver = (
   const boardStore = useBoardStore();
   const dialogStore = useDialogStore();
   const progressStore = useProgressStore();
+  const audioStore = useAudioStore();
 
   let attemptBaseBoard: BoardState | null = null;
 
@@ -116,6 +118,7 @@ export const useQuestionSolver = (
       row[position.col] = playerColor;
     }
     boardStore.setBoard(newBoard, "question");
+    audioStore.playSfx("stone-place");
 
     console.warn(
       `[handlePlaceStone] Placed ${playerColor} stone at (${position.row}, ${position.col})`,

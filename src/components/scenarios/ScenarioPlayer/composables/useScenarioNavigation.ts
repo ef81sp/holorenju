@@ -14,6 +14,7 @@ import type { TextNode } from "@/types/text";
 import { boardStringToBoardState } from "@/logic/scenarioFileHandler";
 import { parseScenario } from "@/logic/scenarioParser";
 import { useAppStore } from "@/stores/appStore";
+import { useAudioStore } from "@/stores/audioStore";
 import {
   useBoardStore,
   type Stone,
@@ -80,6 +81,7 @@ export const useScenarioNavigation = (
   const dialogStore = useDialogStore();
   const progressStore = useProgressStore();
   const animationStore = useScenarioAnimationStore();
+  const audioStore = useAudioStore();
 
   // State
   const scenario = ref<Scenario | null>(null);
@@ -514,7 +516,14 @@ export const useScenarioNavigation = (
             })),
             currentDialogueIndex.value,
           );
-          await animationStore.animateStones(addedStones, { animate });
+          // 石を1つずつアニメーション+SFX再生（連続配置でも毎回鳴らす）
+          for (const stone of addedStones) {
+            if (animate) {
+              audioStore.playSfx("stone-place");
+            }
+            // oxlint-disable-next-line no-await-in-loop -- 順次アニメーション実行のため意図的
+            await animationStore.animateStones([stone], { animate });
+          }
           break;
         }
 
