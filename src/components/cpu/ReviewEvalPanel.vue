@@ -632,7 +632,10 @@ function isPlayed(candidate: { position: Position }): boolean {
 
       <!-- 内訳比較セクション（excellentでない場合） -->
       <div
-        v-if="showBreakdown && evaluation.quality !== 'excellent'"
+        v-if="
+          showBreakdown &&
+          (evaluation.quality !== 'excellent' || evaluation.forcedWinType)
+        "
         class="breakdown-section"
       >
         <div class="breakdown-divider" />
