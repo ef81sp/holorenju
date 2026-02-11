@@ -43,7 +43,7 @@ const handleSelectEditor = (): void => {
         >
           <div class="button-icon">🎮</div>
           <div class="button-text-area">
-            <span class="button-text">CPU対戦</span>
+            <span class="button-text">コンピュータ対戦</span>
             <p class="button-description">コンピュータと対局して腕を磨こう</p>
           </div>
         </button>

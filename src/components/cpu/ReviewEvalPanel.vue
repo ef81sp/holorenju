@@ -522,7 +522,7 @@ function isPlayed(candidate: { position: Position }): boolean {
       <div class="eval-header">
         <span class="move-label">第{{ moveIndex }}手 {{ moveCoord }}</span>
       </div>
-      <div class="cpu-move-text">CPUの手</div>
+      <div class="cpu-move-text">コンピュータの手</div>
     </div>
 
     <!-- プレイヤーの手の評価 -->

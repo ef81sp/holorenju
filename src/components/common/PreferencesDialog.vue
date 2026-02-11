@@ -244,7 +244,7 @@ defineExpose({
 
         <!-- CPU対戦 -->
         <section class="settings-section">
-          <h3 class="section-title">CPU対戦</h3>
+          <h3 class="section-title">コンピュータ対戦</h3>
           <div class="settings-group">
             <label class="setting-row">
               <span class="setting-text">
