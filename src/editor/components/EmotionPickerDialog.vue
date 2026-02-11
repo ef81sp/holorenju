@@ -2,6 +2,7 @@
 import { computed, ref } from "vue";
 import type { CharacterType, EmotionId } from "@/types/character";
 import CharacterSprite from "@/components/character/CharacterSprite.vue";
+import { useLightDismiss } from "@/composables/useLightDismiss";
 
 interface Props {
   character: CharacterType;
@@ -13,7 +14,8 @@ const emit = defineEmits<{
 
 const props = defineProps<Props>();
 
-const dialogRef = ref<HTMLDialogElement>();
+const dialogRef = ref<HTMLDialogElement | null>(null);
+useLightDismiss(dialogRef);
 
 // Shows the emotion picker dialog
 const showModal = (): void => {
@@ -43,6 +45,7 @@ const characterName = computed(() =>
   <dialog
     ref="dialogRef"
     class="emotion-picker-dialog"
+    closedby="any"
   >
     <div class="dialog-wrapper">
       <div class="dialog-header">

@@ -2,6 +2,7 @@
 import { ref, watch } from "vue";
 import ConfirmDialog from "@/components/common/ConfirmDialog.vue";
 import { regenerateScenarioIndex } from "@/editor/logic/indexFileHandler";
+import { useLightDismiss } from "@/composables/useLightDismiss";
 import type { ScenarioDifficulty } from "@/types/scenario";
 
 interface ScenarioItem {
@@ -29,6 +30,7 @@ const emit = defineEmits<{
 }>();
 
 const dialogRef = ref<HTMLDialogElement | null>(null);
+useLightDismiss(dialogRef);
 const confirmDialogRef = ref<InstanceType<typeof ConfirmDialog> | null>(null);
 
 // State
@@ -167,6 +169,7 @@ defineExpose({
   <dialog
     ref="dialogRef"
     class="file-list-dialog"
+    closedby="any"
   >
     <div class="dialog-inner">
       <div class="dialog-header">

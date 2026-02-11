@@ -9,12 +9,14 @@ import { computed, ref } from "vue";
 
 import { useAppStore } from "@/stores/appStore";
 import { useCpuRecordStore } from "@/stores/cpuRecordStore";
+import { useLightDismiss } from "@/composables/useLightDismiss";
 import type { BattleResult, CpuDifficulty } from "@/types/cpu";
 
 const appStore = useAppStore();
 const cpuRecordStore = useCpuRecordStore();
 
 const dialogRef = ref<HTMLDialogElement | null>(null);
+useLightDismiss(dialogRef);
 
 // 難易度ラベル
 const difficultyLabels: Record<CpuDifficulty, string> = {
@@ -69,6 +71,7 @@ defineExpose({
   <dialog
     ref="dialogRef"
     class="record-dialog"
+    closedby="any"
   >
     <div class="dialog-content">
       <header class="dialog-header">

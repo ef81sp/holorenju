@@ -6,12 +6,14 @@ import { useAudioStore } from "@/stores/audioStore";
 // oxlint-disable-next-line consistent-type-imports
 import ConfirmDialog from "./ConfirmDialog.vue";
 import CloseIcon from "@/assets/icons/close.svg?component";
+import { useLightDismiss } from "@/composables/useLightDismiss";
 
 const preferencesStore = usePreferencesStore();
 const progressStore = useProgressStore();
 const audioStore = useAudioStore();
 
 const dialogRef = ref<HTMLDialogElement | null>(null);
+useLightDismiss(dialogRef);
 const confirmDialogRef = ref<InstanceType<typeof ConfirmDialog> | null>(null);
 
 // ラベル定義
@@ -61,6 +63,7 @@ defineExpose({
   <dialog
     ref="dialogRef"
     class="preferences-dialog"
+    closedby="any"
   >
     <div class="dialog-content">
       <div class="dialog-header">

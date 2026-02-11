@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import CloseIcon from "@/assets/icons/close.svg?component";
+import { useLightDismiss } from "@/composables/useLightDismiss";
 
 const dialogRef = ref<HTMLDialogElement | null>(null);
+useLightDismiss(dialogRef);
 
 defineExpose({
   showModal: () => dialogRef.value?.showModal(),
@@ -14,6 +16,7 @@ defineExpose({
   <dialog
     ref="dialogRef"
     class="info-dialog"
+    closedby="any"
   >
     <div class="dialog-content">
       <div class="dialog-header">
