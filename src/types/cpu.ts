@@ -339,6 +339,8 @@ export interface CpuResponse {
   searchStats?: SearchStats;
   /** 強制手フラグ（候補手1つ、スコアは参考値） */
   forcedMove?: boolean;
+  /** 時間制限フォールバックが発動したか */
+  timePressureFallback?: boolean;
 }
 
 /**

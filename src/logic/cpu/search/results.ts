@@ -14,6 +14,10 @@ import { analyzeJumpPatterns } from "../evaluation/jumpPatterns";
 import { detectOpponentThreats } from "../evaluation/threatDetection";
 import { TranspositionTable } from "../transpositionTable";
 import { updateHash } from "../zobrist";
+import {
+  TIME_PRESSURE_FALLBACK_THRESHOLD,
+  WINNING_SCORE_THRESHOLD,
+} from "./techniques";
 
 /**
  * 候補手のスコア情報
@@ -95,6 +99,53 @@ export interface IterativeDeepingResult extends MinimaxResult {
   depthHistory?: DepthHistoryEntry[];
   /** 候補手が1つだけの強制手か（スコアは参考値） */
   forcedMove?: boolean;
+  /** 時間制限フォールバックが発動したか */
+  timePressureFallback?: boolean;
+  /** フォールバック元の探索深度 */
+  fallbackFromDepth?: number;
+}
+
+/**
+ * 時間制限フォールバック
+ *
+ * 反復深化ループ完了後、中断かつ高スコア深度の結果が現在のスコアより大幅に優れている場合、
+ * 完了済み深度の結果にフォールバックする。
+ *
+ * @param bestResult 現在の最善結果
+ * @param depthHistory 深度別の最善手履歴
+ * @param interrupted 探索が中断されたか
+ * @returns フォールバック適用後の結果
+ */
+export function applyTimePressureFallback(
+  bestResult: IterativeDeepingResult,
+  depthHistory: DepthHistoryEntry[],
+  interrupted: boolean,
+): IterativeDeepingResult {
+  if (!interrupted || depthHistory.length === 0) {
+    return bestResult;
+  }
+  // 逆順走査: 最深の高スコアエントリを優先
+  for (let i = depthHistory.length - 1; i >= 0; i--) {
+    const entry = depthHistory[i];
+    if (!entry) {
+      continue;
+    }
+    if (
+      entry.score >= WINNING_SCORE_THRESHOLD &&
+      bestResult.score < entry.score - TIME_PRESSURE_FALLBACK_THRESHOLD
+    ) {
+      return {
+        ...bestResult,
+        position: entry.position,
+        score: entry.score,
+        candidates: undefined,
+        randomSelection: undefined,
+        timePressureFallback: true,
+        fallbackFromDepth: entry.depth,
+      };
+    }
+  }
+  return bestResult;
 }
 
 /**

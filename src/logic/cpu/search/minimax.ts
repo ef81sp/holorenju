@@ -43,6 +43,7 @@ import {
 } from "./context";
 import { findMiseVCFMove } from "./miseVcf";
 import {
+  applyTimePressureFallback,
   extractPV,
   type DepthHistoryEntry,
   type IterativeDeepingResult,
@@ -1287,6 +1288,18 @@ export function findBestMoveIterativeWithTT(
   const loopDeadline = startTime + dynamicTimeLimit * 0.8;
 
   for (let depth = 2; depth <= maxDepth; depth++) {
+    // PVムーブを先頭に移動（move ordering最適化）
+    const pvMove = bestResult.position;
+    const pvIndex = moves.findIndex(
+      (m) => m.row === pvMove.row && m.col === pvMove.col,
+    );
+    if (pvIndex > 0) {
+      const [pv] = moves.splice(pvIndex, 1);
+      if (pv) {
+        moves.unshift(pv);
+      }
+    }
+
     const now = performance.now();
 
     // 絶対時間制限チェック
@@ -1373,7 +1386,7 @@ export function findBestMoveIterativeWithTT(
     completedDepth = depth;
   }
 
-  return {
+  const finalResult: IterativeDeepingResult & { stats: SearchStats } = {
     position: bestResult.position,
     score: bestResult.score,
     candidates: bestResult.candidates,
@@ -1384,4 +1397,9 @@ export function findBestMoveIterativeWithTT(
     depthHistory,
     stats: mergeProfilingCounters(ctx.stats),
   };
+  return applyTimePressureFallback(
+    finalResult,
+    depthHistory,
+    interrupted,
+  ) as typeof finalResult;
 }

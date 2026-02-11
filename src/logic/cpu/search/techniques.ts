@@ -228,6 +228,20 @@ function hasFourInDirection(
  * @param opponentColor 相手の色
  * @returns 相手に四がある場合 true
  */
+// =============================================================================
+// Time-Pressure Fallback パラメータ
+// =============================================================================
+
+/** フォールバック対象の最低スコア（四三相当: FOUR + OPEN_THREE） */
+export const WINNING_SCORE_THRESHOLD = 2000;
+
+/** フォールバック発動のスコア低下閾値（FOUR相当） */
+export const TIME_PRESSURE_FALLBACK_THRESHOLD = 1000;
+
+// =============================================================================
+// Null Move Pruning 用の軽量脅威チェック
+// =============================================================================
+
 export function hasImmediateThreat(
   board: BoardState,
   opponentColor: "black" | "white",

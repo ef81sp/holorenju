@@ -136,6 +136,7 @@ self.onmessage = (event: MessageEvent<CpuRequest>) => {
       depthHistory,
       searchStats: result.stats,
       forcedMove: result.forcedMove,
+      timePressureFallback: result.timePressureFallback,
     };
 
     self.postMessage(response);
