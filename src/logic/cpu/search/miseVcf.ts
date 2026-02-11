@@ -9,7 +9,10 @@
 
 import type { BoardState, Position } from "@/types/game";
 
-import { findMiseTargets } from "../evaluation/tactics";
+import {
+  findMiseTargetsLite,
+  hasPotentialMiseTarget,
+} from "../evaluation/tactics";
 import { isNearExistingStone } from "../moveGenerator";
 import { findVCFSequence, type VCFSearchOptions } from "./vcf";
 
@@ -115,8 +118,14 @@ export function findMiseVCFSequence(
       }
       moveRow[col] = color;
 
-      // ミセターゲットを検出
-      const miseTargets = findMiseTargets(board, row, col, color);
+      // プリフィルタ: ミセターゲットが存在しうるか安価にチェック
+      if (!hasPotentialMiseTarget(board, row, col, color)) {
+        moveRow[col] = null;
+        continue;
+      }
+
+      // ミセターゲットを検出（ライン延長点のみの軽量版）
+      const miseTargets = findMiseTargetsLite(board, row, col, color);
 
       // 各ミセターゲットについてVCF探索
       for (const target of miseTargets) {

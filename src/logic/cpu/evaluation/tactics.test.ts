@@ -25,8 +25,10 @@ import { PATTERN_SCORES } from "./patternScores";
 import {
   canContinueFourAfterDefense,
   findMiseTargets,
+  findMiseTargetsLite,
   hasFollowUpThreat,
   hasMixedForbiddenPoints,
+  hasPotentialMiseTarget,
   isMiseMove,
 } from "./tactics";
 
@@ -958,5 +960,115 @@ describe("isMiseMove（拡張版）", () => {
 
     // (7,6)はミセ手（(7,7)が四三点で距離1）
     expect(isMiseMove(board, 7, 6, "black")).toBe(true);
+  });
+});
+
+describe("findMiseTargetsLite", () => {
+  it("G7配置後、J7(ライン延長点)がLiteでも検出される", () => {
+    // G7(8,6)-H7(8,7)-I7(8,8)の横三、延長点J7(8,9)は四三点
+    const { board } = createBoardFromRecord(
+      "H8 I9 I7 G9 J8 H10 H6 K9 H7 H9 J9 I10 G7",
+    );
+
+    const targets = findMiseTargetsLite(board, 8, 6, "black");
+
+    // J7(row=8, col=9)がターゲットに含まれる
+    expect(targets.some((t) => t.row === 8 && t.col === 9)).toBe(true);
+  });
+
+  it("ミセターゲットが存在しない局面では空配列を返す", () => {
+    const { board } = createBoardFromRecord("H8");
+
+    const targets = findMiseTargetsLite(board, 7, 7, "black");
+    expect(targets).toHaveLength(0);
+  });
+
+  it("ライン延長点上にある四三点を検出する", () => {
+    const board = createBoardWithStones([
+      // 横の三
+      { row: 7, col: 4, color: "black" },
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      // 縦の二
+      { row: 5, col: 7, color: "black" },
+      { row: 6, col: 7, color: "black" },
+    ]);
+
+    // (7,6)に石がある状態で、(7,7)はライン延長点かつ四三点
+    const targets = findMiseTargetsLite(board, 7, 6, "black");
+    expect(targets.some((t) => t.row === 7 && t.col === 7)).toBe(true);
+  });
+
+  it("±2近傍のみの四三点はLiteでは検出されない（仕様）", () => {
+    // ライン延長点でない位置にのみ四三点がある盤面を構築
+    // 起点(7,7)から斜め方向に石がなく、近傍(6,6)が四三点だが
+    // ライン延長点ではないケース
+    const board = createBoardWithStones([
+      // 斜め(左上→右下)の二: (5,5),(6,6) → (7,7)は起点
+      { row: 5, col: 5, color: "black" },
+      { row: 6, col: 6, color: "black" },
+      // (6,6)に石があるので起点(7,7)からの斜め延長は(5,5)方向の先
+      // 縦の二: (5,8),(6,8) → (7,8)が四三点
+      { row: 5, col: 8, color: "black" },
+      { row: 6, col: 8, color: "black" },
+    ]);
+
+    // 起点を(7,9)として、近傍(7,8)に四三点があるがライン延長点ではないケースを検証
+    // (7,9)からはどの方向にも2石以上の連続がない → Liteでは何も検出されない
+    const targets = findMiseTargetsLite(board, 7, 9, "black");
+    // (7,9)から2石以上の連続がないので、Liteではターゲット検出なし
+    expect(targets).toHaveLength(0);
+  });
+
+  it("重複ターゲットを返さない", () => {
+    const { board } = createBoardFromRecord(
+      "H8 I9 I7 G9 J8 H10 H6 K9 H7 H9 J9 I10 G7",
+    );
+
+    const targets = findMiseTargetsLite(board, 8, 6, "black");
+
+    // 重複チェック
+    const keys = targets.map((t) => `${t.row},${t.col}`);
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+});
+
+describe("hasPotentialMiseTarget", () => {
+  it("G7配置後はtrue（H7-I7-G7で3連、端空き）", () => {
+    const { board } = createBoardFromRecord(
+      "H8 I9 I7 G9 J8 H10 H6 K9 H7 H9 J9 I10 G7",
+    );
+
+    // G7 = row=8, col=6
+    expect(hasPotentialMiseTarget(board, 8, 6, "black")).toBe(true);
+  });
+
+  it("孤立した石ではfalse", () => {
+    const { board } = createBoardFromRecord("H8");
+
+    // H8 = row=7, col=7: 周囲に味方の石がないので2石未満
+    expect(hasPotentialMiseTarget(board, 7, 7, "black")).toBe(false);
+  });
+
+  it("2石連続で少なくとも片端が空きならtrue", () => {
+    const board = createBoardWithStones([
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+    ]);
+
+    // (7,7)は(7,6)と合わせて2連、両端空き
+    expect(hasPotentialMiseTarget(board, 7, 7, "black")).toBe(true);
+  });
+
+  it("2石連続だが両端塞がりならfalse", () => {
+    const board = createBoardWithStones([
+      { row: 7, col: 0, color: "black" },
+      { row: 7, col: 1, color: "black" },
+    ]);
+    // col=0の左端は盤外、col=2に相手石を配置
+    board[7][2] = "white";
+
+    // (7,1)は左が盤外、右が白石で両端塞がり
+    expect(hasPotentialMiseTarget(board, 7, 1, "black")).toBe(false);
   });
 });
