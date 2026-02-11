@@ -66,9 +66,11 @@ import {
 } from "./techniques";
 import {
   findFourMoves,
-  findVCFMove,
+  findVCFSequence,
   findWinningMove,
   getFourDefensePosition,
+  vcfAttackMoveCount,
+  type VCFSequenceResult,
 } from "./vcf";
 
 // Re-export types and functions for backward compatibility
@@ -1117,33 +1119,22 @@ export function findBestMoveIterativeWithTT(
     }
   }
 
+  // 相手VCF結果（VCFレース判定 + Mise-VCFスキップ + 防御候補制限で共有）
+  // NOTE: 各VCFは独立に探索するため、手順の相互干渉は考慮しない
+  // 3状態: undefined=未探索、null=探索済みVCFなし、VCFSequenceResult=VCFあり
+  let opponentVCFResult: VCFSequenceResult | null | undefined = undefined;
+
   // 3. 四追い勝ち（VCF）があれば即座にその手を返す
   // （相手の四がある場合は上記で即return済みなのでここには到達しない）
-  const vcfMove = findVCFMove(board, color);
-  if (vcfMove) {
-    return {
-      position: vcfMove,
-      score: PATTERN_SCORES.FIVE, // 勝利確定
-      completedDepth: 0,
-      interrupted: false,
-      elapsedTime: performance.now() - startTime,
-      stats: mergeProfilingCounters(ctx.stats),
-    };
-  }
+  const vcfResult = findVCFSequence(board, color);
+  if (vcfResult) {
+    const myMoveCount = vcfAttackMoveCount(vcfResult.sequence);
 
-  // 3.5 Mise-VCF（ミセ→強制応手→VCF勝ち）があれば即座にその手を返す
-  const miseVcfMove = findMiseVCFMove(board, color, {
-    vcfOptions: { maxDepth: 12, timeLimit: 300 },
-    timeLimit: 500,
-  });
-  if (miseVcfMove) {
-    const isForbidden =
-      color === "black" &&
-      checkForbiddenMoveWithCache(board, miseVcfMove.row, miseVcfMove.col)
-        .isForbidden;
-    if (!isForbidden) {
+    // 1手VCF（活四作成）は無条件勝利
+    // （即五連はfindWinningMoveで、相手の即五連はdetectOpponentThreatsで既にチェック済み）
+    if (myMoveCount <= 1) {
       return {
-        position: miseVcfMove,
+        position: vcfResult.firstMove,
         score: PATTERN_SCORES.FIVE, // 勝利確定
         completedDepth: 0,
         interrupted: false,
@@ -1151,12 +1142,75 @@ export function findBestMoveIterativeWithTT(
         stats: mergeProfilingCounters(ctx.stats),
       };
     }
-    // 禁手の場合はMise-VCFなしとして通常探索にフォールスルー
+
+    // 2手以上: 相手VCFとのレース判定
+    opponentVCFResult = findVCFSequence(board, opponentColor, {
+      timeLimit: 100,
+    });
+
+    if (!opponentVCFResult) {
+      // 相手VCFなし → 自VCF勝利
+      return {
+        position: vcfResult.firstMove,
+        score: PATTERN_SCORES.FIVE, // 勝利確定
+        completedDepth: 0,
+        interrupted: false,
+        elapsedTime: performance.now() - startTime,
+        stats: mergeProfilingCounters(ctx.stats),
+      };
+    }
+
+    const oppMoveCount = vcfAttackMoveCount(opponentVCFResult.sequence);
+    if (myMoveCount <= oppMoveCount) {
+      // 自VCFが同手数以下 → 先手有利で勝利
+      return {
+        position: vcfResult.firstMove,
+        score: PATTERN_SCORES.FIVE, // 勝利確定
+        completedDepth: 0,
+        interrupted: false,
+        elapsedTime: performance.now() - startTime,
+        stats: mergeProfilingCounters(ctx.stats),
+      };
+    }
+    // 相手VCFが短い → 通常探索にフォールスルー
+  }
+
+  // 3.5 Mise-VCF（ミセ→強制応手→VCF勝ち）があれば即座にその手を返す
+  // 自VCFがなかった場合、Mise-VCFの前に相手VCFを探索
+  if (opponentVCFResult === undefined) {
+    opponentVCFResult = findVCFSequence(board, opponentColor, {
+      timeLimit: 100,
+    });
+  }
+
+  // 相手VCFがある場合、Mise-VCFは間に合わない（最低2手+VCF手数が必要）のでスキップ
+  if (!opponentVCFResult) {
+    const miseVcfMove = findMiseVCFMove(board, color, {
+      vcfOptions: { maxDepth: 12, timeLimit: 300 },
+      timeLimit: 500,
+    });
+    if (miseVcfMove) {
+      const isForbidden =
+        color === "black" &&
+        checkForbiddenMoveWithCache(board, miseVcfMove.row, miseVcfMove.col)
+          .isForbidden;
+      if (!isForbidden) {
+        return {
+          position: miseVcfMove,
+          score: PATTERN_SCORES.FIVE, // 勝利確定
+          completedDepth: 0,
+          interrupted: false,
+          elapsedTime: performance.now() - startTime,
+          stats: mergeProfilingCounters(ctx.stats),
+        };
+      }
+      // 禁手の場合はMise-VCFなしとして通常探索にフォールスルー
+    }
   }
 
   // 4. 相手のVCF（四追い勝ち）があれば候補手を防御手に制限
-  // 相手VCFは時間制限を短縮（メイン探索の時間予算を確保）
-  const opponentVCFMove = findVCFMove(board, opponentColor, { timeLimit: 80 });
+  // 相手VCF結果を共有変数から取得（重複探索を排除）
+  const opponentVCFMove = opponentVCFResult?.firstMove ?? null;
   let vcfDefenseSet: Set<string> | null = null;
   if (opponentVCFMove) {
     vcfDefenseSet = new Set<string>();
