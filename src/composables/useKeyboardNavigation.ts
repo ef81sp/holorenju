@@ -13,6 +13,7 @@ export const useKeyboardNavigation = (
   onPlaceStone: () => void,
   onDialogueNavigate?: (direction: "next" | "previous") => void,
   isDisabled?: Ref<boolean> | ComputedRef<boolean>,
+  onCursorMove?: () => void,
 ): {
   cursorPosition: Ref<Position>;
   isCursorActivated: Ref<boolean>;
@@ -96,6 +97,7 @@ export const useKeyboardNavigation = (
       default:
         break;
     }
+    onCursorMove?.();
   };
 
   /**

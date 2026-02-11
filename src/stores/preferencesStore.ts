@@ -28,6 +28,9 @@ interface Preferences {
   display: {
     textSize: TextSize;
   };
+  accessibility: {
+    boardAnnounce: boolean;
+  };
   cpu: {
     fastMove: boolean;
   };
@@ -53,6 +56,9 @@ const defaultPreferences: Preferences = {
   },
   display: {
     textSize: "normal",
+  },
+  accessibility: {
+    boardAnnounce: true,
   },
   cpu: {
     fastMove: false,
@@ -135,6 +141,12 @@ function migrateFromOldFormat(parsed: OldPreferences): Preferences {
           | undefined),
       },
       display: { ...defaultPreferences.display, ...parsed.display },
+      accessibility: {
+        ...defaultPreferences.accessibility,
+        ...((parsed as Record<string, unknown>).accessibility as
+          | Preferences["accessibility"]
+          | undefined),
+      },
       cpu: { ...defaultPreferences.cpu, ...parsed.cpu },
       debug: { ...defaultPreferences.debug, ...parsed.debug },
     };
@@ -167,6 +179,7 @@ function migrateFromOldFormat(parsed: OldPreferences): Preferences {
     },
     audio: { ...defaultPreferences.audio },
     display: { ...defaultPreferences.display, ...parsed.display },
+    accessibility: { ...defaultPreferences.accessibility },
     cpu: { ...defaultPreferences.cpu, ...parsed.cpu },
     debug: { ...defaultPreferences.debug, ...parsed.debug },
   };
@@ -218,6 +231,11 @@ export const usePreferencesStore = defineStore("preferences", () => {
   const textSize = computed({
     get: () => preferences.value.display.textSize,
     set: (v) => (preferences.value.display.textSize = v),
+  });
+
+  const boardAnnounce = computed({
+    get: () => preferences.value.accessibility.boardAnnounce,
+    set: (v) => (preferences.value.accessibility.boardAnnounce = v),
   });
 
   const fastCpuMove = computed({
@@ -338,6 +356,7 @@ export const usePreferencesStore = defineStore("preferences", () => {
     speed,
     effectSpeed,
     textSize,
+    boardAnnounce,
     fastCpuMove,
     showCpuInfo,
     // Audio

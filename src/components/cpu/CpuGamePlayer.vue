@@ -21,6 +21,7 @@ import CpuDebugInfo from "./CpuDebugInfo.vue";
 import { useCpuPlayer } from "./composables/useCpuPlayer";
 import { useCpuDialogue } from "./composables/useCpuDialogue";
 import { useForbiddenMark } from "./composables/useForbiddenMark";
+import { useBoardAnnouncer } from "@/composables/useBoardAnnouncer";
 import { useCutinDisplay } from "@/composables/useCutinDisplay";
 import { useKeyboardNavigation } from "@/composables/useKeyboardNavigation";
 import { useAppStore } from "@/stores/appStore";
@@ -96,11 +97,21 @@ const isBoardDisabled = computed(
 );
 
 // キーボード操作（WASD + Space/Enter で石配置）
+
+let boardAnnouncer: ReturnType<typeof useBoardAnnouncer>;
 const keyboardNav = useKeyboardNavigation(
   () => handlePlaceStone({ ...keyboardNav.cursorPosition.value }),
   undefined,
   isBoardDisabled,
+  () => boardAnnouncer.announceCursorMove(),
 );
+
+// 盤面読み上げ（ARIAライブリージョン）
+boardAnnouncer = useBoardAnnouncer({
+  board: computed(() => boardStore.board),
+  cursorPosition: keyboardNav.cursorPosition,
+  isCursorActivated: keyboardNav.isCursorActivated,
+});
 
 // Escキー用の追加ハンドラー
 function handleEscapeKey(event: KeyboardEvent): void {
@@ -201,6 +212,7 @@ async function cpuMove(): Promise<void> {
   // 石を配置
   cpuGameStore.addMove(response.position, cpuGameStore.currentTurn);
   audioStore.playSfx("stone-place");
+  boardAnnouncer.announceCpuMove(response.position);
 
   // 勝敗判定
   if (cpuGameStore.isGameOver) {
@@ -468,6 +480,20 @@ const gameEndMessage = computed(() => {
         </div>
       </template>
     </GamePlayerLayout>
+
+    <!-- 盤面読み上げ用ARIAライブリージョン -->
+    <div
+      aria-live="polite"
+      class="visually-hidden"
+    >
+      {{ boardAnnouncer.politeMessage.value }}
+    </div>
+    <div
+      aria-live="assertive"
+      class="visually-hidden"
+    >
+      {{ boardAnnouncer.assertiveMessage.value }}
+    </div>
 
     <!-- 戻る確認ダイアログ -->
     <ConfirmDialog

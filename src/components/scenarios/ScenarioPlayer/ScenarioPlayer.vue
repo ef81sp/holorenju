@@ -19,10 +19,12 @@ import SettingsControl from "@/components/common/SettingsControl.vue";
 import GamePlayerLayout from "@/components/common/GamePlayerLayout.vue";
 import DebugReloadButton from "./DebugReloadButton.vue";
 import { useScenarioNavigation } from "./composables/useScenarioNavigation";
+import { useBoardAnnouncer } from "@/composables/useBoardAnnouncer";
 import { useKeyboardNavigation } from "@/composables/useKeyboardNavigation";
 import { useQuestionSolver } from "./composables/useQuestionSolver";
 import { useCutinDisplay } from "@/composables/useCutinDisplay";
 import { scenarioNavKey } from "./composables/useScenarioNavProvide";
+import { useBoardStore } from "@/stores/boardStore";
 import { useDialogStore } from "@/stores/dialogStore";
 import { useAudioStore } from "@/stores/audioStore";
 
@@ -40,6 +42,7 @@ interface Props {
 const props = defineProps<Props>();
 
 // Stores
+const boardStore = useBoardStore();
 const dialogStore = useDialogStore();
 const audioStore = useAudioStore();
 
@@ -96,6 +99,7 @@ const isKeyboardDisabled = computed(
   () => isDemoSection.value || isCutinVisible.value,
 );
 
+let boardAnnouncer: ReturnType<typeof useBoardAnnouncer>;
 const keyboardNav = useKeyboardNavigation(
   () => handlePlaceStone(),
   (direction) => {
@@ -110,7 +114,15 @@ const keyboardNav = useKeyboardNavigation(
     }
   },
   isKeyboardDisabled,
+  () => boardAnnouncer.announceCursorMove(),
 );
+
+// 盤面読み上げ（ARIAライブリージョン）
+boardAnnouncer = useBoardAnnouncer({
+  board: computed(() => boardStore.board),
+  cursorPosition: keyboardNav.cursorPosition,
+  isCursorActivated: keyboardNav.isCursorActivated,
+});
 
 // セクション変更時にカーソルアクティベーションをリセット＆デモ→問題遷移時はカットインを表示
 watch(
@@ -375,4 +387,12 @@ const handleGoToList = (): void => {
       />
     </template>
   </GamePlayerLayout>
+
+  <!-- 盤面読み上げ用ARIAライブリージョン -->
+  <div
+    aria-live="polite"
+    class="visually-hidden"
+  >
+    {{ boardAnnouncer.politeMessage.value }}
+  </div>
 </template>

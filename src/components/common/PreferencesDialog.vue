@@ -245,6 +245,26 @@ defineExpose({
           </div>
         </section>
 
+        <!-- アクセシビリティ -->
+        <section class="settings-section">
+          <h3 class="section-title">アクセシビリティ</h3>
+          <div class="settings-group">
+            <label class="setting-row">
+              <span class="setting-text">
+                <span class="setting-label">盤面の読み上げ</span>
+                <span class="setting-description">
+                  カーソル移動時に座標と石の状態を読み上げ
+                </span>
+              </span>
+              <input
+                v-model="preferencesStore.boardAnnounce"
+                type="checkbox"
+                class="checkbox"
+              />
+            </label>
+          </div>
+        </section>
+
         <!-- CPU対戦 -->
         <section class="settings-section">
           <h3 class="section-title">コンピュータ対戦</h3>

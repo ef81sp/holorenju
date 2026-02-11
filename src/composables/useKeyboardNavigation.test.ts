@@ -343,4 +343,58 @@ describe("useKeyboardNavigation", () => {
       expect(onPlaceStone).toHaveBeenCalledTimes(1);
     });
   });
+
+  describe("onCursorMove コールバック", () => {
+    it("moveCursor 後に呼ばれる", () => {
+      const onCursorMove = vi.fn();
+      const { moveCursor } = useKeyboardNavigation(
+        onPlaceStone,
+        undefined,
+        undefined,
+        onCursorMove,
+      );
+
+      moveCursor("up");
+
+      expect(onCursorMove).toHaveBeenCalledTimes(1);
+    });
+
+    it("WASDキー操作後に呼ばれる", () => {
+      const onCursorMove = vi.fn();
+      const { handleKeyDown } = useKeyboardNavigation(
+        onPlaceStone,
+        undefined,
+        undefined,
+        onCursorMove,
+      );
+
+      handleKeyDown(createKeyEvent("w"));
+      handleKeyDown(createKeyEvent("a"));
+      handleKeyDown(createKeyEvent("s"));
+      handleKeyDown(createKeyEvent("d"));
+
+      expect(onCursorMove).toHaveBeenCalledTimes(4);
+    });
+
+    it("isDisabled 時は呼ばれない", () => {
+      const isDisabled = ref(true);
+      const onCursorMove = vi.fn();
+      const { handleKeyDown } = useKeyboardNavigation(
+        onPlaceStone,
+        undefined,
+        isDisabled,
+        onCursorMove,
+      );
+
+      handleKeyDown(createKeyEvent("w"));
+
+      expect(onCursorMove).not.toHaveBeenCalled();
+    });
+
+    it("未指定でもエラーにならない", () => {
+      const { moveCursor } = useKeyboardNavigation(onPlaceStone);
+
+      expect(() => moveCursor("up")).not.toThrow();
+    });
+  });
 });
