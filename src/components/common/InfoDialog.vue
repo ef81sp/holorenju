@@ -110,35 +110,43 @@ defineExpose({
 
         <section class="info-section">
           <h3 class="section-title">音楽出典</h3>
-          <div class="section-content">
-            <p>
-              BGM:
-              <a
-                href="https://www.youtube.com/watch?v=0RG7iNERF4s"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                SUPERNOVA
-              </a>
-            </p>
-            <p>アーティスト: 白上フブキ</p>
-            <p>作曲: 小池竜暉</p>
-            <p>編曲: かみくず</p>
+          <div class="subsection">
+            <h4>BGM</h4>
+            <div class="section-content">
+              <p>
+                <a
+                  href="https://www.youtube.com/watch?v=0RG7iNERF4s"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  SUPERNOVA
+                </a>
+              </p>
+              <ul>
+                <li>アーティスト: 白上フブキ</li>
+                <li>作曲: 小池竜暉</li>
+                <li>アレンジ: かみくず</li>
+              </ul>
+            </div>
           </div>
-          <div class="section-content">
-            <p>
-              ファンファーレ:
-              <a
-                href="https://www.youtube.com/watch?v=Kn066hDKjx4"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Shiny Smily Story
-              </a>
-            </p>
-            <p>アーティスト: hololive IDOL PROJECT</p>
-            <p>作曲: 中野領太</p>
-            <p>編曲: かみくず</p>
+          <div class="subsection">
+            <h4>ファンファーレ</h4>
+            <div class="section-content">
+              <p>
+                <a
+                  href="https://www.youtube.com/watch?v=Kn066hDKjx4"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Shiny Smily Story
+                </a>
+              </p>
+              <ul>
+                <li>アーティスト: hololive IDOL PROJECT</li>
+                <li>作曲: 中野領太</li>
+                <li>アレンジ: かみくず</li>
+              </ul>
+            </div>
           </div>
         </section>
 
@@ -269,6 +277,21 @@ defineExpose({
   font-size: var(--size-14);
   font-weight: 500;
   color: var(--color-text-secondary);
+}
+
+.subsection {
+  padding-inline-start: var(--size-8);
+
+  &:not(:last-child) {
+    margin-bottom: var(--size-12);
+  }
+}
+
+.info-section h4 {
+  margin: 0 0 var(--size-6) 0;
+  font-size: var(--size-12);
+  font-weight: 500;
+  color: var(--color-text-primary);
 }
 
 .section-content {

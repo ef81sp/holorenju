@@ -81,7 +81,13 @@ const getDifficultyLabel = (difficulty: ScenarioDifficulty): string =>
   <div class="scenario-menu">
     <div class="header">
       <div>
-        <h1>ホロ連珠</h1>
+        <h1>
+          ホロ
+          <ruby>
+            連珠
+            <rt>れんじゅ</rt>
+          </ruby>
+        </h1>
         <small>フブみこさんと学ぶ連珠教室</small>
       </div>
       <ProgressSummary :total-scenarios="scenarios.length" />
