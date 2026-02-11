@@ -2,6 +2,10 @@
  * ベンチマーク棋譜分析の型定義
  */
 
+import type {
+  GameResult,
+  MoveRecord,
+} from "../../src/logic/cpu/benchmark/headless.ts";
 import type { Position } from "../../src/types/game.ts";
 
 // ============================================================================
@@ -114,27 +118,11 @@ export interface AnalysisResult {
 // ベンチマーク結果の型（bench-results/*.json の構造）
 // ============================================================================
 
-/** ベンチマーク結果の1手 */
-export interface BenchMoveHistory {
-  row: number;
-  col: number;
-  time: number;
-  isOpening: boolean;
-  depth?: number;
-  /** 禁手追い込みで勝った場合true（最終手のみ） */
-  forcedForbidden?: boolean;
-}
+/** ベンチマーク結果の1手（headless.ts の MoveRecord と同一） */
+export type BenchMoveHistory = MoveRecord;
 
-/** ベンチマーク結果の1対局 */
-export interface BenchGameResult {
-  playerA: string;
-  playerB: string;
-  winner: "A" | "B" | "draw";
-  reason: string;
-  moves: number;
-  duration: number;
-  moveHistory: BenchMoveHistory[];
-}
+/** ベンチマーク結果の1対局（headless.ts の GameResult と同一） */
+export type BenchGameResult = GameResult;
 
 /** ベンチマーク結果全体 */
 export interface BenchmarkResultFile {

@@ -481,7 +481,7 @@ function generateSuggestions(
     suggestions.push({
       priority: priority++,
       targetWeakness: "forbidden-vulnerability",
-      suggestion: `禁手負けが${forbiddenPattern.count}件（率${(forbiddenPattern.rate * 100).toFixed(1)}%）。FORBIDDEN_TRAP_STRONGの調整、または黒番の禁手回避ロジック強化を検討`,
+      suggestion: `禁手負けが${forbiddenPattern.count}件（${forbiddenPattern.rate.toFixed(2)}/局）。FORBIDDEN_TRAP_STRONGの調整、または黒番の禁手回避ロジック強化を検討`,
       relatedParams: [
         "FORBIDDEN_TRAP_STRONG",
         "FORBIDDEN_VULNERABILITY_STRONG",
@@ -584,9 +584,9 @@ export function formatWeaknessReport(report: WeaknessReport): string {
     if (pattern.count === 0) {
       continue;
     }
-    const rate = (pattern.rate * 100).toFixed(1);
+    const perGame = pattern.rate.toFixed(2);
     ln(
-      `  ${pattern.type}: ${pattern.count}件 (率${rate}%) [黒${pattern.byColor.black}/白${pattern.byColor.white}]`,
+      `  ${pattern.type}: ${pattern.count}件 (${perGame}/局) [黒${pattern.byColor.black}/白${pattern.byColor.white}]`,
     );
   }
   ln();
