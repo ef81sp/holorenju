@@ -61,6 +61,7 @@ export function buildEvaluatedMove(
     candidates: result.candidates,
     completedDepth: result.completedDepth,
     forcedWinType: result.forcedWinType,
+    forcedWinBranches: result.forcedWinBranches,
   };
 }
 

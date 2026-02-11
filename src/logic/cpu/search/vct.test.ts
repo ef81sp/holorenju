@@ -12,6 +12,7 @@ import {
   countStones,
   findVCTMove,
   findVCTSequence,
+  getThreatDefensePositions,
   hasVCT,
   isVCTFirstMove,
   VCT_STONE_THRESHOLD,
@@ -366,5 +367,220 @@ describe("盤面不変性テスト", () => {
     const snapshot2 = copyBoard(board2);
     isVCTFirstMove(board2, { row: 0, col: 0 }, "black", options);
     expect(board2).toEqual(snapshot2);
+  });
+});
+
+describe("分岐収集（collectBranches）", () => {
+  it("collectBranches: true でVCF成立時はbranchesなし", () => {
+    const board = createBoardWithStones([
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+    ]);
+    const result = findVCTSequence(board, "black", {
+      collectBranches: true,
+      timeLimit: 1000,
+    });
+    expect(result).not.toBeNull();
+    // VCFの場合は分岐なし（VCFは四連続なので防御は1通り）
+    expect(result?.branches).toBeUndefined();
+  });
+
+  it("14手目盤面で分岐が収集される", { timeout: 15000 }, () => {
+    const record = "H8 I7 G7 I9 H6 J8 H10 H9 G9 J7 H7 G8 I8 J9";
+    const { board } = createBoardFromRecord(record);
+    const options = {
+      maxDepth: 6,
+      timeLimit: 5000,
+      vcfOptions: { maxDepth: 16, timeLimit: 5000 },
+      collectBranches: true,
+    };
+    const result = findVCTSequence(board, "black", options);
+    expect(result).not.toBeNull();
+    expect(result?.branches).toBeDefined();
+    expect(result!.branches!.length).toBeGreaterThan(0);
+
+    // 各分岐にcontinuationがある
+    for (const branch of result!.branches!) {
+      expect(branch.defenseMove).toBeDefined();
+      expect(branch.continuation.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("メインPVは最長の防御継続を選択", { timeout: 15000 }, () => {
+    const record = "H8 I7 G7 I9 H6 J8 H10 H9 G9 J7 H7 G8 I8 J9";
+    const { board } = createBoardFromRecord(record);
+    const options = {
+      maxDepth: 6,
+      timeLimit: 5000,
+      vcfOptions: { maxDepth: 16, timeLimit: 5000 },
+      collectBranches: true,
+    };
+    const result = findVCTSequence(board, "black", options);
+    expect(result).not.toBeNull();
+
+    // E7の跳び三の後、F8（中止め）が最強防御 → PVに含まれる
+    const e7Idx = result!.sequence.findIndex((p) => p.row === 8 && p.col === 4);
+    expect(e7Idx).toBeGreaterThan(0);
+    const defenseAfterE7 = result!.sequence[e7Idx + 1];
+    expect(defenseAfterE7).toEqual({ row: 7, col: 5 }); // F8
+
+    // 分岐にはI11やD6が含まれる
+    if (result!.branches && result!.branches.length > 0) {
+      const branchDefenses = result!.branches.map(
+        (b) => `${b.defenseMove.row},${b.defenseMove.col}`,
+      );
+      // I11(4,8) or D6(9,3) が分岐に含まれる
+      const hasAlternative =
+        branchDefenses.includes("4,8") || branchDefenses.includes("9,3");
+      expect(hasAlternative).toBe(true);
+    }
+  });
+
+  it(
+    "defenseIndexがsequence内の防御手位置を正しく指す",
+    { timeout: 15000 },
+    () => {
+      const record = "H8 I7 G7 I9 H6 J8 H10 H9 G9 J7 H7 G8 I8 J9";
+      const { board } = createBoardFromRecord(record);
+      const options = {
+        maxDepth: 6,
+        timeLimit: 5000,
+        vcfOptions: { maxDepth: 16, timeLimit: 5000 },
+        collectBranches: true,
+      };
+      const result = findVCTSequence(board, "black", options);
+      expect(result).not.toBeNull();
+      expect(result!.branches).toBeDefined();
+
+      for (const branch of result!.branches!) {
+        // defenseIndexの位置にあるメインPVの手は防御手（偶数インデックス=攻撃、奇数=防御）
+        // sequenceは [攻撃, 防御, 攻撃, 防御, ...] なので奇数インデックスが防御
+        expect(branch.defenseIndex % 2).toBe(1);
+
+        // defenseIndexの位置にある手は分岐先の防御手と同じ「役割」（同じ攻撃手への防御）
+        // メインPVのdefenseIndex位置の手が存在する
+        const mainDefense = result!.sequence[branch.defenseIndex];
+        expect(mainDefense).toBeDefined();
+
+        // 分岐の防御手はメインPVの防御手と異なる
+        expect(branch.defenseMove).not.toEqual(mainDefense);
+      }
+    },
+  );
+
+  it(
+    "collectBranches: false（デフォルト）では既存の動作を維持",
+    { timeout: 15000 },
+    () => {
+      const record = "H8 I7 G7 I9 H6 J8 H10 H9 G9 J7 H7 G8 I8 J9";
+      const { board } = createBoardFromRecord(record);
+      const options = {
+        maxDepth: 6,
+        timeLimit: 5000,
+        vcfOptions: { maxDepth: 16, timeLimit: 5000 },
+      };
+      const result = findVCTSequence(board, "black", options);
+      expect(result).not.toBeNull();
+      expect(result?.branches).toBeUndefined();
+    },
+  );
+
+  it("盤面不変性（collectBranches: true）", { timeout: 15000 }, () => {
+    const record = "H8 I7 G7 I9 H6 J8 H10 H9 G9 J7 H7 G8 I8 J9";
+    const { board } = createBoardFromRecord(record);
+    const snapshot = copyBoard(board);
+    findVCTSequence(board, "black", {
+      maxDepth: 6,
+      timeLimit: 5000,
+      vcfOptions: { maxDepth: 16, timeLimit: 5000 },
+      collectBranches: true,
+    });
+    expect(board).toEqual(snapshot);
+  });
+});
+
+describe("跳び三防御の検証", () => {
+  // 14手目までの盤面
+  // H8 I7 G7 I9 H6 J8 H10 H9 G9 J7 H7 G8 I8 J9
+  // VCT: H5(四)→H4(防御)→E7(跳び三)→... 全防御でVCT継続
+  const record = "H8 I7 G7 I9 H6 J8 H10 H9 G9 J7 H7 G8 I8 J9";
+  const options = {
+    maxDepth: 6,
+    timeLimit: 5000,
+    vcfOptions: { maxDepth: 16, timeLimit: 5000 },
+  };
+
+  it("E7の跳び三の防御位置にF8(中止め)が含まれる", () => {
+    const { board } = createBoardFromRecord(record);
+    // H5(四) → H4(防御) → E7(跳び三) の局面を構築
+    board[10]![7] = "black"; // H5
+    board[11]![7] = "white"; // H4
+    board[8]![4] = "black"; // E7
+
+    // E7(8,4)で跳び三が成立: D6(9,3)-E7(8,4)-F8(7,5)-G9(6,6)-H10(5,7)-I11(4,8)
+    // パターン: ・●・●●・ → 防御点は D6(9,3), F8(7,5), I11(4,8) の3つ
+    const defensePositions = getThreatDefensePositions(board, 8, 4, "black");
+
+    const hasF8 = defensePositions.some((p) => p.row === 7 && p.col === 5);
+    const hasD6 = defensePositions.some((p) => p.row === 9 && p.col === 3);
+    const hasI11 = defensePositions.some((p) => p.row === 4 && p.col === 8);
+
+    expect(hasF8).toBe(true); // F8(中止め)
+    expect(hasD6).toBe(true); // D6(外止め)
+    expect(hasI11).toBe(true); // I11(外止め)
+
+    // undo
+    board[10]![7] = null;
+    board[11]![7] = null;
+    board[8]![4] = null;
+  });
+
+  it("14手目盤面のVCTは全防御を検証済み", { timeout: 15000 }, () => {
+    const { board } = createBoardFromRecord(record);
+    const result = findVCTSequence(board, "black", options);
+    expect(result).not.toBeNull();
+
+    // H5が最初の手
+    expect(result!.firstMove).toEqual({ row: 10, col: 7 });
+
+    // PVにE7が含まれることを確認
+    const e7Idx = result!.sequence.findIndex((p) => p.row === 8 && p.col === 4);
+    expect(e7Idx).toBeGreaterThan(0);
+    // collectBranchesなしの場合は最初の防御がPVに入る
+    const defenseAfterE7 = result!.sequence[e7Idx + 1];
+    expect(defenseAfterE7).toBeDefined();
+  });
+
+  it("E7跳び三の全防御後にVCT継続", { timeout: 15000 }, () => {
+    const { board } = createBoardFromRecord(record);
+    board[10]![7] = "black"; // H5
+    board[11]![7] = "white"; // H4
+    board[8]![4] = "black"; // E7
+
+    // 各防御後にVCTが継続することを確認（全防御で勝ち = 正当なVCT）
+    board[7]![5] = "white"; // F8(中止め)
+    expect(hasVCT(board, "black", 0, undefined, options)).toBe(true);
+    board[7]![5] = null;
+
+    board[9]![3] = "white"; // D6(外止め)
+    expect(hasVCT(board, "black", 0, undefined, options)).toBe(true);
+    board[9]![3] = null;
+
+    board[4]![8] = "white"; // I11(外止め)
+    expect(hasVCT(board, "black", 0, undefined, options)).toBe(true);
+    board[4]![8] = null;
+
+    // undo
+    board[10]![7] = null;
+    board[11]![7] = null;
+    board[8]![4] = null;
+  });
+
+  it("盤面不変性", () => {
+    const { board } = createBoardFromRecord(record);
+    const snapshot = copyBoard(board);
+    findVCTSequence(board, "black", options);
+    expect(board).toEqual(snapshot);
   });
 });

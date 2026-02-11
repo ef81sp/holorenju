@@ -7,7 +7,11 @@
 
 import { computed, ref, watch } from "vue";
 
-import type { EvaluatedMove, ReviewCandidate } from "@/types/review";
+import type {
+  EvaluatedMove,
+  ForcedWinBranch,
+  ReviewCandidate,
+} from "@/types/review";
 import type { Position } from "@/types/game";
 import { formatMove } from "@/logic/gameRecordParser";
 import { getQualityLabel, getQualityColor } from "@/logic/reviewLogic";
@@ -314,6 +318,71 @@ const bestPVLine = computed<PVLine | null>(() => {
   );
 });
 
+/** 分岐表示データ */
+interface BranchLine {
+  key: string;
+  label: string;
+  prefix: string;
+  /** メインPVの分岐点前 + 防御手（ホバー時に先頭に付与） */
+  prefixItems: PVDisplayItem[];
+  items: PVDisplayItem[];
+}
+
+const branchLines = computed<BranchLine[]>(() => {
+  const eval_ = props.evaluation;
+  if (!eval_?.forcedWinBranches || eval_.forcedWinBranches.length === 0) {
+    return [];
+  }
+  const bestPVItems = bestPVLine.value?.items;
+  if (!bestPVItems) {
+    return [];
+  }
+
+  return eval_.forcedWinBranches.map(
+    (branch: ForcedWinBranch, branchIdx: number) => {
+      // 防御手の手番号（PVの defenseIndex 位置）
+      const moveNum = props.moveIndex + branch.defenseIndex;
+      const label = "の場合:";
+      const prefix =
+        branchIdx === eval_.forcedWinBranches!.length - 1 ? "└" : "├";
+
+      // メインPVの分岐点前の手（ホバー時に盤面プレビュー用）
+      const prefixItems: PVDisplayItem[] = bestPVItems.slice(
+        0,
+        branch.defenseIndex,
+      );
+
+      // 防御手自体 + 継続手順
+      const defenseItem: PVDisplayItem = {
+        text: `${moveNum}.${formatMove(branch.defenseMove)}`,
+        isSelf: false,
+        position: branch.defenseMove,
+      };
+      const items: PVDisplayItem[] = [defenseItem];
+      for (let i = 0; i < branch.continuation.length; i++) {
+        const pos = branch.continuation[i];
+        if (!pos) {
+          break;
+        }
+        const num = moveNum + 1 + i;
+        items.push({
+          text: `${num}.${formatMove(pos)}`,
+          isSelf: i % 2 === 0, // 攻撃手=自分
+          position: pos,
+        });
+      }
+
+      return {
+        key: `branch-${branchIdx}`,
+        label,
+        prefix,
+        prefixItems,
+        items,
+      };
+    },
+  );
+});
+
 /** 実際の手のPV+推移 */
 const playedPVLine = computed<PVLine | null>(() => {
   const eval_ = props.evaluation;
@@ -377,6 +446,21 @@ function handlePVMoveEnter(
     return;
   }
   emitPvSlice(items, index, type);
+}
+
+function handleBranchMoveEnter(branch: BranchLine, index: number): void {
+  if (pinnedPv.value) {
+    return;
+  }
+  const allItems = [...branch.prefixItems, ...branch.items.slice(0, index + 1)];
+  emit(
+    "hoverPvMove",
+    allItems.map((item) => ({
+      position: item.position,
+      isSelf: item.isSelf,
+    })),
+    "best",
+  );
 }
 
 function handlePVMoveLeave(): void {
@@ -580,6 +664,46 @@ function isPlayed(candidate: { position: Position }): boolean {
             >
               {{ item.text }}
             </button>
+          </div>
+          <!-- 分岐表示 -->
+          <div
+            v-for="branch in branchLines"
+            :key="branch.key"
+            class="pv-branch"
+          >
+            <span class="pv-branch-prefix">{{ branch.prefix }}</span>
+            <div class="pv-sequence pv-branch-sequence">
+              <!-- 防御手ボタン -->
+              <button
+                v-if="branch.items[0]"
+                type="button"
+                class="pv-move pv-opponent"
+                @mouseenter="handleBranchMoveEnter(branch, 0)"
+                @mouseleave="handlePVMoveLeave"
+                @focus="handleBranchMoveEnter(branch, 0)"
+                @blur="handlePVMoveLeave"
+              >
+                {{ branch.items[0].text }}
+              </button>
+              <span class="pv-branch-label">{{ branch.label }}</span>
+              <!-- 継続手順 -->
+              <button
+                v-for="(item, idx) in branch.items.slice(1)"
+                :key="`${branch.key}-${idx + 1}`"
+                type="button"
+                class="pv-move"
+                :class="{
+                  'pv-self': item.isSelf,
+                  'pv-opponent': !item.isSelf,
+                }"
+                @mouseenter="handleBranchMoveEnter(branch, idx + 1)"
+                @mouseleave="handlePVMoveLeave"
+                @focus="handleBranchMoveEnter(branch, idx + 1)"
+                @blur="handlePVMoveLeave"
+              >
+                {{ item.text }}
+              </button>
+            </div>
           </div>
         </template>
 
@@ -1035,6 +1159,34 @@ function isPlayed(candidate: { position: Position }): boolean {
 .pv-pinned {
   outline: 1px solid currentColor;
   outline-offset: 0;
+}
+
+/* 分岐表示 */
+.pv-branch {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--size-2);
+  margin-top: var(--size-1);
+  padding-left: var(--size-4);
+  font-size: var(--size-9);
+  opacity: 0.8;
+}
+
+.pv-branch-prefix {
+  color: var(--color-text-secondary);
+  font-family: monospace;
+  line-height: 1;
+}
+
+.pv-branch-label {
+  color: var(--color-text-secondary);
+  font-family: monospace;
+  white-space: nowrap;
+}
+
+.pv-branch-sequence {
+  font-size: var(--size-9);
 }
 
 .pv-note {

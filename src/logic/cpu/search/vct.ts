@@ -50,6 +50,18 @@ export interface VCTSearchOptions {
   timeLimit?: number;
   /** 内部VCF呼び出しに渡すオプション */
   vcfOptions?: VCFSearchOptions;
+  /** 分岐情報を収集するか（レビュー用） */
+  collectBranches?: boolean;
+}
+
+/** VCT手順内の分岐情報 */
+export interface VCTBranch {
+  /** 分岐点のsequence内インデックス（防御手の位置） */
+  defenseIndex: number;
+  /** 代替防御手 */
+  defenseMove: Position;
+  /** この防御後の継続手順 */
+  continuation: Position[];
 }
 
 /**
@@ -62,6 +74,8 @@ export interface VCTSequenceResult {
   sequence: Position[];
   /** 禁手追い込みによる勝ちかどうか */
   isForbiddenTrap: boolean;
+  /** 分岐情報（collectBranches有効時のみ） */
+  branches?: VCTBranch[];
 }
 
 /**
@@ -307,7 +321,8 @@ function isThreat(
  * - 止め四: 1点
  * - 活三: 両端の2点
  */
-function getThreatDefensePositions(
+/** @internal テスト用にエクスポート */
+export function getThreatDefensePositions(
   board: BoardState,
   row: number,
   col: number,
@@ -549,7 +564,11 @@ export function findVCTSequence(
   }
 
   const sequence: Position[] = [];
-  const context = { isForbiddenTrap: false };
+  const context: VCTRecursiveContext = {
+    isForbiddenTrap: false,
+    collectBranches: options?.collectBranches ?? false,
+    branches: [],
+  };
   const found = findVCTSequenceRecursive(
     board,
     color,
@@ -564,11 +583,22 @@ export function findVCTSequence(
   if (!found || !sequence[0]) {
     return null;
   }
-  return {
+  const result: VCTSequenceResult = {
     firstMove: sequence[0],
     sequence,
     isForbiddenTrap: context.isForbiddenTrap,
   };
+  if (context.collectBranches && context.branches.length > 0) {
+    result.branches = context.branches;
+  }
+  return result;
+}
+
+/** 再帰探索のコンテキスト */
+interface VCTRecursiveContext {
+  isForbiddenTrap: boolean;
+  collectBranches: boolean;
+  branches: VCTBranch[];
 }
 
 /**
@@ -582,7 +612,7 @@ function findVCTSequenceRecursive(
   limiter: VCFTimeLimiter,
   sequence: Position[],
   options: VCTSearchOptions | undefined,
-  context: { isForbiddenTrap: boolean },
+  context: VCTRecursiveContext,
 ): boolean {
   if (depth >= maxDepth) {
     return false;
@@ -646,7 +676,12 @@ function findVCTSequenceRecursive(
 
     // 全防御に対してVCTが継続するかチェック
     let allDefenseLeadsToVCT = true;
-    // 最初の防御のPVを記録
+    // 防御ごとの手順を収集（collectBranches時は全防御で収集）
+    const defenseSequences: {
+      defense: Position;
+      seq: Position[];
+      childBranches: VCTBranch[];
+    }[] = [];
     let firstDefenseSequence: Position[] | null = null;
 
     for (const defensePos of defensePositions) {
@@ -667,9 +702,14 @@ function findVCTSequenceRecursive(
         defenseRow[defensePos.col] = opponentColor;
       }
 
-      if (firstDefenseSequence === null) {
-        // 最初の防御: 手順を収集
+      if (context.collectBranches || firstDefenseSequence === null) {
+        // 分岐収集時は全防御で手順を収集、通常時は最初の防御のみ
         const subSequence: Position[] = [];
+        const subContext: VCTRecursiveContext = {
+          isForbiddenTrap: false,
+          collectBranches: context.collectBranches,
+          branches: [],
+        };
         const found = findVCTSequenceRecursive(
           board,
           color,
@@ -678,7 +718,7 @@ function findVCTSequenceRecursive(
           limiter,
           subSequence,
           options,
-          context,
+          subContext,
         );
 
         // 元に戻す（Undo）- 防御手
@@ -690,7 +730,20 @@ function findVCTSequenceRecursive(
           allDefenseLeadsToVCT = false;
           break;
         }
-        firstDefenseSequence = [defensePos, ...subSequence];
+        if (subContext.isForbiddenTrap) {
+          context.isForbiddenTrap = true;
+        }
+
+        if (context.collectBranches) {
+          defenseSequences.push({
+            defense: defensePos,
+            seq: subSequence,
+            childBranches: subContext.branches,
+          });
+        }
+        if (firstDefenseSequence === null) {
+          firstDefenseSequence = [defensePos, ...subSequence];
+        }
       } else {
         const vctResult = hasVCT(board, color, depth + 1, limiter, options);
 
@@ -717,8 +770,50 @@ function findVCTSequenceRecursive(
       defensePositions.length > 0 &&
       firstDefenseSequence
     ) {
-      sequence.push(move);
-      sequence.push(...firstDefenseSequence);
+      if (context.collectBranches && defenseSequences.length > 0) {
+        // 最長の継続を持つ防御をメインPVに選択（= 最強防御）
+        let longestIdx = 0;
+        let longestLen = defenseSequences[0]?.seq.length ?? 0;
+        for (let i = 1; i < defenseSequences.length; i++) {
+          const len = defenseSequences[i]?.seq.length ?? 0;
+          if (len > longestLen) {
+            longestLen = len;
+            longestIdx = i;
+          }
+        }
+        const longest = defenseSequences[longestIdx]!;
+        const defenseIndexInSequence = sequence.length + 1; // +1 for the attack move
+
+        sequence.push(move);
+        sequence.push(longest.defense, ...longest.seq);
+
+        // メインPVの子分岐を親に統合（インデックスをオフセット）
+        // subSeqは防御手の次から始まるため +1
+        const subSeqOffset = defenseIndexInSequence + 1;
+        for (const childBranch of longest.childBranches) {
+          context.branches.push({
+            defenseIndex: subSeqOffset + childBranch.defenseIndex,
+            defenseMove: childBranch.defenseMove,
+            continuation: childBranch.continuation,
+          });
+        }
+
+        // 残りの防御を分岐として記録
+        for (let i = 0; i < defenseSequences.length; i++) {
+          if (i === longestIdx) {
+            continue;
+          }
+          const ds = defenseSequences[i]!;
+          context.branches.push({
+            defenseIndex: defenseIndexInSequence,
+            defenseMove: ds.defense,
+            continuation: ds.seq,
+          });
+        }
+      } else {
+        sequence.push(move);
+        sequence.push(...firstDefenseSequence);
+      }
       return true;
     }
   }

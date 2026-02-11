@@ -8,6 +8,7 @@
  */
 
 import type {
+  ForcedWinBranch,
   ReviewCandidate,
   ReviewEvalRequest,
   ReviewWorkerResult,
@@ -35,6 +36,7 @@ import {
   findVCTSequence,
   isVCTFirstMove,
   VCT_STONE_THRESHOLD,
+  type VCTBranch,
   type VCTSearchOptions,
 } from "./search/vct";
 
@@ -50,6 +52,7 @@ const REVIEW_VCT_OPTIONS: VCTSearchOptions = {
     maxDepth: 16,
     timeLimit: 3000,
   },
+  collectBranches: true,
 };
 
 /** 振り返り用VCF探索パラメータ */
@@ -242,6 +245,19 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
         }
       }
 
+      // VCT分岐情報の変換（VCTSequenceResultのみbranches有）
+      const rawBranches =
+        "branches" in forcedWin
+          ? (forcedWin.branches as VCTBranch[] | undefined)
+          : undefined;
+      const forcedWinBranches: ForcedWinBranch[] | undefined = rawBranches?.map(
+        (b) => ({
+          defenseIndex: b.defenseIndex,
+          defenseMove: b.defenseMove,
+          continuation: b.continuation,
+        }),
+      );
+
       const response: ReviewWorkerResult = {
         moveIndex,
         bestMove,
@@ -250,6 +266,7 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
         candidates,
         completedDepth: result.completedDepth,
         forcedWinType,
+        forcedWinBranches,
       };
 
       self.postMessage(response);

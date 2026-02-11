@@ -6,6 +6,18 @@ import type { LeafEvaluation, ScoreBreakdown } from "./cpu";
 import type { Position } from "./game";
 
 /**
+ * VCT/VCF手順の分岐情報
+ */
+export interface ForcedWinBranch {
+  /** 分岐点のPVインデックス（防御手の位置） */
+  defenseIndex: number;
+  /** 代替防御手 */
+  defenseMove: Position;
+  /** この防御後の継続手順 */
+  continuation: Position[];
+}
+
+/**
  * 候補手（内訳付き）
  */
 export interface ReviewCandidate {
@@ -58,6 +70,8 @@ export interface EvaluatedMove {
   completedDepth?: number;
   /** 必勝手順の種類 */
   forcedWinType?: "vcf" | "vct" | "forbidden-trap" | "mise-vcf";
+  /** 必勝手順の分岐情報 */
+  forcedWinBranches?: ForcedWinBranch[];
 }
 
 /**
@@ -102,4 +116,6 @@ export interface ReviewWorkerResult {
   completedDepth: number;
   /** 必勝手順の種類 */
   forcedWinType?: "vcf" | "vct" | "forbidden-trap" | "mise-vcf";
+  /** 必勝手順の分岐情報 */
+  forcedWinBranches?: ForcedWinBranch[];
 }
