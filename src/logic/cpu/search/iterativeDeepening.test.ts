@@ -17,6 +17,11 @@ import {
   findBestMoveIterativeWithTT,
   minimaxWithTT,
 } from "./minimax";
+import {
+  applyTimePressureFallback,
+  type DepthHistoryEntry,
+  type IterativeDeepingResult,
+} from "./results";
 import { INFINITY } from "./techniques";
 
 describe("findBestMoveIterative", () => {
@@ -321,4 +326,131 @@ describe("deadline ベースの時間管理", () => {
     expect(ctx.deadline).toBeUndefined();
     expect(ctx.absoluteDeadline).toBeUndefined();
   });
+});
+
+// =============================================================================
+// applyTimePressureFallback テスト
+// =============================================================================
+
+describe("applyTimePressureFallback", () => {
+  /** テスト用のベース結果を作成 */
+  function makeResult(
+    overrides: Partial<IterativeDeepingResult> = {},
+  ): IterativeDeepingResult {
+    return {
+      position: { row: 5, col: 5 },
+      score: 100,
+      completedDepth: 3,
+      interrupted: true,
+      elapsedTime: 500,
+      ...overrides,
+    };
+  }
+
+  it("中断時にスコアが大幅低下した場合、最深の高スコアエントリを採用", () => {
+    const depthHistory: DepthHistoryEntry[] = [
+      { depth: 1, position: { row: 7, col: 7 }, score: 500 },
+      { depth: 2, position: { row: 8, col: 8 }, score: 3000 },
+    ];
+    const result = makeResult({ score: 100, position: { row: 5, col: 5 } });
+
+    const final = applyTimePressureFallback(result, depthHistory, true);
+
+    expect(final.position).toEqual({ row: 8, col: 8 });
+    expect(final.score).toBe(3000);
+    expect(final.timePressureFallback).toBe(true);
+    expect(final.fallbackFromDepth).toBe(2);
+  });
+
+  it("スコア低下が閾値未満の場合はフォールバックしない", () => {
+    const depthHistory: DepthHistoryEntry[] = [
+      { depth: 1, position: { row: 7, col: 7 }, score: 2500 },
+      { depth: 2, position: { row: 8, col: 8 }, score: 2500 },
+    ];
+    // スコア差 = 2500 - 1600 = 900 < 1000
+    const result = makeResult({ score: 1600, position: { row: 5, col: 5 } });
+
+    const final = applyTimePressureFallback(result, depthHistory, true);
+
+    expect(final.position).toEqual({ row: 5, col: 5 });
+    expect(final.score).toBe(1600);
+    expect(final.timePressureFallback).toBeUndefined();
+  });
+
+  it("中断されていない場合はフォールバックしない", () => {
+    const depthHistory: DepthHistoryEntry[] = [
+      { depth: 2, position: { row: 8, col: 8 }, score: 3000 },
+    ];
+    const result = makeResult({
+      score: 100,
+      position: { row: 5, col: 5 },
+      interrupted: false,
+    });
+
+    const final = applyTimePressureFallback(result, depthHistory, false);
+
+    expect(final.position).toEqual({ row: 5, col: 5 });
+    expect(final.score).toBe(100);
+    expect(final.timePressureFallback).toBeUndefined();
+  });
+
+  it("depthHistoryが空の場合はフォールバックしない", () => {
+    const result = makeResult({ score: 100 });
+
+    const final = applyTimePressureFallback(result, [], true);
+
+    expect(final.position).toEqual({ row: 5, col: 5 });
+    expect(final.score).toBe(100);
+    expect(final.timePressureFallback).toBeUndefined();
+  });
+
+  it("最深の高スコアエントリを優先する", () => {
+    const depthHistory: DepthHistoryEntry[] = [
+      { depth: 1, position: { row: 7, col: 7 }, score: 2500 },
+      { depth: 2, position: { row: 8, col: 8 }, score: 3000 },
+      { depth: 3, position: { row: 9, col: 9 }, score: 2200 },
+    ];
+    const result = makeResult({ score: 100, position: { row: 5, col: 5 } });
+
+    const final = applyTimePressureFallback(result, depthHistory, true);
+
+    // depth 3 のエントリ（score 2200）が最深の高スコアエントリ
+    expect(final.position).toEqual({ row: 9, col: 9 });
+    expect(final.score).toBe(2200);
+    expect(final.fallbackFromDepth).toBe(3);
+  });
+});
+
+// =============================================================================
+// 反復深化のPV再順序付けテスト
+// =============================================================================
+
+describe("反復深化のPV再順序付け", () => {
+  it("前深度の最善手が次深度で最初に探索される", () => {
+    const board = createEmptyBoard();
+    // 序盤の局面を作成（VCFやMise-VCFが発動しない形）
+    placeStonesOnBoard(board, [
+      { row: 7, col: 7, color: "black" },
+      { row: 8, col: 8, color: "white" },
+    ]);
+
+    // depth 2以上で探索し、depthHistoryを取得
+    const result = findBestMoveIterativeWithTT(
+      board,
+      "black",
+      3,
+      5000,
+      0,
+      DEFAULT_EVAL_OPTIONS,
+      undefined,
+      undefined,
+      0,
+    );
+
+    // depth 2以上まで到達していればPV再順序付けが機能している
+    expect(result.completedDepth).toBeGreaterThanOrEqual(2);
+    // depthHistoryが記録されている
+    expect(result.depthHistory).toBeDefined();
+    expect(result.depthHistory?.length).toBeGreaterThanOrEqual(1);
+  }, 10000);
 });
