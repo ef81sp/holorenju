@@ -280,6 +280,8 @@ const messageCharacterInfo = computed(() => {
   border: var(--size-2) solid;
   box-shadow: 0 var(--size-5) var(--size-8) rgba(0, 0, 0, 0.1);
   position: relative;
+  user-select: none;
+  cursor: pointer;
 }
 
 /* トランジション: 下から上へせり上がり */
