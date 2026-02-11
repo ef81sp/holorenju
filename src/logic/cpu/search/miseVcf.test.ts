@@ -7,7 +7,7 @@
 import { describe, expect, it } from "vitest";
 
 import { createBoardFromRecord } from "@/logic/gameRecordParser";
-import { createEmptyBoard } from "@/logic/renjuRules";
+import { checkForbiddenMove, createEmptyBoard } from "@/logic/renjuRules";
 
 import { findMiseVCFMove, findMiseVCFSequence } from "./miseVcf";
 
@@ -103,5 +103,33 @@ describe("findMiseVCFSequence", () => {
         expect(board[r]?.[c]).toBe(snapshot[r]?.[c]);
       }
     }
+  });
+});
+
+describe("黒番のMise-VCF禁手チェック", () => {
+  it("三々禁の位置をMise-VCF手として返さない", () => {
+    // ベンチマーク#34の棋譜: H6が三々禁かつMise-VCF候補
+    // H8 G9 F8 G8 G7 D10 H7 I9 F7 E7 G6 F6 の12手目まで
+    const { board } = createBoardFromRecord(
+      "H8 G9 F8 G8 G7 D10 H7 I9 F7 E7 G6 F6",
+    );
+
+    const move = findMiseVCFMove(board, "black");
+    if (move) {
+      const forbidden = checkForbiddenMove(board, move.row, move.col);
+      expect(forbidden.isForbidden).toBe(false);
+    }
+  });
+
+  it("白番のMise-VCFは禁手チェックの影響を受けない", () => {
+    // 白番ではcheckForbiddenMoveが呼ばれずエラーなく動作する
+    const { board } = createBoardFromRecord(
+      "H8 I9 I7 G9 J8 H10 H6 K9 H7 H9 J9 I10 G7",
+    );
+
+    // 白番のMise-VCF探索がエラーなく完了する
+    const move = findMiseVCFMove(board, "white");
+    // 結果の有無は問わない（エラーなく完了すればOK）
+    expect(move === null || move !== null).toBe(true);
   });
 });

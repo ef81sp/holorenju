@@ -10,7 +10,7 @@
 import { describe, expect, it } from "vitest";
 
 import { createBoardFromRecord } from "@/logic/gameRecordParser";
-import { createEmptyBoard } from "@/logic/renjuRules";
+import { checkForbiddenMove, createEmptyBoard } from "@/logic/renjuRules";
 
 import {
   DEFAULT_EVAL_OPTIONS,
@@ -367,5 +367,51 @@ describe("相手VCF防御", () => {
     // H7 (row=8, col=7) のブロックまたはカウンターフォーが選ばれるべき
     expect(result.position.row).toBeGreaterThanOrEqual(0);
     expect(result.position.row).toBeLessThan(15);
+  }, 15000);
+});
+
+describe("depth=0 Mise-VCFの禁手チェック", () => {
+  it("黒番でMise-VCFの手が三々禁の場合、その手を選ばない", () => {
+    // ベンチマーク#34の棋譜: H6が三々禁かつMise-VCF候補
+    const { board } = createBoardFromRecord(
+      "H8 G9 F8 G8 G7 D10 H7 I9 F7 E7 G6 F6",
+    );
+
+    const result = findBestMoveIterativeWithTT(
+      board,
+      "black",
+      4,
+      10000,
+      0,
+      FULL_EVAL_OPTIONS,
+    );
+
+    // 返された手が禁手でないことを検証
+    const forbidden = checkForbiddenMove(
+      board,
+      result.position.row,
+      result.position.col,
+    );
+    expect(forbidden.isForbidden).toBe(false);
+  }, 15000);
+
+  it("唯一のMise-VCF勝ち手が禁手の場合、通常探索にフォールバック", () => {
+    // 同じ局面で、H6 (row=9, col=7) が返されないことを確認
+    const { board } = createBoardFromRecord(
+      "H8 G9 F8 G8 G7 D10 H7 I9 F7 E7 G6 F6",
+    );
+
+    const result = findBestMoveIterativeWithTT(
+      board,
+      "black",
+      4,
+      10000,
+      0,
+      FULL_EVAL_OPTIONS,
+    );
+
+    // H6 (row=9, col=7) は禁手なので選ばれてはならない
+    const isH6 = result.position.row === 9 && result.position.col === 7;
+    expect(isH6).toBe(false);
   }, 15000);
 });
