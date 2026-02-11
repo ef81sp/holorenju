@@ -19,7 +19,7 @@ import SettingsControl from "@/components/common/SettingsControl.vue";
 import GamePlayerLayout from "@/components/common/GamePlayerLayout.vue";
 import DebugReloadButton from "./DebugReloadButton.vue";
 import { useScenarioNavigation } from "./composables/useScenarioNavigation";
-import { useKeyboardNavigation } from "./composables/useKeyboardNavigation";
+import { useKeyboardNavigation } from "@/composables/useKeyboardNavigation";
 import { useQuestionSolver } from "./composables/useQuestionSolver";
 import { useCutinDisplay } from "@/composables/useCutinDisplay";
 import { scenarioNavKey } from "./composables/useScenarioNavProvide";

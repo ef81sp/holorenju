@@ -22,6 +22,7 @@ import { useCpuPlayer } from "./composables/useCpuPlayer";
 import { useCpuDialogue } from "./composables/useCpuDialogue";
 import { useForbiddenMark } from "./composables/useForbiddenMark";
 import { useCutinDisplay } from "@/composables/useCutinDisplay";
+import { useKeyboardNavigation } from "@/composables/useKeyboardNavigation";
 import { useAppStore } from "@/stores/appStore";
 import { useCpuGameStore } from "@/stores/cpuGameStore";
 import { useCpuRecordStore } from "@/stores/cpuRecordStore";
@@ -82,14 +83,30 @@ const { isCutinVisible, showCutin, hideCutin } = useCutinDisplay(cutinRef);
 // 戻る確認ダイアログ
 const confirmDialogRef = ref<InstanceType<typeof ConfirmDialog> | null>(null);
 
-// キーボードイベント処理
-function handleKeyDown(event: KeyboardEvent): void {
-  // カットイン表示中のキースキップはcomposableが処理するためスキップ
+// プレイヤーの石色
+const playerColor = computed(() => cpuGameStore.playerColor);
+
+// 盤面無効化
+const isBoardDisabled = computed(
+  () =>
+    cpuGameStore.isGameOver ||
+    !cpuGameStore.isPlayerTurn ||
+    isThinking.value ||
+    isCutinVisible.value,
+);
+
+// キーボード操作（WASD + Space/Enter で石配置）
+const keyboardNav = useKeyboardNavigation(
+  () => handlePlaceStone({ ...keyboardNav.cursorPosition.value }),
+  undefined,
+  isBoardDisabled,
+);
+
+// Escキー用の追加ハンドラー
+function handleEscapeKey(event: KeyboardEvent): void {
   if (isCutinVisible.value) {
     return;
   }
-
-  // Escキーで戻る確認ダイアログを表示
   if (event.key === "Escape") {
     event.preventDefault();
     showBackConfirmDialog();
@@ -111,26 +128,16 @@ onMounted(() => {
     }
   }
 
-  window.addEventListener("keydown", handleKeyDown);
+  keyboardNav.attachKeyListener();
+  window.addEventListener("keydown", handleEscapeKey);
 });
 
 onUnmounted(() => {
-  window.removeEventListener("keydown", handleKeyDown);
+  keyboardNav.detachKeyListener();
+  window.removeEventListener("keydown", handleEscapeKey);
   // セリフをクリア
   dialogStore.reset();
 });
-
-// プレイヤーの石色
-const playerColor = computed(() => cpuGameStore.playerColor);
-
-// 盤面無効化
-const isBoardDisabled = computed(
-  () =>
-    cpuGameStore.isGameOver ||
-    !cpuGameStore.isPlayerTurn ||
-    isThinking.value ||
-    isCutinVisible.value,
-);
 
 // プレイヤーの着手処理
 function handlePlaceStone(position: Position): void {
@@ -340,6 +347,11 @@ const gameEndMessage = computed(() => {
           :player-color="playerColor"
           :board-state="boardStore.board"
           :marks="displayMarks"
+          :cursor-position="
+            keyboardNav.isCursorActivated.value
+              ? keyboardNav.cursorPosition.value
+              : undefined
+          "
           @place-stone="handlePlaceStone"
         />
         <CutinOverlay
@@ -448,7 +460,7 @@ const gameEndMessage = computed(() => {
           class="help-text"
         >
           <p v-if="!cpuGameStore.isGameOver && cpuGameStore.isPlayerTurn">
-            盤面をクリックして石を置いてください
+            盤面をクリック、またはWASDキー+Spaceで石を置けます
           </p>
           <p v-else-if="!cpuGameStore.isGameOver && !cpuGameStore.isPlayerTurn">
             コンピュータが考え中です...
