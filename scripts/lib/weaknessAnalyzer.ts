@@ -27,7 +27,7 @@ import type {
 
 import { applyMove } from "../../src/logic/cpu/core/boardUtils.ts";
 import { detectOpponentThreats } from "../../src/logic/cpu/evaluation/threatDetection.ts";
-import { findVCFMove } from "../../src/logic/cpu/search/vcf.ts";
+import { findVCFSequence } from "../../src/logic/cpu/search/vcf.ts";
 import { createEmptyBoard } from "../../src/logic/renjuRules.ts";
 
 // ============================================================================
@@ -238,6 +238,32 @@ function detectMoveWeaknesses(
 // ============================================================================
 
 /**
+ * VCFレースで相手が先着するか判定
+ * 自VCFが2手以上かつ相手VCFがより短い場合にtrue
+ */
+function isVcfRaceLoss(
+  board: BoardState,
+  color: "black" | "white",
+  mySequenceLength: number,
+): boolean {
+  const myMoveCount = Math.ceil(mySequenceLength / 2);
+  if (myMoveCount <= 1) {
+    return false;
+  }
+
+  const opponentColor = color === "black" ? "white" : "black";
+  const oppVcf = findVCFSequence(board, opponentColor, {
+    timeLimit: VCF_ANALYSIS_TIME_LIMIT,
+  });
+  if (!oppVcf) {
+    return false;
+  }
+
+  const oppMoveCount = Math.ceil(oppVcf.sequence.length / 2);
+  return myMoveCount > oppMoveCount;
+}
+
+/**
  * 負けた側の局面でVCFがあったのに見逃した手を検出
  */
 function detectMissedVcf(
@@ -268,31 +294,15 @@ function detectMissedVcf(
 
     // 負けた側のターンでVCFを探索
     if (color === loserColor && mi >= 4) {
-      // 相手に止め四/活四がある場合、VCFは実行不可（防御が強制される）
-      const opponentColor = color === "black" ? "white" : "black";
-      const threats = detectOpponentThreats(board, opponentColor);
-      const hasForcedDefense =
-        threats.openFours.length > 0 || threats.fours.length > 0;
-
-      if (!hasForcedDefense) {
-        const vcfMove = findVCFMove(board, color, {
-          timeLimit: VCF_ANALYSIS_TIME_LIMIT,
-        });
-        if (
-          vcfMove &&
-          (vcfMove.row !== position.row || vcfMove.col !== position.col)
-        ) {
-          weaknesses.push({
-            type: "missed-vcf",
-            gameIndex,
-            moveNumber: mi + 1,
-            color,
-            position,
-            vcfMove,
-            actualMove: position,
-            description: `手${mi + 1}: VCFが(${vcfMove.row},${vcfMove.col})にあったが(${position.row},${position.col})を選択`,
-          });
-        }
+      const vcfWeakness = checkMissedVcfAtPosition(
+        board,
+        color,
+        position,
+        gameIndex,
+        mi,
+      );
+      if (vcfWeakness) {
+        weaknesses.push(vcfWeakness);
       }
     }
 
@@ -301,6 +311,53 @@ function detectMissedVcf(
   }
 
   return weaknesses;
+}
+
+/**
+ * 特定の局面でVCFが存在し、実際に使用可能か（レース・強制防御を考慮）を判定
+ */
+function checkMissedVcfAtPosition(
+  board: BoardState,
+  color: "black" | "white",
+  actualPosition: Position,
+  gameIndex: number,
+  mi: number,
+): MissedVcfWeakness | null {
+  // 相手に止め四/活四がある場合、VCFは実行不可（防御が強制される）
+  const opponentColor = color === "black" ? "white" : "black";
+  const threats = detectOpponentThreats(board, opponentColor);
+  if (threats.openFours.length > 0 || threats.fours.length > 0) {
+    return null;
+  }
+
+  const vcfResult = findVCFSequence(board, color, {
+    timeLimit: VCF_ANALYSIS_TIME_LIMIT,
+  });
+  if (!vcfResult) {
+    return null;
+  }
+  if (
+    vcfResult.firstMove.row === actualPosition.row &&
+    vcfResult.firstMove.col === actualPosition.col
+  ) {
+    return null;
+  }
+
+  // VCFレース判定: 相手もVCFを持っていて先着する場合は除外
+  if (isVcfRaceLoss(board, color, vcfResult.sequence.length)) {
+    return null;
+  }
+
+  return {
+    type: "missed-vcf",
+    gameIndex,
+    moveNumber: mi + 1,
+    color,
+    position: actualPosition,
+    vcfMove: vcfResult.firstMove,
+    actualMove: actualPosition,
+    description: `手${mi + 1}: VCFが(${vcfResult.firstMove.row},${vcfResult.firstMove.col})にあったが(${actualPosition.row},${actualPosition.col})を選択`,
+  };
 }
 
 // ============================================================================
