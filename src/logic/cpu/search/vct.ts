@@ -35,7 +35,7 @@ import {
 const VCT_MAX_DEPTH = 4;
 
 /** VCT探索を有効にする石数の閾値（終盤のみ） */
-export const VCT_STONE_THRESHOLD = 20;
+export const VCT_STONE_THRESHOLD = 14;
 
 /** VCT探索の時間制限（ミリ秒） */
 const VCT_TIME_LIMIT = 150;

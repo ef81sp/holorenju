@@ -60,6 +60,8 @@ function getForcedWinLabel(
       return "追い詰め";
     case "forbidden-trap":
       return "禁手追い込み";
+    case "mise-vcf":
+      return "ミセ四追い";
     default:
       return undefined;
   }

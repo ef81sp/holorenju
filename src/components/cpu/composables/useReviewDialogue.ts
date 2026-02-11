@@ -52,6 +52,7 @@ const FORCED_WIN_LABELS: Record<
   vcf: "四追い",
   vct: "追い詰め",
   "forbidden-trap": "禁手追い込み",
+  "mise-vcf": "ミセ四追い",
 };
 
 /** 強制勝ち検出時の追加セリフ（品質別） */

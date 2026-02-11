@@ -26,6 +26,10 @@ import {
   PATTERN_SCORES,
 } from "./evaluation";
 import { findBestMoveIterativeWithTT } from "./search/minimax";
+import {
+  findMiseVCFSequence,
+  type MiseVCFSearchOptions,
+} from "./search/miseVcf";
 import { findVCFSequence, type VCFSearchOptions } from "./search/vcf";
 import {
   findVCTSequence,
@@ -54,6 +58,12 @@ const REVIEW_VCF_OPTIONS: VCFSearchOptions = {
   timeLimit: 1500,
 };
 
+/** 振り返り用Mise-VCF探索パラメータ */
+const REVIEW_MISE_VCF_OPTIONS: MiseVCFSearchOptions = {
+  vcfOptions: { maxDepth: 12, timeLimit: 300 },
+  timeLimit: 500,
+};
+
 self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
   const { moveHistory, moveIndex, playerFirst: _playerFirst } = event.data;
 
@@ -79,16 +89,31 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
     const vcfResult = opponentHasFour
       ? null
       : findVCFSequence(board, color, REVIEW_VCF_OPTIONS);
+
+    // Mise-VCF検出（VCFが見つからない場合のみ）
+    const miseVcfResult =
+      !vcfResult && !opponentHasFour
+        ? findMiseVCFSequence(board, color, REVIEW_MISE_VCF_OPTIONS)
+        : null;
+
     const forcedWin =
       vcfResult ??
+      miseVcfResult ??
       (countStones(board) >= VCT_STONE_THRESHOLD && !opponentHasFour
         ? findVCTSequence(board, color, REVIEW_VCT_OPTIONS)
         : null);
-    let forcedWinType: "vcf" | "vct" | "forbidden-trap" | undefined = undefined;
+    let forcedWinType:
+      | "vcf"
+      | "vct"
+      | "forbidden-trap"
+      | "mise-vcf"
+      | undefined = undefined;
     if (forcedWin?.isForbiddenTrap) {
       forcedWinType = "forbidden-trap";
     } else if (vcfResult) {
       forcedWinType = "vcf";
+    } else if (miseVcfResult) {
+      forcedWinType = "mise-vcf";
     } else if (forcedWin) {
       forcedWinType = "vct";
     }

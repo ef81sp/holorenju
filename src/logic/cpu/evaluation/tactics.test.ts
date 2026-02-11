@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 
 import type { BoardState } from "@/types/game";
 
+import { createBoardFromRecord } from "@/logic/gameRecordParser";
 import {
   checkForbiddenMove,
   copyBoard,
@@ -23,8 +24,10 @@ import { createBoardWithStones } from "../testUtils";
 import { PATTERN_SCORES } from "./patternScores";
 import {
   canContinueFourAfterDefense,
+  findMiseTargets,
   hasFollowUpThreat,
   hasMixedForbiddenPoints,
+  isMiseMove,
 } from "./tactics";
 
 describe("hasMixedForbiddenPoints", () => {
@@ -889,5 +892,71 @@ describe("禁手脆弱性ペナルティ（evaluatePosition統合）", () => {
     });
 
     expect(breakdown.forbiddenVulnerability).toBeGreaterThan(0);
+  });
+});
+
+describe("findMiseTargets", () => {
+  it("G7配置後、J7(距離3)がミセターゲットとして検出される", () => {
+    // 12手目までの棋譜 + G7(13手目)
+    // G7(8,6)-H7(8,7)-I7(8,8)の横三、延長点J7(8,9)は四三点
+    const { board } = createBoardFromRecord(
+      "H8 I9 I7 G9 J8 H10 H6 K9 H7 H9 J9 I10 G7",
+    );
+
+    // G7 = row=8, col=6
+    const targets = findMiseTargets(board, 8, 6, "black");
+
+    // J7(row=8, col=9)がターゲットに含まれる
+    expect(targets.some((t) => t.row === 8 && t.col === 9)).toBe(true);
+  });
+
+  it("ミセターゲットが存在しない局面では空配列を返す", () => {
+    // 初手のみ: ミセターゲットなし
+    const { board } = createBoardFromRecord("H8");
+
+    const targets = findMiseTargets(board, 7, 7, "black");
+    expect(targets).toHaveLength(0);
+  });
+
+  it("±2近傍の四三点も検出する", () => {
+    // 横三と縦二を作り、距離2以内に四三点がある場合
+    const board = createBoardWithStones([
+      // 横の三
+      { row: 7, col: 4, color: "black" },
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      // 縦の二
+      { row: 5, col: 7, color: "black" },
+      { row: 6, col: 7, color: "black" },
+    ]);
+
+    // (7,6)に石がある状態で、(7,7)が四三点
+    const targets = findMiseTargets(board, 7, 6, "black");
+    expect(targets.some((t) => t.row === 7 && t.col === 7)).toBe(true);
+  });
+});
+
+describe("isMiseMove（拡張版）", () => {
+  it("G7をミセ手として検出する（距離3のターゲット）", () => {
+    // 13手目G7配置後の盤面
+    const { board } = createBoardFromRecord(
+      "H8 I9 I7 G9 J8 H10 H6 K9 H7 H9 J9 I10 G7",
+    );
+
+    // G7 = row=8, col=6
+    expect(isMiseMove(board, 8, 6, "black")).toBe(true);
+  });
+
+  it("既存の±2範囲内のミセ手も引き続き検出する", () => {
+    const board = createBoardWithStones([
+      { row: 7, col: 4, color: "black" },
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 5, col: 7, color: "black" },
+      { row: 6, col: 7, color: "black" },
+    ]);
+
+    // (7,6)はミセ手（(7,7)が四三点で距離1）
+    expect(isMiseMove(board, 7, 6, "black")).toBe(true);
   });
 });

@@ -103,8 +103,8 @@ describe("countStones", () => {
 });
 
 describe("VCT_STONE_THRESHOLD", () => {
-  it("閾値が20に設定されている", () => {
-    expect(VCT_STONE_THRESHOLD).toBe(20);
+  it("閾値が14に設定されている", () => {
+    expect(VCT_STONE_THRESHOLD).toBe(14);
   });
 });
 

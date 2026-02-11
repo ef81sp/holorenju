@@ -508,6 +508,97 @@ export function createsFourThree(
 }
 
 /**
+ * ミセターゲット（四三点）を検出
+ *
+ * 置いた石から各方向のライン延長点と±2近傍をスキャンし、
+ * 四三が作れる位置を列挙する。ライン延長点ベースにより、
+ * ±2を超える距離の四三点も検出可能。
+ *
+ * @param board 盤面（石を置いた状態）
+ * @param row 石を置いた行
+ * @param col 石を置いた列
+ * @param color 石の色
+ * @returns 四三点の配列
+ */
+export function findMiseTargets(
+  board: BoardState,
+  row: number,
+  col: number,
+  color: "black" | "white",
+): Position[] {
+  const targets: Position[] = [];
+  const seen = new Set<string>();
+
+  const tryAdd = (r: number, c: number): void => {
+    const key = `${r},${c}`;
+    if (seen.has(key)) {
+      return;
+    }
+    if (!isValidPosition(r, c) || board[r]?.[c] !== null) {
+      return;
+    }
+
+    // 黒の禁手チェック
+    if (color === "black") {
+      const forbidden = checkForbiddenMove(board, r, c);
+      if (forbidden.isForbidden) {
+        return;
+      }
+    }
+
+    if (createsFourThree(board, r, c, color)) {
+      targets.push({ row: r, col: c });
+      seen.add(key);
+    }
+  };
+
+  // 1. 各方向のライン延長点（距離制限なし）
+  for (const direction of DIRECTIONS) {
+    const [dr, dc] = direction;
+    const pattern = analyzeDirection(board, row, col, dr, dc, color);
+
+    // 2石以上の連続がなければスキップ
+    if (pattern.count < 2) {
+      continue;
+    }
+
+    // 正方向の端
+    let r = row + dr;
+    let c = col + dc;
+    while (isValidPosition(r, c) && board[r]?.[c] === color) {
+      r += dr;
+      c += dc;
+    }
+    if (isValidPosition(r, c) && board[r]?.[c] === null) {
+      tryAdd(r, c);
+    }
+
+    // 負方向の端
+    r = row - dr;
+    c = col - dc;
+    while (isValidPosition(r, c) && board[r]?.[c] === color) {
+      r -= dr;
+      c -= dc;
+    }
+    if (isValidPosition(r, c) && board[r]?.[c] === null) {
+      tryAdd(r, c);
+    }
+  }
+
+  // 2. ±2近傍スキャン（ライン外の四三点も検出）
+  for (let dr = -2; dr <= 2; dr++) {
+    for (let dc = -2; dc <= 2; dc++) {
+      if (dr === 0 && dc === 0) {
+        continue;
+      }
+      tryAdd(row + dr, col + dc);
+    }
+  }
+
+  return targets;
+}
+
+/**
  * ミセ手判定
  * 次の手で四三が作れる位置かどうかをチェック
  *
@@ -523,37 +614,7 @@ export function isMiseMove(
   col: number,
   color: "black" | "white",
 ): boolean {
-  // この手の後、周囲に四三が作れる位置があるかチェック
-  for (let dr = -2; dr <= 2; dr++) {
-    for (let dc = -2; dc <= 2; dc++) {
-      if (dr === 0 && dc === 0) {
-        continue;
-      }
-      const nr = row + dr;
-      const nc = col + dc;
-      if (!isValidPosition(nr, nc)) {
-        continue;
-      }
-      if (board[nr]?.[nc] !== null) {
-        continue;
-      }
-
-      // 黒の禁手チェック
-      if (color === "black") {
-        const forbidden = checkForbiddenMove(board, nr, nc);
-        if (forbidden.isForbidden) {
-          continue;
-        }
-      }
-
-      // この位置で四三が作れるか
-      if (createsFourThree(board, nr, nc, color)) {
-        return true;
-      }
-    }
-  }
-
-  return false;
+  return findMiseTargets(board, row, col, color).length > 0;
 }
 
 /**

@@ -57,7 +57,7 @@ export interface EvaluatedMove {
   /** 探索が完了した深度 */
   completedDepth?: number;
   /** 必勝手順の種類 */
-  forcedWinType?: "vcf" | "vct" | "forbidden-trap";
+  forcedWinType?: "vcf" | "vct" | "forbidden-trap" | "mise-vcf";
 }
 
 /**
@@ -101,5 +101,5 @@ export interface ReviewWorkerResult {
   /** 探索が完了した深度 */
   completedDepth: number;
   /** 必勝手順の種類 */
-  forcedWinType?: "vcf" | "vct" | "forbidden-trap";
+  forcedWinType?: "vcf" | "vct" | "forbidden-trap" | "mise-vcf";
 }

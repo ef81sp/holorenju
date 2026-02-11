@@ -41,6 +41,7 @@ import {
   type SearchContext,
   type SearchStats,
 } from "./context";
+import { findMiseVCFMove } from "./miseVcf";
 import {
   extractPV,
   type DepthHistoryEntry,
@@ -1121,6 +1122,22 @@ export function findBestMoveIterativeWithTT(
   if (vcfMove) {
     return {
       position: vcfMove,
+      score: PATTERN_SCORES.FIVE, // 勝利確定
+      completedDepth: 0,
+      interrupted: false,
+      elapsedTime: performance.now() - startTime,
+      stats: mergeProfilingCounters(ctx.stats),
+    };
+  }
+
+  // 3.5 Mise-VCF（ミセ→強制応手→VCF勝ち）があれば即座にその手を返す
+  const miseVcfMove = findMiseVCFMove(board, color, {
+    vcfOptions: { maxDepth: 12, timeLimit: 300 },
+    timeLimit: 500,
+  });
+  if (miseVcfMove) {
+    return {
+      position: miseVcfMove,
       score: PATTERN_SCORES.FIVE, // 勝利確定
       completedDepth: 0,
       interrupted: false,

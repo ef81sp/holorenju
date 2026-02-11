@@ -93,6 +93,8 @@ const forcedWinLabel = computed(() => {
       return "追詰";
     case "forbidden-trap":
       return "禁手追込";
+    case "mise-vcf":
+      return "ミセ四追";
     default:
       return null;
   }
