@@ -223,13 +223,13 @@ const cursorPositionForBoard = computed(() => {
 // Lifecycle
 onMounted(async () => {
   await scenarioNav.loadScenario();
-  keyboardNav.attachKeyListener();
 
   await nextTick();
-  console.warn("[ScenarioPlayer] Initial size:", {
-    width: layoutRef.value?.boardFrameRef?.clientWidth,
-    height: layoutRef.value?.boardFrameRef?.clientHeight,
-  });
+  const boardElement = layoutRef.value?.boardFrameRef;
+  if (boardElement) {
+    keyboardNav.attachKeyListener(boardElement);
+    boardElement.focus();
+  }
 });
 
 onUnmounted(() => {

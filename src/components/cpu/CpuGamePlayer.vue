@@ -6,7 +6,7 @@
  * CPUはWeb Worker経由で非同期実行してUIブロッキングを回避
  */
 
-import { computed, onMounted, onUnmounted, ref } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
 
 import RenjuBoard from "@/components/game/RenjuBoard/RenjuBoard.vue";
 import CutinOverlay from "@/components/common/CutinOverlay.vue";
@@ -125,7 +125,7 @@ function handleEscapeKey(event: KeyboardEvent): void {
 }
 
 // ゲーム開始
-onMounted(() => {
+onMounted(async () => {
   if (appStore.cpuDifficulty && appStore.cpuPlayerFirst !== null) {
     cpuGameStore.startGame(appStore.cpuDifficulty, appStore.cpuPlayerFirst);
 
@@ -139,7 +139,12 @@ onMounted(() => {
     }
   }
 
-  keyboardNav.attachKeyListener();
+  await nextTick();
+  const boardElement = layoutRef.value?.boardFrameRef;
+  if (boardElement) {
+    keyboardNav.attachKeyListener(boardElement);
+    boardElement.focus();
+  }
   window.addEventListener("keydown", handleEscapeKey);
 });
 

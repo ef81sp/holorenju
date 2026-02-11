@@ -344,6 +344,46 @@ describe("useKeyboardNavigation", () => {
     });
   });
 
+  describe("attachKeyListener / detachKeyListener", () => {
+    const createMockElement = (): HTMLElement =>
+      ({
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }) as unknown as HTMLElement;
+
+    it("指定した要素に keydown リスナーを登録する", () => {
+      const element = createMockElement();
+      const { attachKeyListener } = useKeyboardNavigation(onPlaceStone);
+
+      attachKeyListener(element);
+
+      expect(element.addEventListener).toHaveBeenCalledWith(
+        "keydown",
+        expect.any(Function),
+      );
+    });
+
+    it("detachKeyListener で要素からリスナーを削除する", () => {
+      const element = createMockElement();
+      const { attachKeyListener, detachKeyListener } =
+        useKeyboardNavigation(onPlaceStone);
+
+      attachKeyListener(element);
+      detachKeyListener();
+
+      expect(element.removeEventListener).toHaveBeenCalledWith(
+        "keydown",
+        expect.any(Function),
+      );
+    });
+
+    it("要素が未登録の場合 detachKeyListener は安全に何もしない", () => {
+      const { detachKeyListener } = useKeyboardNavigation(onPlaceStone);
+
+      expect(() => detachKeyListener()).not.toThrow();
+    });
+  });
+
   describe("onCursorMove コールバック", () => {
     it("moveCursor 後に呼ばれる", () => {
       const onCursorMove = vi.fn();

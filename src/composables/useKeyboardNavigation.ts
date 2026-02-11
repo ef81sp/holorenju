@@ -20,7 +20,7 @@ export const useKeyboardNavigation = (
   handleKeyDown: (event: KeyboardEvent) => void;
   moveCursor: (direction: "up" | "down" | "left" | "right") => void;
   placeStoneAtCursor: () => void;
-  attachKeyListener: () => void;
+  attachKeyListener: (element: HTMLElement) => void;
   detachKeyListener: () => void;
   resetCursorActivation: () => void;
 } => {
@@ -107,18 +107,27 @@ export const useKeyboardNavigation = (
     onPlaceStone();
   };
 
+  let targetElement: HTMLElement | null = null;
+
   /**
-   * キーボードリスナーを登録
+   * キーボードリスナーを指定要素に登録
    */
-  const attachKeyListener = (): void => {
-    window.addEventListener("keydown", handleKeyDown);
+  const attachKeyListener = (element: HTMLElement): void => {
+    targetElement = element;
+    element.addEventListener("keydown", handleKeyDown as EventListener);
   };
 
   /**
-   * キーボードリスナーを削除
+   * キーボードリスナーを要素から削除
    */
   const detachKeyListener = (): void => {
-    window.removeEventListener("keydown", handleKeyDown);
+    if (targetElement) {
+      targetElement.removeEventListener(
+        "keydown",
+        handleKeyDown as EventListener,
+      );
+      targetElement = null;
+    }
   };
 
   /**

@@ -41,6 +41,9 @@ defineExpose({
       id="board-anchor"
       ref="boardFrameRef"
       class="board-section-wrapper"
+      tabindex="0"
+      role="application"
+      aria-label="連珠盤"
       style="anchor-name: --board-area"
     >
       <slot
@@ -106,6 +109,12 @@ defineExpose({
   overflow: hidden;
   min-height: 0;
   position: relative;
+  outline-offset: var(--size-2);
+}
+
+.board-section-wrapper:focus-visible {
+  outline: var(--size-2) solid var(--color-primary);
+  border-radius: var(--size-4);
 }
 
 .info-section-slot {
