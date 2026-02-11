@@ -1136,14 +1136,21 @@ export function findBestMoveIterativeWithTT(
     timeLimit: 500,
   });
   if (miseVcfMove) {
-    return {
-      position: miseVcfMove,
-      score: PATTERN_SCORES.FIVE, // 勝利確定
-      completedDepth: 0,
-      interrupted: false,
-      elapsedTime: performance.now() - startTime,
-      stats: mergeProfilingCounters(ctx.stats),
-    };
+    const isForbidden =
+      color === "black" &&
+      checkForbiddenMoveWithCache(board, miseVcfMove.row, miseVcfMove.col)
+        .isForbidden;
+    if (!isForbidden) {
+      return {
+        position: miseVcfMove,
+        score: PATTERN_SCORES.FIVE, // 勝利確定
+        completedDepth: 0,
+        interrupted: false,
+        elapsedTime: performance.now() - startTime,
+        stats: mergeProfilingCounters(ctx.stats),
+      };
+    }
+    // 禁手の場合はMise-VCFなしとして通常探索にフォールスルー
   }
 
   // 4. 相手のVCF（四追い勝ち）があれば候補手を防御手に制限

@@ -9,6 +9,8 @@
 
 import type { BoardState, Position } from "@/types/game";
 
+import { checkForbiddenMove } from "@/logic/renjuRules";
+
 import {
   findMiseTargetsLite,
   hasPotentialMiseTarget,
@@ -104,6 +106,14 @@ export function findMiseVCFSequence(
       }
       if (!isNearExistingStone(board, row, col)) {
         continue;
+      }
+
+      // 黒番の禁手チェック: 三々禁・四四禁・長連禁の位置はスキップ
+      if (color === "black") {
+        const forbidden = checkForbiddenMove(board, row, col);
+        if (forbidden.isForbidden) {
+          continue;
+        }
       }
 
       // 時間制限チェック
