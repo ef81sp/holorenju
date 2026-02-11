@@ -6,7 +6,9 @@ import { describe, expect, it } from "vitest";
 
 import { createEmptyBoard } from "@/logic/renjuRules";
 
+import { PATTERN_SCORES } from "../evaluation";
 import { createBoardWithStones, placeStonesOnBoard } from "../testUtils";
+import { findBestMoveIterativeWithTT } from "./minimax";
 import {
   checkEnds,
   countLine,
@@ -16,6 +18,7 @@ import {
   findVCFMove,
   findVCFSequence,
   hasVCF,
+  vcfAttackMoveCount,
 } from "./vcf";
 
 describe("hasVCF", () => {
@@ -940,5 +943,104 @@ describe("findVCFSequence", () => {
     expect(result).not.toBeNull();
     // 手順は攻撃と防御が交互に含まれる
     expect(result?.sequence.length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe("vcfAttackMoveCount", () => {
+  const pos = { row: 7, col: 7 };
+
+  it("シーケンス長1 → 攻撃1手", () => {
+    expect(vcfAttackMoveCount([pos])).toBe(1);
+  });
+
+  it("シーケンス長3 → 攻撃2手", () => {
+    expect(vcfAttackMoveCount([pos, pos, pos])).toBe(2);
+  });
+
+  it("シーケンス長5 → 攻撃3手", () => {
+    expect(vcfAttackMoveCount([pos, pos, pos, pos, pos])).toBe(3);
+  });
+});
+
+describe("VCFレース判定", () => {
+  it("自VCFあり・相手VCFなし → score = FIVE（回帰テスト）", () => {
+    // 白の2段VCF（カウンターフォー素材なし）
+    const board = createBoardWithStones([
+      // 白の横止め三
+      { row: 7, col: 1, color: "white" },
+      { row: 7, col: 2, color: "white" },
+      { row: 7, col: 3, color: "white" },
+      { row: 7, col: 0, color: "black" },
+      // 白の縦止め三（VCF2段目用）
+      { row: 4, col: 5, color: "white" },
+      { row: 5, col: 5, color: "white" },
+      { row: 6, col: 5, color: "white" },
+      { row: 3, col: 5, color: "black" },
+    ]);
+    const result = findBestMoveIterativeWithTT(board, "white", 4, 1000);
+    expect(result.score).toBe(PATTERN_SCORES.FIVE);
+  });
+
+  it("相手VCFが自VCFより短い → 通常探索にフォールスルー", () => {
+    // 白: 2段VCF（2手必要）
+    // 黒: 活三（1手VCF: 活四作成で即勝利）
+    const board = createBoardWithStones([
+      // 白の横止め三（白(7,4)で止め四、防御(7,5)）
+      { row: 7, col: 1, color: "white" },
+      { row: 7, col: 2, color: "white" },
+      { row: 7, col: 3, color: "white" },
+      { row: 7, col: 0, color: "black" }, // 左端ブロック
+      // 白の縦止め三（VCF2段目用）
+      { row: 4, col: 5, color: "white" },
+      { row: 5, col: 5, color: "white" },
+      { row: 6, col: 5, color: "white" },
+      { row: 3, col: 5, color: "black" }, // 上端ブロック
+      // 黒の活三（1手VCF: 活四を作れば即勝ち）
+      { row: 10, col: 7, color: "black" },
+      { row: 10, col: 8, color: "black" },
+      { row: 10, col: 9, color: "black" },
+    ]);
+
+    // VCF手数の前提を検証
+    const whiteVCF = findVCFSequence(board, "white");
+    const blackVCF = findVCFSequence(board, "black");
+    expect(whiteVCF).not.toBeNull();
+    expect(blackVCF).not.toBeNull();
+    expect(vcfAttackMoveCount(whiteVCF!.sequence)).toBe(2); // 白: 2手
+    expect(vcfAttackMoveCount(blackVCF!.sequence)).toBe(1); // 黒: 1手
+
+    // 白番で白の2段VCF（2手）vs 黒の1手VCF
+    // VCF即returnではなく通常探索にフォールスルーすることを検証
+    // （completedDepth=0 はVCF即return、>0 は通常探索を意味する）
+    const result = findBestMoveIterativeWithTT(board, "white", 4, 1000);
+    expect(result.completedDepth).toBeGreaterThan(0);
+  });
+
+  it("同手数VCF → score = FIVE（先手有利）", () => {
+    // 両者とも活三（1手VCF: 活四作成で即勝利）
+    // 白番なので白が先に活四を作れる
+    const board = createBoardWithStones([
+      // 白の活三
+      { row: 3, col: 5, color: "white" },
+      { row: 3, col: 6, color: "white" },
+      { row: 3, col: 7, color: "white" },
+      // 黒の活三
+      { row: 10, col: 7, color: "black" },
+      { row: 10, col: 8, color: "black" },
+      { row: 10, col: 9, color: "black" },
+    ]);
+    const result = findBestMoveIterativeWithTT(board, "white", 4, 1000);
+    expect(result.score).toBe(PATTERN_SCORES.FIVE);
+  });
+
+  it("1手VCF（活四作成）は無条件勝利", () => {
+    // 活三 → 活四作成で1手VCF
+    const board = createBoardWithStones([
+      { row: 7, col: 5, color: "white" },
+      { row: 7, col: 6, color: "white" },
+      { row: 7, col: 7, color: "white" },
+    ]);
+    const result = findBestMoveIterativeWithTT(board, "white", 4, 1000);
+    expect(result.score).toBe(PATTERN_SCORES.FIVE);
   });
 });

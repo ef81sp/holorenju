@@ -607,6 +607,11 @@ export function findVCFSequence(
   return null;
 }
 
+/** VCF手順から攻撃者の手数を計算 */
+export function vcfAttackMoveCount(sequence: Position[]): number {
+  return Math.ceil(sequence.length / 2);
+}
+
 /**
  * VCF手順の再帰探索
  *

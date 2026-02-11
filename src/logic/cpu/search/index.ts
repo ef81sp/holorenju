@@ -11,6 +11,7 @@ export {
   hasVCF,
   findVCFMove,
   findVCFSequence,
+  vcfAttackMoveCount,
   findFourMoves,
   findDefenseForConsecutiveFour,
   findDefenseForJumpFour,
