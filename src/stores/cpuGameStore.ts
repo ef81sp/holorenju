@@ -80,7 +80,7 @@ export const useCpuGameStore = defineStore("cpuGame", () => {
     isGameOver.value = false;
     winner.value = null;
     moveHistory.value = [];
-    boardStore.resetBoard();
+    boardStore.resetAll();
   }
 
   /**
@@ -126,7 +126,7 @@ export const useCpuGameStore = defineStore("cpuGame", () => {
     isGameOver.value = false;
     winner.value = null;
     moveHistory.value = [];
-    boardStore.resetBoard();
+    boardStore.resetAll();
   }
 
   /**
