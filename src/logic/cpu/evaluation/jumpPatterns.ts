@@ -151,8 +151,11 @@ export function analyzeJumpPatterns(
     const [dr, dc] = direction;
     const pattern = analyzeDirection(board, row, col, dr, dc, color);
 
-    // 連続四をチェック
-    if (pattern.count === 4) {
+    // 連続四をチェック（少なくとも片端が空いていなければ五を作れないため除外）
+    if (
+      pattern.count === 4 &&
+      (pattern.end1 === "empty" || pattern.end2 === "empty")
+    ) {
       result.hasFour = true;
       if (pattern.end1 === "empty" && pattern.end2 === "empty") {
         result.hasOpenFour = true;

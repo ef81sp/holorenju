@@ -106,6 +106,37 @@ describe("findMiseVCFSequence", () => {
   });
 });
 
+describe("Mise-VCF偽検出の回帰テスト", () => {
+  it("44手目白番でI11にMise-VCFを偽検出しない", () => {
+    // K列に白4連(K6-K7-K8)があるが両端が黒(K5,K10)で塞がれている
+    // K9に白を置いても死に四であり、四三にならないためMise-VCFターゲットにならない
+    const record =
+      "H8 G7 I9 I7 J8 K7 H7 H9 G8 I8 I6 J5 J7 K8 J6 K6 K5 J10 F9 E10 K10 E9 E8 D10 F8 D8 F10 F11 F7 F6 D9 C10 G10 H11 H5 G6 H4 H6 G4 F3 D7 C6 I4";
+    const { board } = createBoardFromRecord(record);
+
+    // 白番のMise-VCF探索でI11=(4,8)が返されないこと
+    const move = findMiseVCFMove(board, "white");
+    if (move) {
+      // I11=(row=4, col=8)でないこと
+      expect(move.row === 4 && move.col === 8).toBe(false);
+    }
+  });
+
+  it("44手目白番のMise-VCF手順でI11が含まれない", () => {
+    const record =
+      "H8 G7 I9 I7 J8 K7 H7 H9 G8 I8 I6 J5 J7 K8 J6 K6 K5 J10 F9 E10 K10 E9 E8 D10 F8 D8 F10 F11 F7 F6 D9 C10 G10 H11 H5 G6 H4 H6 G4 F3 D7 C6 I4";
+    const { board } = createBoardFromRecord(record);
+
+    const result = findMiseVCFSequence(board, "white");
+    if (result) {
+      // I11=(row=4, col=8)がミセ手でないこと
+      expect(result.firstMove.row === 4 && result.firstMove.col === 8).toBe(
+        false,
+      );
+    }
+  });
+});
+
 describe("黒番のMise-VCF禁手チェック", () => {
   it("三々禁の位置をMise-VCF手として返さない", () => {
     // ベンチマーク#34の棋譜: H6が三々禁かつMise-VCF候補
