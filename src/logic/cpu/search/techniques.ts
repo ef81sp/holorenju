@@ -57,7 +57,7 @@ export function calculateDynamicTimeLimit(
 // =============================================================================
 
 /** LMRを適用する候補手のインデックス閾値（この値以上のインデックスで適用） */
-export const LMR_MOVE_THRESHOLD = 4;
+export const LMR_MOVE_THRESHOLD = 3;
 
 /** LMRを適用する最小探索深度 */
 export const LMR_MIN_DEPTH = 3;
