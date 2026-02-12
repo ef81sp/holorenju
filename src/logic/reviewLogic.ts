@@ -13,21 +13,31 @@ import type {
 
 import { parseGameRecord } from "@/logic/gameRecordParser";
 
+/** 珠型（開局）の手数。評価対象外 */
+export const OPENING_MOVES = 3;
+
+/**
+ * 開局手かどうかを判定
+ */
+export function isOpeningMove(moveIndex: number): boolean {
+  return moveIndex < OPENING_MOVES;
+}
+
 /**
  * スコア差に基づく品質分類
  */
 export function classifyMoveQuality(scoreDiff: number): MoveQuality {
   const absDiff = Math.abs(scoreDiff);
-  if (absDiff <= 50) {
+  if (absDiff === 0) {
     return "excellent";
   }
-  if (absDiff <= 200) {
+  if (absDiff <= 80) {
     return "good";
   }
-  if (absDiff <= 500) {
+  if (absDiff <= 300) {
     return "inaccuracy";
   }
-  if (absDiff <= 1500) {
+  if (absDiff <= 1000) {
     return "mistake";
   }
   return "blunder";

@@ -42,23 +42,23 @@ defineExpose({
           <ul>
             <li>
               <strong>最善手</strong>
-              ：差50以内
+              ：最善手と同点
             </li>
             <li>
               <strong>好手</strong>
-              ：差200以内
+              ：差80以内
             </li>
             <li>
               <strong>疑問手</strong>
-              ：差500以内
+              ：差300以内
             </li>
             <li>
               <strong>悪手</strong>
-              ：差1500以内
+              ：差1000以内
             </li>
             <li>
               <strong>大悪手</strong>
-              ：差1500超
+              ：差1000超
             </li>
           </ul>
         </section>

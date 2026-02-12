@@ -9,6 +9,7 @@ import { ref, onUnmounted, type Ref } from "vue";
 import type { ReviewEvalRequest, ReviewWorkerResult } from "@/types/review";
 
 import ReviewWorker from "@/logic/cpu/review.worker?worker";
+import { isOpeningMove } from "@/logic/reviewLogic";
 
 /** Workerプールサイズ（最大8、最低2） */
 const POOL_SIZE = Math.max(2, Math.min(8, navigator.hardwareConcurrency ?? 4));
@@ -75,9 +76,12 @@ export function useReviewEvaluator(): UseReviewEvaluatorReturn {
   ): Promise<ReviewWorkerResult[]> {
     const moves = moveHistory.trim().split(/\s+/);
 
-    // プレイヤーの手のインデックスを収集
+    // プレイヤーの手のインデックスを収集（珠型の3手は除外）
     const playerMoveIndices: number[] = [];
     for (let i = 0; i < moves.length; i++) {
+      if (isOpeningMove(i)) {
+        continue;
+      }
       const isPlayerMove = playerFirst ? i % 2 === 0 : i % 2 === 1;
       if (isPlayerMove) {
         playerMoveIndices.push(i);
