@@ -10,6 +10,7 @@ import {
   checkForbiddenMove,
   checkJumpFour,
   checkJumpThree,
+  checkStraightFour,
   getConsecutiveThreeStraightFourPoints,
   getJumpThreeStraightFourPoints,
 } from "@/logic/renjuRules";
@@ -46,7 +47,10 @@ export function isValidConsecutiveThree(
 
   for (const pos of straightFourPoints) {
     const result = checkForbiddenMove(board, pos.row, pos.col);
-    if (!result.isForbidden) {
+    if (
+      !result.isForbidden &&
+      checkStraightFour(board, pos.row, pos.col, dirIndex)
+    ) {
       return true;
     }
   }
@@ -81,7 +85,10 @@ export function isValidJumpThree(
 
   for (const pos of straightFourPoints) {
     const result = checkForbiddenMove(board, pos.row, pos.col);
-    if (!result.isForbidden) {
+    if (
+      !result.isForbidden &&
+      checkStraightFour(board, pos.row, pos.col, dirIndex)
+    ) {
       return true;
     }
   }

@@ -321,14 +321,16 @@ describe("ウソの三の判定", () => {
     board[6][7] = "black";
 
     // col=8 を四四禁にする配置:
-    // 横方向の達四点 col=8 に四四禁を作る
-    // 別の2方向から四を作れるようにする
-    board[7][9] = "black";
-    board[7][10] = "black"; // 横に●●がある
-    // 別方向（斜め）にも四を作る
-    board[5][10] = "black";
+    // 横方向の石は使わない（col=4の達四に影響するため）
+    // 縦方向に四を作る: (7,8)に置くと縦に●●●●になる
+    board[5][8] = "black";
+    board[6][8] = "black";
+    board[8][8] = "black";
+    // 斜め(↗)方向にも四を作る: (7,8)に置くと斜めに●●●●になる
     board[6][9] = "black";
-    // これで (7,8) は四四禁点
+    board[5][10] = "black";
+    board[4][11] = "black";
+    // これで (7,8) は四四禁点（縦+斜め+横の3方向に四）
 
     // しかし col=4 は開いているので、三は有効
     // 結果: 二つの三が両方とも有効なら三々禁
@@ -397,15 +399,17 @@ describe("ウソの三の判定", () => {
     board[6][7] = "black";
 
     // (7,8) が四四禁になるように配置:
-    // 横方向に四を作る: (7,8)に置くと●●●●になる
-    board[7][9] = "black";
-    board[7][10] = "black";
-    // 縦方向にも四を作る: (7,8)に置くと縦に●●●●になる
+    // 横方向の石は使わない（col=4の達四に影響するため）
+    // 縦方向に四を作る: (7,8)に置くと縦に●●●●になる
     board[5][8] = "black";
     board[6][8] = "black";
     board[8][8] = "black";
+    // 斜め(↗)方向にも四を作る: (7,8)に置くと斜めに●●●●になる
+    board[6][9] = "black";
+    board[5][10] = "black";
+    board[4][11] = "black";
 
-    // (7,8) は四四禁点
+    // (7,8) は四四禁点（縦+斜め+横の3方向に四）
     // しかし (7,4) は開いているので、横の三は有効
     // 結果: 三々禁
 
@@ -1184,6 +1188,108 @@ describe("checkJumpThree 色パラメータ", () => {
     // 同様に (6,6) でも誤検出しない
     const result2 = checkJumpThree(board, 6, 6, 3, "white");
     expect(result2).toBe(false);
+  });
+});
+
+describe("達四点が長連隣接で止め四になるケース", () => {
+  it("シンプル版: 横の達四点が止め四なら三として認定しない", () => {
+    const board = createEmptyBoard();
+    // row=7: col2,3=黒, col5,6=黒, col7=置く位置
+    //   col: 0  1  2  3  4  5  6  7  8  9
+    //        ・ ・ ● ● ・ ● ● *  ・ ・
+    //
+    // 横: col5,6,7 で三 → 達四点は col4 と col8
+    //   col8 に置くと 5-6-7-8 の四。end(col4)は空だがその先col3=黒 → 止め四
+    //   col4 に置くと 2-3-4-5-6-7 = 6連 → 長連禁
+    // → 横方向は有効な三ではない
+    board[7][2] = "black";
+    board[7][3] = "black";
+    board[7][5] = "black";
+    board[7][6] = "black";
+
+    // 縦: row5,6=黒, row7=置く → 有効な三
+    board[5][7] = "black";
+    board[6][7] = "black";
+
+    // 有効な三は縦のみ → 三々禁ではない
+    const result = checkForbiddenMove(board, 7, 7);
+    expect(result.isForbidden).toBe(false);
+  });
+
+  it("実局面: 棋譜の局面でI4は三々禁ではない", () => {
+    const board = createEmptyBoard();
+    // 棋譜: H8 G8 I6 G9 G7 I9 F9 H9 H7 F7 I10 F8 K9 G10 H10 E8
+    //        F11 E7 E6 D8 C8 D6 C5 F6 C9 D7 D9 G12 G11 D5 D4 F5
+    //        F4 G5 H4 H5 E5 J5 I5 G6
+    // 座標変換: col = letter(A=0), row = 15 - number
+
+    // 黒石（奇数手）
+    board[7][7] = "black"; // H8
+    board[9][8] = "black"; // I6
+    board[8][6] = "black"; // G7
+    board[6][5] = "black"; // F9
+    board[8][7] = "black"; // H7
+    board[5][8] = "black"; // I10
+    board[6][10] = "black"; // K9
+    board[5][7] = "black"; // H10
+    board[4][5] = "black"; // F11
+    board[9][4] = "black"; // E6
+    board[7][2] = "black"; // C8
+    board[10][2] = "black"; // C5
+    board[6][2] = "black"; // C9
+    board[6][3] = "black"; // D9
+    board[4][6] = "black"; // G11
+    board[11][3] = "black"; // D4
+    board[11][5] = "black"; // F4
+    board[11][7] = "black"; // H4
+    board[10][4] = "black"; // E5
+    board[10][8] = "black"; // I5
+
+    // 白石（偶数手）
+    board[7][6] = "white"; // G8
+    board[6][6] = "white"; // G9
+    board[6][8] = "white"; // I9
+    board[6][7] = "white"; // H9
+    board[8][5] = "white"; // F7
+    board[7][5] = "white"; // F8
+    board[5][6] = "white"; // G10
+    board[7][4] = "white"; // E8
+    board[8][4] = "white"; // E7
+    board[7][3] = "white"; // D8
+    board[9][3] = "white"; // D6
+    board[9][5] = "white"; // F6
+    board[8][3] = "white"; // D7
+    board[3][6] = "white"; // G12
+    board[10][3] = "white"; // D5
+    board[10][5] = "white"; // F5
+    board[10][6] = "white"; // G5
+    board[10][7] = "white"; // H5
+    board[10][9] = "white"; // J5
+    board[9][6] = "white"; // G6
+
+    // I4 = col8, row=15-4=11 → (11, 8)
+    // 横: F4(11,5)-_-H4(11,7)-I4(11,8) → 飛び三
+    //   達四点 G4(11,6): 置くと 5-6-7-8=四, end(col4)空だが先のcol3=D4=黒 → 止め四
+    // 縦: I5(10,8)-I4(11,8) + I6(9,8)=黒 → 9,10,11=三
+    //   達四点は有効
+    // → 有効な三は縦のみ → 三々禁ではない
+    const result = checkForbiddenMove(board, 11, 8);
+    expect(result.isForbidden).toBe(false);
+  });
+
+  it("正常系: 長連隣接のない通常の三々は引き続き禁手", () => {
+    const board = createEmptyBoard();
+    // 横: col5,6=黒, col7=置く → 達四点 col4, col8（どちらも有効）
+    board[7][5] = "black";
+    board[7][6] = "black";
+    // 縦: row5,6=黒, row7=置く → 達四点 row4, row8（どちらも有効）
+    board[5][7] = "black";
+    board[6][7] = "black";
+
+    // 通常の三々禁
+    const result = checkForbiddenMove(board, 7, 7);
+    expect(result.isForbidden).toBe(true);
+    expect(result.type).toBe("double-three");
   });
 });
 

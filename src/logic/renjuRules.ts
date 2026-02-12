@@ -456,6 +456,99 @@ export function getJumpThreeStraightFourPoints(
 }
 
 /**
+ * 達四点に仮置きして、その方向の四が達四（両端で五を作れる四）かどうかを検証
+ *
+ * 達四の条件: 4連 + 両端空き + 両端の先に同色石がない（あると長連になる）
+ * 止め四: 片端の先に同色石があり、その端に打つと長連（6連以上）になる
+ *
+ * @param board 盤面（元の石が既に仮置きされた状態で呼ぶ）
+ * @param row 達四点の行
+ * @param col 達四点の列
+ * @param dirIndex 三の方向インデックス
+ * @returns 達四になるならtrue、止め四ならfalse。4連でない場合はtrue（既存ロジックに委ねる）
+ */
+export function checkStraightFour(
+  board: BoardState,
+  row: number,
+  col: number,
+  dirIndex: number,
+): boolean {
+  const dir1 = DIRECTIONS[dirIndex];
+  const dir2 = DIRECTIONS[(dirIndex + 4) % 8];
+
+  if (!dir1 || !dir2) {
+    return false;
+  }
+
+  // 達四点に仮置き
+  const boardRow = board[row];
+  const originalValue = boardRow?.[col];
+  if (boardRow) {
+    boardRow[col] = "black";
+  }
+
+  // 両方向の連続数をカウント
+  let count1 = 0;
+  let r1 = row + dir1.dr;
+  let c1 = col + dir1.dc;
+  while (isValidPosition(r1, c1) && board[r1]?.[c1] === "black") {
+    count1++;
+    r1 += dir1.dr;
+    c1 += dir1.dc;
+  }
+
+  let count2 = 0;
+  let r2 = row + dir2.dr;
+  let c2 = col + dir2.dc;
+  while (isValidPosition(r2, c2) && board[r2]?.[c2] === "black") {
+    count2++;
+    r2 += dir2.dr;
+    c2 += dir2.dc;
+  }
+
+  const total = count1 + count2 + 1;
+
+  // 仮置きを元に戻す
+  if (boardRow) {
+    boardRow[col] = originalValue ?? null;
+  }
+
+  // 4連でない場合は既存ロジックに委ねる
+  if (total !== 4) {
+    return true;
+  }
+
+  // 両端が空いているかチェック
+  const end1Open = isValidPosition(r1, c1) && board[r1]?.[c1] === null;
+  const end2Open = isValidPosition(r2, c2) && board[r2]?.[c2] === null;
+
+  if (!end1Open || !end2Open) {
+    return false;
+  }
+
+  // 両端の先に黒石がないかチェック（あると長連になる）
+  const beyond1r = r1 + dir1.dr;
+  const beyond1c = c1 + dir1.dc;
+  if (
+    isValidPosition(beyond1r, beyond1c) &&
+    board[beyond1r]?.[beyond1c] === "black"
+  ) {
+    return false;
+  }
+
+  const beyond2r = r2 + dir2.dr;
+  const beyond2c = c2 + dir2.dc;
+  if (
+    isValidPosition(beyond2r, beyond2c) &&
+    board[beyond2r]?.[beyond2c] === "black"
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+/**
  * 指定方向の飛び三パターンをチェック
  *
  * 飛び三とは: 1つの空きを含む3石のパターンで、次に達四（両端開の4連）を作れる形
@@ -595,6 +688,7 @@ function isValidThree(
   context: ForbiddenCheckContext,
   originalRow: number,
   originalCol: number,
+  directionIndex: number,
 ): boolean {
   // 達四点がなければ無効
   if (straightFourPoints.length === 0) {
@@ -628,7 +722,10 @@ function isValidThree(
       pos.col,
       context,
     );
-    if (!result.isForbidden) {
+    if (
+      !result.isForbidden &&
+      checkStraightFour(board, pos.row, pos.col, directionIndex)
+    ) {
       hasValidPoint = true;
       break;
     }
@@ -705,7 +802,16 @@ function checkDoubleThree(
   // ウソの三を除外して有効な三をカウント
   let validThreeCount = 0;
   for (const three of threes) {
-    if (isValidThree(board, three.straightFourPoints, context, row, col)) {
+    if (
+      isValidThree(
+        board,
+        three.straightFourPoints,
+        context,
+        row,
+        col,
+        three.directionIndex,
+      )
+    ) {
       validThreeCount++;
     }
   }
