@@ -13,6 +13,7 @@ import { detectOpponentThreats, evaluatePosition } from "../evaluation";
 import { placeStonesOnBoard } from "../testUtils";
 import {
   addUniquePositions,
+  getOpenThreeDefensePositions,
   hasDefenseThatBlocksBoth,
 } from "./threatDetection";
 
@@ -600,5 +601,154 @@ describe("evaluatePosition - ミセ手防御", () => {
     );
 
     expect(score).toBeGreaterThan(-Infinity);
+  });
+});
+
+describe("getOpenThreeDefensePositions - 夏止め", () => {
+  it("片端の beyond に石がある場合、反対側に夏止め位置を返す", () => {
+    const board = createEmptyBoard();
+    // [blocker](7,2) [EndA空](7,3) ●(7,4) ●(7,5) ●(7,6) [EndB空](7,7) [BeyondB空](7,8)
+    placeStonesOnBoard(board, [
+      { row: 7, col: 2, color: "white" },
+      { row: 7, col: 4, color: "black" },
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+    ]);
+
+    const positions = getOpenThreeDefensePositions(board, 7, 5, 0, 1, "black");
+
+    expect(positions).toContainEqual({ row: 7, col: 3 });
+    expect(positions).toContainEqual({ row: 7, col: 7 });
+    expect(positions).toContainEqual({ row: 7, col: 8 }); // 夏止め
+    expect(positions).toHaveLength(3);
+  });
+
+  it("片端が盤端の場合、反対側に夏止め位置を返す", () => {
+    const board = createEmptyBoard();
+    // [盤端] [EndA空](7,0) ●(7,1) ●(7,2) ●(7,3) [EndB空](7,4) [BeyondB空](7,5)
+    placeStonesOnBoard(board, [
+      { row: 7, col: 1, color: "black" },
+      { row: 7, col: 2, color: "black" },
+      { row: 7, col: 3, color: "black" },
+    ]);
+
+    const positions = getOpenThreeDefensePositions(board, 7, 2, 0, 1, "black");
+
+    expect(positions).toContainEqual({ row: 7, col: 0 });
+    expect(positions).toContainEqual({ row: 7, col: 4 });
+    expect(positions).toContainEqual({ row: 7, col: 5 }); // 夏止め
+    expect(positions).toHaveLength(3);
+  });
+
+  it("両方の beyond が空きの場合、夏止め位置を返さない", () => {
+    const board = createEmptyBoard();
+    // [BeyondA空](7,2) [EndA空](7,3) ●(7,4) ●(7,5) ●(7,6) [EndB空](7,7) [BeyondB空](7,8)
+    placeStonesOnBoard(board, [
+      { row: 7, col: 4, color: "black" },
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+    ]);
+
+    const positions = getOpenThreeDefensePositions(board, 7, 5, 0, 1, "black");
+
+    expect(positions).toContainEqual({ row: 7, col: 3 });
+    expect(positions).toContainEqual({ row: 7, col: 7 });
+    expect(positions).toHaveLength(2);
+  });
+
+  it("両方の beyond がブロック → 夏止め済みで脅威なし、空配列を返す", () => {
+    const board = createEmptyBoard();
+    // [BeyondA石](7,2) [EndA空](7,3) ●(7,4) ●(7,5) ●(7,6) [EndB空](7,7) [BeyondB石](7,8)
+    // どちらに伸ばしても止め四にしかならない → 活三の脅威なし
+    placeStonesOnBoard(board, [
+      { row: 7, col: 2, color: "white" },
+      { row: 7, col: 4, color: "black" },
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 8, color: "white" },
+    ]);
+
+    const positions = getOpenThreeDefensePositions(board, 7, 5, 0, 1, "black");
+
+    expect(positions).toHaveLength(0);
+  });
+
+  it("斜め方向でも夏止めが正しく検出される", () => {
+    const board = createEmptyBoard();
+    // (3,3)白ブロッカー, (4,4)EndA空, (5,5)(6,6)(7,7)黒, (8,8)EndB空, (9,9)BeyondB空
+    placeStonesOnBoard(board, [
+      { row: 3, col: 3, color: "white" },
+      { row: 5, col: 5, color: "black" },
+      { row: 6, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+    ]);
+
+    const positions = getOpenThreeDefensePositions(board, 6, 6, 1, 1, "black");
+
+    expect(positions).toContainEqual({ row: 4, col: 4 });
+    expect(positions).toContainEqual({ row: 8, col: 8 });
+    expect(positions).toContainEqual({ row: 9, col: 9 }); // 夏止め
+    expect(positions).toHaveLength(3);
+  });
+
+  it("detectOpponentThreats経由で夏止め位置がopenThreesに含まれる", () => {
+    const board = createEmptyBoard();
+    placeStonesOnBoard(board, [
+      { row: 7, col: 2, color: "white" },
+      { row: 7, col: 4, color: "black" },
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+    ]);
+
+    const threats = detectOpponentThreats(board, "black");
+
+    const positions = threats.openThrees.map((p) => `${p.row},${p.col}`);
+    expect(positions).toContain("7,3");
+    expect(positions).toContain("7,7");
+    expect(positions).toContain("7,8"); // 夏止め
+  });
+
+  it("ユーザ報告ケース: 盤端+活三に対する夏止めが検出される", () => {
+    const board = createEmptyBoard();
+    // D列縦: D1(row14)=空(盤端), D2(row13)=黒, D3(row12)=黒, D4(row11)=黒,
+    //         D5(row10)=空, D6(row9)=空(夏止め位置), D7(row8)=白
+    placeStonesOnBoard(board, [
+      { row: 13, col: 3, color: "black" },
+      { row: 12, col: 3, color: "black" },
+      { row: 11, col: 3, color: "black" },
+      { row: 8, col: 3, color: "white" },
+    ]);
+
+    const positions = getOpenThreeDefensePositions(
+      board,
+      12,
+      3,
+      -1,
+      0,
+      "black",
+    );
+
+    // EndA = D5 (row10), EndB = D1 (row14), 夏止め = D6 (row9)
+    expect(positions).toContainEqual({ row: 10, col: 3 });
+    expect(positions).toContainEqual({ row: 14, col: 3 });
+    expect(positions).toContainEqual({ row: 9, col: 3 }); // 夏止め
+    expect(positions).toHaveLength(3);
+  });
+
+  it("夏止め済みの三はdetectOpponentThreatsで活三として検出されない", () => {
+    const board = createEmptyBoard();
+    // [BeyondA石](7,2) [EndA空](7,3) ●(7,4) ●(7,5) ●(7,6) [EndB空](7,7) [BeyondB石](7,8)
+    placeStonesOnBoard(board, [
+      { row: 7, col: 2, color: "white" },
+      { row: 7, col: 4, color: "black" },
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 8, color: "white" },
+    ]);
+
+    const threats = detectOpponentThreats(board, "black");
+
+    // 両方の beyond がブロック済み → 活三の脅威なし
+    expect(threats.openThrees).toHaveLength(0);
   });
 });

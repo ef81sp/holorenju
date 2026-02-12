@@ -187,7 +187,11 @@ export function getOpenFourDefensePositions(
 }
 
 /**
- * 活三の防御位置を取得（両端の空きマス）
+ * 活三の防御位置を取得（両端の空きマス＋夏止め位置）
+ *
+ * 夏止め（natsu-dome）: 活三の片端から一つ飛ばしで石を置き、
+ * 相手がどちらに伸ばしても止め四にしかならないようにする防御技。
+ * 条件: 片側の beyond がブロック（盤端 or 石あり）なら反対側の beyond に配置可能。
  */
 export function getOpenThreeDefensePositions(
   board: BoardState,
@@ -197,8 +201,61 @@ export function getOpenThreeDefensePositions(
   dc: number,
   color: "black" | "white",
 ): { row: number; col: number }[] {
-  // 活四と同じロジック（両端の空きマス）
-  return getOpenFourDefensePositions(board, row, col, dr, dc, color);
+  const positions: { row: number; col: number }[] = [];
+
+  // 正方向の端を探す
+  let r = row + dr;
+  let c = col + dc;
+  while (isValidPosition(r, c) && board[r]?.[c] === color) {
+    r += dr;
+    c += dc;
+  }
+  const endPosR = r;
+  const endPosC = c;
+  if (isValidPosition(r, c) && board[r]?.[c] === null) {
+    positions.push({ row: r, col: c });
+  }
+
+  // 負方向の端を探す
+  r = row - dr;
+  c = col - dc;
+  while (isValidPosition(r, c) && board[r]?.[c] === color) {
+    r -= dr;
+    c -= dc;
+  }
+  const endNegR = r;
+  const endNegC = c;
+  if (isValidPosition(r, c) && board[r]?.[c] === null) {
+    positions.push({ row: r, col: c });
+  }
+
+  // 夏止め位置を検出
+  const beyondPosR = endPosR + dr;
+  const beyondPosC = endPosC + dc;
+  const beyondNegR = endNegR - dr;
+  const beyondNegC = endNegC - dc;
+
+  const beyondPosOpen =
+    isValidPosition(beyondPosR, beyondPosC) &&
+    board[beyondPosR]?.[beyondPosC] === null;
+  const beyondNegOpen =
+    isValidPosition(beyondNegR, beyondNegC) &&
+    board[beyondNegR]?.[beyondNegC] === null;
+
+  // 両方の beyond がブロック → 夏止め済み、どちらに伸ばしても止め四にしかならない
+  if (!beyondPosOpen && !beyondNegOpen) {
+    return [];
+  }
+
+  // 片側の beyond がブロック（盤端 or 石あり）なら反対側に夏止め
+  if (beyondPosOpen && !beyondNegOpen) {
+    positions.push({ row: beyondPosR, col: beyondPosC });
+  }
+  if (beyondNegOpen && !beyondPosOpen) {
+    positions.push({ row: beyondNegR, col: beyondNegC });
+  }
+
+  return positions;
 }
 
 /**
