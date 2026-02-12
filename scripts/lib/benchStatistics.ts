@@ -83,6 +83,16 @@ interface ForbiddenDetail {
   moves: number;
 }
 
+/** 難易度別の黒番/白番勝率 */
+interface PlayerColorWinRate {
+  blackWin: number;
+  blackLose: number;
+  blackDraw: number;
+  whiteWin: number;
+  whiteLose: number;
+  whiteDraw: number;
+}
+
 interface BenchStats {
   /** 基本情報 */
   timestamp: string;
@@ -113,6 +123,14 @@ interface BenchStats {
   /** 同難易度対戦 */
   selfPlayTotal: ColorWins;
   selfPlayByPlayer: Map<string, ColorWins>;
+  /** 難易度別の黒番/白番勝率 */
+  playerColorWinRates: Map<string, PlayerColorWinRate>;
+  /** 難易度格差別の黒勝率（同難易度/黒が格上/黒が格下） */
+  gapColorWins: {
+    same: ColorWins;
+    blackStronger: ColorWins;
+    blackWeaker: ColorWins;
+  };
   /** 勝利理由 */
   reasonCounts: Map<string, number>;
   /** プレイヤー別探索統計 */
@@ -253,9 +271,30 @@ export function computeStats(data: BenchmarkDataFile): BenchStats {
   const colorWins = initColorWins();
   const selfPlayTotal = initColorWins();
   const selfPlayByPlayer = new Map<string, ColorWins>();
+  const playerColorWinRates = new Map<string, PlayerColorWinRate>();
   for (const p of players) {
     selfPlayByPlayer.set(p, initColorWins());
+    playerColorWinRates.set(p, {
+      blackWin: 0,
+      blackLose: 0,
+      blackDraw: 0,
+      whiteWin: 0,
+      whiteLose: 0,
+      whiteDraw: 0,
+    });
   }
+
+  // 難易度格差別の黒勝率
+  // レーティング順で難易度のランクを決定
+  const playerRank = new Map<string, number>();
+  for (let i = 0; i < ratings.length; i++) {
+    playerRank.set(ratings[i].name, ratings.length - 1 - i); // 高レート = 高ランク
+  }
+  const gapColorWins = {
+    same: initColorWins(),
+    blackStronger: initColorWins(),
+    blackWeaker: initColorWins(),
+  };
 
   const reasonCounts = new Map<string, number>();
   const playerStats = new Map<string, PlayerMoveStats>();
@@ -328,6 +367,45 @@ export function computeStats(data: BenchmarkDataFile): BenchStats {
       colorWins.white++;
     } else {
       colorWins.draw++;
+    }
+
+    // 難易度別 黒番/白番 勝率
+    const blackPCR = playerColorWinRates.get(blackPlayer);
+    const whitePCR = playerColorWinRates.get(whitePlayer);
+    if (blackPCR) {
+      if (blackWon) {
+        blackPCR.blackWin++;
+      } else if (whiteWon) {
+        blackPCR.blackLose++;
+      } else {
+        blackPCR.blackDraw++;
+      }
+    }
+    if (whitePCR) {
+      if (whiteWon) {
+        whitePCR.whiteWin++;
+      } else if (blackWon) {
+        whitePCR.whiteLose++;
+      } else {
+        whitePCR.whiteDraw++;
+      }
+    }
+
+    // 難易度格差別の黒勝率
+    const blackRank = playerRank.get(blackPlayer) ?? 0;
+    const whiteRank = playerRank.get(whitePlayer) ?? 0;
+    const gap =
+      blackRank === whiteRank
+        ? gapColorWins.same
+        : blackRank > whiteRank
+          ? gapColorWins.blackStronger
+          : gapColorWins.blackWeaker;
+    if (blackWon) {
+      gap.black++;
+    } else if (whiteWon) {
+      gap.white++;
+    } else {
+      gap.draw++;
     }
 
     // 同難易度対戦
@@ -524,6 +602,8 @@ export function computeStats(data: BenchmarkDataFile): BenchStats {
     colorWins,
     selfPlayTotal,
     selfPlayByPlayer,
+    playerColorWinRates,
+    gapColorWins,
     reasonCounts,
     playerStats,
     forbiddenLossByPlayer,
@@ -684,6 +764,42 @@ export function formatStats(stats: BenchStats, filename: string): string {
         ln(`    ${player}: ${sp.black}-${sp.white}-${sp.draw} (黒${pct}%)`);
       } else {
         ln(`    ${player}: (対戦なし)`);
+      }
+    }
+    ln();
+  }
+
+  // 難易度別 黒番/白番 勝率
+  if (stats.players.length > 1) {
+    ln("【難易度別 黒番/白番 勝率】");
+    for (const player of stats.players) {
+      const pcr = stats.playerColorWinRates.get(player);
+      if (!pcr) {
+        continue;
+      }
+      const bTotal = pcr.blackWin + pcr.blackLose + pcr.blackDraw;
+      const wTotal = pcr.whiteWin + pcr.whiteLose + pcr.whiteDraw;
+      const bPct = bTotal > 0 ? Math.floor((pcr.blackWin * 100) / bTotal) : 0;
+      const wPct = wTotal > 0 ? Math.floor((pcr.whiteWin * 100) / wTotal) : 0;
+      ln(
+        `  ${player}: 黒番 ${bPct}% (${pcr.blackWin}W-${pcr.blackLose}L-${pcr.blackDraw}D/${bTotal}局), 白番 ${wPct}% (${pcr.whiteWin}W-${pcr.whiteLose}L-${pcr.whiteDraw}D/${wTotal}局)`,
+      );
+    }
+    ln();
+
+    // 難易度格差別の黒勝率
+    ln("【難易度格差別の黒勝率】");
+    for (const [label, cw] of [
+      ["同難易度", stats.gapColorWins.same],
+      ["黒が格上", stats.gapColorWins.blackStronger],
+      ["黒が格下", stats.gapColorWins.blackWeaker],
+    ] as const) {
+      const gTotal = cw.black + cw.white + cw.draw;
+      if (gTotal > 0) {
+        const pct = Math.floor((cw.black * 100) / gTotal);
+        ln(
+          `  ${label}: 黒${pct}% (${cw.black}W-${cw.white}L-${cw.draw}D/${gTotal}局)`,
+        );
       }
     }
     ln();
