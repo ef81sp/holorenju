@@ -17,6 +17,7 @@ import {
   evaluateBoard,
   evaluatePosition,
   evaluateStonePatterns,
+  evaluateStonePatternsWithBreakdown,
   PATTERN_SCORES,
 } from "./evaluation";
 import { createBoardWithStones, placeStonesOnBoard } from "./testUtils";
@@ -241,6 +242,99 @@ describe("evaluateBoard", () => {
 
     const score = evaluateBoard(board, "black");
     expect(score).toBeGreaterThanOrEqual(PATTERN_SCORES.FIVE);
+  });
+});
+
+describe("evaluateStonePatternsWithBreakdown activeDirectionCount", () => {
+  it("孤立した石は activeDirectionCount = 0", () => {
+    const board = createBoardWithStones([{ row: 7, col: 7, color: "black" }]);
+    const result = evaluateStonePatternsWithBreakdown(board, 7, 7, "black");
+    expect(result.activeDirectionCount).toBe(0);
+  });
+
+  it("横方向のみにパターンがある石は activeDirectionCount = 1", () => {
+    const board = createBoardWithStones([
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+    ]);
+    // (7,7)は横方向にのみ活二パターン
+    const result = evaluateStonePatternsWithBreakdown(board, 7, 7, "black");
+    expect(result.activeDirectionCount).toBe(1);
+  });
+
+  it("横方向と縦方向にパターンがある石は activeDirectionCount = 2", () => {
+    const board = createBoardWithStones([
+      { row: 7, col: 6, color: "black" }, // 横方向
+      { row: 7, col: 7, color: "black" }, // 交差点
+      { row: 6, col: 7, color: "black" }, // 縦方向
+    ]);
+    const result = evaluateStonePatternsWithBreakdown(board, 7, 7, "black");
+    expect(result.activeDirectionCount).toBe(2);
+  });
+
+  it("3方向にパターンがある石は activeDirectionCount = 3", () => {
+    const board = createBoardWithStones([
+      { row: 7, col: 6, color: "black" }, // 横方向
+      { row: 7, col: 7, color: "black" }, // 交差点
+      { row: 6, col: 7, color: "black" }, // 縦方向
+      { row: 6, col: 6, color: "black" }, // 右下斜め方向（7,7から見て左上）
+    ]);
+    const result = evaluateStonePatternsWithBreakdown(board, 7, 7, "black");
+    expect(result.activeDirectionCount).toBe(3);
+  });
+
+  it("4方向全てにパターンがある石は activeDirectionCount = 4", () => {
+    const board = createBoardWithStones([
+      { row: 7, col: 6, color: "black" }, // 横方向
+      { row: 7, col: 7, color: "black" }, // 交差点
+      { row: 6, col: 7, color: "black" }, // 縦方向
+      { row: 6, col: 6, color: "black" }, // 右下斜め方向
+      { row: 6, col: 8, color: "black" }, // 右上斜め方向
+    ]);
+    const result = evaluateStonePatternsWithBreakdown(board, 7, 7, "black");
+    expect(result.activeDirectionCount).toBe(4);
+  });
+});
+
+describe("evaluateBoard 連携ボーナス", () => {
+  it("2方向にパターンがある石は1方向のみの石より高評価", () => {
+    // Board A: 横方向のみの活二（2石とも1方向）
+    const boardA = createBoardWithStones([
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+    ]);
+
+    // Board B: 交差点を持つ配置（(7,7)が2方向にパターン）
+    const boardB = createBoardWithStones([
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+      { row: 6, col: 7, color: "black" },
+    ]);
+
+    const scoreA = evaluateBoard(boardA, "black");
+    const scoreB = evaluateBoard(boardB, "black");
+
+    // Board Bは連携ボーナスにより、単にパターンスコアが増えた以上に高い
+    // Board Bのベース = 活二(50)*2方向 + 活二(50)*1方向 = 150
+    // Board Aのベース = 活二(50)*1方向 = 50 (各石は1方向)
+    // 連携ボーナスにより Board B はさらに加点
+    expect(scoreB).toBeGreaterThan(scoreA);
+  });
+
+  it("連携ボーナスは connectivityBonusValue で制御できる", () => {
+    const board = createBoardWithStones([
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+      { row: 6, col: 7, color: "black" },
+    ]);
+
+    const scoreDefault = evaluateBoard(board, "black");
+    const scoreNoBonus = evaluateBoard(board, "black", {
+      connectivityBonusValue: 0,
+    });
+
+    // ボーナス0の場合より、デフォルトのほうが高い
+    expect(scoreDefault).toBeGreaterThan(scoreNoBonus);
   });
 });
 

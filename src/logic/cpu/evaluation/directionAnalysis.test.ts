@@ -9,7 +9,9 @@ import { createEmptyBoard } from "@/logic/renjuRules";
 import { placeStonesOnBoard } from "../testUtils";
 import {
   analyzeDirection,
+  applyDefenseMultiplier,
   countInDirection,
+  DEFENSE_MULTIPLIERS,
   getCenterBonus,
   getPatternScore,
   getPatternType,
@@ -171,6 +173,54 @@ describe("getPatternType", () => {
     expect(
       getPatternType({ count: 4, end1: "opponent", end2: "opponent" }),
     ).toBeNull();
+  });
+});
+
+describe("DEFENSE_MULTIPLIERS", () => {
+  it("先手脅威（five/openFour/four/openThree）は高倍率", () => {
+    expect(DEFENSE_MULTIPLIERS.five).toBeGreaterThanOrEqual(0.9);
+    expect(DEFENSE_MULTIPLIERS.openFour).toBeGreaterThanOrEqual(0.9);
+    expect(DEFENSE_MULTIPLIERS.four).toBeGreaterThanOrEqual(0.6);
+    expect(DEFENSE_MULTIPLIERS.openThree).toBeGreaterThanOrEqual(0.6);
+  });
+
+  it("構築材料（three/openTwo/two）は低倍率", () => {
+    expect(DEFENSE_MULTIPLIERS.three).toBeLessThanOrEqual(0.4);
+    expect(DEFENSE_MULTIPLIERS.openTwo).toBeLessThanOrEqual(0.3);
+    expect(DEFENSE_MULTIPLIERS.two).toBeLessThanOrEqual(0.2);
+  });
+
+  it("倍率の順序: five >= openFour > four >= openThree > three > openTwo > two", () => {
+    expect(DEFENSE_MULTIPLIERS.five).toBeGreaterThanOrEqual(
+      DEFENSE_MULTIPLIERS.openFour,
+    );
+    expect(DEFENSE_MULTIPLIERS.openFour).toBeGreaterThan(
+      DEFENSE_MULTIPLIERS.four,
+    );
+    expect(DEFENSE_MULTIPLIERS.four).toBeGreaterThanOrEqual(
+      DEFENSE_MULTIPLIERS.openThree,
+    );
+    expect(DEFENSE_MULTIPLIERS.openThree).toBeGreaterThan(
+      DEFENSE_MULTIPLIERS.three,
+    );
+    expect(DEFENSE_MULTIPLIERS.three).toBeGreaterThan(
+      DEFENSE_MULTIPLIERS.openTwo,
+    );
+    expect(DEFENSE_MULTIPLIERS.openTwo).toBeGreaterThan(
+      DEFENSE_MULTIPLIERS.two,
+    );
+  });
+});
+
+describe("applyDefenseMultiplier パターン別倍率", () => {
+  it("パターンタイプ指定で正しい倍率が適用される", () => {
+    const detail = { base: 1000, diagonalBonus: 0, final: 1000 };
+
+    const fiveResult = applyDefenseMultiplier(detail, DEFENSE_MULTIPLIERS.five);
+    const twoResult = applyDefenseMultiplier(detail, DEFENSE_MULTIPLIERS.two);
+
+    // fiveの防御倍率 > twoの防御倍率
+    expect(fiveResult.final).toBeGreaterThan(twoResult.final);
   });
 });
 

@@ -6,45 +6,72 @@
 
 /**
  * パターンスコア定数
+ *
+ * スコア体系の設計根拠:
+ * - 12のOSS実装・学術論文・大会優勝AIの調査結果に基づく
+ * - 止め四(FOUR) > 活三(OPEN_THREE): 絶対先手 vs 相対先手の質的差異
+ *   - Rapfi(Gomocup優勝)、lihongxun945/gobang 等7-8実装が採用
+ * - 連携度ボーナス(CONNECTIVITY_BONUS): 単純加算の限界を補正
+ *   - 多方向にパターンを持つ石は四三等の複合脅威に発展しやすい
+ * - 防御倍率は directionAnalysis.ts の DEFENSE_MULTIPLIERS で脅威レベル別に分化
+ *
+ * @see directionAnalysis.ts DEFENSE_MULTIPLIERS — 脅威レベル別の防御倍率
  */
 export const PATTERN_SCORES = {
-  /** 五連（勝利） */
+  /** 五連（勝利）— 即座に勝負が決まる絶対値 */
   FIVE: 100000,
-  /** 活四（両端開） */
+  /** 活四（両端開）— 防御不能（2箇所のうち1箇所しか塞げない） */
   OPEN_FOUR: 10000,
-  /** 禁手追い込み強（四の防御点が禁手） */
+  /** 禁手追い込み強（四の防御点が禁手）— 実質活四に近い価値 */
   FORBIDDEN_TRAP_STRONG: 8000,
-  /** 四三同時作成ボーナス */
+  /** 四三同時作成ボーナス — 防御不能の複合脅威（四を止めると三が通る） */
   FOUR_THREE_BONUS: 5000,
-  /** フクミ手ボーナス（次にVCFがある手） */
+  /**
+   * フクミ手ボーナス（次にVCFがある手）
+   * @deprecated ゲームプレイ未使用 — evaluatePosition() 内で fukumiBonus = 0 にハードコード。
+   * isFukumiMove(hasVCF) の計算コストが高いため、ルートレベル評価のみで使用想定。
+   * デバッグ表示 (evaluatePositionWithBreakdown) でのみ参照される。
+   */
   FUKUMI_BONUS: 1500,
   /** 禁手追い込みセットアップ（活三の延長点が禁手） */
   FORBIDDEN_TRAP_SETUP: 1500,
   /** 禁手追い込み三（三の達四点の一つが禁手、もう一方を止めても四で勝ち） */
   FORBIDDEN_TRAP_THREE: 3000,
-  /** ミセ手ボーナス（次に四三を作れる手） */
+  /** ミセ手ボーナス（次に四三を作れる手）— 1手後に四三が確定する先手脅威 */
   MISE_BONUS: 1000,
-  /** 止め四（片端開） */
-  FOUR: 1000,
-  /** 活三（両端開） */
+  /**
+   * 止め四（片端開）— 絶対先手（防御点1箇所のみ）
+   * 活三(1000)より高い理由: 四は三では止められないが、逆は可能（カウンターフォー）。
+   * singleFourPenalty により後続脅威のない単発四は減価されるため、
+   * 基本スコアの引き上げはVCFに繋がる有意義な四をより正しく評価する。
+   */
+  FOUR: 1500,
+  /**
+   * 活三（両端開）— 相対先手（防御点2箇所以上、止める手で反撃可能）
+   * 止め四(1500)より低い理由: 活三は防御側に選択肢があり、カウンターフォーで反撃される。
+   */
   OPEN_THREE: 1000,
-  /** 止め三（片端開）- 単独では価値が低い（剣先問題） */
+  /** 止め三（片端開）— 単独では価値が低い（剣先問題: 一方向のみの発展性） */
   THREE: 30,
-  /** 活二 */
+  /** 活二 — 将来的なパターンの素材（連携度で評価を補正） */
   OPEN_TWO: 50,
-  /** 止め二 */
+  /** 止め二 — 発展性が限られた素材 */
   TWO: 10,
-  /** 中央寄りボーナス */
+  /** 中央寄りボーナス — 中央ほど多方向に展開できるため有利 */
   CENTER_BONUS: 5,
   /** 禁じ手誘導ボーナス（白番・旧定数、後方互換） */
   FORBIDDEN_TRAP: 100,
-  /** 複数方向脅威ボーナス（2方向以上の脅威に追加） */
+  /** 複数方向脅威ボーナス（2方向以上の先手脅威に追加）— evaluatePosition() のみ */
   MULTI_THREAT_BONUS: 500,
-  /** VCT（三・四連続勝ち）ボーナス */
+  /**
+   * VCT（三・四連続勝ち）ボーナス
+   * @deprecated 探索・評価コードで未使用。VCT探索は review.worker.ts のみで使用。
+   * 将来的にルートレベルVCT判定を導入する際に活用予定。
+   */
   VCT_BONUS: 8000,
-  /** カウンターフォー倍率 */
+  /** カウンターフォー倍率 — 防御しながら四を作る手の防御スコアに適用 */
   COUNTER_FOUR_MULTIPLIER: 1.5,
-  /** 斜め方向ボーナス係数（斜め連は隣接空き点が多く効率が良い） */
+  /** 斜め方向ボーナス係数 — 斜め連は隣接空き点が多く効率が良い（約5%加算） */
   DIAGONAL_BONUS_MULTIPLIER: 1.05,
   /** 禁手脆弱性（強）: 三の延長点が禁手で白の攻撃ライン上 */
   FORBIDDEN_VULNERABILITY_STRONG: 800,
@@ -52,6 +79,13 @@ export const PATTERN_SCORES = {
   FORBIDDEN_VULNERABILITY_MILD: 300,
   /** 禁手脆弱性ペナルティの合計上限 */
   FORBIDDEN_VULNERABILITY_CAP: 1500,
+  /**
+   * パターン連携ボーナス（evaluateBoard 末端評価用）
+   * 2方向以上にパターンを持つ石への加点（方向数-1 × この値）。
+   * 多方向にパターンがある石は四三等の複合脅威に発展する可能性が高い。
+   * OPEN_TWO(50) の約0.6倍 — 方向追加1つごとの控えめなボーナス。
+   */
+  CONNECTIVITY_BONUS: 30,
 } as const;
 
 /**
@@ -286,6 +320,8 @@ export interface ScoreBreakdown {
 export interface LeafEvaluationOptions {
   /** 単発四ペナルティ倍率（0.0〜1.0、デフォルト1.0=ペナルティなし） */
   singleFourPenaltyMultiplier?: number;
+  /** パターン連携ボーナス値（デフォルト: CONNECTIVITY_BONUS=30、0で無効） */
+  connectivityBonusValue?: number;
 }
 
 /**

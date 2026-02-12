@@ -240,10 +240,10 @@ function hasFourInDirection(
 // =============================================================================
 
 /** フォールバック対象の最低スコア（四三相当: FOUR + OPEN_THREE） */
-export const WINNING_SCORE_THRESHOLD = 2000;
+export const WINNING_SCORE_THRESHOLD = 2500;
 
 /** フォールバック発動のスコア低下閾値（FOUR相当） */
-export const TIME_PRESSURE_FALLBACK_THRESHOLD = 1000;
+export const TIME_PRESSURE_FALLBACK_THRESHOLD = 1500;
 
 // =============================================================================
 // Null Move Pruning 用の軽量脅威チェック

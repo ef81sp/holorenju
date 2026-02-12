@@ -364,10 +364,10 @@ describe("applyTimePressureFallback", () => {
 
   it("スコア低下が閾値未満の場合はフォールバックしない", () => {
     const depthHistory: DepthHistoryEntry[] = [
-      { depth: 1, position: { row: 7, col: 7 }, score: 2500 },
-      { depth: 2, position: { row: 8, col: 8 }, score: 2500 },
+      { depth: 1, position: { row: 7, col: 7 }, score: 3000 },
+      { depth: 2, position: { row: 8, col: 8 }, score: 3000 },
     ];
-    // スコア差 = 2500 - 1600 = 900 < 1000
+    // スコア差 = 3000 - 1600 = 1400 < 1500
     const result = makeResult({ score: 1600, position: { row: 5, col: 5 } });
 
     const final = applyTimePressureFallback(result, depthHistory, true);
@@ -406,17 +406,17 @@ describe("applyTimePressureFallback", () => {
 
   it("最深の高スコアエントリを優先する", () => {
     const depthHistory: DepthHistoryEntry[] = [
-      { depth: 1, position: { row: 7, col: 7 }, score: 2500 },
-      { depth: 2, position: { row: 8, col: 8 }, score: 3000 },
-      { depth: 3, position: { row: 9, col: 9 }, score: 2200 },
+      { depth: 1, position: { row: 7, col: 7 }, score: 3000 },
+      { depth: 2, position: { row: 8, col: 8 }, score: 3500 },
+      { depth: 3, position: { row: 9, col: 9 }, score: 2800 },
     ];
     const result = makeResult({ score: 100, position: { row: 5, col: 5 } });
 
     const final = applyTimePressureFallback(result, depthHistory, true);
 
-    // depth 3 のエントリ（score 2200）が最深の高スコアエントリ
+    // depth 3 のエントリ（score 2800）が最深の高スコアエントリ
     expect(final.position).toEqual({ row: 9, col: 9 });
-    expect(final.score).toBe(2200);
+    expect(final.score).toBe(2800);
     expect(final.fallbackFromDepth).toBe(3);
   });
 });

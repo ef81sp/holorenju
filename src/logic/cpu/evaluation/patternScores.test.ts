@@ -11,7 +11,7 @@ describe("PATTERN_SCORES", () => {
     expect(PATTERN_SCORES.FIVE).toBe(100000);
     expect(PATTERN_SCORES.OPEN_FOUR).toBe(10000);
     expect(PATTERN_SCORES.FOUR_THREE_BONUS).toBe(5000);
-    expect(PATTERN_SCORES.FOUR).toBe(1000);
+    expect(PATTERN_SCORES.FOUR).toBe(1500);
     expect(PATTERN_SCORES.OPEN_THREE).toBe(1000);
     expect(PATTERN_SCORES.THREE).toBe(30);
     expect(PATTERN_SCORES.OPEN_TWO).toBe(50);
@@ -35,5 +35,13 @@ describe("PATTERN_SCORES", () => {
 
   it("禁手追い込み三のスコア定数が正しく定義されている", () => {
     expect(PATTERN_SCORES.FORBIDDEN_TRAP_THREE).toBe(3000);
+  });
+
+  it("止め四は活三より高スコア（絶対先手 > 相対先手）", () => {
+    expect(PATTERN_SCORES.FOUR).toBeGreaterThan(PATTERN_SCORES.OPEN_THREE);
+  });
+
+  it("パターン連携ボーナスが定義されている", () => {
+    expect(PATTERN_SCORES.CONNECTIVITY_BONUS).toBe(30);
   });
 });

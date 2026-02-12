@@ -13,6 +13,7 @@ import { DIRECTIONS } from "../core/constants";
 import {
   analyzeDirection,
   applyDefenseMultiplier,
+  DEFENSE_MULTIPLIERS,
   getCenterBonus,
   getPatternScore,
   getPatternType,
@@ -117,9 +118,14 @@ export function evaluateStonePatternsWithBreakdown(
   row: number,
   col: number,
   color: "black" | "white",
-): { score: number; breakdown: PatternBreakdown } {
+): {
+  score: number;
+  breakdown: PatternBreakdown;
+  activeDirectionCount: number;
+} {
   let score = 0;
   const breakdown: PatternBreakdown = emptyPatternBreakdown();
+  let activeDirectionCount = 0;
 
   // 連続パターンのスコア
   for (let i = 0; i < DIRECTIONS.length; i++) {
@@ -131,6 +137,10 @@ export function evaluateStonePatternsWithBreakdown(
     const pattern = analyzeDirection(board, row, col, dr, dc, color);
     const baseScore = getPatternScore(pattern);
     const patternType = getPatternType(pattern);
+
+    if (baseScore > 0) {
+      activeDirectionCount++;
+    }
 
     // 斜め方向（インデックス2,3）にボーナスを適用
     const isDiagonal = i === 2 || i === 3;
@@ -170,7 +180,7 @@ export function evaluateStonePatternsWithBreakdown(
     breakdown.openThree.final += PATTERN_SCORES.OPEN_THREE;
   }
 
-  return { score, breakdown };
+  return { score, breakdown, activeDirectionCount };
 }
 
 /**
@@ -410,20 +420,26 @@ function evaluatePositionCore(
   if (boardRow) {
     boardRow[col] = opponentColor;
   }
-  const opponentPatternScore = evaluateStonePatterns(
-    board,
-    row,
-    col,
-    opponentColor,
-  );
+  const { score: opponentPatternScore, breakdown: opponentBreakdown } =
+    evaluateStonePatternsWithBreakdown(board, row, col, opponentColor);
   // 元に戻す（自分の石を戻す）
   if (boardRow) {
     boardRow[col] = color;
   }
 
-  // 相手の活三・活四をブロックする手は高評価
-  // ブロック価値は相手のスコアの50%
-  defenseScore = opponentPatternScore * 0.5;
+  // 脅威レベル別の防御倍率を適用
+  defenseScore =
+    Math.round(opponentBreakdown.five.final * DEFENSE_MULTIPLIERS.five) +
+    Math.round(
+      opponentBreakdown.openFour.final * DEFENSE_MULTIPLIERS.openFour,
+    ) +
+    Math.round(opponentBreakdown.four.final * DEFENSE_MULTIPLIERS.four) +
+    Math.round(
+      opponentBreakdown.openThree.final * DEFENSE_MULTIPLIERS.openThree,
+    ) +
+    Math.round(opponentBreakdown.three.final * DEFENSE_MULTIPLIERS.three) +
+    Math.round(opponentBreakdown.openTwo.final * DEFENSE_MULTIPLIERS.openTwo) +
+    Math.round(opponentBreakdown.two.final * DEFENSE_MULTIPLIERS.two);
 
   // カウンターフォー: 防御しながら四を作る手（オプションで有効時のみ）
   // 自分が四以上を作り、相手が活三以上を持っていた場合、防御スコアを1.5倍
@@ -613,16 +629,36 @@ export function evaluatePositionWithBreakdown(
     testRow[col] = color;
   }
 
-  // 防御内訳（0.5倍を適用、丸め処理）
-  // 防御は相手のパターンを阻止するので、斜めボーナスも含めた最終値に0.5を掛ける
+  // 防御内訳（脅威レベル別倍率を適用）
   const defenseBreakdown: PatternBreakdown = {
-    five: applyDefenseMultiplier(opponentPatternBreakdown.five),
-    openFour: applyDefenseMultiplier(opponentPatternBreakdown.openFour),
-    four: applyDefenseMultiplier(opponentPatternBreakdown.four),
-    openThree: applyDefenseMultiplier(opponentPatternBreakdown.openThree),
-    three: applyDefenseMultiplier(opponentPatternBreakdown.three),
-    openTwo: applyDefenseMultiplier(opponentPatternBreakdown.openTwo),
-    two: applyDefenseMultiplier(opponentPatternBreakdown.two),
+    five: applyDefenseMultiplier(
+      opponentPatternBreakdown.five,
+      DEFENSE_MULTIPLIERS.five,
+    ),
+    openFour: applyDefenseMultiplier(
+      opponentPatternBreakdown.openFour,
+      DEFENSE_MULTIPLIERS.openFour,
+    ),
+    four: applyDefenseMultiplier(
+      opponentPatternBreakdown.four,
+      DEFENSE_MULTIPLIERS.four,
+    ),
+    openThree: applyDefenseMultiplier(
+      opponentPatternBreakdown.openThree,
+      DEFENSE_MULTIPLIERS.openThree,
+    ),
+    three: applyDefenseMultiplier(
+      opponentPatternBreakdown.three,
+      DEFENSE_MULTIPLIERS.three,
+    ),
+    openTwo: applyDefenseMultiplier(
+      opponentPatternBreakdown.openTwo,
+      DEFENSE_MULTIPLIERS.openTwo,
+    ),
+    two: applyDefenseMultiplier(
+      opponentPatternBreakdown.two,
+      DEFENSE_MULTIPLIERS.two,
+    ),
   };
 
   // 内訳の合計を計算（表示と一致させる）
@@ -688,6 +724,9 @@ export function evaluateBoard(
   let opponentFourScore = 0;
   let opponentOpenThreeScore = 0;
 
+  const connectivityBonus =
+    options?.connectivityBonusValue ?? PATTERN_SCORES.CONNECTIVITY_BONUS;
+
   // 全ての石について評価
   for (let row = 0; row < 15; row++) {
     for (let col = 0; col < 15; col++) {
@@ -696,19 +735,20 @@ export function evaluateBoard(
         continue;
       }
 
-      const { score, breakdown } = evaluateStonePatternsWithBreakdown(
-        board,
-        row,
-        col,
-        stone,
-      );
+      const { score, breakdown, activeDirectionCount } =
+        evaluateStonePatternsWithBreakdown(board, row, col, stone);
+
+      let adjustedScore = score;
+      if (activeDirectionCount >= 2 && connectivityBonus > 0) {
+        adjustedScore += connectivityBonus * (activeDirectionCount - 1);
+      }
 
       if (stone === perspective) {
-        myScore += score;
+        myScore += adjustedScore;
         myFourScore += breakdown.four.final;
         myOpenThreeScore += breakdown.openThree.final;
       } else if (stone === opponentColor) {
-        opponentScore += score;
+        opponentScore += adjustedScore;
         opponentFourScore += breakdown.four.final;
         opponentOpenThreeScore += breakdown.openThree.final;
       }
@@ -757,12 +797,14 @@ export function evaluateBoardWithBreakdown(
         continue;
       }
 
-      const { score, breakdown } = evaluateStonePatternsWithBreakdown(
-        board,
-        row,
-        col,
-        stone,
-      );
+      const { score, breakdown, activeDirectionCount } =
+        evaluateStonePatternsWithBreakdown(board, row, col, stone);
+
+      let adjustedScore = score;
+      if (activeDirectionCount >= 2) {
+        adjustedScore +=
+          PATTERN_SCORES.CONNECTIVITY_BONUS * (activeDirectionCount - 1);
+      }
 
       if (stone === perspective) {
         myBreakdown.five += breakdown.five.final;
@@ -772,7 +814,7 @@ export function evaluateBoardWithBreakdown(
         myBreakdown.three += breakdown.three.final;
         myBreakdown.openTwo += breakdown.openTwo.final;
         myBreakdown.two += breakdown.two.final;
-        myBreakdown.total += score;
+        myBreakdown.total += adjustedScore;
       } else if (stone === opponentColor) {
         opponentBreakdown.five += breakdown.five.final;
         opponentBreakdown.openFour += breakdown.openFour.final;
@@ -781,7 +823,7 @@ export function evaluateBoardWithBreakdown(
         opponentBreakdown.three += breakdown.three.final;
         opponentBreakdown.openTwo += breakdown.openTwo.final;
         opponentBreakdown.two += breakdown.two.final;
-        opponentBreakdown.total += score;
+        opponentBreakdown.total += adjustedScore;
       }
     }
   }

@@ -193,6 +193,29 @@ export function getPatternType(pattern: DirectionPattern): PatternType {
 }
 
 /**
+ * 脅威レベル別の防御倍率
+ *
+ * 先手脅威（four/openThree）は防御価値が高く、
+ * 構築材料（three以下）は防御価値が低い。
+ */
+export const DEFENSE_MULTIPLIERS = {
+  /** 五連: 止めなければ即負け */
+  five: 1.0,
+  /** 活四: 防御不能の脅威 */
+  openFour: 0.95,
+  /** 止め四: 絶対先手の脅威 */
+  four: 0.7,
+  /** 活三: 相対先手の脅威 */
+  openThree: 0.7,
+  /** 止め三: 低優先度 */
+  three: 0.3,
+  /** 活二: 軽微 */
+  openTwo: 0.2,
+  /** 止め二: 無視可能 */
+  two: 0.1,
+} as const;
+
+/**
  * 防御倍率を適用
  */
 export function applyDefenseMultiplier(
