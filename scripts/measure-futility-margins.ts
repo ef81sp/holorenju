@@ -191,7 +191,9 @@ for (const depth of depths) {
   const allGains = byDepth.get(depth)!;
   const gains = allGains.filter((g) => g < OUTLIER_THRESHOLD);
   gains.sort((a, b) => a - b);
-  if (gains.length === 0) {continue;}
+  if (gains.length === 0) {
+    continue;
+  }
   const p90 = percentile(gains, 90);
   const p95 = percentile(gains, 95);
   const p99 = percentile(gains, 99);

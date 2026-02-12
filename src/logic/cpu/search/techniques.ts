@@ -162,8 +162,15 @@ export const NMP_REDUCTION = 2;
 // Futility Pruning パラメータ
 // =============================================================================
 
-/** 深度別の Futility マージン（index = depth） */
-export const FUTILITY_MARGINS = [0, 500, 1500, 3000] as const;
+/**
+ * 手番別 Futility マージン（index = depth）
+ *
+ * 実測データ（docs/futility-margin-analysis.md）に基づく:
+ * - 自分の手: 静的評価が正確で gain が小さい → 小さいマージンで積極的に刈る
+ * - 相手の手: 防御手・カウンター脅威は探索で判明 → 大きいマージンで慎重に刈る
+ */
+export const FUTILITY_MARGINS_SELF = [0, 900, 300, 900] as const;
+export const FUTILITY_MARGINS_OPPONENT = [0, 5000, 2000, 4500] as const;
 
 // =============================================================================
 // Null Move Pruning 用の軽量脅威チェック

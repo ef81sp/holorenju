@@ -55,7 +55,8 @@ import {
   ASPIRATION_WINDOW,
   calculateDynamicTimeLimit,
   DEFAULT_ABSOLUTE_TIME_LIMIT,
-  FUTILITY_MARGINS,
+  FUTILITY_MARGINS_OPPONENT,
+  FUTILITY_MARGINS_SELF,
   hasImmediateThreat,
   INFINITY,
   isTacticalMove,
@@ -673,7 +674,10 @@ export function minimaxWithTT(
       bestScore < PATTERN_SCORES.FIVE - 5000 &&
       !isTacticalMove(board, move, currentColor) // 四を作る手は除外
     ) {
-      const futilityMargin = FUTILITY_MARGINS[depth] ?? 0;
+      const futilityMargins = isMaximizing
+        ? FUTILITY_MARGINS_SELF
+        : FUTILITY_MARGINS_OPPONENT;
+      const futilityMargin = futilityMargins[depth] ?? 0;
       const staticEval = evaluatePosition(
         board,
         move.row,
