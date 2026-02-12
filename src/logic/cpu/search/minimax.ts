@@ -41,6 +41,7 @@ import {
   type SearchContext,
   type SearchStats,
 } from "./context";
+import { isMeasuringFutility, recordFutilityGain } from "./futilityMeasurement";
 import { findMiseVCFMove } from "./miseVcf";
 import {
   applyTimePressureFallback,
@@ -641,6 +642,26 @@ export function minimaxWithTT(
       }
     }
 
+    // Futility マージン計測: 対象ノードの staticEval を記録
+    let futilityMeasureStaticEval: number | undefined;
+    if (
+      isMeasuringFutility() &&
+      depth >= 1 &&
+      depth <= 4 &&
+      moveIndex > 0 &&
+      bestScore > -PATTERN_SCORES.FIVE + 5000 &&
+      bestScore < PATTERN_SCORES.FIVE - 5000 &&
+      !isTacticalMove(board, move, currentColor)
+    ) {
+      futilityMeasureStaticEval = evaluatePosition(
+        board,
+        move.row,
+        move.col,
+        currentColor,
+        ctx.evaluationOptions,
+      );
+    }
+
     // Futility Pruning（depth 1-2 の非戦術手をスキップ）
     // 静的評価＋マージンが alpha/beta を超えない手は探索不要
     if (
@@ -739,6 +760,14 @@ export function minimaxWithTT(
 
     // 禁手キャッシュ用に盤面ハッシュを元に戻す
     setCurrentBoardHash(hash);
+
+    // Futility マージン計測: gain を記録
+    if (futilityMeasureStaticEval !== undefined) {
+      const gain = isMaximizing
+        ? Math.max(0, score - futilityMeasureStaticEval)
+        : Math.max(0, futilityMeasureStaticEval - score);
+      recordFutilityGain(depth, gain);
+    }
 
     if (isMaximizing) {
       if (score > bestScore) {
