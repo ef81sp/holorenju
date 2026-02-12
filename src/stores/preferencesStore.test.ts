@@ -436,6 +436,18 @@ describe("preferencesStore", () => {
         debug: {
           showCpuInfo: false,
         },
+        audio: {
+          enabled: false,
+          hasBeenAsked: false,
+          masterVolume: 0.8,
+          bgmEnabled: true,
+          bgmVolume: 0.3,
+          sfxEnabled: true,
+          sfxVolume: 0.7,
+        },
+        accessibility: {
+          boardAnnounce: true,
+        },
       });
     });
   });

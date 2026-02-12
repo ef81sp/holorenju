@@ -75,6 +75,12 @@ vi.mock("@/stores/scenarioAnimationStore", () => ({
   }),
 }));
 
+vi.mock("@/stores/audioStore", () => ({
+  useAudioStore: () => ({
+    playSfx: vi.fn(),
+  }),
+}));
+
 vi.mock("@/stores/dialogStore", () => ({
   useDialogStore: () => ({
     showMessage: mockShowMessage,

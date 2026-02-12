@@ -36,6 +36,12 @@ vi.mock("@/stores/progressStore", () => ({
   }),
 }));
 
+vi.mock("@/stores/audioStore", () => ({
+  useAudioStore: () => ({
+    playSfx: vi.fn(),
+  }),
+}));
+
 describe("useQuestionSolver", () => {
   // eslint-disable-next-line init-declarations
   let onSectionComplete: () => void;
