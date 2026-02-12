@@ -23,6 +23,7 @@ export type ForbiddenTag =
 /** 四追い系タグ */
 export type ThreatSequenceTag =
   | "vcf-win" // 四追い勝ち（棋譜から検出）
+  | "vcf-forbidden" // 四追い禁手追い込み（VCF→禁手で勝利）
   | `vcf-${number}` // VCF手数（例: vcf-3 = 3手のVCF）
   | "four-three"; // 四三同時
 

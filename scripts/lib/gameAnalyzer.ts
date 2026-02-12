@@ -291,6 +291,56 @@ function detectVcfWin(
 }
 
 /**
+ * 四追い禁手追い込み（VCF → forbidden）を検出
+ *
+ * 最後の手（白の禁手追い込み手）から遡り、白の連続四を追跡。
+ * 白の連続四が2手以上あればVCF禁手追い込みと判定する。
+ */
+function detectVcfForbidden(moves: MoveAnalysis[]): VcfResult | null {
+  let vcfStartIndex: number | null = null;
+
+  for (let i = moves.length - 1; i >= 0; i--) {
+    const move = moves[i];
+    if (!move || move.color !== "white") {
+      continue;
+    }
+
+    // 四、四三、禁手追い込みのいずれかであればVCFの一部
+    if (
+      move.tags.includes("four") ||
+      move.tags.includes("four-three") ||
+      move.tags.includes("forbidden-trap")
+    ) {
+      vcfStartIndex = i;
+      continue;
+    }
+
+    // それ以外の白の手に到達したら終了
+    break;
+  }
+
+  if (vcfStartIndex === null) {
+    return null;
+  }
+
+  // 白の手数をカウント
+  let vcfLength = 0;
+  for (let i = vcfStartIndex; i < moves.length; i++) {
+    const move = moves[i];
+    if (move?.color === "white") {
+      vcfLength++;
+    }
+  }
+
+  // 2手以上の四追いならVCF
+  if (vcfLength >= 2) {
+    return { startIndex: vcfStartIndex, vcfLength };
+  }
+
+  return null;
+}
+
+/**
  * 1対局を分析
  */
 export function analyzeGame(
@@ -357,6 +407,21 @@ export function analyzeGame(
       lastMove.tags.push("forbidden-loss");
     }
     gameTags.push("forbidden-loss");
+
+    // 四追い禁手追い込み（VCF → forbidden）の検出
+    const vcfForbiddenResult = lastMoveData?.forcedForbidden
+      ? detectVcfForbidden(moves)
+      : null;
+    if (vcfForbiddenResult !== null) {
+      for (let i = vcfForbiddenResult.startIndex; i < moves.length; i++) {
+        const move = moves[i];
+        if (move?.color === "white") {
+          move.tags.push("vcf-forbidden");
+        }
+      }
+      gameTags.push("vcf-forbidden");
+      gameTags.push(`vcf-${vcfForbiddenResult.vcfLength}` as Tag);
+    }
   }
 
   // 対局レベルのタグを収集
