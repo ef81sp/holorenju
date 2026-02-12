@@ -17,6 +17,7 @@ import {
 
 import { DIRECTION_INDICES, DIRECTIONS } from "../core/constants";
 import { checkEnds, countLine, getLineEnds } from "../core/lineAnalysis";
+import { analyzeDirection } from "../evaluation/directionAnalysis";
 import { isNearExistingStone } from "../moveGenerator";
 import {
   findJumpGapPosition,
@@ -39,6 +40,45 @@ export const VCT_STONE_THRESHOLD = 14;
 
 /** VCT探索の時間制限（ミリ秒） */
 const VCT_TIME_LIMIT = 150;
+
+/**
+ * 指定色が活三（連続三で両端空き）を持っているかチェック
+ *
+ * 活三を持つ相手がいる場合、相手は三を無視して四を打てるため、
+ * VCT（三を含む脅威連続）は成立しない。VCF（四追い）のみが有効。
+ *
+ * @param board 盤面
+ * @param color チェック対象の色
+ * @returns 活三があればtrue
+ */
+export function hasOpenThree(
+  board: BoardState,
+  color: "black" | "white",
+): boolean {
+  for (let row = 0; row < BOARD_SIZE; row++) {
+    for (let col = 0; col < BOARD_SIZE; col++) {
+      if (board[row]?.[col] !== color) {
+        continue;
+      }
+      for (let i = 0; i < DIRECTIONS.length; i++) {
+        const direction = DIRECTIONS[i];
+        if (!direction) {
+          continue;
+        }
+        const [dr, dc] = direction;
+        const pattern = analyzeDirection(board, row, col, dr, dc, color);
+        if (
+          pattern.count === 3 &&
+          pattern.end1 === "empty" &&
+          pattern.end2 === "empty"
+        ) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
 
 /**
  * VCT探索オプション（外部からパラメータを設定可能）
@@ -97,12 +137,18 @@ export function hasVCT(
 ): boolean {
   const maxDepth = options?.maxDepth ?? VCT_MAX_DEPTH;
   const timeLimitMs = options?.timeLimit ?? VCT_TIME_LIMIT;
+  const opponentColor = color === "black" ? "white" : "black";
 
   // 時間制限の初期化（ルート呼び出し時）
   const limiter = timeLimiter ?? {
     startTime: performance.now(),
     timeLimit: timeLimitMs,
   };
+
+  // トップレベル: 相手に活三があればVCT不成立（四追いでしか勝てない）
+  if (depth === 0 && hasOpenThree(board, opponentColor)) {
+    return false;
+  }
 
   // 時間制限チェック
   if (performance.now() - limiter.startTime >= limiter.timeLimit) {
@@ -121,8 +167,6 @@ export function hasVCT(
 
   // 脅威（四・活三）を作れる位置を列挙
   const threatMoves = findThreatMoves(board, color);
-
-  const opponentColor = color === "black" ? "white" : "black";
 
   for (const move of threatMoves) {
     // 脅威を作る（インプレース）
@@ -414,6 +458,13 @@ export function findVCTMove(
     timeLimit: timeLimitMs,
   };
 
+  // 相手に活三があればVCT不成立（四追いでしか勝てない）
+  const opponentColor = color === "black" ? "white" : "black";
+  if (hasOpenThree(board, opponentColor)) {
+    // VCFのみ試す（四追いなら活三があっても有効）
+    return findVCFMove(board, color, options?.vcfOptions);
+  }
+
   // VCFが先に成立する場合はVCFの手を返す
   const vcfMove = findVCFMove(board, color, options?.vcfOptions);
   if (vcfMove) {
@@ -552,6 +603,21 @@ export function findVCTSequence(
     startTime: performance.now(),
     timeLimit: timeLimitMs,
   };
+
+  // 相手に活三があればVCT不成立（四追いでしか勝てない）
+  const opponentColor = color === "black" ? "white" : "black";
+  if (hasOpenThree(board, opponentColor)) {
+    // VCFのみ試す（四追いなら活三があっても有効）
+    const vcfOnly = findVCFSequence(board, color, options?.vcfOptions);
+    if (vcfOnly) {
+      return {
+        firstMove: vcfOnly.firstMove,
+        sequence: vcfOnly.sequence,
+        isForbiddenTrap: vcfOnly.isForbiddenTrap,
+      };
+    }
+    return null;
+  }
 
   // VCFが先に成立する場合はVCF手順を返す
   const vcfSeq = findVCFSequence(board, color, options?.vcfOptions);
@@ -842,6 +908,12 @@ export function isVCTFirstMove(
     timeLimit: timeLimitMs,
   };
 
+  // 相手に活三があればVCT開始手として無効（四追いでしか勝てない）
+  const opponentColor = color === "black" ? "white" : "black";
+  if (hasOpenThree(board, opponentColor)) {
+    return false;
+  }
+
   // 手を置く（インプレース）
   const moveRow = board[move.row];
   if (moveRow) {
@@ -884,7 +956,6 @@ export function isVCTFirstMove(
   }
 
   // 全防御に対してVCTが継続するか
-  const opponentColor = color === "black" ? "white" : "black";
   let allDefenseLeadsToVCT = true;
   for (const defensePos of defensePositions) {
     if (color === "white") {
