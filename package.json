@@ -25,7 +25,8 @@
     "analyze:bench": "node --experimental-strip-types --disable-warning=ExperimentalWarning --import ./scripts/register-loader.mjs scripts/analyze-bench.ts",
     "analyze:weakness": "node --experimental-strip-types --disable-warning=ExperimentalWarning --import ./scripts/register-loader.mjs scripts/analyze-weakness.ts",
     "ab:bench": "node --experimental-strip-types --disable-warning=ExperimentalWarning --import ./scripts/register-loader.mjs scripts/ab-bench.ts",
-    "tune:params": "node --experimental-strip-types --disable-warning=ExperimentalWarning --import ./scripts/register-loader.mjs scripts/tune-params.ts"
+    "tune:params": "node --experimental-strip-types --disable-warning=ExperimentalWarning --import ./scripts/register-loader.mjs scripts/tune-params.ts",
+    "analyze:position": "node --experimental-strip-types --disable-warning=ExperimentalWarning --import ./scripts/register-loader.mjs scripts/analyze-position.ts"
   },
   "dependencies": {
     "@vueuse/core": "^14.1.0",
