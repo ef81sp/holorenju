@@ -646,7 +646,7 @@ export function minimaxWithTT(
     if (
       ctx.evaluationOptions.enableFutilityPruning &&
       depth >= 1 &&
-      depth <= 2 &&
+      depth <= 3 &&
       moveIndex > 0 && // 最初の手はスキップしない
       bestScore > -PATTERN_SCORES.FIVE + 5000 && // 勝ち/負け確定でない
       bestScore < PATTERN_SCORES.FIVE - 5000 &&

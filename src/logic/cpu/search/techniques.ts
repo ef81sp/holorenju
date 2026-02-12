@@ -163,7 +163,7 @@ export const NMP_REDUCTION = 2;
 // =============================================================================
 
 /** 深度別の Futility マージン（index = depth） */
-export const FUTILITY_MARGINS = [0, 500, 1500] as const;
+export const FUTILITY_MARGINS = [0, 500, 1500, 3000] as const;
 
 // =============================================================================
 // Null Move Pruning 用の軽量脅威チェック
