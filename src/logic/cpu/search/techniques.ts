@@ -170,7 +170,7 @@ export const NMP_REDUCTION = 2;
  * - 相手の手: 防御手・カウンター脅威は探索で判明 → 大きいマージンで慎重に刈る
  */
 export const FUTILITY_MARGINS_SELF = [0, 900, 300, 900] as const;
-export const FUTILITY_MARGINS_OPPONENT = [0, 5000, 2000, 4500] as const;
+export const FUTILITY_MARGINS_OPPONENT = [0, 3500, 1200, 3000] as const;
 
 // =============================================================================
 // Null Move Pruning 用の軽量脅威チェック
