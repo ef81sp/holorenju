@@ -981,9 +981,11 @@ describe("VCFレース判定", () => {
     expect(result.score).toBe(PATTERN_SCORES.FIVE);
   });
 
-  it("相手VCFが自VCFより短い → 通常探索にフォールスルー", () => {
+  it("相手VCFが短くても自VCFは勝利（counter-fourチェック済み）", () => {
     // 白: 2段VCF（2手必要）
     // 黒: 活三（1手VCF: 活四作成で即勝利）
+    // findVCFSequence が返すVCFは counter-four チェック済みなので、
+    // 相手VCFの長短に関係なく自VCFは勝利確定
     const board = createBoardWithStones([
       // 白の横止め三（白(7,4)で止め四、防御(7,5)）
       { row: 7, col: 1, color: "white" },
@@ -1009,11 +1011,9 @@ describe("VCFレース判定", () => {
     expect(vcfAttackMoveCount(whiteVCF!.sequence)).toBe(2); // 白: 2手
     expect(vcfAttackMoveCount(blackVCF!.sequence)).toBe(1); // 黒: 1手
 
-    // 白番で白の2段VCF（2手）vs 黒の1手VCF
-    // VCF即returnではなく通常探索にフォールスルーすることを検証
-    // （completedDepth=0 はVCF即return、>0 は通常探索を意味する）
+    // 白番で白の2段VCF: counter-fourチェック済みなので勝利確定
     const result = findBestMoveIterativeWithTT(board, "white", 4, 1000);
-    expect(result.completedDepth).toBeGreaterThan(0);
+    expect(result.score).toBe(PATTERN_SCORES.FIVE);
   });
 
   it("同手数VCF → score = FIVE（先手有利）", () => {

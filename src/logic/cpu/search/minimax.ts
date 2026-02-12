@@ -69,7 +69,6 @@ import {
   findVCFSequence,
   findWinningMove,
   getFourDefensePosition,
-  vcfAttackMoveCount,
   type VCFSequenceResult,
 } from "./vcf";
 
@@ -1128,51 +1127,16 @@ export function findBestMoveIterativeWithTT(
   // （相手の四がある場合は上記で即return済みなのでここには到達しない）
   const vcfResult = findVCFSequence(board, color);
   if (vcfResult) {
-    const myMoveCount = vcfAttackMoveCount(vcfResult.sequence);
-
-    // 1手VCF（活四作成）は無条件勝利
-    // （即五連はfindWinningMoveで、相手の即五連はdetectOpponentThreatsで既にチェック済み）
-    if (myMoveCount <= 1) {
-      return {
-        position: vcfResult.firstMove,
-        score: PATTERN_SCORES.FIVE, // 勝利確定
-        completedDepth: 0,
-        interrupted: false,
-        elapsedTime: performance.now() - startTime,
-        stats: mergeProfilingCounters(ctx.stats),
-      };
-    }
-
-    // 2手以上: 相手VCFとのレース判定
-    opponentVCFResult = findVCFSequence(board, opponentColor, {
-      timeLimit: 100,
-    });
-
-    if (!opponentVCFResult) {
-      // 相手VCFなし → 自VCF勝利
-      return {
-        position: vcfResult.firstMove,
-        score: PATTERN_SCORES.FIVE, // 勝利確定
-        completedDepth: 0,
-        interrupted: false,
-        elapsedTime: performance.now() - startTime,
-        stats: mergeProfilingCounters(ctx.stats),
-      };
-    }
-
-    const oppMoveCount = vcfAttackMoveCount(opponentVCFResult.sequence);
-    if (myMoveCount <= oppMoveCount) {
-      // 自VCFが同手数以下 → 先手有利で勝利
-      return {
-        position: vcfResult.firstMove,
-        score: PATTERN_SCORES.FIVE, // 勝利確定
-        completedDepth: 0,
-        interrupted: false,
-        elapsedTime: performance.now() - startTime,
-        stats: mergeProfilingCounters(ctx.stats),
-      };
-    }
-    // 相手VCFが短い → 通常探索にフォールスルー
+    // findVCFSequence が返す VCF は各防御手の counter-four/counter-five チェック済み。
+    // 相手は毎手四を止めるしかないため、相手VCFの有無・長短に関係なく勝利確定。
+    return {
+      position: vcfResult.firstMove,
+      score: PATTERN_SCORES.FIVE, // 勝利確定
+      completedDepth: 0,
+      interrupted: false,
+      elapsedTime: performance.now() - startTime,
+      stats: mergeProfilingCounters(ctx.stats),
+    };
   }
 
   // 3.5 Mise-VCF（ミセ→強制応手→VCF勝ち）があれば即座にその手を返す

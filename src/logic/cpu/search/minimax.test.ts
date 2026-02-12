@@ -415,3 +415,38 @@ describe("depth=0 Mise-VCFの禁手チェック", () => {
     expect(isH6).toBe(false);
   }, 15000);
 });
+
+describe("VCFレース判定", () => {
+  it("2手以上のVCFでも相手VCFに関係なく勝利を返す", () => {
+    // 白の2段VCF + 黒の1手VCF（活三）の局面
+    // 修正前: 相手VCFが短いためフォールスルーしていた
+    // 修正後: findVCFSequence のVCFは counter-four チェック済みなので即勝利
+    const board = createBoardWithStones([
+      // 白の横止め三（白(7,4)で止め四、防御(7,5)）
+      { row: 7, col: 1, color: "white" },
+      { row: 7, col: 2, color: "white" },
+      { row: 7, col: 3, color: "white" },
+      { row: 7, col: 0, color: "black" }, // 左端ブロック
+      // 白の縦止め三（VCF2段目用）
+      { row: 4, col: 5, color: "white" },
+      { row: 5, col: 5, color: "white" },
+      { row: 6, col: 5, color: "white" },
+      { row: 3, col: 5, color: "black" }, // 上端ブロック
+      // 黒の活三（1手VCF: 活四作成で即勝ち）
+      { row: 10, col: 7, color: "black" },
+      { row: 10, col: 8, color: "black" },
+      { row: 10, col: 9, color: "black" },
+    ]);
+    const result = findBestMoveIterativeWithTT(
+      board,
+      "white",
+      4,
+      5000,
+      0,
+      FULL_EVAL_OPTIONS,
+    );
+    // VCFが有効なのでFIVEスコアを返すべき（completedDepth=0はVCF即return）
+    expect(result.score).toBe(PATTERN_SCORES.FIVE);
+    expect(result.completedDepth).toBe(0);
+  }, 15000);
+});
