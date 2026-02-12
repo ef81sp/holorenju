@@ -3,6 +3,7 @@ name: analyze-bench
 description: ベンチマーク結果を分析して戦術的洞察を提供
 allowed-tools:
   - Bash(pnpm analyze:bench:*)
+  - Bash(pnpm analyze:deep:*)
   - Bash(node --eval:*)
   - Bash(ls:*)
   - Write(docs/bench-reports/*.md)
@@ -203,16 +204,29 @@ pnpm analyze:bench <file>  # 引数なしで最新ファイルを自動選択
 - 深度変化（最善手の安定性）
 - 難易度別思考時間（平均、p50、p90、p95、p99、max、timeLimit超過の詳細上位5件）
 
-### 2. 特定ゲームの深掘り分析（必要な場合のみ）
+### 2. 深掘り分析（`pnpm analyze:deep`）
 
-問題のあるゲームを詳細に調査する場合、`node --eval` でJSONを読み込んで必要な情報を抽出する。
-なるべく1回の呼び出しで必要な情報をまとめて取得すること。
+blunder分布、advantage-squandered詳細、time-pressure-error詳細、特定ゲームの手順表示を行う。
 
-調査対象例:
+```bash
+pnpm analyze:deep                         # 最新ファイルの全分析
+pnpm analyze:deep --blunders              # blunder分布のみ
+pnpm analyze:deep --squandered            # advantage-squanderedのみ
+pnpm analyze:deep --tpe                   # time-pressure-errorのみ
+pnpm analyze:deep --game=35               # 特定ゲームの手順表示
+pnpm analyze:deep --file=<file.json>      # 特定ファイル指定
+```
 
-- 特定ゲームの基本情報と全着手の候補手・スコア内訳
-- 予想手順（PV）と末端評価
-- スコア逆転した着手、深度変化のある着手
+出力内容:
+
+- **blunder分布**: 深度別内訳（d0強制手/d3中断/d4評価失敗）、スコア差範囲、真の評価失敗数、Top 10
+- **advantage-squandered**: ピークスコア、VCFフラグ、ピーク後のスコア推移、中断回数
+- **time-pressure-error**: depthHistory全体、スコア悪化幅でソート
+- **game手順**: 全手のscore/depth/top candidate/フラグ（INT/FALLBACK/FORCED）
+
+### 3. 特定ゲームの更に詳細な調査（必要な場合のみ）
+
+`pnpm analyze:deep` で気になるゲームが見つかった場合、`node --eval` でJSONを直接読み込んで候補手のbreakdownやPVを調査する。
 
 ### 3. 戦術的観点からの洞察
 
@@ -278,11 +292,13 @@ pnpm analyze:bench <file>  # 引数なしで最新ファイルを自動選択
 
 ## 関連ファイル
 
-| ファイル                               | 役割                             |
-| -------------------------------------- | -------------------------------- |
-| `scripts/analyze-bench.ts`             | 基本統計CLI                      |
-| `scripts/lib/benchStatistics.ts`       | 統計計算・フォーマットライブラリ |
-| `src/logic/cpu/benchmark/headless.ts`  | MoveRecord型定義                 |
-| `src/types/cpu.ts`                     | CandidateMove, ScoreBreakdown等  |
-| `docs/renju-tactics-and-evaluation.md` | 戦術知識                         |
-| `docs/cpu-ai-algorithm.md`             | アルゴリズム知識                 |
+| ファイル                               | 役割                                    |
+| -------------------------------------- | --------------------------------------- |
+| `scripts/analyze-bench.ts`             | 基本統計CLI                             |
+| `scripts/analyze-bench-deep.ts`        | 深掘り分析CLI（blunder/squandered/TPE） |
+| `scripts/lib/benchStatistics.ts`       | 統計計算・フォーマットライブラリ        |
+| `scripts/lib/benchDeepDive.ts`         | 深掘り分析ライブラリ                    |
+| `src/logic/cpu/benchmark/headless.ts`  | MoveRecord型定義                        |
+| `src/types/cpu.ts`                     | CandidateMove, ScoreBreakdown等         |
+| `docs/renju-tactics-and-evaluation.md` | 戦術知識                                |
+| `docs/cpu-ai-algorithm.md`             | アルゴリズム知識                        |

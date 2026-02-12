@@ -115,22 +115,26 @@ pnpm analyze:weakness --file=<file>       # 特定ファイル指定
 - 改善提案
 - JSON保存先（`weakness-reports/weakness-*.json`）
 
-### 2. 特定ゲームの深掘り分析（必要な場合のみ）
+### 2. 深掘り分析（`pnpm analyze:deep`）
 
-`pnpm analyze:weakness` の出力で気になるゲームがあれば、`node --eval` でベンチマークJSONを直接読み込んで詳細調査する。
+`pnpm analyze:weakness` の出力で気になるパターンがあれば、`pnpm analyze:deep` で詳細調査する。
 
-調査対象例:
+```bash
+pnpm analyze:deep                         # 全分析（blunder分布/squandered/TPE）
+pnpm analyze:deep --blunders              # blunder深度別分布・スコア差範囲
+pnpm analyze:deep --squandered            # advantage-squanderedのピーク後スコア推移
+pnpm analyze:deep --tpe                   # time-pressure-errorのdepthHistory
+pnpm analyze:deep --game=35               # 特定ゲームの全手順表示
+```
 
-- blunderが発生した手の候補手スコア内訳
-- missed-vcfの盤面でなぜVCFが見逃されたか
-- advantage-squanderedのスコア推移とターニングポイント
-- 禁手追い込みの手順
+### 3. 特定ゲームの更に詳細な調査（必要な場合のみ）
+
+`pnpm analyze:deep` で気になるゲームが見つかった場合、`node --eval` でJSONを直接読み込んで候補手のbreakdownやPVを調査する。
 
 ```bash
 node --eval "
 const data = require('./bench-results/<file>.json');
 const game = data.games[<gameIndex>];
-// 特定の手の候補手や PV を確認
 const move = game.moveHistory[<moveIndex>];
 console.log(JSON.stringify(move.candidates, null, 2));
 "
@@ -160,12 +164,14 @@ console.log(JSON.stringify(move.candidates, null, 2));
 
 ## 関連ファイル
 
-| ファイル                               | 役割                          |
-| -------------------------------------- | ----------------------------- |
-| `scripts/analyze-weakness.ts`          | CLI エントリポイント          |
-| `scripts/lib/weaknessAnalyzer.ts`      | 弱点分析ロジック              |
-| `scripts/types/weakness.ts`            | 弱点関連の型定義              |
-| `src/logic/cpu/benchmark/headless.ts`  | MoveRecord型定義              |
-| `src/logic/cpu/search/vcf.ts`          | VCF探索（missed-vcf再検証用） |
-| `docs/renju-tactics-and-evaluation.md` | 戦術知識                      |
-| `docs/cpu-ai-algorithm.md`             | アルゴリズム知識              |
+| ファイル                               | 役割                                    |
+| -------------------------------------- | --------------------------------------- |
+| `scripts/analyze-weakness.ts`          | CLI エントリポイント                    |
+| `scripts/analyze-bench-deep.ts`        | 深掘り分析CLI（blunder/squandered/TPE） |
+| `scripts/lib/weaknessAnalyzer.ts`      | 弱点分析ロジック                        |
+| `scripts/lib/benchDeepDive.ts`         | 深掘り分析ライブラリ                    |
+| `scripts/types/weakness.ts`            | 弱点関連の型定義                        |
+| `src/logic/cpu/benchmark/headless.ts`  | MoveRecord型定義                        |
+| `src/logic/cpu/search/vcf.ts`          | VCF探索（missed-vcf再検証用）           |
+| `docs/renju-tactics-and-evaluation.md` | 戦術知識                                |
+| `docs/cpu-ai-algorithm.md`             | アルゴリズム知識                        |
