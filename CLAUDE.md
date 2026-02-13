@@ -18,9 +18,14 @@ pnpm dev           # Dev server (usually already running)
 pnpm build         # Production build
 ```
 
+### Git
+
+- Don't need `git -C`. Do `pwd`
+
 ## Planning
 
 - Do TDD
+- Review yourself before aprooving
 
 ## Architecture
 
