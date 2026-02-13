@@ -7,6 +7,7 @@
 import { ref, type Ref } from "vue";
 
 import type { EmotionId } from "@/types/character";
+import type { BattleResult } from "@/types/cpu";
 import type { Position } from "@/types/game";
 import type { EvaluatedMove, MoveQuality } from "@/types/review";
 
@@ -55,6 +56,49 @@ const FORCED_WIN_LABELS: Record<
   "mise-vcf": "ミセ四追い",
 };
 
+/** 負け確定（相手の必勝手順あり）時のセリフ（品質別） */
+const FORCED_LOSS_DIALOGUES: Record<MoveQuality, string[]> = {
+  excellent: ["最善は尽くしたけど、相手の{forcedLoss}は防げないよ..."],
+  good: ["悪くないけど、相手に{forcedLoss}があるよ..."],
+  inaccuracy: ["この手で相手に{forcedLoss}を許しちゃったかも"],
+  mistake: [
+    "この手で相手に{forcedLoss}を許しちゃったよ！{bestMove}ならまだ粘れたかも",
+  ],
+  blunder: ["まずい！この手で相手に{forcedLoss}を決められちゃう！"],
+};
+
+/** 負け確定時の表情 */
+const FORCED_LOSS_EMOTIONS: Record<MoveQuality, EmotionId> = {
+  excellent: 1, // 考え中（仕方ない）
+  good: 1, // 考え中
+  inaccuracy: 11, // 心配
+  mistake: 11, // 心配
+  blunder: 11, // 心配
+};
+
+/** CPU手のセリフ */
+const CPU_MOVE_DIALOGUES = ["相手の一手だよ", "コンピュータの手だね"];
+
+/** CPU手で強制勝ち（プレイヤー負け確定）時のセリフ */
+const CPU_FORCED_WIN_DIALOGUES = [
+  "相手の{forcedWin}が決まっているよ...",
+  "ここから相手の{forcedWin}だよ...",
+];
+
+/** 五連（決着）時のセリフ */
+const GAME_END_DIALOGUES: Record<BattleResult, string[]> = {
+  win: ["五連！見事な勝利だね！", "やったね、五連完成！"],
+  lose: ["相手に五連を決められちゃった...", "五連...負けちゃったね"],
+  draw: ["引き分けだね、いい勝負だった！", "引き分け！お互い譲らなかったね"],
+};
+
+/** 五連時の表情 */
+const GAME_END_EMOTIONS: Record<BattleResult, EmotionId> = {
+  win: 26, // 驚き・ツッコミ
+  lose: 11, // 心配
+  draw: 0, // 通常
+};
+
 /** 強制勝ち検出時の追加セリフ（品質別） */
 const FORCED_WIN_DIALOGUES: Record<MoveQuality, string[]> = {
   excellent: [
@@ -91,7 +135,12 @@ export interface UseReviewDialogueReturn {
     quality: MoveQuality,
     bestMove: Position,
     forcedWinType?: EvaluatedMove["forcedWinType"],
+    forcedLossType?: EvaluatedMove["forcedLossType"],
   ) => void;
+  /** CPU手のセリフを表示 */
+  showCpuMoveDialogue: (forcedWinType?: EvaluatedMove["forcedWinType"]) => void;
+  /** 五連（決着）セリフを表示 */
+  showGameEndDialogue: (result: BattleResult) => void;
   /** 初期セリフを表示 */
   showInitialDialogue: () => void;
   /** 評価中セリフを表示 */
@@ -123,22 +172,75 @@ export function useReviewDialogue(): UseReviewDialogueReturn {
     });
   }
 
+  /** 優先順に応じたテンプレートと表情を選択 */
+  function selectTemplateAndEmotion(
+    quality: MoveQuality,
+    forcedWinType?: EvaluatedMove["forcedWinType"],
+    forcedLossType?: EvaluatedMove["forcedLossType"],
+  ): { templates: string[]; emotion: EmotionId } {
+    if (forcedWinType) {
+      return {
+        templates: FORCED_WIN_DIALOGUES[quality],
+        emotion: QUALITY_EMOTIONS[quality],
+      };
+    }
+    if (forcedLossType) {
+      return {
+        templates: FORCED_LOSS_DIALOGUES[quality],
+        emotion: FORCED_LOSS_EMOTIONS[quality],
+      };
+    }
+    return {
+      templates: QUALITY_DIALOGUES[quality],
+      emotion: QUALITY_EMOTIONS[quality],
+    };
+  }
+
   function showQualityDialogue(
     quality: MoveQuality,
     bestMove: Position,
     forcedWinType?: EvaluatedMove["forcedWinType"],
+    forcedLossType?: EvaluatedMove["forcedLossType"],
   ): void {
-    const templates = forcedWinType
-      ? FORCED_WIN_DIALOGUES[quality]
-      : QUALITY_DIALOGUES[quality];
+    const { templates, emotion } = selectTemplateAndEmotion(
+      quality,
+      forcedWinType,
+      forcedLossType,
+    );
     const template = randomChoice(templates);
     const forcedWinLabel = forcedWinType
       ? FORCED_WIN_LABELS[forcedWinType]
       : "";
+    const forcedLossLabel = forcedLossType
+      ? FORCED_WIN_LABELS[forcedLossType]
+      : "";
     const text = template
       .replace(/\{bestMove\}/g, formatMove(bestMove))
-      .replace(/\{forcedWin\}/g, forcedWinLabel);
-    showMessage(text, QUALITY_EMOTIONS[quality]);
+      .replace(/\{forcedWin\}/g, forcedWinLabel)
+      .replace(/\{forcedLoss\}/g, forcedLossLabel);
+    showMessage(text, emotion);
+  }
+
+  function showCpuMoveDialogue(
+    forcedWinType?: EvaluatedMove["forcedWinType"],
+  ): void {
+    if (forcedWinType) {
+      const template = randomChoice(CPU_FORCED_WIN_DIALOGUES);
+      const text = template.replace(
+        /\{forcedWin\}/g,
+        FORCED_WIN_LABELS[forcedWinType],
+      );
+      showMessage(text, 11);
+    } else {
+      showMessage(randomChoice(CPU_MOVE_DIALOGUES), 0);
+    }
+  }
+
+  function showGameEndDialogue(result: BattleResult): void {
+    showMessage(
+      randomChoice(GAME_END_DIALOGUES[result]),
+      GAME_END_EMOTIONS[result],
+    );
   }
 
   function showInitialDialogue(): void {
@@ -166,6 +268,8 @@ export function useReviewDialogue(): UseReviewDialogueReturn {
   return {
     currentEmotion,
     showQualityDialogue,
+    showCpuMoveDialogue,
+    showGameEndDialogue,
     showInitialDialogue,
     showEvaluatingDialogue,
     showEvaluationCompleteDialogue,

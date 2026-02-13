@@ -115,15 +115,25 @@ watch(
   () => {
     overlay.clearPreview();
 
+    // 最終手 = 五連（決着）
+    const isLastMove =
+      reviewStore.currentMoveIndex === reviewStore.moves.length &&
+      reviewStore.currentMoveIndex > 0;
+    if (isLastMove && reviewStore.currentRecord) {
+      dialogue.showGameEndDialogue(reviewStore.currentRecord.result);
+      return;
+    }
+
     const evaluation = reviewStore.currentEvaluation;
     if (evaluation?.isPlayerMove) {
       dialogue.showQualityDialogue(
         evaluation.quality,
         evaluation.bestMove,
         evaluation.forcedWinType,
+        evaluation.forcedLossType,
       );
     } else if (evaluation) {
-      dialogue.clearDialogue();
+      dialogue.showCpuMoveDialogue(evaluation.forcedWinType);
     }
   },
 );
