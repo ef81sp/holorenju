@@ -40,25 +40,17 @@ self.onmessage = (event: MessageEvent<CpuRequest>) => {
     if (isOpeningPhase(moveCount)) {
       const openingMove = getOpeningMove(request.board, currentTurn);
       if (openingMove) {
-        // 探索と同程度の遅延を設ける（難易度に応じた時間の30-60%）
-        const params = DIFFICULTY_PARAMS[request.difficulty];
-        const minDelay = params.timeLimit * 0.3;
-        const maxDelay = params.timeLimit * 0.6;
-        const delay = minDelay + Math.random() * (maxDelay - minDelay);
+        const endTime = performance.now();
+        const thinkingTime = Math.round(endTime - startTime);
 
-        setTimeout(() => {
-          const endTime = performance.now();
-          const thinkingTime = Math.round(endTime - startTime);
+        const response: CpuResponse = {
+          position: openingMove,
+          score: 0, // 開局の手は評価スコアなし
+          thinkingTime,
+          depth: 0, // 探索なし
+        };
 
-          const response: CpuResponse = {
-            position: openingMove,
-            score: 0, // 開局の手は評価スコアなし
-            thinkingTime,
-            depth: 0, // 探索なし
-          };
-
-          self.postMessage(response);
-        }, delay);
+        self.postMessage(response);
         return;
       }
     }
