@@ -13,7 +13,8 @@ import { createBoardFromRecord } from "@/logic/gameRecordParser";
 import { DIFFICULTY_PARAMS } from "@/types/cpu";
 
 import { findBestMoveIterativeWithTT } from "../search/minimax";
-import { findFourMoves, findVCFSequence } from "../search/vcf";
+import { findFourMoves } from "../search/threatPatterns";
+import { findVCFSequence } from "../search/vcf";
 import { detectOpponentThreats } from "./threatDetection";
 
 const GAME_RECORD = "H8 H7 J8 G8 I9 G7 J7 F9 I6 E9 I8";

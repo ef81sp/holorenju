@@ -6,7 +6,8 @@ import type { StoneColor } from "@/types/game";
 import { createEmptyBoard, copyBoard } from "@/logic/renjuRules";
 
 import { evaluatePosition } from "./evaluation";
-import { hasVCF, findFourMoves, findVCFMove } from "./search/vcf";
+import { findFourMoves } from "./search/threatPatterns";
+import { findVCFMove, hasVCF } from "./search/vcf";
 
 /** セルの値を表示用文字に変換 */
 function cellToChar(cell: StoneColor | null): string {

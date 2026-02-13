@@ -6,15 +6,16 @@ import { describe, expect, it } from "vitest";
 
 import { createEmptyBoard } from "@/logic/renjuRules";
 
+import { checkEnds, countLine } from "../core/lineAnalysis";
 import { PATTERN_SCORES } from "../evaluation";
 import { createBoardWithStones, placeStonesOnBoard } from "../testUtils";
 import { findBestMoveIterativeWithTT } from "./minimax";
 import {
-  checkEnds,
-  countLine,
   findDefenseForConsecutiveFour,
   findDefenseForJumpFour,
   findFourMoves,
+} from "./threatPatterns";
+import {
   findVCFMove,
   findVCFSequence,
   hasVCF,

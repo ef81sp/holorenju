@@ -41,10 +41,10 @@ import {
 } from "./techniques";
 import {
   findFourMoves,
-  findVCFSequence,
   findWinningMove,
   getFourDefensePosition,
-} from "./vcf";
+} from "./threatPatterns";
+import { findVCFSequence } from "./vcf";
 
 /**
  * プロファイリングカウンターの値をSearchStatsにマージ

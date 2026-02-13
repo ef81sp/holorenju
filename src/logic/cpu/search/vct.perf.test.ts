@@ -7,17 +7,16 @@ import { describe, expect, it } from "vitest";
 import { createBoardFromRecord } from "@/logic/gameRecordParser";
 import { copyBoard, createEmptyBoard } from "@/logic/renjuRules";
 
+import { countStones } from "../core/boardUtils";
 import { createBoardWithStones } from "../testUtils";
 import {
-  countStones,
   findVCTMove,
   findVCTSequence,
-  getThreatDefensePositions,
-  hasOpenThree,
   hasVCT,
   isVCTFirstMove,
   VCT_STONE_THRESHOLD,
 } from "./vct";
+import { getThreatDefensePositions, hasOpenThree } from "./vctHelpers";
 
 describe("hasVCT", () => {
   it("空の盤面ではVCTなし", () => {

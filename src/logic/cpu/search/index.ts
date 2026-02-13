@@ -9,20 +9,30 @@
 // 共通コンテキスト
 export { type TimeLimiter, isTimeExceeded } from "./context";
 
+// ライン解析（SSoT: core/lineAnalysis）
+export { checkEnds, countLine } from "../core/lineAnalysis";
+
+// 盤面ユーティリティ（SSoT: core/boardUtils）
+export { countStones } from "../core/boardUtils";
+
+// 脅威パターン（SSoT: threatPatterns）
+export {
+  findDefenseForConsecutiveFour,
+  findDefenseForJumpFour,
+  findFourMoves,
+  findWinningMove,
+  getFourDefensePosition,
+  checkDefenseCounterThreat,
+} from "./threatPatterns";
+
 // VCF
 export {
   hasVCF,
   findVCFMove,
   findVCFSequence,
   vcfAttackMoveCount,
-  findFourMoves,
-  findDefenseForConsecutiveFour,
-  findDefenseForJumpFour,
   type VCFSearchOptions,
   type VCFSequenceResult,
-  // 後方互換性のため
-  checkEnds,
-  countLine,
 } from "./vcf";
 
 // VCT
@@ -34,8 +44,6 @@ export {
   VCT_STONE_THRESHOLD,
   type VCTSearchOptions,
   type VCTSequenceResult,
-  // 後方互換性のため
-  countStones,
 } from "./vct";
 
 // Minimax

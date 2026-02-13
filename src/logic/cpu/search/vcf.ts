@@ -13,18 +13,6 @@ import { type TimeLimiter, isTimeExceeded } from "./context";
 import { createsFour } from "./threatMoves";
 import { findFourMoves, getFourDefensePosition } from "./threatPatterns";
 
-// 後方互換性のためライン解析関数を再export
-export { checkEnds, countLine } from "../core/lineAnalysis";
-
-// 後方互換性のため threatPatterns の関数を再export
-export {
-  findDefenseForConsecutiveFour,
-  findDefenseForJumpFour,
-  findFourMoves,
-  getFourDefensePosition,
-  findWinningMove,
-} from "./threatPatterns";
-
 /** VCF探索の最大深度 */
 const VCF_MAX_DEPTH = 8;
 

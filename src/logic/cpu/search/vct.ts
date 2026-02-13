@@ -24,9 +24,6 @@ import {
   isThreat,
 } from "./vctHelpers";
 
-// 後方互換性のため vctHelpers の関数を再export
-export { getThreatDefensePositions, hasOpenThree } from "./vctHelpers";
-
 /** VCT探索の最大深度 */
 const VCT_MAX_DEPTH = 4;
 
@@ -833,6 +830,3 @@ export function isVCTFirstMove(
 
   return allDefenseLeadsToVCT;
 }
-
-// 後方互換性のため core/boardUtils から再export
-export { countStones } from "../core/boardUtils";
