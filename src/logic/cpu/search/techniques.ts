@@ -139,8 +139,8 @@ export function isTacticalMove(
 // Aspiration Windows パラメータ
 // =============================================================================
 
-/** Aspiration Windowの初期幅 */
-export const ASPIRATION_WINDOW = 50;
+/** Aspiration Windowの初期幅（FOUR=1500 に対する比率 75/1500=5% は旧比率 50/1000=5% と同等） */
+export const ASPIRATION_WINDOW = 75;
 
 /** デフォルトの絶対時間制限（10秒） */
 export const DEFAULT_ABSOLUTE_TIME_LIMIT = 10000;
@@ -166,11 +166,15 @@ export const NMP_REDUCTION = 2;
  * 手番別 Futility マージン（index = depth）
  *
  * 実測データ（docs/futility-margin-analysis.md）に基づく:
- * - 自分の手: 静的評価が正確で gain が小さい → 小さいマージンで積極的に刈る
- * - 相手の手: 防御手・カウンター脅威は探索で判明 → 大きいマージンで慎重に刈る
+ * - 自分の手: 静的評価が正確で gain が小さい → P95ベースで積極的に刈る
+ * - 相手の手: 防御手・カウンター脅威は探索で判明 → P95付近で慎重に刈る
+ *
+ * FOUR=1500 スコア分布での再計測値（2026-02-13）:
+ *   Self  d1 P95=987, d2 P95=108
+ *   Opp   d1 P95=4099, d2 P95=1207, d3 P95=2899
  */
-export const FUTILITY_MARGINS_SELF = [0, 900, 300, 900] as const;
-export const FUTILITY_MARGINS_OPPONENT = [0, 3500, 1200, 3000] as const;
+export const FUTILITY_MARGINS_SELF = [0, 1000, 200, 1000] as const;
+export const FUTILITY_MARGINS_OPPONENT = [0, 4100, 1300, 3000] as const;
 
 // =============================================================================
 // Null Move Pruning 用の軽量脅威チェック

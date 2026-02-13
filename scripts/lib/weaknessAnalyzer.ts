@@ -34,8 +34,8 @@ import { createEmptyBoard } from "../../src/logic/renjuRules.ts";
 // 定数
 // ============================================================================
 
-/** blunder 判定の最小スコア差 */
-const BLUNDER_THRESHOLD = 2000;
+/** blunder 判定の最小スコア差（FOUR=1500 で四の獲得/喪失が3000点差を生むため引き上げ） */
+const BLUNDER_THRESHOLD = 3000;
 
 /** advantage-squandered のスコア閾値 */
 const ADVANTAGE_THRESHOLD = 3000;

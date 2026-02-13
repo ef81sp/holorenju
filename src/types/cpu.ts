@@ -84,9 +84,9 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
     maxNodes: 50000,
     evaluationOptions: {
       enableFukumi: false,
-      enableMise: false,
+      enableMise: true, // 計算コスト低で戦術認識向上（medium-easy格差対策）
       enableForbiddenTrap: false,
-      enableMultiThreat: false,
+      enableMultiThreat: true, // 計算コスト低で戦術認識向上（medium-easy格差対策）
       enableCounterFour: false,
       enableVCT: false,
       enableMandatoryDefense: true, // 致命的ミスを減らす
