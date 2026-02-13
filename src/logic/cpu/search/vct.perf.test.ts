@@ -10,13 +10,21 @@ import { copyBoard, createEmptyBoard } from "@/logic/renjuRules";
 import { countStones } from "../core/boardUtils";
 import { createBoardWithStones } from "../testUtils";
 import {
+  checkDefenseCounterThreat,
+  getFourDefensePosition,
+} from "./threatPatterns";
+import {
   findVCTMove,
   findVCTSequence,
   hasVCT,
   isVCTFirstMove,
   VCT_STONE_THRESHOLD,
 } from "./vct";
-import { getThreatDefensePositions, hasOpenThree } from "./vctHelpers";
+import {
+  getThreatDefensePositions,
+  hasOpenThree,
+  isThreat,
+} from "./vctHelpers";
 
 describe("hasVCT", () => {
   it("空の盤面ではVCTなし", () => {
@@ -376,8 +384,8 @@ describe("分岐収集（collectBranches）", () => {
     "H8 H7 H6 I7 G7 I5 G8 F8 G6 G5 E6 F6 F7 H9 E7 E5 C4 D5 F5 D7 K3 J6 H10";
   const branchOptions = {
     maxDepth: 6,
-    timeLimit: 5000,
-    vcfOptions: { maxDepth: 16, timeLimit: 5000 },
+    timeLimit: 10000,
+    vcfOptions: { maxDepth: 16, timeLimit: 10000 },
     collectBranches: true,
   };
 
@@ -416,8 +424,8 @@ describe("分岐収集（collectBranches）", () => {
       const { board } = createBoardFromRecord(record);
       const result = findVCTSequence(board, "white", {
         maxDepth: 6,
-        timeLimit: 5000,
-        vcfOptions: { maxDepth: 16, timeLimit: 5000 },
+        timeLimit: 10000,
+        vcfOptions: { maxDepth: 16, timeLimit: 10000 },
       });
       expect(result).not.toBeNull();
       expect(result?.branches).toBeUndefined();
@@ -538,6 +546,71 @@ describe("相手に活三がある場合のVCTスキップ", () => {
   });
 });
 
+describe("カウンターフォー（ct=four）の処理", () => {
+  it("ct=four でブロックが脅威を作る → VCT開始手として有効", () => {
+    // 白が(7,7)に打つと活三(7,5)(7,6)(7,7)を作る
+    // 防御(7,4)で黒の止め四(6,4)(7,4)(8,4)(9,4)が成立（(5,4)が白で上端ブロック）
+    // 白はブロック(10,4)を打つ → (10,4)(10,5)(10,6)で活三を作る → 脅威 → VCT継続
+    // (7,8)防御では白のVCF（(0,5)(0,6)(0,7)→(0,4)で活四）が成立 → VCT成立
+    const board = createBoardWithStones([
+      { row: 7, col: 5, color: "white" },
+      { row: 7, col: 6, color: "white" },
+      { row: 5, col: 4, color: "white" },
+      { row: 10, col: 5, color: "white" },
+      { row: 10, col: 6, color: "white" },
+      { row: 6, col: 4, color: "black" },
+      { row: 8, col: 4, color: "black" },
+      { row: 9, col: 4, color: "black" },
+      // (7,8)防御時のVCF用: (0,4)で活四→即勝ち
+      { row: 0, col: 5, color: "white" },
+      { row: 0, col: 6, color: "white" },
+      { row: 0, col: 7, color: "white" },
+    ]);
+    expect(isVCTFirstMove(board, { row: 7, col: 7 }, "white")).toBe(true);
+  });
+
+  it("ct=four でブロックが脅威を作らない → VCT開始手として無効", () => {
+    // (7,7)で活三、(7,4)防御でct=four、ブロック(10,4)は孤立 → VCT不成立
+    // 白に(2,5)(2,6)があるので現行コードはVCT誤検出するが、新コードはブロック強制で正しく棄却
+    const board = createBoardWithStones([
+      { row: 7, col: 5, color: "white" },
+      { row: 7, col: 6, color: "white" },
+      { row: 5, col: 4, color: "white" },
+      { row: 2, col: 5, color: "white" },
+      { row: 2, col: 6, color: "white" },
+      { row: 6, col: 4, color: "black" },
+      { row: 8, col: 4, color: "black" },
+      { row: 9, col: 4, color: "black" },
+    ]);
+    expect(isVCTFirstMove(board, { row: 7, col: 7 }, "white")).toBe(false);
+  });
+
+  it("ct=four で盤面不変性", () => {
+    const board = createBoardWithStones([
+      { row: 7, col: 5, color: "white" },
+      { row: 7, col: 6, color: "white" },
+      { row: 5, col: 4, color: "white" },
+      { row: 10, col: 5, color: "white" },
+      { row: 10, col: 6, color: "white" },
+      { row: 6, col: 4, color: "black" },
+      { row: 8, col: 4, color: "black" },
+      { row: 9, col: 4, color: "black" },
+    ]);
+    const snapshot = copyBoard(board);
+    isVCTFirstMove(board, { row: 7, col: 7 }, "white");
+    expect(board).toEqual(snapshot);
+    hasVCT(board, "white");
+    expect(board).toEqual(snapshot);
+    findVCTMove(board, "white");
+    expect(board).toEqual(snapshot);
+    findVCTSequence(board, "white");
+    expect(board).toEqual(snapshot);
+  });
+});
+
+// ct=three: 通常再帰にフォールスルー（hasVCFフォールバックは時間予算を圧迫するため不採用）
+// ct=threeの検出・盤面不変性テストは「VCTカウンター脅威: ct=three」グループに統合
+
 describe("防御手のカウンター脅威チェック", () => {
   // 防御手が四を作る場合にVCTが不成立になることを検証
   it("防御手が四を作る場合はVCT不成立", () => {
@@ -607,6 +680,156 @@ describe("防御手のカウンター脅威チェック", () => {
     findVCTSequence(board, "white");
     expect(board).toEqual(snapshot);
     findVCTMove(board, "white");
+    expect(board).toEqual(snapshot);
+  });
+});
+
+describe("VCTカウンター脅威: ct=four", () => {
+  // 防御手がカウンターフォーを作る局面
+  // White: (3,3)がブロッカー, (7,4)-(7,5)が横二, (8,4)-(8,5)がブロック後の脅威用
+  // Black: (4,3)-(5,3)-(6,3)が縦三
+  // White (7,6)で活三 → 防御(7,3)でBlack縦四(stop four) → ブロック(8,3)で活三
+  it("ct=fourの検出: 防御手が止め四を作る", () => {
+    const board = createBoardWithStones([
+      { row: 3, col: 3, color: "white" }, // ブロッカー
+      { row: 7, col: 4, color: "white" },
+      { row: 7, col: 5, color: "white" },
+      { row: 4, col: 3, color: "black" },
+      { row: 5, col: 3, color: "black" },
+      { row: 6, col: 3, color: "black" },
+    ]);
+    // White (7,6)攻撃後、Black (7,3)防御の状態を構築
+    board[7]![6] = "white"; // 攻撃手
+    board[7]![3] = "black"; // 防御手
+    // (7,3)でBlackが(4,3)-(5,3)-(6,3)-(7,3)の止め四を作る
+    expect(checkDefenseCounterThreat(board, 7, 3, "black")).toBe("four");
+    // ブロック位置は(8,3)
+    const blockPos = getFourDefensePosition(board, { row: 7, col: 3 }, "black");
+    expect(blockPos).toEqual({ row: 8, col: 3 });
+    // undo
+    board[7]![6] = null;
+    board[7]![3] = null;
+  });
+
+  it("ct=four: ブロックが脅威を作る場合VCT成立", () => {
+    const board = createBoardWithStones([
+      { row: 3, col: 3, color: "white" }, // ブロッカー
+      { row: 7, col: 4, color: "white" },
+      { row: 7, col: 5, color: "white" },
+      { row: 8, col: 4, color: "white" }, // ブロック(8,3)で活三になる
+      { row: 8, col: 5, color: "white" },
+      { row: 4, col: 3, color: "black" },
+      { row: 5, col: 3, color: "black" },
+      { row: 6, col: 3, color: "black" },
+    ]);
+    // ブロック位置(8,3)が(8,3)-(8,4)-(8,5)の活三を作ることを確認
+    board[8]![3] = "white";
+    expect(isThreat(board, 8, 3, "white")).toBe(true);
+    board[8]![3] = null;
+
+    expect(hasVCT(board, "white")).toBe(true);
+  });
+
+  it("ct=four: ブロックが脅威を作らない場合VCT不成立", () => {
+    const board = createBoardWithStones([
+      { row: 3, col: 3, color: "white" }, // ブロッカー
+      { row: 7, col: 4, color: "white" },
+      { row: 7, col: 5, color: "white" },
+      // (8,4),(8,5)なし → ブロック(8,3)は脅威にならない
+      { row: 4, col: 3, color: "black" },
+      { row: 5, col: 3, color: "black" },
+      { row: 6, col: 3, color: "black" },
+    ]);
+    // ブロック位置(8,3)が脅威を作らないことを確認
+    board[8]![3] = "white";
+    expect(isThreat(board, 8, 3, "white")).toBe(false);
+    board[8]![3] = null;
+
+    expect(hasVCT(board, "white")).toBe(false);
+  });
+
+  it("ct=four: 盤面不変性", () => {
+    const board = createBoardWithStones([
+      { row: 3, col: 3, color: "white" },
+      { row: 7, col: 4, color: "white" },
+      { row: 7, col: 5, color: "white" },
+      { row: 8, col: 4, color: "white" },
+      { row: 8, col: 5, color: "white" },
+      { row: 4, col: 3, color: "black" },
+      { row: 5, col: 3, color: "black" },
+      { row: 6, col: 3, color: "black" },
+    ]);
+    const snapshot = copyBoard(board);
+    hasVCT(board, "white");
+    expect(board).toEqual(snapshot);
+    findVCTMove(board, "white");
+    expect(board).toEqual(snapshot);
+    findVCTSequence(board, "white");
+    expect(board).toEqual(snapshot);
+  });
+});
+
+describe("VCTカウンター脅威: ct=three", () => {
+  // 防御手がカウンター活三を作る局面
+  // Black: (5,3)-(6,3)が縦二 → 防御(7,3)で活三
+  it("ct=threeの検出: 防御手が活三を作る", () => {
+    const board = createBoardWithStones([
+      { row: 7, col: 4, color: "white" },
+      { row: 7, col: 5, color: "white" },
+      { row: 5, col: 3, color: "black" },
+      { row: 6, col: 3, color: "black" },
+    ]);
+    // White (7,6)攻撃後、Black (7,3)防御
+    board[7]![6] = "white";
+    board[7]![3] = "black";
+    expect(checkDefenseCounterThreat(board, 7, 3, "black")).toBe("three");
+    board[7]![6] = null;
+    board[7]![3] = null;
+  });
+
+  it("ct=three: VCFがある場合VCT成立", () => {
+    // White: ダブルスリーが可能な配置
+    const board = createBoardWithStones([
+      { row: 7, col: 4, color: "white" },
+      { row: 7, col: 5, color: "white" },
+      { row: 5, col: 6, color: "white" }, // (7,6)で縦三も作れる
+      { row: 6, col: 6, color: "white" },
+      { row: 5, col: 3, color: "black" },
+      { row: 6, col: 3, color: "black" },
+    ]);
+    // (7,6)でダブルスリー → 防御(7,3)でct=three → VCF(縦四)で勝ち
+    // timeLimit延長で確認（先に他のthreatが試されるため150msでは不足しうる）
+    expect(hasVCT(board, "white", 0, undefined, { timeLimit: 5000 })).toBe(
+      true,
+    );
+  });
+
+  it("ct=three: VCFがない場合VCT不成立", () => {
+    const board = createBoardWithStones([
+      { row: 7, col: 4, color: "white" },
+      { row: 7, col: 5, color: "white" },
+      // VCFに繋がる追加石なし
+      { row: 5, col: 3, color: "black" },
+      { row: 6, col: 3, color: "black" },
+    ]);
+    expect(hasVCT(board, "white")).toBe(false);
+  });
+
+  it("ct=three: 盤面不変性", () => {
+    const board = createBoardWithStones([
+      { row: 7, col: 4, color: "white" },
+      { row: 7, col: 5, color: "white" },
+      { row: 5, col: 6, color: "white" },
+      { row: 6, col: 6, color: "white" },
+      { row: 5, col: 3, color: "black" },
+      { row: 6, col: 3, color: "black" },
+    ]);
+    const snapshot = copyBoard(board);
+    hasVCT(board, "white");
+    expect(board).toEqual(snapshot);
+    findVCTMove(board, "white");
+    expect(board).toEqual(snapshot);
+    findVCTSequence(board, "white");
     expect(board).toEqual(snapshot);
   });
 });

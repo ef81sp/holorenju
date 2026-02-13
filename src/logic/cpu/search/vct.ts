@@ -10,7 +10,10 @@ import type { BoardState, Position } from "@/types/game";
 import { checkFive, checkForbiddenMove } from "@/logic/renjuRules";
 
 import { type TimeLimiter, isTimeExceeded } from "./context";
-import { checkDefenseCounterThreat } from "./threatPatterns";
+import {
+  checkDefenseCounterThreat,
+  getFourDefensePosition,
+} from "./threatPatterns";
 import {
   findVCFMove,
   findVCFSequence,
@@ -184,18 +187,15 @@ export function hasVCT(
         defenseRow[defensePos.col] = opponentColor;
       }
 
-      // 防御手のカウンター脅威チェック（五連・四）
-      const ct = checkDefenseCounterThreat(
+      // 防御手で五連完成 → VCT不成立
+      const defenseWins = checkFive(
         board,
         defensePos.row,
         defensePos.col,
         opponentColor,
       );
-      let vctResult: boolean;
-      if (ct === "win") {
-        // 防御手で五連/四ができる → VCT不成立
-        vctResult = false;
-      } else {
+      let vctResult = false;
+      if (!defenseWins) {
         vctResult = hasVCT(board, color, depth + 1, limiter, options);
       }
 
@@ -221,6 +221,56 @@ export function hasVCT(
   }
 
   return false;
+}
+
+/**
+ * カウンター脅威に応じたVCT継続判定（isVCTFirstMove専用）
+ *
+ * 探索関数（hasVCT/findVCTMove/findVCTSequence）では使用しない。
+ * これらに適用すると探索木が変形し実用的な時間で完了しないため。
+ *
+ * ct=win: 防御手で五連 → VCT不成立
+ * ct=four: 攻撃側は四のブロック位置に限定。ブロックが脅威を作ればVCT継続（楽観判定）
+ * ct=three/none: 通常の再帰（ct=three の hasVCF フォールバックは将来課題）
+ */
+function evaluateCounterThreat(
+  ct: "win" | "four" | "three" | "none",
+  board: BoardState,
+  color: "black" | "white",
+  defensePos: Position,
+  depth: number,
+  limiter: TimeLimiter,
+  options?: VCTSearchOptions,
+): boolean {
+  if (ct === "win") {
+    return false;
+  }
+
+  if (ct === "four") {
+    // 防御側がカウンターフォーを作った
+    // → 攻撃側は四のブロック位置に限定される
+    // → ブロックが脅威を作れば継続可能（楽観判定: 再帰なしで高速）
+    const opponentColor = color === "black" ? "white" : "black";
+    const blockPos = getFourDefensePosition(board, defensePos, opponentColor);
+    if (!blockPos) {
+      return false; // 活四でブロック不可 → VCT不成立
+    }
+    const blockRow = board[blockPos.row];
+    if (blockRow) {
+      blockRow[blockPos.col] = color;
+    }
+    const result = isThreat(board, blockPos.row, blockPos.col, color);
+    if (blockRow) {
+      blockRow[blockPos.col] = null;
+    }
+    return result;
+  }
+
+  // ct === "three" / "none": 通常の再帰
+  // ct=three は理論上 hasVCF フォールバックが正しいが、
+  // 実用上は時間予算の圧迫と探索木の変形で回帰する。
+  // 将来の改善課題（docs/vct-counter-threat-analysis.md参照）
+  return hasVCT(board, color, depth + 1, limiter, options);
 }
 
 /**
@@ -343,17 +393,15 @@ function findVCTMoveRecursive(
         defenseRow[defensePos.col] = opponentColor;
       }
 
-      // 防御手のカウンター脅威チェック（五連・四）
-      const ct = checkDefenseCounterThreat(
+      // 防御で五連完成 → VCT不成立
+      const defenseWins = checkFive(
         board,
         defensePos.row,
         defensePos.col,
         opponentColor,
       );
-      let vctResult: boolean;
-      if (ct === "win") {
-        vctResult = false;
-      } else {
+      let vctResult = false;
+      if (!defenseWins) {
         vctResult = hasVCT(board, color, depth + 1, limiter, options);
       }
 
@@ -572,17 +620,8 @@ function findVCTSequenceRecursive(
         defenseRow[defensePos.col] = opponentColor;
       }
 
-      // 防御手のカウンター脅威チェック（五連・四）
-      const ct = checkDefenseCounterThreat(
-        board,
-        defensePos.row,
-        defensePos.col,
-        opponentColor,
-      );
-
-      if (ct === "win") {
-        // 防御手で五連/四ができる → VCT不成立
-        // 元に戻す（Undo）- 防御手
+      // 防御手で五連完成 → VCT不成立
+      if (checkFive(board, defensePos.row, defensePos.col, opponentColor)) {
         if (defenseRow) {
           defenseRow[defensePos.col] = null;
         }
@@ -590,7 +629,7 @@ function findVCTSequenceRecursive(
         break;
       }
 
-      // "three" / "none": 通常の再帰
+      // シーケンス収集のため通常再帰（ct=four/threeの特別処理なし）
       if (context.collectBranches || firstDefenseSequence === null) {
         // 分岐収集時は全防御で手順を収集、通常時は最初の防御のみ
         const subSequence: Position[] = [];
@@ -805,12 +844,15 @@ export function isVCTFirstMove(
       defensePos.col,
       opponentColor,
     );
-    let vctResult: boolean;
-    if (ct === "win") {
-      vctResult = false;
-    } else {
-      vctResult = hasVCT(board, color, 1, limiter, options);
-    }
+    const vctResult = evaluateCounterThreat(
+      ct,
+      board,
+      color,
+      defensePos,
+      1, // isVCTFirstMoveはdepth=0から開始、防御後はdepth=1
+      limiter,
+      options,
+    );
 
     // 元に戻す（Undo）- 防御手
     if (defenseRow) {
