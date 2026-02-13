@@ -432,6 +432,8 @@ describe("preferencesStore", () => {
         },
         cpu: {
           fastMove: false,
+          lastDifficulty: "medium",
+          lastPlayerFirst: true,
         },
         debug: {
           showCpuInfo: false,
