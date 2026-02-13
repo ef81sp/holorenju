@@ -67,23 +67,48 @@ function getForcedWinLabel(
   }
 }
 
+/** 負け確定の種別ラベル */
+function getForcedLossLabel(
+  type: EvaluatedMove["forcedLossType"],
+): string | undefined {
+  switch (type) {
+    case "vcf":
+      return "被四追い";
+    case "vct":
+      return "被追い詰め";
+    case "forbidden-trap":
+      return "被禁手追い込み";
+    case "mise-vcf":
+      return "被ミセ四追い";
+    default:
+      return undefined;
+  }
+}
+
 /** 各手の品質ドット表示データ */
 const moveDots = computed(() =>
   Array.from({ length: props.totalMoves }, (_, i) => {
     const evaluated = props.evaluatedMoves.find((e) => e.moveIndex === i);
     const moveNum = String(i + 1);
     const qualityLabel =
-      evaluated && evaluated.quality !== "excellent"
+      evaluated && !evaluated.isLightEval && evaluated.quality !== "excellent"
         ? getQualityLabel(evaluated.quality)
         : undefined;
     const forcedWinLabel = getForcedWinLabel(evaluated?.forcedWinType);
+    const forcedLossLabel = getForcedLossLabel(evaluated?.forcedLossType);
     return {
       index: i + 1,
-      color: evaluated ? getQualityColor(evaluated.quality) : undefined,
+      color:
+        evaluated && !evaluated.isLightEval
+          ? getQualityColor(evaluated.quality)
+          : undefined,
       isCurrent: i + 1 === props.currentMoveIndex,
-      underlines: getUnderlineCount(evaluated?.quality),
+      underlines: evaluated?.isLightEval
+        ? 0
+        : getUnderlineCount(evaluated?.quality),
       hasForcedWin: forcedWinLabel !== undefined,
-      ariaLabel: [moveNum, qualityLabel, forcedWinLabel]
+      hasForcedLoss: forcedLossLabel !== undefined,
+      ariaLabel: [moveNum, qualityLabel, forcedWinLabel, forcedLossLabel]
         .filter(Boolean)
         .join(" "),
     };
@@ -152,6 +177,7 @@ const moveDots = computed(() =>
           current: dot.isCurrent,
           [`underlines-${dot.underlines}`]: dot.underlines > 0,
           'has-forced-win': dot.hasForcedWin,
+          'has-forced-loss': dot.hasForcedLoss,
         }"
         :style="dot.color ? { backgroundColor: dot.color } : {}"
         :aria-label="dot.ariaLabel"
@@ -296,6 +322,20 @@ const moveDots = computed(() =>
   height: var(--size-6);
   border-radius: 50%;
   background: var(--color-miko-primary);
+  box-shadow: 0 0 0 1px var(--color-bg-white);
+  pointer-events: none;
+}
+
+/* 負け確定バッジ（赤系） */
+.has-forced-loss::after {
+  content: "";
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  width: var(--size-6);
+  height: var(--size-6);
+  border-radius: 50%;
+  background: hsl(0, 65%, 50%);
   box-shadow: 0 0 0 1px var(--color-bg-white);
   pointer-events: none;
 }

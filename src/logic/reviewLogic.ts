@@ -72,6 +72,9 @@ export function buildEvaluatedMove(
     completedDepth: result.completedDepth,
     forcedWinType: result.forcedWinType,
     forcedWinBranches: result.forcedWinBranches,
+    forcedLossType: result.forcedLossType,
+    forcedLossSequence: result.forcedLossSequence,
+    isLightEval: result.isLightEval,
   };
 }
 

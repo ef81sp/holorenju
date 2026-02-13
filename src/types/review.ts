@@ -72,6 +72,12 @@ export interface EvaluatedMove {
   forcedWinType?: "vcf" | "vct" | "forbidden-trap" | "mise-vcf";
   /** 必勝手順の分岐情報 */
   forcedWinBranches?: ForcedWinBranch[];
+  /** 相手の必勝手順（自分が負け確定） */
+  forcedLossType?: "vcf" | "vct" | "forbidden-trap" | "mise-vcf";
+  /** 相手の必勝手順のシーケンス */
+  forcedLossSequence?: Position[];
+  /** 軽量評価（minimax省略、強制勝ち検出のみ） */
+  isLightEval?: boolean;
 }
 
 /**
@@ -96,6 +102,8 @@ export interface ReviewEvalRequest {
   moveIndex: number;
   /** プレイヤーが先手かどうか */
   playerFirst: boolean;
+  /** 軽量評価モード（コンピュータ手用） */
+  isLightEval?: boolean;
 }
 
 /**
@@ -118,4 +126,10 @@ export interface ReviewWorkerResult {
   forcedWinType?: "vcf" | "vct" | "forbidden-trap" | "mise-vcf";
   /** 必勝手順の分岐情報 */
   forcedWinBranches?: ForcedWinBranch[];
+  /** 相手の必勝手順（自分が負け確定） */
+  forcedLossType?: "vcf" | "vct" | "forbidden-trap" | "mise-vcf";
+  /** 相手の必勝手順のシーケンス */
+  forcedLossSequence?: Position[];
+  /** 軽量評価（minimax省略、強制勝ち検出のみ） */
+  isLightEval?: boolean;
 }

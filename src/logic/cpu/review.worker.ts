@@ -7,6 +7,7 @@
  * import ReviewWorker from './review.worker?worker'
  */
 
+import type { Position } from "@/types/game";
 import type {
   ForcedWinBranch,
   ReviewCandidate,
@@ -68,7 +69,12 @@ const REVIEW_MISE_VCF_OPTIONS: MiseVCFSearchOptions = {
 };
 
 self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
-  const { moveHistory, moveIndex, playerFirst: _playerFirst } = event.data;
+  const {
+    moveHistory,
+    moveIndex,
+    playerFirst: _playerFirst,
+    isLightEval,
+  } = event.data;
 
   try {
     const moves = moveHistory.trim().split(/\s+/);
@@ -119,6 +125,78 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
       forcedWinType = "mise-vcf";
     } else if (forcedWin) {
       forcedWinType = "vct";
+    }
+
+    // 軽量評価モード（コンピュータ手用）: 強制勝ち検出のみ
+    if (isLightEval) {
+      const response: ReviewWorkerResult = {
+        moveIndex,
+        bestMove: forcedWin?.firstMove ?? { row: 7, col: 7 },
+        bestScore: 0,
+        playedScore: 0,
+        candidates: [],
+        completedDepth: 0,
+        forcedWinType,
+        isLightEval: true,
+      };
+      self.postMessage(response);
+      return;
+    }
+
+    // 相手の必勝手順検出（プレイヤー手用）
+    // プレイヤーの手を打った後の局面で相手のVCF/VCT等を探す
+    let forcedLossType:
+      | "vcf"
+      | "vct"
+      | "forbidden-trap"
+      | "mise-vcf"
+      | undefined = undefined;
+    let forcedLossSequence: Position[] | undefined = undefined;
+    if (!forcedWin && moves[moveIndex]) {
+      const { board: boardAfter } = createBoardFromRecord(
+        moves.slice(0, moveIndex + 1).join(" "),
+      );
+      const stoneCountAfter = countStones(boardAfter);
+
+      // 着手後の局面で、自分の四があるか（相手はVCF/VCTどころではない）
+      const selfThreatsAfter = detectOpponentThreats(boardAfter, color);
+      const selfHasFourAfter =
+        selfThreatsAfter.fours.length > 0 ||
+        selfThreatsAfter.openFours.length > 0;
+
+      if (!selfHasFourAfter) {
+        const oppVCF = findVCFSequence(
+          boardAfter,
+          opponentColor,
+          REVIEW_VCF_OPTIONS,
+        );
+        if (oppVCF) {
+          forcedLossType = oppVCF.isForbiddenTrap ? "forbidden-trap" : "vcf";
+          forcedLossSequence = oppVCF.sequence;
+        }
+        if (!forcedLossType) {
+          const oppMise = findMiseVCFSequence(
+            boardAfter,
+            opponentColor,
+            REVIEW_MISE_VCF_OPTIONS,
+          );
+          if (oppMise) {
+            forcedLossType = "mise-vcf";
+            forcedLossSequence = oppMise.sequence;
+          }
+        }
+        if (!forcedLossType && stoneCountAfter >= VCT_STONE_THRESHOLD) {
+          const oppVCT = findVCTSequence(
+            boardAfter,
+            opponentColor,
+            REVIEW_VCT_OPTIONS,
+          );
+          if (oppVCT) {
+            forcedLossType = oppVCT.isForbiddenTrap ? "forbidden-trap" : "vct";
+            forcedLossSequence = oppVCT.sequence;
+          }
+        }
+      }
     }
 
     // 通常探索（候補手比較データ用）
@@ -311,6 +389,8 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
         playedScore,
         candidates,
         completedDepth: result.completedDepth,
+        forcedLossType,
+        forcedLossSequence,
       };
 
       self.postMessage(response);

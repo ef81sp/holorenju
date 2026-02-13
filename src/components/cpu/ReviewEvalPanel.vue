@@ -88,7 +88,7 @@ const qualityLabel = computed(() => {
   return getQualityLabel(props.evaluation.quality);
 });
 
-/** 必勝手順インジケーターのテキスト */
+/** 必勝手順インジケーターのテキスト（プレイヤー手用） */
 const forcedWinLabel = computed(() => {
   switch (props.evaluation?.forcedWinType) {
     case "vcf":
@@ -99,6 +99,38 @@ const forcedWinLabel = computed(() => {
       return "禁手追込";
     case "mise-vcf":
       return "ミセ四追";
+    default:
+      return null;
+  }
+});
+
+/** 負け確定インジケーターのテキスト */
+const forcedLossLabel = computed(() => {
+  switch (props.evaluation?.forcedLossType) {
+    case "vcf":
+      return "被四追";
+    case "vct":
+      return "被追詰";
+    case "forbidden-trap":
+      return "被禁手追込";
+    case "mise-vcf":
+      return "被ミセ四追";
+    default:
+      return null;
+  }
+});
+
+/** コンピュータ手の強制勝ちラベル（「〜中」） */
+const cpuForcedWinLabel = computed(() => {
+  switch (props.evaluation?.forcedWinType) {
+    case "vcf":
+      return "四追い中";
+    case "vct":
+      return "追詰中";
+    case "forbidden-trap":
+      return "禁手追込中";
+    case "mise-vcf":
+      return "ミセ四追中";
     default:
       return null;
   }
@@ -397,12 +429,49 @@ const playedPVLine = computed<PVLine | null>(() => {
   );
 });
 
+/** 負け確定手順の読み筋（相手視点） */
+const forcedLossPVLine = computed<PVLine | null>(() => {
+  const eval_ = props.evaluation;
+  if (!eval_?.forcedLossSequence || eval_.forcedLossSequence.length === 0) {
+    return null;
+  }
+
+  const label = forcedLossLabel.value ?? "被必勝";
+  const items: PVDisplayItem[] = [];
+
+  // プレイヤーの着手を先頭に含める
+  // → 'played' モードで盤面ラベル番号(currentMoveIndex + i)と整合させる
+  items.push({
+    text: `${props.moveIndex}.${formatMove(eval_.position)}`,
+    isSelf: true,
+    position: eval_.position,
+  });
+
+  // 相手の必勝手順（着手後の局面から算出）
+  const startMoveNum = props.moveIndex + 1;
+  for (let i = 0; i < eval_.forcedLossSequence.length; i++) {
+    const pos = eval_.forcedLossSequence[i];
+    if (!pos) {
+      break;
+    }
+    items.push({
+      text: `${startMoveNum + i}.${formatMove(pos)}`,
+      // 相手の必勝手順: 偶数手=相手（攻撃側）、奇数手=自分（防御側）
+      isSelf: i % 2 !== 0,
+      position: pos,
+    });
+  }
+
+  return { label, searchScore: 0, items };
+});
+
 /** 内訳比較表示が必要か */
 const showBreakdown = computed(
   () =>
     leafEvalDiffGroups.value.length > 0 ||
     bestPVLine.value !== null ||
-    playedPVLine.value !== null,
+    playedPVLine.value !== null ||
+    forcedLossPVLine.value !== null,
 );
 
 /** ヘルプダイアログのref */
@@ -514,13 +583,19 @@ function isPlayed(candidate: { position: Position }): boolean {
       <span class="no-eval-text">手を選択してください</span>
     </div>
 
-    <!-- CPUの手（evaluationがない = 評価対象外） -->
+    <!-- CPUの手（evaluationがない or 軽量評価） -->
     <div
-      v-else-if="!evaluation"
+      v-else-if="!evaluation || evaluation.isLightEval"
       class="cpu-move"
     >
       <div class="eval-header">
         <span class="move-label">第{{ moveIndex }}手 {{ moveCoord }}</span>
+        <span
+          v-if="cpuForcedWinLabel"
+          class="cpu-forced-win-badge"
+        >
+          {{ cpuForcedWinLabel }}
+        </span>
       </div>
       <div class="cpu-move-text">コンピュータの手</div>
     </div>
@@ -544,6 +619,12 @@ function isPlayed(candidate: { position: Position }): boolean {
           class="forced-win-badge"
         >
           {{ forcedWinLabel }}
+        </span>
+        <span
+          v-if="forcedLossLabel"
+          class="forced-loss-badge"
+        >
+          {{ forcedLossLabel }}
         </span>
         <button
           type="button"
@@ -630,11 +711,13 @@ function isPlayed(candidate: { position: Position }): boolean {
         </span>
       </div>
 
-      <!-- 内訳比較セクション（excellentでない場合） -->
+      <!-- 内訳比較セクション（excellentでない場合 or 強制勝ち/負け確定） -->
       <div
         v-if="
           showBreakdown &&
-          (evaluation.quality !== 'excellent' || evaluation.forcedWinType)
+          (evaluation.quality !== 'excellent' ||
+            evaluation.forcedWinType ||
+            evaluation.forcedLossType)
         "
         class="breakdown-section"
       >
@@ -734,6 +817,37 @@ function isPlayed(candidate: { position: Position }): boolean {
               @focus="handlePVMoveEnter(playedPVLine.items, idx, 'played')"
               @blur="handlePVMoveLeave"
               @click="handlePVMoveClick(playedPVLine.items, idx, 'played')"
+            >
+              {{ item.text }}
+            </button>
+          </div>
+        </template>
+
+        <!-- 負け確定手順 -->
+        <template v-if="forcedLossPVLine">
+          <div class="pv-header">
+            <span class="pv-label pv-loss-label">
+              {{ forcedLossPVLine.label }}
+            </span>
+          </div>
+          <div class="pv-sequence">
+            <button
+              v-for="(item, idx) in forcedLossPVLine.items"
+              :key="`loss-${idx}`"
+              type="button"
+              class="pv-move"
+              :class="{
+                'pv-self': item.isSelf,
+                'pv-loss-opponent': !item.isSelf,
+                'pv-pinned': isPvPinned('played', idx),
+              }"
+              @mouseenter="
+                handlePVMoveEnter(forcedLossPVLine.items, idx, 'played')
+              "
+              @mouseleave="handlePVMoveLeave"
+              @focus="handlePVMoveEnter(forcedLossPVLine.items, idx, 'played')"
+              @blur="handlePVMoveLeave"
+              @click="handlePVMoveClick(forcedLossPVLine.items, idx, 'played')"
             >
               {{ item.text }}
             </button>
@@ -883,6 +997,24 @@ function isPlayed(candidate: { position: Position }): boolean {
 }
 
 .forced-win-badge {
+  padding: var(--size-1) var(--size-6);
+  border-radius: var(--size-4);
+  color: white;
+  font-size: var(--size-10);
+  font-weight: 500;
+  background-color: hsl(270, 50%, 55%);
+}
+
+.forced-loss-badge {
+  padding: var(--size-1) var(--size-6);
+  border-radius: var(--size-4);
+  color: white;
+  font-size: var(--size-10);
+  font-weight: 500;
+  background-color: hsl(0, 65%, 50%);
+}
+
+.cpu-forced-win-badge {
   padding: var(--size-1) var(--size-6);
   border-radius: var(--size-4);
   color: white;
@@ -1152,6 +1284,15 @@ function isPlayed(candidate: { position: Position }): boolean {
 .pv-self {
   background: rgba(95, 222, 236, 0.15);
   color: hsl(186, 60%, 40%);
+}
+
+.pv-loss-label {
+  color: hsl(0, 65%, 50%);
+}
+
+.pv-loss-opponent {
+  background: rgba(220, 50, 50, 0.12);
+  color: hsl(0, 55%, 45%);
 }
 
 .pv-opponent {

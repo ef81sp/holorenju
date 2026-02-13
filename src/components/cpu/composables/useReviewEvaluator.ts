@@ -76,31 +76,35 @@ export function useReviewEvaluator(): UseReviewEvaluatorReturn {
   ): Promise<ReviewWorkerResult[]> {
     const moves = moveHistory.trim().split(/\s+/);
 
-    // プレイヤーの手のインデックスを収集（珠型の3手は除外）
-    const playerMoveIndices: number[] = [];
+    // 珠型(3手)以降の全手をキューに入れる
+    // プレイヤー手: isLightEval=false（フル評価）
+    // コンピュータ手: isLightEval=true（強制勝ち検出のみ）
+    interface QueueItem {
+      moveIndex: number;
+      isLightEval: boolean;
+    }
+    const allMoveItems: QueueItem[] = [];
     for (let i = 0; i < moves.length; i++) {
       if (isOpeningMove(i)) {
         continue;
       }
       const isPlayerMove = playerFirst ? i % 2 === 0 : i % 2 === 1;
-      if (isPlayerMove) {
-        playerMoveIndices.push(i);
-      }
+      allMoveItems.push({ moveIndex: i, isLightEval: !isPlayerMove });
     }
 
-    if (playerMoveIndices.length === 0) {
+    if (allMoveItems.length === 0) {
       return Promise.resolve([]);
     }
 
     cancelled = false;
     isEvaluating.value = true;
     completedCount.value = 0;
-    totalCount.value = playerMoveIndices.length;
+    totalCount.value = allMoveItems.length;
     progress.value = 0;
 
     const pool = initPool();
     const results: ReviewWorkerResult[] = [];
-    const queue = [...playerMoveIndices];
+    const queue = [...allMoveItems];
     let resolveAll: ((results: ReviewWorkerResult[]) => void) | null = null;
 
     const promise = new Promise<ReviewWorkerResult[]>((resolve) => {
@@ -115,8 +119,8 @@ export function useReviewEvaluator(): UseReviewEvaluatorReturn {
         return;
       }
 
-      const moveIndex = queue.shift();
-      if (moveIndex === undefined) {
+      const item = queue.shift();
+      if (item === undefined) {
         // キューが空 → 全完了チェック
         if (completedCount.value === totalCount.value) {
           isEvaluating.value = false;
@@ -128,8 +132,9 @@ export function useReviewEvaluator(): UseReviewEvaluatorReturn {
 
       const request: ReviewEvalRequest = {
         moveHistory,
-        moveIndex,
+        moveIndex: item.moveIndex,
         playerFirst,
+        isLightEval: item.isLightEval || undefined,
       };
 
       worker.onmessage = (event: MessageEvent<ReviewWorkerResult>) => {
