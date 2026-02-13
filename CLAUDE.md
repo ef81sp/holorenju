@@ -25,7 +25,8 @@ pnpm build         # Production build
 ## Planning
 
 - Do TDD
-- Review yourself before aprooving
+- Ask anything because your boss is fool so his instructions have overlooks.
+- Use `/review-plan` skill before aproove.
 
 ## Architecture
 
