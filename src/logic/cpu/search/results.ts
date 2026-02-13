@@ -9,8 +9,9 @@ import type { BoardState, Position } from "@/types/game";
 import { checkFive, copyBoard } from "@/logic/renjuRules";
 
 import { applyMove, getOppositeColor } from "../core/boardUtils";
-import { evaluateStonePatterns, PATTERN_SCORES } from "../evaluation";
 import { analyzeJumpPatterns } from "../evaluation/jumpPatterns";
+import { PATTERN_SCORES } from "../evaluation/patternScores";
+import { evaluateStonePatterns } from "../evaluation/stonePatterns";
 import { detectOpponentThreats } from "../evaluation/threatDetection";
 import { TranspositionTable } from "../transpositionTable";
 import { updateHash } from "../zobrist";

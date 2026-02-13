@@ -19,14 +19,14 @@ import {
   getOppositeColor,
   undoMove,
 } from "../core/boardUtils";
+import { evaluateBoard } from "../evaluation/boardEvaluation";
 import {
   DEFAULT_EVAL_OPTIONS,
-  detectOpponentThreats,
-  evaluateBoard,
-  evaluatePosition,
-  PATTERN_SCORES,
   type EvaluationOptions,
-} from "../evaluation";
+  PATTERN_SCORES,
+} from "../evaluation/patternScores";
+import { evaluatePosition } from "../evaluation/positionEvaluation";
+import { detectOpponentThreats } from "../evaluation/threatDetection";
 import {
   generateMoves,
   generateSortedMoves,

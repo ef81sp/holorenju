@@ -4,7 +4,10 @@
  * Minimax探索で使用するデータ構造を一元管理
  */
 
-import { DEFAULT_EVAL_OPTIONS, type EvaluationOptions } from "../evaluation";
+import {
+  DEFAULT_EVAL_OPTIONS,
+  type EvaluationOptions,
+} from "../evaluation/patternScores";
 import {
   createHistoryTable,
   createKillerMoves,
