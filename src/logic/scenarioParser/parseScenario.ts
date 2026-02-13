@@ -1,19 +1,14 @@
 /**
- * シナリオパーサー・バリデーター
+ * シナリオパーサー
  *
- * 2段階のバリデーション機能：
- * 1. validateScenario: JSON/オブジェクトをScenario型にパースする（実行時用）
- * 2. validateBoardState: 盤面の妥当性を検証する（JSON編集時用）
+ * JSONをScenario型にパースしてバリデーション
  */
 
-import type { EmotionId } from "../types/character";
-import type { TextNode, InlineTextNode } from "../types/text";
+import type { TextNode, InlineTextNode } from "../../types/text";
 
 import {
-  DIFFICULTIES,
   BOARD_ACTION_TYPES,
   type Scenario,
-  type ScenarioDifficulty,
   type DemoSection,
   type DemoDialogue,
   type QuestionSection,
@@ -23,42 +18,22 @@ import {
   type Position,
   type QuestionFeedback,
   type DialogueLine,
-} from "../types/scenario";
-import { parseText, parseInlineTextFromString } from "./textParser";
+} from "../../types/scenario";
+import { parseText, parseInlineTextFromString } from "../textParser";
+import {
+  isObject,
+  validateString,
+  validateStringArray,
+  validateEnum,
+  validateDifficulty,
+  validatePosition,
+  validatePositionArray,
+  toEmotionId,
+  DEFAULT_FEEDBACK,
+} from "./parserUtils";
+import { validateBoardState } from "./validateBoardState";
 
-/**
- * フィードバックのデフォルト値
- */
-export const DEFAULT_FEEDBACK: QuestionFeedback = {
-  success: [
-    {
-      character: "fubuki",
-      text: [{ type: "text", content: "ないすー！" }],
-      emotion: 37,
-    },
-  ],
-  failure: [
-    {
-      character: "miko",
-      text: [{ type: "text", content: "おうおうおう……" }],
-      emotion: 34,
-    },
-  ],
-};
-
-/**
- * 数値を0-39にクランプしてEmotionIdとして返す
- */
-function toEmotionId(n: unknown): EmotionId {
-  if (typeof n !== "number") {
-    return 0;
-  }
-  const clamped = Math.min(39, Math.max(0, Math.floor(n)));
-  // 0-39にクランプ済みなのでEmotionIdとして安全
-  return clamped as EmotionId;
-}
-
-// ===== パース・バリデーション =====
+// ===== メインパーサー =====
 
 /**
  * JSONをScenario型にパースしてバリデーション
@@ -93,6 +68,8 @@ export function parseScenario(data: unknown): Scenario {
     sections,
   };
 }
+
+// ===== セクションバリデーション =====
 
 /**
  * セクション配列をバリデーション
@@ -211,6 +188,8 @@ function validateQuestionSection(
   };
 }
 
+// ===== ダイアログバリデーション =====
+
 /**
  * ダイアログ配列をバリデーション
  */
@@ -280,6 +259,8 @@ function validateDialogue(data: unknown, path: string): DemoDialogue {
     boardActions,
   };
 }
+
+// ===== 盤面操作バリデーション =====
 
 /**
  * 盤面操作をバリデーション
@@ -369,6 +350,8 @@ function validateBoardAction(data: unknown, path: string): BoardAction {
     }
   }
 }
+
+// ===== 成功条件バリデーション =====
 
 /**
  * 成功条件配列をバリデーション
@@ -482,6 +465,8 @@ function validateMoveArray(
   });
 }
 
+// ===== フィードバックバリデーション =====
+
 /**
  * フィードバックをバリデーション
  * feedbackが省略された場合、またはsuccess/failureが個別に省略された場合は
@@ -554,49 +539,7 @@ function validateDialogueLineArray(
   });
 }
 
-// ===== 盤面バリデーション =====
-
-const BOARD_SIZE = 15;
-const VALID_BOARD_CHARS = /^[-xo]*$/; // -(未指定), x(黒), o(白)
-
-/**
- * 盤面の妥当性を検証（JSON編集時の検証用）
- * エラーメッセージの配列を返す（複数エラーを一度に報告できる）
- */
-export function validateBoardState(board: unknown[]): string[] {
-  const errors: string[] = [];
-
-  if (!Array.isArray(board)) {
-    return ["Board must be an array"];
-  }
-
-  if (board.length !== BOARD_SIZE) {
-    errors.push(
-      `Board must have exactly ${BOARD_SIZE} rows, got ${board.length}`,
-    );
-  }
-
-  board.forEach((row, rowIndex) => {
-    if (typeof row !== "string") {
-      errors.push(`Board[${rowIndex}] must be a string, got ${typeof row}`);
-      return;
-    }
-
-    if (row.length !== BOARD_SIZE) {
-      errors.push(
-        `Board[${rowIndex}] must have exactly ${BOARD_SIZE} characters, got ${row.length}`,
-      );
-    }
-
-    if (!VALID_BOARD_CHARS.test(row)) {
-      errors.push(
-        `Board[${rowIndex}] contains invalid characters. Use only '-' (unspecified), 'x' (black), 'o' (white)`,
-      );
-    }
-  });
-
-  return errors;
-}
+// ===== テキストバリデーション =====
 
 /**
  * TextNodeArray をバリデーション
@@ -761,135 +704,7 @@ function validateTextContent(
   throw new Error(`${path} must be string or TextNode[]`);
 }
 
-// ===== ヘルパー関数 =====
-
-function isObject(data: unknown): data is Record<string, unknown> {
-  return typeof data === "object" && data !== null && !Array.isArray(data);
-}
-
-function validateString(
-  data: Record<string, unknown>,
-  key: string,
-  path: string,
-  allowEmpty = false,
-): string {
-  const value = data[key];
-
-  if (typeof value !== "string") {
-    throw new Error(`${path} must be a string, got ${typeof value}`);
-  }
-
-  if (!allowEmpty && value.length === 0) {
-    throw new Error(`${path} must not be empty`);
-  }
-
-  return value;
-}
-
-function validateNumber(
-  data: Record<string, unknown>,
-  key: string,
-  path: string,
-): number {
-  const value = data[key];
-
-  if (typeof value !== "number") {
-    throw new Error(`${path} must be a number, got ${typeof value}`);
-  }
-
-  return value;
-}
-
-function validateStringArray(
-  data: Record<string, unknown>,
-  key: string,
-  path: string,
-): string[] {
-  const value = data[key];
-
-  if (!Array.isArray(value)) {
-    throw new Error(`${path} must be an array`);
-  }
-
-  value.forEach((item, index) => {
-    if (typeof item !== "string") {
-      throw new Error(`${path}[${index}] must be a string, got ${typeof item}`);
-    }
-  });
-
-  return value;
-}
-
-function validateEnum<T extends string>(
-  data: Record<string, unknown>,
-  key: string,
-  allowedValues: readonly T[],
-  path: string,
-): T {
-  const value = data[key];
-
-  if (typeof value !== "string") {
-    throw new Error(`${path} must be a string, got ${typeof value}`);
-  }
-
-  if (!allowedValues.includes(value as T)) {
-    throw new Error(
-      `${path} must be one of [${allowedValues.join(", ")}], got "${value}"`,
-    );
-  }
-
-  return value as T;
-}
-
-function validateDifficulty(
-  data: Record<string, unknown>,
-  key: string,
-): ScenarioDifficulty {
-  return validateEnum(data, key, DIFFICULTIES, `Scenario.${key}`);
-}
-
-function validatePosition(data: unknown, path: string): Position {
-  if (!isObject(data)) {
-    throw new Error(`${path} must be an object`);
-  }
-
-  const row = validateNumber(data, "row", `${path}.row`);
-  const col = validateNumber(data, "col", `${path}.col`);
-
-  if (row < 0 || row >= BOARD_SIZE) {
-    throw new Error(
-      `${path}.row must be between 0 and ${BOARD_SIZE - 1}, got ${row}`,
-    );
-  }
-
-  if (col < 0 || col >= BOARD_SIZE) {
-    throw new Error(
-      `${path}.col must be between 0 and ${BOARD_SIZE - 1}, got ${col}`,
-    );
-  }
-
-  return { row, col };
-}
-
-function validatePositionArray(
-  data: Record<string, unknown>,
-  key: string,
-  path: string,
-): Position[] {
-  const value = data[key];
-
-  if (!Array.isArray(value)) {
-    throw new Error(`${path} must be an array`);
-  }
-
-  if (value.length === 0) {
-    throw new Error(`${path} must not be empty`);
-  }
-
-  return value.map((item, index) =>
-    validatePosition(item, `${path}[${index}]`),
-  );
-}
+// ===== 盤面配列バリデーション =====
 
 function validateBoardArray(
   data: Record<string, unknown>,
