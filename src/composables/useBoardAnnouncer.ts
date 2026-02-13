@@ -60,8 +60,18 @@ export function useBoardAnnouncer(
     const coordinate = formatMove(pos);
 
     const cell = board.value[pos.row]?.[pos.col];
-    const stateText =
-      cell === "black" ? "黒" : cell === "white" ? "白" : "なし";
+    let stateText: string;
+    switch (cell) {
+      case "black":
+        stateText = "黒";
+        break;
+      case "white":
+        stateText = "白";
+        break;
+      default:
+        stateText = "なし";
+        break;
+    }
 
     flushPoliteMessage(`${coordinate} ${stateText}`);
   }

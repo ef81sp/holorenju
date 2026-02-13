@@ -394,12 +394,14 @@ export function computeStats(data: BenchmarkDataFile): BenchStats {
     // 難易度格差別の黒勝率
     const blackRank = playerRank.get(blackPlayer) ?? 0;
     const whiteRank = playerRank.get(whitePlayer) ?? 0;
-    const gap =
-      blackRank === whiteRank
-        ? gapColorWins.same
-        : blackRank > whiteRank
-          ? gapColorWins.blackStronger
-          : gapColorWins.blackWeaker;
+    let gap: typeof gapColorWins.same;
+    if (blackRank === whiteRank) {
+      gap = gapColorWins.same;
+    } else if (blackRank > whiteRank) {
+      gap = gapColorWins.blackStronger;
+    } else {
+      gap = gapColorWins.blackWeaker;
+    }
     if (blackWon) {
       gap.black++;
     } else if (whiteWon) {
