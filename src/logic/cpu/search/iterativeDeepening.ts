@@ -76,8 +76,8 @@ interface PreSearchResult {
   opponentVCFFirstMove?: Position | null;
   /** VCTヒント手（偽陽性の可能性があるためminimax検証に委ねる） */
   vctHintMove?: Position;
-  /** 相手の活三防御位置（detectOpponentThreats結果を共有して二重呼び出し防止） */
-  opponentOpenThrees?: Position[];
+  /** 活三防御の候補手（相手の活三を止める位置） */
+  openThreeDefenseMoves?: Position[];
 }
 
 /**
@@ -303,7 +303,7 @@ function findPreSearchMove(
   return {
     opponentVCFFirstMove: opponentVCFMove,
     vctHintMove,
-    opponentOpenThrees: threats.openThrees,
+    openThreeDefenseMoves: threats.openThrees,
     restrictedMoves: vcfDefenseSet
       ? Array.from(vcfDefenseSet).map((key) => {
           const [row, col] = key.split(",").map(Number);
@@ -394,40 +394,23 @@ export function findBestMoveIterativeWithTT(
     evaluationOptions,
   });
 
-  // 相手のVCF防御・活三防御で候補手を制限
-  let movesRestricted = false;
-
-  // VCF防御が最優先
-  if (
-    preSearchResult.restrictedMoves &&
-    preSearchResult.restrictedMoves.length > 0
-  ) {
-    const restrictedSet = new Set(
-      preSearchResult.restrictedMoves.map((m) => `${m.row},${m.col}`),
-    );
-    const defenseMoves = moves.filter((m) =>
-      restrictedSet.has(`${m.row},${m.col}`),
-    );
-    if (defenseMoves.length > 0) {
-      moves = defenseMoves;
-      movesRestricted = true;
-    }
-    // defenseMoves が空の場合（mandatory defense でフィルタ済みなど）は
-    // 活三防御にフォールバックする
-  }
-
-  if (!movesRestricted) {
-    const openThrees = preSearchResult.opponentOpenThrees ?? [];
-    if (openThrees.length > 0) {
-      // 相手の活三があれば、防御位置のみを候補として探索
-      // （どの止め方がいいかは探索で決める）
-      const defenseSet = new Set(openThrees.map((p) => `${p.row},${p.col}`));
-      const defenseMoves = moves.filter((m) =>
-        defenseSet.has(`${m.row},${m.col}`),
+  // 候補手制限の適用（優先順: VCF防御 > 活三防御）
+  // 各制限は候補手とのANDで適用し、空なら次の制限にフォールバック
+  const restrictions = [
+    preSearchResult.restrictedMoves,
+    preSearchResult.openThreeDefenseMoves,
+  ];
+  for (const restriction of restrictions) {
+    if (restriction && restriction.length > 0) {
+      const restrictedSet = new Set(
+        restriction.map((m) => `${m.row},${m.col}`),
       );
-      // 防御位置が候補手に含まれていれば、それらのみを探索
-      if (defenseMoves.length > 0) {
-        moves = defenseMoves;
+      const filtered = moves.filter((m) =>
+        restrictedSet.has(`${m.row},${m.col}`),
+      );
+      if (filtered.length > 0) {
+        moves = filtered;
+        break;
       }
     }
   }
