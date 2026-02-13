@@ -16,6 +16,7 @@ import {
   DEFAULT_EVAL_OPTIONS,
   type EvaluationOptions,
   PATTERN_SCORES,
+  type ThreatInfo,
 } from "../evaluation/patternScores";
 import { detectOpponentThreats } from "../evaluation/threatDetection";
 import { generateSortedMoves } from "../moveGenerator";
@@ -44,7 +45,7 @@ import {
   findWinningMove,
   getFourDefensePosition,
 } from "./threatPatterns";
-import { findVCFSequence } from "./vcf";
+import { findVCFSequence, type VCFSequenceResult } from "./vcf";
 import { findVCTMove, VCT_STONE_THRESHOLD } from "./vct";
 
 /**
@@ -80,84 +81,70 @@ interface PreSearchResult {
   openThreeDefenseMoves?: Position[];
 }
 
-/**
- * 必須手の事前チェック（探索より優先）
- *
- * 勝利手、脅威防御、VCF、Mise-VCF、VCF防御を順にチェックし、
- * 即座に返すべき手や候補手の制限を決定する。
- *
- * @param board 盤面
- * @param color 手番の色
- * @param ctx 探索コンテキスト
- * @param evaluationOptions 評価オプション
- * @param absoluteDeadline 絶対時間制限のタイムスタンプ
- * @returns 事前チェック結果
- */
-function findPreSearchMove(
+// =========================================================================
+// findPreSearchMove サブ関数群
+// =========================================================================
+
+/** 絶対時間制限超過時の緊急フォールバック */
+function checkEmergencyTimeout(
   board: BoardState,
   color: "black" | "white",
   ctx: SearchContext,
   evaluationOptions: EvaluationOptions,
   absoluteDeadline: number,
-): PreSearchResult {
-  // 絶対時間制限チェック（VCF探索前）
-  if (performance.now() >= absoluteDeadline) {
-    // 時間がないので即座に簡易評価で返す（上位5手のみ評価）
-    const moves = generateSortedMoves(board, color, {
-      ttMove: null,
-      killers: ctx.killers,
-      depth: 1,
-      history: ctx.history,
-      useStaticEval: true,
-      evaluationOptions,
-      maxStaticEvalCount: 5,
-    });
-    const fallbackMove = moves[0] ?? { row: 7, col: 7 };
-    return {
-      immediateMove: { position: fallbackMove, score: 0 },
-    };
+): PreSearchResult | null {
+  if (performance.now() < absoluteDeadline) {
+    return null;
   }
+  const moves = generateSortedMoves(board, color, {
+    ttMove: null,
+    killers: ctx.killers,
+    depth: 1,
+    history: ctx.history,
+    useStaticEval: true,
+    evaluationOptions,
+    maxStaticEvalCount: 5,
+  });
+  const fallbackMove = moves[0] ?? { row: 7, col: 7 };
+  return { immediateMove: { position: fallbackMove, score: 0 } };
+}
 
-  // 1. 自分の即勝ち手（五連完成）をチェック
+/** 即勝ち手（五連完成）の検出 */
+function checkImmediateWin(
+  board: BoardState,
+  color: "black" | "white",
+): PreSearchResult | null {
   const winMove = findWinningMove(board, color);
-  if (winMove) {
-    return {
-      immediateMove: { position: winMove, score: PATTERN_SCORES.FIVE },
-    };
+  if (!winMove) {
+    return null;
   }
+  return {
+    immediateMove: { position: winMove, score: PATTERN_SCORES.FIVE },
+  };
+}
 
-  // 2. 相手の脅威（活四・止め四・活三）をチェック
-  const opponentColor = getOppositeColor(color);
-  const threats = detectOpponentThreats(board, opponentColor);
-
+/**
+ * 相手の活四・止め四に対する必須防御
+ *
+ * 黒番で防御位置が禁手の場合は null を返し、通常探索に委ねる。
+ */
+function checkMustDefend(
+  board: BoardState,
+  color: "black" | "white",
+  threats: ThreatInfo,
+): PreSearchResult | null {
   // 相手の活四があれば止める（実際には止められないが）
   if (threats.openFours.length > 0) {
     const [defensePos] = threats.openFours;
     if (defensePos) {
-      // 黒番で防御位置が禁手の場合は通常探索に任せる
-      const isBlack = color === "black";
-      if (isBlack) {
-        const forbiddenResult = checkForbiddenMoveWithCache(
-          board,
-          defensePos.row,
-          defensePos.col,
-        );
-        if (!forbiddenResult.isForbidden) {
-          return {
-            immediateMove: {
-              position: defensePos,
-              score: -PATTERN_SCORES.FIVE,
-            },
-          };
-        }
-        // 禁手追い込み: 防御できないので通常探索で禁手以外の手を選ぶ
-      } else {
-        return {
-          immediateMove: {
-            position: defensePos,
-            score: -PATTERN_SCORES.FIVE,
-          },
-        };
+      const result = tryDefenseMove(
+        board,
+        color,
+        defensePos,
+        -PATTERN_SCORES.FIVE,
+      );
+      if (result) {
+        return result;
       }
     }
   }
@@ -169,63 +156,73 @@ function findPreSearchMove(
     if (defensePos) {
       const fourDefenseScore =
         threats.openThrees.length > 0 ? -PATTERN_SCORES.FIVE : 0;
-      // 黒番で防御位置が禁手の場合は通常探索に任せる
-      const isBlack = color === "black";
-      if (isBlack) {
-        const forbiddenResult = checkForbiddenMoveWithCache(
-          board,
-          defensePos.row,
-          defensePos.col,
-        );
-        if (!forbiddenResult.isForbidden) {
-          return {
-            immediateMove: {
-              position: defensePos,
-              score: fourDefenseScore,
-            },
-          };
-        }
-        // 禁手追い込み: 防御できないので通常探索で禁手以外の手を選ぶ
-      } else {
-        return {
-          immediateMove: {
-            position: defensePos,
-            score: fourDefenseScore,
-          },
-        };
+      const result = tryDefenseMove(board, color, defensePos, fourDefenseScore);
+      if (result) {
+        return result;
       }
     }
   }
 
-  // 相手VCF結果（VCFレース判定 + Mise-VCFスキップ + 防御候補制限で共有）
-  // NOTE: 各VCFは独立に探索するため、手順の相互干渉は考慮しない
-  // 3状態: undefined=未探索、null=探索済みVCFなし、VCFSequenceResult=VCFあり
-  let opponentVCFResult: ReturnType<typeof findVCFSequence> | undefined =
-    undefined;
+  return null;
+}
 
-  // 3. 四追い勝ち（VCF）があれば即座にその手を返す
-  // （相手の四がある場合は上記で即return済みなのでここには到達しない）
+/** 防御手を返す。黒番で防御位置が禁手の場合は null（通常探索に委ねる） */
+function tryDefenseMove(
+  board: BoardState,
+  color: "black" | "white",
+  defensePos: Position,
+  score: number,
+): PreSearchResult | null {
+  if (color === "black") {
+    const { isForbidden } = checkForbiddenMoveWithCache(
+      board,
+      defensePos.row,
+      defensePos.col,
+    );
+    if (isForbidden) {
+      return null;
+    } // 禁手追い込み: 通常探索で禁手以外の手を選ぶ
+  }
+  return { immediateMove: { position: defensePos, score } };
+}
+
+/** checkForcedWinSequences の戻り値 */
+interface ForcedWinCheckResult {
+  immediateMove?: { position: Position; score: number };
+  opponentVCFResult: VCFSequenceResult | null;
+  vctHintMove?: Position;
+}
+
+/**
+ * VCF・Mise-VCF・VCTの強制勝ち探索
+ *
+ * 自VCF → 相手VCF（Mise-VCFスキップ判定用） → Mise-VCF → VCTヒント の順に探索。
+ */
+function checkForcedWinSequences(
+  board: BoardState,
+  color: "black" | "white",
+  opponentColor: "black" | "white",
+  evaluationOptions: EvaluationOptions,
+): ForcedWinCheckResult {
+  // 自VCF（四追い勝ち）
+  // 相手の四がある場合は checkMustDefend で即return済みなのでここには到達しない
   const vcfResult = findVCFSequence(board, color);
   if (vcfResult) {
-    // findVCFSequence が返す VCF は各防御手の counter-four/counter-five チェック済み。
-    // 相手は毎手四を止めるしかないため、相手VCFの有無・長短に関係なく勝利確定。
     return {
       immediateMove: {
         position: vcfResult.firstMove,
         score: PATTERN_SCORES.FIVE,
       },
+      opponentVCFResult: null,
     };
   }
 
-  // 3.5 Mise-VCF（ミセ→強制応手→VCF勝ち）があれば即座にその手を返す
-  // 自VCFがなかった場合、Mise-VCFの前に相手VCFを探索
-  if (opponentVCFResult === undefined) {
-    opponentVCFResult = findVCFSequence(board, opponentColor, {
-      timeLimit: 100,
-    });
-  }
+  // 相手VCF（Mise-VCFスキップ判定 + 防御候補制限で共有）
+  const opponentVCFResult =
+    findVCFSequence(board, opponentColor, { timeLimit: 100 }) ?? null;
 
-  // 相手VCFがある場合、Mise-VCFは間に合わない（最低2手+VCF手数が必要）のでスキップ
+  // Mise-VCF（ミセ→強制応手→VCF勝ち）
+  // 相手VCFがある場合は間に合わない（最低2手+VCF手数が必要）のでスキップ
   if (!opponentVCFResult) {
     const miseVcfMove = findMiseVCFMove(board, color, {
       vcfOptions: { maxDepth: 12, timeLimit: 300 },
@@ -242,14 +239,13 @@ function findPreSearchMove(
             position: miseVcfMove,
             score: PATTERN_SCORES.FIVE,
           },
+          opponentVCFResult: null,
         };
       }
-      // 禁手の場合はMise-VCFなしとして通常探索にフォールスルー
     }
   }
 
-  // 3.8 VCT攻撃ヒント（三・四の連続脅威で勝利）
-  // 偽陽性の可能性があるため即返却せず、ヒントとしてminimax検証に委ねる
+  // VCTヒント（偽陽性の可能性があるためminimax検証に委ねる）
   let vctHintMove: Position | undefined;
   if (evaluationOptions.enableVCT) {
     const stoneCount = countStones(board);
@@ -270,45 +266,102 @@ function findPreSearchMove(
     }
   }
 
-  // 4. 相手のVCF（四追い勝ち）があれば候補手を防御手に制限
-  // 相手VCF結果を共有変数から取得（重複探索を排除）
-  const opponentVCFMove = opponentVCFResult?.firstMove ?? null;
-  let vcfDefenseSet: Set<string> | null = null;
-  if (opponentVCFMove) {
-    vcfDefenseSet = new Set<string>();
+  return { opponentVCFResult, vctHintMove };
+}
 
-    // (a) カウンターフォー: 自分の四を作れる手（相手はVCFを中断して応手が必要）
-    const counterFours = findFourMoves(board, color);
-    for (const m of counterFours) {
-      vcfDefenseSet.add(`${m.row},${m.col}`);
-    }
+/** 相手VCFに対する候補手制限（カウンターフォー + ブロック） */
+function computeVCFDefenseMoves(
+  board: BoardState,
+  color: "black" | "white",
+  opponentColor: "black" | "white",
+  opponentVCFMove: Position,
+): Position[] {
+  const defenseSet = new Set<string>();
 
-    // (b) ブロック: 相手VCF開始手をシミュレートし、四の防御位置を取得
-    const vcfRow = board[opponentVCFMove.row];
-    if (vcfRow) {
-      vcfRow[opponentVCFMove.col] = opponentColor;
-      const blockPos = getFourDefensePosition(
-        board,
-        opponentVCFMove,
-        opponentColor,
-      );
-      vcfRow[opponentVCFMove.col] = null;
+  // (a) カウンターフォー: 自分の四を作れる手（相手はVCFを中断して応手が必要）
+  for (const m of findFourMoves(board, color)) {
+    defenseSet.add(`${m.row},${m.col}`);
+  }
 
-      if (blockPos) {
-        vcfDefenseSet.add(`${blockPos.row},${blockPos.col}`);
-      }
+  // (b) ブロック: 相手VCF開始手をシミュレートし、四の防御位置を取得
+  const vcfRow = board[opponentVCFMove.row];
+  if (vcfRow) {
+    vcfRow[opponentVCFMove.col] = opponentColor;
+    const blockPos = getFourDefensePosition(
+      board,
+      opponentVCFMove,
+      opponentColor,
+    );
+    vcfRow[opponentVCFMove.col] = null;
+    if (blockPos) {
+      defenseSet.add(`${blockPos.row},${blockPos.col}`);
     }
   }
 
+  return Array.from(defenseSet).map((key) => {
+    const [row, col] = key.split(",").map(Number);
+    return { row: row!, col: col! };
+  });
+}
+
+// =========================================================================
+// findPreSearchMove パイプライン
+// =========================================================================
+
+/**
+ * 必須手の事前チェック（探索より優先）
+ *
+ * 緊急タイムアウト → 即勝ち → 必須防御 → 強制勝ち探索 → 候補手制限
+ * の順にチェックし、即座に返すべき手や候補手の制限を決定する。
+ */
+function findPreSearchMove(
+  board: BoardState,
+  color: "black" | "white",
+  ctx: SearchContext,
+  evaluationOptions: EvaluationOptions,
+  absoluteDeadline: number,
+): PreSearchResult {
+  const timeout = checkEmergencyTimeout(
+    board,
+    color,
+    ctx,
+    evaluationOptions,
+    absoluteDeadline,
+  );
+  if (timeout) {
+    return timeout;
+  }
+
+  const win = checkImmediateWin(board, color);
+  if (win) {
+    return win;
+  }
+
+  const opponentColor = getOppositeColor(color);
+  const threats = detectOpponentThreats(board, opponentColor);
+
+  const defense = checkMustDefend(board, color, threats);
+  if (defense) {
+    return defense;
+  }
+
+  const forced = checkForcedWinSequences(
+    board,
+    color,
+    opponentColor,
+    evaluationOptions,
+  );
+  if (forced.immediateMove) {
+    return { immediateMove: forced.immediateMove };
+  }
+
+  const opponentVCFMove = forced.opponentVCFResult?.firstMove;
   return {
-    opponentVCFFirstMove: opponentVCFMove,
-    vctHintMove,
+    opponentVCFFirstMove: opponentVCFMove ?? null,
+    vctHintMove: forced.vctHintMove,
     openThreeDefenseMoves: threats.openThrees,
-    restrictedMoves: vcfDefenseSet
-      ? Array.from(vcfDefenseSet).map((key) => {
-          const [row, col] = key.split(",").map(Number);
-          return { row: row!, col: col! };
-        })
+    restrictedMoves: opponentVCFMove
+      ? computeVCFDefenseMoves(board, color, opponentColor, opponentVCFMove)
       : undefined,
   };
 }
