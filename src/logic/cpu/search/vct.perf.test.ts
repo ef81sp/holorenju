@@ -397,13 +397,14 @@ describe("分岐収集（collectBranches）", () => {
     expect(result?.branches).toBeUndefined();
   });
 
-  it("23手目盤面でVCT手順が収集される", { timeout: 15000, retry: 2 }, () => {
+  it("23手目盤面でVCT手順が収集される", () => {
     const { board } = createBoardFromRecord(record);
     // 分岐収集は探索コストが高いため時間制限を延長
+    // perf プロジェクト（testTimeout: 30000）で直列実行されるため余裕を持たせる
     const result = findVCTSequence(board, "white", {
       ...branchOptions,
-      timeLimit: 10000,
-      vcfOptions: { maxDepth: 16, timeLimit: 10000 },
+      timeLimit: 25000,
+      vcfOptions: { maxDepth: 16, timeLimit: 25000 },
     });
     expect(result).not.toBeNull();
     expect(result?.sequence.length).toBeGreaterThanOrEqual(3);

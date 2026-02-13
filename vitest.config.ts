@@ -24,9 +24,22 @@ export default defineConfig({
           name: "unit",
           globals: true,
           include: ["src/**/*.test.ts"],
-          exclude: ["src/**/*.browser.test.ts"],
+          exclude: ["src/**/*.browser.test.ts", "src/**/*.perf.test.ts"],
           environment: "node",
           includeSource: ["src/**/*.ts"],
+        },
+      },
+      {
+        ...baseConfig,
+        test: {
+          name: "perf",
+          globals: true,
+          include: ["src/**/*.perf.test.ts"],
+          environment: "node",
+          fileParallelism: false,
+          testTimeout: 30000,
+          pool: "forks",
+          poolOptions: { forks: { singleFork: true } },
         },
       },
       {
