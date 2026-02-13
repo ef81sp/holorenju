@@ -238,11 +238,6 @@ function evaluatePositionCore(
 ): number {
   const opponentColor = color === "black" ? "white" : "black";
 
-  // 白の三三・四四チェック（白には禁手がないため即勝利）
-  if (color === "white" && checkWhiteWinningPattern(board, row, col)) {
-    return PATTERN_SCORES.FIVE;
-  }
-
   // 攻撃スコア: 自分のパターン
   const attackScore = evaluateStonePatterns(board, row, col, color);
 
@@ -254,6 +249,7 @@ function evaluatePositionCore(
   }
 
   // 必須防御ルール: 相手の活四・活三を止めない手は除外
+  // 白の三三・四四チェックよりも先に評価（相手の脅威を放置すると先に負ける）
   if (options.enableMandatoryDefense) {
     // 事前計算された脅威情報があればそれを使用（最適化）
     let threats: ThreatInfo = options.precomputedThreats ?? {
@@ -353,6 +349,12 @@ function evaluatePositionCore(
         return -Infinity;
       }
     }
+  }
+
+  // 白の三三・四四チェック（白には禁手がないため即勝利）
+  // mandatory defense を通過した手のみが到達する（防御義務を果たした上での勝利パターン）
+  if (color === "white" && checkWhiteWinningPattern(board, row, col)) {
+    return PATTERN_SCORES.FIVE;
   }
 
   // 禁手追い込みボーナス（白番のみ、オプションで有効時のみ）

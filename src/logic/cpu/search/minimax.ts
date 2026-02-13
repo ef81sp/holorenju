@@ -1249,14 +1249,22 @@ export function findBestMoveIterativeWithTT(
     evaluationOptions,
   });
 
-  // 相手のVCF防御が活三防御より優先
+  // 相手のVCF防御・活三防御で候補手を制限
+  let movesRestricted = false;
+
+  // VCF防御が最優先
   if (vcfDefenseSet && vcfDefenseSet.size > 0) {
     const vcfSet = vcfDefenseSet;
     const defenseMoves = moves.filter((m) => vcfSet.has(`${m.row},${m.col}`));
     if (defenseMoves.length > 0) {
       moves = defenseMoves;
+      movesRestricted = true;
     }
-  } else if (threats.openThrees.length > 0) {
+    // defenseMoves が空の場合（mandatory defense でフィルタ済みなど）は
+    // 活三防御にフォールバックする
+  }
+
+  if (!movesRestricted && threats.openThrees.length > 0) {
     // 相手の活三があれば、防御位置のみを候補として探索
     // （どの止め方がいいかは探索で決める）
     const defenseSet = new Set(
