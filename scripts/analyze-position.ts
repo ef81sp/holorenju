@@ -117,6 +117,7 @@ for (const color of colors) {
   }
 
   // Mise-VCF
+  const opponentHasOpenThree = hasOpenThree(pos.board, opponent);
   const miseResult = findMiseVCFSequence(pos.board, color);
   if (miseResult) {
     const seq = miseResult.sequence.map((m) => formatMove(m)).join(" ");
@@ -124,13 +125,16 @@ for (const color of colors) {
       `  Mise-VCF: あり (ミセ手: ${formatMove(miseResult.firstMove)})`,
     );
     console.log(`    手順: ${seq}`);
+  } else if (opponentHasOpenThree) {
+    console.log(
+      `  Mise-VCF: スキップ (相手に活三あり → ミセの強制応手が成立しない)`,
+    );
   } else {
     console.log(`  Mise-VCF: なし`);
   }
 
   // VCT（石数閾値チェック）
   const stones = countStones(pos.board);
-  const opponentHasOpenThree = hasOpenThree(pos.board, opponent);
   if (stones >= VCT_STONE_THRESHOLD) {
     const vctResult = findVCTSequence(pos.board, color, vctOptions);
     if (vctResult) {

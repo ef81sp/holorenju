@@ -17,6 +17,7 @@ import {
 } from "../evaluation/tactics";
 import { isNearExistingStone } from "../moveGenerator";
 import { findVCFSequence, type VCFSearchOptions } from "./vcf";
+import { hasOpenThree } from "./vct";
 
 /**
  * Mise-VCF探索オプション
@@ -97,6 +98,12 @@ export function findMiseVCFSequence(
   const vcfOptions = options?.vcfOptions ?? DEFAULT_VCF_OPTIONS;
   const startTime = performance.now();
   const opponentColor = color === "black" ? "white" : "black";
+
+  // 相手に活三がある場合、ミセ手の強制応手の前提が崩れるためスキップ
+  // （相手は四三防御を無視して活三を伸ばし四を作れる）
+  if (hasOpenThree(board, opponentColor)) {
+    return null;
+  }
 
   // 候補手を列挙（既存石の近傍の空きマス）
   for (let row = 0; row < 15; row++) {

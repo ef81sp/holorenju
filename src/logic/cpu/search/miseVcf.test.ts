@@ -141,6 +141,30 @@ describe("Mise-VCF偽検出の回帰テスト", () => {
   });
 });
 
+describe("相手に活三がある場合のMise-VCFスキップ", () => {
+  it("相手に活三がある場合、Mise-VCFを検出しない", () => {
+    // 14手目まで: 白がG6-G7-G8の活三を持つ
+    // H6がミセ手候補だが、白の四三防御G5がG列の棒四(G5-G6-G7-G8)を作るため
+    // ミセの強制応手の前提が崩れる
+    const { board } = createBoardFromRecord(
+      "H8 G7 I8 H7 I7 G8 I5 I6 J5 J6 K6 J7 J8 G6",
+    );
+
+    const result = findMiseVCFSequence(board, "black", GENEROUS_TIME_LIMIT);
+    expect(result).toBeNull();
+  });
+
+  it("相手に活三がない場合は通常通りMise-VCFを検出する", () => {
+    // 既存テストケース: 12手目局面で白に活三なし → G7がMise-VCF手
+    const { board } = createBoardFromRecord(
+      "H8 I9 I7 G9 J8 H10 H6 K9 H7 H9 J9 I10",
+    );
+
+    const result = findMiseVCFSequence(board, "black", GENEROUS_TIME_LIMIT);
+    expect(result).not.toBeNull();
+  });
+});
+
 describe("黒番のMise-VCF禁手チェック", () => {
   it("三々禁の位置をMise-VCF手として返さない", () => {
     // ベンチマーク#34の棋譜: H6が三々禁かつMise-VCF候補
