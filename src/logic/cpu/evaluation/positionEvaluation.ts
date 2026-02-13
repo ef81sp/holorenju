@@ -241,21 +241,12 @@ function evaluatePositionCore(
     miseBonus = PATTERN_SCORES.MISE_BONUS;
   }
 
-  // フクミ手ボーナス: ルートレベルでのみ判定するため、評価関数内では無効化
-  // 理由: isFukumiMove(hasVCF)は計算コストが高い
-  const fukumiBonus = 0;
-
   // 複数方向脅威ボーナス: 2方向以上で脅威を作る手（オプションで有効時のみ）
   let multiThreatBonus = 0;
   if (options.enableMultiThreat) {
     const threatCount = countThreatDirections(board, row, col, color);
     multiThreatBonus = evaluateMultiThreat(threatCount);
   }
-
-  // VCTボーナス: ルートレベルでのみ判定するため、評価関数内では無効化
-  // 理由: 各ノードでVCT探索を実行すると計算コストが爆発的に増加
-  // 代わりに findBestMoveIterativeWithTT でルートの候補手に対してのみVCT判定
-  const vctBonus = 0;
 
   // 単発四ペナルティ: 四を作るが四三ではなく、後続脅威もない場合
   let singleFourPenalty = 0;
@@ -326,9 +317,7 @@ function evaluatePositionCore(
     fourThreeBonus +
     forbiddenTrapBonus +
     miseBonus +
-    fukumiBonus +
-    multiThreatBonus +
-    vctBonus -
+    multiThreatBonus -
     singleFourPenalty -
     forbiddenVulnerabilityPenalty
   );
