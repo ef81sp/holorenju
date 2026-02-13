@@ -21,7 +21,7 @@ import {
   checkWin,
   createEmptyBoard,
   DRAW_MOVE_LIMIT,
-} from "../../renjuRules.ts";
+} from "../../renjuRules";
 import { applyMove, countStones } from "../core/boardUtils.ts";
 import {
   evaluateBoardWithBreakdown,
