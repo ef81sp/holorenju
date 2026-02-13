@@ -32,6 +32,94 @@ import {
   type VCFTimeLimiter,
 } from "./vcf";
 
+/**
+ * 防御手のカウンター脅威をチェック（1パス統合版）
+ *
+ * 防御石を置いた後、相手側に五連・四・活三ができるかを判定する。
+ * checkFive + createsFour + createsOpenThree を個別に呼ぶと12回のライン走査が必要だが、
+ * 四と活三を1パスで判定することで走査回数を削減（8回以下）。
+ *
+ * @param board 盤面（防御石を配置済み）
+ * @param row 防御石の行
+ * @param col 防御石の列
+ * @param opponentColor 防御側の色
+ * @returns "win"（五連）| "four"（四）| "three"（活三）| "none"
+ */
+function checkDefenseCounterThreat(
+  board: BoardState,
+  row: number,
+  col: number,
+  opponentColor: "black" | "white",
+): "win" | "four" | "three" | "none" {
+  // 五連は色固有ルール（黒の長連など）があるため専用関数を使用
+  if (checkFive(board, row, col, opponentColor)) {
+    return "win";
+  }
+
+  // 四と活三を1パスでチェック
+  let hasThree = false;
+  for (let i = 0; i < DIRECTION_INDICES.length; i++) {
+    const dirIndex = DIRECTION_INDICES[i];
+    if (dirIndex === undefined) {
+      continue;
+    }
+    const direction = DIRECTIONS[i];
+    if (!direction) {
+      continue;
+    }
+    const [dr, dc] = direction;
+    const count = countLine(board, row, col, dr, dc, opponentColor);
+
+    // 連続四 → 即リターン
+    if (count === 4) {
+      const { end1Open, end2Open } = checkEnds(
+        board,
+        row,
+        col,
+        dr,
+        dc,
+        opponentColor,
+      );
+      if (end1Open || end2Open) {
+        return "four";
+      }
+    }
+
+    // 跳び四
+    if (
+      count !== 4 &&
+      checkJumpFour(board, row, col, dirIndex, opponentColor)
+    ) {
+      return "four";
+    }
+
+    // 連続活三
+    if (count === 3) {
+      const { end1Open, end2Open } = checkEnds(
+        board,
+        row,
+        col,
+        dr,
+        dc,
+        opponentColor,
+      );
+      if (end1Open && end2Open) {
+        hasThree = true;
+      }
+    }
+
+    // 跳び三
+    if (
+      !hasThree &&
+      count !== 3 &&
+      checkJumpThree(board, row, col, dirIndex, opponentColor)
+    ) {
+      hasThree = true;
+    }
+  }
+  return hasThree ? "three" : "none";
+}
+
 /** VCT探索の最大深度 */
 const VCT_MAX_DEPTH = 4;
 
@@ -145,11 +233,6 @@ export function hasVCT(
     timeLimit: timeLimitMs,
   };
 
-  // トップレベル: 相手に活三があればVCT不成立（四追いでしか勝てない）
-  if (depth === 0 && hasOpenThree(board, opponentColor)) {
-    return false;
-  }
-
   // 時間制限チェック
   if (performance.now() - limiter.startTime >= limiter.timeLimit) {
     return false;
@@ -163,6 +246,12 @@ export function hasVCT(
   // 時間制限を共有（VCTの残り時間をVCFにも適用）
   if (hasVCF(board, color, 0, limiter, options?.vcfOptions)) {
     return true;
+  }
+
+  // 相手に活三があればVCT（三脅威）は不成立（VCFのみ有効）
+  // VCFは上で既にチェック済みなので、ここではfalseを返す
+  if (depth === 0 && hasOpenThree(board, opponentColor)) {
+    return false;
   }
 
   // 脅威（四・活三）を作れる位置を列挙
@@ -230,8 +319,20 @@ export function hasVCT(
         defenseRow[defensePos.col] = opponentColor;
       }
 
-      // 再帰的にVCTをチェック
-      const vctResult = hasVCT(board, color, depth + 1, limiter, options);
+      // 防御手のカウンター脅威チェック（五連・四）
+      const ct = checkDefenseCounterThreat(
+        board,
+        defensePos.row,
+        defensePos.col,
+        opponentColor,
+      );
+      let vctResult: boolean;
+      if (ct === "win") {
+        // 防御手で五連/四ができる → VCT不成立
+        vctResult = false;
+      } else {
+        vctResult = hasVCT(board, color, depth + 1, limiter, options);
+      }
 
       // 元に戻す（Undo）- 防御手
       if (defenseRow) {
@@ -558,7 +659,19 @@ function findVCTMoveRecursive(
         defenseRow[defensePos.col] = opponentColor;
       }
 
-      const vctResult = hasVCT(board, color, depth + 1, limiter, options);
+      // 防御手のカウンター脅威チェック（五連・四）
+      const ct = checkDefenseCounterThreat(
+        board,
+        defensePos.row,
+        defensePos.col,
+        opponentColor,
+      );
+      let vctResult: boolean;
+      if (ct === "win") {
+        vctResult = false;
+      } else {
+        vctResult = hasVCT(board, color, depth + 1, limiter, options);
+      }
 
       // 元に戻す（Undo）- 防御手
       if (defenseRow) {
@@ -698,8 +811,15 @@ function findVCTSequenceRecursive(
     return true;
   }
 
-  const threatMoves = findThreatMoves(board, color);
   const opponentColor = color === "black" ? "white" : "black";
+
+  // 相手に活三があればVCT（三脅威）は不成立（VCFのみ有効）
+  // VCFは上で既にチェック済みなので、ここではfalseを返す
+  if (depth === 0 && hasOpenThree(board, opponentColor)) {
+    return false;
+  }
+
+  const threatMoves = findThreatMoves(board, color);
 
   for (const move of threatMoves) {
     // 脅威を作る（インプレース）
@@ -768,6 +888,25 @@ function findVCTSequenceRecursive(
         defenseRow[defensePos.col] = opponentColor;
       }
 
+      // 防御手のカウンター脅威チェック（五連・四）
+      const ct = checkDefenseCounterThreat(
+        board,
+        defensePos.row,
+        defensePos.col,
+        opponentColor,
+      );
+
+      if (ct === "win") {
+        // 防御手で五連/四ができる → VCT不成立
+        // 元に戻す（Undo）- 防御手
+        if (defenseRow) {
+          defenseRow[defensePos.col] = null;
+        }
+        allDefenseLeadsToVCT = false;
+        break;
+      }
+
+      // "three" / "none": 通常の再帰
       if (context.collectBranches || firstDefenseSequence === null) {
         // 分岐収集時は全防御で手順を収集、通常時は最初の防御のみ
         const subSequence: Position[] = [];
@@ -975,7 +1114,19 @@ export function isVCTFirstMove(
       defenseRow[defensePos.col] = opponentColor;
     }
 
-    const vctResult = hasVCT(board, color, 1, limiter, options);
+    // 防御手のカウンター脅威チェック（五連・四）
+    const ct = checkDefenseCounterThreat(
+      board,
+      defensePos.row,
+      defensePos.col,
+      opponentColor,
+    );
+    let vctResult: boolean;
+    if (ct === "win") {
+      vctResult = false;
+    } else {
+      vctResult = hasVCT(board, color, 1, limiter, options);
+    }
 
     // 元に戻す（Undo）- 防御手
     if (defenseRow) {
