@@ -76,6 +76,8 @@ interface PreSearchResult {
   opponentVCFFirstMove?: Position | null;
   /** VCTヒント手（偽陽性の可能性があるためminimax検証に委ねる） */
   vctHintMove?: Position;
+  /** 相手の活三防御位置（detectOpponentThreats結果を共有して二重呼び出し防止） */
+  opponentOpenThrees?: Position[];
 }
 
 /**
@@ -301,6 +303,7 @@ function findPreSearchMove(
   return {
     opponentVCFFirstMove: opponentVCFMove,
     vctHintMove,
+    opponentOpenThrees: threats.openThrees,
     restrictedMoves: vcfDefenseSet
       ? Array.from(vcfDefenseSet).map((key) => {
           const [row, col] = key.split(",").map(Number);
@@ -414,14 +417,11 @@ export function findBestMoveIterativeWithTT(
   }
 
   if (!movesRestricted) {
-    const opponentColor = getOppositeColor(color);
-    const threats = detectOpponentThreats(board, opponentColor);
-    if (threats.openThrees.length > 0) {
+    const openThrees = preSearchResult.opponentOpenThrees ?? [];
+    if (openThrees.length > 0) {
       // 相手の活三があれば、防御位置のみを候補として探索
       // （どの止め方がいいかは探索で決める）
-      const defenseSet = new Set(
-        threats.openThrees.map((p) => `${p.row},${p.col}`),
-      );
+      const defenseSet = new Set(openThrees.map((p) => `${p.row},${p.col}`));
       const defenseMoves = moves.filter((m) =>
         defenseSet.has(`${m.row},${m.col}`),
       );
