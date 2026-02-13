@@ -17,7 +17,7 @@ import {
 } from "../evaluation/tactics";
 import { isNearExistingStone } from "../moveGenerator";
 import { findVCFSequence, type VCFSearchOptions } from "./vcf";
-import { hasOpenThree } from "./vct";
+import { hasOpenThree } from "./vctHelpers";
 
 /**
  * Mise-VCF探索オプション

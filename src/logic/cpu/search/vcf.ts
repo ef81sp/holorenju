@@ -7,22 +7,23 @@
 
 import type { BoardState, Position } from "@/types/game";
 
-import { BOARD_SIZE } from "@/constants";
-import {
-  checkFive,
-  checkForbiddenMove,
-  checkJumpFour,
-  isValidPosition,
-} from "@/logic/renjuRules";
+import { checkFive, checkForbiddenMove } from "@/logic/renjuRules";
 
-import { DIRECTION_INDICES, DIRECTIONS } from "../core/constants";
-import { countLine } from "../core/lineAnalysis";
-import { isNearExistingStone } from "../moveGenerator";
-import { findJumpGapPosition } from "../patterns/threatAnalysis";
+import { type TimeLimiter, isTimeExceeded } from "./context";
 import { createsFour } from "./threatMoves";
+import { findFourMoves, getFourDefensePosition } from "./threatPatterns";
 
 // 後方互換性のためライン解析関数を再export
 export { checkEnds, countLine } from "../core/lineAnalysis";
+
+// 後方互換性のため threatPatterns の関数を再export
+export {
+  findDefenseForConsecutiveFour,
+  findDefenseForJumpFour,
+  findFourMoves,
+  getFourDefensePosition,
+  findWinningMove,
+} from "./threatPatterns";
 
 /** VCF探索の最大深度 */
 const VCF_MAX_DEPTH = 8;
@@ -32,11 +33,9 @@ const VCF_TIME_LIMIT = 150;
 
 /**
  * VCF探索用の時間制限コンテキスト
+ * @deprecated TimeLimiter を使用してください
  */
-export interface VCFTimeLimiter {
-  startTime: number;
-  timeLimit: number;
-}
+export type VCFTimeLimiter = TimeLimiter;
 
 /**
  * VCF探索オプション（外部からパラメータを設定可能）
@@ -81,7 +80,7 @@ export function hasVCF(
   board: BoardState,
   color: "black" | "white",
   depth = 0,
-  timeLimiter?: VCFTimeLimiter,
+  timeLimiter?: TimeLimiter,
   options?: VCFSearchOptions,
 ): boolean {
   const maxDepth = options?.maxDepth ?? VCF_MAX_DEPTH;
@@ -94,7 +93,7 @@ export function hasVCF(
   };
 
   // 時間制限チェック
-  if (performance.now() - limiter.startTime >= limiter.timeLimit) {
+  if (isTimeExceeded(limiter)) {
     return false;
   }
 
@@ -205,14 +204,14 @@ export function findVCFMove(
 ): Position | null {
   const maxDepth = options?.maxDepth ?? VCF_MAX_DEPTH;
   const timeLimitMs = options?.timeLimit ?? VCF_TIME_LIMIT;
-  const limiter: VCFTimeLimiter = {
+  const limiter: TimeLimiter = {
     startTime: performance.now(),
     timeLimit: timeLimitMs,
   };
 
   // 反復深化: 浅い深度から探索し、最短VCFを優先
   for (let depth = 1; depth <= maxDepth; depth++) {
-    if (performance.now() - limiter.startTime >= limiter.timeLimit) {
+    if (isTimeExceeded(limiter)) {
       return null;
     }
     const result = findVCFMoveRecursive(board, color, 0, limiter, {
@@ -237,7 +236,7 @@ function findVCFMoveRecursive(
   board: BoardState,
   color: "black" | "white",
   depth: number,
-  limiter: VCFTimeLimiter,
+  limiter: TimeLimiter,
   options?: VCFSearchOptions,
 ): Position | null {
   const maxDepth = options?.maxDepth ?? VCF_MAX_DEPTH;
@@ -247,7 +246,7 @@ function findVCFMoveRecursive(
   }
 
   // 時間制限チェック
-  if (performance.now() - limiter.startTime >= limiter.timeLimit) {
+  if (isTimeExceeded(limiter)) {
     return null;
   }
 
@@ -340,227 +339,6 @@ function findVCFMoveRecursive(
 }
 
 /**
- * 即勝ち手を探す（五連を完成できる位置）
- *
- * 自分の四（棒四・活四・跳び四）が盤上にある場合、
- * 五を打てる位置を返す。見つからなければnull。
- */
-export function findWinningMove(
-  board: BoardState,
-  color: "black" | "white",
-): Position | null {
-  for (let row = 0; row < BOARD_SIZE; row++) {
-    for (let col = 0; col < BOARD_SIZE; col++) {
-      if (board[row]?.[col] !== null) {
-        continue;
-      }
-      if (!isNearExistingStone(board, row, col)) {
-        continue;
-      }
-
-      const rowArray = board[row];
-      if (rowArray) {
-        rowArray[col] = color;
-      }
-
-      const isFive = checkFive(board, row, col, color);
-
-      if (rowArray) {
-        rowArray[col] = null;
-      }
-
-      if (isFive) {
-        return { row, col };
-      }
-    }
-  }
-
-  return null;
-}
-
-/**
- * 四を作れる位置を列挙
- * @internal テスト用にexport
- */
-export function findFourMoves(
-  board: BoardState,
-  color: "black" | "white",
-): Position[] {
-  const moves: Position[] = [];
-
-  for (let row = 0; row < BOARD_SIZE; row++) {
-    for (let col = 0; col < BOARD_SIZE; col++) {
-      if (board[row]?.[col] !== null) {
-        continue;
-      }
-      if (!isNearExistingStone(board, row, col)) {
-        continue;
-      }
-
-      // 行配列を取得（このセル操作で共通利用）
-      const rowArray = board[row];
-
-      // 石を置いて五連・四を一括チェック（place/undoを1回に統合）
-      if (rowArray) {
-        rowArray[col] = color;
-      }
-
-      const isFive = checkFive(board, row, col, color);
-      if (isFive) {
-        if (rowArray) {
-          rowArray[col] = null;
-        }
-        moves.push({ row, col });
-        continue;
-      }
-
-      const isFour = createsFour(board, row, col, color);
-
-      if (rowArray) {
-        rowArray[col] = null;
-      }
-
-      if (!isFour) {
-        continue;
-      }
-
-      // 禁手チェックは四を作る手だけに限定
-      if (color === "black") {
-        const forbidden = checkForbiddenMove(board, row, col);
-        if (forbidden.isForbidden) {
-          continue;
-        }
-      }
-
-      moves.push({ row, col });
-    }
-  }
-
-  return moves;
-}
-
-/**
- * 四に対する防御位置を取得
- * 四は1点でしか止められないので、その位置を返す
- *
- * @param board 盤面（四が作られた状態）
- * @param lastMove 最後に置かれた手
- * @param color 四を作った手番
- * @returns 防御位置（止められない場合はnull）
- */
-export function getFourDefensePosition(
-  board: BoardState,
-  lastMove: Position,
-  color: "black" | "white",
-): Position | null {
-  const { row, col } = lastMove;
-
-  for (let i = 0; i < DIRECTION_INDICES.length; i++) {
-    const dirIndex = DIRECTION_INDICES[i];
-    if (dirIndex === undefined) {
-      continue;
-    }
-
-    const direction = DIRECTIONS[i];
-    if (!direction) {
-      continue;
-    }
-    const [dr, dc] = direction;
-
-    // 連続四をチェック
-    const count = countLine(board, row, col, dr, dc, color);
-    if (count === 4) {
-      const defensePos = findDefenseForConsecutiveFour(
-        board,
-        row,
-        col,
-        dr,
-        dc,
-        color,
-      );
-      if (defensePos) {
-        return defensePos;
-      }
-    }
-
-    // 跳び四をチェック
-    if (count !== 4 && checkJumpFour(board, row, col, dirIndex, color)) {
-      const defensePos = findDefenseForJumpFour(board, row, col, dr, dc, color);
-      if (defensePos) {
-        return defensePos;
-      }
-    }
-  }
-
-  return null;
-}
-
-/**
- * 連続四に対する防御位置を取得
- * @internal テスト用にexport
- */
-export function findDefenseForConsecutiveFour(
-  board: BoardState,
-  row: number,
-  col: number,
-  dr: number,
-  dc: number,
-  color: "black" | "white",
-): Position | null {
-  const defensePositions: Position[] = [];
-
-  // 正方向の端
-  let r = row + dr;
-  let c = col + dc;
-  while (isValidPosition(r, c) && board[r]?.[c] === color) {
-    r += dr;
-    c += dc;
-  }
-  if (isValidPosition(r, c) && board[r]?.[c] === null) {
-    defensePositions.push({ row: r, col: c });
-  }
-
-  // 負方向の端
-  r = row - dr;
-  c = col - dc;
-  while (isValidPosition(r, c) && board[r]?.[c] === color) {
-    r -= dr;
-    c -= dc;
-  }
-  if (isValidPosition(r, c) && board[r]?.[c] === null) {
-    defensePositions.push({ row: r, col: c });
-  }
-
-  // 止め四の場合は1点のみ
-  if (defensePositions.length === 1) {
-    return defensePositions[0] ?? null;
-  }
-
-  // 活四の場合は止められない（nullを返す = 勝利）
-  if (defensePositions.length === 2) {
-    return null;
-  }
-
-  return null;
-}
-
-/**
- * 跳び四に対する防御位置を取得
- * 跳び四は中の空きを埋めるしかない
- * @internal テスト用にexport
- */
-export function findDefenseForJumpFour(
-  board: BoardState,
-  row: number,
-  col: number,
-  dr: number,
-  dc: number,
-  color: "black" | "white",
-): Position | null {
-  return findJumpGapPosition(board, row, col, dr, dc, color);
-}
-
-/**
  * VCF手順を返す
  *
  * @param board 盤面
@@ -575,14 +353,14 @@ export function findVCFSequence(
 ): VCFSequenceResult | null {
   const maxDepth = options?.maxDepth ?? VCF_MAX_DEPTH;
   const timeLimitMs = options?.timeLimit ?? VCF_TIME_LIMIT;
-  const limiter: VCFTimeLimiter = {
+  const limiter: TimeLimiter = {
     startTime: performance.now(),
     timeLimit: timeLimitMs,
   };
 
   // 反復深化: 浅い深度から探索し、最短VCF手順を優先
   for (let depth = 1; depth <= maxDepth; depth++) {
-    if (performance.now() - limiter.startTime >= limiter.timeLimit) {
+    if (isTimeExceeded(limiter)) {
       return null;
     }
     const sequence: Position[] = [];
@@ -623,7 +401,7 @@ function findVCFSequenceRecursive(
   board: BoardState,
   color: "black" | "white",
   depth: number,
-  limiter: VCFTimeLimiter,
+  limiter: TimeLimiter,
   sequence: Position[],
   options: VCFSearchOptions | undefined,
   context: VCFSearchContext,
@@ -634,7 +412,7 @@ function findVCFSequenceRecursive(
     return false;
   }
 
-  if (performance.now() - limiter.startTime >= limiter.timeLimit) {
+  if (isTimeExceeded(limiter)) {
     return false;
   }
 

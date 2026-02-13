@@ -6,6 +6,9 @@
  * - Minimax + Alpha-Beta
  */
 
+// 共通コンテキスト
+export { type TimeLimiter, isTimeExceeded } from "./context";
+
 // VCF
 export {
   hasVCF,

@@ -1,7 +1,8 @@
 /**
  * 探索コンテキスト管理
  *
- * Minimax探索で使用するデータ構造を一元管理
+ * Minimax探索で使用するデータ構造を一元管理。
+ * VCF/VCT共通の時間制限コンテキストもここで定義。
  */
 
 import {
@@ -15,6 +16,21 @@ import {
   type KillerMoves,
 } from "../moveGenerator";
 import { globalTT, TranspositionTable } from "../transpositionTable";
+
+/**
+ * VCF/VCT共通の時間制限コンテキスト
+ */
+export interface TimeLimiter {
+  startTime: number;
+  timeLimit: number;
+}
+
+/**
+ * 時間制限を超過しているかチェック
+ */
+export function isTimeExceeded(limiter: TimeLimiter): boolean {
+  return performance.now() - limiter.startTime >= limiter.timeLimit;
+}
 
 /**
  * 探索統計
