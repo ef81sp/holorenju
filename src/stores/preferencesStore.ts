@@ -5,6 +5,8 @@
 import { defineStore } from "pinia";
 import { computed, ref, watch } from "vue";
 
+import type { CpuDifficulty } from "@/types/cpu";
+
 const STORAGE_KEY = "holorenju_preferences";
 
 export type AnimationSpeed = "slowest" | "slow" | "normal" | "fast" | "fastest";
@@ -33,6 +35,8 @@ interface Preferences {
   };
   cpu: {
     fastMove: boolean;
+    lastDifficulty: CpuDifficulty;
+    lastPlayerFirst: boolean;
   };
   debug: {
     showCpuInfo: boolean;
@@ -62,6 +66,8 @@ const defaultPreferences: Preferences = {
   },
   cpu: {
     fastMove: false,
+    lastDifficulty: "medium",
+    lastPlayerFirst: true,
   },
   debug: {
     showCpuInfo: false,
@@ -243,6 +249,16 @@ export const usePreferencesStore = defineStore("preferences", () => {
     set: (v) => (preferences.value.cpu.fastMove = v),
   });
 
+  const lastCpuDifficulty = computed({
+    get: () => preferences.value.cpu.lastDifficulty,
+    set: (v) => (preferences.value.cpu.lastDifficulty = v),
+  });
+
+  const lastCpuPlayerFirst = computed({
+    get: () => preferences.value.cpu.lastPlayerFirst,
+    set: (v) => (preferences.value.cpu.lastPlayerFirst = v),
+  });
+
   const showCpuInfo = computed({
     get: () => preferences.value.debug.showCpuInfo,
     set: (v) => (preferences.value.debug.showCpuInfo = v),
@@ -358,6 +374,8 @@ export const usePreferencesStore = defineStore("preferences", () => {
     textSize,
     boardAnnounce,
     fastCpuMove,
+    lastCpuDifficulty,
+    lastCpuPlayerFirst,
     showCpuInfo,
     // Audio
     audioEnabled,

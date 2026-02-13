@@ -5,23 +5,33 @@
  * キャラクターと先後手を選択してゲームを開始する
  */
 
-import { ref } from "vue";
+import { computed, ref } from "vue";
 
 import PageHeader from "@/components/common/PageHeader.vue";
 // oxlint-disable-next-line consistent-type-imports
 import CpuRecordDialog from "./CpuRecordDialog.vue";
 import { getCharacterSpriteUrl } from "@/logic/characterSprites";
 import { useAppStore } from "@/stores/appStore";
+import { usePreferencesStore } from "@/stores/preferencesStore";
 import type { CharacterType } from "@/types/character";
 import type { CpuDifficulty } from "@/types/cpu";
 
 const appStore = useAppStore();
+const preferencesStore = usePreferencesStore();
 
 const recordDialogRef = ref<InstanceType<typeof CpuRecordDialog> | null>(null);
 
-// 選択状態
-const selectedDifficulty = ref<CpuDifficulty>("medium");
-const selectedFirst = ref(true);
+// 選択状態（ストアに値がなければ未選択）
+const selectedDifficulty = ref<CpuDifficulty | null>(
+  preferencesStore.lastCpuDifficulty ?? null,
+);
+const selectedFirst = ref<boolean | null>(
+  preferencesStore.lastCpuPlayerFirst ?? null,
+);
+
+const isReady = computed(
+  () => selectedDifficulty.value !== null && selectedFirst.value !== null,
+);
 
 /**
  * キャラクターカードの定義
@@ -52,6 +62,11 @@ const getFaceStyle = (
 });
 
 const handleStartGame = (): void => {
+  if (selectedDifficulty.value === null || selectedFirst.value === null) {
+    return;
+  }
+  preferencesStore.lastCpuDifficulty = selectedDifficulty.value;
+  preferencesStore.lastCpuPlayerFirst = selectedFirst.value;
   appStore.startCpuGame(selectedDifficulty.value, selectedFirst.value);
 };
 
@@ -134,12 +149,21 @@ const handleBack = (): void => {
 
         <!-- ボタン群 -->
         <div class="action-buttons">
-          <button
-            class="start-button"
-            @click="handleStartGame"
-          >
-            対戦開始
-          </button>
+          <div class="start-area">
+            <p
+              class="setup-hint"
+              :class="{ hidden: isReady }"
+            >
+              キャラクターと先後手を選択してください
+            </p>
+            <button
+              class="start-button"
+              :disabled="!isReady"
+              @click="handleStartGame"
+            >
+              対戦開始
+            </button>
+          </div>
           <button
             class="record-button"
             @click="recordDialogRef?.showModal()"
@@ -312,8 +336,26 @@ const handleBack = (): void => {
   gap: var(--size-8);
 }
 
-.start-button {
+.start-area {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-4);
+}
+
+.setup-hint {
+  margin: 0;
+  font-size: var(--size-10);
+  color: var(--color-text-secondary);
+  text-align: center;
+}
+
+.setup-hint.hidden {
+  visibility: hidden;
+}
+
+.start-button {
+  width: 100%;
   padding: var(--size-12) var(--size-24);
   background: var(--gradient-button-primary);
   border: none;
@@ -325,16 +367,22 @@ const handleBack = (): void => {
   transition: all 0.2s ease;
 }
 
-.start-button:hover {
+.start-button:hover:not(:disabled) {
   transform: translateY(calc(-1 * var(--size-2)));
   box-shadow: 0 var(--size-6) var(--size-16) rgba(0, 0, 0, 0.2);
 }
 
-.start-button:active {
+.start-button:active:not(:disabled) {
   transform: translateY(0);
 }
 
+.start-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .record-button {
+  align-self: flex-end;
   padding: var(--size-12) var(--size-16);
   background: var(--color-background-secondary);
   border: var(--size-2) solid var(--color-border-light);
