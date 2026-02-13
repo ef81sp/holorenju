@@ -11,7 +11,7 @@ import {
   clearForbiddenCache,
   setCurrentBoardHash,
 } from "../cache/forbiddenCache";
-import { getOppositeColor } from "../core/boardUtils";
+import { countStones, getOppositeColor } from "../core/boardUtils";
 import {
   DEFAULT_EVAL_OPTIONS,
   type EvaluationOptions,
@@ -45,6 +45,7 @@ import {
   getFourDefensePosition,
 } from "./threatPatterns";
 import { findVCFSequence } from "./vcf";
+import { findVCTMove, VCT_STONE_THRESHOLD } from "./vct";
 
 /**
  * プロファイリングカウンターの値をSearchStatsにマージ
@@ -73,6 +74,8 @@ interface PreSearchResult {
   restrictedMoves?: Position[];
   /** 相手VCFの初手（VCF防御用） */
   opponentVCFFirstMove?: Position | null;
+  /** VCTヒント手（偽陽性の可能性があるためminimax検証に委ねる） */
+  vctHintMove?: Position;
 }
 
 /**
@@ -243,6 +246,28 @@ function findPreSearchMove(
     }
   }
 
+  // 3.8 VCT攻撃ヒント（三・四の連続脅威で勝利）
+  // 偽陽性の可能性があるため即返却せず、ヒントとしてminimax検証に委ねる
+  let vctHintMove: Position | undefined;
+  if (evaluationOptions.enableVCT) {
+    const stoneCount = countStones(board);
+    if (stoneCount >= VCT_STONE_THRESHOLD) {
+      const vctMove = findVCTMove(board, color, {
+        maxDepth: 4,
+        timeLimit: 150,
+      });
+      if (vctMove) {
+        const isForbidden =
+          color === "black" &&
+          checkForbiddenMoveWithCache(board, vctMove.row, vctMove.col)
+            .isForbidden;
+        if (!isForbidden) {
+          vctHintMove = vctMove;
+        }
+      }
+    }
+  }
+
   // 4. 相手のVCF（四追い勝ち）があれば候補手を防御手に制限
   // 相手VCF結果を共有変数から取得（重複探索を排除）
   const opponentVCFMove = opponentVCFResult?.firstMove ?? null;
@@ -275,6 +300,7 @@ function findPreSearchMove(
 
   return {
     opponentVCFFirstMove: opponentVCFMove,
+    vctHintMove,
     restrictedMoves: vcfDefenseSet
       ? Array.from(vcfDefenseSet).map((key) => {
           const [row, col] = key.split(",").map(Number);
@@ -404,6 +430,14 @@ export function findBestMoveIterativeWithTT(
         moves = defenseMoves;
       }
     }
+  }
+
+  // VCTヒント手がある場合、候補手の先頭に配置してminimax検証に委ねる
+  if (preSearchResult.vctHintMove) {
+    const hint = preSearchResult.vctHintMove;
+    const hintKey = `${hint.row},${hint.col}`;
+    // 重複を除去して先頭に配置
+    moves = [hint, ...moves.filter((m) => `${m.row},${m.col}` !== hintKey)];
   }
 
   // deadline ベースの時間設定

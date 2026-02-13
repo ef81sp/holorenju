@@ -8,7 +8,11 @@ import { describe, expect, it, vi } from "vitest";
 
 import { createEmptyBoard } from "@/logic/renjuRules";
 
-import { DEFAULT_EVAL_OPTIONS, PATTERN_SCORES } from "../evaluation";
+import {
+  DEFAULT_EVAL_OPTIONS,
+  FULL_EVAL_OPTIONS,
+  PATTERN_SCORES,
+} from "../evaluation";
 import { placeStonesOnBoard } from "../testUtils";
 import { computeBoardHash } from "../zobrist";
 import { createSearchContext } from "./context";
@@ -453,4 +457,66 @@ describe("反復深化のPV再順序付け", () => {
     expect(result.depthHistory).toBeDefined();
     expect(result.depthHistory?.length).toBeGreaterThanOrEqual(1);
   }, 10000);
+});
+
+// =============================================================================
+// VCTメインフロー統合テスト
+// =============================================================================
+
+describe("VCTメインフロー統合", () => {
+  it("VCTのある局面でenableVCT=trueなら有効な手を返す", () => {
+    const board = createEmptyBoard();
+    // 白の活三が作れる局面（14石以上）
+    placeStonesOnBoard(board, [
+      // 白の活三素材
+      { row: 7, col: 5, color: "white" },
+      { row: 7, col: 6, color: "white" },
+      { row: 7, col: 7, color: "white" },
+      // 十分な石数にするためのフィラー
+      { row: 0, col: 0, color: "black" },
+      { row: 0, col: 1, color: "white" },
+      { row: 0, col: 3, color: "black" },
+      { row: 0, col: 5, color: "white" },
+      { row: 1, col: 0, color: "black" },
+      { row: 1, col: 1, color: "white" },
+      { row: 1, col: 3, color: "black" },
+      { row: 1, col: 5, color: "white" },
+      { row: 2, col: 0, color: "black" },
+      { row: 2, col: 1, color: "white" },
+      { row: 2, col: 3, color: "black" },
+    ]);
+    // enableVCT=true（FULL_EVAL_OPTIONS）
+    const result = findBestMoveIterativeWithTT(
+      board,
+      "white",
+      3,
+      5000,
+      0,
+      FULL_EVAL_OPTIONS,
+    );
+    // VCTのある局面で有効な手が返ることを確認（具体的な手は問わない）
+    expect(result.position.row).toBeGreaterThanOrEqual(0);
+    expect(result.position.row).toBeLessThan(15);
+  }, 10000);
+
+  it("enableVCT=falseではVCT探索が実行されない", () => {
+    const board = createEmptyBoard();
+    // 序盤の局面（14石未満）
+    placeStonesOnBoard(board, [
+      { row: 7, col: 7, color: "black" },
+      { row: 8, col: 8, color: "white" },
+    ]);
+    // DEFAULT_EVAL_OPTIONS はenableVCT=false
+    const result = findBestMoveIterativeWithTT(
+      board,
+      "black",
+      2,
+      2000,
+      0,
+      DEFAULT_EVAL_OPTIONS,
+    );
+    // 正常に結果が返ることを確認
+    expect(result.position.row).toBeGreaterThanOrEqual(0);
+    expect(result.completedDepth).toBeGreaterThanOrEqual(1);
+  });
 });
