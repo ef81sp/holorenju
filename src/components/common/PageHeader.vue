@@ -2,7 +2,7 @@
 import SettingsControl from "./SettingsControl.vue";
 
 defineProps<{
-  title: string;
+  title?: string;
   showBack?: boolean;
 }>();
 
@@ -20,7 +20,9 @@ defineEmits<{
     >
       ← 戻る
     </button>
-    <h1>{{ title }}</h1>
+    <h1>
+      <slot name="title">{{ title }}</slot>
+    </h1>
     <slot name="right" />
     <SettingsControl />
   </div>

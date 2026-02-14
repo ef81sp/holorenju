@@ -2,6 +2,7 @@
 import { useAppStore } from "@/stores/appStore";
 import PageHeader from "@/components/common/PageHeader.vue";
 import InfoControl from "@/components/common/InfoControl.vue";
+import TitleLogo from "@/components/common/TitleLogo.vue";
 
 const appStore = useAppStore();
 
@@ -22,7 +23,10 @@ const handleSelectEditor = (): void => {
 
 <template>
   <div class="menu-page">
-    <PageHeader title="ホロ連珠">
+    <PageHeader>
+      <template #title>
+        <TitleLogo />
+      </template>
       <template #right>
         <InfoControl />
       </template>
