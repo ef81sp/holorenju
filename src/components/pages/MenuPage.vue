@@ -13,12 +13,6 @@ const handleSelectTraining = (): void => {
 const handleSelectCPU = (): void => {
   appStore.selectMode("cpu");
 };
-
-const isDev = import.meta.env.DEV;
-
-const handleSelectEditor = (): void => {
-  appStore.goToEditor();
-};
 </script>
 
 <template>
@@ -51,17 +45,6 @@ const handleSelectEditor = (): void => {
           <div class="button-text-area">
             <span class="button-text">コンピュータ対戦</span>
             <p class="button-description">コンピュータと対局して腕を磨こう</p>
-          </div>
-        </button>
-        <button
-          v-if="isDev"
-          class="menu-button menu-button--secondary"
-          @click="handleSelectEditor"
-        >
-          <div class="button-icon">⚙️</div>
-          <div class="button-text-area">
-            <span class="button-text">シナリオ編集</span>
-            <p class="button-description">シナリオを作成・編集</p>
           </div>
         </button>
       </div>
@@ -109,10 +92,6 @@ const handleSelectEditor = (): void => {
   align-items: center;
   gap: var(--size-12);
   position: relative;
-}
-
-.menu-button--secondary {
-  background: var(--gradient-button-secondary);
 }
 
 .menu-button:hover:not(:disabled) {

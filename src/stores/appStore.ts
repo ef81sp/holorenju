@@ -8,7 +8,6 @@ export type Scene =
   | "difficulty"
   | "scenarioList"
   | "scenarioPlay"
-  | "editor"
   | "cpuSetup"
   | "cpuPlay"
   | "cpuReview";
@@ -107,12 +106,6 @@ export const useAppStore = defineStore("app", {
       this.transitionDirection = "back";
       this.scene = "scenarioList";
       this.selectedScenarioId = null;
-      this.pushHistory();
-    },
-
-    goToEditor() {
-      this.transitionDirection = "forward";
-      this.scene = "editor";
       this.pushHistory();
     },
 

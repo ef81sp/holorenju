@@ -180,16 +180,6 @@ describe("appStore", () => {
     });
   });
 
-  describe("goToEditor", () => {
-    it("エディタ画面に遷移する", () => {
-      const store = useAppStore();
-      store.goToEditor();
-
-      expect(store.scene).toBe("editor");
-      expect(store.transitionDirection).toBe("forward");
-    });
-  });
-
   describe("CPU対戦機能", () => {
     it("startCpuGameでCPU対戦を開始できる", () => {
       const store = useAppStore();

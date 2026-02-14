@@ -7,7 +7,6 @@ import ScenarioListPage from "./pages/ScenarioListPage.vue";
 import { ScenarioPlayer } from "./scenarios/ScenarioPlayer";
 // oxlint-disable-next-line consistent-type-imports
 import ConfirmDialog from "./common/ConfirmDialog.vue";
-import ScenarioEditor from "@/editor/components/ScenarioEditor.vue";
 import CpuSetupPage from "./cpu/CpuSetupPage.vue";
 import CpuGamePlayer from "./cpu/CpuGamePlayer.vue";
 import CpuReviewPlayer from "./cpu/CpuReviewPlayer.vue";
@@ -103,7 +102,6 @@ onUnmounted(() => {
       <CpuSetupPage v-else-if="currentScene === 'cpuSetup'" />
       <CpuGamePlayer v-else-if="currentScene === 'cpuPlay'" />
       <CpuReviewPlayer v-else-if="currentScene === 'cpuReview'" />
-      <ScenarioEditor v-else-if="currentScene === 'editor'" />
     </Transition>
   </div>
 
