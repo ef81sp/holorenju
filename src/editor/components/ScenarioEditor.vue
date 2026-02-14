@@ -12,6 +12,7 @@ import ValidationPanel from "./ValidationPanel.vue";
 import PreviewPanel from "./PreviewPanel.vue";
 import FileListDialog from "./FileListDialog.vue";
 import ScenarioReorderDialog from "./ScenarioReorderDialog.vue";
+import GameBrowserDialog from "./GameBrowser/GameBrowserDialog.vue";
 
 // File System Access API の型定義
 declare global {
@@ -33,6 +34,7 @@ const fileListDialogRef = ref<InstanceType<typeof FileListDialog> | null>(null);
 const reorderDialogRef = ref<InstanceType<typeof ScenarioReorderDialog> | null>(
   null,
 );
+const gameBrowserRef = ref<InstanceType<typeof GameBrowserDialog> | null>(null);
 let validationTimer: number | null = null;
 
 // マウント時にIndexedDBから保存されたディレクトリハンドルを復元
@@ -172,6 +174,13 @@ const handleReloadFile = async (): Promise<void> => {
         >
           {{ fileOps.showJsonInput.value ? "閉じる" : "JSON入出力" }}
         </button>
+        <button
+          class="btn-secondary"
+          title="ベンチマーク棋譜から盤面を参照・取り込み"
+          @click="gameBrowserRef?.showModal()"
+        >
+          📊 棋譜参照
+        </button>
       </div>
     </header>
 
@@ -256,6 +265,10 @@ const handleReloadFile = async (): Promise<void> => {
       :dir-handle="dirOps.scenarioDir.value"
       @confirm="handleReorderConfirm"
       @cancel="() => {}"
+    />
+    <GameBrowserDialog
+      ref="gameBrowserRef"
+      @import="editorStore.importBoardFromGame($event)"
     />
   </div>
 </template>
