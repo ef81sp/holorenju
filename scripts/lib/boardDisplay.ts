@@ -5,7 +5,7 @@
 import type { BoardState, Position } from "../../src/types/game.ts";
 import type { MoveAnalysis } from "../types/analysis.ts";
 
-import { createEmptyBoard } from "../../src/logic/renjuRules.ts";
+import { createEmptyBoard } from "../../src/logic/renjuRules/index.ts";
 
 /** セル文字を取得 */
 function getCellChar(
