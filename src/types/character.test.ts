@@ -20,11 +20,11 @@ describe("EMOTION_LABELS", () => {
 
 describe("getEmotionAltText", () => {
   it("fubuki の場合「フブキ ラベル」を返す", () => {
-    expect(getEmotionAltText("fubuki", 0)).toBe("フブキ おだやかな笑顔");
+    expect(getEmotionAltText("fubuki", 0)).toBe("フブキ にっこり");
   });
 
   it("miko の場合「みこ ラベル」を返す", () => {
-    expect(getEmotionAltText("miko", 1)).toBe("みこ 嬉しい");
+    expect(getEmotionAltText("miko", 1)).toBe("みこ にっこりお話");
   });
 
   it("narration の場合は空文字を返す", () => {
