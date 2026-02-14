@@ -172,4 +172,6 @@ export interface BrowseFilter {
   winner?: "black" | "white" | "draw";
   /** 珠型で絞り込み */
   jushu?: string;
+  /** ベンチマークソースファイルで絞り込み（完全一致） */
+  sourceFile?: string;
 }

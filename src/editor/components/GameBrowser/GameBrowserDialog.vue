@@ -2,13 +2,8 @@
 import { onMounted, ref } from "vue";
 import { useLightDismiss } from "@/composables/useLightDismiss";
 import { useGameBrowser } from "@/editor/composables/useGameBrowser";
-import { boardStateToStringArray } from "@/editor/logic/boardCalculator";
 import GameListPanel from "./GameListPanel.vue";
 import GamePlaybackPanel from "./GamePlaybackPanel.vue";
-
-const emit = defineEmits<{
-  import: [data: { board: string[]; record: string; moveNumber: number }];
-}>();
 
 const dialogRef = ref<HTMLDialogElement | null>(null);
 useLightDismiss(dialogRef);
@@ -24,24 +19,6 @@ const showModal = (): void => {
 
 const close = (): void => {
   dialogRef.value?.close();
-};
-
-const handleImport = (): void => {
-  const game = browser.selectedGame.value;
-  if (!game) {
-    return;
-  }
-
-  const board = boardStateToStringArray(browser.currentBoard.value);
-  const moves = game.moves.slice(0, browser.moveIndex.value);
-  const record = moves.map((m: { notation: string }) => m.notation).join(" ");
-
-  emit("import", {
-    board,
-    record,
-    moveNumber: browser.moveIndex.value,
-  });
-  close();
 };
 
 // キーボードショートカット
@@ -79,67 +56,69 @@ defineExpose({ showModal, close });
     class="game-browser-dialog"
     closedby="any"
   >
-    <div class="dialog-header">
-      <h2>棋譜ブラウザ</h2>
-      <button
-        class="close-button"
-        @click="close"
-      >
-        ✕
-      </button>
-    </div>
-
-    <div
-      v-if="browser.isLoading.value"
-      class="loading"
-    >
-      読み込み中...
-    </div>
-    <div
-      v-else-if="browser.loadError.value"
-      class="error"
-    >
-      {{ browser.loadError.value }}
-    </div>
-    <div
-      v-else
-      class="dialog-content"
-    >
-      <GameListPanel
-        :games="browser.filteredGames.value"
-        :selected-index="browser.selectedGameIndex.value"
-        :filter="browser.filter.value"
-        :available-matchups="browser.availableMatchups.value"
-        :available-jushu="browser.availableJushu.value"
-        :available-tags="browser.availableTags.value"
-        @select="browser.selectGame"
-        @update:filter="(f) => (browser.filter.value = f)"
-      />
+    <div class="dialog-inner">
+      <div class="dialog-header">
+        <h2>棋譜ブラウザ</h2>
+        <button
+          class="close-button"
+          @click="close"
+        >
+          ✕
+        </button>
+      </div>
 
       <div
-        v-if="browser.selectedGame.value"
-        class="playback-area"
+        v-if="browser.isLoading.value"
+        class="loading"
       >
-        <GamePlaybackPanel
-          :game="browser.selectedGame.value"
-          :board-state="browser.currentBoard.value"
-          :move-index="browser.moveIndex.value"
-          :total-moves="browser.totalMoves.value"
-          :current-move-analysis="browser.currentMoveAnalysis.value"
-          :stone-labels="browser.stoneLabels.value"
-          @first="browser.goToFirst"
-          @prev="browser.goToPrev"
-          @next="browser.goToNext"
-          @last="browser.goToLast"
-          @go-to-move="browser.goToMove"
-          @import="handleImport"
-        />
+        読み込み中...
+      </div>
+      <div
+        v-else-if="browser.loadError.value"
+        class="error"
+      >
+        {{ browser.loadError.value }}
       </div>
       <div
         v-else
-        class="no-selection"
+        class="dialog-content"
       >
-        左のリストからゲームを選択してください
+        <GameListPanel
+          :games="browser.filteredGames.value"
+          :selected-index="browser.selectedGameIndex.value"
+          :filter="browser.filter.value"
+          :available-matchups="browser.availableMatchups.value"
+          :available-jushu="browser.availableJushu.value"
+          :available-tags="browser.availableTags.value"
+          :available-source-files="browser.availableSourceFiles.value"
+          @select="browser.selectGame"
+          @update:filter="(f) => (browser.filter.value = f)"
+        />
+
+        <div
+          v-if="browser.selectedGame.value"
+          class="playback-area"
+        >
+          <GamePlaybackPanel
+            :game="browser.selectedGame.value"
+            :board-state="browser.currentBoard.value"
+            :move-index="browser.moveIndex.value"
+            :total-moves="browser.totalMoves.value"
+            :current-move-analysis="browser.currentMoveAnalysis.value"
+            :stone-labels="browser.stoneLabels.value"
+            @first="browser.goToFirst"
+            @prev="browser.goToPrev"
+            @next="browser.goToNext"
+            @last="browser.goToLast"
+            @go-to-move="browser.goToMove"
+          />
+        </div>
+        <div
+          v-else
+          class="no-selection"
+        >
+          左のリストからゲームを選択してください
+        </div>
       </div>
     </div>
   </dialog>
@@ -151,12 +130,17 @@ defineExpose({ showModal, close });
   max-width: 1000px;
   height: 80vh;
   max-height: 700px;
+  margin: auto;
   padding: 0;
   border: 1px solid #ccc;
   border-radius: 8px;
   overflow: hidden;
+}
+
+.dialog-inner {
   display: flex;
   flex-direction: column;
+  height: 100%;
 }
 
 .game-browser-dialog::backdrop {
@@ -205,6 +189,7 @@ defineExpose({ showModal, close });
 .dialog-content {
   display: grid;
   grid-template-columns: 1fr 380px;
+  grid-template-rows: minmax(0, 1fr);
   gap: 12px;
   padding: 12px;
   flex: 1;
@@ -214,6 +199,7 @@ defineExpose({ showModal, close });
 
 .playback-area {
   overflow-y: auto;
+  min-height: 0;
 }
 
 .no-selection {

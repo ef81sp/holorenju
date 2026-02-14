@@ -55,5 +55,12 @@ export function matchesFilter(
     }
   }
 
+  // ソースファイルフィルタ
+  if (filter.sourceFile) {
+    if (game.sourceFile !== filter.sourceFile) {
+      return false;
+    }
+  }
+
   return true;
 }

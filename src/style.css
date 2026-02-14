@@ -408,6 +408,12 @@ h1 {
   overflow: hidden;
 }
 
+#editor-app {
+  width: 100vw;
+  height: 100svh;
+  overflow: hidden;
+}
+
 /* テキストサイズ設定（normalが基準=1.15） */
 /* normal は :root のデフォルト値 1.15 を使用 */
 

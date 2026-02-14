@@ -28,8 +28,25 @@ function cloneBoard(board: BoardState): BoardState {
 export function useGameBrowser() {
   // ===== データ読み込み =====
   const analysisResult = ref<AnalysisResult | null>(null);
+  const availableFiles = ref<string[]>([]);
+  const selectedFile = ref<string | null>(null);
   const isLoading = ref(false);
   const loadError = ref<string | null>(null);
+
+  const loadFile = async (filename: string): Promise<void> => {
+    isLoading.value = true;
+    loadError.value = null;
+    selectedFile.value = filename;
+    selectedGameIndex.value = null;
+    try {
+      const dataRes = await fetch(`/api/analysis-data/${filename}`);
+      analysisResult.value = await dataRes.json();
+    } catch (e) {
+      loadError.value = `読み込みエラー: ${e}`;
+    } finally {
+      isLoading.value = false;
+    }
+  };
 
   const loadLatestAnalysis = async (): Promise<void> => {
     isLoading.value = true;
@@ -37,13 +54,13 @@ export function useGameBrowser() {
     try {
       const res = await fetch("/api/analysis-files");
       const files = (await res.json()) as string[];
+      availableFiles.value = files;
       if (files.length === 0) {
         loadError.value = "分析ファイルが見つかりません";
         return;
       }
       const latest = files[files.length - 1]!;
-      const dataRes = await fetch(`/api/analysis-data/${latest}`);
-      analysisResult.value = await dataRes.json();
+      await loadFile(latest);
     } catch (e) {
       loadError.value = `読み込みエラー: ${e}`;
     } finally {
@@ -86,6 +103,11 @@ export function useGameBrowser() {
     return [...counts.entries()]
       .sort((a, b) => b[1] - a[1])
       .map(([tag]) => tag);
+  });
+
+  const availableSourceFiles = computed(() => {
+    const set = new Set(allGames.value.map((g) => g.sourceFile));
+    return [...set].sort().reverse();
   });
 
   // ===== ゲーム選択・再生 =====
@@ -194,6 +216,7 @@ export function useGameBrowser() {
     availableMatchups,
     availableJushu,
     availableTags,
+    availableSourceFiles,
     // ゲーム選択・再生
     selectedGameIndex,
     selectedGame,

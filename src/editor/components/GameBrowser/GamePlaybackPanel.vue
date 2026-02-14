@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import RenjuBoard from "@/components/game/RenjuBoard/RenjuBoard.vue";
 import type { StoneLabel } from "@/components/game/RenjuBoard/RenjuBoard.vue";
+import { boardStateToStringArray } from "@/editor/logic/boardCalculator";
 import type { BoardState } from "@/types/game";
 import type { GameAnalysis, MoveAnalysis } from "@scripts/types/analysis";
 
@@ -22,8 +23,18 @@ const emit = defineEmits<{
   next: [];
   last: [];
   "go-to-move": [n: number];
-  import: [];
 }>();
+
+const copyLabel = ref("📋 盤面コピー");
+
+const handleCopyBoard = async (): Promise<void> => {
+  const text = boardStateToStringArray(props.boardState).join("\n");
+  await navigator.clipboard.writeText(text);
+  copyLabel.value = "✓ コピー済み";
+  setTimeout(() => {
+    copyLabel.value = "📋 盤面コピー";
+  }, 1500);
+};
 
 const moveInfo = computed(() => {
   const move = props.currentMoveAnalysis;
@@ -116,10 +127,10 @@ const gameRecordUpToMove = computed(() => {
       </div>
 
       <button
-        class="import-button"
-        @click="emit('import')"
+        class="copy-button"
+        @click="handleCopyBoard"
       >
-        盤面を取り込む
+        {{ copyLabel }}
       </button>
     </div>
   </div>
@@ -216,7 +227,7 @@ const gameRecordUpToMove = computed(() => {
   word-break: break-all;
 }
 
-.import-button {
+.copy-button {
   width: 100%;
   padding: 8px;
   background: #4a90e2;
@@ -228,7 +239,7 @@ const gameRecordUpToMove = computed(() => {
   font-weight: 500;
 }
 
-.import-button:hover {
+.copy-button:hover {
   opacity: 0.9;
 }
 </style>

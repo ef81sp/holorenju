@@ -427,31 +427,6 @@ export const useEditorStore = defineStore("editor", () => {
     originalDifficulty.value = null;
   };
 
-  /**
-   * ゲームブラウザから盤面を取り込む
-   * 現在選択中のセクションの initialBoard を上書き
-   */
-  const importBoardFromGame = (data: {
-    board: string[];
-    record: string;
-    moveNumber: number;
-  }): void => {
-    if (selectedSectionIndex.value === null) {
-      addSection("demo");
-    }
-    const section = scenario.value.sections[selectedSectionIndex.value!];
-    if (!section) {
-      return;
-    }
-
-    section.initialBoard = data.board;
-    isDirty.value = true;
-
-    console.log(
-      `[棋譜取り込み] ${data.moveNumber}手目: ${data.record || "(初期盤面)"}`,
-    );
-  };
-
   return {
     scenario,
     selectedSectionIndex,
@@ -485,6 +460,5 @@ export const useEditorStore = defineStore("editor", () => {
     originalDifficulty,
     updateOriginalDifficulty,
     clearOriginalDifficulty,
-    importBoardFromGame,
   };
 });

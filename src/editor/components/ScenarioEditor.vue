@@ -266,10 +266,7 @@ const handleReloadFile = async (): Promise<void> => {
       @confirm="handleReorderConfirm"
       @cancel="() => {}"
     />
-    <GameBrowserDialog
-      ref="gameBrowserRef"
-      @import="editorStore.importBoardFromGame($event)"
-    />
+    <GameBrowserDialog ref="gameBrowserRef" />
   </div>
 </template>
 

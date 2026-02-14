@@ -9,6 +9,7 @@ interface Props {
   availableMatchups: string[];
   availableJushu: string[];
   availableTags: string[];
+  availableSourceFiles: string[];
 }
 
 const props = defineProps<Props>();
@@ -35,7 +36,32 @@ const winnerLabel = (winner: "A" | "B" | "draw"): string => {
 
 const formatTags = (tags: Tag[]): string => tags.slice(0, 3).join(", ");
 
-const selectedTagValue = computed(() => props.filter.tags?.[0] ?? "");
+const selectedTags = computed(() => props.filter.tags ?? []);
+
+const addTag = (tag: string): void => {
+  if (!tag) {
+    return;
+  }
+  const current = props.filter.tags ?? [];
+  if (current.includes(tag as Tag)) {
+    return;
+  }
+  updateFilter({ tags: [...current, tag as Tag] });
+};
+
+const removeTag = (tag: Tag): void => {
+  const next = (props.filter.tags ?? []).filter((t) => t !== tag);
+  updateFilter({ tags: next.length > 0 ? next : undefined });
+};
+
+const formatSourceFile = (name: string): string => {
+  // "bench-2026-02-14T10-33-51-517Z.json" → "02/14 10:33"
+  const m = name.match(/(\d{4})-(\d{2})-(\d{2})T(\d{2})-(\d{2})/);
+  if (!m) {
+    return name;
+  }
+  return `${m[2]}/${m[3]} ${m[4]}:${m[5]}`;
+};
 </script>
 
 <template>
@@ -78,20 +104,18 @@ const selectedTagValue = computed(() => props.filter.tags?.[0] ?? "");
       </select>
 
       <select
-        :value="selectedTagValue"
+        value=""
         @change="
-          updateFilter({
-            tags: ($event.target as HTMLSelectElement).value
-              ? ([($event.target as HTMLSelectElement).value] as Tag[])
-              : undefined,
-          })
+          addTag(($event.target as HTMLSelectElement).value);
+          ($event.target as HTMLSelectElement).value = '';
         "
       >
-        <option value="">全タグ</option>
+        <option value="">タグ追加...</option>
         <option
           v-for="t in availableTags"
           :key="t"
           :value="t"
+          :disabled="selectedTags.includes(t as Tag)"
         >
           {{ t }}
         </option>
@@ -114,6 +138,38 @@ const selectedTagValue = computed(() => props.filter.tags?.[0] ?? "");
           {{ j }}
         </option>
       </select>
+
+      <select
+        :value="filter.sourceFile ?? ''"
+        @change="
+          updateFilter({
+            sourceFile: ($event.target as HTMLSelectElement).value || undefined,
+          })
+        "
+      >
+        <option value="">全ベンチマーク</option>
+        <option
+          v-for="sf in availableSourceFiles"
+          :key="sf"
+          :value="sf"
+        >
+          {{ formatSourceFile(sf) }}
+        </option>
+      </select>
+    </div>
+
+    <div
+      v-if="selectedTags.length > 0"
+      class="selected-tags"
+    >
+      <span
+        v-for="tag in selectedTags"
+        :key="tag"
+        class="tag-chip"
+        @click="removeTag(tag)"
+      >
+        {{ tag }} ✕
+      </span>
     </div>
 
     <div class="game-count">{{ games.length }} 件</div>
@@ -154,6 +210,7 @@ const selectedTagValue = computed(() => props.filter.tags?.[0] ?? "");
   flex-direction: column;
   gap: 8px;
   height: 100%;
+  min-height: 0;
   min-width: 0;
 }
 
@@ -170,6 +227,25 @@ const selectedTagValue = computed(() => props.filter.tags?.[0] ?? "");
   border-radius: 3px;
   min-width: 0;
   flex: 1;
+}
+
+.selected-tags {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.tag-chip {
+  font-size: 11px;
+  padding: 1px 6px;
+  background: #d0e4ff;
+  border-radius: 3px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tag-chip:hover {
+  background: #f0c0c0;
 }
 
 .game-count {
