@@ -493,6 +493,74 @@ describe("boardStore", () => {
       });
     });
 
+    describe("removeLine", () => {
+      it("位置が一致するラインを削除", () => {
+        const store = useBoardStore();
+        store.addLines(
+          [
+            {
+              fromPosition: { row: 0, col: 0 },
+              toPosition: { row: 4, col: 4 },
+            },
+          ],
+          0,
+        );
+        expect(store.lines).toHaveLength(1);
+
+        store.removeLine({ row: 0, col: 0 }, { row: 4, col: 4 });
+
+        expect(store.lines).toHaveLength(0);
+      });
+
+      it("from/to が逆順でも削除（双方向マッチ）", () => {
+        const store = useBoardStore();
+        store.addLines(
+          [
+            {
+              fromPosition: { row: 0, col: 0 },
+              toPosition: { row: 4, col: 4 },
+            },
+          ],
+          0,
+        );
+
+        store.removeLine({ row: 4, col: 4 }, { row: 0, col: 0 });
+
+        expect(store.lines).toHaveLength(0);
+      });
+
+      it("一致しないラインは残す", () => {
+        const store = useBoardStore();
+        store.addLines(
+          [
+            {
+              fromPosition: { row: 0, col: 0 },
+              toPosition: { row: 4, col: 4 },
+            },
+            {
+              fromPosition: { row: 1, col: 1 },
+              toPosition: { row: 5, col: 5 },
+            },
+          ],
+          0,
+        );
+
+        store.removeLine({ row: 0, col: 0 }, { row: 4, col: 4 });
+
+        expect(store.lines).toHaveLength(1);
+        expect(store.lines[0].fromPosition).toEqual({ row: 1, col: 1 });
+      });
+
+      it("ラインが存在しない場合でもエラーにならない", () => {
+        const store = useBoardStore();
+
+        expect(() => {
+          store.removeLine({ row: 0, col: 0 }, { row: 4, col: 4 });
+        }).not.toThrow();
+        expect(store.lines).toHaveLength(0);
+      });
+    });
+
     describe("clearLines", () => {
       it("全てのラインを削除", () => {
         const store = useBoardStore();
@@ -510,6 +578,32 @@ describe("boardStore", () => {
 
         expect(store.lines).toEqual([]);
       });
+    });
+  });
+
+  describe("resetMarkLine", () => {
+    it("マーク・ラインのみリセットし、石は残す", () => {
+      const store = useBoardStore();
+      store.addStones([{ position: { row: 7, col: 7 }, color: "black" }], 0);
+      store.addMarks(
+        [{ positions: [{ row: 7, col: 8 }], markType: "circle" }],
+        0,
+      );
+      store.addLines(
+        [
+          {
+            fromPosition: { row: 0, col: 0 },
+            toPosition: { row: 4, col: 4 },
+          },
+        ],
+        0,
+      );
+
+      store.resetMarkLine();
+
+      expect(store.stones).toHaveLength(1);
+      expect(store.marks).toEqual([]);
+      expect(store.lines).toEqual([]);
     });
   });
 

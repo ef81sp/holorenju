@@ -7,7 +7,12 @@ import DialogText from "@/components/common/DialogText.vue";
 import RichText from "@/components/common/RichText.vue";
 import type { DemoSection, QuestionSection } from "@/types/scenario";
 import type { CharacterType, EmotionId } from "@/types/character";
-import { isMarkMatching, type Mark, type Line } from "@/stores/boardStore";
+import {
+  isMarkMatching,
+  isLineMatching,
+  type Mark,
+  type Line,
+} from "@/stores/boardStore";
 import { assertNever } from "@/utils/assertNever";
 import { getSectionDisplayTitle } from "@/utils/sectionUtils";
 import {
@@ -123,6 +128,20 @@ const removeMatchingMark = (
   }
 };
 
+// ライン配列から一致するラインを削除
+const removeMatchingLine = (
+  lines: Line[],
+  fromPosition: { row: number; col: number },
+  toPosition: { row: number; col: number },
+): void => {
+  const removeIndex = lines.findIndex((line) =>
+    isLineMatching(line, fromPosition, toPosition),
+  );
+  if (removeIndex >= 0) {
+    lines.splice(removeIndex, 1);
+  }
+};
+
 // 現在のダイアログまでのmark/lineアクションを収集
 const currentMarks = computed<Mark[]>(() => {
   if (!previewContent.value || previewContent.value.type !== "demo") {
@@ -210,8 +229,9 @@ const currentLines = computed<Line[]>(() => {
               style: action.style ?? "solid",
               placedAtDialogueIndex: i,
             });
+          } else {
+            removeMatchingLine(lines, action.fromPosition, action.toPosition);
           }
-          // action === "remove" の場合は現状サポートなし
           break;
         case "place":
         case "remove":

@@ -80,6 +80,27 @@ export function isMarkMatching(
 }
 
 /**
+ * ラインが指定位置と一致するかを判定（双方向マッチ）
+ */
+export function isLineMatching(
+  line: Pick<Line, "fromPosition" | "toPosition">,
+  from: Position,
+  to: Position,
+): boolean {
+  const matchForward =
+    line.fromPosition.row === from.row &&
+    line.fromPosition.col === from.col &&
+    line.toPosition.row === to.row &&
+    line.toPosition.col === to.col;
+  const matchBackward =
+    line.fromPosition.row === to.row &&
+    line.fromPosition.col === to.col &&
+    line.toPosition.row === from.row &&
+    line.toPosition.col === from.col;
+  return matchForward || matchBackward;
+}
+
+/**
  * シナリオ用のラインオブジェクト
  */
 export interface Line {
@@ -373,19 +394,9 @@ export const useBoardStore = defineStore("board", () => {
    * 指定位置のラインを削除
    */
   function removeLine(fromPosition: Position, toPosition: Position): void {
-    lines.value = lines.value.filter((line) => {
-      const matchForward =
-        line.fromPosition.row === fromPosition.row &&
-        line.fromPosition.col === fromPosition.col &&
-        line.toPosition.row === toPosition.row &&
-        line.toPosition.col === toPosition.col;
-      const matchBackward =
-        line.fromPosition.row === toPosition.row &&
-        line.fromPosition.col === toPosition.col &&
-        line.toPosition.row === fromPosition.row &&
-        line.toPosition.col === fromPosition.col;
-      return !matchForward && !matchBackward;
-    });
+    lines.value = lines.value.filter(
+      (line) => !isLineMatching(line, fromPosition, toPosition),
+    );
   }
 
   /**

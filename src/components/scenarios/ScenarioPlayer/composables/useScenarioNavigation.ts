@@ -721,8 +721,9 @@ export const useScenarioNavigation = (
             ],
             dialogueIndex,
           );
+        } else {
+          boardStore.removeLine(action.fromPosition, action.toPosition);
         }
-        // action === "remove" の場合、現状ではサポートなし
         break;
       default:
         assertNever(action);
