@@ -371,9 +371,21 @@ function validateSuccessConditionArray(
     throw new Error(`${path} must not be empty`);
   }
 
-  return value.map((item, index) =>
+  const conditions = value.map((item, index) =>
     validateSuccessCondition(item, `${path}[${index}]`),
   );
+
+  // VCF/VCT条件は他の条件タイプと混在不可（1件のみ許可）
+  const hasVcfVct = conditions.some(
+    (c) => c.type === "vcf" || c.type === "vct",
+  );
+  if (hasVcfVct && conditions.length > 1) {
+    throw new Error(
+      `${path}: vcf/vct cannot be mixed with other condition types`,
+    );
+  }
+
+  return conditions;
 }
 
 /**
@@ -390,7 +402,7 @@ function validateSuccessCondition(
   const type = validateEnum(
     data,
     "type",
-    ["position", "pattern", "sequence"],
+    ["position", "pattern", "sequence", "vcf", "vct"],
     path,
   );
 
@@ -426,6 +438,18 @@ function validateSuccessCondition(
       const strict = Boolean(data.strict);
       return { type: "sequence", moves, strict };
     }
+
+    case "vcf":
+    case "vct": {
+      const color = validateEnum(
+        data,
+        "color",
+        ["black", "white"],
+        `${path}.color`,
+      );
+      return { type, color };
+    }
+
     default:
       throw new Error(`Unknown success condition type: ${type}`);
   }

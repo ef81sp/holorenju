@@ -405,6 +405,115 @@ describe("parseScenario", () => {
 
       expect(() => parseScenario(scenario)).toThrow("must not be empty");
     });
+
+    it("vcf条件を正しくパースできる", () => {
+      const questionWithVcf = {
+        ...validQuestionSection,
+        successConditions: [{ type: "vcf", color: "black" }],
+      };
+      const scenario = {
+        ...validScenario,
+        sections: [questionWithVcf],
+      };
+
+      const result = parseScenario(scenario);
+      const [section] = result.sections;
+      if (section.type === "question") {
+        expect(section.successConditions[0]).toEqual({
+          type: "vcf",
+          color: "black",
+        });
+      }
+    });
+
+    it("vcf条件でwhite色を正しくパースできる", () => {
+      const questionWithVcf = {
+        ...validQuestionSection,
+        successConditions: [{ type: "vcf", color: "white" }],
+      };
+      const scenario = {
+        ...validScenario,
+        sections: [questionWithVcf],
+      };
+
+      const result = parseScenario(scenario);
+      const [section] = result.sections;
+      if (section.type === "question") {
+        expect(section.successConditions[0]).toEqual({
+          type: "vcf",
+          color: "white",
+        });
+      }
+    });
+
+    it("vct条件を正しくパースできる", () => {
+      const questionWithVct = {
+        ...validQuestionSection,
+        successConditions: [{ type: "vct", color: "black" }],
+      };
+      const scenario = {
+        ...validScenario,
+        sections: [questionWithVct],
+      };
+
+      const result = parseScenario(scenario);
+      const [section] = result.sections;
+      if (section.type === "question") {
+        expect(section.successConditions[0]).toEqual({
+          type: "vct",
+          color: "black",
+        });
+      }
+    });
+
+    it("vcf条件の無効なcolorはエラー", () => {
+      const questionWithInvalidVcf = {
+        ...validQuestionSection,
+        successConditions: [{ type: "vcf", color: "red" }],
+      };
+      const scenario = {
+        ...validScenario,
+        sections: [questionWithInvalidVcf],
+      };
+
+      expect(() => parseScenario(scenario)).toThrow("must be one of");
+    });
+
+    it("vcf条件と他の条件の混在はエラー", () => {
+      const questionWithMixed = {
+        ...validQuestionSection,
+        successConditions: [
+          { type: "vcf", color: "black" },
+          { type: "position", positions: [{ row: 7, col: 7 }], color: "black" },
+        ],
+      };
+      const scenario = {
+        ...validScenario,
+        sections: [questionWithMixed],
+      };
+
+      expect(() => parseScenario(scenario)).toThrow(
+        "cannot be mixed with other condition types",
+      );
+    });
+
+    it("vct条件と他の条件の混在はエラー", () => {
+      const questionWithMixed = {
+        ...validQuestionSection,
+        successConditions: [
+          { type: "vct", color: "black" },
+          { type: "position", positions: [{ row: 7, col: 7 }], color: "black" },
+        ],
+      };
+      const scenario = {
+        ...validScenario,
+        sections: [questionWithMixed],
+      };
+
+      expect(() => parseScenario(scenario)).toThrow(
+        "cannot be mixed with other condition types",
+      );
+    });
   });
 
   describe("フィードバックのデフォルト値", () => {

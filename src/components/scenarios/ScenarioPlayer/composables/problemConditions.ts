@@ -6,25 +6,25 @@ export const evaluateCondition = (
   board: BoardState,
   operator: SuccessOperator = "or",
 ): boolean => {
-  if (condition.type === "position") {
-    const matcher = operator === "and" ? "every" : "some";
-    return condition.positions[matcher]((pos) => {
-      const cell = board[pos.row]?.[pos.col];
-      return cell === condition.color;
-    });
+  switch (condition.type) {
+    case "position": {
+      const matcher = operator === "and" ? "every" : "some";
+      return condition.positions[matcher]((pos) => {
+        const cell = board[pos.row]?.[pos.col];
+        return cell === condition.color;
+      });
+    }
+    case "pattern":
+      // パターン判定は未実装
+      return false;
+    case "sequence":
+      // シーケンス判定は未実装
+      return false;
+    case "vcf":
+    case "vct":
+      // VCF/VCTは静的条件チェックではない（専用ソルバーが処理する）
+      return false;
   }
-
-  if (condition.type === "pattern") {
-    // パターン判定は未実装
-    return false;
-  }
-
-  if (condition.type === "sequence") {
-    // シーケンス判定は未実装
-    return false;
-  }
-
-  return false;
 };
 
 export const evaluateAllConditions = (

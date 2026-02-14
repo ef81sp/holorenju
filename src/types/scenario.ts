@@ -159,7 +159,9 @@ interface QuestionSection extends BaseSection {
 type SuccessCondition =
   | PositionCondition
   | PatternCondition
-  | SequenceCondition;
+  | SequenceCondition
+  | VcfCondition
+  | VctCondition;
 
 interface PositionCondition {
   type: "position";
@@ -177,6 +179,16 @@ interface SequenceCondition {
   type: "sequence";
   moves: (Position & { color: "black" | "white" })[];
   strict: boolean;
+}
+
+interface VcfCondition {
+  type: "vcf";
+  color: "black" | "white";
+}
+
+interface VctCondition {
+  type: "vct";
+  color: "black" | "white";
 }
 
 interface QuestionFeedback {
@@ -241,6 +253,8 @@ export type {
   PositionCondition,
   PatternCondition,
   SequenceCondition,
+  VcfCondition,
+  VctCondition,
   QuestionFeedback,
   DialogueLine,
   Scenario,

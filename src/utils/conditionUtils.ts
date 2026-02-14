@@ -12,14 +12,20 @@ export const getPlayerColorFromConditions = (
   conditions: SuccessCondition[],
 ): "black" | "white" => {
   for (const condition of conditions) {
-    if (condition.type === "position" || condition.type === "pattern") {
-      return condition.color;
-    }
-    if (condition.type === "sequence" && condition.moves.length > 0) {
-      const [firstMove] = condition.moves;
-      if (firstMove) {
-        return firstMove.color;
-      }
+    switch (condition.type) {
+      case "position":
+      case "pattern":
+      case "vcf":
+      case "vct":
+        return condition.color;
+      case "sequence":
+        if (condition.moves.length > 0) {
+          const [firstMove] = condition.moves;
+          if (firstMove) {
+            return firstMove.color;
+          }
+        }
+        break;
     }
   }
   return "black";

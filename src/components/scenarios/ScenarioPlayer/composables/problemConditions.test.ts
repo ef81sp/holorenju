@@ -162,6 +162,32 @@ describe("evaluateCondition", () => {
       expect(evaluateCondition(condition, board, "or")).toBe(false);
     });
   });
+
+  describe("vcf条件", () => {
+    it("静的条件チェックではないためfalseを返す", () => {
+      const board = createEmptyBoard();
+
+      const condition: SuccessCondition = {
+        type: "vcf",
+        color: "black",
+      };
+
+      expect(evaluateCondition(condition, board, "or")).toBe(false);
+    });
+  });
+
+  describe("vct条件", () => {
+    it("静的条件チェックではないためfalseを返す", () => {
+      const board = createEmptyBoard();
+
+      const condition: SuccessCondition = {
+        type: "vct",
+        color: "black",
+      };
+
+      expect(evaluateCondition(condition, board, "or")).toBe(false);
+    });
+  });
 });
 
 describe("evaluateAllConditions", () => {
