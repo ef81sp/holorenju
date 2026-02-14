@@ -31,7 +31,7 @@ import {
   checkFive,
   checkForbiddenMove,
   createEmptyBoard,
-} from "../../src/logic/renjuRules.ts";
+} from "../../src/logic/renjuRules/index.ts";
 
 /**
  * 1手を分析してタグを付与（盤面ベース、探索なし）
@@ -438,11 +438,27 @@ export function analyzeGame(
 
   const matchup = `${game.playerA} vs ${game.playerB}`;
 
+  // isABlack=false のとき winner を反転して色ベースに正規化
+  // A=黒勝, B=白勝 の慣例に合わせる
+  let colorWinner: "A" | "B" | "draw" = game.winner;
+  if (!game.isABlack) {
+    switch (game.winner) {
+      case "A":
+        colorWinner = "B";
+        break;
+      case "B":
+        colorWinner = "A";
+        break;
+      default:
+        colorWinner = "draw";
+    }
+  }
+
   return {
     gameId,
     sourceFile,
     matchup,
-    winner: game.winner,
+    winner: colorWinner,
     reason: game.reason,
     totalMoves: game.moves,
     gameTags,
