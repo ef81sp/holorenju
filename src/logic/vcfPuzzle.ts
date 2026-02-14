@@ -28,9 +28,13 @@ function findAllWinPositions(
   const positions: Position[] = [];
   for (let row = 0; row < BOARD_SIZE; row++) {
     const rowArray = board[row];
-    if (!rowArray) {continue;}
+    if (!rowArray) {
+      continue;
+    }
     for (let col = 0; col < BOARD_SIZE; col++) {
-      if (rowArray[col] !== null) {continue;}
+      if (rowArray[col] !== null) {
+        continue;
+      }
       rowArray[col] = color;
       if (checkFive(board, row, col, color)) {
         positions.push({ row, col });

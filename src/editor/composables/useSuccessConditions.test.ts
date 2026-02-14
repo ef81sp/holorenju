@@ -6,6 +6,8 @@ import type {
   PositionCondition,
   PatternCondition,
   SequenceCondition,
+  VcfCondition,
+  VctCondition,
 } from "@/types/scenario";
 
 import { useSuccessConditions } from "./useSuccessConditions";
@@ -597,6 +599,135 @@ describe("useSuccessConditions", () => {
         const [[callArgs]] = updateSection.mock.calls;
         const condition = callArgs.successConditions[0] as SequenceCondition;
         expect(condition.strict).toBe(false);
+      });
+    });
+  });
+
+  describe("VCF/VCT条件", () => {
+    describe("型ガード", () => {
+      it("isVcfConditionがvcf条件を正しく判定", () => {
+        const { isVcfCondition } = useSuccessConditions(
+          getCurrentSection,
+          updateSection,
+        );
+
+        const vcf: SuccessCondition = { type: "vcf", color: "black" };
+        const vct: SuccessCondition = { type: "vct", color: "black" };
+        const position: SuccessCondition = {
+          type: "position",
+          positions: [],
+          color: "black",
+        };
+
+        expect(isVcfCondition(vcf)).toBe(true);
+        expect(isVcfCondition(vct)).toBe(false);
+        expect(isVcfCondition(position)).toBe(false);
+      });
+
+      it("isVctConditionがvct条件を正しく判定", () => {
+        const { isVctCondition } = useSuccessConditions(
+          getCurrentSection,
+          updateSection,
+        );
+
+        const vct: SuccessCondition = { type: "vct", color: "white" };
+        const vcf: SuccessCondition = { type: "vcf", color: "white" };
+        const pattern: SuccessCondition = {
+          type: "pattern",
+          pattern: "",
+          color: "black",
+        };
+
+        expect(isVctCondition(vct)).toBe(true);
+        expect(isVctCondition(vcf)).toBe(false);
+        expect(isVctCondition(pattern)).toBe(false);
+      });
+    });
+
+    describe("changeConditionType", () => {
+      it("vcfタイプに変更", () => {
+        mockSection.successConditions = [
+          { type: "position", positions: [], color: "black" },
+        ];
+
+        const { changeConditionType } = useSuccessConditions(
+          getCurrentSection,
+          updateSection,
+        );
+
+        changeConditionType(0, "vcf");
+
+        const [[callArgs]] = updateSection.mock.calls;
+        const condition = callArgs.successConditions[0] as VcfCondition;
+        expect(condition.type).toBe("vcf");
+        expect(condition.color).toBe("black");
+      });
+
+      it("vctタイプに変更", () => {
+        mockSection.successConditions = [
+          { type: "position", positions: [], color: "black" },
+        ];
+
+        const { changeConditionType } = useSuccessConditions(
+          getCurrentSection,
+          updateSection,
+        );
+
+        changeConditionType(0, "vct");
+
+        const [[callArgs]] = updateSection.mock.calls;
+        const condition = callArgs.successConditions[0] as VctCondition;
+        expect(condition.type).toBe("vct");
+        expect(condition.color).toBe("black");
+      });
+    });
+
+    describe("updateConditionColor", () => {
+      it("vcf条件の色を更新", () => {
+        mockSection.successConditions = [{ type: "vcf", color: "black" }];
+
+        const { updateConditionColor } = useSuccessConditions(
+          getCurrentSection,
+          updateSection,
+        );
+
+        updateConditionColor(0, "white");
+
+        const [[callArgs]] = updateSection.mock.calls;
+        const condition = callArgs.successConditions[0] as VcfCondition;
+        expect(condition.type).toBe("vcf");
+        expect(condition.color).toBe("white");
+      });
+
+      it("vct条件の色を更新", () => {
+        mockSection.successConditions = [{ type: "vct", color: "white" }];
+
+        const { updateConditionColor } = useSuccessConditions(
+          getCurrentSection,
+          updateSection,
+        );
+
+        updateConditionColor(0, "black");
+
+        const [[callArgs]] = updateSection.mock.calls;
+        const condition = callArgs.successConditions[0] as VctCondition;
+        expect(condition.type).toBe("vct");
+        expect(condition.color).toBe("black");
+      });
+
+      it("vcf/vct以外の条件には効果なし", () => {
+        mockSection.successConditions = [
+          { type: "position", positions: [], color: "black" },
+        ];
+
+        const { updateConditionColor } = useSuccessConditions(
+          getCurrentSection,
+          updateSection,
+        );
+
+        updateConditionColor(0, "white");
+
+        expect(updateSection).not.toHaveBeenCalled();
       });
     });
   });

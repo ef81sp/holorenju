@@ -5,6 +5,8 @@ import type {
   PositionCondition,
   PatternCondition,
   SequenceCondition,
+  VcfCondition,
+  VctCondition,
 } from "@/types/scenario";
 
 /**
@@ -24,9 +26,12 @@ export function useSuccessConditions(
   isSequenceCondition: (
     condition: SuccessCondition,
   ) => condition is SequenceCondition;
+  isVcfCondition: (condition: SuccessCondition) => condition is VcfCondition;
+  isVctCondition: (condition: SuccessCondition) => condition is VctCondition;
   addSuccessCondition: () => void;
   removeSuccessCondition: (index: number) => void;
   changeConditionType: (index: number, type: SuccessCondition["type"]) => void;
+  updateConditionColor: (index: number, color: "black" | "white") => void;
   updatePositionCondition: (
     index: number,
     updates: Partial<PositionCondition>,
@@ -68,6 +73,14 @@ export function useSuccessConditions(
   const isSequenceCondition = (
     condition: SuccessCondition,
   ): condition is SequenceCondition => condition.type === "sequence";
+
+  const isVcfCondition = (
+    condition: SuccessCondition,
+  ): condition is VcfCondition => condition.type === "vcf";
+
+  const isVctCondition = (
+    condition: SuccessCondition,
+  ): condition is VctCondition => condition.type === "vct";
 
   // ===== 内部ヘルパー関数 =====
   const setSuccessConditions = (conditions: SuccessCondition[]): void => {
@@ -114,18 +127,24 @@ export function useSuccessConditions(
     }
 
     const newConditions = [...section.successConditions];
-    let baseCondition: SuccessCondition = {
-      type: "position",
-      positions: [],
-      color: "black",
-    };
+    let baseCondition: SuccessCondition;
 
-    if (type === "position") {
-      baseCondition = { type: "position", positions: [], color: "black" };
-    } else if (type === "pattern") {
-      baseCondition = { type: "pattern", pattern: "", color: "black" };
-    } else {
-      baseCondition = { type: "sequence", moves: [], strict: false };
+    switch (type) {
+      case "position":
+        baseCondition = { type: "position", positions: [], color: "black" };
+        break;
+      case "pattern":
+        baseCondition = { type: "pattern", pattern: "", color: "black" };
+        break;
+      case "sequence":
+        baseCondition = { type: "sequence", moves: [], strict: false };
+        break;
+      case "vcf":
+        baseCondition = { type: "vcf", color: "black" };
+        break;
+      case "vct":
+        baseCondition = { type: "vct", color: "black" };
+        break;
     }
 
     newConditions[index] = baseCondition;
@@ -341,15 +360,38 @@ export function useSuccessConditions(
     setSuccessConditions(newConditions);
   };
 
+  // ===== VCF/VCT共通: 色の更新 =====
+  const updateConditionColor = (
+    index: number,
+    color: "black" | "white",
+  ): void => {
+    const section = getCurrentSection();
+    if (!section) {
+      return;
+    }
+
+    const condition = section.successConditions[index];
+    if (!condition || (condition.type !== "vcf" && condition.type !== "vct")) {
+      return;
+    }
+
+    const newConditions = [...section.successConditions];
+    newConditions[index] = { ...condition, color };
+    setSuccessConditions(newConditions);
+  };
+
   return {
     // 型ガード
     isPositionCondition,
     isPatternCondition,
     isSequenceCondition,
+    isVcfCondition,
+    isVctCondition,
     // 条件の追加・削除・タイプ変更
     addSuccessCondition,
     removeSuccessCondition,
     changeConditionType,
+    updateConditionColor,
     // Position用
     updatePositionCondition,
     addPositionToCondition,

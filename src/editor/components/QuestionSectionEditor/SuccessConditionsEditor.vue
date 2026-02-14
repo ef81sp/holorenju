@@ -15,9 +15,12 @@ const {
   isPositionCondition,
   isPatternCondition,
   isSequenceCondition,
+  isVcfCondition,
+  isVctCondition,
   addSuccessCondition,
   removeSuccessCondition,
   changeConditionType,
+  updateConditionColor,
   updatePositionCondition,
   addPositionToCondition,
   updatePositionField,
@@ -96,6 +99,8 @@ const {
             <option value="position">Position (位置指定)</option>
             <option value="pattern">Pattern (パターン)</option>
             <option value="sequence">Sequence (手順)</option>
+            <option value="vcf">VCF (四追い)</option>
+            <option value="vct">VCT (脅威追い)</option>
           </select>
           <button
             class="btn-remove-small"
@@ -275,6 +280,34 @@ const {
             >
               + 手を追加
             </button>
+          </div>
+        </div>
+
+        <!-- VCF/VCT条件 -->
+        <div
+          v-else-if="isVcfCondition(condition) || isVctCondition(condition)"
+          class="condition-body"
+        >
+          <div class="field-row">
+            <label>
+              攻め側の色
+              <select
+                :value="condition.color"
+                class="form-input form-input-small"
+                @change="
+                  (e) =>
+                    updateConditionColor(
+                      index,
+                      (e.target as HTMLSelectElement).value as
+                        | 'black'
+                        | 'white',
+                    )
+                "
+              >
+                <option value="black">黒</option>
+                <option value="white">白</option>
+              </select>
+            </label>
           </div>
         </div>
       </div>
