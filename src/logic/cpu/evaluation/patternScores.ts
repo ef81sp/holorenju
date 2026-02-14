@@ -87,6 +87,13 @@ export const PATTERN_SCORES = {
   /** 禁手脆弱性ペナルティの合計上限 */
   FORBIDDEN_VULNERABILITY_CAP: 1500,
   /**
+   * 末端評価 四三脅威ボーナス（evaluateBoard 用）
+   * 「次の1手で四三が作れる空き交点」が存在する場合に加算。
+   * FOUR_THREE_BONUS(5000) より保守的: 手番が不明なため確実性が低い。
+   * --score-override=LEAF_FOUR_THREE_THREAT:0 で無効化可能。
+   */
+  LEAF_FOUR_THREE_THREAT: 3000,
+  /**
    * パターン連携ボーナス（evaluateBoard 末端評価用）
    * 2方向以上にパターンを持つ石への加点（方向数-1 × この値）。
    * 多方向にパターンがある石は四三等の複合脅威に発展する可能性が高い。
@@ -99,7 +106,7 @@ export const PATTERN_SCORES = {
  * パターンスコアの値型（オーバーライド用）
  */
 export type PatternScoreValues = {
-  [K in keyof typeof PATTERN_SCORES]: (typeof PATTERN_SCORES)[K];
+  [K in keyof typeof PATTERN_SCORES]: number;
 };
 
 /**

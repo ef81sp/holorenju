@@ -20,6 +20,7 @@ import {
   evaluateStonePatternsWithBreakdown,
   PATTERN_SCORES,
 } from "./evaluation";
+import { applyPatternScoreOverrides } from "./evaluation/patternScores";
 import { createBoardWithStones, placeStonesOnBoard } from "./testUtils";
 
 describe("evaluateStonePatterns", () => {
@@ -335,6 +336,107 @@ describe("evaluateBoard 連携ボーナス", () => {
 
     // ボーナス0の場合より、デフォルトのほうが高い
     expect(scoreDefault).toBeGreaterThan(scoreNoBonus);
+  });
+});
+
+describe("evaluateBoard 四三脅威スキャン", () => {
+  it("Test A: 四三機会ありで bonus 加算", () => {
+    // 黒: 横3連 (7,5)(7,6)(7,7) + 縦2連 (6,8)(8,8)
+    // → 空き (7,8) で四(横) + 活三(縦) = 四三
+    const board = createBoardWithStones([
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+      { row: 6, col: 8, color: "black" },
+      { row: 8, col: 8, color: "black" },
+      // 白ダミー
+      { row: 10, col: 10, color: "white" },
+      { row: 10, col: 11, color: "white" },
+    ]);
+
+    // (8,8) を除去 → 四三不可能
+    const boardNoThreat = createBoardWithStones([
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+      { row: 6, col: 8, color: "black" },
+      // 白ダミー
+      { row: 10, col: 10, color: "white" },
+      { row: 10, col: 11, color: "white" },
+    ]);
+
+    const scoreWith = evaluateBoard(board, "black");
+    const scoreWithout = evaluateBoard(boardNoThreat, "black");
+
+    // 差分が LEAF_FOUR_THREE_THREAT 以上（(8,8) のパターン差も含む）
+    expect(scoreWith - scoreWithout).toBeGreaterThanOrEqual(
+      PATTERN_SCORES.LEAF_FOUR_THREE_THREAT,
+    );
+  });
+
+  it("Test B: 四三機会なしで bonus なし", () => {
+    // 散在した石のみ（四三不可能）
+    const board = createBoardWithStones([
+      { row: 0, col: 0, color: "black" },
+      { row: 14, col: 14, color: "black" },
+      { row: 0, col: 14, color: "white" },
+      { row: 14, col: 0, color: "white" },
+    ]);
+
+    // LEAF_FOUR_THREE_THREAT を0にした場合と差がない
+    const saved = PATTERN_SCORES.LEAF_FOUR_THREE_THREAT;
+    const scoreDefault = evaluateBoard(board, "black");
+    applyPatternScoreOverrides({ LEAF_FOUR_THREE_THREAT: 0 });
+    const scoreDisabled = evaluateBoard(board, "black");
+    applyPatternScoreOverrides({ LEAF_FOUR_THREE_THREAT: saved });
+
+    expect(scoreDefault).toBe(scoreDisabled);
+  });
+
+  it("Test C: 相手側の四三機会で opponentScore に加算", () => {
+    // 白のみ四三機会あり: 横3連 + 縦2連
+    const board = createBoardWithStones([
+      { row: 7, col: 5, color: "white" },
+      { row: 7, col: 6, color: "white" },
+      { row: 7, col: 7, color: "white" },
+      { row: 6, col: 8, color: "white" },
+      { row: 8, col: 8, color: "white" },
+      // 黒ダミー（四三不可能な散在）
+      { row: 0, col: 0, color: "black" },
+      { row: 14, col: 14, color: "black" },
+    ]);
+
+    // 白から見ると有利（正）、黒から見ると不利（負）
+    const blackScore = evaluateBoard(board, "black");
+    const whiteScore = evaluateBoard(board, "white");
+    expect(blackScore).toBeLessThan(0);
+    expect(whiteScore).toBeGreaterThan(0);
+
+    // 四三脅威を無効化した場合と比較
+    const saved = PATTERN_SCORES.LEAF_FOUR_THREE_THREAT;
+    applyPatternScoreOverrides({ LEAF_FOUR_THREE_THREAT: 0 });
+    const blackScoreNoThreat = evaluateBoard(board, "black");
+    applyPatternScoreOverrides({ LEAF_FOUR_THREE_THREAT: saved });
+
+    // 白の四三脅威分、黒から見たスコアが下がっている
+    expect(blackScore).toBeLessThan(blackScoreNoThreat);
+  });
+
+  it("Test D: 盤面不変性", () => {
+    const board = createBoardWithStones([
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+      { row: 6, col: 8, color: "black" },
+      { row: 8, col: 8, color: "black" },
+      { row: 10, col: 10, color: "white" },
+      { row: 10, col: 11, color: "white" },
+    ]);
+    const snapshot = copyBoard(board);
+
+    evaluateBoard(board, "black");
+
+    expect(board).toEqual(snapshot);
   });
 });
 
