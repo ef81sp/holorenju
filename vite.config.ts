@@ -4,9 +4,11 @@ import { URL, fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
 import svgLoader from "vite-svg-loader";
 
+import { analysisDataPlugin } from "./vite-plugins/analysisDataPlugin";
+
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [vue(), svgLoader()],
+  plugins: [vue(), svgLoader(), analysisDataPlugin()],
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url)),
