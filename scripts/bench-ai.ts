@@ -24,6 +24,11 @@ import {
   type GameResult,
   type PlayerConfig,
 } from "../src/logic/cpu/benchmark/index.ts";
+import {
+  applyPatternScoreOverrides,
+  PATTERN_SCORES,
+  type PatternScoreValues,
+} from "../src/logic/cpu/evaluation/patternScores.ts";
 import { CPU_DIFFICULTIES, type CpuDifficulty } from "../src/types/cpu.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -37,6 +42,7 @@ interface CliOptions {
   parallel: boolean;
   workers: number;
   self: boolean; // 同じ難易度同士の対戦モード
+  scoreOverrides: Partial<PatternScoreValues>;
 }
 
 interface MatchupResult {
@@ -88,6 +94,7 @@ function parseArgs(): CliOptions {
     parallel: false,
     workers: Math.max(1, cpuCount - 1),
     self: false,
+    scoreOverrides: {},
   };
 
   for (const arg of args) {
@@ -125,6 +132,16 @@ function parseArgs(): CliOptions {
       }
     } else if (arg === "--self" || arg === "-s") {
       options.self = true;
+    } else if (arg.startsWith("--score-override=")) {
+      const value = arg.slice("--score-override=".length);
+      for (const pair of value.split(",")) {
+        const [key, val] = pair.split(":");
+        if (key && val !== undefined && key in PATTERN_SCORES) {
+          (options.scoreOverrides as Record<string, number>)[key] = Number(val);
+        } else if (key) {
+          console.warn(`Warning: unknown score key "${key}", skipping`);
+        }
+      }
     } else if (arg === "--help" || arg === "-h") {
       printHelp();
       process.exit(0);
@@ -154,6 +171,9 @@ Options:
                      (implies --parallel)
   --self, -s         Self-play only mode: each difficulty plays only against
                      itself (excludes cross-difficulty matchups)
+  --score-override=<k:v,...>
+                     Override PATTERN_SCORES values (comma-separated KEY:VALUE).
+                     Applied before benchmark starts. Use for A/B testing.
   --help, -h         Show this help message
 
 Examples:
@@ -162,6 +182,7 @@ Examples:
   pnpm bench:ai --parallel --workers=4
   pnpm bench:ai --verbose --format=csv
   pnpm bench:ai --self --players=hard --games=100   # hard vs hard (self-play)
+  pnpm bench:ai --score-override=LEAF_COMPOUND_THREAT_BONUS:0  # A/B test
 `);
 }
 
@@ -442,11 +463,13 @@ async function runBenchmarkParallel(
   }
 
   // ワーカーで並列実行
+  const hasOverrides = Object.keys(options.scoreOverrides).length > 0;
   const results = await runTasksWithWorkers(
     tasks,
     numWorkers,
     verbose,
     totalGames,
+    hasOverrides ? options.scoreOverrides : undefined,
   );
 
   // 結果を集計
@@ -581,6 +604,7 @@ function runTasksWithWorkers(
   numWorkers: number,
   verbose: boolean,
   totalGames: number,
+  scoreOverrides?: Partial<PatternScoreValues>,
 ): Promise<WorkerResult[]> {
   const results: WorkerResult[] = [];
   const taskQueue = [...tasks];
@@ -616,6 +640,7 @@ function runTasksWithWorkers(
           playerA: task.playerA,
           playerB: task.playerB,
           verbose,
+          scoreOverrides,
         },
         execArgv: [
           "--experimental-strip-types",
@@ -731,6 +756,15 @@ function saveResults(result: BenchmarkResult, options: CliOptions): void {
 // メイン処理
 async function main(): Promise<void> {
   const options = parseArgs();
+
+  // スコアオーバーライドを適用（直列実行用。並列はワーカー側で適用）
+  if (Object.keys(options.scoreOverrides).length > 0) {
+    applyPatternScoreOverrides(options.scoreOverrides);
+    console.log(`\nScore overrides applied:`);
+    for (const [key, value] of Object.entries(options.scoreOverrides)) {
+      console.log(`  ${key}: ${value}`);
+    }
+  }
 
   const result = options.parallel
     ? await runBenchmarkParallel(options)

@@ -28,7 +28,7 @@ import type {
 import { applyMove } from "../../src/logic/cpu/core/boardUtils.ts";
 import { detectOpponentThreats } from "../../src/logic/cpu/evaluation/threatDetection.ts";
 import { findVCFSequence } from "../../src/logic/cpu/search/vcf.ts";
-import { createEmptyBoard } from "../../src/logic/renjuRules.ts";
+import { createEmptyBoard } from "../../src/logic/renjuRules/index.ts";
 
 // ============================================================================
 // 定数

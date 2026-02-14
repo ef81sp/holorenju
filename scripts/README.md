@@ -109,6 +109,48 @@ analyzed-games/            # 分析結果出力先
 
 ---
 
+## ベンチマーク CLI
+
+### 概要
+
+CPU AI同士の対局を実行し、レーティングや統計を測定する。
+
+### CLI
+
+```bash
+pnpm bench                                         # 全難易度総当たり
+pnpm bench --players=medium,hard --games=20        # 特定難易度
+pnpm bench --self --players=hard --games=100       # hard vs hard (self-play)
+pnpm bench --parallel --workers=4                  # 並列実行
+pnpm bench --score-override=LEAF_COMPOUND_THREAT_BONUS:0  # スコア定数を上書き
+```
+
+### `--score-override` オプション
+
+`PATTERN_SCORES` の値を上書きしてベンチマークを実行する。A/Bテストやパラメータ調整の効果検証に使用。
+
+```bash
+# 単一パラメータ
+pnpm bench --score-override=LEAF_COMPOUND_THREAT_BONUS:0
+
+# 複数パラメータ（カンマ区切り）
+pnpm bench --score-override=FOUR:2000,OPEN_THREE:1200
+
+# self-play A/Bテストの例
+pnpm bench --self --players=hard --games=100 --score-override=LEAF_COMPOUND_THREAT_BONUS:0
+pnpm bench --self --players=hard --games=100  # デフォルト値で比較
+```
+
+並列実行時もワーカーに自動で反映される。
+
+### 出力
+
+```
+bench-results/bench-<timestamp>.json
+```
+
+---
+
 ## 弱点パターン分析ツール
 
 ### 概要
