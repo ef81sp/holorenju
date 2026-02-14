@@ -76,7 +76,6 @@ defineExpose({
               <li>記述内容は予告なく変更される可能性があります。</li>
               <li>このゲームの使用によるいかなる損害も責任を負いません。</li>
             </ul>
-            <p class="disclaimer"></p>
           </div>
         </section>
 

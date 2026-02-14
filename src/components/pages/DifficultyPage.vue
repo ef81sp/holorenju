@@ -51,7 +51,7 @@ const difficultyCards: DifficultyCard[] = [
     key: "renju_intermediate",
     label: "連珠:初級",
     gradient: "var(--gradient-difficulty-4)",
-    description: "基本形な攻撃",
+    description: "基本的な攻撃",
   },
   {
     key: "renju_advanced",

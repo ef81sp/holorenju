@@ -88,7 +88,7 @@
         {
           "id": "scenario_mlce6x86_9cy53",
           "title": "EX:開局規定",
-          "description": "存在の紹介",
+          "description": "開局規定の概要を紹介します",
           "path": "renju_beginner/scenario_mlce6x86_9cy53.json"
         }
       ]
@@ -101,6 +101,12 @@
           "title": "四追い",
           "description": "最強の攻撃を学びます",
           "path": "renju_intermediate/scenario_mlcg64mu_c6bi1.json"
+        },
+        {
+          "id": "scenario_mljjjf9f_7ez5w",
+          "title": "禁手に嵌める",
+          "description": "白特有の勝ち方を学びます",
+          "path": "renju_intermediate/scenario_mljjjf9f_7ez5w.json"
         }
       ]
     },

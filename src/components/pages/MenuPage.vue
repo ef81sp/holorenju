@@ -13,6 +13,8 @@ const handleSelectCPU = (): void => {
   appStore.selectMode("cpu");
 };
 
+const isDev = import.meta.env.DEV;
+
 const handleSelectEditor = (): void => {
   appStore.goToEditor();
 };
@@ -48,6 +50,7 @@ const handleSelectEditor = (): void => {
           </div>
         </button>
         <button
+          v-if="isDev"
           class="menu-button menu-button--secondary"
           @click="handleSelectEditor"
         >

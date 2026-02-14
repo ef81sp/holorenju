@@ -24,8 +24,13 @@ export const useFullscreenPrompt = (
   const isMobile = computed(() => isMobileByMedia.value || hasTouchPoints);
 
   // LocalStorageの確認
-  const isPromptDisabled = (): boolean =>
-    localStorage.getItem(STORAGE_KEY) === "true";
+  const isPromptDisabled = (): boolean => {
+    try {
+      return localStorage.getItem(STORAGE_KEY) === "true";
+    } catch {
+      return false;
+    }
+  };
 
   // 全画面表示プロンプトを表示
   const showFullscreenPrompt = (): void => {
@@ -36,7 +41,11 @@ export const useFullscreenPrompt = (
 
   // 「二度と表示しない」フラグを保存
   const handleNeverShow = (): void => {
-    localStorage.setItem(STORAGE_KEY, "true");
+    try {
+      localStorage.setItem(STORAGE_KEY, "true");
+    } catch {
+      // Safari プライベートブラウジング等で使用不可の場合は無視
+    }
   };
 
   return {
