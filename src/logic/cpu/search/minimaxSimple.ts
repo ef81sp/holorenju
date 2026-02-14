@@ -246,6 +246,18 @@ export function findBestMove(
     };
   }
 
+  // 同スコア手のタイブレーク
+  const topScore = best.score;
+  const tiedMoves = moveScores.filter((m) => m.score === topScore);
+  if (tiedMoves.length > 1) {
+    const tieIndex = Math.floor(Math.random() * tiedMoves.length);
+    const selected = tiedMoves[tieIndex] ?? best;
+    return {
+      position: selected.move,
+      score: selected.score,
+    };
+  }
+
   return {
     position: best.move,
     score: best.score,

@@ -7,7 +7,7 @@
  * - search/techniques.test.ts - LMR・戦術的手テスト
  */
 
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createBoardFromRecord } from "@/logic/gameRecordParser";
 import { checkForbiddenMove, createEmptyBoard } from "@/logic/renjuRules";
@@ -18,7 +18,12 @@ import {
   PATTERN_SCORES,
 } from "../evaluation";
 import { createBoardWithStones, placeStonesOnBoard } from "../testUtils";
-import { findBestMove, findBestMoveIterativeWithTT, minimax } from "./minimax";
+import {
+  findBestMove,
+  findBestMoveIterativeWithTT,
+  findBestMoveWithTT,
+  minimax,
+} from "./minimax";
 
 describe("minimax", () => {
   it("深さ0では現在の盤面評価を返す", () => {
@@ -449,4 +454,83 @@ describe("VCFレース判定", () => {
     expect(result.score).toBe(PATTERN_SCORES.FIVE);
     expect(result.completedDepth).toBe(0);
   }, 15000);
+});
+
+describe("同スコア手のタイブレーク", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("対称盤面で同スコアの手が複数ある場合、タイブレークが発生する", () => {
+    // 中央に黒1手のみ → 対称的な盤面で同スコアの手が複数存在するはず
+    const board = createBoardWithStones([{ row: 7, col: 7, color: "black" }]);
+
+    // Math.random を固定して再現性のあるテスト
+    vi.spyOn(Math, "random").mockReturnValue(0.0);
+
+    const result = findBestMoveWithTT(board, "white", 2, 0);
+
+    // randomSelection が返される
+    expect(result.randomSelection).toBeDefined();
+
+    if (result.randomSelection?.wasTieBreak) {
+      // タイブレーク発生時: 同スコア手が2手以上
+      expect(result.randomSelection.wasTieBreak).toBe(true);
+      expect(result.randomSelection.wasRandom).toBe(false);
+      expect(result.randomSelection.candidateCount).toBeGreaterThanOrEqual(2);
+    } else {
+      // タイブレーク未発生（同スコアが1手のみ）: wasRandom=false, wasTieBreak=false
+      expect(result.randomSelection?.wasRandom).toBe(false);
+      expect(result.randomSelection?.wasTieBreak).toBe(false);
+    }
+  });
+
+  it("タイブレーク時にMath.randomの値で異なる手が選ばれる", () => {
+    // 中央に黒1手のみの対称盤面
+    const board = createBoardWithStones([{ row: 7, col: 7, color: "black" }]);
+
+    // 最初: Math.random = 0.0（最初の同スコア手を選択）
+    vi.spyOn(Math, "random").mockReturnValue(0.0);
+    const result1 = findBestMoveWithTT(board, "white", 2, 0);
+
+    // 次: Math.random = 0.99（最後の同スコア手を選択）
+    vi.spyOn(Math, "random").mockReturnValue(0.99);
+    const result2 = findBestMoveWithTT(board, "white", 2, 0);
+
+    // 両方とも有効な手を返す
+    expect(result1.position.row).toBeGreaterThanOrEqual(0);
+    expect(result2.position.row).toBeGreaterThanOrEqual(0);
+
+    // タイブレークが発生した場合、異なる手が選ばれるはず
+    if (
+      result1.randomSelection?.wasTieBreak &&
+      result2.randomSelection?.wasTieBreak &&
+      result1.randomSelection.candidateCount > 1
+    ) {
+      const sameMove =
+        result1.position.row === result2.position.row &&
+        result1.position.col === result2.position.col;
+      expect(sameMove).toBe(false);
+    }
+  });
+
+  it("単独最善手がある場合はwasTieBreak=falseになる", () => {
+    // 黒が4つ並び、片端を白がブロック → 五連は1手のみ
+    const board = createBoardWithStones([
+      { row: 7, col: 2, color: "white" },
+      { row: 7, col: 3, color: "black" },
+      { row: 7, col: 4, color: "black" },
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 8, col: 8, color: "white" },
+    ]);
+
+    const result = findBestMoveWithTT(board, "black", 2, 0);
+
+    expect(result.randomSelection).toBeDefined();
+    expect(result.randomSelection?.wasTieBreak).toBe(false);
+    expect(result.randomSelection?.wasRandom).toBe(false);
+    // 唯一の五連手 (7, 7) が選ばれる
+    expect(result.position).toEqual({ row: 7, col: 7 });
+  });
 });

@@ -58,6 +58,8 @@ export interface RandomSelectionResult {
   originalRank: number;
   /** 選択対象の候補数 */
   candidateCount: number;
+  /** 同スコアのタイブレークで選択されたか */
+  wasTieBreak: boolean;
 }
 
 /**

@@ -219,6 +219,8 @@ export interface RandomSelectionInfo {
   candidateCount: number;
   /** 設定されたランダム係数 */
   randomFactor: number;
+  /** 同スコアのタイブレークで選択されたか */
+  wasTieBreak: boolean;
 }
 
 /**

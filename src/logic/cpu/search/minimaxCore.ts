@@ -603,6 +603,7 @@ export function findBestMoveWithTT(
           candidates: moveScores,
           randomSelection: {
             wasRandom: true,
+            wasTieBreak: false,
             originalRank,
             candidateCount: validMoves.length,
           },
@@ -621,12 +622,35 @@ export function findBestMoveWithTT(
     };
   }
 
+  // 同スコア手のタイブレーク
+  const bestScore = best.score;
+  const tiedMoves = moveScores.filter((m) => m.score === bestScore);
+  if (tiedMoves.length > 1) {
+    const tieIndex = Math.floor(Math.random() * tiedMoves.length);
+    const selected = tiedMoves[tieIndex] ?? best;
+    const originalRank =
+      moveScores.findIndex((m) => m.move === selected.move) + 1;
+    return {
+      position: selected.move,
+      score: selected.score,
+      candidates: moveScores,
+      randomSelection: {
+        wasRandom: false,
+        wasTieBreak: true,
+        originalRank,
+        candidateCount: tiedMoves.length,
+      },
+      ctx,
+    };
+  }
+
   return {
     position: best.move,
     score: best.score,
     candidates: moveScores,
     randomSelection: {
       wasRandom: false,
+      wasTieBreak: false,
       originalRank: 1,
       candidateCount: moveScores.length,
     },

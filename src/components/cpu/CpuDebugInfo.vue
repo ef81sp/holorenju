@@ -136,6 +136,11 @@ const wasRandom = computed(
   () => props.response?.randomSelection?.wasRandom ?? false,
 );
 
+// タイブレーク選択かどうか
+const wasTieBreak = computed(
+  () => props.response?.randomSelection?.wasTieBreak ?? false,
+);
+
 // ランダム選択時の候補数
 const randomCandidateCount = computed(
   () => props.response?.randomSelection?.candidateCount ?? 0,
@@ -239,7 +244,7 @@ function isDepthChanged(index: number): boolean {
             v-if="candidate.rank === selectedRank"
             class="selected-marker"
           >
-            {{ wasRandom ? "選択" : "" }}
+            {{ wasRandom ? "選択" : wasTieBreak ? "同スコア" : "" }}
           </span>
 
           <!-- ポップオーバー (Popover API + Anchor Positioning API) -->
@@ -410,10 +415,12 @@ function isDepthChanged(index: number): boolean {
             </div>
 
             <div
-              v-if="candidate.rank === selectedRank && wasRandom"
+              v-if="
+                candidate.rank === selectedRank && (wasRandom || wasTieBreak)
+              "
               class="popover-selected"
             >
-              ランダム選択
+              {{ wasRandom ? "ランダム選択" : "同スコア選択" }}
             </div>
           </div>
         </li>
@@ -423,6 +430,12 @@ function isDepthChanged(index: number): boolean {
         class="random-info"
       >
         ランダム選択: #{{ selectedRank }} (上位{{ randomCandidateCount }}手)
+      </div>
+      <div
+        v-if="wasTieBreak"
+        class="random-info"
+      >
+        同スコア選択: #{{ selectedRank }} ({{ randomCandidateCount }}手)
       </div>
     </div>
 

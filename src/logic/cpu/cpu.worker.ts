@@ -120,6 +120,7 @@ self.onmessage = (event: MessageEvent<CpuRequest>) => {
       randomSelection: result.randomSelection
         ? {
             wasRandom: result.randomSelection.wasRandom,
+            wasTieBreak: result.randomSelection.wasTieBreak,
             originalRank: result.randomSelection.originalRank,
             candidateCount: result.randomSelection.candidateCount,
             randomFactor: params.randomFactor,
