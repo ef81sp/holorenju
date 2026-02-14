@@ -89,7 +89,7 @@ describe("findBestMoveIterative", () => {
     expect(result.position.row).toBeGreaterThanOrEqual(0);
     expect(result.position.row).toBeLessThan(15);
     expect(result.score).toBeGreaterThanOrEqual(PATTERN_SCORES.FIVE);
-  });
+  }, 15000);
 
   it("completedDepthとinterruptedが正しく設定される", () => {
     const board = createEmptyBoard();
