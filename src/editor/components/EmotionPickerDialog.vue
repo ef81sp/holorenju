@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
-import type { CharacterType, EmotionId } from "@/types/character";
+import {
+  type CharacterType,
+  type EmotionId,
+  EMOTION_LABELS,
+} from "@/types/character";
 import CharacterSprite from "@/components/character/CharacterSprite.vue";
 import { useLightDismiss } from "@/composables/useLightDismiss";
 
@@ -66,7 +70,8 @@ const characterName = computed(() =>
             v-for="emotionId in allEmotionIds"
             :key="`emotion-${emotionId}`"
             class="emotion-cell"
-            :title="`表情ID: ${emotionId}`"
+            :title="`${emotionId}: ${EMOTION_LABELS[emotionId]}`"
+            :aria-label="`表情${emotionId}: ${EMOTION_LABELS[emotionId]}`"
             @click="selectEmotion(emotionId)"
           >
             <CharacterSprite

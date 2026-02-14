@@ -4,6 +4,7 @@ import {
   type CharacterType,
   type EmotionId,
   EMOTION_COORDS,
+  getEmotionAltText,
 } from "@/types/character";
 import { getCharacterSpriteUrl } from "@/logic/characterSprites";
 
@@ -18,6 +19,9 @@ const props = withDefaults(defineProps<Props>(), {
 });
 
 const coords = computed(() => EMOTION_COORDS[props.emotionId]);
+const altText = computed(() =>
+  getEmotionAltText(props.character, props.emotionId),
+);
 const spriteUrl = computed(() =>
   getCharacterSpriteUrl(props.character, coords.value.imageSet),
 );
@@ -62,7 +66,7 @@ watch([spriteUrl, coords], cropSprite, { immediate: true });
     :src="croppedImageUrl"
     class="character-sprite"
     :class="{ inactive: !isActive }"
-    alt="character sprite"
+    :alt="altText"
   />
 </template>
 

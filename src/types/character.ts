@@ -126,6 +126,67 @@ interface DialogState {
   isWaitingForInput: boolean;
 }
 
+// 表情ラベルマップ（全40個）
+const EMOTION_LABELS = {
+  0: "おだやかな笑顔",
+  1: "嬉しい",
+  2: "とまどい",
+  3: "心配",
+  4: "びっくり",
+  5: "しょんぼり",
+  6: "おろおろ",
+  7: "落ち込み",
+  8: "にこにこ",
+  9: "苦笑い",
+  10: "真顔",
+  11: "クール",
+  12: "感動",
+  13: "うっとり",
+  14: "感激",
+  15: "見とれる",
+  16: "不満",
+  17: "ショック",
+  18: "怒り",
+  19: "むくれ",
+  20: "気まずい",
+  21: "放心",
+  22: "ぼんやり",
+  23: "興味",
+  24: "わくわく",
+  25: "はしゃぎ",
+  26: "大はしゃぎ",
+  27: "したり顔",
+  28: "おそるおそる",
+  29: "不安",
+  30: "心細い",
+  31: "途方にくれる",
+  32: "激怒",
+  33: "くやしい",
+  34: "泣き",
+  35: "照れ",
+  36: "安心",
+  37: "にんまり",
+  38: "ほんわか",
+  39: "大笑い",
+} as const satisfies Record<EmotionId, string>;
+
+// キャラクター表示名
+const CHARACTER_DISPLAY_NAMES = {
+  fubuki: "フブキ",
+  miko: "みこ",
+} as const;
+
+// alt テキスト生成（narration は空文字）
+const getEmotionAltText = (
+  character: CharacterType,
+  emotionId: EmotionId,
+): string => {
+  if (character === "narration") {
+    return "";
+  }
+  return `${CHARACTER_DISPLAY_NAMES[character]} ${EMOTION_LABELS[emotionId]}`;
+};
+
 export type {
   CharacterType,
   EmotionId,
@@ -135,4 +196,9 @@ export type {
   DialogState,
 };
 
-export { EMOTION_COORDS };
+export {
+  EMOTION_COORDS,
+  EMOTION_LABELS,
+  CHARACTER_DISPLAY_NAMES,
+  getEmotionAltText,
+};
