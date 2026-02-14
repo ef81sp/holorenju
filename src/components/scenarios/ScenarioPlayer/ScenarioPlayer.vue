@@ -21,12 +21,13 @@ import DebugReloadButton from "./DebugReloadButton.vue";
 import { useScenarioNavigation } from "./composables/useScenarioNavigation";
 import { useBoardAnnouncer } from "@/composables/useBoardAnnouncer";
 import { useKeyboardNavigation } from "@/composables/useKeyboardNavigation";
-import { useQuestionSolver } from "./composables/useQuestionSolver";
+import { useQuestionRouter } from "./composables/useQuestionRouter";
 import { useCutinDisplay } from "@/composables/useCutinDisplay";
 import { scenarioNavKey } from "./composables/useScenarioNavProvide";
 import { useBoardStore } from "@/stores/boardStore";
 import { useDialogStore } from "@/stores/dialogStore";
 import { useAudioStore } from "@/stores/audioStore";
+import { useScenarioAnimationStore } from "@/stores/scenarioAnimationStore";
 
 import type { QuestionSection } from "@/types/scenario";
 import type { Position } from "@/types/game";
@@ -45,6 +46,7 @@ const props = defineProps<Props>();
 const boardStore = useBoardStore();
 const dialogStore = useDialogStore();
 const audioStore = useAudioStore();
+const animationStore = useScenarioAnimationStore();
 
 // Composables
 const scenarioNav = useScenarioNavigation(props.scenarioId);
@@ -83,7 +85,7 @@ const showIncorrectCutin = (): void => {
   audioStore.playSfx("incorrect");
 };
 
-const questionSolver = useQuestionSolver(
+const questionRouter = useQuestionRouter(
   props.scenarioId,
   onSectionComplete,
   showCorrectCutin,
@@ -94,9 +96,12 @@ const isDemoSection = computed(
   () => scenarioNav.currentSection.value?.type === "demo",
 );
 
-// カットイン表示中はキーボード操作を無効化
+// カットイン表示中 or アニメーション中はキーボード操作を無効化
 const isKeyboardDisabled = computed(
-  () => isDemoSection.value || isCutinVisible.value,
+  () =>
+    isDemoSection.value ||
+    isCutinVisible.value ||
+    animationStore.animatingIds.size > 0,
 );
 
 let boardAnnouncer: ReturnType<typeof useBoardAnnouncer>;
@@ -201,12 +206,26 @@ watch(
   },
 );
 
-// ボード無効化条件（デモセクションまたはセクション完了時のみ）
-const isBoardDisabled = computed(
-  () =>
-    scenarioNav.currentSection.value?.type === "demo" ||
-    scenarioNav.isSectionCompleted.value,
-);
+// ボード無効化条件（デモセクション / セクション完了 / アニメーション中 / VCT未サポート）
+const isBoardDisabled = computed(() => {
+  const section = scenarioNav.currentSection.value;
+  if (section?.type === "demo") {
+    return true;
+  }
+  if (scenarioNav.isSectionCompleted.value) {
+    return true;
+  }
+  if (animationStore.animatingIds.size > 0) {
+    return true;
+  }
+  if (
+    section?.type === "question" &&
+    questionRouter.isVctUnsupported(section as QuestionSection)
+  ) {
+    return true;
+  }
+  return false;
+});
 
 // カーソル表示条件（問題セクションでWASDキーを押した場合のみ表示）
 const cursorPositionForBoard = computed(() => {
@@ -252,7 +271,7 @@ const handlePlaceStone = (position?: Position): void => {
   // Position が指定されていればそれを使用、なければカーソル位置
   const targetPosition = position || keyboardNav.cursorPosition.value;
 
-  questionSolver.handlePlaceStone(
+  questionRouter.handlePlaceStone(
     targetPosition,
     scenarioNav.currentSection.value as QuestionSection,
     scenarioNav.isSectionCompleted.value,
@@ -296,7 +315,7 @@ const handleSubmitAnswer = (): void => {
     return;
   }
 
-  questionSolver.submitAnswer(
+  questionRouter.submitAnswer(
     scenarioNav.currentSection.value as QuestionSection,
     scenarioNav.isSectionCompleted.value,
   );
@@ -304,6 +323,13 @@ const handleSubmitAnswer = (): void => {
 
 const handleNextDialogue = (): void => {
   scenarioNav.nextDialogue();
+};
+
+const handleResetPuzzle = (): void => {
+  const section = scenarioNav.currentSection.value;
+  if (section?.type === "question") {
+    questionRouter.resetPuzzle(section as QuestionSection);
+  }
 };
 
 const handleGoToList = (): void => {
@@ -367,8 +393,13 @@ const handleGoToList = (): void => {
         :show-complete-button="scenarioNav.isScenarioDone.value"
         :show-answer-button="requiresAnswerButton"
         :answer-disabled="scenarioNav.isSectionCompleted.value"
+        :show-reset-button="
+          questionRouter.isResetAvailable.value &&
+          !scenarioNav.isSectionCompleted.value
+        "
         @next-section="scenarioNav.nextSection"
         @submit-answer="handleSubmitAnswer"
+        @reset-puzzle="handleResetPuzzle"
         @complete-scenario="handleGoToList"
       />
     </template>

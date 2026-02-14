@@ -12,6 +12,7 @@ interface Props {
   showCompleteButton: boolean;
   showAnswerButton?: boolean;
   answerDisabled?: boolean;
+  showResetButton?: boolean;
 }
 
 defineProps<Props>();
@@ -19,6 +20,7 @@ defineProps<Props>();
 const emits = defineEmits<{
   nextSection: [];
   submitAnswer: [];
+  resetPuzzle: [];
   completeScenario: [];
 }>();
 </script>
@@ -40,6 +42,13 @@ const emits = defineEmits<{
 
     <!-- コントロール -->
     <div class="controls">
+      <button
+        v-if="showResetButton"
+        class="reset-button"
+        @click="emits('resetPuzzle')"
+      >
+        やり直す
+      </button>
       <button
         v-if="showAnswerButton"
         class="answer-button"
@@ -114,6 +123,28 @@ const emits = defineEmits<{
   background: white;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
   border-radius: 0 0 8px 8px;
+}
+
+.reset-button {
+  padding: var(--size-8) var(--size-16);
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  font-size: var(--font-size-12);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+  background: #f5f5f5;
+  color: #666;
+}
+
+.reset-button:hover {
+  background: #e8e8e8;
+  color: #333;
+}
+
+.reset-button:active {
+  transform: scale(0.98);
 }
 
 .answer-button {
