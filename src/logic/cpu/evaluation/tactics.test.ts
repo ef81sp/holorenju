@@ -1072,3 +1072,90 @@ describe("hasPotentialMiseTarget", () => {
     expect(hasPotentialMiseTarget(board, 7, 1, "black")).toBe(false);
   });
 });
+
+describe("防御交差点ボーナス", () => {
+  const baseOptions = {
+    enableFukumi: false,
+    enableMise: false,
+    enableForbiddenTrap: false,
+    enableMultiThreat: true, // 攻撃・防御で共用
+    enableCounterFour: false,
+    enableVCT: false,
+    enableMandatoryDefense: false,
+    enableSingleFourPenalty: false,
+    singleFourPenaltyMultiplier: 1.0,
+    enableMiseThreat: false,
+    enableNullMovePruning: false,
+    enableFutilityPruning: false,
+    enableForbiddenVulnerability: false,
+  };
+
+  it("相手が置くと2方向以上の脅威になる位置にボーナスが付く", () => {
+    // 白の2方向の脅威が交差する位置を作る
+    // 横: (5,5),(5,6) → (5,7)に白が置くと横活三
+    // 縦: (3,7),(4,7) → (5,7)に白が置くと縦活三
+    const board = createBoardWithStones([
+      { row: 5, col: 5, color: "white" },
+      { row: 5, col: 6, color: "white" },
+      { row: 3, col: 7, color: "white" },
+      { row: 4, col: 7, color: "white" },
+    ]);
+
+    // 黒が(5,7)に置く — この位置に相手が置くと2方向の脅威
+    const scoreWithBonus = evaluatePosition(board, 5, 7, "black", baseOptions);
+    const scoreWithoutBonus = evaluatePosition(board, 5, 7, "black", {
+      ...baseOptions,
+      enableMultiThreat: false,
+    });
+
+    // 防御交差点ボーナス分だけ高い（DEFENSE_MULTI_THREAT_BONUS=300）
+    expect(scoreWithBonus - scoreWithoutBonus).toBeGreaterThanOrEqual(
+      PATTERN_SCORES.DEFENSE_MULTI_THREAT_BONUS - 1,
+    );
+  });
+
+  it("enableMultiThreat=false時は防御交差点ボーナスが0", () => {
+    const board = createBoardWithStones([
+      { row: 5, col: 5, color: "white" },
+      { row: 5, col: 6, color: "white" },
+      { row: 3, col: 7, color: "white" },
+      { row: 4, col: 7, color: "white" },
+    ]);
+
+    const { breakdown: withBonus } = evaluatePositionWithBreakdown(
+      board,
+      5,
+      7,
+      "black",
+      baseOptions,
+    );
+    const { breakdown: withoutBonus } = evaluatePositionWithBreakdown(
+      board,
+      5,
+      7,
+      "black",
+      { ...baseOptions, enableMultiThreat: false },
+    );
+
+    expect(withBonus.defenseMultiThreat).toBeGreaterThan(0);
+    expect(withoutBonus.defenseMultiThreat).toBe(0);
+  });
+
+  it("1方向のみの脅威位置では防御交差点ボーナスが0", () => {
+    // 白の1方向のみの脅威
+    const board = createBoardWithStones([
+      { row: 5, col: 5, color: "white" },
+      { row: 5, col: 6, color: "white" },
+    ]);
+
+    const { breakdown } = evaluatePositionWithBreakdown(
+      board,
+      5,
+      7,
+      "black",
+      baseOptions,
+    );
+
+    expect(breakdown.defenseMultiThreat).toBe(0);
+  });
+});

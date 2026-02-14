@@ -64,6 +64,13 @@ export const PATTERN_SCORES = {
   /** 複数方向脅威ボーナス（2方向以上の先手脅威に追加）— evaluatePosition() のみ */
   MULTI_THREAT_BONUS: 500,
   /**
+   * 防御交差点ボーナス（相手が置くと2方向以上の脅威になる位置の防御価値）
+   * 攻撃の MULTI_THREAT_BONUS(500) より低い理由:
+   * 防御パターンスコアは各方向の加算で交差効果を部分的に反映済み。
+   * 追加ボーナスは「1手では止めきれないシナジー効果」分のみ。
+   */
+  DEFENSE_MULTI_THREAT_BONUS: 300,
+  /**
    * VCT（三・四連続勝ち）ボーナス
    * @deprecated 探索・評価コードで未使用。VCT探索は review.worker.ts のみで使用。
    * 将来的にルートレベルVCT判定を導入する際に活用予定。
@@ -306,6 +313,8 @@ export interface ScoreBreakdown {
   center: number;
   /** 複数方向脅威ボーナス */
   multiThreat: number;
+  /** 防御交差点ボーナス（相手が2方向以上の脅威を作る位置の防御価値） */
+  defenseMultiThreat: number;
   /** 単発四ペナルティ（減点） */
   singleFourPenalty: number;
   /** 禁手追い込みボーナス（白番のみ） */

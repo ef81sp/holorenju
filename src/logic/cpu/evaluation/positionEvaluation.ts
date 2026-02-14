@@ -269,6 +269,7 @@ function evaluatePositionCore(
 
   // 防御スコア: 相手の脅威をブロック
   let defenseScore = 0;
+  let defenseMultiThreatBonus = 0;
 
   // この位置に相手が置いた場合のスコアを計算（ブロック価値）
   // boardを再利用: 自分の石を消して相手の石を置く
@@ -277,6 +278,21 @@ function evaluatePositionCore(
   }
   const { score: opponentPatternScore, breakdown: opponentBreakdown } =
     evaluateStonePatternsWithBreakdown(board, row, col, opponentColor);
+
+  // 防御交差点ボーナス: 相手が置くと2方向以上の脅威になる位置の防御価値
+  if (options.enableMultiThreat) {
+    const defThreatCount = countThreatDirections(
+      board,
+      row,
+      col,
+      opponentColor,
+    );
+    if (defThreatCount >= 2) {
+      defenseMultiThreatBonus =
+        PATTERN_SCORES.DEFENSE_MULTI_THREAT_BONUS * (defThreatCount - 1);
+    }
+  }
+
   // 元に戻す（自分の石を戻す）
   if (boardRow) {
     boardRow[col] = color;
@@ -317,7 +333,8 @@ function evaluatePositionCore(
     fourThreeBonus +
     forbiddenTrapBonus +
     miseBonus +
-    multiThreatBonus -
+    multiThreatBonus +
+    defenseMultiThreatBonus -
     singleFourPenalty -
     forbiddenVulnerabilityPenalty
   );
@@ -342,6 +359,7 @@ export function evaluatePositionWithBreakdown(
     mise: 0,
     center: 0,
     multiThreat: 0,
+    defenseMultiThreat: 0,
     singleFourPenalty: 0,
     forbiddenTrap: 0,
     forbiddenVulnerability: 0,
@@ -477,6 +495,22 @@ export function evaluatePositionWithBreakdown(
   }
   const { breakdown: opponentPatternBreakdown } =
     evaluateStonePatternsWithBreakdown(testBoard, row, col, opponentColor);
+
+  // 防御交差点ボーナス: 相手が置くと2方向以上の脅威になる位置の防御価値
+  let defenseMultiThreatBonus = 0;
+  if (options.enableMultiThreat) {
+    const defThreatCount = countThreatDirections(
+      testBoard,
+      row,
+      col,
+      opponentColor,
+    );
+    if (defThreatCount >= 2) {
+      defenseMultiThreatBonus =
+        PATTERN_SCORES.DEFENSE_MULTI_THREAT_BONUS * (defThreatCount - 1);
+    }
+  }
+
   // 元に戻す（自分の石を戻す）
   if (testRow) {
     testRow[col] = color;
@@ -535,6 +569,7 @@ export function evaluatePositionWithBreakdown(
     miseBonus +
     fukumiBonus +
     multiThreatBonus +
+    defenseMultiThreatBonus +
     forbiddenTrapBonus -
     singleFourPenalty -
     forbiddenVulnerabilityPenalty;
@@ -549,6 +584,7 @@ export function evaluatePositionWithBreakdown(
       mise: miseBonus,
       center: centerBonus,
       multiThreat: multiThreatBonus,
+      defenseMultiThreat: defenseMultiThreatBonus,
       singleFourPenalty: singleFourPenalty,
       forbiddenTrap: forbiddenTrapBonus,
       forbiddenVulnerability: forbiddenVulnerabilityPenalty,

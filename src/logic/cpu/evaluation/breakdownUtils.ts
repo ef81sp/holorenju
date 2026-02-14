@@ -29,6 +29,7 @@ export const bonusLabels: Record<string, string> = {
   mise: "ミセ手",
   center: "中央",
   multiThreat: "複数脅威",
+  defenseMultiThreat: "防御交差",
   singleFourPenalty: "単発四ペナ",
   forbiddenTrap: "禁手追込",
   forbiddenVulnerability: "禁手脆弱",

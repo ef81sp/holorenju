@@ -3,8 +3,22 @@
  */
 
 import type { EvaluationOptions } from "@/logic/cpu/evaluation";
+import type {
+  LeafPatternScores,
+  PatternBreakdown,
+  PatternScoreDetail,
+  ScoreBreakdown,
+} from "@/logic/cpu/evaluation/patternScores";
 
 import type { BoardState, Position, StoneColor } from "./game";
+
+// SSoT: patternScores.ts に定義された型を re-export
+export type {
+  LeafPatternScores,
+  PatternBreakdown,
+  PatternScoreDetail,
+  ScoreBreakdown,
+};
 
 /**
  * CPU難易度
@@ -155,90 +169,6 @@ export interface CpuRequest {
   currentTurn: StoneColor;
   /** 難易度 */
   difficulty: CpuDifficulty;
-}
-
-/**
- * パターンスコア詳細（斜めボーナス・倍率表示用）
- */
-export interface PatternScoreDetail {
-  /** 基本スコア（斜めボーナス適用前の合計） */
-  base: number;
-  /** 斜めボーナス分 */
-  diagonalBonus: number;
-  /** 最終スコア（base + diagonalBonus、倍率適用後） */
-  final: number;
-  /** 倍率適用前の値（防御の0.5倍前など） */
-  preMultiplier?: number;
-  /** 適用された倍率（0.5など） */
-  multiplier?: number;
-}
-
-/**
- * パターン内訳（デバッグ表示用）
- */
-export interface PatternBreakdown {
-  /** 五連 */
-  five: PatternScoreDetail;
-  /** 活四（両端開） */
-  openFour: PatternScoreDetail;
-  /** 止め四（片端開） */
-  four: PatternScoreDetail;
-  /** 活三（両端開） */
-  openThree: PatternScoreDetail;
-  /** 止め三（片端開） */
-  three: PatternScoreDetail;
-  /** 活二 */
-  openTwo: PatternScoreDetail;
-  /** 止め二 */
-  two: PatternScoreDetail;
-}
-
-/**
- * スコア内訳（デバッグ表示用）
- */
-export interface ScoreBreakdown {
-  /** 攻撃パターン内訳 */
-  pattern: PatternBreakdown;
-  /** 防御パターン内訳（相手のパターンを阻止） */
-  defense: PatternBreakdown;
-  /** 四三ボーナス */
-  fourThree: number;
-  /** フクミ手ボーナス */
-  fukumi: number;
-  /** ミセ手ボーナス */
-  mise: number;
-  /** 中央ボーナス */
-  center: number;
-  /** 複数方向脅威ボーナス */
-  multiThreat: number;
-  /** 単発四ペナルティ（減点） */
-  singleFourPenalty: number;
-  /** 禁手追い込みボーナス（白番のみ） */
-  forbiddenTrap: number;
-  /** 禁手脆弱性ペナルティ（黒番のみ、減点） */
-  forbiddenVulnerability: number;
-}
-
-/**
- * パターンスコア内訳（探索末端用）
- */
-export interface LeafPatternScores {
-  /** 五連のスコア */
-  five: number;
-  /** 活四のスコア */
-  openFour: number;
-  /** 四のスコア */
-  four: number;
-  /** 活三のスコア */
-  openThree: number;
-  /** 三のスコア */
-  three: number;
-  /** 活二のスコア */
-  openTwo: number;
-  /** 二のスコア */
-  two: number;
-  /** 合計スコア */
-  total: number;
 }
 
 /**
