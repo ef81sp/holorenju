@@ -149,11 +149,6 @@
           "boardActions": [
             {
               "type": "setBoard",
-              "position": {
-                "row": 7,
-                "col": 7
-              },
-              "color": "black",
               "board": [
                 "---------------",
                 "---------------",
@@ -231,11 +226,6 @@
             },
             {
               "type": "line",
-              "position": {
-                "row": 7,
-                "col": 7
-              },
-              "color": "black",
               "fromPosition": {
                 "row": 3,
                 "col": 6
@@ -261,12 +251,7 @@
           "emotion": 0,
           "boardActions": [
             {
-              "type": "resetMarkLine",
-              "position": {
-                "row": 7,
-                "col": 7
-              },
-              "color": "black"
+              "type": "resetMarkLine"
             },
             {
               "type": "place",
@@ -299,11 +284,6 @@
             },
             {
               "type": "line",
-              "position": {
-                "row": 7,
-                "col": 7
-              },
-              "color": "black",
               "fromPosition": {
                 "row": 6,
                 "col": 10
@@ -329,12 +309,7 @@
           "emotion": 8,
           "boardActions": [
             {
-              "type": "resetMarkLine",
-              "position": {
-                "row": 7,
-                "col": 7
-              },
-              "color": "black"
+              "type": "resetMarkLine"
             },
             {
               "type": "place",
@@ -367,11 +342,6 @@
             },
             {
               "type": "line",
-              "position": {
-                "row": 7,
-                "col": 7
-              },
-              "color": "black",
               "fromPosition": {
                 "row": 6,
                 "col": 7
@@ -397,12 +367,7 @@
           "emotion": 1,
           "boardActions": [
             {
-              "type": "resetMarkLine",
-              "position": {
-                "row": 7,
-                "col": 7
-              },
-              "color": "black"
+              "type": "resetMarkLine"
             },
             {
               "type": "place",
@@ -496,11 +461,6 @@
           "boardActions": [
             {
               "type": "line",
-              "position": {
-                "row": 4,
-                "col": 7
-              },
-              "color": "black",
               "fromPosition": {
                 "row": 4,
                 "col": 8
@@ -514,11 +474,6 @@
             },
             {
               "type": "line",
-              "position": {
-                "row": 7,
-                "col": 7
-              },
-              "color": "black",
               "fromPosition": {
                 "row": 3,
                 "col": 7
@@ -544,12 +499,7 @@
           "emotion": 0,
           "boardActions": [
             {
-              "type": "resetMarkLine",
-              "position": {
-                "row": 7,
-                "col": 7
-              },
-              "color": "black"
+              "type": "resetMarkLine"
             },
             {
               "type": "place",
@@ -585,11 +535,6 @@
             },
             {
               "type": "line",
-              "position": {
-                "row": 7,
-                "col": 7
-              },
-              "color": "black",
               "fromPosition": {
                 "row": 2,
                 "col": 6
@@ -737,13 +682,250 @@
           "text": [
             {
               "type": "text",
-              "content": "四追いは"
+              "content": "四追いはパズルとしても楽しめるよ。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_34",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "本やほかのアプリでも問題があるから、たくさん触れて、センスを磨いていこう！"
+            }
+          ],
+          "emotion": 1,
+          "boardActions": []
+        }
+      ]
+    },
+    {
+      "id": "section_2",
+      "type": "question",
+      "title": "問題セクション",
+      "initialBoard": [
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "-----------o---",
+        "------xxxox----",
+        "-----oxxxxo----",
+        "------oox------",
+        "------oxoo-----",
+        "------o--------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------"
+      ],
+      "description": [
+        {
+          "type": "text",
+          "content": "黒番です。四追い勝ちしてください。"
+        }
+      ],
+      "dialogues": [
+        {
+          "id": "dialogue_1",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "四三はどこにできるかな？"
             }
           ],
           "emotion": 0,
           "boardActions": []
         }
-      ]
+      ],
+      "successOperator": "or",
+      "successConditions": [
+        {
+          "type": "vcf",
+          "color": "black"
+        }
+      ],
+      "feedback": {
+        "success": [
+          {
+            "character": "fubuki",
+            "text": [
+              {
+                "type": "text",
+                "content": "ないすー！"
+              }
+            ],
+            "emotion": 37
+          }
+        ],
+        "failure": [
+          {
+            "character": "miko",
+            "text": [
+              {
+                "type": "text",
+                "content": "おうおうおう……"
+              }
+            ],
+            "emotion": 34
+          }
+        ]
+      }
+    },
+    {
+      "id": "section_3",
+      "type": "question",
+      "title": "問題セクション",
+      "initialBoard": [
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "-----------o---",
+        "------x-x-x----",
+        "-----oxxxxo----",
+        "------oox------",
+        "------oxoo-----",
+        "------o--------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------"
+      ],
+      "description": [
+        {
+          "type": "text",
+          "content": "黒番です。四追い勝ちしてください。"
+        }
+      ],
+      "dialogues": [
+        {
+          "id": "dialogue_1",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "さっきの問題の1手前だよ！四三ができる場所をイメージして四を作ろう！"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        }
+      ],
+      "successOperator": "or",
+      "successConditions": [
+        {
+          "type": "vcf",
+          "color": "black"
+        }
+      ],
+      "feedback": {
+        "success": [
+          {
+            "character": "fubuki",
+            "text": [
+              {
+                "type": "text",
+                "content": "ないすー！"
+              }
+            ],
+            "emotion": 37
+          }
+        ],
+        "failure": [
+          {
+            "character": "miko",
+            "text": [
+              {
+                "type": "text",
+                "content": "おうおうおう……"
+              }
+            ],
+            "emotion": 34
+          }
+        ]
+      }
+    },
+    {
+      "id": "section_4",
+      "type": "question",
+      "title": "問題セクション",
+      "initialBoard": [
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "------x-x------",
+        "-----oxxxxo----",
+        "------oox------",
+        "------oxoo-----",
+        "------o--------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------"
+      ],
+      "description": [
+        {
+          "type": "text",
+          "content": "黒番です。四追い勝ちしてください。"
+        }
+      ],
+      "dialogues": [
+        {
+          "id": "dialogue_1",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "さらに1手前だよ！どうやって石が繋がっていくかをイメージしよう！"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        }
+      ],
+      "successOperator": "or",
+      "successConditions": [
+        {
+          "type": "vcf",
+          "color": "black"
+        }
+      ],
+      "feedback": {
+        "success": [
+          {
+            "character": "fubuki",
+            "text": [
+              {
+                "type": "text",
+                "content": "ないすー！"
+              }
+            ],
+            "emotion": 37
+          }
+        ],
+        "failure": [
+          {
+            "character": "miko",
+            "text": [
+              {
+                "type": "text",
+                "content": "おうおうおう……"
+              }
+            ],
+            "emotion": 34
+          }
+        ]
+      }
     }
   ]
 }

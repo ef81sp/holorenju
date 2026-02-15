@@ -1,0 +1,1583 @@
+{
+  "id": "scenario_mljjjf9f_7ez5w",
+  "title": "禁手に嵌める",
+  "difficulty": "renju_intermediate",
+  "description": "白特有の勝ち方を学びます",
+  "objectives": [],
+  "sections": [
+    {
+      "id": "section_1",
+      "type": "demo",
+      "title": "禁手に嵌める",
+      "initialBoard": [
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------"
+      ],
+      "dialogues": [
+        {
+          "id": "dialogue_1",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "禁手のことは覚えてるかな？"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_2",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "そりゃもうフブさんに散々打たされましたから"
+            }
+          ],
+          "emotion": 9,
+          "description": {
+            "text": [
+              {
+                "type": "emphasis",
+                "content": [
+                  {
+                    "type": "ruby",
+                    "base": "禁手",
+                    "ruby": "きんて"
+                  }
+                ]
+              },
+              {
+                "type": "lineBreak"
+              },
+              {
+                "type": "lineBreak"
+              },
+              {
+                "type": "text",
+                "content": "黒有利を是正するルール。黒は以下の手を打つと負けになる。"
+              },
+              {
+                "type": "lineBreak"
+              },
+              {
+                "type": "lineBreak"
+              },
+              {
+                "type": "list",
+                "items": [
+                  [
+                    {
+                      "type": "ruby",
+                      "base": "三三禁",
+                      "ruby": "さんさんきん"
+                    },
+                    {
+                      "type": "text",
+                      "content": ": 三を同時に2つ作ってはいけない"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "ruby",
+                      "base": "四四禁",
+                      "ruby": "ししきん"
+                    },
+                    {
+                      "type": "text",
+                      "content": ": 四を同時に2つ作ってはいけない"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "ruby",
+                      "base": "長連",
+                      "ruby": "ちょうれん"
+                    },
+                    {
+                      "type": "text",
+                      "content": ": 6つ以上石を繋げてはいけない"
+                    }
+                  ]
+                ]
+              }
+            ]
+          },
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_3",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "あはは"
+            }
+          ],
+          "emotion": 28,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_4",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "黒は禁手を打つと負けになる。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_5",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "うん"
+            }
+          ],
+          "emotion": 10,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_6",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "つまり、白は"
+            },
+            {
+              "type": "emphasis",
+              "content": [
+                {
+                  "type": "text",
+                  "content": "黒に禁手を打たせると勝ち"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "content": "になるんだ。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_7",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "散々やられた"
+            }
+          ],
+          "emotion": 9,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_8",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "ごめんて"
+            }
+          ],
+          "emotion": 35,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_9",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "改めて見てみよう。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_10",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "じゃあみこさん黒だ。今D8に打って三を作ったよ。どう止める？"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": [
+            {
+              "type": "setBoard",
+              "board": [
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "------xx-------",
+                "------xx-------",
+                "----oxoo-------",
+                "----oo-x-------",
+                "------o--------",
+                "-------x-------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------"
+              ]
+            },
+            {
+              "type": "place",
+              "position": {
+                "row": 7,
+                "col": 3
+              },
+              "color": "white"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_11",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "連を作りながら止める！"
+            }
+          ],
+          "emotion": 19,
+          "boardActions": [
+            {
+              "type": "place",
+              "position": {
+                "row": 7,
+                "col": 6
+              },
+              "color": "black"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_12",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "はいみこさん負けー"
+            }
+          ],
+          "emotion": 11,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_13",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "ええーーーー！！"
+            }
+          ],
+          "emotion": 26,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_14",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "今ので禁手ができたんだ。どこかわかるかな？"
+            }
+          ],
+          "emotion": 1,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_15",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "えっえっうーんとうーんと"
+            }
+          ],
+          "emotion": 14,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_16",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "フブさんヒント"
+            }
+          ],
+          "emotion": 15,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_17",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "三三禁があるよぉ"
+            }
+          ],
+          "emotion": 35,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_18",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "さんさんきん……"
+            }
+          ],
+          "emotion": 13,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_19",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "あっここぉ！"
+            }
+          ],
+          "emotion": 19,
+          "boardActions": [
+            {
+              "type": "mark",
+              "positions": [
+                {
+                  "row": 5,
+                  "col": 4
+                }
+              ],
+              "markType": "cross",
+              "action": "draw"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_20",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "正解！ナナメの二と横の二が交差しているところがあるね。"
+            }
+          ],
+          "emotion": 1,
+          "description": {
+            "text": [],
+            "clear": true
+          },
+          "boardActions": [
+            {
+              "type": "line",
+              "fromPosition": {
+                "row": 5,
+                "col": 4
+              },
+              "toPosition": {
+                "row": 5,
+                "col": 7
+              },
+              "action": "draw",
+              "style": "solid"
+            },
+            {
+              "type": "line",
+              "fromPosition": {
+                "row": 5,
+                "col": 4
+              },
+              "toPosition": {
+                "row": 7,
+                "col": 6
+              },
+              "action": "draw",
+              "style": "solid"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_21",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "じゃあどう負けるか見ていってみよう。実はとっても簡単だ。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": [
+            {
+              "type": "resetMarkLine"
+            },
+            {
+              "type": "mark",
+              "positions": [
+                {
+                  "row": 5,
+                  "col": 4
+                }
+              ],
+              "markType": "cross",
+              "action": "draw"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_22",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "禁手を空けたまま三を打つじゃろ？みこさん三止めて。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": [
+            {
+              "type": "place",
+              "position": {
+                "row": 8,
+                "col": 4
+              },
+              "color": "white"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_23",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "えっ……"
+            }
+          ],
+          "emotion": 6,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_24",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "こっちしか止められないじゃんか"
+            }
+          ],
+          "emotion": 5,
+          "boardActions": [
+            {
+              "type": "place",
+              "position": {
+                "row": 9,
+                "col": 4
+              },
+              "color": "black"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_25",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "そうだねぇ。じゃあ跳び四を打って……"
+            }
+          ],
+          "emotion": 35,
+          "boardActions": [
+            {
+              "type": "place",
+              "position": {
+                "row": 4,
+                "col": 4
+              },
+              "color": "white"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_26",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "はい四だよ！止めて！"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_27",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "お゙っ……お゙お゙っ……"
+            }
+          ],
+          "emotion": 14,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_28",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "よん！！！！！"
+            }
+          ],
+          "emotion": 26,
+          "boardActions": [
+            {
+              "type": "place",
+              "position": {
+                "row": 3,
+                "col": 8
+              },
+              "color": "black"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_29",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "まぁそうはいかず"
+            }
+          ],
+          "emotion": 35,
+          "boardActions": [
+            {
+              "type": "resetMarkLine"
+            },
+            {
+              "type": "place",
+              "position": {
+                "row": 5,
+                "col": 4
+              },
+              "color": "white"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_30",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "……このように、禁手ができるところに四を作って勝つことができるんだ。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_31",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "これを"
+            },
+            {
+              "type": "emphasis",
+              "content": [
+                {
+                  "type": "ruby",
+                  "base": "禁手",
+                  "ruby": "きんて"
+                },
+                {
+                  "type": "text",
+                  "content": "に"
+                },
+                {
+                  "type": "ruby",
+                  "base": "嵌",
+                  "ruby": "は"
+                },
+                {
+                  "type": "text",
+                  "content": "める"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "content": "と言うよ。"
+            }
+          ],
+          "emotion": 1,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_32",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "逆に言えば、黒は禁手に嵌まらないように打つ必要がある。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": [
+            {
+              "type": "resetAll"
+            },
+            {
+              "type": "setBoard",
+              "board": [
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "------xx-------",
+                "------xx-------",
+                "----oxoo-------",
+                "---ooo-x-------",
+                "------o--------",
+                "-------x-------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------",
+                "---------------"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "dialogue_33",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "今の手なんかは、左を止めるとまだまだどうなるかわからないよ。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": [
+            {
+              "type": "place",
+              "position": {
+                "row": 7,
+                "col": 2
+              },
+              "color": "black"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_34",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "かてるかも！！つづき！！！"
+            }
+          ],
+          "emotion": 18,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_35",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "ええー？"
+            }
+          ],
+          "emotion": 11,
+          "boardActions": [
+            {
+              "type": "place",
+              "position": {
+                "row": 8,
+                "col": 4
+              },
+              "color": "white"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_36",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "ふん！"
+            }
+          ],
+          "emotion": 17,
+          "boardActions": [
+            {
+              "type": "place",
+              "position": {
+                "row": 9,
+                "col": 4
+              },
+              "color": "black"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_37",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "はい"
+            }
+          ],
+          "emotion": 35,
+          "boardActions": [
+            {
+              "type": "place",
+              "position": {
+                "row": 8,
+                "col": 3
+              },
+              "color": "white"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_38",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "とめる！"
+            }
+          ],
+          "emotion": 20,
+          "boardActions": [
+            {
+              "type": "place",
+              "position": {
+                "row": 8,
+                "col": 5
+              },
+              "color": "black"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_39",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "ほい四三"
+            }
+          ],
+          "emotion": 35,
+          "boardActions": [
+            {
+              "type": "place",
+              "position": {
+                "row": 5,
+                "col": 3
+              },
+              "color": "white"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_40",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "だぁっ（台パン）"
+            }
+          ],
+          "emotion": 26,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_41",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "フブさんづよいよ……"
+            }
+          ],
+          "emotion": 34,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_42",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "がんばりたまえよ"
+            }
+          ],
+          "emotion": 35,
+          "boardActions": []
+        }
+      ]
+    },
+    {
+      "id": "section_2",
+      "type": "demo",
+      "title": "四追いで禁手に",
+      "initialBoard": [
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------"
+      ],
+      "dialogues": [
+        {
+          "id": "dialogue_1",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "さて、三には止め方に複数のパターンがあるけど、四には1種類しかないよね。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_2",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "うん"
+            }
+          ],
+          "emotion": 1,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_3",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "つまり、"
+            },
+            {
+              "type": "emphasis",
+              "content": [
+                {
+                  "type": "text",
+                  "content": "四追いで禁手に嵌める"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "content": "こともできるんだ。"
+            }
+          ],
+          "emotion": 1,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_4",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "なかなか難しいけど、決まると気持ちいいよ〜"
+            }
+          ],
+          "emotion": 11,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_5",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "ほえー"
+            }
+          ],
+          "emotion": 6,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_6",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "こんな盤面があるとして。この時点では黒の禁手はまだ存在しないよ。"
+            }
+          ],
+          "emotion": 1,
+          "boardActions": [
+            {
+              "type": "setBoard",
+              "board": [
+                "---------------",
+                "---------------",
+                "-------xx------",
+                "------xooo-----",
+                "------oox-o----",
+                "------xoxxxox--",
+                "-------oxxxox--",
+                "-------x-o-x---",
+                "--------o---o--",
+                "-------o-------",
+                "------o--------",
+                "-----x---------",
+                "---------------",
+                "---------------",
+                "---------------"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "dialogue_7",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "えっ……"
+            }
+          ],
+          "emotion": 9,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_8",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "じゃあ禁手にはめられないじゃん"
+            }
+          ],
+          "emotion": 10,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_9",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "禁手を作らせるんだよ"
+            }
+          ],
+          "emotion": 11,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_10",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "つくらせる……？"
+            }
+          ],
+          "emotion": 4,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_11",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "ruby",
+              "base": "四伸",
+              "ruby": "しの"
+            },
+            {
+              "type": "text",
+              "content": "びの防御が禁手を作るように誘導するのさ。"
+            }
+          ],
+          "emotion": 8,
+          "description": {
+            "text": [
+              {
+                "type": "emphasis",
+                "content": [
+                  {
+                    "type": "ruby",
+                    "base": "四伸",
+                    "ruby": "しの"
+                  },
+                  {
+                    "type": "text",
+                    "content": "び"
+                  }
+                ]
+              },
+              {
+                "type": "text",
+                "content": ": 四を作ること"
+              },
+              {
+                "type": "lineBreak"
+              },
+              {
+                "type": "lineBreak"
+              },
+              {
+                "type": "text",
+                "content": "ちなみに三を作ることは「三を引く」という"
+              }
+            ]
+          },
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_12",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "見本を見せるね。白番で、四追いだよ。"
+            }
+          ],
+          "emotion": 0,
+          "description": {
+            "text": [],
+            "clear": true
+          },
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_13",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "まずL12に打つ。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": [
+            {
+              "type": "place",
+              "position": {
+                "row": 3,
+                "col": 11
+              },
+              "color": "white"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_14",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "すると黒はK12に打たないといけない。"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": [
+            {
+              "type": "place",
+              "position": {
+                "row": 3,
+                "col": 10
+              },
+              "color": "black"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_15",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "これによって、黒のナナメの連ができて、禁手が生まれるんだ。"
+            }
+          ],
+          "emotion": 1,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_16",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "みこさんどこだかわかる？"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_17",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "んっとー、いまうったところだからこれとー"
+            }
+          ],
+          "emotion": 4,
+          "boardActions": [
+            {
+              "type": "line",
+              "fromPosition": {
+                "row": 3,
+                "col": 10
+              },
+              "toPosition": {
+                "row": 5,
+                "col": 12
+              },
+              "action": "draw",
+              "style": "solid"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_18",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "これ？"
+            }
+          ],
+          "emotion": 7,
+          "boardActions": [
+            {
+              "type": "line",
+              "fromPosition": {
+                "row": 2,
+                "col": 7
+              },
+              "toPosition": {
+                "row": 2,
+                "col": 8
+              },
+              "action": "draw",
+              "style": "solid"
+            },
+            {
+              "type": "mark",
+              "positions": [
+                {
+                  "row": 2,
+                  "col": 9
+                }
+              ],
+              "markType": "cross",
+              "action": "draw"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_19",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "そこも三三禁だけど、今回使いたい禁手は別にあるよ。"
+            }
+          ],
+          "emotion": 1,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_20",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "四追いだからね。四が打てる場所が関連しているんだ。"
+            }
+          ],
+          "emotion": 8,
+          "boardActions": []
+        },
+        {
+          "id": "dialogue_21",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "そっかーじゃあ……"
+            }
+          ],
+          "emotion": 4,
+          "boardActions": [
+            {
+              "type": "line",
+              "fromPosition": {
+                "row": 2,
+                "col": 7
+              },
+              "toPosition": {
+                "row": 2,
+                "col": 8
+              },
+              "action": "remove",
+              "style": "solid"
+            },
+            {
+              "type": "mark",
+              "positions": [
+                {
+                  "row": 2,
+                  "col": 9
+                }
+              ],
+              "markType": "cross",
+              "action": "remove"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_22",
+          "character": "miko",
+          "text": [
+            {
+              "type": "text",
+              "content": "あっここだ！"
+            }
+          ],
+          "emotion": 19,
+          "boardActions": [
+            {
+              "type": "line",
+              "fromPosition": {
+                "row": 5,
+                "col": 10
+              },
+              "toPosition": {
+                "row": 6,
+                "col": 9
+              },
+              "action": "draw",
+              "style": "solid"
+            },
+            {
+              "type": "mark",
+              "positions": [
+                {
+                  "row": 4,
+                  "col": 11
+                }
+              ],
+              "markType": "cross",
+              "action": "draw"
+            }
+          ]
+        },
+        {
+          "id": "dialogue_23",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "正解！！白はL13に打って、黒は禁手だから止められない、ということだねー。"
+            }
+          ],
+          "emotion": 39,
+          "boardActions": [
+            {
+              "type": "place",
+              "position": {
+                "row": 2,
+                "col": 11
+              },
+              "color": "white"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "section_3",
+      "type": "question",
+      "title": "問題セクション",
+      "initialBoard": [
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "----o----------",
+        "-----x-xo------",
+        "----xoxoxx-----",
+        "-----oxxxo-----",
+        "-----ooxx------",
+        "-----xoxoooxo--",
+        "-------xoo-----",
+        "-------oox-----",
+        "------xx-------",
+        "---------------",
+        "---------------"
+      ],
+      "description": [
+        {
+          "type": "text",
+          "content": "白番です。"
+        }
+      ],
+      "dialogues": [
+        {
+          "id": "dialogue_1",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "まずは黒の禁手を見つけよう！"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        }
+      ],
+      "successOperator": "or",
+      "successConditions": [
+        {
+          "type": "vcf",
+          "color": "white"
+        }
+      ],
+      "feedback": {
+        "success": [
+          {
+            "character": "fubuki",
+            "text": [
+              {
+                "type": "text",
+                "content": "ないすー！"
+              }
+            ],
+            "emotion": 37
+          }
+        ],
+        "failure": [
+          {
+            "character": "miko",
+            "text": [
+              {
+                "type": "text",
+                "content": "おうおうおう……"
+              }
+            ],
+            "emotion": 34
+          }
+        ]
+      }
+    },
+    {
+      "id": "section_4",
+      "type": "question",
+      "title": "問題セクション",
+      "initialBoard": [
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "--------xx-----",
+        "-----xoox------",
+        "-----o-x-------",
+        "----xooo-------",
+        "-----oxx-------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------",
+        "---------------"
+      ],
+      "description": [
+        {
+          "type": "text",
+          "content": "白番です。四追いで勝ってください。"
+        }
+      ],
+      "dialogues": [
+        {
+          "id": "dialogue_1",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "四伸びする順番に注意しよう！まずは禁手を作らせてから！"
+            }
+          ],
+          "emotion": 1,
+          "boardActions": []
+        }
+      ],
+      "successOperator": "or",
+      "successConditions": [
+        {
+          "type": "vcf",
+          "color": "white"
+        }
+      ],
+      "feedback": {
+        "success": [
+          {
+            "character": "fubuki",
+            "text": [
+              {
+                "type": "text",
+                "content": "ないすー！"
+              }
+            ],
+            "emotion": 37
+          }
+        ],
+        "failure": [
+          {
+            "character": "miko",
+            "text": [
+              {
+                "type": "text",
+                "content": "おうおうおう……"
+              }
+            ],
+            "emotion": 34
+          }
+        ]
+      }
+    },
+    {
+      "id": "section_5",
+      "type": "question",
+      "title": "問題セクション",
+      "initialBoard": [
+        "---------------",
+        "---------------",
+        "---------------",
+        "-----x---------",
+        "------o--------",
+        "---oxo-o-------",
+        "----x-ooox-----",
+        "-----xox-o-----",
+        "----oxxox-x----",
+        "-----oxxxxo----",
+        "------x-o-x----",
+        "-----xo----o---",
+        "----o-x--------",
+        "---------------",
+        "---------------"
+      ],
+      "description": [
+        {
+          "type": "text",
+          "content": "白番です。四追いで勝ってください。"
+        }
+      ],
+      "dialogues": [
+        {
+          "id": "dialogue_1",
+          "character": "fubuki",
+          "text": [
+            {
+              "type": "text",
+              "content": "長いよー！"
+            }
+          ],
+          "emotion": 0,
+          "boardActions": []
+        }
+      ],
+      "successOperator": "or",
+      "successConditions": [
+        {
+          "type": "vcf",
+          "color": "white"
+        }
+      ],
+      "feedback": {
+        "success": [
+          {
+            "character": "fubuki",
+            "text": [
+              {
+                "type": "text",
+                "content": "ないすー！"
+              }
+            ],
+            "emotion": 37
+          }
+        ],
+        "failure": [
+          {
+            "character": "miko",
+            "text": [
+              {
+                "type": "text",
+                "content": "おうおうおう……"
+              }
+            ],
+            "emotion": 34
+          }
+        ]
+      }
+    }
+  ]
+}
