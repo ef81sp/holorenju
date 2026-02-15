@@ -51,6 +51,7 @@ export const useQuestionRouter = (
     scenarioId,
     onSectionComplete,
     onShowCorrectCutin,
+    onShowIncorrectCutin,
   );
 
   // VCFモードで1手以上打っているかの追跡

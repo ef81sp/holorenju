@@ -67,12 +67,14 @@ vi.mock("@/stores/scenarioAnimationStore", () => ({
 const mockValidateAttackMove = vi.fn();
 const mockGetDefenseResponse = vi.fn();
 const mockFindDummyDefensePosition = vi.fn();
+const mockHasRemainingAttacks = vi.fn((..._args: unknown[]) => true);
 
 vi.mock("@/logic/vcfPuzzle", () => ({
   validateAttackMove: (...args: unknown[]) => mockValidateAttackMove(...args),
   getDefenseResponse: (...args: unknown[]) => mockGetDefenseResponse(...args),
   findDummyDefensePosition: (...args: unknown[]) =>
     mockFindDummyDefensePosition(...args),
+  hasRemainingAttacks: (...args: unknown[]) => mockHasRemainingAttacks(...args),
 }));
 
 // === Test helpers ===
@@ -108,6 +110,8 @@ describe("useVcfSolver", () => {
   let onSectionComplete: () => void;
   // eslint-disable-next-line init-declarations
   let onShowCorrectCutin: () => void;
+  // eslint-disable-next-line init-declarations
+  let onShowIncorrectCutin: () => void;
 
   beforeEach(() => {
     setActivePinia(createPinia());
@@ -115,6 +119,7 @@ describe("useVcfSolver", () => {
 
     onSectionComplete = vi.fn();
     onShowCorrectCutin = vi.fn();
+    onShowIncorrectCutin = vi.fn();
 
     // boardをリセット
     for (let i = 0; i < 15; i++) {
@@ -132,6 +137,7 @@ describe("useVcfSolver", () => {
         "scenario-1",
         onSectionComplete,
         onShowCorrectCutin,
+        onShowIncorrectCutin,
       );
       const section = createVcfQuestionSection();
 
@@ -150,6 +156,7 @@ describe("useVcfSolver", () => {
         "scenario-1",
         onSectionComplete,
         onShowCorrectCutin,
+        onShowIncorrectCutin,
       );
       const section = createVcfQuestionSection();
 
@@ -167,6 +174,7 @@ describe("useVcfSolver", () => {
         "scenario-1",
         onSectionComplete,
         onShowCorrectCutin,
+        onShowIncorrectCutin,
       );
       const section = createVcfQuestionSection();
 
@@ -188,6 +196,7 @@ describe("useVcfSolver", () => {
         "scenario-1",
         onSectionComplete,
         onShowCorrectCutin,
+        onShowIncorrectCutin,
       );
       const section = createVcfQuestionSection();
 
@@ -198,6 +207,30 @@ describe("useVcfSolver", () => {
       expect(onSectionComplete).not.toHaveBeenCalled();
     });
 
+    it("通常防御後に攻め手が尽きた → 失敗", async () => {
+      mockValidateAttackMove.mockReturnValue({ valid: true, type: "four" });
+      mockGetDefenseResponse.mockReturnValue({
+        type: "blocked",
+        position: { row: 7, col: 8 },
+      });
+      mockHasRemainingAttacks.mockReturnValue(false);
+
+      const { handleVcfPlaceStone } = useVcfSolver(
+        "scenario-1",
+        onSectionComplete,
+        onShowCorrectCutin,
+        onShowIncorrectCutin,
+      );
+      const section = createVcfQuestionSection();
+
+      await handleVcfPlaceStone({ row: 7, col: 7 }, section, false);
+
+      expect(onSectionComplete).not.toHaveBeenCalled();
+      // 失敗カットイン + フィードバック
+      expect(onShowIncorrectCutin).toHaveBeenCalled();
+      expect(mockShowMessage).toHaveBeenCalled();
+    });
+
     it("禁手陥穽 → 即成功", async () => {
       mockValidateAttackMove.mockReturnValue({ valid: true, type: "four" });
       mockGetDefenseResponse.mockReturnValue({ type: "forbidden-trap" });
@@ -206,6 +239,7 @@ describe("useVcfSolver", () => {
         "scenario-1",
         onSectionComplete,
         onShowCorrectCutin,
+        onShowIncorrectCutin,
       );
       const section = createVcfQuestionSection();
 
@@ -230,6 +264,7 @@ describe("useVcfSolver", () => {
         "scenario-1",
         onSectionComplete,
         onShowCorrectCutin,
+        onShowIncorrectCutin,
       );
       const section = createVcfQuestionSection();
 
@@ -240,7 +275,7 @@ describe("useVcfSolver", () => {
       expect(onSectionComplete).not.toHaveBeenCalled();
     });
 
-    it("カウンターフォー → 防御石+CPU五連石配置 → 失敗", async () => {
+    it("カウンターフォー → 防御石配置のみ、プレイヤーの手を待つ", async () => {
       mockValidateAttackMove.mockReturnValue({ valid: true, type: "four" });
       mockGetDefenseResponse.mockReturnValue({
         type: "counter-five",
@@ -252,15 +287,112 @@ describe("useVcfSolver", () => {
         "scenario-1",
         onSectionComplete,
         onShowCorrectCutin,
+        onShowIncorrectCutin,
       );
       const section = createVcfQuestionSection();
 
       await handleVcfPlaceStone({ row: 7, col: 7 }, section, false);
 
-      // 攻撃石 + 防御石 + CPU五連石 = 3回
-      expect(mockAddStones).toHaveBeenCalledTimes(3);
+      // 攻撃石 + 防御石のみ（CPU五連石はまだ配置しない）
+      expect(mockAddStones).toHaveBeenCalledTimes(2);
       expect(onSectionComplete).not.toHaveBeenCalled();
-      // 失敗フィードバック
+      expect(mockShowMessage).not.toHaveBeenCalled();
+    });
+
+    it("カウンターフォー後にプレイヤーが五連 → 成功", async () => {
+      // 1手目: 四を作る → counter-five
+      mockValidateAttackMove.mockReturnValue({ valid: true, type: "four" });
+      mockGetDefenseResponse.mockReturnValue({
+        type: "counter-five",
+        defensePos: { row: 7, col: 8 },
+        winPos: { row: 8, col: 8 },
+      });
+
+      const { handleVcfPlaceStone } = useVcfSolver(
+        "scenario-1",
+        onSectionComplete,
+        onShowCorrectCutin,
+        onShowIncorrectCutin,
+      );
+      const section = createVcfQuestionSection();
+
+      await handleVcfPlaceStone({ row: 7, col: 7 }, section, false);
+
+      // 2手目: プレイヤーが五連達成
+      mockValidateAttackMove.mockReturnValue({ valid: true, type: "five" });
+
+      await handleVcfPlaceStone({ row: 7, col: 9 }, section, false);
+
+      expect(onSectionComplete).toHaveBeenCalled();
+      expect(onShowCorrectCutin).toHaveBeenCalled();
+    });
+
+    it("カウンターフォー後にプレイヤーが四 → CPU五連で失敗", async () => {
+      // 1手目: 四を作る → counter-five
+      mockValidateAttackMove.mockReturnValue({ valid: true, type: "four" });
+      mockGetDefenseResponse.mockReturnValue({
+        type: "counter-five",
+        defensePos: { row: 7, col: 8 },
+        winPos: { row: 8, col: 8 },
+      });
+
+      const { handleVcfPlaceStone } = useVcfSolver(
+        "scenario-1",
+        onSectionComplete,
+        onShowCorrectCutin,
+        onShowIncorrectCutin,
+      );
+      const section = createVcfQuestionSection();
+
+      await handleVcfPlaceStone({ row: 7, col: 7 }, section, false);
+      vi.clearAllMocks();
+
+      // 2手目: プレイヤーが四（五連ではない）
+      mockValidateAttackMove.mockReturnValue({ valid: true, type: "four" });
+
+      await handleVcfPlaceStone({ row: 5, col: 5 }, section, false);
+
+      // CPU五連石のみ配置（プレイヤーの石は配置しない）
+      expect(mockAddStones).toHaveBeenCalledTimes(1);
+      expect(onSectionComplete).not.toHaveBeenCalled();
+      // 失敗カットイン + フィードバック
+      expect(onShowIncorrectCutin).toHaveBeenCalled();
+      expect(mockShowMessage).toHaveBeenCalled();
+    });
+
+    it("カウンターフォー後にプレイヤーが無効手 → CPU五連で失敗", async () => {
+      // 1手目: 四を作る → counter-five
+      mockValidateAttackMove.mockReturnValue({ valid: true, type: "four" });
+      mockGetDefenseResponse.mockReturnValue({
+        type: "counter-five",
+        defensePos: { row: 7, col: 8 },
+        winPos: { row: 8, col: 8 },
+      });
+
+      const { handleVcfPlaceStone } = useVcfSolver(
+        "scenario-1",
+        onSectionComplete,
+        onShowCorrectCutin,
+        onShowIncorrectCutin,
+      );
+      const section = createVcfQuestionSection();
+
+      await handleVcfPlaceStone({ row: 7, col: 7 }, section, false);
+      vi.clearAllMocks();
+
+      // 2手目: 無効な手
+      mockValidateAttackMove.mockReturnValue({
+        valid: false,
+        reason: "not-four",
+      });
+
+      await handleVcfPlaceStone({ row: 5, col: 5 }, section, false);
+
+      // CPU五連石が配置される
+      expect(mockAddStones).toHaveBeenCalled();
+      expect(onSectionComplete).not.toHaveBeenCalled();
+      // 失敗カットイン + フィードバック
+      expect(onShowIncorrectCutin).toHaveBeenCalled();
       expect(mockShowMessage).toHaveBeenCalled();
     });
   });
@@ -277,6 +409,7 @@ describe("useVcfSolver", () => {
         "scenario-1",
         onSectionComplete,
         onShowCorrectCutin,
+        onShowIncorrectCutin,
       );
       const section = createVcfQuestionSection();
 

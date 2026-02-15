@@ -4,6 +4,7 @@ import { parseInitialBoard } from "./boardParser";
 import {
   findDummyDefensePosition,
   getDefenseResponse,
+  hasRemainingAttacks,
   validateAttackMove,
 } from "./vcfPuzzle";
 
@@ -126,6 +127,26 @@ describe("getDefenseResponse", () => {
 
     const result = getDefenseResponse(board, { row: 5, col: 5 }, "white");
     expect(result.type).toBe("forbidden-trap");
+  });
+});
+
+describe("hasRemainingAttacks", () => {
+  it("四を作れる手が残っている場合はtrue", () => {
+    // 黒3つ並び → 四を作れる
+    const board = makeBoard([[7, "-----xxx-------"]]);
+    expect(hasRemainingAttacks(board, "black")).toBe(true);
+  });
+
+  it("五連を作れる手のみ残っている場合もtrue", () => {
+    // 黒4つ並び、左端が白で塞がれているが右端は空 → col8で五連可能
+    const board = makeBoard([[7, "---oxxxx-------"]]);
+    expect(hasRemainingAttacks(board, "black")).toBe(true);
+  });
+
+  it("四も五も作れない場合はfalse", () => {
+    // 黒石が散在して四を作れない
+    const board = makeBoard([[7, "x-o-x-o-x-o-x-o"]]);
+    expect(hasRemainingAttacks(board, "black")).toBe(false);
   });
 });
 

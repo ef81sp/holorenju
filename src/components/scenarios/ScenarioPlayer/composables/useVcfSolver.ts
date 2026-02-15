@@ -14,6 +14,7 @@ import type { QuestionSection, VcfCondition } from "@/types/scenario";
 import {
   findDummyDefensePosition,
   getDefenseResponse,
+  hasRemainingAttacks,
   validateAttackMove,
 } from "@/logic/vcfPuzzle";
 import { useAudioStore } from "@/stores/audioStore";
@@ -33,6 +34,7 @@ export const useVcfSolver = (
   scenarioId: string,
   onSectionComplete: () => void,
   onShowCorrectCutin?: () => void,
+  onShowIncorrectCutin?: () => void,
 ): {
   handleVcfPlaceStone: (
     position: Position,
@@ -56,6 +58,9 @@ export const useVcfSolver = (
 
   // VCFモードの石ID用カウンタ
   let vcfMoveCounter = 0;
+
+  // カウンターフォー後のCPU勝ち手位置（プレイヤーの次の手を待つ）
+  let pendingCounterFive: Position | null = null;
 
   const isResetAvailable = computed(() => hasMoves.value);
 
@@ -170,6 +175,8 @@ export const useVcfSolver = (
   // ===== 失敗処理（カウンターフォー） =====
 
   function handleCounterFiveFailure(section: QuestionSection): void {
+    onShowIncorrectCutin?.();
+
     const [msg] = section.feedback.failure;
     if (msg) {
       dialogStore.showMessage({
@@ -179,7 +186,6 @@ export const useVcfSolver = (
         emotion: msg.emotion,
       });
     }
-    audioStore.playSfx("incorrect");
   }
 
   // ===== メインフロー =====
@@ -212,6 +218,25 @@ export const useVcfSolver = (
       attackerColor,
     );
 
+    // カウンターフォー保留中の処理
+    if (pendingCounterFive) {
+      if (result.valid && result.type === "five") {
+        // プレイヤーが五連達成 → 成功（CPUの脅威より先に勝利）
+        pendingCounterFive = null;
+        placeStone(position, attackerColor);
+        audioStore.playSfx("stone-place");
+        handleSuccess(questionSection);
+        return;
+      }
+
+      // 五連以外 → CPUが五連を完成させて失敗
+      const winPos = pendingCounterFive;
+      pendingCounterFive = null;
+      await placeDefenseStone(winPos, opponentColor);
+      handleCounterFiveFailure(questionSection);
+      return;
+    }
+
     if (result.valid === false) {
       await handleInvalidMove(position, result.reason);
       return;
@@ -240,6 +265,10 @@ export const useVcfSolver = (
       case "blocked":
         // 通常の防御 → 防御石をアニメーション付きで配置
         await placeDefenseStone(defense.position, opponentColor);
+        // 攻め手が尽きた場合は失敗
+        if (!hasRemainingAttacks(boardStore.board, attackerColor)) {
+          handleCounterFiveFailure(questionSection);
+        }
         break;
 
       case "open-four": {
@@ -255,10 +284,9 @@ export const useVcfSolver = (
       }
 
       case "counter-five":
-        // 防御石を配置 → CPU五連石を配置 → 失敗
+        // 防御石のみ配置、CPUの勝ち手を保留してプレイヤーの手を待つ
         await placeDefenseStone(defense.defensePos, opponentColor);
-        await placeDefenseStone(defense.winPos, opponentColor);
-        handleCounterFiveFailure(questionSection);
+        pendingCounterFive = defense.winPos;
         break;
 
       case "forbidden-trap":
@@ -278,6 +306,7 @@ export const useVcfSolver = (
     boardStore.clearLines();
     hasMoves.value = false;
     vcfMoveCounter = 0;
+    pendingCounterFive = null;
   }
 
   return {

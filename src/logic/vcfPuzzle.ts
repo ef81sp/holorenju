@@ -153,6 +153,29 @@ export function getDefenseResponse(
   return { type: "blocked", position: defensePos };
 }
 
+// ===== hasRemainingAttacks =====
+
+/**
+ * プレイヤーに有効な攻め手（四または五を作れる手）が残っているか判定する。
+ */
+export function hasRemainingAttacks(
+  board: BoardState,
+  attackerColor: "black" | "white",
+): boolean {
+  for (let row = 0; row < BOARD_SIZE; row++) {
+    for (let col = 0; col < BOARD_SIZE; col++) {
+      if (board[row]?.[col] !== null) {
+        continue;
+      }
+      const result = validateAttackMove(board, { row, col }, attackerColor);
+      if (result.valid) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 // ===== findDummyDefensePosition =====
 
 /**
