@@ -19,9 +19,10 @@
 CPUは「次にどこに石を置くか」を以下の手順で決定します。
 
 1. **開局フェーズ**: 最初の3手は定石パターン（珠型）から選択
-2. **VCF探索**: 四追い勝ち（連続で四を作って勝つ手順）があるかチェック
-3. **脅威検出**: 相手の活四・活三などの危険な形を検出し、必須の防御手を特定
-4. **Minimax探索**: 数手先を読んで最善手を選択
+2. **即勝ち検出**: 五連を完成できるかチェック
+3. **必須防御**: 相手の活四・止め四を検出し、必須の防御手を特定
+4. **強制勝ち探索**: VCF → Mise-VCF → VCTの順で勝ち筋を探索
+5. **Minimax探索**: 数手先を読んで最善手を選択
 
 ### 使用している主要なアルゴリズム
 
@@ -30,13 +31,17 @@ CPUは「次にどこに石を置くか」を以下の手順で決定します�
 | Minimax                       | 「自分は最大、相手は最小を選ぶ」ゲーム木探索       |
 | Alpha-Beta剪定                | 「調べなくても結果が変わらない手は省略」する最適化 |
 | Iterative Deepening           | 「時間内でできるだけ深く読む」仕組み               |
+| Aspiration Windows            | 「前回のスコア付近だけ調べる」高速化テクニック     |
 | Transposition Table（置換表） | 「同じ局面の計算結果を覚えておく」キャッシュ       |
 | Zobrist Hashing               | 「盤面を数値1つで表す」ハッシュ技術                |
 | Move Ordering                 | 「良さそうな手から先に調べる」と効率UP             |
 | Killer Moves                  | 「前に効果的だった手を優先」するヒューリスティック |
 | History Heuristic             | 「過去の統計から良い手を予測」する手法             |
 | Late Move Reductions (LMR)    | 「後半の手は浅く調べる」省略テクニック             |
+| Null Move Pruning (NMP)       | 「パスして悪くならないなら安全」と判断する剪定     |
+| Futility Pruning              | 「逆転不可能な局面は調べない」末端剪定             |
 | VCF探索                       | 「四追い勝ち」の専用探索                           |
+| Mise-VCF探索                  | 「ミセ手→VCF勝ち」の複合探索                       |
 | VCT探索                       | 「三・四連続勝ち」の専用探索                       |
 
 ---
@@ -197,8 +202,8 @@ alphabeta(局面, 深さ, α, β, 最大化か) =
 
 ```
 深さ1で探索 → 結果を保存
-深さ2で探索 → 結果を更新
-深さ3で探索 → 結果を更新
+深さ2で探索 → 結果を更新（Aspiration Windows使用）
+深さ3で探索 → 結果を更新（Aspiration Windows使用）
 ...
 時間切れ → 最後に完了した深さの結果を使用
 ```
@@ -210,17 +215,22 @@ alphabeta(局面, 深さ, α, β, 最大化か) =
 3. **Transposition Table活用**: 浅い探索の結果を深い探索で再利用
 
 ```typescript
-// 実装の概要（minimax.ts:479-530）
-function findBestMoveIterative(board, color, maxDepth, timeLimit) {
-  let bestResult = findBestMove(board, color, 1); // 深さ1で開始
+// 実装の概要（iterativeDeepening.ts）
+function findBestMoveIterativeWithTT(board, color, maxDepth, timeLimit) {
+  // 事前チェック（即勝ち・必須防御・VCF・Mise-VCF・VCT）
+  const preSearch = findPreSearchMove(board, color, ...);
+  if (preSearch.immediateMove) return preSearch.immediateMove;
+
+  let bestResult = findBestMoveWithTT(board, color, 1); // 深さ1で開始
   let completedDepth = 1;
 
   for (let depth = 2; depth <= maxDepth; depth++) {
-    if (経過時間 > timeLimit * 0.5) {
+    if (経過時間 > dynamicTimeLimit * 0.8) {
       break; // 残り時間が少ないので中断
     }
 
-    bestResult = findBestMove(board, color, depth);
+    // Aspiration Windowsで探索（前回スコア ± 75 の範囲で高速探索）
+    bestResult = findBestMoveWithTT(board, color, depth, aspirationWindow);
     completedDepth = depth;
   }
 
@@ -230,7 +240,37 @@ function findBestMoveIterative(board, color, maxDepth, timeLimit) {
 
 ---
 
-### 4. Transposition Table（置換表）
+### 4. Aspiration Windows（アスピレーションウィンドウ）
+
+**ひとことで言うと**: 「前回のスコア付近だけ調べる」高速化テクニック
+
+#### なぜ必要か
+
+Alpha-Beta探索のウィンドウ（α, β）を狭めると、剪定がより多く発生して高速化します。前回の深さで得たスコアが大きく変わらないと仮定し、その付近だけ探索します。
+
+#### アルゴリズム
+
+```
+前回のスコア = 500
+
+ウィンドウ幅 = 75
+α = 500 - 75 = 425
+β = 500 + 75 = 575
+
+→ この範囲で探索（高速）
+
+結果がウィンドウ外 → フルウィンドウで再探索（通常速度）
+```
+
+#### パラメータ（本実装）
+
+```typescript
+ASPIRATION_WINDOW = 75; // ウィンドウ幅
+```
+
+---
+
+### 5. Transposition Table（置換表）
 
 **ひとことで言うと**: 「同じ局面の計算結果を覚えておく」キャッシュ
 
@@ -269,7 +309,7 @@ UPPER_BOUND: 上限値（α剪定で打ち切られた = 実際はこれ以下�
 
 ---
 
-### 5. Zobrist Hashing（ゾブリストハッシュ）
+### 6. Zobrist Hashing（ゾブリストハッシュ）
 
 **ひとことで言うと**: 「盤面を数値1つで表す」技術
 
@@ -329,7 +369,7 @@ function updateHash(hash, row, col, color) {
 
 ---
 
-### 6. Move Ordering（手の並び替え）
+### 7. Move Ordering（手の並び替え）
 
 **ひとことで言うと**: 「良さそうな手から先に調べる」と効率UP
 
@@ -351,14 +391,18 @@ Alpha-Beta剪定の効果は、良い手を先に調べるほど大きくなり�
 
 #### 優先度（高い順）
 
-1. **TT最善手**: 前回の探索で見つかった最善手
-2. **Killer Moves**: 同じ深さで剪定を引き起こした手
-3. **静的評価**: 盤面を見て「良さそう」と判断した手
+1. **TT最善手**: 前回の探索で見つかった最善手（+1,000,000）
+2. **Killer Moves**: 同じ深さで剪定を引き起こした手（+100,000 / +90,000）
+3. **静的評価**: 盤面を見て「良さそう」と判断した手（Lazy Evaluation対応）
 4. **History Heuristic**: 過去に剪定を引き起こした手の統計
+
+#### Lazy Evaluation
+
+候補手が多い場合、全ての手を静的評価するのはコストが高い。そこで、TT・Killer・Historyで事前ソートし、上位N手のみ静的評価を実行して高速化する。
 
 ---
 
-### 7. Killer Moves（キラームーブ）
+### 8. Killer Moves（キラームーブ）
 
 **ひとことで言うと**: 「前に効果的だった手を優先」するヒューリスティック
 
@@ -381,7 +425,7 @@ KillerMoves[深さ][1] = 2番目に新しいKiller Move
 
 ---
 
-### 8. History Heuristic（ヒストリーヒューリスティック）
+### 9. History Heuristic（ヒストリーヒューリスティック）
 
 **ひとことで言うと**: 「過去の統計から良い手を予測」する手法
 
@@ -411,7 +455,7 @@ function updateHistory(history, move, depth) {
 
 ---
 
-### 9. Late Move Reductions (LMR)
+### 10. Late Move Reductions (LMR)
 
 **ひとことで言うと**: 「後半の手は浅く調べる」省略テクニック
 
@@ -423,8 +467,8 @@ Move Orderingにより、良い手は前の方に来ます。つまり、後ろ�
 
 ```typescript
 for (let i = 0; i < moves.length; i++) {
-  if (i >= 4 && depth >= 3) {
-    // 5手目以降 かつ 深さ3以上なら、1手浅く探索
+  if (i >= 3 && depth >= 3 && !isTacticalMove(move)) {
+    // 4手目以降 かつ 深さ3以上 かつ 戦術手でないなら、1手浅く探索
     score = search(depth - 1 - 1);  // 削減量 = 1
 
     if (score が有望) {
@@ -432,7 +476,7 @@ for (let i = 0; i < moves.length; i++) {
       score = search(depth - 1);
     }
   } else {
-    // 最初の4手は通常の深さで探索
+    // 最初の3手・戦術手は通常の深さで探索
     score = search(depth - 1);
   }
 }
@@ -441,14 +485,76 @@ for (let i = 0; i < moves.length; i++) {
 #### パラメータ（本実装）
 
 ```typescript
-LMR_MOVE_THRESHOLD = 4; // 5手目以降（インデックス4以上）で適用
+LMR_MOVE_THRESHOLD = 3; // 4手目以降（インデックス3以上）で適用
 LMR_MIN_DEPTH = 3; // 深さ3以上で適用
 LMR_REDUCTION = 1; // 削減量
 ```
 
+#### 戦術手の除外
+
+連珠では一手で形勢が激変するため、以下の手はLMRから除外される:
+
+- **連続四を作る手**: count === 4 で片端以上が開いている
+- **跳び四を作る手**: checkJumpFourで検出
+
 ---
 
-### 10. VCF探索（Victory by Continuous Fours）
+### 11. Null Move Pruning (NMP)
+
+**ひとことで言うと**: 「パスしても悪くならないなら安全な局面」と判断する剪定テクニック
+
+#### なぜ必要か
+
+手番を持つことは通常有利です。もし手番をパス（何もしない）しても十分良いスコアが出るなら、その局面は相手にとって不利なはず。この場合、深く調べなくても安全と判断できます。
+
+#### アルゴリズム
+
+```
+if 深さ >= 3 かつ 相手に即座の脅威（四）がない:
+  パスした後の局面を 深さ-3 で探索
+  if スコアが十分高い（β以上）:
+    return β  // 剪定
+```
+
+#### パラメータ（本実装）
+
+```typescript
+NMP_MIN_DEPTH = 3; // 深さ3以上で適用
+NMP_REDUCTION = 2; // 削減量（パス + 2手分浅く探索）
+```
+
+---
+
+### 12. Futility Pruning（枝刈り）
+
+**ひとことで言うと**: 「逆転不可能な局面は調べない」末端剪定
+
+#### なぜ必要か
+
+探索末端（浅い深さ）で、現在の評価値と候補手の最大限の改善を足しても、目標スコアに届かない場合、その手は調べる価値がありません。
+
+#### 仕組み
+
+```
+if 静的評価 + マージン < α:
+  この手は調べない（剪定）
+```
+
+#### パラメータ（本実装）
+
+手番によってマージンを分離し、精度を高めています。
+
+```typescript
+// 自分の手番: 静的評価が正確なので積極的に刈る
+FUTILITY_MARGINS_SELF = [0, 1000, 200, 1000]; // 深さ1,2,3
+
+// 相手の手番: 防御手・カウンター脅威は探索で判明するので慎重に刈る
+FUTILITY_MARGINS_OPPONENT = [0, 4100, 1300, 3000]; // 深さ1,2,3
+```
+
+---
+
+### 13. VCF探索（Victory by Continuous Fours）
 
 **ひとことで言うと**: 「四追い勝ち」の専用探索
 
@@ -498,9 +604,58 @@ function hasVCF(board, color, depth) {
 }
 ```
 
+#### パラメータ
+
+```typescript
+VCF_MAX_DEPTH = 8; // 最大探索深度
+VCF_TIME_LIMIT = 150; // 時間制限（ミリ秒）
+```
+
 ---
 
-### 11. VCT探索（Victory by Continuous Threats）
+### 14. Mise-VCF探索（ミセ手→VCF勝ち）
+
+**ひとことで言うと**: 「ミセ手で相手を誘導してからVCFで仕留める」複合探索
+
+#### なぜ必要か
+
+通常のVCF探索では検出できない勝ち筋がある。ミセ手（次に四三を作れる手）を打つと、相手は四三を防御するしかない。その応手の後にVCFが成立すれば勝利。
+
+```
+例:
+自分: G7（ミセ手 = 次に四三を狙う）
+相手: J7（四三の点を防御するしかない）
+自分: H4（VCF開始）→ ... → 勝ち
+```
+
+#### アルゴリズム
+
+```typescript
+function findMiseVCFMove(board, color) {
+  for (ミセ手候補) {
+    ミセ手を打った盤面を生成;
+    四三防御点 = ミセ手の脅威を止める位置;
+
+    相手が防御した盤面を生成;
+
+    if (VCF探索(相手が防御した盤面, color)) {
+      return ミセ手;  // 勝ち確定
+    }
+  }
+  return null;
+}
+```
+
+#### パラメータ
+
+```typescript
+DEFAULT_TIME_LIMIT = 500; // 全体の時間制限（ミリ秒）
+// VCF探索: maxDepth=12, timeLimit=300
+```
+
+---
+
+### 15. VCT探索（Victory by Continuous Threats）
 
 **ひとことで言うと**: 「三・四連続勝ち」の専用探索
 
@@ -512,6 +667,7 @@ function hasVCF(board, color, depth) {
 | 相手の選択肢 | 1通り（止めるしかない） | 複数（どちらを止めるか選べる） |
 | 計算量       | 少ない                  | 多い                           |
 | 探索深度     | 8手                     | 4手                            |
+| 適用条件     | 常時                    | 終盤のみ（14石以上）           |
 
 #### アルゴリズム
 
@@ -548,6 +704,14 @@ function hasVCT(board, color, depth) {
 }
 ```
 
+#### パラメータ
+
+```typescript
+VCT_MAX_DEPTH = 4; // 最大探索深度
+VCT_TIME_LIMIT = 150; // 時間制限（ミリ秒）
+VCT_STONE_THRESHOLD = 14; // 終盤判定の石数閾値
+```
+
 ---
 
 ## 処理の流れ
@@ -557,49 +721,67 @@ flowchart TD
     Start[CPUの手番] --> OpeningCheck{開局フェーズ？<br>3手目以内}
 
     OpeningCheck -->|Yes| Opening[珠型パターンから選択]
-    OpeningCheck -->|No| VCF[VCF探索<br>四追い勝ちがあるか]
+    OpeningCheck -->|No| PreSearch[事前チェック<br>パイプライン]
 
     Opening --> Return[着手を返す]
 
-    VCF -->|勝ち手あり| Return
-    VCF -->|なし| ThreatDetect[脅威検出<br>相手の活四・活三をチェック]
+    PreSearch --> EmergencyTimeout{絶対時間制限<br>超過？}
+    EmergencyTimeout -->|Yes| Fallback[緊急フォールバック<br>上位候補手を返す]
+    Fallback --> Return
 
-    ThreatDetect --> HasOpenFour{相手に活四あり？}
-    HasOpenFour -->|Yes| DefendOpenFour[活四を止める<br>実際は止められない]
-    HasOpenFour -->|No| HasFour{相手に止め四あり？}
+    EmergencyTimeout -->|No| ImmediateWin{五連を<br>作れる？}
+    ImmediateWin -->|Yes| Return
 
-    DefendOpenFour --> Return
-
-    HasFour -->|Yes| DefendFour[四を止める]
-    HasFour -->|No| HasOpenThree{相手に活三あり？}
-
+    ImmediateWin -->|No| MustDefend{相手に<br>活四・止め四？}
+    MustDefend -->|Yes| DefendFour[四を止める]
     DefendFour --> Return
 
-    HasOpenThree -->|Yes| RestrictMoves[候補手を防御位置に制限]
-    HasOpenThree -->|No| NormalSearch[通常の候補手生成]
+    MustDefend -->|No| SelfVCF{自分にVCF<br>四追い勝ち？}
+    SelfVCF -->|Yes| Return
 
-    RestrictMoves --> IterativeDeepening
-    NormalSearch --> IterativeDeepening
+    SelfVCF -->|No| MiseVCF{Mise-VCF？<br>ミセ→VCF勝ち}
+    MiseVCF -->|Yes| Return
 
-    IterativeDeepening[Iterative Deepening<br>深さ1から開始]
+    MiseVCF -->|No| VCTHint{VCTヒント？<br>三四連続勝ち}
+    VCTHint -->|ヒントあり| PrioritizeVCT[候補手先頭に配置<br>minimax検証に委ねる]
+
+    VCTHint -->|なし| CheckRestrictions{候補手制限？}
+    PrioritizeVCT --> CheckRestrictions
+
+    CheckRestrictions -->|相手VCFあり| RestrictVCFDefense[カウンターフォー<br>+ブロック手に制限]
+    CheckRestrictions -->|相手活三あり| RestrictOpenThree[防御位置に制限]
+    CheckRestrictions -->|なし| NormalMoves[通常の候補手生成]
+
+    RestrictVCFDefense --> DynamicTime
+    RestrictOpenThree --> DynamicTime
+    NormalMoves --> DynamicTime
+
+    DynamicTime[動的時間配分<br>序盤50%・少候補30%]
+
+    DynamicTime --> IterativeDeepening[Iterative Deepening<br>深さ1から開始]
 
     IterativeDeepening --> Depth1[深さ1で探索]
     Depth1 --> SaveResult1[結果を保存]
     SaveResult1 --> TimeCheck1{時間に余裕あり？}
 
-    TimeCheck1 -->|Yes| Depth2[深さ2で探索]
+    TimeCheck1 -->|Yes| DepthN[深さNで探索<br>Aspiration Windows使用]
     TimeCheck1 -->|No| Return
-
-    Depth2 --> SaveResult2[結果を更新]
-    SaveResult2 --> TimeCheck2{時間に余裕あり？}
-
-    TimeCheck2 -->|Yes| DepthN[深さNで探索...]
-    TimeCheck2 -->|No| Return
 
     DepthN --> TimeCheckN{時間内 かつ<br>最大深度未満？}
     TimeCheckN -->|Yes| DepthN
     TimeCheckN -->|No| Return
 ```
+
+### 動的時間配分
+
+局面に応じて時間制限を動的に調整します。
+
+| 条件                      | 時間倍率 |
+| ------------------------- | -------- |
+| 唯一の候補手              | 即座     |
+| 序盤（6手以下）           | 50%      |
+| 候補手が少ない（3手以下） | 30%      |
+| 通常                      | 100%     |
 
 ---
 
@@ -609,23 +791,46 @@ flowchart TD
 
 評価関数は、盤面上の石のパターンにスコアを付けて「良し悪し」を数値化します。
 
-| パターン                     | スコア  | 説明                                 |
-| ---------------------------- | ------- | ------------------------------------ |
-| **五連（FIVE）**             | 100,000 | 勝利確定                             |
-| **活四（OPEN_FOUR）**        | 10,000  | 両端が開いた四連。相手は止められない |
-| **禁手追い込み強**           | 8,000   | 白の四の防御点が黒の禁手             |
-| **四三ボーナス**             | 5,000   | 四と活三を同時に作る                 |
-| **禁手追い込み三**           | 3,000   | 三の達四点の一方が禁手               |
-| **フクミ手ボーナス**         | 1,500   | 次にVCF（四追い勝ち）がある手        |
-| **禁手追い込みセットアップ** | 1,500   | 活三の延長点が禁手                   |
-| **ミセ手ボーナス**           | 1,000   | 次に四三を作れる手                   |
-| **止め四（FOUR）**           | 1,000   | 片端だけ開いた四連                   |
-| **活三（OPEN_THREE）**       | 1,000   | 両端が開いた三連                     |
-| **複数方向脅威ボーナス**     | 500     | 2方向以上で脅威を作る                |
-| **活二（OPEN_TWO）**         | 50      | 両端が開いた二連                     |
-| **止め三（THREE）**          | 30      | 片端だけ開いた三連                   |
-| **止め二（TWO）**            | 10      | 片端だけ開いた二連                   |
-| **中央ボーナス**             | 0〜5    | 中央に近いほど高い                   |
+| パターン                     | スコア  | 説明                                        |
+| ---------------------------- | ------- | ------------------------------------------- |
+| **五連（FIVE）**             | 100,000 | 勝利確定                                    |
+| **活四（OPEN_FOUR）**        | 10,000  | 両端が開いた四連。相手は止められない        |
+| **禁手追い込み強**           | 8,000   | 白の四の防御点が黒の禁手                    |
+| **四三ボーナス**             | 5,000   | 四と活三を同時に作る（基本スコアに加算）    |
+| **禁手追い込み三**           | 3,000   | 三の達四点の一方が禁手                      |
+| **末端四三脅威**             | 3,000   | 探索末端で次の1手に四三がある（保守的評価） |
+| **禁手追い込みセットアップ** | 1,500   | 活三の延長点が禁手                          |
+| **止め四（FOUR）**           | 1,500   | 片端だけ開いた四連（絶対先手）              |
+| **ミセ手ボーナス**           | 1,000   | 次に四三を作れる手                          |
+| **活三（OPEN_THREE）**       | 1,000   | 両端が開いた三連（相対先手）                |
+| **複数方向脅威ボーナス**     | 500     | 2方向以上で脅威を作る                       |
+| **防御交差点ボーナス**       | 300     | 相手が2方向以上の脅威を作る位置の防御価値   |
+| **活二（OPEN_TWO）**         | 50      | 両端が開いた二連                            |
+| **止め三（THREE）**          | 30      | 片端だけ開いた三連                          |
+| **連携度ボーナス**           | 30      | 2方向以上にパターンを持つ石への加点/方向    |
+| **止め二（TWO）**            | 10      | 片端だけ開いた二連                          |
+| **中央ボーナス**             | 0〜5    | 中央に近いほど高い                          |
+
+#### 止め四 > 活三 の理由
+
+止め四（1,500）が活三（1,000）より高い理由は、絶対先手と相対先手の質的差異にある。四は三では止められないが、活三はカウンターフォーで反撃される。複数のOSS実装・大会優勝AI（Rapfi等）の調査結果に基づく設計。
+
+#### 特殊な倍率・係数
+
+| 倍率                 | 値    | 説明                                     |
+| -------------------- | ----- | ---------------------------------------- |
+| カウンターフォー倍率 | 1.5x  | 防御しながら四を作る手の防御スコアに適用 |
+| 斜めボーナス係数     | 1.05x | 斜め連は隣接空き点が多く効率が良い       |
+
+### 禁手脆弱性評価（黒番の弱点検出）
+
+白番がhard難易度の場合、黒の禁手に由来する脆弱性を評価して攻撃に活用します。
+
+| パターン       | スコア | 説明                               |
+| -------------- | ------ | ---------------------------------- |
+| 脆弱性（強）   | 800    | 三の延長点が禁手で白の攻撃ライン上 |
+| 脆弱性（弱）   | 300    | 三の延長点が禁手（白の攻撃なし）   |
+| 脆弱性合計上限 | 1,500  | ペナルティの累積制限               |
 
 ### 攻撃と防御のバランス
 
@@ -633,10 +838,21 @@ flowchart TD
 最終スコア = 攻撃スコア + 防御スコア + 各種ボーナス
 
 攻撃スコア = 自分のパターンスコア合計
-防御スコア = 相手のパターンスコア合計 × 0.5
+防御スコア = 相手のパターンに応じた脅威レベル別の倍率で計算
 ```
 
-**防御スコアが0.5倍の理由**: 攻撃（自分の形を強くする）の方が、防御（相手の形を止める）より重要度が高いため。
+防御倍率は方向ごとの脅威レベルに応じて `directionAnalysis.ts` の `DEFENSE_MULTIPLIERS` で分化されている。
+
+### 単発四ペナルティ
+
+後続脅威のない単独の四は、攻撃リソースの浪費になる。難易度に応じて四のスコアを減額する。
+
+```
+残存倍率 0.0 = 四のスコアを全て打ち消す（hard）
+残存倍率 0.3 = 70%減点（medium）
+残存倍率 0.6 = 40%減点（easy）
+残存倍率 1.0 = ペナルティなし（beginner）
+```
 
 ### 連珠特有の用語
 
@@ -669,18 +885,21 @@ function evaluatePosition(board, row, col, color) {
   // 3. 攻撃スコア（自分のパターン）
   attackScore = evaluateStonePatterns(testBoard, row, col, color);
 
-  // 4. 防御スコア（相手のパターンを阻止）
+  // 4. 防御スコア（相手のパターンを阻止、脅威レベル別倍率）
   testBoard[row][col] = opponentColor;
-  defenseScore = evaluateStonePatterns(...) * 0.5;
+  defenseScore = evaluateDefense(testBoard, row, col, ...);
 
   // 5. 各種ボーナス
   fourThreeBonus = (四と活三を同時) ? 5000 : 0;
   miseBonus = (次に四三可能) ? 1000 : 0;
   centerBonus = getCenterBonus(row, col);
+  singleFourPenalty = (後続脅威なし) ? -FOUR * (1 - multiplier) : 0;
+  forbiddenVulnerability = (黒番の禁手脆弱性) ? ... : 0;
   ...
 
   // 6. 合計
-  return attackScore + defenseScore + fourThreeBonus + miseBonus + centerBonus + ...;
+  return attackScore + defenseScore + fourThreeBonus + miseBonus
+       + centerBonus + singleFourPenalty + forbiddenVulnerability + ...;
 }
 ```
 
@@ -690,31 +909,36 @@ function evaluatePosition(board, row, col, color) {
 
 ### パラメータ一覧
 
-| パラメータ     | 説明                                           |
-| -------------- | ---------------------------------------------- |
-| `depth`        | 最大探索深度。深いほど強い                     |
-| `timeLimit`    | 時間制限（ミリ秒）。長いほど深く読める         |
-| `randomFactor` | ランダム要素（0〜1）。高いほど悪手を打ちやすい |
-| `maxNodes`     | 探索ノード数上限。多いほど広く読める           |
-| 評価オプション | 評価関数の機能ON/OFF                           |
+| パラメータ       | 説明                                                   |
+| ---------------- | ------------------------------------------------------ |
+| `depth`          | 最大探索深度。深いほど強い                             |
+| `timeLimit`      | 時間制限（ミリ秒）。長いほど深く読める                 |
+| `randomFactor`   | ランダム要素（0〜1）。高いほど悪手を打ちやすい         |
+| `maxNodes`       | 探索ノード数上限。多いほど広く読める                   |
+| `scoreThreshold` | ランダム選択時の許容スコア差。広いほど悪手候補が増える |
+| 評価オプション   | 評価関数の機能ON/OFF                                   |
 
 ### 難易度別の設定比較
 
-| パラメータ       | beginner | easy   | medium  | hard     |
-| ---------------- | -------- | ------ | ------- | -------- |
-| 探索深度         | 1        | 2      | 4       | 5        |
-| 時間制限         | 1秒      | 2秒    | 4秒     | 6秒      |
-| ランダム要素     | 45%      | 40%    | 15%     | 0%       |
-| ノード上限       | 10,000   | 50,000 | 200,000 | 600,000  |
-| フクミ手評価     | ✗        | ✗      | ✗       | ✓        |
-| ミセ手評価       | ✗        | ✗      | ✓       | ✓        |
-| 禁手追い込み     | ✗        | ✗      | ✗       | ✓        |
-| 複数方向脅威     | ✗        | ✗      | ✓       | ✓        |
-| カウンターフォー | ✗        | ✗      | ✓       | ✓        |
-| VCT探索          | ✗        | ✗      | ✗       | ✓        |
-| 必須防御         | ✗        | ✗      | ✓       | ✓        |
-| 単発四ペナルティ | ✗        | ✗      | ✓ (30%) | ✓ (100%) |
-| ミセ脅威対応     | ✗        | ✗      | ✓       | ✓        |
+| パラメータ        | beginner | easy      | medium    | hard       |
+| ----------------- | -------- | --------- | --------- | ---------- |
+| 探索深度          | 1        | 2         | 3         | 4          |
+| 時間制限          | 1秒      | 2秒       | 4秒       | 8秒        |
+| ランダム要素      | 80%      | 25%       | 10%       | 0%         |
+| ノード上限        | 10,000   | 50,000    | 200,000   | 600,000    |
+| スコア閾値        | 1,200    | 200       | 150       | 0          |
+| フクミ手評価      | ✗        | ✗         | ✗         | ✓          |
+| ミセ手評価        | ✗        | ✓         | ✓         | ✓          |
+| 禁手追い込み      | ✗        | ✗         | ✗         | ✓          |
+| 複数方向脅威      | ✗        | ✓         | ✓         | ✓          |
+| カウンターフォー  | ✗        | ✗         | ✓         | ✓          |
+| VCT探索           | ✗        | ✗         | ✓         | ✓          |
+| 必須防御          | ✗        | ✓         | ✓         | ✓          |
+| 単発四ペナルティ  | ✗ (100%) | ✓ (40%減) | ✓ (70%減) | ✓ (100%減) |
+| ミセ脅威対応      | ✗        | ✗         | ✓         | ✓          |
+| Null Move Pruning | ✗        | ✗         | ✗         | ✓          |
+| Futility Pruning  | ✗        | ✗         | ✓         | ✓          |
+| 禁手脆弱性評価    | ✗        | ✗         | ✗         | ✓          |
 
 ### なぜその設定で強さが変わるか
 
@@ -723,25 +947,28 @@ function evaluatePosition(board, row, col, color) {
 ```
 深さ1: 次の1手だけ見る → 目先の良さだけで判断
 深さ3: 自→相→自 の3手先まで見る → 相手の応手を考慮
-深さ5: 5手先まで見る → 複雑な読み合いができる
+深さ4: 4手先まで見る → 複雑な読み合い + 枝刈りの効率化
 ```
 
 #### ランダム要素の効果
 
 ```
 randomFactor = 0%: 常に最善手を選択
-randomFactor = 45%: 45%の確率で次善以下の手を選択
-→ 明らかな悪手を打つことがある
+randomFactor = 80%: 80%の確率で次善以下の手を選択
+→ 初心者向けに意図的に弱い手を打つ
 ```
 
 #### 評価オプションの効果
 
-| オプション       | 効果                                 |
-| ---------------- | ------------------------------------ |
-| フクミ手評価     | 四追い勝ちにつながる手を高評価       |
-| 必須防御         | 相手の脅威を見逃さない               |
-| 単発四ペナルティ | 後続のない四を低評価（無駄打ち防止） |
-| VCT探索          | 三・四連続勝ちを読み切る             |
+| オプション        | 効果                                 |
+| ----------------- | ------------------------------------ |
+| フクミ手評価      | 四追い勝ちにつながる手を高評価       |
+| 必須防御          | 相手の脅威を見逃さない               |
+| 単発四ペナルティ  | 後続のない四を低評価（無駄打ち防止） |
+| VCT探索           | 三・四連続勝ちを読み切る             |
+| Null Move Pruning | 探索の中断率を削減し深く読める       |
+| Futility Pruning  | 末端の無駄な探索を削減               |
+| 禁手脆弱性評価    | 黒番の禁手を利用した攻撃を計画       |
 
 ---
 
@@ -749,46 +976,91 @@ randomFactor = 45%: 45%の確率で次善以下の手を選択
 
 ```
 src/logic/cpu/
-├── index.ts              # 公開API（export）
-├── evaluation.ts         # 評価関数（スコア計算）
-├── moveGenerator.ts      # 候補手生成、Move Ordering
-├── zobrist.ts           # Zobrist Hashing（盤面ハッシュ）
-├── transpositionTable.ts # Transposition Table（置換表）
-├── opening.ts           # 開局（珠型）ロジック
-├── cpu.worker.ts        # Web Worker（メインスレッドをブロックしない）
+├── index.ts                # 公開API（export）
+├── evaluation.ts           # 評価関数（互換リダイレクト）
+├── moveGenerator.ts        # 候補手生成
+├── moveOrdering.ts         # Move Ordering（Killer・History・Lazy Evaluation）
+├── zobrist.ts              # Zobrist Hashing（盤面ハッシュ）
+├── transpositionTable.ts   # Transposition Table（置換表）
+├── opening.ts              # 開局（珠型）ロジック
+├── cpu.worker.ts           # Web Worker（メインスレッドをブロックしない）
+├── review.worker.ts        # 分析用Worker（局面レビュー）
 │
-├── search/
-│   ├── index.ts         # 探索API
-│   ├── minimax.ts       # Minimax + Alpha-Beta + Iterative Deepening
-│   ├── vcf.ts           # VCF探索（四追い勝ち）
-│   └── vct.ts           # VCT探索（三・四連続勝ち）
+├── evaluation/             # 評価関数群
+│   ├── index.ts            # バレルモジュール
+│   ├── patternScores.ts    # スコア定数・評価オプション（SSoT）
+│   ├── positionEvaluation.ts # 位置評価（evaluatePosition）
+│   ├── boardEvaluation.ts  # 盤面評価（探索末端用）
+│   ├── stonePatterns.ts    # 石のパターン解析（連・端の判定）
+│   ├── directionAnalysis.ts # 方向別脅威分析・防御倍率
+│   ├── threatDetection.ts  # 脅威検出（活四・活三・ミセ手）
+│   ├── forbiddenTactics.ts # 禁手追い込み戦術（白番専用）
+│   ├── jumpPatterns.ts     # 跳びパターン検出（跳び三・跳び四）
+│   ├── miseTactics.ts      # ミセ手戦術
+│   ├── tactics.ts          # 複合戦術（四三判定等）
+│   ├── followUpThreats.ts  # 後続脅威分析（単発四ペナルティ用）
+│   └── breakdownUtils.ts   # スコア内訳ユーティリティ
 │
-├── core/
-│   ├── constants.ts     # 定数（方向ベクトルなど）
-│   ├── boardUtils.ts    # 盤面操作ユーティリティ
-│   └── lineAnalysis.ts  # ライン解析（連の端を調べる）
+├── search/                 # 探索アルゴリズム群
+│   ├── index.ts            # 探索API（バレルモジュール）
+│   ├── minimax.ts          # Minimax（バレルモジュール）
+│   ├── minimaxCore.ts      # Minimax + Alpha-Beta（TT統合版）
+│   ├── minimaxSimple.ts    # Minimax（TT無し簡易版）
+│   ├── iterativeDeepening.ts # Iterative Deepening + 事前チェック
+│   ├── context.ts          # 探索コンテキスト（時間・ノード管理）
+│   ├── results.ts          # 結果集約・Time-Pressure Fallback
+│   ├── techniques.ts       # LMR・NMP・Futility・Aspiration定数
+│   ├── vcf.ts              # VCF探索（四追い勝ち）
+│   ├── vct.ts              # VCT探索（三・四連続勝ち）
+│   ├── vctHelpers.ts       # VCT補助関数
+│   ├── miseVcf.ts          # Mise-VCF探索（ミセ→VCF複合）
+│   ├── threatMoves.ts      # 脅威手検出（四・活三を作る手）
+│   ├── threatPatterns.ts   # 脅威パターンユーティリティ
+│   └── pvValidation.ts     # PV（最善手列）検証
 │
-├── patterns/
-│   └── threatAnalysis.ts # 脅威パターン解析
+├── core/                   # 基盤ユーティリティ
+│   ├── constants.ts        # 定数（方向ベクトルなど）
+│   ├── boardUtils.ts       # 盤面操作ユーティリティ
+│   └── lineAnalysis.ts     # ライン解析（連の端を調べる）
 │
-└── benchmark/
-    ├── index.ts         # ベンチマーク実行
-    ├── rating.ts        # レーティング計算
-    └── headless.ts      # ヘッドレステスト用
+├── cache/                  # キャッシュ
+│   └── forbiddenCache.ts   # 禁手判定キャッシュ
+│
+├── patterns/               # パターン解析
+│   └── threatAnalysis.ts   # 脅威パターン解析
+│
+├── profiling/              # プロファイリング
+│   └── counters.ts         # 探索統計カウンター
+│
+└── benchmark/              # ベンチマーク
+    ├── index.ts            # ベンチマーク実行
+    ├── gameRunner.ts       # 対局実行エンジン
+    ├── rating.ts           # レーティング計算
+    ├── statistics.ts       # 統計ユーティリティ
+    └── headless.ts         # ヘッドレステスト用
 ```
 
 ### 各ファイルの役割
 
-| ファイル                | 役割                                         |
-| ----------------------- | -------------------------------------------- |
-| `evaluation.ts`         | 盤面・位置の評価スコアを計算                 |
-| `moveGenerator.ts`      | 候補手を生成し、優先度順にソート             |
-| `zobrist.ts`            | 盤面をハッシュ値に変換                       |
-| `transpositionTable.ts` | 計算結果をキャッシュ                         |
-| `minimax.ts`            | Minimax探索の本体、Iterative Deepeningを含む |
-| `vcf.ts`                | 四追い勝ちの探索                             |
-| `vct.ts`                | 三・四連続勝ちの探索                         |
-| `opening.ts`            | 開局定石（珠型）の選択                       |
+| ファイル                | 役割                                            |
+| ----------------------- | ----------------------------------------------- |
+| `patternScores.ts`      | スコア定数・評価オプション型の一元管理（SSoT）  |
+| `positionEvaluation.ts` | 候補手の位置評価スコアを計算                    |
+| `boardEvaluation.ts`    | 探索末端での盤面全体の評価                      |
+| `directionAnalysis.ts`  | 方向別の脅威レベル分析と防御倍率の適用          |
+| `moveGenerator.ts`      | 候補手を生成（既存石の近傍を列挙）              |
+| `moveOrdering.ts`       | 候補手を優先度順にソート（TT・Killer・History） |
+| `zobrist.ts`            | 盤面をハッシュ値に変換                          |
+| `transpositionTable.ts` | 計算結果をキャッシュ                            |
+| `iterativeDeepening.ts` | 反復深化・事前チェックパイプライン              |
+| `minimaxCore.ts`        | Minimax探索の本体（TT・NMP・Futility統合）      |
+| `techniques.ts`         | 探索テクニックの定数と判定関数                  |
+| `vcf.ts`                | 四追い勝ちの探索                                |
+| `miseVcf.ts`            | ミセ手→VCF勝ちの複合探索                        |
+| `vct.ts`                | 三・四連続勝ちの探索                            |
+| `forbiddenTactics.ts`   | 白番の禁手追い込み戦術                          |
+| `followUpThreats.ts`    | 単発四ペナルティ用の後続脅威分析                |
+| `opening.ts`            | 開局定石（珠型）の選択                          |
 
 ---
 
@@ -799,3 +1071,6 @@ src/logic/cpu/
 - [Iterative deepening depth-first search - Wikipedia](https://en.wikipedia.org/wiki/Iterative_deepening_depth-first_search)
 - [Zobrist hashing - Wikipedia](https://en.wikipedia.org/wiki/Zobrist_hashing)
 - [Transposition table - Chess Programming Wiki](https://www.chessprogramming.org/Transposition_Table)
+- [Null-move pruning - Chess Programming Wiki](https://www.chessprogramming.org/Null_Move_Pruning)
+- [Futility pruning - Chess Programming Wiki](https://www.chessprogramming.org/Futility_Pruning)
+- [Aspiration windows - Chess Programming Wiki](https://www.chessprogramming.org/Aspiration_Windows)
