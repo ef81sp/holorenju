@@ -148,6 +148,14 @@ watch(
     const prevSection = sections[oldIndex];
     const newSection = sections[newIndex];
 
+    // 問題セクションに入ったらボードにフォーカス（WASD操作を有効化）
+    if (newSection?.type === "question") {
+      await nextTick();
+      layoutRef.value?.boardFrameRef?.focus({
+        focusVisible: false,
+      } as FocusOptions);
+    }
+
     // デモ→問題への遷移時のみカットインを表示
     if (prevSection?.type === "demo" && newSection?.type === "question") {
       cutinType.value = "practice";
@@ -239,6 +247,31 @@ const cursorPositionForBoard = computed(() => {
   return keyboardNav.cursorPosition.value;
 });
 
+// ボードにフォーカスがなくても矢印キーで会話送りできるようにする
+const handleGlobalArrowKeys = (event: KeyboardEvent): void => {
+  // dialog 内やフォーム要素にフォーカスがある場合は無視
+  const target = event.target as HTMLElement;
+  if (
+    target.closest("dialog") ||
+    target.tagName === "INPUT" ||
+    target.tagName === "TEXTAREA"
+  ) {
+    return;
+  }
+
+  if (!scenarioNav.currentSection.value) {
+    return;
+  }
+
+  if (event.key === "ArrowRight") {
+    event.preventDefault();
+    scenarioNav.nextDialogue();
+  } else if (event.key === "ArrowLeft") {
+    event.preventDefault();
+    scenarioNav.previousDialogue();
+  }
+};
+
 // Lifecycle
 onMounted(async () => {
   await scenarioNav.loadScenario();
@@ -247,12 +280,15 @@ onMounted(async () => {
   const boardElement = layoutRef.value?.boardFrameRef;
   if (boardElement) {
     keyboardNav.attachKeyListener(boardElement);
-    boardElement.focus();
+    // フォーカスリングを表示せずにフォーカス（WASD操作を有効化）
+    boardElement.focus({ focusVisible: false } as FocusOptions);
   }
+  window.addEventListener("keydown", handleGlobalArrowKeys);
 });
 
 onUnmounted(() => {
   keyboardNav.detachKeyListener();
+  window.removeEventListener("keydown", handleGlobalArrowKeys);
 });
 
 const handlePlaceStone = (position?: Position): void => {
@@ -338,92 +374,102 @@ const handleGoToList = (): void => {
 </script>
 
 <template>
-  <GamePlayerLayout
-    v-if="scenarioNav.scenario.value"
-    ref="layoutRef"
-  >
-    <template #back-button>
-      <BackButton @back="scenarioNav.goBack" />
-    </template>
+  <!-- Transition mode="out-in" に対応するため単一ルート要素で囲む -->
+  <div class="scenario-player-root">
+    <GamePlayerLayout
+      v-if="scenarioNav.scenario.value"
+      ref="layoutRef"
+    >
+      <template #back-button>
+        <BackButton @back="scenarioNav.goBack" />
+      </template>
 
-    <template #header-controls>
-      <DebugReloadButton />
-      <SettingsControl />
-    </template>
+      <template #header-controls>
+        <DebugReloadButton />
+        <SettingsControl />
+      </template>
 
-    <template #control-info>
-      <ControlInfo
-        :cursor-position="keyboardNav.cursorPosition.value"
-        :section-type="scenarioNav.currentSection.value?.type"
-      />
-    </template>
+      <template #control-info>
+        <ControlInfo
+          :cursor-position="keyboardNav.cursorPosition.value"
+          :section-type="scenarioNav.currentSection.value?.type"
+        />
+      </template>
 
-    <template #board="{ boardSize }">
-      <RenjuBoard
-        :disabled="isBoardDisabled"
-        :stage-size="boardSize"
-        :cursor-position="cursorPositionForBoard"
-        :player-color="playerColor"
-        @place-stone="handlePlaceStone"
-      />
-      <CutinOverlay
-        ref="cutinRef"
-        :type="cutinType"
-        :anchor="'board-anchor'"
-      />
-    </template>
+      <template #board="{ boardSize }">
+        <RenjuBoard
+          :disabled="isBoardDisabled"
+          :stage-size="boardSize"
+          :cursor-position="cursorPositionForBoard"
+          :player-color="playerColor"
+          @place-stone="handlePlaceStone"
+        />
+        <CutinOverlay
+          ref="cutinRef"
+          :type="cutinType"
+          :anchor="'board-anchor'"
+        />
+      </template>
 
-    <template #info>
-      <ScenarioInfoPanel
-        :scenario-title="scenarioNav.scenario.value.title"
-        :section-title="
-          getSectionDisplayTitle(
-            scenarioNav.scenario.value.sections,
-            scenarioNav.currentSectionIndex.value,
-          )
-        "
-        :description="
-          scenarioNav.currentSection.value?.type === 'demo'
-            ? scenarioNav.demoDescriptionNodes.value
-            : descriptionNodes
-        "
-        :section-index="scenarioNav.currentSectionIndex.value"
-        :total-sections="scenarioNav.scenario.value.sections.length"
-        :show-next-section-button="scenarioNav.showNextSectionButton.value"
-        :show-complete-button="scenarioNav.isScenarioDone.value"
-        :show-answer-button="requiresAnswerButton"
-        :answer-disabled="scenarioNav.isSectionCompleted.value"
-        :show-reset-button="
-          questionRouter.isResetAvailable.value &&
-          !scenarioNav.isSectionCompleted.value
-        "
-        @next-section="scenarioNav.nextSection"
-        @submit-answer="handleSubmitAnswer"
-        @reset-puzzle="handleResetPuzzle"
-        @complete-scenario="handleGoToList"
-      />
-    </template>
+      <template #info>
+        <ScenarioInfoPanel
+          :scenario-title="scenarioNav.scenario.value.title"
+          :section-title="
+            getSectionDisplayTitle(
+              scenarioNav.scenario.value.sections,
+              scenarioNav.currentSectionIndex.value,
+            )
+          "
+          :description="
+            scenarioNav.currentSection.value?.type === 'demo'
+              ? scenarioNav.demoDescriptionNodes.value
+              : descriptionNodes
+          "
+          :section-index="scenarioNav.currentSectionIndex.value"
+          :total-sections="scenarioNav.scenario.value.sections.length"
+          :show-next-section-button="scenarioNav.showNextSectionButton.value"
+          :show-complete-button="scenarioNav.isScenarioDone.value"
+          :show-answer-button="requiresAnswerButton"
+          :answer-disabled="scenarioNav.isSectionCompleted.value"
+          :show-reset-button="
+            questionRouter.isResetAvailable.value &&
+            !scenarioNav.isSectionCompleted.value
+          "
+          @next-section="scenarioNav.nextSection"
+          @submit-answer="handleSubmitAnswer"
+          @reset-puzzle="handleResetPuzzle"
+          @complete-scenario="handleGoToList"
+        />
+      </template>
 
-    <template #dialog>
-      <DialogSection
-        :message="dialogStore.currentMessage"
-        :is-demo="scenarioNav.currentSection.value?.type === 'demo'"
-        :dialog-index="scenarioNav.currentDialogueIndex.value"
-        :total-dialogues="scenarioNav.allDialogues.value.length"
-        :can-navigate-previous="scenarioNav.canNavigatePrevious.value"
-        :can-navigate-next="scenarioNav.canNavigateNext.value"
-        @dialog-clicked="handleNextDialogue"
-        @next-dialogue="scenarioNav.nextDialogue"
-        @previous-dialogue="scenarioNav.previousDialogue"
-      />
-    </template>
-  </GamePlayerLayout>
+      <template #dialog>
+        <DialogSection
+          :message="dialogStore.currentMessage"
+          :is-demo="scenarioNav.currentSection.value?.type === 'demo'"
+          :dialog-index="scenarioNav.currentDialogueIndex.value"
+          :total-dialogues="scenarioNav.allDialogues.value.length"
+          :can-navigate-previous="scenarioNav.canNavigatePrevious.value"
+          :can-navigate-next="scenarioNav.canNavigateNext.value"
+          @dialog-clicked="handleNextDialogue"
+          @next-dialogue="scenarioNav.nextDialogue"
+          @previous-dialogue="scenarioNav.previousDialogue"
+        />
+      </template>
+    </GamePlayerLayout>
 
-  <!-- 盤面読み上げ用ARIAライブリージョン -->
-  <div
-    aria-live="polite"
-    class="visually-hidden"
-  >
-    {{ boardAnnouncer.politeMessage.value }}
+    <!-- 盤面読み上げ用ARIAライブリージョン -->
+    <div
+      aria-live="polite"
+      class="visually-hidden"
+    >
+      {{ boardAnnouncer.politeMessage.value }}
+    </div>
   </div>
 </template>
+
+<style scoped>
+.scenario-player-root {
+  width: 100%;
+  height: 100%;
+}
+</style>

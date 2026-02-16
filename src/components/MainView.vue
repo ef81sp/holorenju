@@ -88,10 +88,7 @@ onUnmounted(() => {
 
 <template>
   <div class="main-container">
-    <Transition
-      :name="transitionName"
-      mode="out-in"
-    >
+    <Transition :name="transitionName">
       <MenuPage v-if="currentScene === 'menu'" />
       <DifficultyPage v-else-if="currentScene === 'difficulty'" />
       <ScenarioListPage v-else-if="currentScene === 'scenarioList'" />
@@ -119,9 +116,17 @@ onUnmounted(() => {
 
 <style scoped>
 .main-container {
+  position: relative;
   width: 100%;
   height: 100%;
   overflow: hidden;
+}
+
+/* 遷移中は両コンポーネントを重ねて表示（mode="out-in" 不使用のため） */
+.scale-fade-forward-leave-active,
+.scale-fade-back-leave-active {
+  position: absolute;
+  inset: 0;
 }
 
 /* 前進アニメーション（拡大して退場） */

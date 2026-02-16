@@ -143,7 +143,7 @@ onMounted(async () => {
   const boardElement = layoutRef.value?.boardFrameRef;
   if (boardElement) {
     keyboardNav.attachKeyListener(boardElement);
-    boardElement.focus();
+    boardElement.focus({ focusVisible: false } as FocusOptions);
   }
   window.addEventListener("keydown", handleEscapeKey);
 });

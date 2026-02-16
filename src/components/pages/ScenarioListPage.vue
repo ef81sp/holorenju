@@ -92,7 +92,6 @@ const handleTouchEnd = (e: TouchEvent): void => {
 
 // ホイール操作
 const handleWheel = (e: WheelEvent): void => {
-  e.preventDefault();
   if (e.deltaY > 0) {
     nextPage();
   } else if (e.deltaY < 0) {
@@ -129,7 +128,7 @@ const isCompleted = (scenarioId: string): boolean =>
     class="scenario-list-page"
     @touchstart="handleTouchStart"
     @touchend="handleTouchEnd"
-    @wheel.passive="handleWheel"
+    @wheel.prevent="handleWheel"
   >
     <PageHeader
       title="シナリオ選択"

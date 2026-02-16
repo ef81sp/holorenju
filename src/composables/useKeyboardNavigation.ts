@@ -65,6 +65,7 @@ export const useKeyboardNavigation = (
       case "arrowright":
         // 矢印キーでの会話送りは常に有効
         event.preventDefault();
+        event.stopPropagation(); // window リスナーとの二重発火防止
         if (onDialogueNavigate) {
           onDialogueNavigate(
             key.toLowerCase() === "arrowleft" ? "previous" : "next",
