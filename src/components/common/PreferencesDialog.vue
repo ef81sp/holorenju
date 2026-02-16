@@ -348,8 +348,8 @@ defineExpose({
   padding: 0;
   box-shadow: 0 var(--size-10) var(--size-32) rgba(0, 0, 0, 0.2);
   width: var(--size-500);
-  /* 16:9画面に収まるよう高さを制限（effective-vwから高さを計算） */
-  max-height: calc(var(--effective-vw) * 9 / 16 * 0.85);
+  max-height: 80%;
+  overflow: hidden;
 
   transition:
     opacity 0.15s ease-out,
@@ -385,7 +385,8 @@ defineExpose({
 .dialog-content {
   display: flex;
   flex-direction: column;
-  max-height: 100%;
+  max-height: 80vh;
+  overflow-y: scroll;
 }
 
 .dialog-header {
