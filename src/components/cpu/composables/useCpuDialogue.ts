@@ -49,12 +49,12 @@ const FUBUKI_EMOTIONS: Record<CpuDialogueSituation, EmotionId> = {
  * シチュエーション別の表情マッピング（ミコ）
  */
 const MIKO_EMOTIONS: Record<CpuDialogueSituation, EmotionId> = {
-  gameStart: 32, // 興奮・やる気
-  cpuThinking: 23, // 困惑・考え中
-  playerGoodMove: 13, // 驚愕
+  gameStart: 19,
+  cpuThinking: 15, // 困惑・考え中
+  playerGoodMove: 29, // 驚愕
   cpuAdvantage: 35, // 感心・理解
-  playerWin: 28, // 落ち込み・悲しみ
-  cpuWin: 4, // 感嘆・喜び
+  playerWin: 14, // 落ち込み・悲しみ
+  cpuWin: 26, // 感嘆・喜び
 };
 
 /**
@@ -85,11 +85,7 @@ const CPU_DIALOGUES: Record<
       "ここだねぇ",
       "こっちも負けないよ！",
     ],
-    playerWin: [
-      "やられたー",
-      "すーばーらーしい！",
-      "くやしいなぁ...次はがんばるよ",
-    ],
+    playerWin: ["やられたー", "すーばーらーしい！", "なかなかやりますねぇ……"],
     cpuWin: [
       "白上の勝ちっ！",
       "ありがとう、楽しかった！",
@@ -122,7 +118,7 @@ const CPU_DIALOGUES: Record<
       "ぐぬぬ...もう一回！",
       "くっそー...次は負けないから！",
     ],
-    cpuWin: ["やったー！みこの勝ちー！", "エリートだからね！", "どやぁ……"],
+    cpuWin: ["やったー！みこの勝ちー！", "エリートですから！", "どやぁ……"],
   },
 };
 
