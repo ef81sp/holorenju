@@ -91,7 +91,7 @@ defineExpose({
 .control-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
 }
 
 .header-controls {

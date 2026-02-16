@@ -16,12 +16,12 @@ const emits = defineEmits<{
 <style scoped>
 .back-button {
   width: fit-content;
-  padding: var(--size-10) var(--size-20);
+  padding: var(--size-6) var(--size-14);
   background: white;
-  border: 2px solid #ddd;
-  border-radius: 8px;
+  border: var(--size-2) solid var(--color-border);
+  border-radius: var(--size-6);
   cursor: pointer;
-  font-size: var(--size-16);
+  font-size: var(--font-size-14);
   font-weight: 500;
   transition: all 0.2s;
 }
