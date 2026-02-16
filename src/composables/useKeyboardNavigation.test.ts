@@ -15,6 +15,7 @@ describe("useKeyboardNavigation", () => {
     ({
       key,
       preventDefault: vi.fn(),
+      stopPropagation: vi.fn(),
     }) as unknown as KeyboardEvent;
 
   beforeEach(() => {

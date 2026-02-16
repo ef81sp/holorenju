@@ -266,7 +266,6 @@ describe("useQuestionSolver", () => {
       expect(mockCompleteSection).toHaveBeenCalledWith(
         "scenario-1",
         "question-1",
-        100,
       );
     });
   });
