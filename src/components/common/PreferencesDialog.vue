@@ -116,7 +116,9 @@ defineExpose({
             <label class="setting-row">
               <span class="setting-text">
                 <span class="setting-label">演出速度</span>
-                <span class="setting-description">キャラクター演出の速さ</span>
+                <span class="setting-description">
+                  カットイン表示・ダイアログ等のアニメーションの速さ
+                </span>
               </span>
               <select
                 v-model="preferencesStore.effectSpeed"

@@ -597,7 +597,7 @@ function isPlayed(candidate: { position: Position }): boolean {
           {{ cpuForcedWinLabel }}
         </span>
       </div>
-      <div class="cpu-move-text">コンピュータの手</div>
+      <div class="cpu-move-text">相手の手</div>
     </div>
 
     <!-- プレイヤーの手の評価 -->

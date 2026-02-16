@@ -86,7 +86,7 @@ const handleBack = (): void => {
       <div class="setup-container">
         <!-- キャラクター選択 -->
         <fieldset class="setup-section">
-          <legend class="section-title">キャラクターを選択</legend>
+          <legend class="section-title">ホロメンを選択</legend>
           <div class="character-grid">
             <label
               v-for="card in characterCards"
@@ -152,7 +152,7 @@ const handleBack = (): void => {
               class="setup-hint"
               :class="{ hidden: isReady }"
             >
-              キャラクターと先後手を選択してください
+              ホロメンと先後手を選択してください
             </p>
             <button
               class="start-button"

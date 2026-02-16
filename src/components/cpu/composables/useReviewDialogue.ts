@@ -77,7 +77,7 @@ const FORCED_LOSS_EMOTIONS: Record<MoveQuality, EmotionId> = {
 };
 
 /** CPU手のセリフ */
-const CPU_MOVE_DIALOGUES = ["相手の一手だよ", "コンピュータの手だね"];
+const CPU_MOVE_DIALOGUES = ["相手の一手だよ", "相手の手だね"];
 
 /** CPU手で強制勝ち（プレイヤー負け確定）時のセリフ */
 const CPU_FORCED_WIN_DIALOGUES = [
