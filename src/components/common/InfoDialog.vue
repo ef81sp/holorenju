@@ -182,12 +182,12 @@ defineExpose({
   padding: 0;
   box-shadow: 0 var(--size-10) var(--size-32) rgba(0, 0, 0, 0.2);
   width: var(--size-500);
-  max-height: 80%;
+  max-height: calc(var(--effective-vw) * 9 / 16 * 0.85);
   overflow: hidden;
+  opacity: 0;
 
   transition:
     opacity 0.15s ease-out,
-    transform 0.15s ease-out,
     overlay 0.15s ease-out allow-discrete,
     display 0.15s ease-out allow-discrete;
 
@@ -201,6 +201,7 @@ defineExpose({
 
   &::backdrop {
     background: rgba(0, 0, 0, 0.5);
+    opacity: 0;
     transition:
       opacity 0.15s ease-out,
       overlay 0.15s ease-out allow-discrete,
@@ -219,8 +220,7 @@ defineExpose({
 .dialog-content {
   display: flex;
   flex-direction: column;
-  max-height: 80vh;
-  overflow-y: scroll;
+  max-height: 100%;
 }
 
 .dialog-header {

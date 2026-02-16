@@ -146,6 +146,7 @@ defineExpose({
   width: var(--size-500);
   height: var(--size-400, 400px);
   overflow: hidden;
+  opacity: 0;
 
   transition:
     opacity 0.15s ease-out,
@@ -162,6 +163,7 @@ defineExpose({
 
   &::backdrop {
     background: rgba(0, 0, 0, 0.5);
+    opacity: 0;
     transition:
       opacity 0.15s ease-out,
       overlay 0.15s ease-out allow-discrete,

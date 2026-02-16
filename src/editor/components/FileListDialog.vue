@@ -250,10 +250,10 @@ defineExpose({
   width: 90%;
   max-width: 700px;
   max-height: 85vh;
+  opacity: 0;
 
   transition:
     opacity 0.15s ease-out,
-    transform 0.15s ease-out,
     overlay 0.15s ease-out allow-discrete,
     display 0.15s ease-out allow-discrete;
 
@@ -266,11 +266,19 @@ defineExpose({
   }
 
   &::backdrop {
-    background-color: rgba(0, 0, 0, 0.5);
-    transition: background-color 0.15s ease-out allow-discrete;
+    background: rgba(0, 0, 0, 0.5);
+    opacity: 0;
+    transition:
+      opacity 0.15s ease-out,
+      overlay 0.15s ease-out allow-discrete,
+      display 0.15s ease-out allow-discrete;
+  }
+
+  &[open]::backdrop {
+    opacity: 1;
 
     @starting-style {
-      background-color: rgba(0, 0, 0, 0);
+      opacity: 0;
     }
   }
 }
