@@ -139,53 +139,6 @@ describe("preferencesStore", () => {
     });
   });
 
-  describe("旧形式からのマイグレーション", () => {
-    it("旧stoneSpeed=slow → speed=normal, effectSpeed=normal", () => {
-      localStorageMock.setItem(
-        "holorenju_preferences",
-        JSON.stringify({
-          animation: { enabled: true, stoneSpeed: "slow" },
-        }),
-      );
-      setActivePinia(createPinia());
-
-      const store = usePreferencesStore();
-
-      expect(store.speed).toBe("normal");
-      expect(store.effectSpeed).toBe("normal");
-    });
-
-    it("旧stoneSpeed=normal → speed=fast, effectSpeed=fast", () => {
-      localStorageMock.setItem(
-        "holorenju_preferences",
-        JSON.stringify({
-          animation: { enabled: true, stoneSpeed: "normal" },
-        }),
-      );
-      setActivePinia(createPinia());
-
-      const store = usePreferencesStore();
-
-      expect(store.speed).toBe("fast");
-      expect(store.effectSpeed).toBe("fast");
-    });
-
-    it("旧stoneSpeed=fast → speed=fastest, effectSpeed=fastest", () => {
-      localStorageMock.setItem(
-        "holorenju_preferences",
-        JSON.stringify({
-          animation: { enabled: true, stoneSpeed: "fast" },
-        }),
-      );
-      setActivePinia(createPinia());
-
-      const store = usePreferencesStore();
-
-      expect(store.speed).toBe("fastest");
-      expect(store.effectSpeed).toBe("fastest");
-    });
-  });
-
   describe("設定変更", () => {
     it("animationEnabledを変更できる", () => {
       const store = usePreferencesStore();

@@ -183,7 +183,7 @@ export const useQuestionSolver = (
     }
 
     // 進度を記録
-    progressStore.completeSection(scenarioId, questionSection.id, 100);
+    progressStore.completeSection(scenarioId, questionSection.id);
   };
 
   /**

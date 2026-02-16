@@ -88,11 +88,14 @@ vi.mock("@/stores/dialogStore", () => ({
   }),
 }));
 
+const mockReconcileProgress = vi.fn();
+
 vi.mock("@/stores/progressStore", () => ({
   useProgressStore: () => ({
     startScenario: mockStartScenario,
     completeScenario: mockCompleteScenario,
     getProgress: mockGetProgress,
+    reconcileProgress: mockReconcileProgress,
   }),
 }));
 
@@ -102,6 +105,10 @@ vi.mock("@/logic/scenarioFileHandler", () => ({
       .fill(null)
       .map(() => Array(15).fill(null)),
   ),
+}));
+
+vi.mock("@/logic/scenarioHash", () => ({
+  computeStructureHash: vi.fn(() => "mock-hash"),
 }));
 
 vi.mock("@/logic/scenarioParser", () => ({
@@ -576,14 +583,6 @@ describe("useScenarioNavigation", () => {
   });
 
   describe("completeScenario", () => {
-    it("progressStore.completeScenarioが呼ばれる", () => {
-      const { completeScenario } = useScenarioNavigation("test-scenario");
-
-      completeScenario();
-
-      expect(mockCompleteScenario).toHaveBeenCalledWith("test-scenario");
-    });
-
     it("appStore.goToScenarioListが呼ばれる", () => {
       const { completeScenario } = useScenarioNavigation("test-scenario");
 

@@ -42,11 +42,6 @@ describe("progressStore", () => {
       expect(store.currentScenario).toBeNull();
     });
 
-    it("totalScoreが0", () => {
-      const store = useProgressStore();
-      expect(store.totalScore).toBe(0);
-    });
-
     it("空のachievements", () => {
       const store = useProgressStore();
       expect(store.achievements).toEqual([]);
@@ -70,18 +65,16 @@ describe("progressStore", () => {
       expect(progress?.completedSections).toEqual([]);
       expect(progress?.currentSectionIndex).toBe(0);
       expect(progress?.isCompleted).toBe(false);
-      expect(progress?.score).toBe(0);
     });
 
     it("既存の進度は上書きしない", () => {
       const store = useProgressStore();
       store.startScenario("scenario-1");
-      store.completeSection("scenario-1", "section-1", 100);
+      store.completeSection("scenario-1", "section-1");
 
       store.startScenario("scenario-1"); // 再度開始
 
       const progress = store.getScenarioProgress("scenario-1");
-      expect(progress?.score).toBe(100);
       expect(progress?.completedSections).toContain("section-1");
     });
   });
@@ -90,37 +83,26 @@ describe("progressStore", () => {
     it("セクションを完了済みに追加する", () => {
       const store = useProgressStore();
       store.startScenario("scenario-1");
-      store.completeSection("scenario-1", "section-1", 50);
+      store.completeSection("scenario-1", "section-1");
 
       const progress = store.getScenarioProgress("scenario-1");
       expect(progress?.completedSections).toContain("section-1");
     });
 
-    it("スコアを加算する", () => {
+    it("同じセクションは二重追加されない", () => {
       const store = useProgressStore();
       store.startScenario("scenario-1");
-      store.completeSection("scenario-1", "section-1", 50);
+      store.completeSection("scenario-1", "section-1");
+      store.completeSection("scenario-1", "section-1");
 
       const progress = store.getScenarioProgress("scenario-1");
-      expect(progress?.score).toBe(50);
-      expect(store.totalScore).toBe(50);
-    });
-
-    it("同じセクションは二重加算されない", () => {
-      const store = useProgressStore();
-      store.startScenario("scenario-1");
-      store.completeSection("scenario-1", "section-1", 50);
-      store.completeSection("scenario-1", "section-1", 50);
-
-      const progress = store.getScenarioProgress("scenario-1");
-      expect(progress?.score).toBe(50);
-      expect(store.totalScore).toBe(50);
+      expect(progress?.completedSections).toHaveLength(1);
     });
 
     it("localStorageに保存する", () => {
       const store = useProgressStore();
       store.startScenario("scenario-1");
-      store.completeSection("scenario-1", "section-1", 50);
+      store.completeSection("scenario-1", "section-1");
 
       expect(localStorageMock.setItem).toHaveBeenCalled();
     });
@@ -204,7 +186,7 @@ describe("progressStore", () => {
     it("localStorageに保存できる", () => {
       const store = useProgressStore();
       store.startScenario("scenario-1");
-      store.completeSection("scenario-1", "section-1", 100);
+      store.completeSection("scenario-1", "section-1");
       store.addAchievement("first-win");
 
       store.saveProgress();
@@ -220,7 +202,6 @@ describe("progressStore", () => {
       const savedData = {
         completedScenarios: ["scenario-1"],
         currentScenario: null as string | null,
-        totalScore: 100,
         achievements: ["first-win"],
         lastPlayedAt: new Date().toISOString(),
         scenarioProgress: [
@@ -231,7 +212,6 @@ describe("progressStore", () => {
               completedSections: ["section-1"],
               currentSectionIndex: 1,
               isCompleted: true,
-              score: 100,
             },
           ],
         ],
@@ -242,8 +222,37 @@ describe("progressStore", () => {
       const store = useProgressStore();
 
       expect(store.completedScenarios).toEqual(["scenario-1"]);
-      expect(store.totalScore).toBe(100);
       expect(store.achievements).toContain("first-win");
+    });
+
+    it("既存データのscore/totalScoreフィールドを無視する", () => {
+      const savedData = {
+        completedScenarios: ["scenario-1"],
+        currentScenario: null as string | null,
+        totalScore: 999,
+        achievements: [] as string[],
+        lastPlayedAt: new Date().toISOString(),
+        scenarioProgress: [
+          [
+            "scenario-1",
+            {
+              scenarioId: "scenario-1",
+              completedSections: ["section-1"],
+              currentSectionIndex: 1,
+              isCompleted: true,
+              score: 999,
+            },
+          ],
+        ],
+      };
+      localStorageMock.getItem.mockReturnValueOnce(JSON.stringify(savedData));
+
+      setActivePinia(createPinia());
+      const store = useProgressStore();
+
+      expect(store.completedScenarios).toEqual(["scenario-1"]);
+      const progress = store.getScenarioProgress("scenario-1");
+      expect(progress?.completedSections).toEqual(["section-1"]);
     });
 
     it("不正なJSONでもクラッシュしない", () => {
@@ -261,7 +270,7 @@ describe("progressStore", () => {
     it("全ての進度をリセットする", () => {
       const store = useProgressStore();
       store.startScenario("scenario-1");
-      store.completeSection("scenario-1", "section-1", 100);
+      store.completeSection("scenario-1", "section-1");
       store.completeScenario("scenario-1");
       store.addAchievement("first-win");
 
@@ -269,7 +278,6 @@ describe("progressStore", () => {
 
       expect(store.completedScenarios).toEqual([]);
       expect(store.currentScenario).toBeNull();
-      expect(store.totalScore).toBe(0);
       expect(store.achievements).toEqual([]);
     });
 
@@ -298,6 +306,133 @@ describe("progressStore", () => {
 
       const progress = store.getScenarioProgress("nonexistent");
       expect(progress).toBeNull();
+    });
+  });
+
+  describe("reconcileProgress", () => {
+    it("進行度がなければ何もしない", () => {
+      const store = useProgressStore();
+      store.reconcileProgress("scenario-1", "hash1", ["s1"], ["s1"]);
+      expect(store.getScenarioProgress("scenario-1")).toBeNull();
+    });
+
+    it("ハッシュが一致すれば何もしない", () => {
+      const store = useProgressStore();
+      store.startScenario("scenario-1");
+      store.completeSection("scenario-1", "s1");
+
+      // ハッシュを設定
+      store.reconcileProgress("scenario-1", "hash1", ["s1", "s2"], ["s1"]);
+
+      // 同じハッシュで再度呼び出し → 変更なし
+      store.reconcileProgress("scenario-1", "hash1", ["s1"], ["s1"]);
+
+      const progress = store.getScenarioProgress("scenario-1");
+      expect(progress?.completedSections).toContain("s1");
+    });
+
+    it("ハッシュ未設定（既存ユーザー）ならreconcileを実行する", () => {
+      const store = useProgressStore();
+      store.startScenario("scenario-1");
+      store.completeSection("scenario-1", "s1");
+
+      // structureHash が undefined の状態で呼び出す
+      store.reconcileProgress("scenario-1", "hash1", ["s1", "s2"], ["s1"]);
+
+      const progress = store.getScenarioProgress("scenario-1");
+      expect(progress?.structureHash).toBe("hash1");
+    });
+
+    it("存続セクションのcompletedSectionsは保持される", () => {
+      const store = useProgressStore();
+      store.startScenario("scenario-1");
+      store.completeSection("scenario-1", "s1");
+      store.completeSection("scenario-1", "s2");
+
+      // s3追加、s1とs2は残る
+      store.reconcileProgress(
+        "scenario-1",
+        "hash2",
+        ["s1", "s2", "s3"],
+        ["s1", "s2"],
+      );
+
+      const progress = store.getScenarioProgress("scenario-1");
+      expect(progress?.completedSections).toContain("s1");
+      expect(progress?.completedSections).toContain("s2");
+    });
+
+    it("孤立セクションのcompletedSectionsは除去される", () => {
+      const store = useProgressStore();
+      store.startScenario("scenario-1");
+      store.completeSection("scenario-1", "s1");
+      store.completeSection("scenario-1", "s2");
+      store.completeSection("scenario-1", "s3");
+
+      // s2が削除された
+      store.reconcileProgress("scenario-1", "hash2", ["s1", "s3"], ["s1"]);
+
+      const progress = store.getScenarioProgress("scenario-1");
+      expect(progress?.completedSections).toContain("s1");
+      expect(progress?.completedSections).toContain("s3");
+      expect(progress?.completedSections).not.toContain("s2");
+    });
+
+    it("currentSectionIndexをセクション数内にクランプする", () => {
+      const store = useProgressStore();
+      store.startScenario("scenario-1");
+
+      // currentSectionIndexを手動で大きな値に設定
+      const progress = store.getScenarioProgress("scenario-1");
+      if (progress) {
+        progress.currentSectionIndex = 5;
+      }
+
+      // 2セクションしかないシナリオにreconcile
+      store.reconcileProgress("scenario-1", "hash2", ["s1", "s2"], ["s1"]);
+
+      const updated = store.getScenarioProgress("scenario-1");
+      expect(updated?.currentSectionIndex).toBeLessThanOrEqual(1);
+    });
+
+    it("isCompletedがfalseに変わるケース", () => {
+      const store = useProgressStore();
+      store.startScenario("scenario-1");
+      store.completeSection("scenario-1", "q1");
+      store.completeScenario("scenario-1");
+
+      expect(store.getScenarioProgress("scenario-1")?.isCompleted).toBe(true);
+      expect(store.completedScenarios).toContain("scenario-1");
+
+      // 新しいquestionセクションq2を追加
+      store.reconcileProgress(
+        "scenario-1",
+        "hash2",
+        ["q1", "q2"],
+        ["q1", "q2"],
+      );
+
+      const progress = store.getScenarioProgress("scenario-1");
+      expect(progress?.isCompleted).toBe(false);
+    });
+
+    it("completedScenariosからも除去される", () => {
+      const store = useProgressStore();
+      store.startScenario("scenario-1");
+      store.completeSection("scenario-1", "q1");
+      store.completeScenario("scenario-1");
+
+      expect(store.completedScenarios).toContain("scenario-1");
+
+      // 新しいquestionセクションq2を追加
+      store.reconcileProgress(
+        "scenario-1",
+        "hash2",
+        ["q1", "q2"],
+        ["q1", "q2"],
+      );
+
+      expect(store.completedScenarios).not.toContain("scenario-1");
     });
   });
 });

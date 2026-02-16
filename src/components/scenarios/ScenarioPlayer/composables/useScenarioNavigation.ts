@@ -12,6 +12,7 @@ import type {
 import type { TextNode } from "@/types/text";
 
 import { boardStringToBoardState } from "@/logic/scenarioFileHandler";
+import { computeStructureHash } from "@/logic/scenarioHash";
 import { parseScenario } from "@/logic/scenarioParser";
 import { useAppStore } from "@/stores/appStore";
 import { useAudioStore } from "@/stores/audioStore";
@@ -217,6 +218,19 @@ export const useScenarioNavigation = (
       }
       const rawScenarioData = await scenarioRes.json();
       const scenarioData = parseScenario(rawScenarioData);
+
+      // シナリオ構造変更時に進行度を整合させる
+      const structureHash = computeStructureHash(scenarioData);
+      const sectionIds = scenarioData.sections.map((s) => s.id);
+      const questionSectionIds = scenarioData.sections
+        .filter((s) => s.type === "question")
+        .map((s) => s.id);
+      progressStore.reconcileProgress(
+        scenarioId,
+        structureHash,
+        sectionIds,
+        questionSectionIds,
+      );
 
       scenario.value = scenarioData;
 
@@ -814,11 +828,17 @@ export const useScenarioNavigation = (
     await nextDialogue();
   };
 
+  // シナリオ完了を自動検知してクリア済みにする
+  watch(isScenarioDone, (isDone) => {
+    if (isDone) {
+      progressStore.completeScenario(scenarioId);
+    }
+  });
+
   /**
-   * シナリオを完了
+   * シナリオ完了後、一覧画面へ戻る
    */
   const completeScenario = (): void => {
-    progressStore.completeScenario(scenarioId);
     appStore.goToScenarioList();
   };
 

@@ -224,14 +224,13 @@ interface ScenarioProgress {
   attempts?: Record<string, number>;
   hintsUsed?: Record<string, number>;
   isCompleted: boolean;
-  score: number;
+  structureHash?: string;
 }
 
 // 学習進度
 interface LearningProgress {
   completedScenarios: string[];
   currentScenario: string | null;
-  totalScore: number;
   achievements: string[];
   lastPlayedAt: Date;
 }

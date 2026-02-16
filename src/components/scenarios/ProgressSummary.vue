@@ -12,7 +12,6 @@ const progressStore = useProgressStore();
 
 // Computed
 const completedCount = computed(() => progressStore.completedScenarios.length);
-const totalScore = computed(() => progressStore.totalScore);
 const completionRate = computed(() => progressStore.completionRate);
 </script>
 
@@ -22,10 +21,6 @@ const completionRate = computed(() => progressStore.completionRate);
       <div class="progress-item">
         <span class="label">完了:</span>
         <span class="value">{{ completedCount }} / {{ totalScenarios }}</span>
-      </div>
-      <div class="progress-item">
-        <span class="label">スコア:</span>
-        <span class="value">{{ totalScore }}点</span>
       </div>
     </div>
     <progress
@@ -50,8 +45,8 @@ const completionRate = computed(() => progressStore.completionRate);
 }
 
 .progress-items {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
+  justify-content: center;
   gap: var(--size-16);
   line-height: 1.6;
 }

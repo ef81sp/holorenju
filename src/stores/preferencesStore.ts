@@ -106,91 +106,6 @@ const BASE_EFFECT_DURATIONS = {
   cutinDisplay: 0.8, // カットイン表示時間
 } as const;
 
-/**
- * 旧設定からのマイグレーション
- * stoneSpeed を speed / effectSpeed に変換
- */
-type OldStoneSpeed = "slow" | "normal" | "fast";
-interface OldPreferences {
-  animation?: {
-    enabled?: boolean;
-    stoneSpeed?: OldStoneSpeed;
-    speed?: AnimationSpeed;
-    effectSpeed?: AnimationSpeed;
-  };
-  display?: {
-    textSize?: TextSize;
-  };
-  cpu?: {
-    fastMove?: boolean;
-  };
-  debug?: {
-    showCpuInfo?: boolean;
-  };
-}
-
-function migrateFromOldFormat(parsed: OldPreferences): Preferences {
-  const animation = parsed.animation ?? {};
-
-  // 既に新形式であればそのまま使用
-  if (animation.speed !== undefined && animation.effectSpeed !== undefined) {
-    return {
-      animation: {
-        enabled: animation.enabled ?? defaultPreferences.animation.enabled,
-        speed: animation.speed,
-        effectSpeed: animation.effectSpeed,
-      },
-      audio: {
-        ...defaultPreferences.audio,
-        ...((parsed as Record<string, unknown>).audio as
-          | Preferences["audio"]
-          | undefined),
-      },
-      display: { ...defaultPreferences.display, ...parsed.display },
-      accessibility: {
-        ...defaultPreferences.accessibility,
-        ...((parsed as Record<string, unknown>).accessibility as
-          | Preferences["accessibility"]
-          | undefined),
-      },
-      cpu: { ...defaultPreferences.cpu, ...parsed.cpu },
-      debug: { ...defaultPreferences.debug, ...parsed.debug },
-    };
-  }
-
-  // 旧形式からマイグレーション
-  const oldSpeed = animation.stoneSpeed;
-  let newSpeed: AnimationSpeed = "normal";
-  let newEffectSpeed: AnimationSpeed = "normal";
-
-  if (oldSpeed === "slow") {
-    // 旧slow (0.4s) → 新normal (0.4s)
-    newSpeed = "normal";
-    newEffectSpeed = "normal";
-  } else if (oldSpeed === "normal") {
-    // 旧normal (0.2s) → 新fast (0.2s)
-    newSpeed = "fast";
-    newEffectSpeed = "fast";
-  } else if (oldSpeed === "fast") {
-    // 旧fast (0.1s) → 新fastest (0.1s)
-    newSpeed = "fastest";
-    newEffectSpeed = "fastest";
-  }
-
-  return {
-    animation: {
-      enabled: animation.enabled ?? defaultPreferences.animation.enabled,
-      speed: newSpeed,
-      effectSpeed: newEffectSpeed,
-    },
-    audio: { ...defaultPreferences.audio },
-    display: { ...defaultPreferences.display, ...parsed.display },
-    accessibility: { ...defaultPreferences.accessibility },
-    cpu: { ...defaultPreferences.cpu, ...parsed.cpu },
-    debug: { ...defaultPreferences.debug, ...parsed.debug },
-  };
-}
-
 export const usePreferencesStore = defineStore("preferences", () => {
   // State
   const preferences = ref<Preferences>(loadFromStorage());
@@ -199,11 +114,18 @@ export const usePreferencesStore = defineStore("preferences", () => {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       try {
-        const parsed = JSON.parse(saved) as OldPreferences;
-        const migrated = migrateFromOldFormat(parsed);
-        // マイグレーション後、新形式で即座に保存
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
-        return migrated;
+        const parsed = JSON.parse(saved) as Partial<Preferences>;
+        return {
+          animation: { ...defaultPreferences.animation, ...parsed.animation },
+          audio: { ...defaultPreferences.audio, ...parsed.audio },
+          display: { ...defaultPreferences.display, ...parsed.display },
+          accessibility: {
+            ...defaultPreferences.accessibility,
+            ...parsed.accessibility,
+          },
+          cpu: { ...defaultPreferences.cpu, ...parsed.cpu },
+          debug: { ...defaultPreferences.debug, ...parsed.debug },
+        };
       } catch {
         return { ...defaultPreferences };
       }

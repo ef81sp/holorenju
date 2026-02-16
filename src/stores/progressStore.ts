@@ -13,7 +13,6 @@ export const useProgressStore = defineStore("progress", () => {
   // State
   const completedScenarios = ref<string[]>([]);
   const currentScenario = ref<string | null>(null);
-  const totalScore = ref(0);
   const achievements = ref<string[]>([]);
   const lastPlayedAt = ref<Date>(new Date());
   const scenarioProgress = ref<Map<string, ScenarioProgress>>(new Map());
@@ -24,7 +23,6 @@ export const useProgressStore = defineStore("progress", () => {
     completedScenarios: completedScenarios.value,
     currentScenario: currentScenario.value,
     lastPlayedAt: lastPlayedAt.value,
-    totalScore: totalScore.value,
   }));
 
   const completionRate = computed(() => {
@@ -42,16 +40,11 @@ export const useProgressStore = defineStore("progress", () => {
         currentSectionIndex: 0,
         isCompleted: false,
         scenarioId,
-        score: 0,
       });
     }
   }
 
-  function completeSection(
-    scenarioId: string,
-    sectionId: string,
-    score: number,
-  ): void {
+  function completeSection(scenarioId: string, sectionId: string): void {
     const progress = scenarioProgress.value.get(scenarioId);
     if (!progress) {
       return;
@@ -59,8 +52,6 @@ export const useProgressStore = defineStore("progress", () => {
 
     if (!progress.completedSections.includes(sectionId)) {
       progress.completedSections.push(sectionId);
-      progress.score += score;
-      totalScore.value += score;
     }
 
     saveProgress();
@@ -98,7 +89,6 @@ export const useProgressStore = defineStore("progress", () => {
       currentScenario: currentScenario.value,
       lastPlayedAt: lastPlayedAt.value.toISOString(),
       scenarioProgress: Array.from(scenarioProgress.value.entries()),
-      totalScore: totalScore.value,
     };
 
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -114,7 +104,6 @@ export const useProgressStore = defineStore("progress", () => {
       const data = JSON.parse(saved);
       completedScenarios.value = data.completedScenarios || [];
       currentScenario.value = data.currentScenario || null;
-      totalScore.value = data.totalScore || 0;
       achievements.value = data.achievements || [];
       lastPlayedAt.value = new Date(data.lastPlayedAt || new Date());
 
@@ -129,7 +118,6 @@ export const useProgressStore = defineStore("progress", () => {
   function resetProgress(): void {
     completedScenarios.value = [];
     currentScenario.value = null;
-    totalScore.value = 0;
     achievements.value = [];
     lastPlayedAt.value = new Date();
     scenarioProgress.value.clear();
@@ -141,6 +129,55 @@ export const useProgressStore = defineStore("progress", () => {
     return scenarioProgress.value.get(scenarioId) || null;
   }
 
+  /**
+   * シナリオ構造変更時に進行度を整合させる
+   *
+   * ハッシュが一致すれば何もしない。不一致なら孤立セクションの進行度を除去し、
+   * currentSectionIndex をクランプ、isCompleted を再計算する。
+   */
+  function reconcileProgress(
+    scenarioId: string,
+    structureHash: string,
+    sectionIds: string[],
+    questionSectionIds: string[],
+  ): void {
+    const progress = scenarioProgress.value.get(scenarioId);
+    if (!progress) {
+      return;
+    }
+
+    if (progress.structureHash === structureHash) {
+      return;
+    }
+
+    // 存続セクションのみ保持
+    const currentIds = new Set(sectionIds);
+    progress.completedSections = progress.completedSections.filter((id) =>
+      currentIds.has(id),
+    );
+
+    // currentSectionIndex をセクション数内にクランプ
+    const maxIndex = Math.max(0, sectionIds.length - 1);
+    progress.currentSectionIndex = Math.min(
+      progress.currentSectionIndex,
+      maxIndex,
+    );
+
+    // isCompleted 再計算: 全questionセクションが完了しているか
+    const allQuestionsCompleted = questionSectionIds.every((id) =>
+      progress.completedSections.includes(id),
+    );
+    if (!allQuestionsCompleted && progress.isCompleted) {
+      progress.isCompleted = false;
+      completedScenarios.value = completedScenarios.value.filter(
+        (id) => id !== scenarioId,
+      );
+    }
+
+    progress.structureHash = structureHash;
+    saveProgress();
+  }
+
   // 初期化時に進度を読み込む
   loadProgress();
 
@@ -148,7 +185,6 @@ export const useProgressStore = defineStore("progress", () => {
     // State
     completedScenarios,
     currentScenario,
-    totalScore,
     achievements,
     lastPlayedAt,
     // Getters
@@ -163,5 +199,6 @@ export const useProgressStore = defineStore("progress", () => {
     loadProgress,
     resetProgress,
     getScenarioProgress,
+    reconcileProgress,
   };
 });

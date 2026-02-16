@@ -169,7 +169,7 @@ export const useVcfSolver = (
       });
     }
 
-    progressStore.completeSection(scenarioId, section.id, 100);
+    progressStore.completeSection(scenarioId, section.id);
   }
 
   // ===== 失敗処理（カウンターフォー） =====
