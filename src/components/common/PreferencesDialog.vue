@@ -348,7 +348,7 @@ defineExpose({
   padding: 0;
   box-shadow: 0 var(--size-10) var(--size-32) rgba(0, 0, 0, 0.2);
   width: var(--size-500);
-  max-height: calc(var(--effective-vw) * 9 / 16 * 0.85);
+  height: calc(var(--effective-vw) * 9 / 16 * 0.85);
   overflow: hidden;
   opacity: 0;
 
