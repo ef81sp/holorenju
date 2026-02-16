@@ -43,8 +43,8 @@ const handleSelectCPU = (): void => {
         >
           <div class="button-icon">🎮</div>
           <div class="button-text-area">
-            <span class="button-text">コンピュータ対戦</span>
-            <p class="button-description">コンピュータと対局して腕を磨こう</p>
+            <span class="button-text">ホロメン対戦</span>
+            <p class="button-description">ホロメン(CPU)と対局して腕を磨こう</p>
           </div>
         </button>
       </div>

@@ -331,7 +331,7 @@ const gameEndMessage = computed(() => {
     return "あなたの勝ち！";
   }
   if (cpuGameStore.winner === cpuGameStore.cpuColor) {
-    return "コンピュータの勝ち...";
+    return "相手の勝ち...";
   }
   return "引き分け";
 });
@@ -480,7 +480,7 @@ const gameEndMessage = computed(() => {
             盤面をクリック、またはWASDキー+Spaceで石を置けます
           </p>
           <p v-else-if="!cpuGameStore.isGameOver && !cpuGameStore.isPlayerTurn">
-            コンピュータが考え中です...
+            考え中です...
           </p>
         </div>
       </template>

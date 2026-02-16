@@ -139,9 +139,7 @@ const handleBack = (): void => {
               <span class="order-icon white">○</span>
               <div class="order-text">
                 <span class="order-label">後手（白）</span>
-                <span class="order-description">
-                  コンピュータから打ち始めます
-                </span>
+                <span class="order-description">相手から打ち始めます</span>
               </div>
             </label>
           </div>

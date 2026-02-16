@@ -43,7 +43,7 @@ const turnLabel = computed(() => {
   if (cpuGameStore.isPlayerTurn) {
     return "あなたの番";
   }
-  return "コンピュータの番";
+  return "相手の番";
 });
 
 const turnColor = computed(() =>
