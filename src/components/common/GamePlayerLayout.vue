@@ -129,6 +129,5 @@ defineExpose({
   display: flex;
   justify-content: center;
   min-height: 0;
-  overflow: clip;
 }
 </style>

@@ -624,7 +624,6 @@ const gameEndMessage = computed(() => {
   width: 100%;
   height: 100%;
   box-sizing: border-box;
-  overflow: clip;
 }
 
 .dialog-avatar {
@@ -659,6 +658,6 @@ const gameEndMessage = computed(() => {
 }
 
 .dialog-text-wrapper {
-  font-size: calc(var(--size-16) * var(--text-size-multiplier));
+  font-size: var(--font-size-14);
 }
 </style>
