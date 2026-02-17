@@ -63,7 +63,6 @@ withDefaults(defineProps<Props>(), {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   flex-shrink: 1;
   min-width: 0;
-  word-break: auto-phrase;
 }
 
 .control-title {

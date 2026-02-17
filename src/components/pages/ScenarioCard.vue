@@ -113,7 +113,6 @@ const handleStart = (): void => {
   color: var(--color-text-secondary);
   margin: 0;
   line-height: 1.4;
-  word-break: auto-phrase;
   overflow: hidden;
   flex-grow: 1;
 }

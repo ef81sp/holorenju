@@ -201,7 +201,7 @@ const handleBack = (): void => {
 }
 
 .difficulty-card {
-  padding: var(--size-20);
+  padding: var(--size-14);
   border: var(--size-2) solid var(--color-border-heavy);
   border-radius: var(--size-16);
   cursor: pointer;

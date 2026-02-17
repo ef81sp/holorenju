@@ -212,7 +212,7 @@ const getDifficultyLabel = (difficulty: ScenarioDifficulty): string =>
   max-width: var(--size-1200);
   margin: 0 auto;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(var(--size-350), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(var(--size-350), 1fr));
   gap: var(--size-30);
 }
 
@@ -244,7 +244,7 @@ const getDifficultyLabel = (difficulty: ScenarioDifficulty): string =>
 .card-header h3 {
   margin: 0;
   color: var(--color-text-primary);
-  font-size: var(--font-size-24);
+  font-size: var(--font-size-20);
   flex: 1;
 }
 

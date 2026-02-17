@@ -33,12 +33,12 @@ defineEmits<{
   display: flex;
   align-items: center;
   gap: var(--size-20);
-  margin-bottom: var(--size-40);
+  margin-bottom: var(--size-24);
   position: relative;
 }
 
 .page-header h1 {
-  font-size: var(--font-size-48);
+  font-size: var(--font-size-24);
   font-weight: bold;
   color: var(--color-text-primary);
   margin: 0;
