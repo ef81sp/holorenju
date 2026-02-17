@@ -104,6 +104,7 @@ const BASE_EFFECT_DURATIONS = {
   sprite: 0.3,
   cutinOverlay: 0.2,
   cutinDisplay: 0.8, // カットイン表示時間
+  cutinClearDisplay: 3.6, // クリアカットイン表示時間（ファンファーレに合わせる）
 } as const;
 
 export const usePreferencesStore = defineStore("preferences", () => {
@@ -286,6 +287,10 @@ export const usePreferencesStore = defineStore("preferences", () => {
     () => BASE_EFFECT_DURATIONS.cutinDisplay * effectSpeedMultiplier.value,
   );
 
+  const cutinClearDisplayDuration = computed(
+    () => BASE_EFFECT_DURATIONS.cutinClearDisplay * effectSpeedMultiplier.value,
+  );
+
   return {
     // State
     preferences,
@@ -322,5 +327,6 @@ export const usePreferencesStore = defineStore("preferences", () => {
     spriteAnimationDuration,
     cutinOverlayDuration,
     cutinDisplayDuration,
+    cutinClearDisplayDuration,
   };
 });

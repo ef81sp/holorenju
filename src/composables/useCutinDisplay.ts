@@ -37,7 +37,7 @@ export const useCutinDisplay = (
   /**
    * カットインを表示
    */
-  const showCutin = (_type: CutinType): void => {
+  const showCutin = (type: CutinType): void => {
     if (!cutinRef.value) {
       return;
     }
@@ -57,7 +57,11 @@ export const useCutinDisplay = (
     }
 
     // 自動消滅タイマーを設定（秒→ミリ秒に変換）
-    const durationMs = preferencesStore.cutinDisplayDuration * 1000;
+    const displayDuration =
+      type === "clear"
+        ? preferencesStore.cutinClearDisplayDuration
+        : preferencesStore.cutinDisplayDuration;
+    const durationMs = displayDuration * 1000;
     autoHideTimer = setTimeout(() => {
       hideCutin();
     }, durationMs);
