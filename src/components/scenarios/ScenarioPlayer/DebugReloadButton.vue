@@ -6,6 +6,8 @@ import { inject } from "vue";
 import { useScenarioReload } from "./composables/useScenarioReload";
 import { scenarioNavKey } from "./composables/useScenarioNavProvide";
 
+const isDev = import.meta.env.DEV;
+
 // 親コンポーネントから loadScenario を inject
 const scenarioNavContext = inject(scenarioNavKey);
 
@@ -16,6 +18,7 @@ const { reload } = scenarioNavContext
 
 <template>
   <button
+    v-if="isDev"
     class="debug-reload-btn"
     title="シナリオを再読み込み（デバッグ用）"
     @click="reload"
