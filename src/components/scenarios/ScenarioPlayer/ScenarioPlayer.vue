@@ -34,6 +34,7 @@ import type { Position } from "@/types/game";
 import type { TextNode } from "@/types/text";
 import { getSectionDisplayTitle } from "@/utils/sectionUtils";
 import { getPlayerColorFromConditions } from "@/utils/conditionUtils";
+import { isInteractiveClick } from "@/utils/isInteractiveClick";
 
 // Props
 interface Props {
@@ -371,11 +372,28 @@ const handleResetPuzzle = (): void => {
 const handleGoToList = (): void => {
   scenarioNav.completeScenario();
 };
+
+const handleLayoutClick = (event: MouseEvent): void => {
+  if (isInteractiveClick(event)) {
+    return;
+  }
+  const target = event.target as HTMLElement;
+  if (target.closest(".dialog-bubble")) {
+    return;
+  }
+  if (isCutinVisible.value || animationStore.animatingIds.size > 0) {
+    return;
+  }
+  scenarioNav.nextDialogue();
+};
 </script>
 
 <template>
   <!-- Transition mode="out-in" に対応するため単一ルート要素で囲む -->
-  <div class="scenario-player-root">
+  <div
+    class="scenario-player-root"
+    @click="handleLayoutClick"
+  >
     <GamePlayerLayout
       v-if="scenarioNav.scenario.value"
       ref="layoutRef"

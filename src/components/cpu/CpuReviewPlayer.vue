@@ -26,6 +26,7 @@ import { useDialogStore } from "@/stores/dialogStore";
 import { useAudioStore } from "@/stores/audioStore";
 import { useBoardStore } from "@/stores/boardStore";
 import type { Position } from "@/types/game";
+import { isInteractiveClick } from "@/utils/isInteractiveClick";
 
 const appStore = useAppStore();
 const boardStore = useBoardStore();
@@ -204,10 +205,24 @@ function handleKeyDown(event: KeyboardEvent): void {
 function handleBack(): void {
   appStore.goToCpuSetup();
 }
+
+function handleLayoutClick(event: MouseEvent): void {
+  if (isInteractiveClick(event)) {
+    return;
+  }
+  const target = event.target as HTMLElement;
+  if (target.closest(".info-section-slot")) {
+    return;
+  }
+  advanceMove();
+}
 </script>
 
 <template>
-  <div class="cpu-review-player">
+  <div
+    class="cpu-review-player"
+    @click="handleLayoutClick"
+  >
     <GamePlayerLayout ref="layoutRef">
       <template #back-button>
         <button
