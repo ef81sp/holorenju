@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useAppStore } from "@/stores/appStore";
 import PageHeader from "@/components/common/PageHeader.vue";
+import FullscreenButton from "@/components/common/FullscreenButton.vue";
 import InfoControl from "@/components/common/InfoControl.vue";
 import TitleLogo from "@/components/common/TitleLogo.vue";
 
@@ -22,7 +23,10 @@ const handleSelectCPU = (): void => {
         <TitleLogo />
       </template>
       <template #right>
-        <InfoControl />
+        <div class="right-controls">
+          <FullscreenButton />
+          <InfoControl />
+        </div>
       </template>
     </PageHeader>
     <div class="content">
@@ -53,6 +57,12 @@ const handleSelectCPU = (): void => {
 </template>
 
 <style scoped>
+.right-controls {
+  display: flex;
+  gap: var(--size-8);
+  align-items: center;
+}
+
 .menu-page {
   display: flex;
   flex-direction: column;
