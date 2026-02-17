@@ -205,22 +205,21 @@ const moveDots = computed(() =>
 }
 
 .nav-button {
-  display: inline-block;
-  height: var(--size-36);
-  aspect-ratio: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--size-36);
+  min-height: var(--size-32);
+  padding: 0 var(--size-6);
   background: var(--color-background-secondary);
   border: 2px solid var(--color-border-light);
   border-radius: var(--size-6);
   font-size: var(--size-14);
   font-weight: 500;
-  line-height: var(--size-36);
-  text-align: center;
   color: var(--color-text-primary);
   cursor: pointer;
   transition: all 0.2s;
-  padding: 0;
   box-sizing: border-box;
-  width: 2rem;
 }
 
 .nav-button:hover:not(:disabled) {
@@ -236,7 +235,7 @@ const moveDots = computed(() =>
 .move-counter {
   font-size: var(--size-14);
   color: var(--color-text-secondary);
-  min-width: var(--size-64);
+  min-width: var(--size-48);
   text-align: center;
   font-variant-numeric: tabular-nums;
 }

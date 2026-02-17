@@ -209,6 +209,7 @@
   --size-28: clamp(19px, calc(var(--effective-vw) * 0.02917), 37px); /* 28px */
   --size-30: clamp(20px, calc(var(--effective-vw) * 0.03125), 40px); /* 30px */
   --size-32: clamp(22px, calc(var(--effective-vw) * 0.03333), 42px); /* 32px */
+  --size-36: clamp(25px, calc(var(--effective-vw) * 0.0375), 47px); /* 36px */
   --size-40: clamp(28px, calc(var(--effective-vw) * 0.04167), 53px); /* 40px */
   --size-48: clamp(33px, calc(var(--effective-vw) * 0.05), 64px); /* 48px */
   --size-56: clamp(39px, calc(var(--effective-vw) * 0.05833), 74px); /* 56px */
