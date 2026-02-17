@@ -210,10 +210,6 @@ function handleLayoutClick(event: MouseEvent): void {
   if (isInteractiveClick(event)) {
     return;
   }
-  const target = event.target as HTMLElement;
-  if (target.closest(".info-section-slot")) {
-    return;
-  }
   advanceMove();
 }
 </script>

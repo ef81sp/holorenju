@@ -1,5 +1,5 @@
 const INTERACTIVE_SELECTOR =
-  "button, a, canvas, input, select, textarea, dialog, [role='button']";
+  "button, a, canvas, input, select, textarea, dialog, [role='button'], [tabindex]";
 
 /** MouseEvent のターゲットがインタラクティブ要素内かを判定 */
 export function isInteractiveClick(event: MouseEvent): boolean {
