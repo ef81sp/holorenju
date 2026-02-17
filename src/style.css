@@ -296,6 +296,7 @@ html {
   font-size: 100%;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overscroll-behavior: none;
 }
 
 h1,
@@ -401,6 +402,8 @@ body {
   height: 100svh;
   overflow: hidden;
   background-color: var(--color-bg-white);
+  overscroll-behavior: none;
+  touch-action: manipulation;
 }
 
 h1 {
