@@ -236,7 +236,7 @@ export function getJumpThreeStraightFourPoints(
 
   // 飛び三パターン1: ・●●・●・ (空白, 2石, 空白, 1石, 空白)
   // 達四点は [startIdx+2] の位置（飛びの空き）
-  for (const offset of [-1, 0]) {
+  for (const offset of [-3, -1, 0]) {
     const startIdx = placedIndex + offset;
     if (
       lineStones[startIdx - 1] === null &&
@@ -447,9 +447,9 @@ export function checkJumpThree(
   const placedIndex = 5; // 置いた位置のインデックス
 
   // 飛び三パターン1: ・●●・●・ (空白, 2石, 空白, 1石, 空白)
-  // 置いた位置が2石のどちらかになるパターン
-  for (const offset of [-1, 0]) {
-    // 置いた位置が2石の先頭(offset=0)または2番目(offset=-1)
+  // 置いた位置が3石のいずれかになるパターン
+  for (const offset of [-3, -1, 0]) {
+    // 置いた位置が2石の先頭(offset=0)、2番目(offset=-1)、または孤立石(offset=-3)
     const startIdx = placedIndex + offset;
     // パターン: [startIdx-1]=空, [startIdx]=石, [startIdx+1]=石, [startIdx+2]=空, [startIdx+3]=石, [startIdx+4]=空
     if (

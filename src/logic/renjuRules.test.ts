@@ -265,6 +265,56 @@ describe("飛び三の検出", () => {
     expect(result.type).toBe("double-three");
   });
 
+  it("・●●・*・ パターン（置くと飛び三●●・●になる）で三々禁になる", () => {
+    const board = createEmptyBoard();
+    // 横方向: 置いた後に ・●●・●・ の飛び三になる
+    board[7][6] = "black";
+    board[7][7] = "black";
+
+    // 斜め方向: 普通の三 (両端開)
+    board[8][8] = "black";
+    board[9][7] = "black";
+
+    // (7,9) に置くと横に飛び三(●●・●) + 斜めに普通の三(●●●) = 三々禁
+    const result = checkForbiddenMove(board, 7, 9);
+    expect(result.isForbidden).toBe(true);
+    expect(result.type).toBe("double-three");
+  });
+
+  it("斜め方向の・●●・*・パターンでも三々禁になる", () => {
+    const board = createEmptyBoard();
+    // 斜め右方向(↘): 置いた後に ・●●・●・ の飛び三になる
+    // (5,5)と(6,6)が2石、(7,7)が空き(ギャップ)、(8,8)が置く位置
+    board[5][5] = "black";
+    board[6][6] = "black";
+
+    // 横方向: 普通の三 (両端開)
+    board[8][6] = "black";
+    board[8][7] = "black";
+
+    // (8,8) に置くと斜めに飛び三(●●・●) + 横に普通の三(●●●) = 三々禁
+    const result = checkForbiddenMove(board, 8, 8);
+    expect(result.isForbidden).toBe(true);
+    expect(result.type).toBe("double-three");
+  });
+
+  it("縦方向の・●●・*・パターンでも三々禁になる", () => {
+    const board = createEmptyBoard();
+    // 縦方向: 置いた後に ・●●・●・ の飛び三になる
+    // (5,7)と(6,7)が2石、(7,7)が空き(ギャップ)、(8,7)が置く位置
+    board[5][7] = "black";
+    board[6][7] = "black";
+
+    // 横方向: 普通の三 (両端開)
+    board[8][5] = "black";
+    board[8][6] = "black";
+
+    // (8,7) に置くと縦に飛び三(●●・●) + 横に普通の三(●●●) = 三々禁
+    const result = checkForbiddenMove(board, 8, 7);
+    expect(result.isForbidden).toBe(true);
+    expect(result.type).toBe("double-three");
+  });
+
   it("飛び三が2つで三々禁になる", () => {
     const board = createEmptyBoard();
     // 横方向: ・●*・●・ (row=6, cols 5=石, 6=置く, 7=空, 8=石) - 飛び三になる
