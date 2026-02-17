@@ -54,11 +54,7 @@ defineExpose({
             </li>
             <li>
               <strong>悪手</strong>
-              ：差1000以内
-            </li>
-            <li>
-              <strong>大悪手</strong>
-              ：差1000超
+              ：差300超
             </li>
           </ul>
         </section>

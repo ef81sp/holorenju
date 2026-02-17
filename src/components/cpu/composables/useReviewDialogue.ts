@@ -30,9 +30,9 @@ const QUALITY_DIALOGUES: Record<MoveQuality, string[]> = {
     "うーん、{bestMove}の方がずっと良かったよ",
   ],
   blunder: [
-    "{bestMove}じゃないと危ないよ！",
-    "これは大変！{bestMove}が急所だったね",
-    "{bestMove}を見逃しちゃったね...",
+    "ここは{bestMove}が正解だったね",
+    "{bestMove}に打つべきだったかも...",
+    "うーん、{bestMove}の方がずっと良かったよ",
   ],
 };
 
@@ -42,7 +42,7 @@ const QUALITY_EMOTIONS: Record<MoveQuality, EmotionId> = {
   good: 0, // 通常の説明
   inaccuracy: 1, // 考え中
   mistake: 19, // 強調・指摘
-  blunder: 11, // 心配
+  blunder: 19, // 強調・指摘（mistakeと同じ）
 };
 
 /** 強制勝ち種別の表示名 */
@@ -64,7 +64,9 @@ const FORCED_LOSS_DIALOGUES: Record<MoveQuality, string[]> = {
   mistake: [
     "この手で相手に{forcedLoss}を許しちゃったよ！{bestMove}ならまだ粘れたかも",
   ],
-  blunder: ["まずい！この手で相手に{forcedLoss}を決められちゃう！"],
+  blunder: [
+    "この手で相手に{forcedLoss}を許しちゃったよ！{bestMove}ならまだ粘れたかも",
+  ],
 };
 
 /** 負け確定時の表情 */
@@ -115,8 +117,8 @@ const FORCED_WIN_DIALOGUES: Record<MoveQuality, string[]> = {
     "ここは{forcedWin}で勝てたね。{bestMove}がポイント！",
   ],
   blunder: [
-    "{forcedWin}があったのに！{bestMove}から一気に決まったよ",
-    "{forcedWin}を見逃しちゃったね...{bestMove}が急所！",
+    "{forcedWin}を逃しちゃった！{bestMove}から決まったよ",
+    "ここは{forcedWin}で勝てたね。{bestMove}がポイント！",
   ],
 };
 

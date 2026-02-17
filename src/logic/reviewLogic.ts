@@ -119,7 +119,7 @@ export function getQualityColor(quality: MoveQuality): string {
     case "mistake":
       return "#f44336";
     case "blunder":
-      return "#b71c1c";
+      return "#f44336";
     default: {
       const _exhaustive: never = quality;
       return _exhaustive;
@@ -141,7 +141,7 @@ export function getQualityLabel(quality: MoveQuality): string {
     case "mistake":
       return "悪手";
     case "blunder":
-      return "大悪手";
+      return "悪手";
     default: {
       const _exhaustive: never = quality;
       return _exhaustive;
