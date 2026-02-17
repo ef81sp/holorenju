@@ -662,17 +662,10 @@ function isPlayed(candidate: { position: Position }): boolean {
           <span class="score-value">
             {{
               playedRank === "unranked"
-                ? "ランク外"
+                ? "-"
                 : `${playedRank}位/${Math.min(evaluation.candidates.length, 5)}候補`
             }}
           </span>
-        </div>
-        <div
-          v-if="evaluation.completedDepth"
-          class="score-cell"
-        >
-          <span class="score-label">深度:</span>
-          <span class="score-value">{{ evaluation.completedDepth }}</span>
         </div>
       </div>
 
@@ -698,7 +691,9 @@ function isPlayed(candidate: { position: Position }): boolean {
           @blur="handleCandidateLeave"
         >
           <span class="chip-rank">{{ idx < 5 ? `#${idx + 1}` : "—" }}</span>
+          :
           <span class="chip-pos">{{ formatMove(candidate.position) }}</span>
+          /
           <span class="chip-score">
             {{ formatScore(candidate.searchScore ?? candidate.score) }}
           </span>
@@ -706,7 +701,7 @@ function isPlayed(candidate: { position: Position }): boolean {
             v-if="isPlayed(candidate)"
             class="chip-tag"
           >
-            着手
+            ◂
           </span>
         </span>
       </div>
@@ -954,7 +949,7 @@ function isPlayed(candidate: { position: Position }): boolean {
 
 .no-eval-text {
   color: var(--color-text-secondary);
-  font-size: var(--size-14);
+  font-size: var(--font-size-14);
 }
 
 .cpu-move {
@@ -965,7 +960,7 @@ function isPlayed(candidate: { position: Position }): boolean {
 
 .cpu-move-text {
   color: var(--color-text-secondary);
-  font-size: var(--size-14);
+  font-size: var(--font-size-14);
 }
 
 .player-eval {
@@ -983,7 +978,7 @@ function isPlayed(candidate: { position: Position }): boolean {
 }
 
 .move-label {
-  font-size: var(--size-13);
+  font-size: var(--font-size-13);
   font-weight: 500;
   color: var(--color-text-primary);
 }
@@ -992,7 +987,7 @@ function isPlayed(candidate: { position: Position }): boolean {
   padding: var(--size-1) var(--size-6);
   border-radius: var(--size-4);
   color: white;
-  font-size: var(--size-10);
+  font-size: var(--font-size-10);
   font-weight: 500;
 }
 
@@ -1000,7 +995,7 @@ function isPlayed(candidate: { position: Position }): boolean {
   padding: var(--size-1) var(--size-6);
   border-radius: var(--size-4);
   color: white;
-  font-size: var(--size-10);
+  font-size: var(--font-size-10);
   font-weight: 500;
   background-color: hsl(270, 50%, 55%);
 }
@@ -1009,7 +1004,7 @@ function isPlayed(candidate: { position: Position }): boolean {
   padding: var(--size-1) var(--size-6);
   border-radius: var(--size-4);
   color: white;
-  font-size: var(--size-10);
+  font-size: var(--font-size-10);
   font-weight: 500;
   background-color: hsl(0, 65%, 50%);
 }
@@ -1018,7 +1013,7 @@ function isPlayed(candidate: { position: Position }): boolean {
   padding: var(--size-1) var(--size-6);
   border-radius: var(--size-4);
   color: white;
-  font-size: var(--size-10);
+  font-size: var(--font-size-10);
   font-weight: 500;
   background-color: hsl(270, 50%, 55%);
 }
@@ -1028,7 +1023,7 @@ function isPlayed(candidate: { position: Position }): boolean {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--size-1) var(--size-6);
-  font-size: var(--size-11);
+  font-size: var(--font-size-11);
   font-family: monospace;
 }
 
@@ -1061,13 +1056,12 @@ function isPlayed(candidate: { position: Position }): boolean {
   display: flex;
   flex-wrap: wrap;
   gap: var(--size-2);
-  font-size: var(--size-10);
+  font-size: var(--font-size-10);
   font-family: monospace;
 }
 
 .candidate-chip {
   display: inline-flex;
-  gap: var(--size-2);
   padding: 0 var(--size-3);
   border-radius: var(--size-3);
   cursor: pointer;
@@ -1102,13 +1096,15 @@ function isPlayed(candidate: { position: Position }): boolean {
 
 .chip-tag {
   color: hsl(186, 60%, 40%);
-  font-size: var(--size-9);
 }
 
 /* 内訳比較セクション */
 .breakdown-section {
-  font-size: var(--size-10);
+  font-size: var(--font-size-10);
   font-family: monospace;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .breakdown-divider {
@@ -1123,7 +1119,7 @@ function isPlayed(candidate: { position: Position }): boolean {
 
 .breakdown-title {
   color: var(--color-text-secondary);
-  font-size: var(--size-9);
+  font-size: var(--font-size-9);
 }
 
 .help-button {
@@ -1135,7 +1131,7 @@ function isPlayed(candidate: { position: Position }): boolean {
   color: white;
   border: none;
   border-radius: 50%;
-  font-size: var(--size-10);
+  font-size: var(--font-size-10);
   font-weight: 500;
   line-height: var(--size-16);
   text-align: center;
@@ -1245,12 +1241,12 @@ function isPlayed(candidate: { position: Position }): boolean {
 
 .pv-label {
   color: var(--color-text-secondary);
-  font-size: var(--size-9);
+  font-size: var(--font-size-9);
 }
 
 .pv-search-score {
   color: var(--color-text-secondary);
-  font-size: var(--size-9);
+  font-size: var(--font-size-9);
   font-family: monospace;
 }
 
@@ -1262,7 +1258,7 @@ function isPlayed(candidate: { position: Position }): boolean {
   display: flex;
   flex-wrap: wrap;
   gap: var(--size-2);
-  font-size: var(--size-10);
+  font-size: var(--font-size-10);
   font-family: monospace;
 }
 
@@ -1313,7 +1309,7 @@ function isPlayed(candidate: { position: Position }): boolean {
   gap: var(--size-2);
   margin-top: var(--size-1);
   padding-left: var(--size-4);
-  font-size: var(--size-9);
+  font-size: var(--font-size-9);
   opacity: 0.8;
 }
 
@@ -1330,12 +1326,12 @@ function isPlayed(candidate: { position: Position }): boolean {
 }
 
 .pv-branch-sequence {
-  font-size: var(--size-9);
+  font-size: var(--font-size-9);
 }
 
 .pv-note {
   margin-top: var(--size-3);
-  font-size: var(--size-8);
+  font-size: var(--font-size-8);
   color: var(--color-text-secondary);
   line-height: 1.4;
 }
