@@ -53,6 +53,21 @@ describe("useFullscreenPrompt", () => {
 
     mockIsMobileByMedia.value = false;
 
+    // PWA判定のmatchMediaモック（デフォルト: 非PWA）
+    vi.stubGlobal(
+      "matchMedia",
+      vi.fn((query: string) => ({
+        matches: false,
+        media: query,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+        onchange: null,
+      })),
+    );
+
     mockPromptRef = shallowRef({
       showModal: vi.fn(),
     }) as unknown as PromptRef;
@@ -151,6 +166,34 @@ describe("useFullscreenPrompt", () => {
         configurable: true,
       });
       mockIsMobileByMedia.value = false;
+
+      const { showFullscreenPrompt } = useFullscreenPrompt(mockPromptRef);
+      showFullscreenPrompt();
+
+      expect(mockPromptRef.value?.showModal).not.toHaveBeenCalled();
+    });
+
+    it("PWA起動時はshowModalが呼ばれない", () => {
+      Object.defineProperty(navigator, "maxTouchPoints", {
+        value: 5,
+        configurable: true,
+      });
+      mockIsMobileByMedia.value = true;
+
+      // PWAモード（display-mode: fullscreen）をシミュレート
+      vi.stubGlobal(
+        "matchMedia",
+        vi.fn((query: string) => ({
+          matches: query.includes("display-mode"),
+          media: query,
+          addEventListener: vi.fn(),
+          removeEventListener: vi.fn(),
+          addListener: vi.fn(),
+          removeListener: vi.fn(),
+          dispatchEvent: vi.fn(),
+          onchange: null,
+        })),
+      );
 
       const { showFullscreenPrompt } = useFullscreenPrompt(mockPromptRef);
       showFullscreenPrompt();

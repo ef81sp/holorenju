@@ -32,8 +32,18 @@ export const useFullscreenPrompt = (
     }
   };
 
-  // 全画面表示プロンプトを表示
+  // PWA判定（standaloneまたはfullscreenモードで起動済み）
+  const isPWA =
+    typeof matchMedia === "function" &&
+    (matchMedia("(display-mode: standalone)").matches ||
+      matchMedia("(display-mode: fullscreen)").matches ||
+      (navigator as unknown as { standalone?: boolean }).standalone === true);
+
+  // 全画面表示プロンプトを表示（PWA起動時はスキップ）
   const showFullscreenPrompt = (): void => {
+    if (isPWA) {
+      return;
+    }
     if (isMobile.value && !isPromptDisabled()) {
       promptRef.value?.showModal();
     }
