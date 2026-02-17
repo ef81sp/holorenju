@@ -10,21 +10,17 @@ import { computed, ref } from "vue";
 import { useAppStore } from "@/stores/appStore";
 import { useCpuRecordStore } from "@/stores/cpuRecordStore";
 import { useLightDismiss } from "@/composables/useLightDismiss";
-import type { BattleResult, CpuDifficulty } from "@/types/cpu";
+import {
+  DIFFICULTY_ARIA_LABELS,
+  DIFFICULTY_LABELS,
+  type BattleResult,
+} from "@/types/cpu";
 
 const appStore = useAppStore();
 const cpuRecordStore = useCpuRecordStore();
 
 const dialogRef = ref<HTMLDialogElement | null>(null);
 useLightDismiss(dialogRef);
-
-// 難易度ラベル
-const difficultyLabels: Record<CpuDifficulty, string> = {
-  beginner: "かんたん",
-  easy: "やさしい",
-  medium: "ふつう",
-  hard: "むずかしい",
-};
 
 // 結果ラベル
 const resultLabels: Record<BattleResult, string> = {
@@ -93,8 +89,11 @@ defineExpose({
             :key="stat.difficulty"
             class="stats-card"
           >
-            <div class="stats-label">
-              {{ difficultyLabels[stat.difficulty] }}
+            <div
+              class="stats-label"
+              :aria-label="DIFFICULTY_ARIA_LABELS[stat.difficulty]"
+            >
+              {{ DIFFICULTY_LABELS[stat.difficulty] }}
             </div>
             <div class="stats-value">
               <span class="wins">{{ stat.wins }}勝</span>
@@ -128,8 +127,11 @@ defineExpose({
             class="recent-item"
           >
             <span class="record-date">{{ formatDate(record.timestamp) }}</span>
-            <span class="record-difficulty">
-              {{ difficultyLabels[record.difficulty] }}
+            <span
+              class="record-difficulty"
+              :aria-label="DIFFICULTY_ARIA_LABELS[record.difficulty]"
+            >
+              {{ DIFFICULTY_LABELS[record.difficulty] }}
             </span>
             <span
               class="record-result"

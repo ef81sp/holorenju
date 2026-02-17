@@ -25,6 +25,22 @@ export type {
  */
 export type CpuDifficulty = "beginner" | "easy" | "medium" | "hard";
 
+/** 難易度の★表示ラベル */
+export const DIFFICULTY_LABELS: Record<CpuDifficulty, string> = {
+  beginner: "★",
+  easy: "★★",
+  medium: "★★★",
+  hard: "★★★★",
+};
+
+/** 難易度のアクセシビリティラベル */
+export const DIFFICULTY_ARIA_LABELS: Record<CpuDifficulty, string> = {
+  beginner: "★1つ",
+  easy: "★2つ",
+  medium: "★3つ",
+  hard: "★4つ",
+};
+
 /**
  * 有効な難易度の配列
  */

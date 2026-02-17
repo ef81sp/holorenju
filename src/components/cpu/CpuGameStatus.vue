@@ -8,6 +8,7 @@
 import { computed, ref } from "vue";
 
 import { useCpuGameStore } from "@/stores/cpuGameStore";
+import { DIFFICULTY_ARIA_LABELS, DIFFICULTY_LABELS } from "@/types/cpu";
 
 // 座標を棋譜形式に変換
 function formatPosition(row: number, col: number): string {
@@ -27,16 +28,13 @@ const props = withDefaults(defineProps<Props>(), {
   isThinking: false,
 });
 
-// 難易度のラベル
-const difficultyLabels: Record<string, string> = {
-  beginner: "かんたん",
-  easy: "やさしい",
-  medium: "ふつう",
-  hard: "むずかしい",
-};
-
 const difficultyLabel = computed(
-  () => difficultyLabels[cpuGameStore.difficulty] ?? cpuGameStore.difficulty,
+  () => DIFFICULTY_LABELS[cpuGameStore.difficulty] ?? cpuGameStore.difficulty,
+);
+
+const difficultyAriaLabel = computed(
+  () =>
+    DIFFICULTY_ARIA_LABELS[cpuGameStore.difficulty] ?? cpuGameStore.difficulty,
 );
 
 const turnLabel = computed(() => {
@@ -75,7 +73,12 @@ async function handleCopy(): Promise<void> {
   <div class="cpu-game-status">
     <div class="status-row">
       <span class="status-label">難易度</span>
-      <span class="status-value">{{ difficultyLabel }}</span>
+      <span
+        class="status-value"
+        :aria-label="difficultyAriaLabel"
+      >
+        {{ difficultyLabel }}
+      </span>
     </div>
     <div class="status-row">
       <span class="status-label">手数</span>

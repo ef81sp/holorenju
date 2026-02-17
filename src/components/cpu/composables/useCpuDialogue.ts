@@ -27,10 +27,10 @@ export type CpuDialogueSituation =
  * 難易度とキャラクターのマッピング
  */
 const DIFFICULTY_CHARACTER_MAP: Record<CpuDifficulty, CharacterType> = {
-  beginner: "miko", // かんたん → ミコ
-  easy: "miko", // やさしい → ミコ
-  medium: "fubuki", // ふつう → フブキ
-  hard: "fubuki", // むずかしい → フブキ
+  beginner: "miko", // ★ → ミコ
+  easy: "miko", // ★★ → ミコ
+  medium: "fubuki", // ★★★ → フブキ
+  hard: "fubuki", // ★★★★ → フブキ
 };
 
 /**

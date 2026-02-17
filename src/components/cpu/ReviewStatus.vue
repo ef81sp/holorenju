@@ -8,6 +8,11 @@
 import { ref } from "vue";
 import ContentCopyIcon from "@/assets/icons/content_copy.svg?component";
 import CheckIcon from "@/assets/icons/check.svg?component";
+import {
+  DIFFICULTY_ARIA_LABELS,
+  DIFFICULTY_LABELS,
+  type CpuDifficulty,
+} from "@/types/cpu";
 
 interface Props {
   isEvaluating: boolean;
@@ -15,21 +20,13 @@ interface Props {
   totalCount: number;
   accuracy: number | null;
   criticalErrors: number;
-  difficulty: string;
+  difficulty: CpuDifficulty;
   moveCount: number;
   playerFirst: boolean;
   moveHistory: string | null;
 }
 
 const props = defineProps<Props>();
-
-/** 難易度ラベル */
-const difficultyLabels: Record<string, string> = {
-  beginner: "かんたん",
-  easy: "やさしい",
-  medium: "ふつう",
-  hard: "むずかしい",
-};
 
 /** コピー済みフィードバック */
 const copied = ref(false);
@@ -50,8 +47,11 @@ async function copyMoveHistory(): Promise<void> {
   <div class="review-status">
     <!-- 対局情報 -->
     <div class="game-info">
-      <span class="info-item">
-        {{ difficultyLabels[props.difficulty] ?? props.difficulty }}
+      <span
+        class="info-item"
+        :aria-label="DIFFICULTY_ARIA_LABELS[props.difficulty]"
+      >
+        {{ DIFFICULTY_LABELS[props.difficulty] }}
       </span>
       <span class="info-item">{{ props.playerFirst ? "先手" : "後手" }}</span>
       <span class="info-item">{{ props.moveCount }}手</span>
