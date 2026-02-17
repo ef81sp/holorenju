@@ -59,7 +59,7 @@ const defaultPreferences: Preferences = {
     sfxVolume: 0.7,
   },
   display: {
-    textSize: "normal",
+    textSize: "large",
   },
   accessibility: {
     boardAnnounce: true,

@@ -47,9 +47,9 @@ describe("preferencesStore", () => {
       expect(store.effectSpeed).toBe("normal");
     });
 
-    it("display.textSizeがnormal", () => {
+    it("display.textSizeがlarge", () => {
       const store = usePreferencesStore();
-      expect(store.textSize).toBe("normal");
+      expect(store.textSize).toBe("large");
     });
 
     it("cpu.fastMoveがfalse", () => {
@@ -110,7 +110,7 @@ describe("preferencesStore", () => {
       expect(store.animationEnabled).toBe(false);
       expect(store.speed).toBe("normal"); // デフォルト値
       expect(store.effectSpeed).toBe("normal"); // デフォルト値
-      expect(store.textSize).toBe("normal"); // デフォルト値
+      expect(store.textSize).toBe("large"); // デフォルト値
     });
 
     it("不正なJSONでもクラッシュしない", () => {
@@ -123,7 +123,7 @@ describe("preferencesStore", () => {
       expect(store.animationEnabled).toBe(true);
       expect(store.speed).toBe("normal");
       expect(store.effectSpeed).toBe("normal");
-      expect(store.textSize).toBe("normal");
+      expect(store.textSize).toBe("large");
     });
 
     it("空のオブジェクトでもデフォルト値が適用される", () => {
@@ -135,7 +135,7 @@ describe("preferencesStore", () => {
       expect(store.animationEnabled).toBe(true);
       expect(store.speed).toBe("normal");
       expect(store.effectSpeed).toBe("normal");
-      expect(store.textSize).toBe("normal");
+      expect(store.textSize).toBe("large");
     });
   });
 
