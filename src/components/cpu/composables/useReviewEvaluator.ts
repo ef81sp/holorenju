@@ -43,6 +43,7 @@ export function useReviewEvaluator(): UseReviewEvaluatorReturn {
 
   let workers: Worker[] = [];
   let cancelled = false;
+  let resolveAll: ((results: ReviewWorkerResult[]) => void) | null = null;
 
   /**
    * Workerプールを初期化
@@ -105,7 +106,6 @@ export function useReviewEvaluator(): UseReviewEvaluatorReturn {
     const pool = initPool();
     const results: ReviewWorkerResult[] = [];
     const queue = [...allMoveItems];
-    let resolveAll: ((results: ReviewWorkerResult[]) => void) | null = null;
 
     const promise = new Promise<ReviewWorkerResult[]>((resolve) => {
       resolveAll = resolve;
@@ -173,6 +173,8 @@ export function useReviewEvaluator(): UseReviewEvaluatorReturn {
   function cancel(): void {
     cancelled = true;
     isEvaluating.value = false;
+    resolveAll?.([]);
+    resolveAll = null;
     destroyPool();
   }
 

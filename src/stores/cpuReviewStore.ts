@@ -200,6 +200,15 @@ export const useCpuReviewStore = defineStore("cpuReview", () => {
   }
 
   /**
+   * 指定レコードのキャッシュを削除し、評価結果をクリア
+   */
+  function clearCacheForRecord(recordId: string): void {
+    reviewCache.value.delete(recordId);
+    saveCache(reviewCache.value);
+    evaluatedMoves.value = [];
+  }
+
+  /**
    * 振り返りを閉じる
    */
   function closeReview(): void {
@@ -232,6 +241,7 @@ export const useCpuReviewStore = defineStore("cpuReview", () => {
     goToStart,
     goToEnd,
     setEvaluationResults,
+    clearCacheForRecord,
     closeReview,
   };
 });

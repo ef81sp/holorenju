@@ -7,6 +7,7 @@
 
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 
+import RefreshIcon from "@/assets/icons/refresh.svg?component";
 import RenjuBoard from "@/components/game/RenjuBoard/RenjuBoard.vue";
 import SettingsControl from "@/components/common/SettingsControl.vue";
 import GamePlayerLayout from "@/components/common/GamePlayerLayout.vue";
@@ -89,6 +90,9 @@ async function startEvaluation(): Promise<void> {
 
   const { moveHistory } = record;
   const results = await evaluator.evaluate(moveHistory, record.playerFirst);
+  if (results.length === 0) {
+    return;
+  } // キャンセルされた場合
 
   // 結果を変換
   const evaluated = results.map((r) =>
@@ -206,6 +210,15 @@ function handleBack(): void {
   appStore.goToCpuSetup();
 }
 
+function handleReanalyze(): void {
+  if (evaluator.isEvaluating.value || !reviewStore.currentRecord) {
+    return;
+  }
+  evaluator.cancel();
+  reviewStore.clearCacheForRecord(reviewStore.currentRecord.id);
+  startEvaluation();
+}
+
 function handleLayoutClick(event: MouseEvent): void {
   if (isInteractiveClick(event)) {
     return;
@@ -230,6 +243,14 @@ function handleLayoutClick(event: MouseEvent): void {
       </template>
 
       <template #header-controls>
+        <button
+          class="reanalyze-button"
+          aria-label="再分析"
+          :disabled="evaluator.isEvaluating.value"
+          @click="handleReanalyze"
+        >
+          <RefreshIcon />
+        </button>
         <SettingsControl />
       </template>
 
@@ -329,6 +350,36 @@ function handleLayoutClick(event: MouseEvent): void {
 
   :deep(.dialog-section-slot) {
     grid-column: 1 / span 2;
+  }
+}
+
+.reanalyze-button {
+  width: var(--size-40);
+  height: var(--size-40);
+  padding: var(--size-8);
+  background: rgba(255, 255, 255, 0.9);
+  border: var(--size-2) solid var(--color-border);
+  border-radius: var(--size-8);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: var(--color-text-secondary);
+
+  &:hover:not(:disabled) {
+    background: white;
+    border-color: var(--color-border-heavy);
+    color: var(--color-text-primary);
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    margin: auto;
   }
 }
 
