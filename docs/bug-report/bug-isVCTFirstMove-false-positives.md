@@ -65,8 +65,8 @@ ct=four 修正の有効性は合成局面テスト（`vct.perf.test.ts`）で確
 ### 修正状況
 
 - [x] 原因特定
-- [ ] 修正実装（時間予算の問題を解決する設計が必要）
-- [ ] テスト追加
+- [x] 修正実装（深さ制限 CT_THREE_VCF_MAX_DEPTH=8 で hasVCF フォールバック）
+- [x] テスト追加（isVCTFirstMove ct=three テスト3件）
 
 ## 未修正2: 探索関数の ct=four/three フォールスルー
 

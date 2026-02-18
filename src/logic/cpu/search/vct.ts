@@ -36,6 +36,9 @@ export const VCT_STONE_THRESHOLD = 14;
 /** VCT探索の時間制限（ミリ秒） */
 const VCT_TIME_LIMIT = 150;
 
+/** ct=three 時の hasVCF フォールバック用深さ制限 */
+const CT_THREE_VCF_MAX_DEPTH = 8;
+
 /**
  * VCT探索オプション（外部からパラメータを設定可能）
  */
@@ -266,10 +269,23 @@ function evaluateCounterThreat(
     return result;
   }
 
-  // ct === "three" / "none": 通常の再帰
-  // ct=three は理論上 hasVCF フォールバックが正しいが、
-  // 実用上は時間予算の圧迫と探索木の変形で回帰する。
-  // 将来の改善課題（docs/vct-counter-threat-analysis.md参照）
+  if (ct === "three") {
+    // 防御側が活三を作った → 攻撃側の三脅威は無効（防御側が無視可能）
+    // 四脅威（VCF）のみで勝てるかチェック
+    // 深さ制限で探索コストを制御（環境非依存・決定的）
+    if (isTimeExceeded(limiter)) {
+      return false;
+    }
+    return hasVCF(board, color, 0, limiter, {
+      ...options?.vcfOptions,
+      maxDepth: Math.min(
+        options?.vcfOptions?.maxDepth ?? CT_THREE_VCF_MAX_DEPTH,
+        CT_THREE_VCF_MAX_DEPTH,
+      ),
+    });
+  }
+
+  // ct === "none": 通常の再帰
   return hasVCT(board, color, depth + 1, limiter, options);
 }
 

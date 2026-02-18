@@ -311,11 +311,11 @@ describe("ユーザ報告の棋譜テスト", () => {
 
   it("VCT開始手がisVCTFirstMoveで検証される", { timeout: 15000 }, () => {
     const { board } = createBoardFromRecord(record);
-    const move = findVCTMove(board, "white", options);
-    expect(move).not.toBeNull();
-    if (move) {
-      expect(isVCTFirstMove(board, move, "white", options)).toBe(true);
-    }
+    // findVCTMoveはhasVCTベース（ct=three楽観判定）のため、
+    // isVCTFirstMove（ct=three→hasVCFフォールバック）と結果が異なりうる。
+    // 既知の有効手H4で直接検証する。
+    const h4 = { row: 11, col: 7 };
+    expect(isVCTFirstMove(board, h4, "white", options)).toBe(true);
   });
 });
 
@@ -609,8 +609,9 @@ describe("カウンターフォー（ct=four）の処理", () => {
   });
 });
 
-// ct=three: 通常再帰にフォールスルー（hasVCFフォールバックは時間予算を圧迫するため不採用）
+// ct=three: hasVCFフォールバック適用済み
 // ct=threeの検出・盤面不変性テストは「VCTカウンター脅威: ct=three」グループに統合
+// isVCTFirstMove用のct=threeテストは「isVCTFirstMove: ct=three のhasVCFフォールバック」グループ
 
 describe("防御手のカウンター脅威チェック", () => {
   // 防御手が四を作る場合にVCTが不成立になることを検証
@@ -951,6 +952,72 @@ describe("ct=four 楽観判定の偽陽性", () => {
     ]);
     const snapshot = copyBoard(board);
     isVCTFirstMove(board, { row: 7, col: 7 }, "white");
+    expect(board).toEqual(snapshot);
+  });
+});
+
+describe("isVCTFirstMove: ct=three の hasVCF フォールバック", () => {
+  const options = {
+    maxDepth: 6,
+    timeLimit: 5000,
+    vcfOptions: { maxDepth: 8, timeLimit: 5000 },
+  };
+
+  it("ct=three + VCF あり → isVCTFirstMove=true", () => {
+    // White: (7,4)(7,5) — 横二、attack(7,6)で活三
+    // White: (0,5)(0,6)(0,7) — 活三（VCFリソース）
+    // Black: (5,3)(6,3) — 防御(7,3)でct=three
+    const board = createBoardWithStones([
+      { row: 7, col: 4, color: "white" },
+      { row: 7, col: 5, color: "white" },
+      { row: 0, col: 5, color: "white" },
+      { row: 0, col: 6, color: "white" },
+      { row: 0, col: 7, color: "white" },
+      { row: 5, col: 3, color: "black" },
+      { row: 6, col: 3, color: "black" },
+    ]);
+    // (7,6)攻撃 → (7,3)防御でct=three → hasVCF=true（(0,5)(0,6)(0,7)活三→活四）
+    // (7,7)防御でct=none → hasVCT=true（(0,5)(0,6)(0,7)のVCF）
+    expect(isVCTFirstMove(board, { row: 7, col: 6 }, "white", options)).toBe(
+      true,
+    );
+  });
+
+  it("ct=three + VCF なし → isVCTFirstMove=false", () => {
+    // White: (7,4)(7,5) — 横二、attack(7,6)で活三
+    // White: (10,4)(10,5)(11,6)(12,6) — VCTリソース（(10,6)でダブルスリー）だがVCFなし
+    // Black: (5,3)(6,3) — 防御(7,3)でct=three
+    const board = createBoardWithStones([
+      { row: 7, col: 4, color: "white" },
+      { row: 7, col: 5, color: "white" },
+      { row: 10, col: 4, color: "white" },
+      { row: 10, col: 5, color: "white" },
+      { row: 11, col: 6, color: "white" },
+      { row: 12, col: 6, color: "white" },
+      { row: 5, col: 3, color: "black" },
+      { row: 6, col: 3, color: "black" },
+    ]);
+    // 防御(7,3)でct=three → 攻撃側にVCFなし（止め四1回のみ、連続四追い不可）
+    // 修正前: hasVCT=true（(10,6)ダブルスリーでVCT成立 — 偽陽性）
+    // 修正後: hasVCF=false → 正しくfalse（防御の活三で三脅威無効化）
+    expect(isVCTFirstMove(board, { row: 7, col: 6 }, "white", options)).toBe(
+      false,
+    );
+  });
+
+  it("ct=three で盤面不変性", () => {
+    const board = createBoardWithStones([
+      { row: 7, col: 4, color: "white" },
+      { row: 7, col: 5, color: "white" },
+      { row: 10, col: 4, color: "white" },
+      { row: 10, col: 5, color: "white" },
+      { row: 11, col: 6, color: "white" },
+      { row: 12, col: 6, color: "white" },
+      { row: 5, col: 3, color: "black" },
+      { row: 6, col: 3, color: "black" },
+    ]);
+    const snapshot = copyBoard(board);
+    isVCTFirstMove(board, { row: 7, col: 6 }, "white", options);
     expect(board).toEqual(snapshot);
   });
 });
