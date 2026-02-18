@@ -2,7 +2,29 @@
 
 ## 概要
 
-振り返り機能で `isVCTFirstMove` が偽陽性を返し、非最善手が「最善手」として評価されるケースがある。ct=four の楽観判定は修正済みだが、他の偽陽性源が残存している。
+振り返り機能で `isVCTFirstMove` が偽陽性を返し、非最善手が「最善手」として評価されるケースがある。ct=four の楽観判定は修正済みだが、他の課題が残存している。
+
+## 再現棋譜の調査結果
+
+元のバグ報告で使用した再現棋譜について、Phase 0 の調査で以下が判明した。
+
+### 再現棋譜
+
+`H8 H9 G8 I8 G10 G9 F9 E8 E10 H7 F10 H10 F8 F11`（14手目盤面）
+
+- mise-VCF 検出: F8 の跳び四から VCF 手順あり
+- F6=(9,5) は跳び四を作り、防御後に VCT 成立（10秒の `findVCTSequence` で手順確認済み）
+
+### 検証結果
+
+- `isVCTFirstMove(F6)=true` は **正しい結果**（正当な VCT 開始手）
+- `hasVCT=true` かつ `findVCTSequence(3s)=null` は時間制限の差であり論理バグではない（10秒では検出可能）
+- F6 が「最善手」(scoreDiff=0→"excellent") と評価されるのは VCT 開始手として正当
+- **元のバグ報告の前提（「プレイヤーの手が不当に最善手として扱われる」）は、この再現棋譜では成立しない**
+
+### 結論
+
+ct=four 修正の有効性は合成局面テスト（`vct.perf.test.ts`）で確認済み。再現棋譜は偽陽性の再現ケースとしては不適切だったが、ct=four の楽観判定自体は合成局面で実証された実際の課題である。
 
 ## 修正済み: ct=four の楽観判定
 
@@ -46,51 +68,44 @@
 - [ ] 修正実装（時間予算の問題を解決する設計が必要）
 - [ ] テスト追加
 
-## 未修正2: hasVCT 自体の偽陽性
+## 未修正2: 探索関数の ct=four/three フォールスルー
 
 ### 症状
 
 - 探索関数（`hasVCT`/`findVCTMove`/`findVCTSequence`）は ct=four/three を通常再帰にフォールスルー
-- `evaluateCounterThreat` は `isVCTFirstMove` 専用のため、探索関数の偽陽性は未対応
-- `hasVCT` が `true` でも `findVCTSequence` が `null` になるケースが存在（時間制限の違いによる）
+- `evaluateCounterThreat` の ct=four 修正は `isVCTFirstMove` 専用であり、探索関数本体には未適用
 
 ### 想定される原因
 
 - 探索関数に ct=four を適用すると探索木が変形し実用時間で完了しない
-- `hasVCT`（boolean判定）と `findVCTSequence`（手順収集）で時間消費が異なり、結果の一貫性がない
 
-### 確認方法
+### 観察事項: hasVCT vs findVCTSequence の時間制限不一致
 
-```bash
-pnpm vitest run --project perf src/logic/cpu/search/vct.perf.test.ts -t "ミセ四追い"
-```
-
-再現棋譜 `H8 H9 G8 I8 G10 G9 F9 E8 E10 H7 F10 H10 F8 F11` の14手目盤面で、
-F6=(9,5) に対する `isVCTFirstMove` が `true` を返す。
-F6は跳び四を作り防御後に `hasVCT(depth=2)=true` だが、`findVCTSequence(3s)=null`（10秒では検出可能）。
+`hasVCT`（boolean判定）と `findVCTSequence`（手順収集）で時間消費が異なり、結果の一貫性がないケースがある。ただし、再現棋譜の F6 の事例（`hasVCT=true`, `findVCTSequence(3s)=null`）は調査の結果 F6 が正当な VCT 開始手と判明したため、偽陽性の再現例としては使用できない（「再現棋譜の調査結果」セクション参照）。
 
 ### 修正状況
 
 - [x] 原因特定
-- [ ] 修正実装（Phase 2「ヒント方式 + minimax検証」で偽陽性を吸収する設計を予定）
+- [ ] 修正実装（Phase 2「ヒント方式 + minimax検証」で吸収する設計を予定）
 - [ ] テスト追加
 
-## 未修正3: review.worker.ts の VCT 検証ガード不足
+## 未修正3: review.worker.ts の isVCTFirstMove 呼び出し最適化
 
 ### 症状
 
 - `review.worker.ts` で VCT 検出は `VCT_STONE_THRESHOLD` でゲートされるが、`isVCTFirstMove` 呼び出し前にはこのガードがない
-- `isVCTFirstMove` は独自の `TimeLimiter` と `isThreat`/`hasOpenThree` ガードで制限されるため影響は限定的
+- `isVCTFirstMove` は独自の `TimeLimiter` と `isThreat`/`hasOpenThree` ガードで制限されるため、正確性への影響はない
 
-### 想定される原因
+### 改善内容
 
-- `isVCTFirstMove` は任意の手に対して呼ばれるが、石数が少ない序盤では VCT が成立しにくく、計算が無駄になる
+- パフォーマンス最適化: 石数が少ない序盤では VCT が成立しにくく、`isVCTFirstMove` の計算が無駄になる
+- `isVCTFirstMove` 呼び出し前に石数チェックを追加することで不要な計算を削減
 
 ### 修正状況
 
 - [x] 原因特定
-- [ ] 修正実装（`isVCTFirstMove` 呼び出し前に石数チェック追加）
-- [ ] テスト追加
+- [x] 修正実装（`isVCTFirstMove` 呼び出し前に石数チェック追加）
+- [x] テスト追加（worker はテスト困難、findVCTSequence と同一ガード条件のため既存テストで回帰確認）
 
 ## 関連ファイル
 

@@ -260,6 +260,7 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
       ) {
         // 別の追い詰め開始手かチェック
         if (
+          countStones(board) >= VCT_STONE_THRESHOLD &&
           isVCTFirstMove(
             board,
             { row: playedRow, col: playedCol },
