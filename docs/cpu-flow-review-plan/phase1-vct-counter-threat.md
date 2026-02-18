@@ -22,12 +22,12 @@ ct=four を全4関数に適用すると hasVCT の探索木が変形し、23手�
 > Phase 2 で `findVCTMove` をメインフローに統合する際は「ヒント方式 + minimax検証」で
 > 偽陽性を吸収する設計とすること。
 
-| 関数                       | ct=win                          | ct=four               | ct=three/none |
-| -------------------------- | ------------------------------- | --------------------- | ------------- |
-| `hasVCT`                   | `checkFive` → false             | 通常再帰              | 通常再帰      |
-| `findVCTMoveRecursive`     | `checkFive` → false             | 通常再帰              | 通常再帰      |
-| `findVCTSequenceRecursive` | `checkFive` → false             | 通常再帰              | 通常再帰      |
-| `isVCTFirstMove`           | `evaluateCounterThreat` → false | ブロック+脅威チェック | 通常再帰      |
+| 関数                       | ct=win                          | ct=four             | ct=three/none |
+| -------------------------- | ------------------------------- | ------------------- | ------------- |
+| `hasVCT`                   | `checkFive` → false             | 通常再帰            | 通常再帰      |
+| `findVCTMoveRecursive`     | `checkFive` → false             | 通常再帰            | 通常再帰      |
+| `findVCTSequenceRecursive` | `checkFive` → false             | 通常再帰            | 通常再帰      |
+| `isVCTFirstMove`           | `evaluateCounterThreat` → false | ブロック+hasVCT再帰 | 通常再帰      |
 
 ### evaluateCounterThreat（新規ヘルパー）
 
@@ -46,7 +46,7 @@ function evaluateCounterThreat(
 ```
 
 - `ct=win`: false（防御で五連）
-- `ct=four`: `getFourDefensePosition` でブロック位置取得 → `isThreat` で脅威チェック（楽観判定: 再帰なし）
+- `ct=four`: `getFourDefensePosition` でブロック位置取得 → `hasVCT` で再帰的にVCT継続を検証
 - `ct=three/none`: `hasVCT` 通常再帰
 
 ### hasVCT / findVCTMoveRecursive / findVCTSequenceRecursive の簡素化
@@ -59,11 +59,13 @@ function evaluateCounterThreat(
 
 ## テスト結果
 
-- [x] 既存VCTテスト（`vct.perf.test.ts`）全58テストパス
+- [x] 既存VCTテスト（`vct.perf.test.ts`）全テストパス
 - [x] `ct=four` でブロックが脅威を作る → VCT成立（isVCTFirstMove）
 - [x] `ct=four` でブロックが脅威を作らない → VCT不成立（isVCTFirstMove）
+- [x] `ct=four` でブロックが囲まれた活三を作る → VCT不成立（hasVCT再帰で正しく棄却）
+- [x] `ct=four` でブロックがVCFリソース付き活三を作る → VCT成立
 - [x] `ct=three` 検出テスト
 - [x] `ct=three` VCFあり/なしテスト
 - [x] 23手目VCT経路が引き続き検出される
+- [x] mise-VCF局面の再現テスト（F6のVCT開始手判定）
 - [x] `pnpm check-fix` パス（0 errors）
-- [x] unit テスト全1407パス

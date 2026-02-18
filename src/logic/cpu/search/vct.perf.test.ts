@@ -9,6 +9,7 @@ import { copyBoard, createEmptyBoard } from "@/logic/renjuRules";
 
 import { countStones } from "../core/boardUtils";
 import { createBoardWithStones } from "../testUtils";
+import { findMiseVCFSequence } from "./miseVcf";
 import {
   checkDefenseCounterThreat,
   getFourDefensePosition,
@@ -830,6 +831,126 @@ describe("VCTカウンター脅威: ct=three", () => {
     findVCTMove(board, "white");
     expect(board).toEqual(snapshot);
     findVCTSequence(board, "white");
+    expect(board).toEqual(snapshot);
+  });
+});
+
+describe("ミセ四追い局面での再現テスト", () => {
+  // 再現棋譜の14手目までの盤面（黒番、15手目F6の直前）
+  // mise-VCF: firstMove=G7(8,6), defenseMove=F6(9,5)
+  // F6は跳び四(5,5)(6,5)(7,5)_(8,5)(9,5)を作り、防御後に黒VCTが成立する
+  const record14 = "H8 H9 G8 I8 G10 G9 F9 E8 E10 H7 F10 H10 F8 F11";
+
+  it("14手目盤面でmise-VCFが検出される", () => {
+    const { board } = createBoardFromRecord(record14);
+    const miseVcf = findMiseVCFSequence(board, "black", {
+      vcfOptions: { maxDepth: 12, timeLimit: 300 },
+      timeLimit: 500,
+    });
+    expect(miseVcf).not.toBeNull();
+    expect(miseVcf?.firstMove).toEqual({ row: 8, col: 6 }); // G7
+    expect(miseVcf?.defenseMove).toEqual({ row: 9, col: 5 }); // F6
+  });
+
+  it("F6は有効なVCT開始手（跳び四→防御後にVCT成立）", () => {
+    const { board } = createBoardFromRecord(record14);
+    // F6の跳び四は正当なVCTリソース（ct=none経由でhasVCT=true）
+    expect(
+      isVCTFirstMove(board, { row: 9, col: 5 }, "black", {
+        maxDepth: 6,
+        timeLimit: 3000,
+        vcfOptions: { maxDepth: 16, timeLimit: 3000 },
+      }),
+    ).toBe(true);
+  });
+
+  it("盤面不変性", () => {
+    const { board } = createBoardFromRecord(record14);
+    const snapshot = copyBoard(board);
+    isVCTFirstMove(board, { row: 9, col: 5 }, "black", {
+      maxDepth: 6,
+      timeLimit: 3000,
+      vcfOptions: { maxDepth: 16, timeLimit: 3000 },
+    });
+    expect(board).toEqual(snapshot);
+  });
+});
+
+describe("ct=four 楽観判定の偽陽性", () => {
+  // ブロックが「囲まれた活三」を作る場合:
+  // isThreat=trueだがhasVCT=false → 現行コードは偽陽性を返す
+  //
+  // 盤面構成:
+  // Row 7: B(7,4) W(7,5) W(7,6) [W(7,7)played] W(7,8) → 止め四, 防御(7,9)
+  // Col 9: W(5,9) B(6,9) [B(7,9)defense] B(8,9) B(9,9) → カウンター止め四, ブロック(10,9)
+  // Row 10: B(10,7) _(10,8) [W(10,9)block] W(10,10) W(10,11) _(10,12) B(10,13)
+  //   → ブロックで活三形成、しかし両端が黒に囲まれ止め四しか作れない → VCT不成立
+  it("ブロックが囲まれた活三を作る場合、VCT開始手として無効", () => {
+    const board = createBoardWithStones([
+      // 止め四リソース (row 7)
+      { row: 7, col: 5, color: "white" },
+      { row: 7, col: 6, color: "white" },
+      { row: 7, col: 8, color: "white" },
+      { row: 7, col: 4, color: "black" }, // 左端ブロック
+      // カウンターフォーリソース (col 9)
+      { row: 5, col: 9, color: "white" }, // 上端ブロック
+      { row: 6, col: 9, color: "black" },
+      { row: 8, col: 9, color: "black" },
+      { row: 9, col: 9, color: "black" },
+      // (5,9)-(6,8)-(7,7)斜めリソースを遮断
+      { row: 6, col: 8, color: "black" },
+      // ブロック位置(10,9)で活三になるが両端に黒
+      { row: 10, col: 10, color: "white" },
+      { row: 10, col: 11, color: "white" },
+      { row: 10, col: 7, color: "black" }, // 活三左端
+      { row: 10, col: 13, color: "black" }, // 活三右端（1マス空け）
+    ]);
+    // (7,7)で止め四 → (7,9)防御でct=four → (10,9)ブロック
+    // ブロックで活三だが両端に黒 → 止め四しか作れず勝利不能
+    expect(isVCTFirstMove(board, { row: 7, col: 7 }, "white")).toBe(false);
+  });
+
+  it("ブロックが活三+VCFリソースを持つ場合、VCT開始手として有効", () => {
+    const board = createBoardWithStones([
+      // 止め四リソース (row 7)
+      { row: 7, col: 5, color: "white" },
+      { row: 7, col: 6, color: "white" },
+      { row: 7, col: 8, color: "white" },
+      { row: 7, col: 4, color: "black" },
+      // カウンターフォーリソース (col 9)
+      { row: 5, col: 9, color: "white" },
+      { row: 6, col: 9, color: "black" },
+      { row: 8, col: 9, color: "black" },
+      { row: 9, col: 9, color: "black" },
+      // ブロック位置(10,9)で活三（制限なし: VCTリソースあり）
+      { row: 10, col: 10, color: "white" },
+      { row: 10, col: 11, color: "white" },
+      // 追加VCFリソース (row 0): 活三→活四→勝利
+      { row: 0, col: 5, color: "white" },
+      { row: 0, col: 6, color: "white" },
+      { row: 0, col: 7, color: "white" },
+    ]);
+    expect(isVCTFirstMove(board, { row: 7, col: 7 }, "white")).toBe(true);
+  });
+
+  it("盤面不変性", () => {
+    const board = createBoardWithStones([
+      { row: 7, col: 5, color: "white" },
+      { row: 7, col: 6, color: "white" },
+      { row: 7, col: 8, color: "white" },
+      { row: 7, col: 4, color: "black" },
+      { row: 5, col: 9, color: "white" },
+      { row: 6, col: 9, color: "black" },
+      { row: 6, col: 8, color: "black" },
+      { row: 8, col: 9, color: "black" },
+      { row: 9, col: 9, color: "black" },
+      { row: 10, col: 10, color: "white" },
+      { row: 10, col: 11, color: "white" },
+      { row: 10, col: 7, color: "black" },
+      { row: 10, col: 13, color: "black" },
+    ]);
+    const snapshot = copyBoard(board);
+    isVCTFirstMove(board, { row: 7, col: 7 }, "white");
     expect(board).toEqual(snapshot);
   });
 });

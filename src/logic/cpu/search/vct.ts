@@ -230,7 +230,7 @@ export function hasVCT(
  * これらに適用すると探索木が変形し実用的な時間で完了しないため。
  *
  * ct=win: 防御手で五連 → VCT不成立
- * ct=four: 攻撃側は四のブロック位置に限定。ブロックが脅威を作ればVCT継続（楽観判定）
+ * ct=four: 攻撃側は四のブロック位置に限定。ブロック後にVCTが継続するか再帰的に検証
  * ct=three/none: 通常の再帰（ct=three の hasVCF フォールバックは将来課題）
  */
 function evaluateCounterThreat(
@@ -249,7 +249,7 @@ function evaluateCounterThreat(
   if (ct === "four") {
     // 防御側がカウンターフォーを作った
     // → 攻撃側は四のブロック位置に限定される
-    // → ブロックが脅威を作れば継続可能（楽観判定: 再帰なしで高速）
+    // → ブロック後にVCTが継続するか再帰的に検証
     const opponentColor = color === "black" ? "white" : "black";
     const blockPos = getFourDefensePosition(board, defensePos, opponentColor);
     if (!blockPos) {
@@ -259,7 +259,7 @@ function evaluateCounterThreat(
     if (blockRow) {
       blockRow[blockPos.col] = color;
     }
-    const result = isThreat(board, blockPos.row, blockPos.col, color);
+    const result = hasVCT(board, color, depth + 1, limiter, options);
     if (blockRow) {
       blockRow[blockPos.col] = null;
     }
