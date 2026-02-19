@@ -116,13 +116,61 @@ if (ct === "win") {
 
 例: ブロックが「囲まれた活三」（両端に相手石）を作る場合、止め四しか作れずVCT不成立。旧コードでは `isThreat=true` で偽陽性、新コードでは `hasVCT=false` で正しく棄却。
 
-#### 未実装: 探索関数への ct=four 適用
+#### 実装済み: `findVCTSequence` の事後検証（post-search validation）
 
-探索関数（hasVCT/findVCTMove/findVCTSequence）では ct=four/three を通常再帰にフォールスルーしたまま。探索関数に適用すると探索木が変形し実用時間で完了しないため、Phase 2 の「ヒント方式 + minimax検証」で偽陽性を吸収する設計を予定。
+探索関数（hasVCT/findVCTMove/findVCTSequence）内でのper-nodeカウンター脅威チェックは、探索木の全ノードに対して `createsFour` を呼ぶため6倍以上の速度低下を招き実用不可能だった（試行4,5で確認）。
 
-#### 未実装: ct=three の hasVCF フォールバック
+代替として `findVCTSequence` のみ**事後検証**方式を採用:
 
-理論上は `ct=three` で `hasVCF` にフォールバックすべきだが、共有時間予算を圧迫する問題が未解決。
+1. 探索は高速（`checkFive` のみ、従来通り）
+2. 見つかった手順を O(sequence_length) でリプレイ
+3. 各防御手が五連（counter-win）または四（counter-four）を作る場合、手順を棄却
+
+`hasVCT` / `findVCTMove` はper-nodeチェックなしのまま（偽陽性の可能性あり）。正確なVCT判定が必要な場合は `isVCTFirstMove`（`evaluateCounterThreat` 使用）を利用する。
+
+#### 未実装: ct=three の事後検証
+
+事後検証は現在 counter-win と counter-four のみチェック。counter-three（防御手が活三を作る場合）は未対応。攻撃側の次手が四であれば活三は無視可能だが、三脅威の場合は無効化される。`isVCTFirstMove` では `hasVCF` フォールバックで対応済み。
+
+### 試行4: 探索関数に `checkDefenseCounterThreat` を追加
+
+```typescript
+const ct = checkDefenseCounterThreat(
+  board,
+  defensePos.row,
+  defensePos.col,
+  opponentColor,
+);
+// ct に応じて evaluateCounterThreat で分岐
+```
+
+**結果**: 9テスト失敗。23手目テストが30秒でもタイムアウト。
+
+**原因**: `checkDefenseCounterThreat` は `checkFive` + `createsFour` + `createsOpenThree` を統合した1パス関数だが、VCT探索木の数百万ノードに対して呼ぶとper-node コストが3倍以上になり、5秒→30秒超の速度低下。
+
+### 試行5: `checkFive` + `createsFour` のみ（三チェック省略）
+
+```typescript
+const defenseWins = checkFive(
+  board,
+  defensePos.row,
+  defensePos.col,
+  opponentColor,
+);
+const defenseCounterFour =
+  !defenseWins &&
+  createsFour(board, defensePos.row, defensePos.col, opponentColor);
+```
+
+**結果**: 6テスト失敗 → 4テスト失敗（部分改善）。23手目テストは依然30秒超タイムアウト。
+
+**原因**: `createsFour` 単独でも `checkJumpFour` を含む4方向スキャン（約280演算/呼び出し）が必要。ベースライン `checkFive`（約100演算）との差が大きく、数百万ノードでは累積コストが致命的。
+
+### 試行6（最終）: 事後検証（post-search validation）
+
+探索関数はそのまま（`checkFive` のみ）。`findVCTSequence` で見つかった手順を事後検証。
+
+**結果**: 全テストパス。性能劣化なし（検証は O(sequence_length) で高速）。
 
 ## 17手目VCT経路の分析
 

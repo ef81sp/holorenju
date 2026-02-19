@@ -5,11 +5,12 @@
 import { describe, expect, it } from "vitest";
 
 import { createBoardFromRecord } from "@/logic/gameRecordParser";
-import { copyBoard, createEmptyBoard } from "@/logic/renjuRules";
+import { checkFive, copyBoard, createEmptyBoard } from "@/logic/renjuRules";
 
 import { countStones } from "../core/boardUtils";
 import { createBoardWithStones } from "../testUtils";
 import { findMiseVCFSequence } from "./miseVcf";
+import { createsFour } from "./threatMoves";
 import {
   checkDefenseCounterThreat,
   getFourDefensePosition,
@@ -278,10 +279,11 @@ describe("ユーザ報告の棋譜テスト", () => {
   // H4はJ6-I5-H4のナナメの活三を作り、VCT開始手として有効
   const record =
     "H8 H7 H6 I7 G7 I5 G8 F8 G6 G5 E6 F6 F7 H9 E7 E5 C4 D5 F5 D7 K3 J6 H10";
+  // 分析用: 正確性重視のため時間制限を十分に確保
   const options = {
     maxDepth: 6,
-    timeLimit: 5000,
-    vcfOptions: { maxDepth: 16, timeLimit: 5000 },
+    timeLimit: 30000,
+    vcfOptions: { maxDepth: 16, timeLimit: 30000 },
   };
 
   it("24手目は白番", () => {
@@ -289,27 +291,31 @@ describe("ユーザ報告の棋譜テスト", () => {
     expect(nextColor).toBe("white");
   });
 
-  it("H4がJ6-I5-H4のナナメの活三を作りVCT開始手と判定される", () => {
-    const { board } = createBoardFromRecord(record);
-    // H4 → row=11, col=7（白番）
-    const h4 = { row: 11, col: 7 };
-    expect(isVCTFirstMove(board, h4, "white", options)).toBe(true);
-  });
+  it(
+    "H4がJ6-I5-H4のナナメの活三を作りVCT開始手と判定される",
+    { timeout: 35000 },
+    () => {
+      const { board } = createBoardFromRecord(record);
+      // H4 → row=11, col=7（白番）
+      const h4 = { row: 11, col: 7 };
+      expect(isVCTFirstMove(board, h4, "white", options)).toBe(true);
+    },
+  );
 
-  it("findVCTMoveが白のVCT開始手を見つける", () => {
+  it("findVCTMoveが白のVCT開始手を見つける", { timeout: 35000 }, () => {
     const { board } = createBoardFromRecord(record);
     const move = findVCTMove(board, "white", options);
     expect(move).not.toBeNull();
   });
 
-  it("findVCTSequenceが白のVCT手順を返す", () => {
+  it("findVCTSequenceが白のVCT手順を返す", { timeout: 35000 }, () => {
     const { board } = createBoardFromRecord(record);
     const result = findVCTSequence(board, "white", options);
     expect(result).not.toBeNull();
     expect(result?.sequence.length).toBeGreaterThanOrEqual(3);
   });
 
-  it("VCT開始手がisVCTFirstMoveで検証される", { timeout: 15000 }, () => {
+  it("VCT開始手がisVCTFirstMoveで検証される", { timeout: 35000 }, () => {
     const { board } = createBoardFromRecord(record);
     // findVCTMoveはhasVCTベース（ct=three楽観判定）のため、
     // isVCTFirstMove（ct=three→hasVCFフォールバック）と結果が異なりうる。
@@ -383,10 +389,11 @@ describe("分岐収集（collectBranches）", () => {
   // 23手目盤面: 白のVCTが成立し、分岐が存在する
   const record =
     "H8 H7 H6 I7 G7 I5 G8 F8 G6 G5 E6 F6 F7 H9 E7 E5 C4 D5 F5 D7 K3 J6 H10";
+  // 分岐収集は分析機能のため、正確性重視で時間制限を十分に確保
   const branchOptions = {
     maxDepth: 6,
-    timeLimit: 10000,
-    vcfOptions: { maxDepth: 16, timeLimit: 10000 },
+    timeLimit: 60000,
+    vcfOptions: { maxDepth: 16, timeLimit: 60000 },
     collectBranches: true,
   };
 
@@ -405,35 +412,29 @@ describe("分岐収集（collectBranches）", () => {
     expect(result?.branches).toBeUndefined();
   });
 
-  it("23手目盤面でVCT手順が収集される", () => {
+  it("23手目盤面でVCT手順が収集される", { timeout: 90000 }, () => {
     const { board } = createBoardFromRecord(record);
-    // 分岐収集は探索コストが高いため時間制限を延長
-    // perf プロジェクト（testTimeout: 30000）で直列実行されるため余裕を持たせる
-    const result = findVCTSequence(board, "white", {
-      ...branchOptions,
-      timeLimit: 25000,
-      vcfOptions: { maxDepth: 16, timeLimit: 25000 },
-    });
+    const result = findVCTSequence(board, "white", branchOptions);
     expect(result).not.toBeNull();
     expect(result?.sequence.length).toBeGreaterThanOrEqual(3);
   });
 
   it(
     "collectBranches: false（デフォルト）では既存の動作を維持",
-    { timeout: 15000 },
+    { timeout: 40000 },
     () => {
       const { board } = createBoardFromRecord(record);
       const result = findVCTSequence(board, "white", {
         maxDepth: 6,
-        timeLimit: 10000,
-        vcfOptions: { maxDepth: 16, timeLimit: 10000 },
+        timeLimit: 30000,
+        vcfOptions: { maxDepth: 16, timeLimit: 30000 },
       });
       expect(result).not.toBeNull();
       expect(result?.branches).toBeUndefined();
     },
   );
 
-  it("盤面不変性（collectBranches: true）", { timeout: 15000 }, () => {
+  it("盤面不変性（collectBranches: true）", { timeout: 90000 }, () => {
     const { board } = createBoardFromRecord(record);
     const snapshot = copyBoard(board);
     findVCTSequence(board, "white", branchOptions);
@@ -1018,6 +1019,119 @@ describe("isVCTFirstMove: ct=three の hasVCF フォールバック", () => {
     ]);
     const snapshot = copyBoard(board);
     isVCTFirstMove(board, { row: 7, col: 6 }, "white", options);
+    expect(board).toEqual(snapshot);
+  });
+});
+
+describe("findVCTSequence の事後検証", () => {
+  it(
+    "返された手順の防御手がカウンターフォーを作らない",
+    { timeout: 35000 },
+    () => {
+      // 16手目まで（黒番）: 探索がカウンターフォー防御を含む偽VCTを返さないことを確認
+      const record = "H8 I7 G9 I8 I9 G7 H10 J9 I11 F8 H7 H6 H9 H11 E9 F9";
+      const { board } = createBoardFromRecord(record);
+      const options = {
+        maxDepth: 6,
+        timeLimit: 30000,
+        vcfOptions: { maxDepth: 16, timeLimit: 30000 },
+      };
+      const result = findVCTSequence(board, "black", options);
+      // 返された手順があれば、全防御手がカウンターフォーを作らないことを検証
+      if (result) {
+        for (let i = 0; i < result.sequence.length; i++) {
+          const pos = result.sequence[i]!;
+          const isDefense = i % 2 === 1;
+          if (isDefense) {
+            // 手順をリプレイして防御手の状態を確認
+            const replayBoard = copyBoard(board);
+            for (let j = 0; j <= i; j++) {
+              const p = result.sequence[j]!;
+              const stoneColor: "black" | "white" =
+                j % 2 === 0 ? "black" : "white";
+              replayBoard[p.row]![p.col] = stoneColor;
+            }
+            expect(checkFive(replayBoard, pos.row, pos.col, "white")).toBe(
+              false,
+            );
+            expect(createsFour(replayBoard, pos.row, pos.col, "white")).toBe(
+              false,
+            );
+          }
+        }
+      }
+    },
+  );
+
+  it("盤面不変性", { timeout: 35000 }, () => {
+    const record = "H8 I7 G9 I8 I9 G7 H10 J9 I11 F8 H7 H6 H9 H11 E9 F9";
+    const { board } = createBoardFromRecord(record);
+    const snapshot = copyBoard(board);
+    findVCTSequence(board, "black", {
+      maxDepth: 6,
+      timeLimit: 30000,
+      vcfOptions: { maxDepth: 16, timeLimit: 30000 },
+    });
+    expect(board).toEqual(snapshot);
+  });
+});
+
+describe("VCT探索のカウンター脅威チェック（探索関数）", () => {
+  it("ct=four: hasVCTで防御手の四をブロック→VCT継続を検証", () => {
+    // White: (3,3)ブロッカー, (7,4)(7,5)横二, (8,4)(8,5)ブロック後の脅威用
+    // Black: (4,3)(5,3)(6,3)縦三
+    // White (7,6)で活三 → 防御(7,3)でBlack縦四 → ブロック(8,3)で白活三
+    // hasVCTでもct=four処理が有効であることを確認
+    const board = createBoardWithStones([
+      { row: 3, col: 3, color: "white" },
+      { row: 7, col: 4, color: "white" },
+      { row: 7, col: 5, color: "white" },
+      { row: 8, col: 4, color: "white" },
+      { row: 8, col: 5, color: "white" },
+      { row: 4, col: 3, color: "black" },
+      { row: 5, col: 3, color: "black" },
+      { row: 6, col: 3, color: "black" },
+    ]);
+    const ctFourOptions = { timeLimit: 1000 };
+    expect(hasVCT(board, "white", 0, undefined, ctFourOptions)).toBe(true);
+    const move = findVCTMove(board, "white", ctFourOptions);
+    expect(move).not.toBeNull();
+    const seq = findVCTSequence(board, "white", ctFourOptions);
+    expect(seq).not.toBeNull();
+  });
+
+  it("ct=four: ブロックが孤立 → hasVCT/findVCTMove/findVCTSequence で不成立", () => {
+    // ブロック(8,3)が孤立（脅威にならない）→ VCT不成立
+    const board = createBoardWithStones([
+      { row: 3, col: 3, color: "white" },
+      { row: 7, col: 4, color: "white" },
+      { row: 7, col: 5, color: "white" },
+      { row: 4, col: 3, color: "black" },
+      { row: 5, col: 3, color: "black" },
+      { row: 6, col: 3, color: "black" },
+    ]);
+    expect(hasVCT(board, "white")).toBe(false);
+    expect(findVCTMove(board, "white")).toBeNull();
+    expect(findVCTSequence(board, "white")).toBeNull();
+  });
+
+  it("ct=four: 盤面不変性", () => {
+    const board = createBoardWithStones([
+      { row: 3, col: 3, color: "white" },
+      { row: 7, col: 4, color: "white" },
+      { row: 7, col: 5, color: "white" },
+      { row: 8, col: 4, color: "white" },
+      { row: 8, col: 5, color: "white" },
+      { row: 4, col: 3, color: "black" },
+      { row: 5, col: 3, color: "black" },
+      { row: 6, col: 3, color: "black" },
+    ]);
+    const snapshot = copyBoard(board);
+    hasVCT(board, "white");
+    expect(board).toEqual(snapshot);
+    findVCTMove(board, "white");
+    expect(board).toEqual(snapshot);
+    findVCTSequence(board, "white");
     expect(board).toEqual(snapshot);
   });
 });

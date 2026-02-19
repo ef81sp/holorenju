@@ -10,6 +10,7 @@ import type { BoardState, Position } from "@/types/game";
 import { checkFive, checkForbiddenMove } from "@/logic/renjuRules";
 
 import { type TimeLimiter, isTimeExceeded } from "./context";
+import { createsFour } from "./threatMoves";
 import {
   checkDefenseCounterThreat,
   getFourDefensePosition,
@@ -227,14 +228,15 @@ export function hasVCT(
 }
 
 /**
- * カウンター脅威に応じたVCT継続判定（isVCTFirstMove専用）
+ * カウンター脅威に応じたVCT継続判定
  *
- * 探索関数（hasVCT/findVCTMove/findVCTSequence）では使用しない。
- * これらに適用すると探索木が変形し実用的な時間で完了しないため。
+ * isVCTFirstMoveで使用。探索関数（hasVCT/findVCTMove/findVCTSequence）では
+ * per-nodeチェックが性能上不可能なため、findVCTSequenceのみ事後検証で対応。
  *
  * ct=win: 防御手で五連 → VCT不成立
  * ct=four: 攻撃側は四のブロック位置に限定。ブロック後にVCTが継続するか再帰的に検証
- * ct=three/none: 通常の再帰（ct=three の hasVCF フォールバックは将来課題）
+ * ct=three: 防御側の活三で三脅威は無効。hasVCFフォールバック（深度制限付き）
+ * ct=none: 通常の再帰
  */
 function evaluateCounterThreat(
   ct: "win" | "four" | "three" | "none",
@@ -510,6 +512,13 @@ export function findVCTSequence(
   if (!found || !sequence[0]) {
     return null;
   }
+
+  // Post-search validation: 防御手がカウンターフォー/カウンターウィンを作る経路を棄却
+  // 探索関数内でのper-nodeチェックは性能上不可能なため、見つかった手順を事後検証する
+  if (!validateVCTSequence(board, color, sequence)) {
+    return null;
+  }
+
   const result: VCTSequenceResult = {
     firstMove: sequence[0],
     sequence,
@@ -519,6 +528,61 @@ export function findVCTSequence(
     result.branches = context.branches;
   }
   return result;
+}
+
+/**
+ * VCT手順の事後検証
+ *
+ * 見つかった手順を盤面上でリプレイし、各防御手が五連（カウンターウィン）
+ * または四（カウンターフォー）を作らないことを検証する。
+ *
+ * 探索関数内でのper-nodeチェックは探索木全体のノードに対して実行され
+ * 性能上不可能（6倍以上の速度低下）なため、O(sequence_length)の事後検証で対応。
+ */
+function validateVCTSequence(
+  board: BoardState,
+  color: "black" | "white",
+  sequence: Position[],
+): boolean {
+  const opponentColor = color === "black" ? "white" : "black";
+  const placed: Position[] = [];
+
+  let valid = true;
+  for (let i = 0; i < sequence.length; i++) {
+    const pos = sequence[i]!;
+    const isDefense = i % 2 === 1;
+    const stoneColor = isDefense ? opponentColor : color;
+
+    const row = board[pos.row];
+    if (row) {
+      row[pos.col] = stoneColor;
+    }
+    placed.push(pos);
+
+    if (isDefense) {
+      // 防御手が五連を作る → 攻撃側敗北
+      if (checkFive(board, pos.row, pos.col, opponentColor)) {
+        valid = false;
+        break;
+      }
+      // 防御手が四を作る → 攻撃側はブロック必須、VCT手順が崩壊
+      if (createsFour(board, pos.row, pos.col, opponentColor)) {
+        valid = false;
+        break;
+      }
+    }
+  }
+
+  // 盤面を元に戻す
+  for (let j = placed.length - 1; j >= 0; j--) {
+    const p = placed[j]!;
+    const r = board[p.row];
+    if (r) {
+      r[p.col] = null;
+    }
+  }
+
+  return valid;
 }
 
 /** 再帰探索のコンテキスト */
