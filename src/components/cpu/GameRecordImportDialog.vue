@@ -61,6 +61,7 @@ defineExpose({
     ref="dialogRef"
     class="import-dialog"
     closedby="any"
+    @keydown.esc.stop
   >
     <div class="dialog-content">
       <div class="dialog-header">
@@ -81,6 +82,7 @@ defineExpose({
           class="record-input"
           placeholder="H8 G7 I9 I8 ..."
           rows="3"
+          autofocus
         />
         <p
           v-if="errorMessage"
