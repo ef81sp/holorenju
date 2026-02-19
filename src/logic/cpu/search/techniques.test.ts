@@ -11,7 +11,7 @@ import { createEmptyBoard } from "@/logic/renjuRules";
 import { DEFAULT_EVAL_OPTIONS, PATTERN_SCORES } from "../evaluation";
 import { placeStonesOnBoard } from "../testUtils";
 import { findBestMoveIterativeWithTT } from "./minimax";
-import { hasImmediateThreat } from "./techniques";
+import { hasImmediateThreat, isTacticalMove } from "./techniques";
 
 describe("LMR タクティカルムーブ除外", () => {
   it("四を作る手が正しく検出される", () => {
@@ -102,6 +102,47 @@ describe("LMR タクティカルムーブ除外", () => {
     // 連続四: (7,3) または (7,7)
     // 跳び四: (7,8) で ●●●・●
     expect([3, 7, 8]).toContain(result.position.col);
+  });
+});
+
+describe("isTacticalMove", () => {
+  it("五連完成手を戦術手と判定する", () => {
+    const board = createEmptyBoard();
+    // 白が4つ並んでいる状態で、5つ目を置いて五連完成
+    placeStonesOnBoard(board, [
+      { row: 7, col: 4, color: "white" },
+      { row: 7, col: 5, color: "white" },
+      { row: 7, col: 6, color: "white" },
+      { row: 7, col: 7, color: "white" },
+    ]);
+    // (7,8) に置くと五連完成
+    expect(isTacticalMove(board, { row: 7, col: 8 }, "white")).toBe(true);
+    // (7,3) に置いても五連完成
+    expect(isTacticalMove(board, { row: 7, col: 3 }, "white")).toBe(true);
+  });
+
+  it("四を作る手を戦術手と判定する", () => {
+    const board = createEmptyBoard();
+    // 黒が3つ並んでいる状態で、4つ目を置いて四を作る
+    placeStonesOnBoard(board, [
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+    ]);
+    // (7,4) に置くと四を作る（両端空き）
+    expect(isTacticalMove(board, { row: 7, col: 4 }, "black")).toBe(true);
+    // (7,8) に置いても四を作る
+    expect(isTacticalMove(board, { row: 7, col: 8 }, "black")).toBe(true);
+  });
+
+  it("三を作る手は戦術手ではない", () => {
+    const board = createEmptyBoard();
+    placeStonesOnBoard(board, [
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+    ]);
+    // (7,7) に置くと三を作るが、四ではない
+    expect(isTacticalMove(board, { row: 7, col: 7 }, "black")).toBe(false);
   });
 });
 

@@ -101,8 +101,15 @@ export function isTacticalMove(
     }
     const [dr, dc] = direction;
 
-    // 連続四をチェック（count === 4 で片端以上が開いている）
     const count = countLine(board, move.row, move.col, dr, dc, color);
+
+    // 五連以上をチェック（完勝手は最も戦術的）
+    if (count >= 5) {
+      isTactical = true;
+      break;
+    }
+
+    // 連続四をチェック（count === 4 で片端以上が開いている）
     if (count === 4) {
       const { end1Open, end2Open } = checkEnds(
         board,
