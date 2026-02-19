@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import type { BoardState } from "@/types/game";
+
 import { parseInitialBoard } from "./boardParser";
 import {
   findDummyDefensePosition,
@@ -15,7 +17,7 @@ const EMPTY = "-".repeat(15);
  * 部分指定で盤面を作成するヘルパー
  * entries: [rowIndex, rowString] のペア配列
  */
-function makeBoard(entries: [number, string][]) {
+function makeBoard(entries: [number, string][]): BoardState {
   const lines = Array(15).fill(EMPTY) as string[];
   for (const [row, str] of entries) {
     lines[row] = str;

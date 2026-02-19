@@ -13,6 +13,7 @@ export default defineConfig({
     vue(),
     svgLoader(),
     analysisDataPlugin(),
+    // eslint-disable-next-line new-cap
     VitePWA({
       registerType: "prompt",
       injectRegister: null,

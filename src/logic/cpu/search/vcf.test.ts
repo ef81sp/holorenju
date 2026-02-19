@@ -1009,7 +1009,9 @@ describe("VCFレース判定", () => {
     const blackVCF = findVCFSequence(board, "black");
     expect(whiteVCF).not.toBeNull();
     expect(blackVCF).not.toBeNull();
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     expect(vcfAttackMoveCount(whiteVCF!.sequence)).toBe(2); // 白: 2手
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     expect(vcfAttackMoveCount(blackVCF!.sequence)).toBe(1); // 黒: 1手
 
     // 白番で白の2段VCF: counter-fourチェック済みなので勝利確定

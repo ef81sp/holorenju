@@ -1,11 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import type { EmotionId } from "./character";
-
 import {
   CHARACTER_DISPLAY_NAMES,
   EMOTION_LABELS,
   getEmotionAltText,
+  type EmotionId,
 } from "./character";
 
 describe("EMOTION_LABELS", () => {

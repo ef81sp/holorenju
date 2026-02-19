@@ -24,6 +24,8 @@ export const evaluateCondition = (
     case "vct":
       // VCF/VCTは静的条件チェックではない（専用ソルバーが処理する）
       return false;
+    default:
+      return false;
   }
 };
 

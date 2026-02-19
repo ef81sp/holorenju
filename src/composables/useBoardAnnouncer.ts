@@ -9,6 +9,17 @@ import { usePreferencesStore } from "@/stores/preferencesStore";
 /** politeMessage のデバウンス遅延（ms） */
 const POLITE_DEBOUNCE_MS = 400;
 
+function getStoneStateText(cell: "black" | "white" | null | undefined): string {
+  switch (cell) {
+    case "black":
+      return "黒";
+    case "white":
+      return "白";
+    default:
+      return "なし";
+  }
+}
+
 interface BoardAnnouncerOptions {
   board: ComputedRef<BoardState>;
   cursorPosition: Ref<Position>;
@@ -60,18 +71,7 @@ export function useBoardAnnouncer(
     const coordinate = formatMove(pos);
 
     const cell = board.value[pos.row]?.[pos.col];
-    let stateText: string;
-    switch (cell) {
-      case "black":
-        stateText = "黒";
-        break;
-      case "white":
-        stateText = "白";
-        break;
-      default:
-        stateText = "なし";
-        break;
-    }
+    const stateText = getStoneStateText(cell);
 
     flushPoliteMessage(`${coordinate} ${stateText}`);
   }

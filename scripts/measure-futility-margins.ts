@@ -30,12 +30,14 @@ let maxDepth = 4;
 
 for (const arg of args) {
   const gamesMatch = arg.match(/^--games=(\d+)$/);
-  if (gamesMatch) {
-    numGames = parseInt(gamesMatch[1]!, 10);
+  const gamesValue = gamesMatch?.[1];
+  if (gamesValue) {
+    numGames = parseInt(gamesValue, 10);
   }
   const depthMatch = arg.match(/^--depth=(\d+)$/);
-  if (depthMatch) {
-    maxDepth = parseInt(depthMatch[1]!, 10);
+  const depthValue = depthMatch?.[1];
+  if (depthValue) {
+    maxDepth = parseInt(depthValue, 10);
   }
 }
 
@@ -125,7 +127,7 @@ const depths = [...byDepth.keys()].sort((a, b) => a - b);
 
 function percentile(sorted: number[], p: number): number {
   const idx = Math.ceil((p / 100) * sorted.length) - 1;
-  return sorted[Math.max(0, idx)]!;
+  return sorted[Math.max(0, idx)] ?? 0;
 }
 
 // VCF/FIVE による極端な外れ値を除外した分析も行う
@@ -164,7 +166,10 @@ console.log(`=== Depth-wise Gain Distribution (maxDepth=${maxDepth}) ===`);
 console.log();
 
 for (const depth of depths) {
-  const allGains = byDepth.get(depth)!;
+  const allGains = byDepth.get(depth);
+  if (!allGains) {
+    continue;
+  }
   const filtered = allGains.filter((g) => g < OUTLIER_THRESHOLD);
   const outliers = allGains.length - filtered.length;
   const player = getPlayerLabel(depth);
@@ -188,7 +193,10 @@ console.log("|-------|--------|---------|-----|-----|-----|-----|---------|");
 
 const currentMargins = [0, 500, 1500, 3000];
 for (const depth of depths) {
-  const allGains = byDepth.get(depth)!;
+  const allGains = byDepth.get(depth);
+  if (!allGains) {
+    continue;
+  }
   const gains = allGains.filter((g) => g < OUTLIER_THRESHOLD);
   gains.sort((a, b) => a - b);
   if (gains.length === 0) {
@@ -197,7 +205,7 @@ for (const depth of depths) {
   const p90 = percentile(gains, 90);
   const p95 = percentile(gains, 95);
   const p99 = percentile(gains, 99);
-  const max = gains[gains.length - 1]!;
+  const max = gains.at(-1) ?? 0;
   const current = currentMargins[depth] ?? "N/A";
   const player = getPlayerLabel(depth);
   console.log(

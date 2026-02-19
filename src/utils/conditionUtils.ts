@@ -26,6 +26,8 @@ export const getPlayerColorFromConditions = (
           }
         }
         break;
+      default:
+        break;
     }
   }
   return "black";

@@ -73,7 +73,8 @@ export const useQuestionRouter = (
 
     if (hasVcfCondition(questionSection)) {
       vcfActive.value = true;
-      void vcfSolver.handleVcfPlaceStone(
+      // eslint-disable-next-line @typescript-eslint/no-floating-promises
+      vcfSolver.handleVcfPlaceStone(
         position,
         questionSection,
         isSectionCompleted,

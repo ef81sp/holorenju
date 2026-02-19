@@ -24,7 +24,10 @@ export function validateGameRecord(input: string): GameRecordValidationResult {
   const seen = new Set<string>();
 
   for (let i = 0; i < tokens.length; i++) {
-    const token = tokens[i]!;
+    const token = tokens[i];
+    if (!token) {
+      continue;
+    }
 
     if (!MOVE_PATTERN.test(token)) {
       return {

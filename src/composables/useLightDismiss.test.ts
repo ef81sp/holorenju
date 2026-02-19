@@ -21,27 +21,29 @@ vi.mock("vue", async () => {
 });
 
 describe("useLightDismiss", () => {
-  let mockDialog: {
+  const createMockDialog = (): {
     close: Mock;
     addEventListener: Mock;
     removeEventListener: Mock;
     getBoundingClientRect: Mock;
-  };
+  } => ({
+    close: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    getBoundingClientRect: vi.fn(() => ({
+      left: 100,
+      right: 400,
+      top: 50,
+      bottom: 350,
+    })),
+  });
+
+  let mockDialog = createMockDialog();
 
   beforeEach(() => {
     mountedCallback = null;
     unmountedCallback = null;
-    mockDialog = {
-      close: vi.fn(),
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-      getBoundingClientRect: vi.fn(() => ({
-        left: 100,
-        right: 400,
-        top: 50,
-        bottom: 350,
-      })),
-    };
+    mockDialog = createMockDialog();
   });
 
   it("onMounted でクリックイベントリスナーを登録する", () => {
@@ -49,6 +51,7 @@ describe("useLightDismiss", () => {
     useLightDismiss(dialogRef);
 
     expect(mountedCallback).not.toBeNull();
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     mountedCallback!();
 
     expect(mockDialog.addEventListener).toHaveBeenCalledWith(
@@ -61,7 +64,9 @@ describe("useLightDismiss", () => {
     const dialogRef = shallowRef(mockDialog as unknown as HTMLDialogElement);
     useLightDismiss(dialogRef);
 
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     mountedCallback!();
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     unmountedCallback!();
 
     expect(mockDialog.removeEventListener).toHaveBeenCalledWith(
@@ -73,6 +78,7 @@ describe("useLightDismiss", () => {
   it("ダイアログ外側のクリックで close() が呼ばれる", () => {
     const dialogRef = shallowRef(mockDialog as unknown as HTMLDialogElement);
     useLightDismiss(dialogRef);
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     mountedCallback!();
 
     // addEventListener に渡されたハンドラーを取得
@@ -94,6 +100,7 @@ describe("useLightDismiss", () => {
   it("ダイアログ内側のクリックで close() が呼ばれない", () => {
     const dialogRef = shallowRef(mockDialog as unknown as HTMLDialogElement);
     useLightDismiss(dialogRef);
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     mountedCallback!();
 
     const handler = mockDialog.addEventListener.mock.calls[0][1] as (
@@ -114,6 +121,7 @@ describe("useLightDismiss", () => {
   it("子要素のクリックで close() が呼ばれない", () => {
     const dialogRef = shallowRef(mockDialog as unknown as HTMLDialogElement);
     useLightDismiss(dialogRef);
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     mountedCallback!();
 
     const handler = mockDialog.addEventListener.mock.calls[0][1] as (
@@ -141,6 +149,7 @@ describe("useLightDismiss", () => {
       dialogWithClosedBy as unknown as HTMLDialogElement,
     );
     useLightDismiss(dialogRef);
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     mountedCallback!();
 
     const handler = dialogWithClosedBy.addEventListener.mock.calls[0][1] as (
@@ -161,6 +170,7 @@ describe("useLightDismiss", () => {
   it("dialogRef が null の場合はイベントリスナーを登録しない", () => {
     const dialogRef = shallowRef<HTMLDialogElement | null>(null);
     useLightDismiss(dialogRef);
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     mountedCallback!();
 
     expect(mockDialog.addEventListener).not.toHaveBeenCalled();

@@ -42,10 +42,11 @@ if (!record) {
 }
 
 const moveArg = args.find((a) => a.startsWith("--move="));
-const upToMove = moveArg ? parseInt(moveArg.split("=")[1]!, 10) : undefined;
+const moveValue = moveArg?.split("=")[1];
+const upToMove = moveValue ? parseInt(moveValue, 10) : undefined;
 
 const colorArg = args.find((a) => a.startsWith("--color="));
-const filterColor = colorArg
+const filterColor = colorArg?.split("=")[1]
   ? (colorArg.split("=")[1] as StoneColor)
   : undefined;
 

@@ -75,7 +75,10 @@ export function validateAttackMove(
 
   // 2. 一時ボードに石を仮配置
   const tempBoard = cloneBoard(board);
-  tempBoard[row]![col] = attackerColor;
+  const tempRow = tempBoard[row];
+  if (tempRow) {
+    tempRow[col] = attackerColor;
+  }
 
   // 3. 五連チェック（五連は禁手に優先）
   if (checkFive(tempBoard, row, col, attackerColor)) {
@@ -142,7 +145,10 @@ export function getDefenseResponse(
 
   // 4. 防御石を仮配置してカウンター五連チェック
   const tempBoard = cloneBoard(board);
-  tempBoard[defensePos.row]![defensePos.col] = opponentColor;
+  const defenseRow = tempBoard[defensePos.row];
+  if (defenseRow) {
+    defenseRow[defensePos.col] = opponentColor;
+  }
 
   const winPos = findWinningMove(tempBoard, opponentColor);
   if (winPos) {

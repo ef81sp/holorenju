@@ -198,8 +198,9 @@ export function analyzeAdvantageSquandered(
 
       const afterPeak: { move: number; score: number }[] = [];
       for (let k = peakIdx + 2; k < history.length; k += 2) {
-        if (history[k].score !== undefined) {
-          afterPeak.push({ move: k + 1, score: history[k].score! });
+        const entry = history[k];
+        if (entry && entry.score !== undefined) {
+          afterPeak.push({ move: k + 1, score: entry.score });
         }
         if (afterPeak.length >= 5) {
           break;

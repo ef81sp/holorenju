@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
-import RenjuBoard from "@/components/game/RenjuBoard/RenjuBoard.vue";
-import type { StoneLabel } from "@/components/game/RenjuBoard/RenjuBoard.vue";
+import RenjuBoard, {
+  type StoneLabel,
+} from "@/components/game/RenjuBoard/RenjuBoard.vue";
 import { boardStateToStringArray } from "@/editor/logic/boardCalculator";
 import type { BoardState } from "@/types/game";
 import type { GameAnalysis, MoveAnalysis } from "@scripts/types/analysis";

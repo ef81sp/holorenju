@@ -98,12 +98,13 @@ const isBoardDisabled = computed(
 
 // キーボード操作（WASD + Space/Enter で石配置）
 
-let boardAnnouncer: ReturnType<typeof useBoardAnnouncer>;
+let boardAnnouncer: ReturnType<typeof useBoardAnnouncer> | undefined =
+  undefined;
 const keyboardNav = useKeyboardNavigation(
   () => handlePlaceStone({ ...keyboardNav.cursorPosition.value }),
   undefined,
   isBoardDisabled,
-  () => boardAnnouncer.announceCursorMove(),
+  () => boardAnnouncer?.announceCursorMove(),
 );
 
 // 盤面読み上げ（ARIAライブリージョン）
@@ -217,7 +218,7 @@ async function cpuMove(): Promise<void> {
   // 石を配置
   cpuGameStore.addMove(response.position, cpuGameStore.currentTurn);
   audioStore.playSfx("stone-place");
-  boardAnnouncer.announceCpuMove(response.position);
+  boardAnnouncer?.announceCpuMove(response.position);
 
   // 勝敗判定
   if (cpuGameStore.isGameOver) {
@@ -491,13 +492,13 @@ const gameEndMessage = computed(() => {
       aria-live="polite"
       class="visually-hidden"
     >
-      {{ boardAnnouncer.politeMessage.value }}
+      {{ boardAnnouncer?.politeMessage.value }}
     </div>
     <div
       aria-live="assertive"
       class="visually-hidden"
     >
-      {{ boardAnnouncer.assertiveMessage.value }}
+      {{ boardAnnouncer?.assertiveMessage.value }}
     </div>
 
     <!-- 戻る確認ダイアログ -->

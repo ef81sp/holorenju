@@ -61,11 +61,9 @@ export function buildEvaluatedMove(
       ? parseGameRecord(moveHistoryOrMoves)
       : moveHistoryOrMoves;
   const move = moves[result.moveIndex];
-  const isPlayerMove = analyzeAll
-    ? true
-    : playerFirst
-      ? result.moveIndex % 2 === 0
-      : result.moveIndex % 2 === 1;
+  const isPlayerMove =
+    analyzeAll ||
+    (playerFirst ? result.moveIndex % 2 === 0 : result.moveIndex % 2 === 1);
 
   const scoreDiff = result.bestScore - result.playedScore;
 

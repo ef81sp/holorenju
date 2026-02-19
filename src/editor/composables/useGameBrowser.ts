@@ -10,7 +10,7 @@ import type {
 } from "@scripts/types/analysis";
 
 import { matchesFilter } from "@scripts/lib/gameFilter";
-import { computed, ref, watch } from "vue";
+import { computed, ref, watch, type ComputedRef, type Ref } from "vue";
 
 import type { StoneLabel } from "@/components/game/RenjuBoard/RenjuBoard.vue";
 import type { BoardState, StoneColor } from "@/types/game";
@@ -25,7 +25,33 @@ function cloneBoard(board: BoardState): BoardState {
   return board.map((row) => [...row]);
 }
 
-export function useGameBrowser() {
+interface UseGameBrowserReturn {
+  isLoading: Ref<boolean>;
+  loadError: Ref<string | null>;
+  loadLatestAnalysis: () => Promise<void>;
+  analysisResult: Ref<AnalysisResult | null>;
+  filter: Ref<BrowseFilter>;
+  filteredGames: ComputedRef<GameAnalysis[]>;
+  availableMatchups: ComputedRef<string[]>;
+  availableJushu: ComputedRef<string[]>;
+  availableTags: ComputedRef<string[]>;
+  availableSourceFiles: ComputedRef<string[]>;
+  selectedGameIndex: Ref<number | null>;
+  selectedGame: ComputedRef<GameAnalysis | null>;
+  selectGame: (index: number) => void;
+  moveIndex: Ref<number>;
+  totalMoves: ComputedRef<number>;
+  currentBoard: ComputedRef<BoardState>;
+  currentMoveAnalysis: ComputedRef<MoveAnalysis | null>;
+  stoneLabels: ComputedRef<Map<string, StoneLabel>>;
+  goToFirst: () => void;
+  goToPrev: () => void;
+  goToNext: () => void;
+  goToLast: () => void;
+  goToMove: (n: number) => void;
+}
+
+export function useGameBrowser(): UseGameBrowserReturn {
   // ===== データ読み込み =====
   const analysisResult = ref<AnalysisResult | null>(null);
   const availableFiles = ref<string[]>([]);
@@ -59,8 +85,10 @@ export function useGameBrowser() {
         loadError.value = "分析ファイルが見つかりません";
         return;
       }
-      const latest = files[files.length - 1]!;
-      await loadFile(latest);
+      const latest = files[files.length - 1];
+      if (latest) {
+        await loadFile(latest);
+      }
     } catch (e) {
       loadError.value = `読み込みエラー: ${e}`;
     } finally {
@@ -140,7 +168,7 @@ export function useGameBrowser() {
 
     const boards: BoardState[] = [createEmptyBoard()];
     for (const move of game.moves) {
-      const prev = boards[boards.length - 1]!;
+      const prev = boards[boards.length - 1] ?? createEmptyBoard();
       const next = cloneBoard(prev);
       const row = next[move.position.row];
       if (row) {
@@ -173,7 +201,10 @@ export function useGameBrowser() {
     }
 
     for (let i = 0; i < moveIndex.value && i < game.moves.length; i++) {
-      const move = game.moves[i]!;
+      const move = game.moves[i];
+      if (!move) {
+        continue;
+      }
       const key = `${move.position.row},${move.position.col}`;
       labels.set(key, {
         text: String(i + 1),

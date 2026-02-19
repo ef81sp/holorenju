@@ -26,8 +26,23 @@ import { useScenarioAnimationStore } from "@/stores/scenarioAnimationStore";
 /** VCF石のdialogueIndex（シナリオダイアログとは別のスロット） */
 const VCF_DIALOGUE_INDEX = 9000;
 
+function getInvalidMoveMessage(reason: string): string {
+  switch (reason) {
+    case "occupied":
+      return "その場所には既に石があります";
+    case "forbidden":
+      return "禁手です";
+    case "not-four":
+      return "四になる手を打ってください";
+    default:
+      return "無効な手です";
+  }
+}
+
 function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
 
 export const useVcfSolver = (
@@ -126,20 +141,7 @@ export const useVcfSolver = (
     );
     audioStore.playSfx("incorrect");
 
-    let message: string;
-    switch (reason) {
-      case "occupied":
-        message = "その場所には既に石があります";
-        break;
-      case "forbidden":
-        message = "禁手です";
-        break;
-      case "not-four":
-        message = "四になる手を打ってください";
-        break;
-      default:
-        message = "無効な手です";
-    }
+    const message = getInvalidMoveMessage(reason);
 
     dialogStore.showMessage({
       id: `vcf-invalid-${Date.now()}`,
@@ -292,6 +294,8 @@ export const useVcfSolver = (
       case "forbidden-trap":
         // 禁手陥穽 → 即座に成功
         handleSuccess(questionSection);
+        break;
+      default:
         break;
     }
   }

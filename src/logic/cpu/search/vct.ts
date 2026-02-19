@@ -556,7 +556,10 @@ function validateVCTSequence(
 
   let valid = true;
   for (let i = 0; i < sequence.length; i++) {
-    const pos = sequence[i]!;
+    const pos = sequence[i];
+    if (!pos) {
+      continue;
+    }
     const isDefense = i % 2 === 1;
     const stoneColor = isDefense ? opponentColor : color;
 
@@ -582,7 +585,10 @@ function validateVCTSequence(
 
   // 盤面を元に戻す
   for (let j = placed.length - 1; j >= 0; j--) {
-    const p = placed[j]!;
+    const p = placed[j];
+    if (!p) {
+      continue;
+    }
     const r = board[p.row];
     if (r) {
       r[p.col] = null;
@@ -597,6 +603,76 @@ interface VCTRecursiveContext {
   isForbiddenTrap: boolean;
   collectBranches: boolean;
   branches: VCTBranch[];
+}
+
+/** 防御ごとの手順情報 */
+interface DefenseSeqEntry {
+  defense: Position;
+  seq: Position[];
+  childBranches: VCTBranch[];
+  isForbiddenTrap: boolean;
+}
+
+/** 最長の継続を持つ防御を選択する */
+function selectLongestDefense(defenseSequences: DefenseSeqEntry[]): number {
+  let longestIdx = 0;
+  let longestLen = defenseSequences[0]?.seq.length ?? 0;
+  for (let i = 1; i < defenseSequences.length; i++) {
+    const len = defenseSequences[i]?.seq.length ?? 0;
+    if (len > longestLen) {
+      longestLen = len;
+      longestIdx = i;
+    }
+  }
+  return longestIdx;
+}
+
+/** メインPVとサイド分岐を構築する */
+function buildBranches(
+  defenseSequences: DefenseSeqEntry[],
+  longestIdx: number,
+  sequence: Position[],
+  move: Position,
+  context: VCTRecursiveContext,
+): void {
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+  const longest = defenseSequences[longestIdx]!;
+  const defenseIndexInSequence = sequence.length + 1; // +1 for the attack move
+
+  // メインPVのisForbiddenTrapのみ伝播（サイド分岐は無視）
+  if (longest.isForbiddenTrap) {
+    context.isForbiddenTrap = true;
+  }
+
+  sequence.push(move);
+  sequence.push(longest.defense, ...longest.seq);
+
+  // メインPVの子分岐を親に統合（インデックスをオフセット）
+  // subSeqは防御手の次から始まるため +1
+  const subSeqOffset = defenseIndexInSequence + 1;
+  for (const childBranch of longest.childBranches) {
+    context.branches.push({
+      defenseIndex: subSeqOffset + childBranch.defenseIndex,
+      defenseMove: childBranch.defenseMove,
+      continuation: childBranch.continuation,
+    });
+  }
+
+  // 残りの防御を分岐として記録
+  for (let i = 0; i < defenseSequences.length; i++) {
+    if (i === longestIdx) {
+      continue;
+    }
+    const ds = defenseSequences[i];
+    if (!ds) {
+      continue;
+    }
+    context.branches.push({
+      defenseIndex: defenseIndexInSequence,
+      defenseMove: ds.defense,
+      continuation: ds.seq,
+    });
+  }
 }
 
 /**
@@ -682,12 +758,7 @@ function findVCTSequenceRecursive(
     // 全防御に対してVCTが継続するかチェック
     let allDefenseLeadsToVCT = true;
     // 防御ごとの手順を収集（collectBranches時は全防御で収集）
-    const defenseSequences: {
-      defense: Position;
-      seq: Position[];
-      childBranches: VCTBranch[];
-      isForbiddenTrap: boolean;
-    }[] = [];
+    const defenseSequences: DefenseSeqEntry[] = [];
     let firstDefenseSequence: Position[] | null = null;
 
     for (const defensePos of defensePositions) {
@@ -789,50 +860,8 @@ function findVCTSequenceRecursive(
       firstDefenseSequence
     ) {
       if (context.collectBranches && defenseSequences.length > 0) {
-        // 最長の継続を持つ防御をメインPVに選択（= 最強防御）
-        let longestIdx = 0;
-        let longestLen = defenseSequences[0]?.seq.length ?? 0;
-        for (let i = 1; i < defenseSequences.length; i++) {
-          const len = defenseSequences[i]?.seq.length ?? 0;
-          if (len > longestLen) {
-            longestLen = len;
-            longestIdx = i;
-          }
-        }
-        const longest = defenseSequences[longestIdx]!;
-        const defenseIndexInSequence = sequence.length + 1; // +1 for the attack move
-
-        // メインPVのisForbiddenTrapのみ伝播（サイド分岐は無視）
-        if (longest.isForbiddenTrap) {
-          context.isForbiddenTrap = true;
-        }
-
-        sequence.push(move);
-        sequence.push(longest.defense, ...longest.seq);
-
-        // メインPVの子分岐を親に統合（インデックスをオフセット）
-        // subSeqは防御手の次から始まるため +1
-        const subSeqOffset = defenseIndexInSequence + 1;
-        for (const childBranch of longest.childBranches) {
-          context.branches.push({
-            defenseIndex: subSeqOffset + childBranch.defenseIndex,
-            defenseMove: childBranch.defenseMove,
-            continuation: childBranch.continuation,
-          });
-        }
-
-        // 残りの防御を分岐として記録
-        for (let i = 0; i < defenseSequences.length; i++) {
-          if (i === longestIdx) {
-            continue;
-          }
-          const ds = defenseSequences[i]!;
-          context.branches.push({
-            defenseIndex: defenseIndexInSequence,
-            defenseMove: ds.defense,
-            continuation: ds.seq,
-          });
-        }
+        const longestIdx = selectLongestDefense(defenseSequences);
+        buildBranches(defenseSequences, longestIdx, sequence, move, context);
       } else {
         sequence.push(move);
         sequence.push(...firstDefenseSequence);

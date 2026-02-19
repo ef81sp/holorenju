@@ -105,7 +105,8 @@ const isKeyboardDisabled = computed(
     animationStore.animatingIds.size > 0,
 );
 
-let boardAnnouncer: ReturnType<typeof useBoardAnnouncer>;
+let boardAnnouncer: ReturnType<typeof useBoardAnnouncer> | undefined =
+  undefined;
 const keyboardNav = useKeyboardNavigation(
   () => handlePlaceStone(),
   (direction) => {
@@ -120,7 +121,7 @@ const keyboardNav = useKeyboardNavigation(
     }
   },
   isKeyboardDisabled,
-  () => boardAnnouncer.announceCursorMove(),
+  () => boardAnnouncer?.announceCursorMove(),
 );
 
 // 盤面読み上げ（ARIAライブリージョン）
@@ -480,7 +481,7 @@ const handleLayoutClick = (event: MouseEvent): void => {
       aria-live="polite"
       class="visually-hidden"
     >
-      {{ boardAnnouncer.politeMessage.value }}
+      {{ boardAnnouncer?.politeMessage.value }}
     </div>
   </div>
 </template>

@@ -290,7 +290,7 @@ export function minimaxWithTT(
     }
 
     // Futility マージン計測: 対象ノードの staticEval を記録
-    let futilityMeasureStaticEval: number | undefined;
+    let futilityMeasureStaticEval: number | undefined = undefined;
     if (
       isMeasuringFutility() &&
       depth >= 1 &&

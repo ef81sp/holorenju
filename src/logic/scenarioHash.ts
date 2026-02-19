@@ -10,6 +10,7 @@ import type { Scenario } from "@/types/scenario";
 /**
  * djb2 ハッシュ関数
  */
+/* eslint-disable no-bitwise */
 function djb2(str: string): number {
   let hash = 5381;
   for (let i = 0; i < str.length; i++) {
@@ -17,6 +18,7 @@ function djb2(str: string): number {
   }
   return hash >>> 0; // unsigned 32-bit
 }
+/* eslint-enable no-bitwise */
 
 /**
  * シナリオの構造ハッシュを計算する

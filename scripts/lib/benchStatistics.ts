@@ -251,6 +251,26 @@ function countSingleFourPenalties(
   return count;
 }
 
+interface GapColorWins {
+  same: ColorWins;
+  blackStronger: ColorWins;
+  blackWeaker: ColorWins;
+}
+
+function getGapBucket(
+  blackRank: number,
+  whiteRank: number,
+  gapColorWins: GapColorWins,
+): ColorWins {
+  if (blackRank === whiteRank) {
+    return gapColorWins.same;
+  }
+  if (blackRank > whiteRank) {
+    return gapColorWins.blackStronger;
+  }
+  return gapColorWins.blackWeaker;
+}
+
 /**
  * 1パスで全統計を計算
  */
@@ -394,14 +414,7 @@ export function computeStats(data: BenchmarkDataFile): BenchStats {
     // 難易度格差別の黒勝率
     const blackRank = playerRank.get(blackPlayer) ?? 0;
     const whiteRank = playerRank.get(whitePlayer) ?? 0;
-    let gap: typeof gapColorWins.same;
-    if (blackRank === whiteRank) {
-      gap = gapColorWins.same;
-    } else if (blackRank > whiteRank) {
-      gap = gapColorWins.blackStronger;
-    } else {
-      gap = gapColorWins.blackWeaker;
-    }
+    const gap = getGapBucket(blackRank, whiteRank, gapColorWins);
     if (blackWon) {
       gap.black++;
     } else if (whiteWon) {

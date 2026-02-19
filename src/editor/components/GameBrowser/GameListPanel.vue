@@ -31,6 +31,8 @@ const winnerLabel = (winner: "A" | "B" | "draw"): string => {
       return "白勝";
     case "draw":
       return "引分";
+    default:
+      return "";
   }
 };
 

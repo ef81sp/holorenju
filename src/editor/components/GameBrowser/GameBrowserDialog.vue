@@ -40,6 +40,8 @@ const handleKeydown = (e: KeyboardEvent): void => {
       e.preventDefault();
       browser.goToLast();
       break;
+    default:
+      break;
   }
 };
 

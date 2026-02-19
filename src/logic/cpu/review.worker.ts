@@ -7,7 +7,7 @@
  * import ReviewWorker from './review.worker?worker'
  */
 
-import type { Position } from "@/types/game";
+import type { BoardState, Position } from "@/types/game";
 import type {
   ForcedWinBranch,
   ReviewCandidate,
@@ -67,6 +67,55 @@ const REVIEW_MISE_VCF_OPTIONS: MiseVCFSearchOptions = {
   vcfOptions: { maxDepth: 12, timeLimit: 300 },
   timeLimit: 500,
 };
+
+type ForcedLossType = "vcf" | "vct" | "forbidden-trap" | "mise-vcf";
+
+interface ForcedLossResult {
+  type: ForcedLossType;
+  sequence: Position[];
+}
+
+/**
+ * 相手の必勝手順（VCF→Mise-VCF→VCT）を検出する
+ */
+function checkForcedLoss(
+  boardAfter: BoardState,
+  opponentColor: "black" | "white",
+  stoneCountAfter: number,
+): ForcedLossResult | undefined {
+  const oppVCF = findVCFSequence(boardAfter, opponentColor, REVIEW_VCF_OPTIONS);
+  if (oppVCF) {
+    return {
+      type: oppVCF.isForbiddenTrap ? "forbidden-trap" : "vcf",
+      sequence: oppVCF.sequence,
+    };
+  }
+
+  const oppMise = findMiseVCFSequence(
+    boardAfter,
+    opponentColor,
+    REVIEW_MISE_VCF_OPTIONS,
+  );
+  if (oppMise) {
+    return { type: "mise-vcf", sequence: oppMise.sequence };
+  }
+
+  if (stoneCountAfter >= VCT_STONE_THRESHOLD) {
+    const oppVCT = findVCTSequence(
+      boardAfter,
+      opponentColor,
+      REVIEW_VCT_OPTIONS,
+    );
+    if (oppVCT) {
+      return {
+        type: oppVCT.isForbiddenTrap ? "forbidden-trap" : "vct",
+        sequence: oppVCT.sequence,
+      };
+    }
+  }
+
+  return undefined;
+}
 
 self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
   const {
@@ -145,12 +194,7 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
 
     // 相手の必勝手順検出（プレイヤー手用）
     // プレイヤーの手を打った後の局面で相手のVCF/VCT等を探す
-    let forcedLossType:
-      | "vcf"
-      | "vct"
-      | "forbidden-trap"
-      | "mise-vcf"
-      | undefined = undefined;
+    let forcedLossType: ForcedLossType | undefined = undefined;
     let forcedLossSequence: Position[] | undefined = undefined;
     if (!forcedWin && moves[moveIndex]) {
       const { board: boardAfter } = createBoardFromRecord(
@@ -165,36 +209,14 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
         selfThreatsAfter.openFours.length > 0;
 
       if (!selfHasFourAfter) {
-        const oppVCF = findVCFSequence(
+        const loss = checkForcedLoss(
           boardAfter,
           opponentColor,
-          REVIEW_VCF_OPTIONS,
+          stoneCountAfter,
         );
-        if (oppVCF) {
-          forcedLossType = oppVCF.isForbiddenTrap ? "forbidden-trap" : "vcf";
-          forcedLossSequence = oppVCF.sequence;
-        }
-        if (!forcedLossType) {
-          const oppMise = findMiseVCFSequence(
-            boardAfter,
-            opponentColor,
-            REVIEW_MISE_VCF_OPTIONS,
-          );
-          if (oppMise) {
-            forcedLossType = "mise-vcf";
-            forcedLossSequence = oppMise.sequence;
-          }
-        }
-        if (!forcedLossType && stoneCountAfter >= VCT_STONE_THRESHOLD) {
-          const oppVCT = findVCTSequence(
-            boardAfter,
-            opponentColor,
-            REVIEW_VCT_OPTIONS,
-          );
-          if (oppVCT) {
-            forcedLossType = oppVCT.isForbiddenTrap ? "forbidden-trap" : "vct";
-            forcedLossSequence = oppVCT.sequence;
-          }
+        if (loss) {
+          forcedLossType = loss.type;
+          forcedLossSequence = loss.sequence;
         }
       }
     }

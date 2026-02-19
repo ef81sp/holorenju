@@ -376,7 +376,7 @@ const branchLines = computed<BranchLine[]>(() => {
       const moveNum = props.moveIndex + branch.defenseIndex;
       const label = "の場合:";
       const prefix =
-        branchIdx === eval_.forcedWinBranches!.length - 1 ? "└" : "├";
+        branchIdx === (eval_.forcedWinBranches?.length ?? 0) - 1 ? "└" : "├";
 
       // メインPVの分岐点前の手（ホバー時に盤面プレビュー用）
       const prefixItems: PVDisplayItem[] = bestPVItems.slice(

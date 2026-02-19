@@ -9,6 +9,23 @@ import type {
   VctCondition,
 } from "@/types/scenario";
 
+function createBaseCondition(type: SuccessCondition["type"]): SuccessCondition {
+  switch (type) {
+    case "position":
+      return { type: "position", positions: [], color: "black" };
+    case "pattern":
+      return { type: "pattern", pattern: "", color: "black" };
+    case "sequence":
+      return { type: "sequence", moves: [], strict: false };
+    case "vcf":
+      return { type: "vcf", color: "black" };
+    case "vct":
+      return { type: "vct", color: "black" };
+    default:
+      return { type: "position", positions: [], color: "black" };
+  }
+}
+
 /**
  * 成功条件の管理ロジックを提供するComposable
  * Position、Pattern、Sequenceの3種類の成功条件を管理する
@@ -127,25 +144,7 @@ export function useSuccessConditions(
     }
 
     const newConditions = [...section.successConditions];
-    let baseCondition: SuccessCondition;
-
-    switch (type) {
-      case "position":
-        baseCondition = { type: "position", positions: [], color: "black" };
-        break;
-      case "pattern":
-        baseCondition = { type: "pattern", pattern: "", color: "black" };
-        break;
-      case "sequence":
-        baseCondition = { type: "sequence", moves: [], strict: false };
-        break;
-      case "vcf":
-        baseCondition = { type: "vcf", color: "black" };
-        break;
-      case "vct":
-        baseCondition = { type: "vct", color: "black" };
-        break;
-    }
+    const baseCondition = createBaseCondition(type);
 
     newConditions[index] = baseCondition;
     setSuccessConditions(newConditions);

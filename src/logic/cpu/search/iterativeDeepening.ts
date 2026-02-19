@@ -246,7 +246,7 @@ function checkForcedWinSequences(
   }
 
   // VCTヒント（偽陽性の可能性があるためminimax検証に委ねる）
-  let vctHintMove: Position | undefined;
+  let vctHintMove: Position | undefined = undefined;
   if (evaluationOptions.enableVCT) {
     const stoneCount = countStones(board);
     if (stoneCount >= VCT_STONE_THRESHOLD) {
@@ -300,6 +300,7 @@ function computeVCFDefenseMoves(
 
   return Array.from(defenseSet).map((key) => {
     const [row, col] = key.split(",").map(Number);
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     return { row: row!, col: col! };
   });
 }

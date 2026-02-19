@@ -702,7 +702,9 @@ describe("VCTカウンター脅威: ct=four", () => {
       { row: 6, col: 3, color: "black" },
     ]);
     // White (7,6)攻撃後、Black (7,3)防御の状態を構築
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     board[7]![6] = "white"; // 攻撃手
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     board[7]![3] = "black"; // 防御手
     // (7,3)でBlackが(4,3)-(5,3)-(6,3)-(7,3)の止め四を作る
     expect(checkDefenseCounterThreat(board, 7, 3, "black")).toBe("four");
@@ -710,7 +712,9 @@ describe("VCTカウンター脅威: ct=four", () => {
     const blockPos = getFourDefensePosition(board, { row: 7, col: 3 }, "black");
     expect(blockPos).toEqual({ row: 8, col: 3 });
     // undo
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     board[7]![6] = null;
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     board[7]![3] = null;
   });
 
@@ -726,8 +730,10 @@ describe("VCTカウンター脅威: ct=four", () => {
       { row: 6, col: 3, color: "black" },
     ]);
     // ブロック位置(8,3)が(8,3)-(8,4)-(8,5)の活三を作ることを確認
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     board[8]![3] = "white";
     expect(isThreat(board, 8, 3, "white")).toBe(true);
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     board[8]![3] = null;
 
     expect(hasVCT(board, "white", 0, undefined, { timeLimit: 1000 })).toBe(
@@ -746,8 +752,10 @@ describe("VCTカウンター脅威: ct=four", () => {
       { row: 6, col: 3, color: "black" },
     ]);
     // ブロック位置(8,3)が脅威を作らないことを確認
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     board[8]![3] = "white";
     expect(isThreat(board, 8, 3, "white")).toBe(false);
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     board[8]![3] = null;
 
     expect(hasVCT(board, "white")).toBe(false);
@@ -785,10 +793,14 @@ describe("VCTカウンター脅威: ct=three", () => {
       { row: 6, col: 3, color: "black" },
     ]);
     // White (7,6)攻撃後、Black (7,3)防御
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     board[7]![6] = "white";
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     board[7]![3] = "black";
     expect(checkDefenseCounterThreat(board, 7, 3, "black")).toBe("three");
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     board[7]![6] = null;
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     board[7]![3] = null;
   });
 
@@ -1042,15 +1054,18 @@ describe("findVCTSequence の事後検証", () => {
       // 返された手順があれば、全防御手がカウンターフォーを作らないことを検証
       if (result) {
         for (let i = 0; i < result.sequence.length; i++) {
+          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
           const pos = result.sequence[i]!;
           const isDefense = i % 2 === 1;
           if (isDefense) {
             // 手順をリプレイして防御手の状態を確認
             const replayBoard = copyBoard(board);
             for (let j = 0; j <= i; j++) {
+              // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
               const p = result.sequence[j]!;
               const stoneColor: "black" | "white" =
                 j % 2 === 0 ? "black" : "white";
+              // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
               replayBoard[p.row]![p.col] = stoneColor;
             }
             expect(checkFive(replayBoard, pos.row, pos.col, "white")).toBe(

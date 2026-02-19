@@ -81,6 +81,7 @@ describe("useReviewBoardOverlay", () => {
       reviewStore.goToMove(3);
 
       // 3手目: 黒 I8 = row:7, col:8
+      // eslint-disable-next-line prefer-destructuring
       const currentMove = reviewStore.moves[2];
       expect(currentMove).toBeDefined();
       if (!currentMove) {
@@ -109,6 +110,7 @@ describe("useReviewBoardOverlay", () => {
       );
 
       const labels = overlay.stoneLabels.value;
+      // eslint-disable-next-line prefer-destructuring
       const currentMove = reviewStore.moves[2];
       expect(currentMove).toBeDefined();
       if (!currentMove) {
@@ -134,6 +136,7 @@ describe("useReviewBoardOverlay", () => {
   describe("playedモード", () => {
     it("playedモードでPVホバー時、現在の手の石は残る", () => {
       reviewStore.goToMove(3);
+      // eslint-disable-next-line prefer-destructuring
       const currentMove = reviewStore.moves[2];
       expect(currentMove).toBeDefined();
       if (!currentMove) {
