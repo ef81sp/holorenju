@@ -14,6 +14,7 @@ import {
 } from "@/logic/renjuRules";
 
 import { DIRECTION_INDICES, DIRECTIONS } from "../core/constants";
+import { getLineEnds } from "../core/lineAnalysis";
 import { isNearExistingStone } from "../moveGenerator";
 import { findJumpGapPosition } from "../patterns/threatAnalysis";
 import { analyzeDirection } from "./directionAnalysis";
@@ -159,31 +160,7 @@ export function getOpenFourDefensePositions(
   dc: number,
   color: "black" | "white",
 ): { row: number; col: number }[] {
-  const positions: { row: number; col: number }[] = [];
-
-  // 正方向の端を探す
-  let r = row + dr;
-  let c = col + dc;
-  while (isValidPosition(r, c) && board[r]?.[c] === color) {
-    r += dr;
-    c += dc;
-  }
-  if (isValidPosition(r, c) && board[r]?.[c] === null) {
-    positions.push({ row: r, col: c });
-  }
-
-  // 負方向の端を探す
-  r = row - dr;
-  c = col - dc;
-  while (isValidPosition(r, c) && board[r]?.[c] === color) {
-    r -= dr;
-    c -= dc;
-  }
-  if (isValidPosition(r, c) && board[r]?.[c] === null) {
-    positions.push({ row: r, col: c });
-  }
-
-  return positions;
+  return getLineEnds(board, row, col, dr, dc, color);
 }
 
 /**
