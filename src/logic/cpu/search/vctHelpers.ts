@@ -24,7 +24,7 @@ import {
   findJumpGapPosition,
   getJumpThreeDefensePositions,
 } from "../patterns/threatAnalysis";
-import { createsFour, createsOpenThree } from "./threatMoves";
+import { classifyThreat } from "./threatMoves";
 
 /**
  * 指定色が活三（連続三で両端空き）を持っているかチェック
@@ -101,40 +101,19 @@ export function findThreatMoves(
         continue;
       }
 
-      // 四が作れるかチェック
-      const isFour = createsFour(board, row, col, color);
-
-      if (isFour) {
-        // 元に戻す（Undo）
-        if (rowArray) {
-          rowArray[col] = null;
-        }
-
-        // 禁手チェックは四を作る手だけに限定
-        if (
-          color === "black" &&
-          checkForbiddenMove(board, row, col).isForbidden
-        ) {
-          continue;
-        }
-
-        fourMoves.push({ row, col });
-        continue;
-      }
-
-      // 活三が作れるかチェック
-      const isOpenThree = createsOpenThree(board, row, col, color);
+      // 四と活三を1パスで判定
+      const threat = classifyThreat(board, row, col, color);
 
       // 元に戻す（Undo）
       if (rowArray) {
         rowArray[col] = null;
       }
 
-      if (!isOpenThree) {
+      if (!threat.createsFour && !threat.createsOpenThree) {
         continue;
       }
 
-      // 禁手チェックは活三を作る手だけに限定
+      // 禁手チェックは脅威を作る手だけに限定
       if (
         color === "black" &&
         checkForbiddenMove(board, row, col).isForbidden
@@ -142,7 +121,11 @@ export function findThreatMoves(
         continue;
       }
 
-      openThreeMoves.push({ row, col });
+      if (threat.createsFour) {
+        fourMoves.push({ row, col });
+      } else {
+        openThreeMoves.push({ row, col });
+      }
     }
   }
 
@@ -159,10 +142,8 @@ export function isThreat(
   col: number,
   color: "black" | "white",
 ): boolean {
-  return (
-    createsFour(board, row, col, color) ||
-    createsOpenThree(board, row, col, color)
-  );
+  const result = classifyThreat(board, row, col, color);
+  return result.createsFour || result.createsOpenThree;
 }
 
 /**
