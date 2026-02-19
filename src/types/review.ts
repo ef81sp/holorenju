@@ -2,8 +2,20 @@
  * 振り返り（棋譜評価）関連の型定義
  */
 
-import type { LeafEvaluation, ScoreBreakdown } from "./cpu";
+import type { CpuBattleRecord, LeafEvaluation, ScoreBreakdown } from "./cpu";
 import type { Position } from "./game";
+
+/**
+ * プレイヤー視点の手番
+ */
+export type PlayerSide = "black" | "white" | "both";
+
+/**
+ * レビューソースの判別共用体
+ */
+export type ReviewSource =
+  | { type: "cpuBattle"; record: CpuBattleRecord }
+  | { type: "imported"; moveHistory: string; playerSide: PlayerSide };
 
 /**
  * VCT/VCF手順の分岐情報

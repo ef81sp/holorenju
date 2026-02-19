@@ -24,6 +24,7 @@ export interface AppState {
   cpuDifficulty: CpuDifficulty | null;
   cpuPlayerFirst: boolean | null;
   reviewRecordId: string | null;
+  reviewImported: boolean;
 }
 
 interface AppStoreState extends AppState {
@@ -41,6 +42,7 @@ export const useAppStore = defineStore("app", {
     cpuDifficulty: null,
     cpuPlayerFirst: null,
     reviewRecordId: null,
+    reviewImported: false,
   }),
 
   actions: {
@@ -86,6 +88,7 @@ export const useAppStore = defineStore("app", {
       this.cpuDifficulty = null;
       this.cpuPlayerFirst = null;
       this.reviewRecordId = null;
+      this.reviewImported = false;
       this.pushHistory();
     },
 
@@ -114,6 +117,7 @@ export const useAppStore = defineStore("app", {
       this.scene = "cpuSetup";
       this.cpuDifficulty = null;
       this.cpuPlayerFirst = null;
+      this.reviewImported = false;
       this.pushHistory();
     },
 
@@ -128,6 +132,15 @@ export const useAppStore = defineStore("app", {
     openCpuReview(recordId: string) {
       this.transitionDirection = "forward";
       this.reviewRecordId = recordId;
+      this.reviewImported = false;
+      this.scene = "cpuReview";
+      this.pushHistory();
+    },
+
+    openImportedReview() {
+      this.transitionDirection = "forward";
+      this.reviewImported = true;
+      this.reviewRecordId = null;
       this.scene = "cpuReview";
       this.pushHistory();
     },
@@ -163,6 +176,9 @@ export const useAppStore = defineStore("app", {
       if (state.reviewRecordId !== undefined) {
         this.reviewRecordId = state.reviewRecordId;
       }
+      if (state.reviewImported !== undefined) {
+        this.reviewImported = state.reviewImported;
+      }
     },
 
     restoreCpuState(state: Partial<AppState>) {
@@ -184,6 +200,7 @@ export const useAppStore = defineStore("app", {
         cpuDifficulty: this.cpuDifficulty,
         cpuPlayerFirst: this.cpuPlayerFirst,
         reviewRecordId: this.reviewRecordId,
+        reviewImported: this.reviewImported,
       };
       window.history.pushState(state, "", `#${this.scene}`);
     },

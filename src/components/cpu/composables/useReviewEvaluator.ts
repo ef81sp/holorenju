@@ -27,6 +27,7 @@ export interface UseReviewEvaluatorReturn {
   evaluate: (
     moveHistory: string,
     playerFirst: boolean,
+    analyzeAll?: boolean,
   ) => Promise<ReviewWorkerResult[]>;
   /** 評価をキャンセル */
   cancel: () => void;
@@ -74,12 +75,14 @@ export function useReviewEvaluator(): UseReviewEvaluatorReturn {
   function evaluate(
     moveHistory: string,
     playerFirst: boolean,
+    analyzeAll?: boolean,
   ): Promise<ReviewWorkerResult[]> {
     const moves = moveHistory.trim().split(/\s+/);
 
     // 珠型(3手)以降の全手をキューに入れる
     // プレイヤー手: isLightEval=false（フル評価）
     // コンピュータ手: isLightEval=true（強制勝ち検出のみ）
+    // analyzeAll時は全手をフル評価
     interface QueueItem {
       moveIndex: number;
       isLightEval: boolean;
@@ -90,7 +93,8 @@ export function useReviewEvaluator(): UseReviewEvaluatorReturn {
         continue;
       }
       const isPlayerMove = playerFirst ? i % 2 === 0 : i % 2 === 1;
-      allMoveItems.push({ moveIndex: i, isLightEval: !isPlayerMove });
+      const isLightEval = analyzeAll ? false : !isPlayerMove;
+      allMoveItems.push({ moveIndex: i, isLightEval });
     }
 
     if (allMoveItems.length === 0) {

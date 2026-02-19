@@ -2,17 +2,23 @@
  * CPU対戦振り返りストア
  *
  * 振り返り対象の対局データ・手順ナビゲーション・評価結果を管理
+ * ReviewSource で CPU対戦記録・外部棋譜の2ソースに対応
  */
 
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 
-import type { CpuBattleRecord } from "@/types/cpu";
+import type { BattleResult, CpuBattleRecord } from "@/types/cpu";
 import type { BoardState, Position, StoneColor } from "@/types/game";
-import type { EvaluatedMove, GameReview } from "@/types/review";
+import type {
+  EvaluatedMove,
+  GameReview,
+  PlayerSide,
+  ReviewSource,
+} from "@/types/review";
 
 import { parseGameRecord } from "@/logic/gameRecordParser";
-import { createEmptyBoard } from "@/logic/renjuRules";
+import { checkWin, createEmptyBoard } from "@/logic/renjuRules";
 
 /** localStorageキャッシュキー */
 const REVIEW_CACHE_KEY = "holorenju-review-cache";
@@ -53,10 +59,39 @@ function saveCache(cache: Map<string, GameReview>): void {
   }
 }
 
+/**
+ * 棋譜から勝者を検出する（五連判定のみ）
+ */
+function detectWinnerFromMoves(
+  moves: { position: Position; color: StoneColor }[],
+): BattleResult | null {
+  if (moves.length === 0) {
+    return null;
+  }
+
+  const board = createEmptyBoard();
+  for (const move of moves) {
+    const row = board[move.position.row];
+    if (row) {
+      row[move.position.col] = move.color;
+    }
+  }
+
+  // 最終手で五連したか確認
+  const lastMove = moves[moves.length - 1]!;
+  if (checkWin(board, lastMove.position, lastMove.color)) {
+    // 最終手で五連した色がわかった → playerSide次第でwin/lose
+    // ここでは勝った色だけ返す（呼び出し側でwin/loseを判定）
+    return lastMove.color === "black" ? "win" : "lose";
+  }
+
+  return null;
+}
+
 export const useCpuReviewStore = defineStore("cpuReview", () => {
   // ========== State ==========
-  /** 振り返り対象のレコード */
-  const currentRecord = ref<CpuBattleRecord | null>(null);
+  /** レビューソース（CPU対戦 or 外部棋譜） */
+  const reviewSource = ref<ReviewSource | null>(null);
   /** パース済み手順 */
   const moves = ref<{ position: Position; color: StoneColor }[]>([]);
   /** 表示中の手数（0=初期盤面、moves.length=最終盤面） */
@@ -69,6 +104,65 @@ export const useCpuReviewStore = defineStore("cpuReview", () => {
   const evaluationProgress = ref(0);
   /** キャッシュ */
   const reviewCache = ref<Map<string, GameReview>>(loadCache());
+
+  // ========== Computed（後方互換） ==========
+
+  /** CPU対戦記録（cpuBattleソースのみ、それ以外はnull） */
+  const currentRecord = computed(() =>
+    reviewSource.value?.type === "cpuBattle" ? reviewSource.value.record : null,
+  );
+
+  /** 棋譜文字列への統一アクセサ */
+  const moveHistory = computed(() => {
+    if (!reviewSource.value) {
+      return null;
+    }
+    return reviewSource.value.type === "cpuBattle"
+      ? (reviewSource.value.record.moveHistory ?? null)
+      : reviewSource.value.moveHistory;
+  });
+
+  /** プレイヤーが先手か */
+  const playerFirst = computed(() => {
+    if (!reviewSource.value) {
+      return true;
+    }
+    return reviewSource.value.type === "cpuBattle"
+      ? reviewSource.value.record.playerFirst
+      : reviewSource.value.playerSide !== "white";
+  });
+
+  /** 全手分析モードか */
+  const isAnalyzeAll = computed(
+    () =>
+      reviewSource.value?.type === "imported" &&
+      reviewSource.value.playerSide === "both",
+  );
+
+  /** 決着結果（importedでは五連検出、検出不可ならnull） */
+  const gameResult = computed<BattleResult | null>(() => {
+    if (!reviewSource.value) {
+      return null;
+    }
+    if (reviewSource.value.type === "cpuBattle") {
+      return reviewSource.value.record.result;
+    }
+    // imported: 五連検出。playerSideに応じてwin/loseを反転
+    const rawResult = detectWinnerFromMoves(moves.value);
+    if (!rawResult) {
+      return null;
+    }
+    const { playerSide } = reviewSource.value;
+    if (playerSide === "both") {
+      return rawResult;
+    } // 全手分析では素のまま
+    // "win" = 黒勝ち、"lose" = 白勝ち
+    if (playerSide === "black") {
+      return rawResult;
+    }
+    // playerSide === "white": 白視点なので反転
+    return rawResult === "win" ? "lose" : "win";
+  });
 
   // ========== Computed ==========
 
@@ -125,10 +219,10 @@ export const useCpuReviewStore = defineStore("cpuReview", () => {
   // ========== Actions ==========
 
   /**
-   * 振り返りを開始
+   * CPU対戦記録の振り返りを開始
    */
   function openReview(record: CpuBattleRecord): void {
-    currentRecord.value = record;
+    reviewSource.value = { type: "cpuBattle", record };
     if (record.moveHistory) {
       moves.value = parseGameRecord(record.moveHistory);
     } else {
@@ -144,6 +238,25 @@ export const useCpuReviewStore = defineStore("cpuReview", () => {
     if (cached) {
       evaluatedMoves.value = cached.evaluatedMoves;
     }
+  }
+
+  /**
+   * 外部棋譜の振り返りを開始
+   */
+  function openReviewFromImport(
+    importedMoveHistory: string,
+    playerSide: PlayerSide,
+  ): void {
+    reviewSource.value = {
+      type: "imported",
+      moveHistory: importedMoveHistory,
+      playerSide,
+    };
+    moves.value = parseGameRecord(importedMoveHistory);
+    currentMoveIndex.value = Math.min(1, moves.value.length);
+    evaluatedMoves.value = []; // キャッシュなし。都度分析
+    isEvaluating.value = false;
+    evaluationProgress.value = 0;
   }
 
   /**
@@ -187,7 +300,7 @@ export const useCpuReviewStore = defineStore("cpuReview", () => {
   function setEvaluationResults(results: EvaluatedMove[]): void {
     evaluatedMoves.value = results;
 
-    // キャッシュに保存
+    // cpuBattle のみキャッシュ保存
     if (currentRecord.value) {
       const review: GameReview = {
         evaluatedMoves: results,
@@ -209,10 +322,17 @@ export const useCpuReviewStore = defineStore("cpuReview", () => {
   }
 
   /**
+   * 評価結果のみクリア（imported用）
+   */
+  function clearEvaluation(): void {
+    evaluatedMoves.value = [];
+  }
+
+  /**
    * 振り返りを閉じる
    */
   function closeReview(): void {
-    currentRecord.value = null;
+    reviewSource.value = null;
     moves.value = [];
     currentMoveIndex.value = 0;
     evaluatedMoves.value = [];
@@ -222,6 +342,7 @@ export const useCpuReviewStore = defineStore("cpuReview", () => {
 
   return {
     // State
+    reviewSource,
     currentRecord,
     moves,
     currentMoveIndex,
@@ -229,12 +350,17 @@ export const useCpuReviewStore = defineStore("cpuReview", () => {
     isEvaluating,
     evaluationProgress,
     // Computed
+    moveHistory,
+    playerFirst,
+    isAnalyzeAll,
+    gameResult,
     boardAtCurrentMove,
     currentEvaluation,
     playerAccuracy,
     criticalErrors,
     // Actions
     openReview,
+    openReviewFromImport,
     goToMove,
     nextMove,
     prevMove,
@@ -242,6 +368,7 @@ export const useCpuReviewStore = defineStore("cpuReview", () => {
     goToEnd,
     setEvaluationResults,
     clearCacheForRecord,
+    clearEvaluation,
     closeReview,
   };
 });

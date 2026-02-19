@@ -20,7 +20,7 @@ interface Props {
   totalCount: number;
   accuracy: number | null;
   criticalErrors: number;
-  difficulty: CpuDifficulty;
+  difficulty?: CpuDifficulty;
   moveCount: number;
   playerFirst: boolean;
   moveHistory: string | null;
@@ -48,6 +48,7 @@ async function copyMoveHistory(): Promise<void> {
     <!-- 対局情報 -->
     <div class="game-info">
       <span
+        v-if="props.difficulty"
         class="info-item"
         :aria-label="DIFFICULTY_ARIA_LABELS[props.difficulty]"
       >

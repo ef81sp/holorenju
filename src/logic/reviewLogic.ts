@@ -4,6 +4,7 @@
  * スコア差に基づく手の品質分類と精度計算
  */
 
+import type { Position, StoneColor } from "@/types/game";
 import type {
   EvaluatedMove,
   GameReview,
@@ -45,17 +46,26 @@ export function classifyMoveQuality(scoreDiff: number): MoveQuality {
 
 /**
  * Worker結果から評価済みの手を構築
+ *
+ * @param parsedMoves パース済み手順配列（省略時はmoveHistoryからパース）
+ * @param analyzeAll 全手分析モード（全手をisPlayerMove: trueに）
  */
 export function buildEvaluatedMove(
   result: ReviewWorkerResult,
-  moveHistory: string,
+  moveHistoryOrMoves: string | { position: Position; color: StoneColor }[],
   playerFirst: boolean,
+  analyzeAll?: boolean,
 ): EvaluatedMove {
-  const moves = parseGameRecord(moveHistory);
+  const moves =
+    typeof moveHistoryOrMoves === "string"
+      ? parseGameRecord(moveHistoryOrMoves)
+      : moveHistoryOrMoves;
   const move = moves[result.moveIndex];
-  const isPlayerMove = playerFirst
-    ? result.moveIndex % 2 === 0
-    : result.moveIndex % 2 === 1;
+  const isPlayerMove = analyzeAll
+    ? true
+    : playerFirst
+      ? result.moveIndex % 2 === 0
+      : result.moveIndex % 2 === 1;
 
   const scoreDiff = result.bestScore - result.playedScore;
 

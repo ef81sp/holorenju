@@ -8,6 +8,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 
 import RefreshIcon from "@/assets/icons/refresh.svg?component";
+import UploadFileIcon from "@/assets/icons/upload_file.svg?component";
 import RenjuBoard from "@/components/game/RenjuBoard/RenjuBoard.vue";
 import SettingsControl from "@/components/common/SettingsControl.vue";
 import GamePlayerLayout from "@/components/common/GamePlayerLayout.vue";
@@ -16,10 +17,13 @@ import CharacterSprite from "@/components/character/CharacterSprite.vue";
 import ReviewControls from "./ReviewControls.vue";
 import ReviewStatus from "./ReviewStatus.vue";
 import ReviewEvalPanel from "./ReviewEvalPanel.vue";
+// oxlint-disable-next-line consistent-type-imports
+import GameRecordImportDialog from "./GameRecordImportDialog.vue";
 import { useReviewEvaluator } from "./composables/useReviewEvaluator";
 import { useReviewDialogue } from "./composables/useReviewDialogue";
 import { useReviewBoardOverlay } from "./composables/useReviewBoardOverlay";
 import { buildEvaluatedMove } from "@/logic/reviewLogic";
+import { parseGameRecord } from "@/logic/gameRecordParser";
 import { useAppStore } from "@/stores/appStore";
 import { useCpuReviewStore } from "@/stores/cpuReviewStore";
 import { useCpuRecordStore } from "@/stores/cpuRecordStore";
@@ -37,6 +41,9 @@ const dialogStore = useDialogStore();
 const audioStore = useAudioStore();
 
 const layoutRef = ref<InstanceType<typeof GamePlayerLayout> | null>(null);
+const importDialogRef = ref<InstanceType<typeof GameRecordImportDialog> | null>(
+  null,
+);
 
 // Composables
 const evaluator = useReviewEvaluator();
@@ -48,19 +55,27 @@ onMounted(() => {
   // 対戦画面から遷移した場合、boardStoreに残っている石をクリア
   boardStore.resetBoard();
 
-  const recordId = appStore.reviewRecordId;
-  if (!recordId) {
+  if (appStore.reviewRecordId) {
+    // 既存パス: CPU対戦記録
+    const record = cpuRecordStore.records.find(
+      (r) => r.id === appStore.reviewRecordId,
+    );
+    if (!record?.moveHistory) {
+      appStore.goToCpuSetup();
+      return;
+    }
+    reviewStore.openReview(record);
+  } else if (appStore.reviewImported) {
+    // 新パス: cpuReviewStore に既にセット済みか確認
+    if (!reviewStore.reviewSource) {
+      appStore.goToCpuSetup();
+      return;
+    }
+  } else {
     appStore.goToCpuSetup();
     return;
   }
 
-  const record = cpuRecordStore.records.find((r) => r.id === recordId);
-  if (!record?.moveHistory) {
-    appStore.goToCpuSetup();
-    return;
-  }
-
-  reviewStore.openReview(record);
   dialogue.showInitialDialogue();
 
   // キャッシュがなければ評価を開始
@@ -80,23 +95,32 @@ onUnmounted(() => {
 
 // 評価を開始
 async function startEvaluation(): Promise<void> {
-  const record = reviewStore.currentRecord;
-  if (!record?.moveHistory) {
+  const mh = reviewStore.moveHistory;
+  if (!mh) {
     return;
   }
 
   reviewStore.isEvaluating = true;
   dialogue.showEvaluatingDialogue();
 
-  const { moveHistory } = record;
-  const results = await evaluator.evaluate(moveHistory, record.playerFirst);
+  const results = await evaluator.evaluate(
+    mh,
+    reviewStore.playerFirst,
+    reviewStore.isAnalyzeAll,
+  );
   if (results.length === 0) {
     return;
   } // キャンセルされた場合
 
-  // 結果を変換
+  // 結果を変換（1回だけパース）
+  const parsedMoves = parseGameRecord(mh);
   const evaluated = results.map((r) =>
-    buildEvaluatedMove(r, moveHistory, record.playerFirst),
+    buildEvaluatedMove(
+      r,
+      parsedMoves,
+      reviewStore.playerFirst,
+      reviewStore.isAnalyzeAll,
+    ),
   );
 
   reviewStore.setEvaluationResults(evaluated);
@@ -124,8 +148,11 @@ watch(
     const isLastMove =
       reviewStore.currentMoveIndex === reviewStore.moves.length &&
       reviewStore.currentMoveIndex > 0;
-    if (isLastMove && reviewStore.currentRecord) {
-      dialogue.showGameEndDialogue(reviewStore.currentRecord.result);
+    if (isLastMove) {
+      const result = reviewStore.gameResult;
+      if (result) {
+        dialogue.showGameEndDialogue(result);
+      }
       return;
     }
 
@@ -211,11 +238,24 @@ function handleBack(): void {
 }
 
 function handleReanalyze(): void {
-  if (evaluator.isEvaluating.value || !reviewStore.currentRecord) {
+  if (evaluator.isEvaluating.value || !reviewStore.reviewSource) {
     return;
   }
   evaluator.cancel();
-  reviewStore.clearCacheForRecord(reviewStore.currentRecord.id);
+  // cpuBattle: キャッシュ削除、imported: 評価結果クリアのみ
+  if (reviewStore.currentRecord) {
+    reviewStore.clearCacheForRecord(reviewStore.currentRecord.id);
+  } else {
+    reviewStore.clearEvaluation();
+  }
+  startEvaluation();
+}
+
+function handleImported(): void {
+  evaluator.cancel();
+  boardStore.resetBoard();
+  overlay.clearPreview();
+  dialogue.showInitialDialogue();
   startEvaluation();
 }
 
@@ -244,7 +284,14 @@ function handleLayoutClick(event: MouseEvent): void {
 
       <template #header-controls>
         <button
-          class="reanalyze-button"
+          class="header-icon-button"
+          aria-label="棋譜を読み込む"
+          @click="importDialogRef?.showModal()"
+        >
+          <UploadFileIcon />
+        </button>
+        <button
+          class="header-icon-button"
           aria-label="再分析"
           :disabled="evaluator.isEvaluating.value"
           @click="handleReanalyze"
@@ -257,16 +304,16 @@ function handleLayoutClick(event: MouseEvent): void {
       <template #control-info>
         <div class="control-info-content">
           <ReviewStatus
-            v-if="reviewStore.currentRecord"
+            v-if="reviewStore.reviewSource"
             :is-evaluating="evaluator.isEvaluating.value"
             :completed-count="evaluator.completedCount.value"
             :total-count="evaluator.totalCount.value"
             :accuracy="reviewStore.playerAccuracy"
             :critical-errors="reviewStore.criticalErrors"
-            :difficulty="reviewStore.currentRecord.difficulty"
-            :move-count="reviewStore.currentRecord.moves"
-            :player-first="reviewStore.currentRecord.playerFirst"
-            :move-history="reviewStore.currentRecord.moveHistory ?? null"
+            :difficulty="reviewStore.currentRecord?.difficulty"
+            :move-count="reviewStore.moves.length"
+            :player-first="reviewStore.playerFirst"
+            :move-history="reviewStore.moveHistory"
           />
           <ReviewControls
             :current-move-index="reviewStore.currentMoveIndex"
@@ -335,6 +382,10 @@ function handleLayoutClick(event: MouseEvent): void {
         </div>
       </template>
     </GamePlayerLayout>
+    <GameRecordImportDialog
+      ref="importDialogRef"
+      @imported="handleImported"
+    />
   </div>
 </template>
 
@@ -353,7 +404,7 @@ function handleLayoutClick(event: MouseEvent): void {
   }
 }
 
-.reanalyze-button {
+.header-icon-button {
   width: var(--size-40);
   height: var(--size-40);
   padding: var(--size-8);
