@@ -1123,6 +1123,7 @@ function isPlayed(candidate: { position: Position }): boolean {
 }
 
 .help-button {
+  position: relative;
   width: var(--size-16);
   height: var(--size-16);
   padding: 0;
@@ -1142,6 +1143,16 @@ function isPlayed(candidate: { position: Position }): boolean {
 
   &:hover {
     opacity: 1;
+  }
+
+  &::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: var(--size-48);
+    height: var(--size-48);
   }
 }
 

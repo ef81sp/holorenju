@@ -60,7 +60,7 @@ async function copyMoveHistory(): Promise<void> {
         class="copy-button"
         :class="{ copied }"
         aria-label="棋譜をコピー"
-        @click="copyMoveHistory"
+        @click.stop="copyMoveHistory"
       >
         <ContentCopyIcon v-if="!copied" />
         <CheckIcon v-else />
