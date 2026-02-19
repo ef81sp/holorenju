@@ -20,7 +20,7 @@ pnpm build         # Production build
 
 ### Git
 
-- Don't need `git -C`. Do `pwd`
+- Don't use `git -C`. Do `pwd` if needed.
 
 ## Planning
 
