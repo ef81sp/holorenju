@@ -492,42 +492,49 @@ export function findVCTSequence(
     };
   }
 
-  const sequence: Position[] = [];
-  const context: VCTRecursiveContext = {
-    isForbiddenTrap: false,
-    collectBranches: options?.collectBranches ?? false,
-    branches: [],
-  };
-  const found = findVCTSequenceRecursive(
-    board,
-    color,
-    0,
-    maxDepth,
-    limiter,
-    sequence,
-    options,
-    context,
-  );
+  // 反復深化: 浅い深度から探索し、最短VCT手順を優先
+  for (let depth = 1; depth <= maxDepth; depth++) {
+    if (isTimeExceeded(limiter)) {
+      return null;
+    }
 
-  if (!found || !sequence[0]) {
-    return null;
-  }
+    const sequence: Position[] = [];
+    const context: VCTRecursiveContext = {
+      isForbiddenTrap: false,
+      collectBranches: options?.collectBranches ?? false,
+      branches: [],
+    };
+    const found = findVCTSequenceRecursive(
+      board,
+      color,
+      0,
+      depth,
+      limiter,
+      sequence,
+      options,
+      context,
+    );
 
-  // Post-search validation: 防御手がカウンターフォー/カウンターウィンを作る経路を棄却
-  // 探索関数内でのper-nodeチェックは性能上不可能なため、見つかった手順を事後検証する
-  if (!validateVCTSequence(board, color, sequence)) {
-    return null;
-  }
+    if (!found || !sequence[0]) {
+      continue;
+    }
 
-  const result: VCTSequenceResult = {
-    firstMove: sequence[0],
-    sequence,
-    isForbiddenTrap: context.isForbiddenTrap,
-  };
-  if (context.collectBranches && context.branches.length > 0) {
-    result.branches = context.branches;
+    // Post-search validation: 防御手がカウンターフォー/カウンターウィンを作る経路を棄却
+    if (!validateVCTSequence(board, color, sequence)) {
+      continue;
+    }
+
+    const result: VCTSequenceResult = {
+      firstMove: sequence[0],
+      sequence,
+      isForbiddenTrap: context.isForbiddenTrap,
+    };
+    if (context.collectBranches && context.branches.length > 0) {
+      result.branches = context.branches;
+    }
+    return result;
   }
-  return result;
+  return null;
 }
 
 /**
