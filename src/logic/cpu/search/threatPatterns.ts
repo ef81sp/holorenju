@@ -137,6 +137,7 @@ export function getFourDefensePosition(
   color: "black" | "white",
 ): Position | null {
   const { row, col } = lastMove;
+  let firstDefense: Position | null = null;
 
   for (let i = 0; i < DIRECTION_INDICES.length; i++) {
     const dirIndex = DIRECTION_INDICES[i];
@@ -153,29 +154,27 @@ export function getFourDefensePosition(
     // 連続四をチェック
     const count = countLine(board, row, col, dr, dc, color);
     if (count === 4) {
-      const defensePos = findDefenseForConsecutiveFour(
-        board,
-        row,
-        col,
-        dr,
-        dc,
-        color,
-      );
-      if (defensePos) {
-        return defensePos;
+      const ends = getLineEnds(board, row, col, dr, dc, color);
+      if (ends.length === 2) {
+        // 活四（両端空き）= 防御不可能 → 即座にnullを返す
+        return null;
       }
+      if (ends.length === 1 && !firstDefense) {
+        firstDefense = ends[0] ?? null;
+      }
+      continue;
     }
 
     // 跳び四をチェック
-    if (count !== 4 && checkJumpFour(board, row, col, dirIndex, color)) {
+    if (checkJumpFour(board, row, col, dirIndex, color)) {
       const defensePos = findDefenseForJumpFour(board, row, col, dr, dc, color);
-      if (defensePos) {
-        return defensePos;
+      if (defensePos && !firstDefense) {
+        firstDefense = defensePos;
       }
     }
   }
 
-  return null;
+  return firstDefense;
 }
 
 /**

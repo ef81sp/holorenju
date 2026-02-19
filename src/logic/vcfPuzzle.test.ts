@@ -97,6 +97,21 @@ describe("getDefenseResponse", () => {
     }
   });
 
+  it("活四+別方向の止め四でもopen-fourを返す", () => {
+    // 横: row7, col4-7に黒4つ、両端空き → 活四
+    // 縦: col7にrow4-7の黒4つ、row3に白 → 止め四
+    // → 活四が存在するので防御不可能（open-four）
+    const board = makeBoard([
+      [3, "-------o-------"], // (3,7) = 白（縦方向ブロック）
+      [4, "-------x-------"], // (4,7) = 黒
+      [5, "-------x-------"], // (5,7) = 黒
+      [6, "-------x-------"], // (6,7) = 黒
+      [7, "----xxxx-------"], // (7,4-7) = 黒、横に活四
+    ]);
+    const result = getDefenseResponse(board, { row: 7, col: 7 }, "black");
+    expect(result.type).toBe("open-four");
+  });
+
   it("防御後にCPU五連が成立する場合counter-fiveを返す", () => {
     // 黒が四を作ったが、白の防御位置に白石を置くと白が五連になる
     // row7: 黒4つ (col4-7)、col3に白で止め四

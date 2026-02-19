@@ -373,6 +373,64 @@ export function vcfAttackMoveCount(sequence: Position[]): number {
 }
 
 /**
+ * 指定した手がVCFの開始手として有効かチェック
+ *
+ * isVCTFirstMove と異なり、相手の活三ガードがない。
+ * VCFは全手が四なので相手の活三は無関係。
+ */
+export function isVCFFirstMove(
+  board: BoardState,
+  move: Position,
+  color: "black" | "white",
+  options?: VCFSearchOptions,
+): boolean {
+  const moveRow = board[move.row];
+  if (!moveRow || moveRow[move.col] !== null) {
+    return false;
+  }
+
+  // 手を仮配置
+  moveRow[move.col] = color;
+
+  // 五連チェック
+  if (checkFive(board, move.row, move.col, color)) {
+    moveRow[move.col] = null;
+    return true;
+  }
+
+  // 四を作るかチェック
+  if (!createsFour(board, move.row, move.col, color)) {
+    moveRow[move.col] = null;
+    return false;
+  }
+
+  // 防御位置を取得
+  const defensePos = getFourDefensePosition(board, move, color);
+  if (!defensePos) {
+    // 活四 → 防御不可能 → VCF成立
+    moveRow[move.col] = null;
+    return true;
+  }
+
+  // 防御石を仮配置してVCF探索継続
+  const opponentColor = color === "black" ? "white" : "black";
+  const defRow = board[defensePos.row];
+  if (defRow) {
+    defRow[defensePos.col] = opponentColor;
+  }
+
+  const vcf = findVCFSequence(board, color, options);
+
+  // Undo（逆順）
+  if (defRow) {
+    defRow[defensePos.col] = null;
+  }
+  moveRow[move.col] = null;
+
+  return vcf !== null;
+}
+
+/**
  * VCF手順の再帰探索
  *
  * 1パスで五連→活四→再帰の順に処理。

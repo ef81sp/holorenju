@@ -32,7 +32,11 @@ import {
   findMiseVCFSequence,
   type MiseVCFSearchOptions,
 } from "./search/miseVcf";
-import { findVCFSequence, type VCFSearchOptions } from "./search/vcf";
+import {
+  findVCFSequence,
+  isVCFFirstMove,
+  type VCFSearchOptions,
+} from "./search/vcf";
 import {
   findVCTSequence,
   isVCTFirstMove,
@@ -280,15 +284,13 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
         playedRow >= 0 &&
         !(playedRow === bestMove.row && playedCol === bestMove.col)
       ) {
-        // 別の追い詰め開始手かチェック
-        if (
+        // 別の追い詰め開始手かチェック（VCF → VCT の順）
+        const playedPos = { row: playedRow, col: playedCol };
+        if (isVCFFirstMove(board, playedPos, color, REVIEW_VCF_OPTIONS)) {
+          playedScore = PATTERN_SCORES.FIVE;
+        } else if (
           countStones(board) >= VCT_STONE_THRESHOLD &&
-          isVCTFirstMove(
-            board,
-            { row: playedRow, col: playedCol },
-            color,
-            REVIEW_VCT_OPTIONS,
-          )
+          isVCTFirstMove(board, playedPos, color, REVIEW_VCT_OPTIONS)
         ) {
           playedScore = PATTERN_SCORES.FIVE;
         } else {
