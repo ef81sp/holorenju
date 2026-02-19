@@ -730,7 +730,9 @@ describe("VCTカウンター脅威: ct=four", () => {
     expect(isThreat(board, 8, 3, "white")).toBe(true);
     board[8]![3] = null;
 
-    expect(hasVCT(board, "white")).toBe(true);
+    expect(hasVCT(board, "white", 0, undefined, { timeLimit: 1000 })).toBe(
+      true,
+    );
   });
 
   it("ct=four: ブロックが脅威を作らない場合VCT不成立", () => {
