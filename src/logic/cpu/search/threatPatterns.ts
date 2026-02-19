@@ -14,11 +14,10 @@ import {
   checkForbiddenMove,
   checkJumpFour,
   checkJumpThree,
-  isValidPosition,
 } from "@/logic/renjuRules";
 
 import { DIRECTION_INDICES, DIRECTIONS } from "../core/constants";
-import { checkEnds, countLine } from "../core/lineAnalysis";
+import { checkEnds, countLine, getLineEnds } from "../core/lineAnalysis";
 import { isNearExistingStone } from "../moveGenerator";
 import { findJumpGapPosition } from "../patterns/threatAnalysis";
 import { createsFour } from "./threatMoves";
@@ -191,41 +190,9 @@ export function findDefenseForConsecutiveFour(
   dc: number,
   color: "black" | "white",
 ): Position | null {
-  const defensePositions: Position[] = [];
-
-  // 正方向の端
-  let r = row + dr;
-  let c = col + dc;
-  while (isValidPosition(r, c) && board[r]?.[c] === color) {
-    r += dr;
-    c += dc;
-  }
-  if (isValidPosition(r, c) && board[r]?.[c] === null) {
-    defensePositions.push({ row: r, col: c });
-  }
-
-  // 負方向の端
-  r = row - dr;
-  c = col - dc;
-  while (isValidPosition(r, c) && board[r]?.[c] === color) {
-    r -= dr;
-    c -= dc;
-  }
-  if (isValidPosition(r, c) && board[r]?.[c] === null) {
-    defensePositions.push({ row: r, col: c });
-  }
-
-  // 止め四の場合は1点のみ
-  if (defensePositions.length === 1) {
-    return defensePositions[0] ?? null;
-  }
-
-  // 活四の場合は止められない（nullを返す = 勝利）
-  if (defensePositions.length === 2) {
-    return null;
-  }
-
-  return null;
+  const ends = getLineEnds(board, row, col, dr, dc, color);
+  // 止め四（片端のみ空き）= 1点で防御、活四（両端空き）= 防御不可
+  return ends.length === 1 ? (ends[0] ?? null) : null;
 }
 
 /**
