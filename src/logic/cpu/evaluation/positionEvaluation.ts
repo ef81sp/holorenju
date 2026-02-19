@@ -11,6 +11,7 @@ import type { BoardState, StoneColor } from "@/types/game";
 import { incrementEvaluationCalls } from "@/logic/cpu/profiling/counters";
 import { checkFive, copyBoard } from "@/logic/renjuRules";
 
+import { includesPosition } from "../core/boardUtils";
 import {
   applyDefenseMultiplier,
   DEFENSE_MULTIPLIERS,
@@ -141,10 +142,7 @@ function evaluatePositionCore(
 
     // 相手の活四を止めない手は除外（例外: 自分の活四のみ）
     if (threats.openFours.length > 0 && !hasMyOpenFour) {
-      const isDefendingOpenFour = threats.openFours.some(
-        (p) => p.row === row && p.col === col,
-      );
-      if (!isDefendingOpenFour) {
+      if (!includesPosition(threats.openFours, row, col)) {
         return -Infinity;
       }
     }
@@ -156,10 +154,7 @@ function evaluatePositionCore(
       threats.openFours.length === 0 &&
       !hasMyOpenFour
     ) {
-      const isDefendingFour = threats.fours.some(
-        (p) => p.row === row && p.col === col,
-      );
-      if (!isDefendingFour) {
+      if (!includesPosition(threats.fours, row, col)) {
         return -Infinity;
       }
     }
@@ -172,21 +167,15 @@ function evaluatePositionCore(
       threats.fours.length === 0 &&
       !canWinFirst
     ) {
-      const isDefendingOpenThree = threats.openThrees.some(
-        (p) => p.row === row && p.col === col,
-      );
-      if (!isDefendingOpenThree) {
+      if (!includesPosition(threats.openThrees, row, col)) {
         return -Infinity;
       }
 
       // 活三を止めつつミセ手も止める必要がある
       if (options.enableMiseThreat && threats.mises.length > 0) {
-        const isDefendingMise = threats.mises.some(
-          (p) => p.row === row && p.col === col,
-        );
         // ミセ手を止めていない、かつ両方を止める手が存在する場合のみ除外
         if (
-          !isDefendingMise &&
+          !includesPosition(threats.mises, row, col) &&
           hasDefenseThatBlocksBoth(threats.openThrees, threats.mises)
         ) {
           return -Infinity;
@@ -204,10 +193,7 @@ function evaluatePositionCore(
       threats.openThrees.length === 0 &&
       !canWinFirst
     ) {
-      const isDefendingMise = threats.mises.some(
-        (p) => p.row === row && p.col === col,
-      );
-      if (!isDefendingMise) {
+      if (!includesPosition(threats.mises, row, col)) {
         return -Infinity;
       }
     }

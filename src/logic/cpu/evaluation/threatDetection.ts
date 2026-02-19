@@ -13,6 +13,7 @@ import {
   isValidPosition,
 } from "@/logic/renjuRules";
 
+import { includesPosition } from "../core/boardUtils";
 import { DIRECTION_INDICES, DIRECTIONS } from "../core/constants";
 import { getLineEnds } from "../core/lineAnalysis";
 import { isNearExistingStone } from "../moveGenerator";
@@ -26,8 +27,7 @@ import { createsFourThree } from "./tactics";
  * 配列に重複しない位置を追加するヘルパー関数
  */
 function addUniquePosition(positions: Position[], pos: Position): void {
-  const exists = positions.some((p) => p.row === pos.row && p.col === pos.col);
-  if (!exists) {
+  if (!includesPosition(positions, pos.row, pos.col)) {
     positions.push(pos);
   }
 }
@@ -51,12 +51,7 @@ export function hasDefenseThatBlocksBoth(
   openThrees: Position[],
   mises: Position[],
 ): boolean {
-  return openThrees.some((openThreePos) =>
-    mises.some(
-      (misePos) =>
-        openThreePos.row === misePos.row && openThreePos.col === misePos.col,
-    ),
-  );
+  return openThrees.some((pos) => includesPosition(mises, pos.row, pos.col));
 }
 
 /**

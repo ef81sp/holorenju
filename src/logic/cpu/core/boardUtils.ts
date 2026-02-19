@@ -88,6 +88,17 @@ export function undoMove(board: BoardState, move: Position): void {
 }
 
 /**
+ * 位置リストに指定座標が含まれるかチェック
+ */
+export function includesPosition(
+  positions: { row: number; col: number }[],
+  row: number,
+  col: number,
+): boolean {
+  return positions.some((p) => p.row === row && p.col === col);
+}
+
+/**
  * 配列からランダムに1要素を選択
  *
  * @param array 選択対象の配列

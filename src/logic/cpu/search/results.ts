@@ -8,7 +8,11 @@ import type { BoardState, Position } from "@/types/game";
 
 import { checkFive, copyBoard } from "@/logic/renjuRules";
 
-import { applyMove, getOppositeColor } from "../core/boardUtils";
+import {
+  applyMove,
+  getOppositeColor,
+  includesPosition,
+} from "../core/boardUtils";
 import { analyzeJumpPatterns } from "../evaluation/jumpPatterns";
 import { PATTERN_SCORES } from "../evaluation/patternScores";
 import { evaluateStonePatterns } from "../evaluation/stonePatterns";
@@ -195,10 +199,7 @@ export function isValidPVMove(
 
   // 相手の活四を止めない手は不正（例外: 自分の活四のみ）
   if (threats.openFours.length > 0 && !hasMyOpenFour) {
-    const isDefending = threats.openFours.some(
-      (p) => p.row === move.row && p.col === move.col,
-    );
-    if (!isDefending) {
+    if (!includesPosition(threats.openFours, move.row, move.col)) {
       return false;
     }
   }
@@ -209,10 +210,7 @@ export function isValidPVMove(
     threats.openFours.length === 0 &&
     !hasMyOpenFour
   ) {
-    const isDefending = threats.fours.some(
-      (p) => p.row === move.row && p.col === move.col,
-    );
-    if (!isDefending) {
+    if (!includesPosition(threats.fours, move.row, move.col)) {
       return false;
     }
   }
@@ -224,10 +222,7 @@ export function isValidPVMove(
     threats.fours.length === 0 &&
     !canWinFirst
   ) {
-    const isDefending = threats.openThrees.some(
-      (p) => p.row === move.row && p.col === move.col,
-    );
-    if (!isDefending) {
+    if (!includesPosition(threats.openThrees, move.row, move.col)) {
       return false;
     }
   }
