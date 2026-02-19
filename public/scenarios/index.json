@@ -80,6 +80,18 @@
           "path": "renju_beginner/scenario_mlbxwgw2_a4l03.json"
         },
         {
+          "id": "scenario_mlcg64mu_c6bi1",
+          "title": "四追い",
+          "description": "最強の攻撃を学びます",
+          "path": "renju_beginner/scenario_mlcg64mu_c6bi1.json"
+        },
+        {
+          "id": "scenario_mljjjf9f_7ez5w",
+          "title": "禁手に嵌める",
+          "description": "白特有の勝ち方を学びます",
+          "path": "renju_beginner/scenario_mljjjf9f_7ez5w.json"
+        },
+        {
           "id": "scenario_mlbzqn68_71jtz",
           "title": "EX:珠型一覧",
           "description": "珠型の細かい説明と全パターンを紹介します",
@@ -88,27 +100,14 @@
         {
           "id": "scenario_mlce6x86_9cy53",
           "title": "EX:開局規定",
-          "description": "開局規定の概要を紹介します",
+          "description": "存在の紹介",
           "path": "renju_beginner/scenario_mlce6x86_9cy53.json"
         }
       ]
     },
     "renju_intermediate": {
       "label": "連珠:初級",
-      "scenarios": [
-        {
-          "id": "scenario_mlcg64mu_c6bi1",
-          "title": "四追い",
-          "description": "最強の攻撃を学びます",
-          "path": "renju_intermediate/scenario_mlcg64mu_c6bi1.json"
-        },
-        {
-          "id": "scenario_mljjjf9f_7ez5w",
-          "title": "禁手に嵌める",
-          "description": "白特有の勝ち方を学びます",
-          "path": "renju_intermediate/scenario_mljjjf9f_7ez5w.json"
-        }
-      ]
+      "scenarios": []
     },
     "renju_advanced": {
       "label": "連珠:中級",
