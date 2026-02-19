@@ -20,12 +20,6 @@ const VCF_MAX_DEPTH = 8;
 const VCF_TIME_LIMIT = 150;
 
 /**
- * VCF探索用の時間制限コンテキスト
- * @deprecated TimeLimiter を使用してください
- */
-export type VCFTimeLimiter = TimeLimiter;
-
-/**
  * VCF探索オプション（外部からパラメータを設定可能）
  */
 export interface VCFSearchOptions {
