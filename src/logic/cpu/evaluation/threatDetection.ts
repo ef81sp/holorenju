@@ -21,7 +21,7 @@ import { findJumpGapPosition } from "../patterns/threatAnalysis";
 import { analyzeDirection } from "./directionAnalysis";
 import { isValidConsecutiveThree, isValidJumpThree } from "./jumpPatterns";
 import { type ThreatInfo, PATTERN_SCORES } from "./patternScores";
-import { createsFourThree } from "./tactics";
+import { createsDoubleThree, createsFourThree } from "./tactics";
 
 /**
  * 配列に重複しない位置を追加するヘルパー関数
@@ -325,6 +325,7 @@ export function detectOpponentThreats(
     fours: [],
     openThrees: [],
     mises: [],
+    doubleThrees: [],
   };
 
   // 相手の石を全て走査
@@ -430,8 +431,8 @@ export function detectOpponentThreats(
     }
   }
 
-  // 相手のミセ手（次に四三が作れる位置）を検出
-  // 四三を作るには同色石が近くに必要なので、石の近傍のみ走査
+  // 相手のミセ手（次に四三が作れる位置）+ 三三脅威を1つのループで検出
+  // 四三・三三を作るには同色石が近くに必要なので、石の近傍のみ走査
   for (let r = 0; r < 15; r++) {
     for (let c = 0; c < 15; c++) {
       if (board[r]?.[c] !== null) {
@@ -440,8 +441,18 @@ export function detectOpponentThreats(
       if (!isNearExistingStone(board, r, c)) {
         continue;
       }
+
+      // ミセ手チェック
       if (createsFourThree(board, r, c, opponentColor)) {
         result.mises.push({ row: r, col: c });
+      }
+
+      // 三三脅威チェック（白のみ: 黒は三三が禁手）
+      if (
+        opponentColor === "white" &&
+        createsDoubleThree(board, r, c, opponentColor)
+      ) {
+        result.doubleThrees.push({ row: r, col: c });
       }
     }
   }

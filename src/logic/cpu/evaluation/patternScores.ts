@@ -176,6 +176,8 @@ export interface EvaluationOptions {
   singleFourPenaltyMultiplier: number;
   /** ミセ手脅威防御を有効にするか（相手のミセ手を止めない手を除外） */
   enableMiseThreat: boolean;
+  /** 三三脅威防御を有効にするか（白の三三を止めない手を除外） */
+  enableDoubleThreeThreat: boolean;
   /** Null Move Pruning を有効にするか */
   enableNullMovePruning: boolean;
   /** Futility Pruning を有効にするか */
@@ -202,6 +204,7 @@ export const DEFAULT_EVAL_OPTIONS: EvaluationOptions = {
   enableSingleFourPenalty: false,
   singleFourPenaltyMultiplier: 1.0, // ペナルティ無効時は1.0（100%維持）
   enableMiseThreat: false,
+  enableDoubleThreeThreat: false,
   enableNullMovePruning: false,
   enableFutilityPruning: false,
   enableForbiddenVulnerability: false,
@@ -221,6 +224,7 @@ export const FULL_EVAL_OPTIONS: EvaluationOptions = {
   enableSingleFourPenalty: true,
   singleFourPenaltyMultiplier: 0.0, // 全機能有効時は0.0（単独四は完全に無価値）
   enableMiseThreat: true,
+  enableDoubleThreeThreat: true,
   enableNullMovePruning: true,
   enableFutilityPruning: true,
   enableForbiddenVulnerability: true,
@@ -238,6 +242,8 @@ export interface ThreatInfo {
   openThrees: { row: number; col: number }[];
   /** ミセ手（次に四三が作れる位置） */
   mises: { row: number; col: number }[];
+  /** 三三脅威（次に三三が作れる位置） */
+  doubleThrees: { row: number; col: number }[];
 }
 
 /**

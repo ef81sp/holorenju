@@ -14,7 +14,11 @@ export {
 } from "./forbiddenTactics";
 
 // 勝利パターン検出
-export { checkWhiteWinningPattern, createsFourThree } from "./winningPatterns";
+export {
+  checkWhiteWinningPattern,
+  createsDoubleThree,
+  createsFourThree,
+} from "./winningPatterns";
 
 // ミセ手戦術
 export {

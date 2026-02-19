@@ -221,6 +221,7 @@ describe("必須防御ルール", () => {
     enableSingleFourPenalty: false,
     singleFourPenaltyMultiplier: 1.0,
     enableMiseThreat: false,
+    enableDoubleThreeThreat: false,
     enableNullMovePruning: false,
     enableFutilityPruning: false,
     enableForbiddenVulnerability: false,
@@ -422,6 +423,7 @@ describe("evaluatePosition - 止め四防御", () => {
     enableSingleFourPenalty: false,
     singleFourPenaltyMultiplier: 1.0,
     enableMiseThreat: false,
+    enableDoubleThreeThreat: false,
     enableNullMovePruning: false,
     enableFutilityPruning: false,
     enableForbiddenVulnerability: false,
@@ -480,6 +482,7 @@ describe("evaluatePosition - 止め四防御（実戦棋譜）", () => {
     enableSingleFourPenalty: false,
     singleFourPenaltyMultiplier: 1.0,
     enableMiseThreat: false,
+    enableDoubleThreeThreat: false,
     enableNullMovePruning: false,
     enableFutilityPruning: false,
     enableForbiddenVulnerability: false,
@@ -544,6 +547,7 @@ describe("evaluatePosition - ミセ手防御", () => {
     enableSingleFourPenalty: false,
     singleFourPenaltyMultiplier: 1.0,
     enableMiseThreat: true,
+    enableDoubleThreeThreat: false,
     enableNullMovePruning: false,
     enableFutilityPruning: false,
     enableForbiddenVulnerability: false,
@@ -750,5 +754,205 @@ describe("getOpenThreeDefensePositions - 夏止め", () => {
 
     // 両方の beyond がブロック済み → 活三の脅威なし
     expect(threats.openThrees).toHaveLength(0);
+  });
+});
+
+describe("detectOpponentThreats - 三三脅威検出", () => {
+  it("白が三三を作れる位置がある局面 → doubleThrees に検出", () => {
+    const board = createEmptyBoard();
+    // 白が(7,8)に置くと横活三+縦活三=三三
+    placeStonesOnBoard(board, [
+      { row: 7, col: 6, color: "white" },
+      { row: 7, col: 7, color: "white" },
+      { row: 6, col: 8, color: "white" },
+      { row: 5, col: 8, color: "white" },
+    ]);
+
+    const threats = detectOpponentThreats(board, "white");
+
+    expect(threats.doubleThrees.length).toBeGreaterThan(0);
+    expect(threats.doubleThrees).toContainEqual({ row: 7, col: 8 });
+  });
+
+  it("白の脅威がない局面 → doubleThrees が空", () => {
+    const board = createEmptyBoard();
+    // 白石が1方向のみ
+    placeStonesOnBoard(board, [
+      { row: 7, col: 6, color: "white" },
+      { row: 7, col: 7, color: "white" },
+    ]);
+
+    const threats = detectOpponentThreats(board, "white");
+
+    expect(threats.doubleThrees).toHaveLength(0);
+  });
+
+  it("黒の相手（opponentColor=black）→ doubleThrees 検出しない（黒は三三禁手）", () => {
+    const board = createEmptyBoard();
+    // 黒が(7,8)に置くと横活三+縦活三=三三 だが黒は三三禁手
+    placeStonesOnBoard(board, [
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+      { row: 6, col: 8, color: "black" },
+      { row: 5, col: 8, color: "black" },
+    ]);
+
+    const threats = detectOpponentThreats(board, "black");
+
+    expect(threats.doubleThrees).toHaveLength(0);
+  });
+});
+
+describe("evaluatePosition - 三三脅威防御", () => {
+  const enableDoubleThreeThreatOptions = {
+    enableFukumi: false,
+    enableMise: false,
+    enableForbiddenTrap: false,
+    enableMultiThreat: false,
+    enableCounterFour: false,
+    enableVCT: false,
+    enableMandatoryDefense: true,
+    enableSingleFourPenalty: false,
+    singleFourPenaltyMultiplier: 1.0,
+    enableMiseThreat: false,
+    enableDoubleThreeThreat: true,
+    enableNullMovePruning: false,
+    enableFutilityPruning: false,
+    enableForbiddenVulnerability: false,
+  };
+
+  it("白の三三脅威が1箇所: 阻止しない手 → -Infinity", () => {
+    const board = createEmptyBoard();
+    // 白が(7,8)に置くと横活三+縦活三=三三
+    placeStonesOnBoard(board, [
+      { row: 7, col: 6, color: "white" },
+      { row: 7, col: 7, color: "white" },
+      { row: 6, col: 8, color: "white" },
+      { row: 5, col: 8, color: "white" },
+    ]);
+
+    // 黒が(0,0)に置く → 三三脅威を阻止していない
+    const score = evaluatePosition(
+      board,
+      0,
+      0,
+      "black",
+      enableDoubleThreeThreatOptions,
+    );
+
+    expect(score).toBe(-Infinity);
+  });
+
+  it("白の三三脅威が1箇所: 阻止する手 → 正常スコア", () => {
+    const board = createEmptyBoard();
+    placeStonesOnBoard(board, [
+      { row: 7, col: 6, color: "white" },
+      { row: 7, col: 7, color: "white" },
+      { row: 6, col: 8, color: "white" },
+      { row: 5, col: 8, color: "white" },
+    ]);
+
+    // 黒が(7,8)に置く → 三三脅威を阻止
+    const score = evaluatePosition(
+      board,
+      7,
+      8,
+      "black",
+      enableDoubleThreeThreatOptions,
+    );
+
+    expect(score).toBeGreaterThan(-Infinity);
+  });
+
+  it("白の三三脅威が2箇所以上: 必須防御が発動しない（通常探索に委ねる）", () => {
+    const board = createEmptyBoard();
+    // 2箇所で三三脅威を作る
+    // 脅威1: (7,8)に白を置くと三三
+    placeStonesOnBoard(board, [
+      { row: 7, col: 6, color: "white" },
+      { row: 7, col: 7, color: "white" },
+      { row: 6, col: 8, color: "white" },
+      { row: 5, col: 8, color: "white" },
+    ]);
+    // 脅威2: (3,3)に白を置くと三三
+    placeStonesOnBoard(board, [
+      { row: 3, col: 1, color: "white" },
+      { row: 3, col: 2, color: "white" },
+      { row: 2, col: 3, color: "white" },
+      { row: 1, col: 3, color: "white" },
+    ]);
+
+    // 2箇所脅威 → 必須防御不発 → 通常スコア
+    const score = evaluatePosition(
+      board,
+      0,
+      0,
+      "black",
+      enableDoubleThreeThreatOptions,
+    );
+
+    expect(score).toBeGreaterThan(-Infinity);
+  });
+
+  it("自分が四三を持つ（canWinFirst）→ 三三脅威を無視", () => {
+    const board = createEmptyBoard();
+    // 白の三三脅威
+    placeStonesOnBoard(board, [
+      { row: 7, col: 6, color: "white" },
+      { row: 7, col: 7, color: "white" },
+      { row: 6, col: 8, color: "white" },
+      { row: 5, col: 8, color: "white" },
+    ]);
+    // 黒が(10,10)に置くと四三（横方向に止め四+縦方向に活三）
+    placeStonesOnBoard(board, [
+      // 横: 止め三 → 四を作る
+      { row: 10, col: 7, color: "black" },
+      { row: 10, col: 8, color: "black" },
+      { row: 10, col: 9, color: "black" },
+      // 縦: 活二 → 活三を作る
+      { row: 11, col: 10, color: "black" },
+      { row: 12, col: 10, color: "black" },
+    ]);
+
+    const score = evaluatePosition(
+      board,
+      10,
+      10,
+      "black",
+      enableDoubleThreeThreatOptions,
+    );
+
+    // 四三なので canWinFirst → 三三脅威を無視
+    expect(score).toBeGreaterThan(-Infinity);
+  });
+
+  it("活三がある場合は三三脅威防御が発動しない", () => {
+    const board = createEmptyBoard();
+    // 白の三三脅威
+    placeStonesOnBoard(board, [
+      { row: 7, col: 6, color: "white" },
+      { row: 7, col: 7, color: "white" },
+      { row: 6, col: 8, color: "white" },
+      { row: 5, col: 8, color: "white" },
+    ]);
+    // 白の活三（三三脅威より優先度が高い）
+    placeStonesOnBoard(board, [
+      { row: 12, col: 4, color: "white" },
+      { row: 12, col: 5, color: "white" },
+      { row: 12, col: 6, color: "white" },
+    ]);
+
+    // 活三がある → 三三脅威防御は発動しない
+    const score = evaluatePosition(
+      board,
+      0,
+      0,
+      "black",
+      enableDoubleThreeThreatOptions,
+    );
+
+    // 活三の必須防御で -Infinity になるはず（三三脅威ではなく活三の防御義務で）
+    // ただし (0,0) が活三の防御位置でないため -Infinity
+    expect(score).toBe(-Infinity);
   });
 });

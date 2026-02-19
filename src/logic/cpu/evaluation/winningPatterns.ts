@@ -81,6 +81,74 @@ export function checkWhiteWinningPattern(
 }
 
 /**
+ * 指定位置に石を置くと三三ができるかチェック
+ * checkWhiteWinningPattern の三三判定ロジックを抽出した軽量版（四四チェック省略）
+ *
+ * @param board 盤面
+ * @param row 行
+ * @param col 列
+ * @param color 石の色
+ * @returns 三三（活三2つ以上）なら true
+ */
+export function createsDoubleThree(
+  board: BoardState,
+  row: number,
+  col: number,
+  color: "black" | "white",
+): boolean {
+  // 盤面を直接変更
+  const targetRow = board[row];
+  if (targetRow) {
+    targetRow[col] = color;
+  }
+
+  let openThreeCount = 0;
+
+  for (let i = 0; i < DIRECTION_INDICES.length; i++) {
+    const dirIndex = DIRECTION_INDICES[i];
+    if (dirIndex === undefined) {
+      continue;
+    }
+
+    const direction = DIRECTIONS[i];
+    if (!direction) {
+      continue;
+    }
+    const [dr, dc] = direction;
+    const pattern = analyzeDirection(board, row, col, dr, dc, color);
+
+    // 活三カウント
+    if (
+      pattern.count === 3 &&
+      pattern.end1 === "empty" &&
+      pattern.end2 === "empty"
+    ) {
+      openThreeCount++;
+    } else if (
+      // 跳び三をチェック（連続三がない場合のみ）
+      pattern.count !== 3 &&
+      checkJumpThree(board, row, col, dirIndex, color)
+    ) {
+      openThreeCount++;
+    }
+
+    // 2つ見つかった時点で早期リターン
+    if (openThreeCount >= 2) {
+      if (targetRow) {
+        targetRow[col] = null;
+      }
+      return true;
+    }
+  }
+
+  // 盤面を元に戻す
+  if (targetRow) {
+    targetRow[col] = null;
+  }
+  return false;
+}
+
+/**
  * 指定位置に石を置くと四三ができるかチェック
  * 最適化: 盤面を直接変更して元に戻す方式（copyBoard不要）
  */

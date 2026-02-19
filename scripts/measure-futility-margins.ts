@@ -69,6 +69,7 @@ const measurePlayer: PlayerConfig = {
       enableSingleFourPenalty: true,
       singleFourPenaltyMultiplier: 0.0,
       enableMiseThreat: true,
+      enableDoubleThreeThreat: true,
       enableNullMovePruning: maxDepth >= 4,
       enableFutilityPruning: false, // Futility 無効化（全手を探索）
       enableForbiddenVulnerability: maxDepth >= 4,

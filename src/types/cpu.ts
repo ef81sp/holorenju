@@ -101,6 +101,7 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
       enableSingleFourPenalty: false,
       singleFourPenaltyMultiplier: 1.0, // ペナルティなし（初心者らしく四を打ちがち）
       enableMiseThreat: false,
+      enableDoubleThreeThreat: false,
       enableNullMovePruning: false,
       enableFutilityPruning: false,
       enableForbiddenVulnerability: false,
@@ -123,6 +124,7 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
       enableSingleFourPenalty: true, // 無駄な四を減らす
       singleFourPenaltyMultiplier: 0.6, // 40%減点（mild）
       enableMiseThreat: false,
+      enableDoubleThreeThreat: false,
       enableNullMovePruning: false,
       enableFutilityPruning: false,
       enableForbiddenVulnerability: false,
@@ -145,6 +147,7 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
       enableSingleFourPenalty: true,
       singleFourPenaltyMultiplier: 0.3, // 70%減点に緩和（単独四にも価値を認める）
       enableMiseThreat: true,
+      enableDoubleThreeThreat: true,
       enableNullMovePruning: false,
       enableFutilityPruning: true, // depth 3 でも浅い末端の効率化に有用
       enableForbiddenVulnerability: false,
@@ -167,6 +170,7 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
       enableSingleFourPenalty: true,
       singleFourPenaltyMultiplier: 0.0, // 100%減点（単独四は完全に無価値）
       enableMiseThreat: true,
+      enableDoubleThreeThreat: true,
       enableNullMovePruning: true, // depth 4 の中断率削減
       enableFutilityPruning: true,
       enableForbiddenVulnerability: true, // 黒番の禁手脆弱性評価

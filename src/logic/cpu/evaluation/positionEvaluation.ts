@@ -120,6 +120,7 @@ function evaluatePositionCore(
       fours: [],
       openThrees: [],
       mises: [],
+      doubleThrees: [],
     };
     if (!options.precomputedThreats) {
       // Undo → detectOpponentThreats → Redo（元の盤面で脅威を検出する必要がある）
@@ -180,6 +181,22 @@ function evaluatePositionCore(
         ) {
           return -Infinity;
         }
+      }
+    }
+
+    // 相手の三三脅威を止めない手は除外（活四・止め四・活三がない場合）
+    // 三三成立 = 両方の活三を止められず2手後に勝利確定（防御不能）
+    // 脅威位置が2箇所以上あると1手で防御不能なので、1箇所のときのみ適用
+    if (
+      options.enableDoubleThreeThreat &&
+      threats.doubleThrees.length === 1 &&
+      threats.openFours.length === 0 &&
+      threats.fours.length === 0 &&
+      threats.openThrees.length === 0 &&
+      !canWinFirst
+    ) {
+      if (!includesPosition(threats.doubleThrees, row, col)) {
+        return -Infinity;
       }
     }
 
