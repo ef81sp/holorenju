@@ -679,6 +679,7 @@ function findVCTSequenceRecursive(
       defense: Position;
       seq: Position[];
       childBranches: VCTBranch[];
+      isForbiddenTrap: boolean;
     }[] = [];
     let firstDefenseSequence: Position[] | null = null;
 
@@ -738,16 +739,18 @@ function findVCTSequenceRecursive(
           allDefenseLeadsToVCT = false;
           break;
         }
-        if (subContext.isForbiddenTrap) {
-          context.isForbiddenTrap = true;
-        }
 
         if (context.collectBranches) {
+          // collectBranches時: isForbiddenTrapはメインPV選択後に設定
           defenseSequences.push({
             defense: defensePos,
             seq: subSequence,
             childBranches: subContext.branches,
+            isForbiddenTrap: subContext.isForbiddenTrap,
           });
+        } else if (subContext.isForbiddenTrap) {
+          // 非collectBranches時: 最初の防御のみ探索するので即伝播
+          context.isForbiddenTrap = true;
         }
         if (firstDefenseSequence === null) {
           firstDefenseSequence = [defensePos, ...subSequence];
@@ -791,6 +794,11 @@ function findVCTSequenceRecursive(
         }
         const longest = defenseSequences[longestIdx]!;
         const defenseIndexInSequence = sequence.length + 1; // +1 for the attack move
+
+        // メインPVのisForbiddenTrapのみ伝播（サイド分岐は無視）
+        if (longest.isForbiddenTrap) {
+          context.isForbiddenTrap = true;
+        }
 
         sequence.push(move);
         sequence.push(longest.defense, ...longest.seq);
