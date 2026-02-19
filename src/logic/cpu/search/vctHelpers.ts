@@ -45,16 +45,29 @@ export function hasOpenThree(
       if (board[row]?.[col] !== color) {
         continue;
       }
-      for (const direction of DIRECTIONS) {
+      for (let i = 0; i < DIRECTION_INDICES.length; i++) {
+        const dirIndex = DIRECTION_INDICES[i];
+        if (dirIndex === undefined) {
+          continue;
+        }
+        const direction = DIRECTIONS[i];
         if (!direction) {
           continue;
         }
         const [dr, dc] = direction;
         const pattern = analyzeDirection(board, row, col, dr, dc, color);
+        // 連続活三
         if (
           pattern.count === 3 &&
           pattern.end1 === "empty" &&
           pattern.end2 === "empty"
+        ) {
+          return true;
+        }
+        // 跳び三（○○_○ や ○_○○）
+        if (
+          pattern.count !== 3 &&
+          checkJumpThree(board, row, col, dirIndex, color)
         ) {
           return true;
         }
