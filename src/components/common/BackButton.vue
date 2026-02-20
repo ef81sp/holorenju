@@ -25,12 +25,13 @@ const emits = defineEmits<{
   cursor: pointer;
   font-size: var(--font-size-14);
   font-weight: 500;
+  white-space: nowrap;
   transition: all 0.2s;
 }
 
 .back-button:hover {
-  background: #f5f5f5;
-  border-color: #4a9eff;
+  background: var(--color-bg-gray);
+  border-color: var(--color-primary);
 }
 
 .back-text-short {

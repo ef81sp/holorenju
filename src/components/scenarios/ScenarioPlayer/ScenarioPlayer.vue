@@ -9,7 +9,7 @@ import {
   watch,
 } from "vue";
 
-import BackButton from "./BackButton.vue";
+import BackButton from "@/components/common/BackButton.vue";
 import ControlInfo from "./ControlInfo.vue";
 import ScenarioInfoPanel from "./ScenarioInfoPanel.vue";
 import RenjuBoard from "@/components/game/RenjuBoard/RenjuBoard.vue";

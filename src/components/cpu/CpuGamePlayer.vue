@@ -8,6 +8,7 @@
 
 import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
 
+import BackButton from "@/components/common/BackButton.vue";
 import RenjuBoard from "@/components/game/RenjuBoard/RenjuBoard.vue";
 import CutinOverlay from "@/components/common/CutinOverlay.vue";
 import ConfirmDialog from "@/components/common/ConfirmDialog.vue";
@@ -349,14 +350,7 @@ const gameEndMessage = computed(() => {
       :large-board="isLargeBoard"
     >
       <template #back-button>
-        <button
-          class="back-button"
-          aria-label="戻る"
-          @click="showBackConfirmDialog"
-        >
-          <span class="back-text-full">← 戻る</span>
-          <span class="back-text-short">←</span>
-        </button>
+        <BackButton @back="showBackConfirmDialog" />
       </template>
 
       <template #header-controls>
@@ -542,41 +536,6 @@ const gameEndMessage = computed(() => {
 .cpu-game-player {
   width: 100%;
   height: 100%;
-}
-
-.back-button {
-  width: fit-content;
-  padding: var(--size-10) var(--size-20);
-  background: white;
-  border: 2px solid #ddd;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: var(--size-16);
-  font-weight: 500;
-  transition: all 0.2s;
-}
-
-.back-button:hover {
-  background: #f5f5f5;
-  border-color: #4a9eff;
-}
-
-.back-text-short {
-  display: none;
-}
-
-@container (max-width: 140px) {
-  .back-text-full {
-    display: none;
-  }
-
-  .back-text-short {
-    display: inline;
-  }
-
-  .back-button {
-    padding: var(--size-6) var(--size-8);
-  }
 }
 
 .info-content {

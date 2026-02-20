@@ -11,7 +11,7 @@
 
 ```mermaid
 graph TD
-    SP[ScenarioPlayer.vue] --> BB[BackButton]
+    SP[ScenarioPlayer.vue] --> BB[common/BackButton]
     SP --> SC[SettingsControl]
     SP --> CI[ControlInfo]
     SP --> SIP[ScenarioInfoPanel]

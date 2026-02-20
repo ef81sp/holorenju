@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import BackButton from "./BackButton.vue";
 import SettingsControl from "./SettingsControl.vue";
 
 defineProps<{
@@ -13,13 +14,10 @@ defineEmits<{
 
 <template>
   <div class="page-header">
-    <button
+    <BackButton
       v-if="showBack"
-      class="back-button"
-      @click="$emit('back')"
-    >
-      ← 戻る
-    </button>
+      @back="$emit('back')"
+    />
     <h1>
       <slot name="title">{{ title }}</slot>
     </h1>
@@ -43,22 +41,5 @@ defineEmits<{
   color: var(--color-text-primary);
   margin: 0;
   flex: 1;
-}
-
-.back-button {
-  padding: var(--size-8) var(--size-16);
-  background: rgba(255, 255, 255, 0.9);
-  border: var(--size-2) solid var(--color-border);
-  border-radius: var(--size-8);
-  cursor: pointer;
-  font-size: var(--font-size-14);
-  font-weight: bold;
-  transition: all 0.2s ease;
-  white-space: nowrap;
-
-  &:hover {
-    background: white;
-    border-color: var(--color-border-heavy);
-  }
 }
 </style>

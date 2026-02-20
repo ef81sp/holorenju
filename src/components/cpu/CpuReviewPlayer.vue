@@ -9,6 +9,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 
 import RefreshIcon from "@/assets/icons/refresh.svg?component";
 import UploadFileIcon from "@/assets/icons/upload_file.svg?component";
+import BackButton from "@/components/common/BackButton.vue";
 import RenjuBoard from "@/components/game/RenjuBoard/RenjuBoard.vue";
 import SettingsControl from "@/components/common/SettingsControl.vue";
 import GamePlayerLayout from "@/components/common/GamePlayerLayout.vue";
@@ -276,12 +277,7 @@ function handleLayoutClick(event: MouseEvent): void {
   >
     <GamePlayerLayout ref="layoutRef">
       <template #back-button>
-        <button
-          class="back-button"
-          @click="handleBack"
-        >
-          ← 戻る
-        </button>
+        <BackButton @back="handleBack" />
       </template>
 
       <template #header-controls>
@@ -435,23 +431,6 @@ function handleLayoutClick(event: MouseEvent): void {
     height: 100%;
     margin: auto;
   }
-}
-
-.back-button {
-  width: fit-content;
-  padding: var(--size-10) var(--size-20);
-  background: white;
-  border: 2px solid #ddd;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: var(--size-16);
-  font-weight: 500;
-  transition: all 0.2s;
-}
-
-.back-button:hover {
-  background: #f5f5f5;
-  border-color: #4a9eff;
 }
 
 .control-info-content {
