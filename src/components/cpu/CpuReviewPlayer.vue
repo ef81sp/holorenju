@@ -103,31 +103,33 @@ async function startEvaluation(): Promise<void> {
   reviewStore.isEvaluating = true;
   dialogue.showEvaluatingDialogue();
 
+  const parsedMoves = parseGameRecord(mh);
+
   const results = await evaluator.evaluate(
     mh,
     reviewStore.playerFirst,
     reviewStore.isAnalyzeAll,
+    (result) => {
+      const evaluated = buildEvaluatedMove(
+        result,
+        parsedMoves,
+        reviewStore.playerFirst,
+        reviewStore.isAnalyzeAll,
+      );
+      reviewStore.addEvaluatedMove(evaluated);
+    },
   );
   if (results.length === 0) {
     return;
   } // キャンセルされた場合
 
-  // 結果を変換（1回だけパース）
-  const parsedMoves = parseGameRecord(mh);
-  const evaluated = results.map((r) =>
-    buildEvaluatedMove(
-      r,
-      parsedMoves,
-      reviewStore.playerFirst,
-      reviewStore.isAnalyzeAll,
-    ),
+  // ソート済み配列でキャッシュ保存
+  reviewStore.setEvaluationResults(
+    [...reviewStore.evaluatedMoves].sort((a, b) => a.moveIndex - b.moveIndex),
   );
-
-  reviewStore.setEvaluationResults(evaluated);
   reviewStore.isEvaluating = false;
 
-  const accuracy = reviewStore.playerAccuracy;
-  dialogue.showEvaluationCompleteDialogue(accuracy ?? 100);
+  dialogue.showEvaluationCompleteDialogue(reviewStore.playerAccuracy ?? 100);
 }
 
 // 評価進捗を同期
@@ -343,6 +345,7 @@ function handleLayoutClick(event: MouseEvent): void {
           :evaluation="reviewStore.currentEvaluation ?? null"
           :move-index="reviewStore.currentMoveIndex"
           :current-position="currentMovePosition"
+          :is-evaluating="evaluator.isEvaluating.value"
           @hover-candidate="overlay.handleHoverCandidate"
           @leave-candidate="overlay.handleLeaveCandidate"
           @hover-pv-move="overlay.handleHoverPVMove"

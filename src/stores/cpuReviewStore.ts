@@ -295,6 +295,13 @@ export const useCpuReviewStore = defineStore("cpuReview", () => {
   }
 
   /**
+   * 評価済みの手を1件追加（逐次表示用）
+   */
+  function addEvaluatedMove(move: EvaluatedMove): void {
+    evaluatedMoves.value = [...evaluatedMoves.value, move];
+  }
+
+  /**
    * 評価結果を設定
    */
   function setEvaluationResults(results: EvaluatedMove[]): void {
@@ -366,6 +373,7 @@ export const useCpuReviewStore = defineStore("cpuReview", () => {
     prevMove,
     goToStart,
     goToEnd,
+    addEvaluatedMove,
     setEvaluationResults,
     clearCacheForRecord,
     clearEvaluation,

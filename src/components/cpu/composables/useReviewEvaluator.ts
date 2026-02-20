@@ -28,6 +28,7 @@ export interface UseReviewEvaluatorReturn {
     moveHistory: string,
     playerFirst: boolean,
     analyzeAll?: boolean,
+    onResult?: (result: ReviewWorkerResult) => void,
   ) => Promise<ReviewWorkerResult[]>;
   /** 評価をキャンセル */
   cancel: () => void;
@@ -76,6 +77,7 @@ export function useReviewEvaluator(): UseReviewEvaluatorReturn {
     moveHistory: string,
     playerFirst: boolean,
     analyzeAll?: boolean,
+    onResult?: (result: ReviewWorkerResult) => void,
   ): Promise<ReviewWorkerResult[]> {
     const moves = moveHistory.trim().split(/\s+/);
 
@@ -146,6 +148,7 @@ export function useReviewEvaluator(): UseReviewEvaluatorReturn {
           return;
         }
         results.push(event.data);
+        onResult?.(event.data);
         completedCount.value++;
         progress.value = completedCount.value / totalCount.value;
 

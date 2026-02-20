@@ -30,6 +30,8 @@ const props = defineProps<{
   moveIndex: number;
   /** 現在の手の位置（evaluation がない場合にCPU手の座標表示用） */
   currentPosition: Position | null;
+  /** 評価中かどうか */
+  isEvaluating?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -583,6 +585,17 @@ function isPlayed(candidate: { position: Position }): boolean {
       <span class="no-eval-text">手を選択してください</span>
     </div>
 
+    <!-- 解析中（まだ結果が届いていない手） -->
+    <div
+      v-else-if="!evaluation && isEvaluating"
+      class="cpu-move"
+    >
+      <div class="eval-header">
+        <span class="move-label">第{{ moveIndex }}手 {{ moveCoord }}</span>
+      </div>
+      <div class="cpu-move-text analyzing-text">解析中...</div>
+    </div>
+
     <!-- CPUの手（evaluationがない or 軽量評価） -->
     <div
       v-else-if="!evaluation || evaluation.isLightEval"
@@ -961,6 +974,20 @@ function isPlayed(candidate: { position: Position }): boolean {
 .cpu-move-text {
   color: var(--color-text-secondary);
   font-size: var(--font-size-14);
+}
+
+.analyzing-text {
+  animation: analyzing-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes analyzing-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
 }
 
 .player-eval {
