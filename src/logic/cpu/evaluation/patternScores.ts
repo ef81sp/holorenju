@@ -81,11 +81,11 @@ export const PATTERN_SCORES = {
   /** 斜め方向ボーナス係数 — 斜め連は隣接空き点が多く効率が良い（約5%加算） */
   DIAGONAL_BONUS_MULTIPLIER: 1.05,
   /** 禁手脆弱性（強）: 三の延長点が禁手で白の攻撃ライン上 */
-  FORBIDDEN_VULNERABILITY_STRONG: 800,
+  FORBIDDEN_VULNERABILITY_STRONG: 1000,
   /** 禁手脆弱性（弱）: 三の延長点が禁手（白の攻撃なし） */
-  FORBIDDEN_VULNERABILITY_MILD: 300,
+  FORBIDDEN_VULNERABILITY_MILD: 400,
   /** 禁手脆弱性ペナルティの合計上限 */
-  FORBIDDEN_VULNERABILITY_CAP: 1500,
+  FORBIDDEN_VULNERABILITY_CAP: 2000,
   /**
    * 末端評価 四三脅威ボーナス（evaluateBoard 用）
    * 「次の1手で四三が作れる空き交点」が存在する場合に加算。

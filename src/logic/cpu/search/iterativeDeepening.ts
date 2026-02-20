@@ -221,8 +221,12 @@ function checkForcedWinSequences(
   const opponentVCFResult =
     findVCFSequence(board, opponentColor, { timeLimit: 100 }) ?? null;
 
+  // VCTヒント（偽陽性の可能性があるためminimax検証に委ねる）
+  let vctHintMove: Position | undefined = undefined;
+
   // Mise-VCF（ミセ→強制応手→VCF勝ち）
   // 相手VCFがある場合は間に合わない（最低2手+VCF手数が必要）のでスキップ
+  // Mise-VCFの防御手は「強制」ではないため、VCTヒントとして扱いminimax検証に委ねる
   if (!opponentVCFResult) {
     const miseVcfMove = findMiseVCFMove(board, color, {
       vcfOptions: { maxDepth: 12, timeLimit: 300 },
@@ -234,19 +238,10 @@ function checkForcedWinSequences(
         checkForbiddenMoveWithCache(board, miseVcfMove.row, miseVcfMove.col)
           .isForbidden;
       if (!isForbidden) {
-        return {
-          immediateMove: {
-            position: miseVcfMove,
-            score: PATTERN_SCORES.FIVE,
-          },
-          opponentVCFResult: null,
-        };
+        vctHintMove = miseVcfMove;
       }
     }
   }
-
-  // VCTヒント（偽陽性の可能性があるためminimax検証に委ねる）
-  let vctHintMove: Position | undefined = undefined;
   if (evaluationOptions.enableVCT) {
     const stoneCount = countStones(board);
     if (stoneCount >= VCT_STONE_THRESHOLD) {

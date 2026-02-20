@@ -6,6 +6,7 @@
 
 import { describe, expect, it, vi } from "vitest";
 
+import { createBoardFromRecord } from "@/logic/gameRecordParser";
 import { createEmptyBoard } from "@/logic/renjuRules";
 
 import {
@@ -519,4 +520,52 @@ describe("VCTメインフロー統合", () => {
     expect(result.position.row).toBeGreaterThanOrEqual(0);
     expect(result.completedDepth).toBeGreaterThanOrEqual(1);
   });
+});
+
+// =============================================================================
+// Mise-VCFはminimax検証に委ねるテスト
+// =============================================================================
+
+describe("Mise-VCFのminimax検証", () => {
+  it("Mise-VCFのある局面でスコアがFIVE(100000)未満になる", () => {
+    // Game 185 m14時点: Mise-VCF(H7→G6→H9)が存在する局面
+    // VCFは存在しない
+    const { board } = createBoardFromRecord(
+      "H8 I9 G7 I7 G8 I6 I8 J8 G9 G10 F8 E8 H10 I11",
+    );
+
+    const result = findBestMoveIterativeWithTT(
+      board,
+      "black",
+      4,
+      5000,
+      0,
+      FULL_EVAL_OPTIONS,
+    );
+
+    // Mise-VCFがminimaxで検証されるため、score < FIVE
+    expect(result.score).toBeLessThan(PATTERN_SCORES.FIVE);
+    // depth > 0 = minimax探索が起動されたことの証拠
+    expect(result.completedDepth).toBeGreaterThanOrEqual(1);
+  }, 15000);
+
+  it("Game 121: 白のMise-VCFがminimax検証される", () => {
+    // Game 121 m41時点: 白のMise-VCF(K13→I11→禁手追い込み)が存在する局面
+    const { board } = createBoardFromRecord(
+      "H8 I7 F10 K9 J8 H6 I8 G8 H9 G10 I9 H10 G9 F9 J10 G7 H7 J9 G12 F8 E9 H11 E8 E11 F11 I5 J4 I14 E10 D9 I12 H12 E7 E6 K5 J12 L9 H14 H13 K11 I13",
+    );
+
+    const result = findBestMoveIterativeWithTT(
+      board,
+      "white",
+      4,
+      5000,
+      0,
+      FULL_EVAL_OPTIONS,
+    );
+
+    // Mise-VCFがminimaxで検証されるため、score < FIVE
+    expect(result.score).toBeLessThan(PATTERN_SCORES.FIVE);
+    expect(result.completedDepth).toBeGreaterThanOrEqual(1);
+  }, 15000);
 });
