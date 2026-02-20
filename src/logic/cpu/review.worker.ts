@@ -45,9 +45,14 @@ import {
   type VCTSearchOptions,
 } from "./search/vct";
 
-/** 振り返り用パラメータ（hard準拠） */
-const REVIEW_TIME_LIMIT = DIFFICULTY_PARAMS.hard.timeLimit;
-const REVIEW_MAX_NODES = DIFFICULTY_PARAMS.hard.maxNodes;
+/** 振り返り専用の探索パラメータ（hardから分離し深度を引き上げ） */
+const REVIEW_SEARCH_PARAMS = {
+  depth: 8,
+  timeLimit: 15_000,
+  maxNodes: 2_000_000,
+  absoluteTimeLimit: 20_000,
+  evaluationOptions: DIFFICULTY_PARAMS.hard.evaluationOptions,
+} as const;
 
 /** 振り返り用VCT探索パラメータ */
 const REVIEW_VCT_OPTIONS: VCTSearchOptions = {
@@ -138,7 +143,6 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
     );
 
     const color = nextColor as "black" | "white";
-    const hardParams = DIFFICULTY_PARAMS.hard;
 
     // 相手の脅威チェック（VCF/VCT探索より先に実行）
     const opponentColor = color === "black" ? "white" : "black";
@@ -229,11 +233,12 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
     const result = findBestMoveIterativeWithTT(
       board,
       color,
-      hardParams.depth,
-      REVIEW_TIME_LIMIT,
+      REVIEW_SEARCH_PARAMS.depth,
+      REVIEW_SEARCH_PARAMS.timeLimit,
       0, // randomFactor: 0（決定論的）
-      hardParams.evaluationOptions,
-      REVIEW_MAX_NODES,
+      REVIEW_SEARCH_PARAMS.evaluationOptions,
+      REVIEW_SEARCH_PARAMS.maxNodes,
+      REVIEW_SEARCH_PARAMS.absoluteTimeLimit,
     );
 
     // 候補手エントリから内訳付きデータを構築するヘルパー
@@ -244,7 +249,7 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
           entry.move.row,
           entry.move.col,
           color,
-          hardParams.evaluationOptions,
+          REVIEW_SEARCH_PARAMS.evaluationOptions,
         );
 
       const leafEvaluation =
@@ -312,7 +317,7 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
           bestMove.row,
           bestMove.col,
           color,
-          hardParams.evaluationOptions,
+          REVIEW_SEARCH_PARAMS.evaluationOptions,
         );
       candidates.push({
         position: bestMove,
