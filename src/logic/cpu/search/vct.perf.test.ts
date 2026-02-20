@@ -413,9 +413,15 @@ describe("分岐収集（collectBranches）", () => {
     expect(result?.branches).toBeUndefined();
   });
 
-  it("23手目盤面でVCT手順が収集される", { timeout: 90000 }, () => {
+  it("23手目盤面でVCT手順が収集される＋盤面不変性", { timeout: 90000 }, () => {
     const { board } = createBoardFromRecord(record);
+    const snapshot = copyBoard(board);
     const result = findVCTSequence(board, "white", branchOptions);
+
+    // 盤面不変性チェック
+    expect(board).toEqual(snapshot);
+
+    // VCT手順の検証
     expect(result).not.toBeNull();
     expect(result?.sequence.length).toBeGreaterThanOrEqual(3);
   });
@@ -434,13 +440,6 @@ describe("分岐収集（collectBranches）", () => {
       expect(result?.branches).toBeUndefined();
     },
   );
-
-  it("盤面不変性（collectBranches: true）", { timeout: 90000 }, () => {
-    const { board } = createBoardFromRecord(record);
-    const snapshot = copyBoard(board);
-    findVCTSequence(board, "white", branchOptions);
-    expect(board).toEqual(snapshot);
-  });
 });
 
 describe("跳び三防御の検証", () => {
@@ -1039,18 +1038,23 @@ describe("isVCTFirstMove: ct=three の hasVCF フォールバック", () => {
 
 describe("findVCTSequence の事後検証", () => {
   it(
-    "返された手順の防御手がカウンターフォーを作らない",
+    "返された手順の防御手がカウンターフォーを作らない＋盤面不変性",
     { timeout: 35000 },
     () => {
       // 16手目まで（黒番）: 探索がカウンターフォー防御を含む偽VCTを返さないことを確認
       const record = "H8 I7 G9 I8 I9 G7 H10 J9 I11 F8 H7 H6 H9 H11 E9 F9";
       const { board } = createBoardFromRecord(record);
+      const snapshot = copyBoard(board);
       const options = {
         maxDepth: 6,
         timeLimit: 30000,
         vcfOptions: { maxDepth: 16, timeLimit: 30000 },
       };
       const result = findVCTSequence(board, "black", options);
+
+      // 盤面不変性チェック
+      expect(board).toEqual(snapshot);
+
       // 返された手順があれば、全防御手がカウンターフォーを作らないことを検証
       if (result) {
         for (let i = 0; i < result.sequence.length; i++) {
@@ -1079,18 +1083,6 @@ describe("findVCTSequence の事後検証", () => {
       }
     },
   );
-
-  it("盤面不変性", { timeout: 35000 }, () => {
-    const record = "H8 I7 G9 I8 I9 G7 H10 J9 I11 F8 H7 H6 H9 H11 E9 F9";
-    const { board } = createBoardFromRecord(record);
-    const snapshot = copyBoard(board);
-    findVCTSequence(board, "black", {
-      maxDepth: 6,
-      timeLimit: 30000,
-      vcfOptions: { maxDepth: 16, timeLimit: 30000 },
-    });
-    expect(board).toEqual(snapshot);
-  });
 });
 
 describe("VCT探索のカウンター脅威チェック（探索関数）", () => {

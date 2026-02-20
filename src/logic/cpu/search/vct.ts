@@ -22,6 +22,12 @@ import {
   type VCFSearchOptions,
 } from "./vcf";
 import {
+  createVCFCache,
+  lookupVCF,
+  storeVCF,
+  type VCFResultCache,
+} from "./vcfCache";
+import {
   findThreatMoves,
   getThreatDefensePositions,
   hasOpenThree,
@@ -39,6 +45,84 @@ const VCT_TIME_LIMIT = 150;
 
 /** ct=three 時の hasVCF フォールバック用深さ制限 */
 const CT_THREE_VCF_MAX_DEPTH = 8;
+
+/**
+ * キャッシュ付き hasVCF
+ *
+ * VCT探索の反復深化で同一盤面の VCF 判定を再利用する。
+ * タイムアウト時の false はキャッシュしない（非決定的結果）。
+ */
+function cachedHasVCF(
+  board: BoardState,
+  color: "black" | "white",
+  limiter: TimeLimiter,
+  vcfOptions?: VCFSearchOptions,
+  vcfCache?: VCFResultCache,
+): boolean {
+  if (vcfCache) {
+    const cached = lookupVCF(vcfCache, board, color);
+    if (cached !== undefined) {
+      return cached;
+    }
+  }
+  const result = hasVCF(board, color, 0, limiter, vcfOptions);
+  if (vcfCache && !isTimeExceeded(limiter)) {
+    storeVCF(vcfCache, board, color, result);
+  }
+  return result;
+}
+
+/**
+ * キャッシュ付き findVCFSequence ゲート
+ *
+ * キャッシュで false 確定なら即 null を返す。
+ * 結果は boolean としてキャッシュに記録する。
+ */
+function cachedFindVCFSequence(
+  board: BoardState,
+  color: "black" | "white",
+  limiter: TimeLimiter,
+  vcfOptions?: VCFSearchOptions,
+  vcfCache?: VCFResultCache,
+): ReturnType<typeof findVCFSequence> {
+  if (vcfCache) {
+    const cached = lookupVCF(vcfCache, board, color);
+    if (cached === false) {
+      return null;
+    }
+  }
+  const result = findVCFSequence(board, color, vcfOptions);
+  if (vcfCache && !isTimeExceeded(limiter)) {
+    storeVCF(vcfCache, board, color, result !== null);
+  }
+  return result;
+}
+
+/**
+ * キャッシュ付き findVCFMove ゲート
+ *
+ * キャッシュで false 確定なら即 null を返す。
+ * 結果は boolean としてキャッシュに記録する。
+ */
+function cachedFindVCFMove(
+  board: BoardState,
+  color: "black" | "white",
+  limiter: TimeLimiter,
+  vcfOptions?: VCFSearchOptions,
+  vcfCache?: VCFResultCache,
+): ReturnType<typeof findVCFMove> {
+  if (vcfCache) {
+    const cached = lookupVCF(vcfCache, board, color);
+    if (cached === false) {
+      return null;
+    }
+  }
+  const result = findVCFMove(board, color, vcfOptions);
+  if (vcfCache && !isTimeExceeded(limiter)) {
+    storeVCF(vcfCache, board, color, result !== null);
+  }
+  return result;
+}
 
 /**
  * VCT探索オプション（外部からパラメータを設定可能）
@@ -94,6 +178,7 @@ export function hasVCT(
   depth = 0,
   timeLimiter?: TimeLimiter,
   options?: VCTSearchOptions,
+  vcfCache?: VCFResultCache,
 ): boolean {
   const maxDepth = options?.maxDepth ?? VCT_MAX_DEPTH;
   const timeLimitMs = options?.timeLimit ?? VCT_TIME_LIMIT;
@@ -104,6 +189,9 @@ export function hasVCT(
     startTime: performance.now(),
     timeLimit: timeLimitMs,
   };
+
+  // VCFキャッシュの初期化（ルート呼び出し時）
+  const cache = vcfCache ?? createVCFCache();
 
   // 時間制限チェック
   if (isTimeExceeded(limiter)) {
@@ -116,7 +204,7 @@ export function hasVCT(
 
   // VCFがあればVCT成立（VCF ⊂ VCT）
   // 時間制限を共有（VCTの残り時間をVCFにも適用）
-  if (hasVCF(board, color, 0, limiter, options?.vcfOptions)) {
+  if (cachedHasVCF(board, color, limiter, options?.vcfOptions, cache)) {
     return true;
   }
 
@@ -200,7 +288,7 @@ export function hasVCT(
       );
       let vctResult = false;
       if (!defenseWins) {
-        vctResult = hasVCT(board, color, depth + 1, limiter, options);
+        vctResult = hasVCT(board, color, depth + 1, limiter, options, cache);
       }
 
       // 元に戻す（Undo）- 防御手
@@ -246,6 +334,7 @@ function evaluateCounterThreat(
   depth: number,
   limiter: TimeLimiter,
   options?: VCTSearchOptions,
+  vcfCache?: VCFResultCache,
 ): boolean {
   if (ct === "win") {
     return false;
@@ -264,7 +353,7 @@ function evaluateCounterThreat(
     if (blockRow) {
       blockRow[blockPos.col] = color;
     }
-    const result = hasVCT(board, color, depth + 1, limiter, options);
+    const result = hasVCT(board, color, depth + 1, limiter, options, vcfCache);
     if (blockRow) {
       blockRow[blockPos.col] = null;
     }
@@ -278,17 +367,18 @@ function evaluateCounterThreat(
     if (isTimeExceeded(limiter)) {
       return false;
     }
-    return hasVCF(board, color, 0, limiter, {
+    const ctThreeVcfOptions = {
       ...options?.vcfOptions,
       maxDepth: Math.min(
         options?.vcfOptions?.maxDepth ?? CT_THREE_VCF_MAX_DEPTH,
         CT_THREE_VCF_MAX_DEPTH,
       ),
-    });
+    };
+    return cachedHasVCF(board, color, limiter, ctThreeVcfOptions, vcfCache);
   }
 
   // ct === "none": 通常の再帰
-  return hasVCT(board, color, depth + 1, limiter, options);
+  return hasVCT(board, color, depth + 1, limiter, options, vcfCache);
 }
 
 /**
@@ -310,21 +400,42 @@ export function findVCTMove(
     startTime: performance.now(),
     timeLimit: timeLimitMs,
   };
+  const vcfCache = createVCFCache();
 
   // 相手に活三があればVCT不成立（四追いでしか勝てない）
   const opponentColor = color === "black" ? "white" : "black";
   if (hasOpenThree(board, opponentColor)) {
     // VCFのみ試す（四追いなら活三があっても有効）
-    return findVCFMove(board, color, options?.vcfOptions);
+    return cachedFindVCFMove(
+      board,
+      color,
+      limiter,
+      options?.vcfOptions,
+      vcfCache,
+    );
   }
 
   // VCFが先に成立する場合はVCFの手を返す
-  const vcfMove = findVCFMove(board, color, options?.vcfOptions);
+  const vcfMove = cachedFindVCFMove(
+    board,
+    color,
+    limiter,
+    options?.vcfOptions,
+    vcfCache,
+  );
   if (vcfMove) {
     return vcfMove;
   }
 
-  return findVCTMoveRecursive(board, color, 0, maxDepth, limiter, options);
+  return findVCTMoveRecursive(
+    board,
+    color,
+    0,
+    maxDepth,
+    limiter,
+    options,
+    vcfCache,
+  );
 }
 
 /**
@@ -337,6 +448,7 @@ function findVCTMoveRecursive(
   maxDepth: number,
   limiter: TimeLimiter,
   options?: VCTSearchOptions,
+  vcfCache?: VCFResultCache,
 ): Position | null {
   if (depth >= maxDepth) {
     return null;
@@ -347,7 +459,13 @@ function findVCTMoveRecursive(
   }
 
   // VCFチェック（hasVCF→findVCFMoveの二重探索を統合）
-  const vcfMove = findVCFMove(board, color, options?.vcfOptions);
+  const vcfMove = cachedFindVCFMove(
+    board,
+    color,
+    limiter,
+    options?.vcfOptions,
+    vcfCache,
+  );
   if (vcfMove) {
     return vcfMove;
   }
@@ -420,7 +538,7 @@ function findVCTMoveRecursive(
       );
       let vctResult = false;
       if (!defenseWins) {
-        vctResult = hasVCT(board, color, depth + 1, limiter, options);
+        vctResult = hasVCT(board, color, depth + 1, limiter, options, vcfCache);
       }
 
       // 元に戻す（Undo）- 防御手
@@ -466,12 +584,19 @@ export function findVCTSequence(
     startTime: performance.now(),
     timeLimit: timeLimitMs,
   };
+  const vcfCache = createVCFCache();
 
   // 相手に活三があればVCT不成立（四追いでしか勝てない）
   const opponentColor = color === "black" ? "white" : "black";
   if (hasOpenThree(board, opponentColor)) {
     // VCFのみ試す（四追いなら活三があっても有効）
-    const vcfOnly = findVCFSequence(board, color, options?.vcfOptions);
+    const vcfOnly = cachedFindVCFSequence(
+      board,
+      color,
+      limiter,
+      options?.vcfOptions,
+      vcfCache,
+    );
     if (vcfOnly) {
       return {
         firstMove: vcfOnly.firstMove,
@@ -483,7 +608,13 @@ export function findVCTSequence(
   }
 
   // VCFが先に成立する場合はVCF手順を返す
-  const vcfSeq = findVCFSequence(board, color, options?.vcfOptions);
+  const vcfSeq = cachedFindVCFSequence(
+    board,
+    color,
+    limiter,
+    options?.vcfOptions,
+    vcfCache,
+  );
   if (vcfSeq) {
     return {
       firstMove: vcfSeq.firstMove,
@@ -513,6 +644,7 @@ export function findVCTSequence(
       sequence,
       options,
       context,
+      vcfCache,
     );
 
     if (!found || !sequence[0]) {
@@ -687,6 +819,7 @@ function findVCTSequenceRecursive(
   sequence: Position[],
   options: VCTSearchOptions | undefined,
   context: VCTRecursiveContext,
+  vcfCache?: VCFResultCache,
 ): boolean {
   if (depth >= maxDepth) {
     return false;
@@ -697,7 +830,13 @@ function findVCTSequenceRecursive(
   }
 
   // VCF手順に委譲
-  const vcfSeq = findVCFSequence(board, color, options?.vcfOptions);
+  const vcfSeq = cachedFindVCFSequence(
+    board,
+    color,
+    limiter,
+    options?.vcfOptions,
+    vcfCache,
+  );
   if (vcfSeq) {
     sequence.push(...vcfSeq.sequence);
     if (vcfSeq.isForbiddenTrap) {
@@ -806,6 +945,7 @@ function findVCTSequenceRecursive(
           subSequence,
           options,
           subContext,
+          vcfCache,
         );
 
         // 元に戻す（Undo）- 防御手
@@ -834,7 +974,14 @@ function findVCTSequenceRecursive(
           firstDefenseSequence = [defensePos, ...subSequence];
         }
       } else {
-        const vctResult = hasVCT(board, color, depth + 1, limiter, options);
+        const vctResult = hasVCT(
+          board,
+          color,
+          depth + 1,
+          limiter,
+          options,
+          vcfCache,
+        );
 
         // 元に戻す（Undo）- 防御手
         if (defenseRow) {
@@ -1028,6 +1175,7 @@ export function isVCTFirstMove(
     startTime: performance.now(),
     timeLimit: timeLimitMs,
   };
+  const vcfCache = createVCFCache();
 
   // 相手に活三があればVCT開始手として無効（四追いでしか勝てない）
   const opponentColor = color === "black" ? "white" : "black";
@@ -1111,6 +1259,7 @@ export function isVCTFirstMove(
       1, // isVCTFirstMoveはdepth=0から開始、防御後はdepth=1
       limiter,
       options,
+      vcfCache,
     );
 
     // 元に戻す（Undo）- 防御手
