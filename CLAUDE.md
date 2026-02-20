@@ -26,7 +26,7 @@ pnpm build         # Production build
 
 - Do TDD
 - Ask anything because your boss is fool so his instructions have overlooks.
-- Use `/review-plan` skill before aproove.
+- Use `/review` skill (user skill) to review plans and implementations with subagents.
 
 ## Architecture
 
