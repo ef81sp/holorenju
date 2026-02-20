@@ -25,6 +25,7 @@ export default defineConfig({
         theme_color: "#5fdeec",
         background_color: "#5fdeec",
         display: "fullscreen",
+        display_override: ["fullscreen"],
         orientation: "landscape",
         scope: "/",
         start_url: "/",

@@ -14,6 +14,7 @@ export const useFullscreenPrompt = (
   promptRef: Readonly<ShallowRef<FullscreenPromptRef | null | undefined>>,
 ): {
   isMobile: ComputedRef<boolean>;
+  isPWA: boolean;
   isPromptDisabled: () => boolean;
   showFullscreenPrompt: () => void;
   handleNeverShow: () => void;
@@ -39,9 +40,9 @@ export const useFullscreenPrompt = (
       matchMedia("(display-mode: fullscreen)").matches ||
       (navigator as unknown as { standalone?: boolean }).standalone === true);
 
-  // 全画面表示プロンプトを表示（PWA起動時はスキップ）
+  // 全画面表示プロンプトを表示（PWA起動時かつ真のfullscreenならスキップ）
   const showFullscreenPrompt = (): void => {
-    if (isPWA) {
+    if (isPWA && document.fullscreenElement) {
       return;
     }
     if (isMobile.value && !isPromptDisabled()) {
@@ -60,6 +61,7 @@ export const useFullscreenPrompt = (
 
   return {
     isMobile,
+    isPWA,
     showFullscreenPrompt,
     isPromptDisabled,
     handleNeverShow,

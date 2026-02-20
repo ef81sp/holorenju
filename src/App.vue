@@ -14,8 +14,13 @@ const fullscreenPromptRef = useTemplateRef<
 const audioConfirmRef =
   useTemplateRef<InstanceType<typeof AudioConfirmDialog>>("audioConfirmRef");
 
-const { showFullscreenPrompt, handleNeverShow, isPromptDisabled, isMobile } =
-  useFullscreenPrompt(fullscreenPromptRef);
+const {
+  showFullscreenPrompt,
+  handleNeverShow,
+  isPromptDisabled,
+  isMobile,
+  isPWA,
+} = useFullscreenPrompt(fullscreenPromptRef);
 
 // テキストサイズ設定をDOMに反映
 const preferencesStore = usePreferencesStore();
@@ -76,6 +81,10 @@ onMounted(() => {
   // モバイルでFullscreenPromptが表示される場合は、閉じた後にAudio確認
   if (isMobile.value && !isPromptDisabled()) {
     showFullscreenPrompt();
+    // PWAで既にfullscreenの場合、showFullscreenPromptが早期リターンするので直接呼ぶ
+    if (isPWA && document.fullscreenElement) {
+      showAudioConfirmIfNeeded();
+    }
   } else {
     // デスクトップまたはFullscreenPrompt無効の場合は直接Audio確認
     showAudioConfirmIfNeeded();
