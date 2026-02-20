@@ -65,7 +65,7 @@ function isInvalidatedByNoriTe(
   const opponentColor = color === "black" ? "white" : "black";
   const threeDefenseVcfOptions: VCFSearchOptions = {
     maxDepth: vcfMaxDepth,
-    timeLimit: 100,
+    timeLimit: 300,
   };
   for (const defense of threeDefenses) {
     if (performance.now() - startTime >= timeLimit) {

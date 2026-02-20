@@ -10,3 +10,9 @@ pre-commit:
 
     test:
       run: pnpm test:browser:headless
+
+pre-push:
+  parallel: true
+  commands:
+    test:
+      run: pnpm test

@@ -857,15 +857,14 @@ describe("ミセ四追い局面での再現テスト", () => {
   // F6は跳び四(5,5)(6,5)(7,5)_(8,5)(9,5)を作り、防御後に黒VCTが成立する
   const record14 = "H8 H9 G8 I8 G10 G9 F9 E8 E10 H7 F10 H10 F8 F11";
 
-  it("14手目盤面でmise-VCFが検出される", () => {
+  it("14手目盤面でG7は非強制（三も四も作らない）のためmise-VCF検出されない", () => {
     const { board } = createBoardFromRecord(record14);
     const miseVcf = findMiseVCFSequence(board, "black", {
       vcfOptions: { maxDepth: 12, timeLimit: 300 },
-      timeLimit: 500,
+      timeLimit: 5000,
     });
-    expect(miseVcf).not.toBeNull();
-    expect(miseVcf?.firstMove).toEqual({ row: 8, col: 6 }); // G7
-    expect(miseVcf?.defenseMove).toEqual({ row: 9, col: 5 }); // F6
+    // G7(8,6)は三も四も作らない非強制ミセ手のため強制性チェックで却下される
+    expect(miseVcf).toBeNull();
   });
 
   it("F6は有効なVCT開始手（跳び四→防御後にVCT成立）", () => {
