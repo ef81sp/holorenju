@@ -7,9 +7,17 @@
  * grid-template-rows: 7fr 2fr
  */
 
-import { ref, computed, type Ref } from "vue";
+import { ref, computed } from "vue";
 
 import { useBoardSize } from "@/components/scenarios/ScenarioPlayer/composables/useBoardSize";
+
+interface Props {
+  largeBoard?: boolean;
+}
+
+withDefaults(defineProps<Props>(), {
+  largeBoard: false,
+});
 
 // boardFrameRefを親に公開
 const boardFrameRef = ref<HTMLElement | null>(null);
@@ -24,7 +32,7 @@ defineExpose({
 </script>
 
 <template>
-  <div class="game-player-layout">
+  <div :class="['game-player-layout', { 'large-board': largeBoard }]">
     <!-- 操作セクション（左上 4×7）-->
     <div class="control-section-slot">
       <div class="control-header">
@@ -33,7 +41,9 @@ defineExpose({
           <slot name="header-controls" />
         </div>
       </div>
-      <slot name="control-info" />
+      <div class="control-info-wrapper">
+        <slot name="control-info" />
+      </div>
     </div>
 
     <!-- 連珠盤セクション（中央 8×7）-->
@@ -86,6 +96,7 @@ defineExpose({
   justify-content: space-between;
   gap: var(--size-12);
   overflow: hidden;
+  container-type: inline-size;
 }
 
 .control-header {
@@ -129,5 +140,19 @@ defineExpose({
   display: flex;
   justify-content: center;
   min-height: 0;
+}
+
+/* 盤面拡大モード */
+.game-player-layout.large-board {
+  grid-template-columns: 2fr 9fr 5fr;
+  grid-template-rows: 1fr;
+}
+
+.large-board .control-info-wrapper {
+  display: none;
+}
+
+.large-board .dialog-section-slot {
+  display: none;
 }
 </style>

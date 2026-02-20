@@ -17,6 +17,7 @@ import DialogSection from "./DialogSection.vue";
 import CutinOverlay from "@/components/common/CutinOverlay.vue";
 import SettingsControl from "@/components/common/SettingsControl.vue";
 import GamePlayerLayout from "@/components/common/GamePlayerLayout.vue";
+import CompactCharacterDialog from "@/components/character/CompactCharacterDialog.vue";
 import DebugReloadButton from "./DebugReloadButton.vue";
 import { useScenarioNavigation } from "./composables/useScenarioNavigation";
 import { useBoardAnnouncer } from "@/composables/useBoardAnnouncer";
@@ -27,6 +28,7 @@ import { scenarioNavKey } from "./composables/useScenarioNavProvide";
 import { useBoardStore } from "@/stores/boardStore";
 import { useDialogStore } from "@/stores/dialogStore";
 import { useAudioStore } from "@/stores/audioStore";
+import { usePreferencesStore } from "@/stores/preferencesStore";
 import { useScenarioAnimationStore } from "@/stores/scenarioAnimationStore";
 
 import type { QuestionSection } from "@/types/scenario";
@@ -47,6 +49,7 @@ const props = defineProps<Props>();
 const boardStore = useBoardStore();
 const dialogStore = useDialogStore();
 const audioStore = useAudioStore();
+const preferencesStore = usePreferencesStore();
 const animationStore = useScenarioAnimationStore();
 
 // Composables
@@ -374,6 +377,14 @@ const handleGoToList = (): void => {
   scenarioNav.completeScenario();
 };
 
+// 盤面拡大モード（問題セクションのみ）
+const isLargeBoard = computed(() => {
+  if (scenarioNav.currentSection.value?.type !== "question") {
+    return false;
+  }
+  return preferencesStore.isLargeBoardForQuestion;
+});
+
 const handleLayoutClick = (event: MouseEvent): void => {
   if (isInteractiveClick(event)) {
     return;
@@ -398,6 +409,7 @@ const handleLayoutClick = (event: MouseEvent): void => {
     <GamePlayerLayout
       v-if="scenarioNav.scenario.value"
       ref="layoutRef"
+      :large-board="isLargeBoard"
     >
       <template #back-button>
         <BackButton @back="scenarioNav.goBack" />
@@ -431,38 +443,50 @@ const handleLayoutClick = (event: MouseEvent): void => {
       </template>
 
       <template #info>
-        <ScenarioInfoPanel
-          :scenario-title="scenarioNav.scenario.value.title"
-          :section-title="
-            getSectionDisplayTitle(
-              scenarioNav.scenario.value.sections,
-              scenarioNav.currentSectionIndex.value,
-            )
-          "
-          :description="
-            scenarioNav.currentSection.value?.type === 'demo'
-              ? scenarioNav.demoDescriptionNodes.value
-              : descriptionNodes
-          "
-          :section-index="scenarioNav.currentSectionIndex.value"
-          :total-sections="scenarioNav.scenario.value.sections.length"
-          :show-next-section-button="scenarioNav.showNextSectionButton.value"
-          :show-complete-button="scenarioNav.isScenarioDone.value"
-          :show-answer-button="requiresAnswerButton"
-          :answer-disabled="scenarioNav.isSectionCompleted.value"
-          :show-reset-button="
-            questionRouter.isResetAvailable.value &&
-            !scenarioNav.isSectionCompleted.value
-          "
-          @next-section="scenarioNav.nextSection"
-          @submit-answer="handleSubmitAnswer"
-          @reset-puzzle="handleResetPuzzle"
-          @complete-scenario="handleGoToList"
-        />
+        <div :class="['info-wrapper', { 'large-board-info': isLargeBoard }]">
+          <ScenarioInfoPanel
+            :scenario-title="scenarioNav.scenario.value.title"
+            :section-title="
+              getSectionDisplayTitle(
+                scenarioNav.scenario.value.sections,
+                scenarioNav.currentSectionIndex.value,
+              )
+            "
+            :description="
+              scenarioNav.currentSection.value?.type === 'demo'
+                ? scenarioNav.demoDescriptionNodes.value
+                : descriptionNodes
+            "
+            :section-index="scenarioNav.currentSectionIndex.value"
+            :total-sections="scenarioNav.scenario.value.sections.length"
+            :show-next-section-button="scenarioNav.showNextSectionButton.value"
+            :show-complete-button="scenarioNav.isScenarioDone.value"
+            :show-answer-button="requiresAnswerButton"
+            :answer-disabled="scenarioNav.isSectionCompleted.value"
+            :show-reset-button="
+              questionRouter.isResetAvailable.value &&
+              !scenarioNav.isSectionCompleted.value
+            "
+            @next-section="scenarioNav.nextSection"
+            @submit-answer="handleSubmitAnswer"
+            @reset-puzzle="handleResetPuzzle"
+            @complete-scenario="handleGoToList"
+          />
+          <CompactCharacterDialog
+            v-if="isLargeBoard"
+            :message="dialogStore.currentMessage"
+            :can-navigate-previous="scenarioNav.canNavigatePrevious.value"
+            :can-navigate-next="scenarioNav.canNavigateNext.value"
+            @dialog-clicked="handleNextDialogue"
+            @dialog-next="scenarioNav.nextDialogue"
+            @dialog-previous="scenarioNav.previousDialogue"
+          />
+        </div>
       </template>
 
       <template #dialog>
         <DialogSection
+          v-if="!isLargeBoard"
           :message="dialogStore.currentMessage"
           :is-demo="scenarioNav.currentSection.value?.type === 'demo'"
           :dialog-index="scenarioNav.currentDialogueIndex.value"
@@ -490,5 +514,15 @@ const handleLayoutClick = (event: MouseEvent): void => {
 .scenario-player-root {
   width: 100%;
   height: 100%;
+}
+
+.info-wrapper {
+  height: 100%;
+}
+
+.info-wrapper.large-board-info {
+  display: grid;
+  grid-template-rows: 7.5fr 1.5fr;
+  gap: var(--size-8);
 }
 </style>

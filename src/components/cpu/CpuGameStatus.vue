@@ -21,11 +21,11 @@ const cpuGameStore = useCpuGameStore();
 
 // Props
 interface Props {
-  isThinking?: boolean;
+  compact?: boolean;
 }
 
-const props = withDefaults(defineProps<Props>(), {
-  isThinking: false,
+withDefaults(defineProps<Props>(), {
+  compact: false,
 });
 
 const difficultyLabel = computed(
@@ -70,7 +70,7 @@ async function handleCopy(): Promise<void> {
 </script>
 
 <template>
-  <div class="cpu-game-status">
+  <div :class="['cpu-game-status', { compact }]">
     <div class="status-row">
       <span class="status-label">難易度</span>
       <span
@@ -94,14 +94,6 @@ async function handleCopy(): Promise<void> {
           {{ turnColor }}
         </span>
         {{ turnLabel }}
-      </span>
-    </div>
-    <div class="thinking-indicator">
-      <span
-        v-show="props.isThinking"
-        class="thinking-dots"
-      >
-        考え中...
       </span>
     </div>
   </div>
@@ -142,7 +134,6 @@ async function handleCopy(): Promise<void> {
 
 <style scoped>
 .cpu-game-status {
-  flex: 1;
   display: flex;
   flex-direction: column;
   gap: var(--size-10);
@@ -183,28 +174,30 @@ async function handleCopy(): Promise<void> {
   color: #888;
 }
 
-.thinking-indicator {
-  display: flex;
-  justify-content: center;
-  padding-top: var(--size-8);
-  border-top: 1px solid var(--color-border-light);
-  min-height: var(--size-16);
+/* コンパクトモード: 横並びテーブル */
+.compact {
+  flex-direction: row;
+  gap: 0;
+  padding: var(--size-8);
 }
 
-.thinking-dots {
+.compact .status-row {
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--size-2);
+}
+
+.compact .status-row:not(:last-of-type) {
+  border-right: 1px solid var(--color-border-light);
+}
+
+.compact .status-label {
+  font-size: var(--size-10);
+}
+
+.compact .status-value {
   font-size: var(--size-12);
-  color: var(--color-primary);
-  animation: pulse 1.5s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  0%,
-  100% {
-    opacity: 0.5;
-  }
-  50% {
-    opacity: 1;
-  }
 }
 
 .move-history-card {

@@ -8,6 +8,7 @@ import type {
 } from "@/types/character";
 import CharacterSprite from "./CharacterSprite.vue";
 import DialogText from "@/components/common/DialogText.vue";
+import { CHARACTER_CONFIG } from "./characterConfig";
 
 // Props
 interface Props {
@@ -44,30 +45,6 @@ const emit = defineEmits<{
 // 選択肢がクリックされた
 const handleChoiceClick = (choiceId: string): void => {
   emit("choiceSelected", choiceId);
-};
-
-// キャラクター設定（CSS変数参照）
-const CHARACTER_CONFIG: Record<
-  "fubuki" | "miko",
-  {
-    avatarBg: string;
-    borderColor: string;
-    nameColor: string;
-    name: string;
-  }
-> = {
-  fubuki: {
-    avatarBg: "var(--color-fubuki-bg)",
-    borderColor: "var(--color-fubuki-primary)",
-    nameColor: "var(--color-fubuki-name)",
-    name: "フブキ先生",
-  },
-  miko: {
-    avatarBg: "var(--color-miko-bg)",
-    borderColor: "var(--color-miko-primary)",
-    nameColor: "var(--color-miko-name)",
-    name: "みこ",
-  },
 };
 
 // キャラクターのアバター背景色を取得

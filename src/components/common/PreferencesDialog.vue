@@ -30,6 +30,12 @@ const textSizeLabels = {
   large: "大",
 } as const;
 
+const largeBoardScopeLabels = {
+  cpuPlay: "ホロメン対戦のみ",
+  question: "問題のみ",
+  both: "両方",
+} as const;
+
 // オーディオ有効/無効の切り替え
 const handleAudioEnabledChange = (event: Event): void => {
   const { checked } = event.target as HTMLInputElement;
@@ -242,6 +248,41 @@ defineExpose({
               >
                 <option value="normal">{{ textSizeLabels.normal }}</option>
                 <option value="large">{{ textSizeLabels.large }}</option>
+              </select>
+            </label>
+            <hr class="setting-divider" />
+            <label class="setting-row">
+              <span class="setting-text">
+                <span class="setting-label">盤面拡大モード</span>
+                <span class="setting-description">
+                  盤面を大きく表示（スマホ向け）
+                </span>
+              </span>
+              <input
+                v-model="preferencesStore.largeBoardEnabled"
+                type="checkbox"
+                class="checkbox"
+              />
+            </label>
+            <hr class="setting-divider" />
+            <label class="setting-row">
+              <span class="setting-text">
+                <span class="setting-label">拡大の対象</span>
+              </span>
+              <select
+                v-model="preferencesStore.largeBoardScope"
+                class="select"
+                :disabled="!preferencesStore.largeBoardEnabled"
+              >
+                <option value="cpuPlay">
+                  {{ largeBoardScopeLabels.cpuPlay }}
+                </option>
+                <option value="question">
+                  {{ largeBoardScopeLabels.question }}
+                </option>
+                <option value="both">
+                  {{ largeBoardScopeLabels.both }}
+                </option>
               </select>
             </label>
           </div>

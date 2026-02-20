@@ -17,6 +17,7 @@ import DialogText from "@/components/common/DialogText.vue";
 import CharacterSprite from "@/components/character/CharacterSprite.vue";
 import CpuGameStatus from "./CpuGameStatus.vue";
 import CpuCharacterPanel from "./CpuCharacterPanel.vue";
+import CompactCharacterDialog from "@/components/character/CompactCharacterDialog.vue";
 import CpuDebugInfo from "./CpuDebugInfo.vue";
 import { useCpuPlayer } from "./composables/useCpuPlayer";
 import { useCpuDialogue } from "./composables/useCpuDialogue";
@@ -323,6 +324,9 @@ function handleConfirmBack(): void {
   appStore.goToCpuSetup();
 }
 
+// 盤面拡大モード
+const isLargeBoard = computed(() => preferencesStore.isLargeBoardForCpuPlay);
+
 // ゲーム終了メッセージ
 const gameEndMessage = computed(() => {
   if (!cpuGameStore.isGameOver) {
@@ -340,13 +344,18 @@ const gameEndMessage = computed(() => {
 
 <template>
   <div class="cpu-game-player">
-    <GamePlayerLayout ref="layoutRef">
+    <GamePlayerLayout
+      ref="layoutRef"
+      :large-board="isLargeBoard"
+    >
       <template #back-button>
         <button
           class="back-button"
+          aria-label="戻る"
           @click="showBackConfirmDialog"
         >
-          ← 戻る
+          <span class="back-text-full">← 戻る</span>
+          <span class="back-text-short">←</span>
         </button>
       </template>
 
@@ -355,7 +364,7 @@ const gameEndMessage = computed(() => {
       </template>
 
       <template #control-info>
-        <CpuGameStatus :is-thinking="isThinking" />
+        <CpuGameStatus />
       </template>
 
       <template #board="{ boardSize }">
@@ -380,11 +389,25 @@ const gameEndMessage = computed(() => {
       </template>
 
       <template #info>
-        <div class="info-content">
-          <!-- キャラクター表示 -->
+        <div
+          class="info-content"
+          :class="{ 'large-board-info': isLargeBoard }"
+        >
+          <!-- 拡大モード時: CpuGameStatus を右パネル上部に移動 -->
+          <CpuGameStatus
+            v-if="isLargeBoard"
+            compact
+          />
+          <!-- キャラクター表示（通常モードのみ） -->
           <CpuCharacterPanel
+            v-if="!isLargeBoard"
             :character="cpuCharacter"
             :emotion-id="currentEmotion"
+          />
+          <!-- 拡大モード時: ダイアログを右パネルに統合 -->
+          <CompactCharacterDialog
+            v-if="isLargeBoard && dialogStore.currentMessage"
+            :message="dialogStore.currentMessage"
           />
 
           <div class="game-controls">
@@ -395,20 +418,22 @@ const gameEndMessage = computed(() => {
             >
               待った
             </button>
-            <button
-              v-if="cpuGameStore.isGameOver"
-              class="control-button primary"
-              @click="handleRematch"
-            >
-              もう一度
-            </button>
-            <button
-              v-if="cpuGameStore.isGameOver"
-              class="control-button"
-              @click="handleOpenReview"
-            >
-              振り返り
-            </button>
+            <div class="endgame-controls">
+              <button
+                v-if="cpuGameStore.isGameOver"
+                class="control-button primary"
+                @click="handleRematch"
+              >
+                もう一度
+              </button>
+              <button
+                v-if="cpuGameStore.isGameOver"
+                class="control-button"
+                @click="handleOpenReview"
+              >
+                振り返り
+              </button>
+            </div>
           </div>
 
           <!-- CPUデバッグ情報 -->
@@ -417,9 +442,9 @@ const gameEndMessage = computed(() => {
             :response="lastResponse"
           />
 
-          <!-- ゲーム終了時のメッセージ -->
+          <!-- ゲーム終了時のメッセージ（通常モードのみ） -->
           <div
-            v-if="cpuGameStore.isGameOver"
+            v-if="cpuGameStore.isGameOver && !isLargeBoard"
             class="game-result"
           >
             <p class="result-message">{{ gameEndMessage }}</p>
@@ -430,7 +455,7 @@ const gameEndMessage = computed(() => {
 
       <template #dialog>
         <div
-          v-if="dialogStore.currentMessage"
+          v-if="!isLargeBoard && dialogStore.currentMessage"
           class="character-dialog"
         >
           <div
@@ -474,7 +499,7 @@ const gameEndMessage = computed(() => {
           </div>
         </div>
         <div
-          v-else
+          v-else-if="!isLargeBoard"
           class="help-text"
         >
           <p v-if="!cpuGameStore.isGameOver && cpuGameStore.isPlayerTurn">
@@ -536,6 +561,24 @@ const gameEndMessage = computed(() => {
   border-color: #4a9eff;
 }
 
+.back-text-short {
+  display: none;
+}
+
+@container (max-width: 140px) {
+  .back-text-full {
+    display: none;
+  }
+
+  .back-text-short {
+    display: inline;
+  }
+
+  .back-button {
+    padding: var(--size-6) var(--size-8);
+  }
+}
+
 .info-content {
   display: flex;
   flex-direction: column;
@@ -544,10 +587,25 @@ const gameEndMessage = computed(() => {
   height: 100%;
 }
 
+.info-content.large-board-info {
+  gap: var(--size-8);
+  overflow-y: auto;
+}
+
 .game-controls {
   display: flex;
   flex-direction: column;
   gap: var(--size-8);
+}
+
+.endgame-controls {
+  display: flex;
+  gap: var(--size-8);
+  min-height: var(--size-48);
+}
+
+.endgame-controls .control-button {
+  flex: 1;
 }
 
 .control-button {

@@ -7,9 +7,11 @@ const emits = defineEmits<{
 <template>
   <button
     class="back-button"
+    aria-label="戻る"
     @click="emits('back')"
   >
-    ← 戻る
+    <span class="back-text-full">← 戻る</span>
+    <span class="back-text-short">←</span>
   </button>
 </template>
 
@@ -29,5 +31,23 @@ const emits = defineEmits<{
 .back-button:hover {
   background: #f5f5f5;
   border-color: #4a9eff;
+}
+
+.back-text-short {
+  display: none;
+}
+
+@container (max-width: 140px) {
+  .back-text-full {
+    display: none;
+  }
+
+  .back-text-short {
+    display: inline;
+  }
+
+  .back-button {
+    padding: var(--size-6) var(--size-8);
+  }
 }
 </style>

@@ -1,7 +1,7 @@
 import { createPinia, setActivePinia } from "pinia";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { usePreferencesStore } from "./preferencesStore";
+import { usePreferencesStore, type LargeBoardScope } from "./preferencesStore";
 
 describe("preferencesStore", () => {
   // localStorageのモック
@@ -23,6 +23,9 @@ describe("preferencesStore", () => {
 
   beforeEach(() => {
     vi.stubGlobal("localStorage", localStorageMock);
+    // window が未定義の場合もあるので、typeof チェックで安全にアクセス
+    // ストア側が typeof window !== "undefined" をチェックするため、
+    // テスト環境では window を定義しない（= デスクトップ扱い）
     localStorageMock.clear();
     setActivePinia(createPinia());
   });
@@ -364,6 +367,117 @@ describe("preferencesStore", () => {
     });
   });
 
+  describe("盤面拡大モード", () => {
+    describe("初期状態", () => {
+      it("largeBoardEnabledがfalse（デスクトップ画面）", () => {
+        const store = usePreferencesStore();
+        expect(store.largeBoardEnabled).toBe(false);
+      });
+
+      it("largeBoardScopeがboth", () => {
+        const store = usePreferencesStore();
+        expect(store.largeBoardScope).toBe("both");
+      });
+    });
+
+    describe("初回起動時の小画面自動有効化", () => {
+      it("小画面（768px以下）で初回起動時にlargeBoardEnabledがtrue", () => {
+        // window オブジェクトをモック
+        vi.stubGlobal("window", {
+          matchMedia: vi.fn(() => ({ matches: true })),
+          localStorage: localStorageMock,
+        });
+        setActivePinia(createPinia());
+        const store = usePreferencesStore();
+        expect(store.largeBoardEnabled).toBe(true);
+      });
+
+      it("保存データがある場合は画面サイズ判定しない", () => {
+        vi.stubGlobal("window", {
+          matchMedia: vi.fn(() => ({ matches: true })),
+          localStorage: localStorageMock,
+        });
+        localStorageMock.setItem(
+          "holorenju_preferences",
+          JSON.stringify({
+            display: {
+              textSize: "large",
+              largeBoardEnabled: false,
+              largeBoardScope: "both",
+            },
+          }),
+        );
+        setActivePinia(createPinia());
+        const store = usePreferencesStore();
+        expect(store.largeBoardEnabled).toBe(false);
+      });
+    });
+
+    describe("設定変更", () => {
+      it("largeBoardEnabledを変更できる", () => {
+        const store = usePreferencesStore();
+        store.largeBoardEnabled = true;
+        expect(store.largeBoardEnabled).toBe(true);
+      });
+
+      it("largeBoardScopeを変更できる", () => {
+        const store = usePreferencesStore();
+        store.largeBoardScope = "cpuPlay";
+        expect(store.largeBoardScope).toBe("cpuPlay");
+      });
+    });
+
+    describe("isLargeBoardForCpuPlay", () => {
+      it.each<[boolean, LargeBoardScope, boolean]>([
+        [true, "cpuPlay", true],
+        [true, "question", false],
+        [true, "both", true],
+        [false, "cpuPlay", false],
+        [false, "both", false],
+      ])("enabled=%s, scope=%s => %s", (enabled, scope, expected) => {
+        const store = usePreferencesStore();
+        store.largeBoardEnabled = enabled;
+        store.largeBoardScope = scope;
+        expect(store.isLargeBoardForCpuPlay).toBe(expected);
+      });
+    });
+
+    describe("isLargeBoardForQuestion", () => {
+      it.each<[boolean, LargeBoardScope, boolean]>([
+        [true, "cpuPlay", false],
+        [true, "question", true],
+        [true, "both", true],
+        [false, "question", false],
+        [false, "both", false],
+      ])("enabled=%s, scope=%s => %s", (enabled, scope, expected) => {
+        const store = usePreferencesStore();
+        store.largeBoardEnabled = enabled;
+        store.largeBoardScope = scope;
+        expect(store.isLargeBoardForQuestion).toBe(expected);
+      });
+    });
+
+    describe("後方互換性", () => {
+      it("largeBoardフィールドがない旧データでもデフォルト値が適用される", () => {
+        localStorageMock.setItem(
+          "holorenju_preferences",
+          JSON.stringify({
+            animation: {
+              enabled: true,
+              speed: "normal",
+              effectSpeed: "normal",
+            },
+            display: { textSize: "normal" },
+          }),
+        );
+        setActivePinia(createPinia());
+        const store = usePreferencesStore();
+        expect(store.largeBoardEnabled).toBe(false);
+        expect(store.largeBoardScope).toBe("both");
+      });
+    });
+  });
+
   describe("preferencesオブジェクト全体", () => {
     it("preferencesオブジェクトに直接アクセスできる", () => {
       const store = usePreferencesStore();
@@ -382,6 +496,8 @@ describe("preferencesStore", () => {
         },
         display: {
           textSize: "normal",
+          largeBoardEnabled: false,
+          largeBoardScope: "both",
         },
         cpu: {
           fastMove: false,

@@ -11,6 +11,7 @@ const STORAGE_KEY = "holorenju_preferences";
 
 export type AnimationSpeed = "slowest" | "slow" | "normal" | "fast" | "fastest";
 export type TextSize = "normal" | "large";
+export type LargeBoardScope = "cpuPlay" | "question" | "both";
 
 interface Preferences {
   animation: {
@@ -29,6 +30,8 @@ interface Preferences {
   };
   display: {
     textSize: TextSize;
+    largeBoardEnabled: boolean;
+    largeBoardScope: LargeBoardScope;
   };
   accessibility: {
     boardAnnounce: boolean;
@@ -60,6 +63,8 @@ const defaultPreferences: Preferences = {
   },
   display: {
     textSize: "large",
+    largeBoardEnabled: false,
+    largeBoardScope: "both",
   },
   accessibility: {
     boardAnnounce: true,
@@ -131,7 +136,18 @@ export const usePreferencesStore = defineStore("preferences", () => {
         return { ...defaultPreferences };
       }
     }
-    return { ...defaultPreferences };
+    // 初回起動: 画面サイズで判定
+    const defaults = {
+      ...defaultPreferences,
+      display: { ...defaultPreferences.display },
+    };
+    if (
+      typeof window !== "undefined" &&
+      window.matchMedia("(max-width: 768px)").matches
+    ) {
+      defaults.display.largeBoardEnabled = true;
+    }
+    return defaults;
   }
 
   function saveToStorage(): void {
@@ -161,6 +177,30 @@ export const usePreferencesStore = defineStore("preferences", () => {
     get: () => preferences.value.display.textSize,
     set: (v) => (preferences.value.display.textSize = v),
   });
+
+  const largeBoardEnabled = computed({
+    get: () => preferences.value.display.largeBoardEnabled,
+    set: (v) => (preferences.value.display.largeBoardEnabled = v),
+  });
+
+  const largeBoardScope = computed({
+    get: () => preferences.value.display.largeBoardScope,
+    set: (v) => (preferences.value.display.largeBoardScope = v),
+  });
+
+  const isLargeBoardForCpuPlay = computed(
+    () =>
+      preferences.value.display.largeBoardEnabled &&
+      (preferences.value.display.largeBoardScope === "cpuPlay" ||
+        preferences.value.display.largeBoardScope === "both"),
+  );
+
+  const isLargeBoardForQuestion = computed(
+    () =>
+      preferences.value.display.largeBoardEnabled &&
+      (preferences.value.display.largeBoardScope === "question" ||
+        preferences.value.display.largeBoardScope === "both"),
+  );
 
   const boardAnnounce = computed({
     get: () => preferences.value.accessibility.boardAnnounce,
@@ -299,6 +339,10 @@ export const usePreferencesStore = defineStore("preferences", () => {
     speed,
     effectSpeed,
     textSize,
+    largeBoardEnabled,
+    largeBoardScope,
+    isLargeBoardForCpuPlay,
+    isLargeBoardForQuestion,
     boardAnnounce,
     fastCpuMove,
     lastCpuDifficulty,
