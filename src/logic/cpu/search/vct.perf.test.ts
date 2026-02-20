@@ -18,6 +18,7 @@ import {
 import {
   findVCTMove,
   findVCTSequence,
+  findVCTSequenceFromFirstMove,
   hasVCT,
   isVCTFirstMove,
   VCT_STONE_THRESHOLD,
@@ -1149,5 +1150,117 @@ describe("VCT探索のカウンター脅威チェック（探索関数）", () =
     expect(board).toEqual(snapshot);
     findVCTSequence(board, "white");
     expect(board).toEqual(snapshot);
+  });
+});
+
+describe("findVCTSequenceFromFirstMove", () => {
+  it("有効なVCT開始手 → シーケンスが返る", () => {
+    // 活三: (7,5)(7,6)(7,7) → (7,4)でVCT開始（VCFでもある）
+    const board = createBoardWithStones([
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+    ]);
+    const move = { row: 7, col: 4 };
+    const result = findVCTSequenceFromFirstMove(board, move, "black");
+    expect(result).not.toBeNull();
+    expect(result?.firstMove).toEqual(move);
+    expect(result?.sequence[0]).toEqual(move);
+    expect(result?.sequence.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("無効な手 → null", () => {
+    const board = createBoardWithStones([
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+    ]);
+    const result = findVCTSequenceFromFirstMove(
+      board,
+      { row: 0, col: 0 },
+      "black",
+    );
+    expect(result).toBeNull();
+  });
+
+  it("即勝ち（五連） → sequence: [move]", () => {
+    const board = createBoardWithStones([
+      { row: 7, col: 4, color: "black" },
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+    ]);
+    const move = { row: 7, col: 8 };
+    const result = findVCTSequenceFromFirstMove(board, move, "black");
+    expect(result).not.toBeNull();
+    expect(result?.sequence).toEqual([move]);
+  });
+
+  it("相手に活三がある場合 → null", () => {
+    // 黒に活三がある状態で白の手を検証
+    const board = createBoardWithStones([
+      // 黒の活三（相手の脅威）
+      { row: 10, col: 5, color: "black" },
+      { row: 10, col: 6, color: "black" },
+      { row: 10, col: 7, color: "black" },
+      // 白の二
+      { row: 3, col: 5, color: "white" },
+      { row: 3, col: 6, color: "white" },
+    ]);
+    // (3,7)は脅威だが相手に活三があるのでVCT開始手として無効
+    const result = findVCTSequenceFromFirstMove(
+      board,
+      { row: 3, col: 7 },
+      "white",
+    );
+    expect(result).toBeNull();
+  });
+
+  it("isVCTFirstMoveと結果が一致する（基本ケース）", () => {
+    const board = createBoardWithStones([
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+    ]);
+    const options = { maxDepth: 4, timeLimit: 1000 };
+    // 有効な手
+    const validMove = { row: 7, col: 4 };
+    expect(isVCTFirstMove(board, validMove, "black", options)).toBe(true);
+    expect(
+      findVCTSequenceFromFirstMove(board, validMove, "black", options),
+    ).not.toBeNull();
+    // 無効な手
+    const invalidMove = { row: 0, col: 0 };
+    expect(isVCTFirstMove(board, invalidMove, "black", options)).toBe(false);
+    expect(
+      findVCTSequenceFromFirstMove(board, invalidMove, "black", options),
+    ).toBeNull();
+  });
+
+  it("盤面不変性", () => {
+    const board = createBoardWithStones([
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+    ]);
+    const snapshot = copyBoard(board);
+    findVCTSequenceFromFirstMove(board, { row: 7, col: 4 }, "black");
+    expect(board).toEqual(snapshot);
+    findVCTSequenceFromFirstMove(board, { row: 0, col: 0 }, "black");
+    expect(board).toEqual(snapshot);
+  });
+
+  it("既に石がある位置 → null", () => {
+    const board = createBoardWithStones([
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+    ]);
+    const result = findVCTSequenceFromFirstMove(
+      board,
+      { row: 7, col: 5 },
+      "black",
+    );
+    expect(result).toBeNull();
   });
 });

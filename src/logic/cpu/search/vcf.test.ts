@@ -18,7 +18,9 @@ import {
 import {
   findVCFMove,
   findVCFSequence,
+  findVCFSequenceFromFirstMove,
   hasVCF,
+  isVCFFirstMove,
   vcfAttackMoveCount,
 } from "./vcf";
 
@@ -1045,5 +1047,140 @@ describe("VCFレース判定", () => {
     ]);
     const result = findBestMoveIterativeWithTT(board, "white", 4, 1000);
     expect(result.score).toBe(PATTERN_SCORES.FIVE);
+  });
+});
+
+describe("findVCFSequenceFromFirstMove", () => {
+  it("有効なVCF開始手 → シーケンスが返り、firstMoveが指定した手と一致", () => {
+    // 活三: (7,5)(7,6)(7,7) → (7,4)でVCF開始
+    const board = createBoardWithStones([
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+    ]);
+    const move = { row: 7, col: 4 };
+    const result = findVCFSequenceFromFirstMove(board, move, "black");
+    expect(result).not.toBeNull();
+    expect(result?.firstMove).toEqual(move);
+    expect(result?.sequence[0]).toEqual(move);
+    expect(result?.sequence.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("無効な手（四を作れない） → null", () => {
+    const board = createBoardWithStones([
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+    ]);
+    // (0,0) は四を作れない
+    const result = findVCFSequenceFromFirstMove(
+      board,
+      { row: 0, col: 0 },
+      "black",
+    );
+    expect(result).toBeNull();
+  });
+
+  it("即勝ち（五連） → sequence: [move]", () => {
+    // 四連 + 五連を作れる手
+    const board = createBoardWithStones([
+      { row: 7, col: 4, color: "black" },
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+    ]);
+    const move = { row: 7, col: 8 };
+    const result = findVCFSequenceFromFirstMove(board, move, "black");
+    expect(result).not.toBeNull();
+    expect(result?.sequence).toEqual([move]);
+  });
+
+  it("活四（防御不能） → sequence: [move]", () => {
+    // 三連の両端が空いている場合、一方に置くと活四
+    const board = createBoardWithStones([
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+    ]);
+    const move = { row: 7, col: 4 };
+    const result = findVCFSequenceFromFirstMove(board, move, "black");
+    expect(result).not.toBeNull();
+    // 活四なので1手で勝ち
+    expect(result?.sequence).toEqual([move]);
+  });
+
+  it("2段VCFのシーケンスが正しく返される", () => {
+    // 2方向に止め三がある形（四追い2段勝ち）
+    const board = createBoardWithStones([
+      // 横止め三
+      { row: 7, col: 1, color: "white" },
+      { row: 7, col: 2, color: "white" },
+      { row: 7, col: 3, color: "white" },
+      { row: 7, col: 0, color: "black" }, // 左端ブロック
+      // 縦止め三（VCF2段目用）
+      { row: 4, col: 5, color: "white" },
+      { row: 5, col: 5, color: "white" },
+      { row: 6, col: 5, color: "white" },
+      { row: 3, col: 5, color: "black" }, // 上端ブロック
+    ]);
+    // (7,5)で縦止め四 → 防御(8,5) → (7,4)で横五連勝ち
+    const move = { row: 7, col: 5 };
+    const result = findVCFSequenceFromFirstMove(board, move, "white", {
+      maxDepth: 16,
+      timeLimit: 1000,
+    });
+    expect(result).not.toBeNull();
+    expect(result?.firstMove).toEqual(move);
+    expect(result?.sequence[0]).toEqual(move);
+    // 2段VCF: [攻撃1(7,5), 防御1(8,5), 攻撃2(7,4)] = 3手
+    expect(result?.sequence.length).toBe(3);
+  });
+
+  it("isVCFFirstMoveと結果が一致する", () => {
+    const board = createBoardWithStones([
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+    ]);
+    const options = { maxDepth: 16, timeLimit: 1000 };
+    // 有効な手
+    const validMove = { row: 7, col: 4 };
+    expect(isVCFFirstMove(board, validMove, "black", options)).toBe(true);
+    expect(
+      findVCFSequenceFromFirstMove(board, validMove, "black", options),
+    ).not.toBeNull();
+    // 無効な手
+    const invalidMove = { row: 0, col: 0 };
+    expect(isVCFFirstMove(board, invalidMove, "black", options)).toBe(false);
+    expect(
+      findVCFSequenceFromFirstMove(board, invalidMove, "black", options),
+    ).toBeNull();
+  });
+
+  it("盤面不変性", () => {
+    const board = createBoardWithStones([
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+    ]);
+    const snapshot = JSON.stringify(board);
+    findVCFSequenceFromFirstMove(board, { row: 7, col: 4 }, "black");
+    expect(JSON.stringify(board)).toBe(snapshot);
+    findVCFSequenceFromFirstMove(board, { row: 0, col: 0 }, "black");
+    expect(JSON.stringify(board)).toBe(snapshot);
+  });
+
+  it("既に石がある位置 → null", () => {
+    const board = createBoardWithStones([
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+    ]);
+    const result = findVCFSequenceFromFirstMove(
+      board,
+      { row: 7, col: 5 },
+      "black",
+    );
+    expect(result).toBeNull();
   });
 });

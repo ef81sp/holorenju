@@ -874,6 +874,141 @@ function findVCTSequenceRecursive(
 }
 
 /**
+ * 指定した手からのVCT手順を返す
+ *
+ * isVCTFirstMove と同等のロジックだが、boolean ではなく
+ * VCTSequenceResult | null を返す。
+ *
+ * 注意: isVCTFirstMove は evaluateCounterThreat でカウンターフォーを処理するが、
+ * findVCTSequence にはこのロジックがない。そのため isVCTFirstMove が true でも
+ * 本関数が null を返すケースがある。
+ */
+export function findVCTSequenceFromFirstMove(
+  board: BoardState,
+  move: Position,
+  color: "black" | "white",
+  options?: VCTSearchOptions,
+): VCTSequenceResult | null {
+  const moveRow = board[move.row];
+  if (!moveRow || moveRow[move.col] !== null) {
+    return null;
+  }
+
+  // 相手に活三があればVCT開始手として無効（四追いでしか勝てない）
+  const opponentColor = color === "black" ? "white" : "black";
+  if (hasOpenThree(board, opponentColor)) {
+    return null;
+  }
+
+  // 手を仮配置
+  moveRow[move.col] = color;
+
+  // 五連チェック → 即勝ち
+  if (checkFive(board, move.row, move.col, color)) {
+    moveRow[move.col] = null;
+    return {
+      firstMove: move,
+      sequence: [move],
+      isForbiddenTrap: false,
+    };
+  }
+
+  // 脅威かチェック
+  if (!isThreat(board, move.row, move.col, color)) {
+    moveRow[move.col] = null;
+    return null;
+  }
+
+  // 防御位置を列挙
+  const defensePositions = getThreatDefensePositions(
+    board,
+    move.row,
+    move.col,
+    color,
+  );
+
+  // 防御不可 = 勝利
+  if (defensePositions.length === 0) {
+    moveRow[move.col] = null;
+    return {
+      firstMove: move,
+      sequence: [move],
+      isForbiddenTrap: false,
+    };
+  }
+
+  // 全防御に対してVCTが継続するか＆最長の継続シーケンスを記録
+  let mainDefense: Position | null = null;
+  let mainContinuation: VCTSequenceResult | null = null;
+
+  for (const defensePos of defensePositions) {
+    // 白番の場合、黒の防御位置が禁手ならスキップ（攻撃側の勝ち）
+    if (color === "white") {
+      const forbiddenResult = checkForbiddenMove(
+        board,
+        defensePos.row,
+        defensePos.col,
+      );
+      if (forbiddenResult.isForbidden) {
+        continue;
+      }
+    }
+
+    // 相手が防御した後の局面
+    const defRow = board[defensePos.row];
+    if (defRow) {
+      defRow[defensePos.col] = opponentColor;
+    }
+
+    // 防御手で五連完成 → VCT不成立
+    if (checkFive(board, defensePos.row, defensePos.col, opponentColor)) {
+      if (defRow) {
+        defRow[defensePos.col] = null;
+      }
+      moveRow[move.col] = null;
+      return null;
+    }
+
+    // collectBranches: false で探索（シーケンス取得のみ）
+    const continuation = findVCTSequence(board, color, {
+      ...options,
+      collectBranches: false,
+    });
+
+    if (defRow) {
+      defRow[defensePos.col] = null;
+    }
+
+    if (!continuation) {
+      // 1つでも防御で続行不能 → VCT不成立
+      moveRow[move.col] = null;
+      return null;
+    }
+
+    // 最長の継続をメインラインとして記録
+    if (
+      !mainContinuation ||
+      continuation.sequence.length > mainContinuation.sequence.length
+    ) {
+      mainDefense = defensePos;
+      mainContinuation = continuation;
+    }
+  }
+
+  moveRow[move.col] = null;
+
+  if (!mainDefense || !mainContinuation) {
+    return null;
+  }
+
+  return {
+    firstMove: move,
+    sequence: [move, mainDefense, ...mainContinuation.sequence],
+    isForbiddenTrap: mainContinuation.isForbiddenTrap,
+  };
+}
+
+/**
  * 指定した手がVCT開始手として有効かチェック
  *
  * @param board 盤面

@@ -34,11 +34,12 @@ import {
 } from "./search/miseVcf";
 import {
   findVCFSequence,
-  isVCFFirstMove,
+  findVCFSequenceFromFirstMove,
   type VCFSearchOptions,
 } from "./search/vcf";
 import {
   findVCTSequence,
+  findVCTSequenceFromFirstMove,
   isVCTFirstMove,
   VCT_STONE_THRESHOLD,
   type VCTBranch,
@@ -82,6 +83,74 @@ type ForcedLossType = "vcf" | "vct" | "forbidden-trap" | "mise-vcf";
 interface ForcedLossResult {
   type: ForcedLossType;
   sequence: Position[];
+}
+
+/**
+ * 実際に打った手が追い詰め開始手かチェックし、スコアとシーケンスを返す
+ */
+function evaluatePlayedForcedWin(
+  board: BoardState,
+  color: "black" | "white",
+  playedRow: number,
+  playedCol: number,
+  bestMove: Position,
+  bestScore: number,
+  result: { candidates?: MoveScoreEntry[]; score: number },
+): { playedScore: number; playedForcedWinSequence: Position[] | undefined } {
+  if (
+    playedRow < 0 ||
+    (playedRow === bestMove.row && playedCol === bestMove.col)
+  ) {
+    return { playedScore: bestScore, playedForcedWinSequence: undefined };
+  }
+
+  const playedPos = { row: playedRow, col: playedCol };
+
+  // VCF シーケンス取得を試行
+  const vcfFromPlayed = findVCFSequenceFromFirstMove(
+    board,
+    playedPos,
+    color,
+    REVIEW_VCF_OPTIONS,
+  );
+  if (vcfFromPlayed) {
+    return {
+      playedScore: PATTERN_SCORES.FIVE,
+      playedForcedWinSequence: vcfFromPlayed.sequence,
+    };
+  }
+
+  // VCT シーケンス取得を試行
+  if (countStones(board) >= VCT_STONE_THRESHOLD) {
+    const vctFromPlayed = findVCTSequenceFromFirstMove(
+      board,
+      playedPos,
+      color,
+      REVIEW_VCT_OPTIONS,
+    );
+    if (vctFromPlayed) {
+      return {
+        playedScore: PATTERN_SCORES.FIVE,
+        playedForcedWinSequence: vctFromPlayed.sequence,
+      };
+    }
+    // VCT開始手だがシーケンス取得失敗（カウンター脅威の実装差）
+    if (isVCTFirstMove(board, playedPos, color, REVIEW_VCT_OPTIONS)) {
+      return {
+        playedScore: PATTERN_SCORES.FIVE,
+        playedForcedWinSequence: undefined,
+      };
+    }
+  }
+
+  // minimax候補から探す
+  const minimaxEntry = result.candidates?.find(
+    (c) => c.move.row === playedRow && c.move.col === playedCol,
+  );
+  return {
+    playedScore: minimaxEntry?.score ?? result.score - 2000,
+    playedForcedWinSequence: undefined,
+  };
 }
 
 /**
@@ -284,28 +353,15 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
       const bestMove = forcedWin.firstMove;
 
       // 実際の手のスコア判定
-      let playedScore: number = bestScore;
-      if (
-        playedRow >= 0 &&
-        !(playedRow === bestMove.row && playedCol === bestMove.col)
-      ) {
-        // 別の追い詰め開始手かチェック（VCF → VCT の順）
-        const playedPos = { row: playedRow, col: playedCol };
-        if (isVCFFirstMove(board, playedPos, color, REVIEW_VCF_OPTIONS)) {
-          playedScore = PATTERN_SCORES.FIVE;
-        } else if (
-          countStones(board) >= VCT_STONE_THRESHOLD &&
-          isVCTFirstMove(board, playedPos, color, REVIEW_VCT_OPTIONS)
-        ) {
-          playedScore = PATTERN_SCORES.FIVE;
-        } else {
-          // minimax候補から探す
-          const minimaxEntry = result.candidates?.find(
-            (c) => c.move.row === playedRow && c.move.col === playedCol,
-          );
-          playedScore = minimaxEntry?.score ?? result.score - 2000;
-        }
-      }
+      const { playedScore, playedForcedWinSequence } = evaluatePlayedForcedWin(
+        board,
+        color,
+        playedRow,
+        playedCol,
+        bestMove,
+        bestScore,
+        result,
+      );
 
       // 候補手リスト構築
       const candidates: ReviewCandidate[] = [];
@@ -338,13 +394,44 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
         .map(buildCandidate);
       candidates.push(...minimaxCandidates);
 
-      // 実際の手が候補に入っていなければ追加
-      if (
+      // 実際の手の追い詰めシーケンスを候補に反映
+      if (playedForcedWinSequence && playedRow >= 0) {
+        const existingIdx = candidates.findIndex(
+          (c) => c.position.row === playedRow && c.position.col === playedCol,
+        );
+        if (existingIdx >= 0) {
+          // minimax 候補の PV を追い詰めシーケンスで上書き
+          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+          candidates[existingIdx] = {
+            ...candidates[existingIdx]!,
+            principalVariation: playedForcedWinSequence,
+            searchScore: PATTERN_SCORES.FIVE,
+          };
+        } else {
+          // 候補に存在しない → 追い詰め候補として追加
+          const { score: pScore, breakdown: pBreakdown } =
+            evaluatePositionWithBreakdown(
+              board,
+              playedRow,
+              playedCol,
+              color,
+              REVIEW_SEARCH_PARAMS.evaluationOptions,
+            );
+          candidates.push({
+            position: { row: playedRow, col: playedCol },
+            score: Math.round(pScore),
+            searchScore: PATTERN_SCORES.FIVE,
+            breakdown: pBreakdown as ScoreBreakdown,
+            principalVariation: playedForcedWinSequence,
+          });
+        }
+      } else if (
         playedRow >= 0 &&
         !candidates.some(
           (c) => c.position.row === playedRow && c.position.col === playedCol,
         )
       ) {
+        // 既存のminimax候補フォールバック
         const playedEntry = result.candidates?.find(
           (c) => c.move.row === playedRow && c.move.col === playedCol,
         );

@@ -431,6 +431,85 @@ export function isVCFFirstMove(
 }
 
 /**
+ * 指定した手からのVCF手順を返す
+ *
+ * isVCFFirstMove と同等のロジックだが、boolean ではなく
+ * VCFSequenceResult | null を返す。
+ */
+export function findVCFSequenceFromFirstMove(
+  board: BoardState,
+  move: Position,
+  color: "black" | "white",
+  options?: VCFSearchOptions,
+): VCFSequenceResult | null {
+  const moveRow = board[move.row];
+  if (!moveRow || moveRow[move.col] !== null) {
+    return null;
+  }
+
+  // 手を仮配置
+  moveRow[move.col] = color;
+
+  // 五連チェック → 即勝ち
+  if (checkFive(board, move.row, move.col, color)) {
+    moveRow[move.col] = null;
+    return { firstMove: move, sequence: [move], isForbiddenTrap: false };
+  }
+
+  // 四を作るかチェック
+  if (!createsFour(board, move.row, move.col, color)) {
+    moveRow[move.col] = null;
+    return null;
+  }
+
+  // 防御位置を取得
+  const defensePos = getFourDefensePosition(board, move, color);
+  if (!defensePos) {
+    // 活四 → 防御不可能 → VCF成立
+    moveRow[move.col] = null;
+    return { firstMove: move, sequence: [move], isForbiddenTrap: false };
+  }
+
+  // 白番の場合、黒の防御位置が禁手なら即勝ち
+  if (color === "white") {
+    const forbiddenResult = checkForbiddenMove(
+      board,
+      defensePos.row,
+      defensePos.col,
+    );
+    if (forbiddenResult.isForbidden) {
+      moveRow[move.col] = null;
+      return { firstMove: move, sequence: [move], isForbiddenTrap: true };
+    }
+  }
+
+  // 防御石を仮配置してVCF探索継続
+  const opponentColor = color === "black" ? "white" : "black";
+  const defRow = board[defensePos.row];
+  if (defRow) {
+    defRow[defensePos.col] = opponentColor;
+  }
+
+  const continuation = findVCFSequence(board, color, options);
+
+  // Undo（逆順）
+  if (defRow) {
+    defRow[defensePos.col] = null;
+  }
+  moveRow[move.col] = null;
+
+  if (!continuation) {
+    return null;
+  }
+
+  return {
+    firstMove: move,
+    sequence: [move, defensePos, ...continuation.sequence],
+    isForbiddenTrap: continuation.isForbiddenTrap,
+  };
+}
+
+/**
  * VCF手順の再帰探索
  *
  * 1パスで五連→活四→再帰の順に処理。
