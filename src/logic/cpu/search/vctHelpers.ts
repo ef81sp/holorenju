@@ -19,6 +19,11 @@ import {
 import { DIRECTION_INDICES, DIRECTIONS } from "../core/constants";
 import { checkEnds, countLine, getLineEnds } from "../core/lineAnalysis";
 import { analyzeDirection } from "../evaluation/directionAnalysis";
+import {
+  isValidConsecutiveThree,
+  isValidJumpThree,
+} from "../evaluation/jumpPatterns";
+import { getOpenThreeDefensePositions } from "../evaluation/threatDetection";
 import { isNearExistingStone } from "../moveGenerator";
 import {
   findJumpGapPosition,
@@ -236,5 +241,65 @@ export function getThreatDefensePositions(
     }
   }
 
+  return Array.from(unique.values());
+}
+
+/**
+ * 指定位置に石を置いた際に作られた活三/飛び三の防御位置を返す
+ *
+ * Mise-VCFのノリ手検証で使用。ミセ手は必ず三に含まれるため、
+ * 4方向チェックで十分（全盤面スキャン不要）。
+ */
+export function getCreatedOpenThreeDefenses(
+  board: BoardState,
+  row: number,
+  col: number,
+  color: "black" | "white",
+): Position[] {
+  const defenses: Position[] = [];
+  for (let i = 0; i < DIRECTION_INDICES.length; i++) {
+    const dirIndex = DIRECTION_INDICES[i];
+    if (dirIndex === undefined) {
+      continue;
+    }
+    const direction = DIRECTIONS[i];
+    if (!direction) {
+      continue;
+    }
+    const [dr, dc] = direction;
+    const pattern = analyzeDirection(board, row, col, dr, dc, color);
+    // 連続活三（黒の場合はウソの三を除外）
+    if (
+      pattern.count === 3 &&
+      pattern.end1 === "empty" &&
+      pattern.end2 === "empty" &&
+      (color !== "black" || isValidConsecutiveThree(board, row, col, dirIndex))
+    ) {
+      defenses.push(
+        ...getOpenThreeDefensePositions(board, row, col, dr, dc, color),
+      );
+    }
+    // 飛び三（黒の場合はウソの三を除外）
+    if (
+      pattern.count !== 3 &&
+      checkJumpThree(board, row, col, dirIndex, color) &&
+      (color !== "black" || isValidJumpThree(board, row, col, dirIndex))
+    ) {
+      defenses.push(
+        ...getJumpThreeDefensePositions(board, row, col, dr, dc, color),
+      );
+    }
+  }
+  // 重複除去 + 空きマスのみ
+  const unique = new Map<string, Position>();
+  for (const pos of defenses) {
+    if (board[pos.row]?.[pos.col] !== null) {
+      continue;
+    }
+    const key = `${pos.row},${pos.col}`;
+    if (!unique.has(key)) {
+      unique.set(key, pos);
+    }
+  }
   return Array.from(unique.values());
 }

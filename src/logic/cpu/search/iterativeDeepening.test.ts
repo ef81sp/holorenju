@@ -526,10 +526,10 @@ describe("VCTメインフロー統合", () => {
 // Mise-VCFはminimax検証に委ねるテスト
 // =============================================================================
 
-describe("Mise-VCFのminimax検証", () => {
-  it("Mise-VCFのある局面でスコアがFIVE(100000)未満になる", () => {
-    // Game 185 m14時点: Mise-VCF(H7→G6→H9)が存在する局面
-    // VCFは存在しない
+describe("Mise-VCFの偽陽性対策", () => {
+  it("Game 185: ノリ手でMise-VCFが無効化されスコアがFIVE未満になる", () => {
+    // Game 185 m14時点: H7のミセ手は飛び三(H10-_-H8-H7)も作る
+    // ノリ手チェックでMise-VCFが無効化されるため、minimax探索に移行する
     const { board } = createBoardFromRecord(
       "H8 I9 G7 I7 G8 I6 I8 J8 G9 G10 F8 E8 H10 I11",
     );
@@ -543,14 +543,14 @@ describe("Mise-VCFのminimax検証", () => {
       FULL_EVAL_OPTIONS,
     );
 
-    // Mise-VCFがminimaxで検証されるため、score < FIVE
+    // ノリ手チェックでMise-VCFが無効化 → score < FIVE
     expect(result.score).toBeLessThan(PATTERN_SCORES.FIVE);
-    // depth > 0 = minimax探索が起動されたことの証拠
     expect(result.completedDepth).toBeGreaterThanOrEqual(1);
   }, 15000);
 
-  it("Game 121: 白のMise-VCFがminimax検証される", () => {
-    // Game 121 m41時点: 白のMise-VCF(K13→I11→禁手追い込み)が存在する局面
+  it("Game 121: 非強制ミセ手K13がMise-VCFとして検出されずスコアがFIVE未満になる", () => {
+    // Game 121 m41時点: K13は四三点I11へのセットアップだが三も四も作らない
+    // 非強制ミセ手のためMise-VCFアルゴリズムで却下される
     const { board } = createBoardFromRecord(
       "H8 I7 F10 K9 J8 H6 I8 G8 H9 G10 I9 H10 G9 F9 J10 G7 H7 J9 G12 F8 E9 H11 E8 E11 F11 I5 J4 I14 E10 D9 I12 H12 E7 E6 K5 J12 L9 H14 H13 K11 I13",
     );
@@ -564,7 +564,7 @@ describe("Mise-VCFのminimax検証", () => {
       FULL_EVAL_OPTIONS,
     );
 
-    // Mise-VCFがminimaxで検証されるため、score < FIVE
+    // 非強制ミセ手が却下されMise-VCFなし → minimax探索 → score < FIVE
     expect(result.score).toBeLessThan(PATTERN_SCORES.FIVE);
     expect(result.completedDepth).toBeGreaterThanOrEqual(1);
   }, 15000);

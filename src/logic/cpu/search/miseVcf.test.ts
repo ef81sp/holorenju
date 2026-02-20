@@ -165,6 +165,49 @@ describe("相手に活三がある場合のMise-VCFスキップ", () => {
   });
 });
 
+describe("Mise-VCFの強制性チェック", () => {
+  it("Game 185: ミセ手H7が飛び三を作るがノリ手で無効 → Mise-VCF検出しない", () => {
+    // m14時点: H7のミセ手は飛び三(H10-_-H8-H7)も作る
+    // 白がH6で止めるとノリ手になるため、Mise-VCFは不正
+    const { board } = createBoardFromRecord(
+      "H8 I9 G7 I7 G8 I6 I8 J8 G9 G10 F8 E8 H10 I11",
+    );
+    const result = findMiseVCFSequence(board, "black", GENEROUS_TIME_LIMIT);
+    // H7をミセ手として返さないこと
+    if (result) {
+      expect(result.miseMove.row === 8 && result.miseMove.col === 7).toBe(
+        false,
+      );
+    }
+  });
+
+  it("Game 121: 三も四も作らないミセ手K13 → Mise-VCF検出しない", () => {
+    // m41時点: K13は四三点I11へのセットアップだが、K13自体は三も四も作らない
+    // 非強制ミセ手のためMise-VCFとして不適格
+    const { board } = createBoardFromRecord(
+      "H8 I7 F10 K9 J8 H6 I8 G8 H9 G10 I9 H10 G9 F9 J10 G7 H7 J9 G12 F8 E9 H11 E8 E11 F11 I5 J4 I14 E10 D9 I12 H12 E7 E6 K5 J12 L9 H14 H13 K11 I13",
+    );
+    const result = findMiseVCFSequence(board, "white", GENEROUS_TIME_LIMIT);
+    if (result) {
+      // K13=(row=2, col=10)がミセ手として返されないこと
+      expect(result.miseMove.row === 2 && result.miseMove.col === 10).toBe(
+        false,
+      );
+    }
+  });
+
+  it("三を作るミセ手で全防御位置にVCFが成立 → 従来通り検出する", () => {
+    // G7のミセ手は活三(G7-H7-I7)を作り、全三防御位置でVCFが成立する
+    const { board } = createBoardFromRecord(
+      "H8 I9 I7 G9 J8 H10 H6 K9 H7 H9 J9 I10",
+    );
+    const result = findMiseVCFSequence(board, "black", GENEROUS_TIME_LIMIT);
+    expect(result).not.toBeNull();
+    expect(result?.miseMove.row).toBe(8);
+    expect(result?.miseMove.col).toBe(6);
+  });
+});
+
 describe("黒番のMise-VCF禁手チェック", () => {
   it("三々禁の位置をMise-VCF手として返さない", () => {
     // ベンチマーク#34の棋譜: H6が三々禁かつMise-VCF候補

@@ -16,8 +16,9 @@ import {
   hasPotentialMiseTarget,
 } from "../evaluation/tactics";
 import { isNearExistingStone } from "../moveGenerator";
+import { createsFour } from "./threatMoves";
 import { findVCFSequence, type VCFSearchOptions } from "./vcf";
-import { hasOpenThree } from "./vctHelpers";
+import { getCreatedOpenThreeDefenses, hasOpenThree } from "./vctHelpers";
 
 /**
  * Mise-VCF探索オプション
@@ -43,6 +44,45 @@ export interface MiseVCFResult {
   miseMove: Position;
   /** 四三防御点 */
   defenseMove: Position;
+}
+
+/**
+ * ノリ手チェック: 三防御位置ごとにVCFが成立するか検証
+ *
+ * ミセ手が活三/飛び三を作った場合、相手は四三点ではなく三を止める可能性がある。
+ * 全ての三防御位置でVCFが成立しなければ、Mise-VCFは無効（ノリ手で破綻）。
+ *
+ * @returns true = ノリ手で無効化された（Mise-VCFを却下すべき）, null = タイムアウト
+ */
+function isInvalidatedByNoriTe(
+  board: BoardState,
+  color: "black" | "white",
+  threeDefenses: Position[],
+  vcfMaxDepth: number,
+  startTime: number,
+  timeLimit: number,
+): boolean | null {
+  const opponentColor = color === "black" ? "white" : "black";
+  const threeDefenseVcfOptions: VCFSearchOptions = {
+    maxDepth: vcfMaxDepth,
+    timeLimit: 100,
+  };
+  for (const defense of threeDefenses) {
+    if (performance.now() - startTime >= timeLimit) {
+      return null; // タイムアウト
+    }
+    const defRow = board[defense.row];
+    if (!defRow) {
+      continue;
+    }
+    defRow[defense.col] = opponentColor;
+    const vcfCheck = findVCFSequence(board, color, threeDefenseVcfOptions);
+    defRow[defense.col] = null;
+    if (!vcfCheck) {
+      return true; // VCF不成立 → ノリ手で無効化
+    }
+  }
+  return false; // 全防御位置でVCF成立 → 有効
 }
 
 /** デフォルトの時間制限（ミリ秒） */
@@ -143,6 +183,38 @@ export function findMiseVCFSequence(
 
       // ミセターゲットを検出（ライン延長点のみの軽量版）
       const miseTargets = findMiseTargetsLite(board, row, col, color);
+
+      if (miseTargets.length === 0) {
+        moveRow[col] = null;
+        continue;
+      }
+
+      // 強制性チェック: ミセ手が三も四も作らない場合は非強制 → 却下
+      const threeDefenses = getCreatedOpenThreeDefenses(board, row, col, color);
+      if (threeDefenses.length === 0 && !createsFour(board, row, col, color)) {
+        moveRow[col] = null;
+        continue;
+      }
+
+      // ノリ手チェック: ミセ手が活三/飛び三を作る場合、全三防御位置でVCFが成立するか検証
+      if (threeDefenses.length > 0) {
+        const noriTeResult = isInvalidatedByNoriTe(
+          board,
+          color,
+          threeDefenses,
+          vcfOptions.maxDepth ?? 12,
+          startTime,
+          timeLimit,
+        );
+        if (noriTeResult === null) {
+          moveRow[col] = null;
+          return null; // タイムアウト
+        }
+        if (noriTeResult) {
+          moveRow[col] = null;
+          continue; // ノリ手で無効化
+        }
+      }
 
       // 各ミセターゲットについてVCF探索
       for (const target of miseTargets) {
