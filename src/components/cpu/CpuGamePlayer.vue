@@ -9,6 +9,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
 
 import BackButton from "@/components/common/BackButton.vue";
+import FeatureConfirmDialog from "@/components/common/FeatureConfirmDialog.vue";
 import RenjuBoard from "@/components/game/RenjuBoard/RenjuBoard.vue";
 import CutinOverlay from "@/components/common/CutinOverlay.vue";
 import ConfirmDialog from "@/components/common/ConfirmDialog.vue";
@@ -149,6 +150,14 @@ onMounted(async () => {
     boardElement.focus({ focusVisible: false } as FocusOptions);
   }
   window.addEventListener("keydown", handleEscapeKey);
+
+  // 盤面拡大確認ダイアログ
+  if (
+    !preferencesStore.largeBoardHasBeenAsked &&
+    !preferencesStore.largeBoardEnabled
+  ) {
+    largeBoardConfirmRef.value?.showModal();
+  }
 });
 
 onUnmounted(() => {
@@ -323,6 +332,20 @@ function showBackConfirmDialog(): void {
 function handleConfirmBack(): void {
   cpuGameStore.resetGame();
   appStore.goToCpuSetup();
+}
+
+// 盤面拡大確認ダイアログ
+const largeBoardConfirmRef = ref<InstanceType<
+  typeof FeatureConfirmDialog
+> | null>(null);
+
+function handleLargeBoardEnable(): void {
+  preferencesStore.largeBoardEnabled = true;
+  preferencesStore.largeBoardHasBeenAsked = true;
+}
+
+function handleLargeBoardDismiss(): void {
+  preferencesStore.largeBoardHasBeenAsked = true;
 }
 
 // 盤面拡大モード
@@ -519,6 +542,18 @@ const gameEndMessage = computed(() => {
     >
       {{ boardAnnouncer?.assertiveMessage.value }}
     </div>
+
+    <!-- 盤面拡大確認ダイアログ -->
+    <FeatureConfirmDialog
+      ref="largeBoardConfirmRef"
+      title="盤面拡大設定"
+      message="盤面を拡大して表示しますか？"
+      note="この設定は後から設定画面で変更できます"
+      primary-text="拡大する"
+      secondary-text="そのまま"
+      @primary="handleLargeBoardEnable"
+      @secondary="handleLargeBoardDismiss"
+    />
 
     <!-- 戻る確認ダイアログ -->
     <ConfirmDialog

@@ -10,6 +10,7 @@ import {
 } from "vue";
 
 import BackButton from "@/components/common/BackButton.vue";
+import FeatureConfirmDialog from "@/components/common/FeatureConfirmDialog.vue";
 import ControlInfo from "./ControlInfo.vue";
 import ScenarioInfoPanel from "./ScenarioInfoPanel.vue";
 import RenjuBoard from "@/components/game/RenjuBoard/RenjuBoard.vue";
@@ -199,6 +200,11 @@ watch(
   (isVisible, wasVisible) => {
     // カットインが消えた瞬間を検知
     if (wasVisible && !isVisible) {
+      // practiceカットインが消えた後に盤面拡大確認ダイアログを表示
+      if (cutinType.value === "practice") {
+        showLargeBoardConfirmIfNeeded();
+      }
+
       // 最後の問題セクションで正解カットインだった場合
       if (
         scenarioNav.isScenarioDone.value &&
@@ -215,6 +221,21 @@ watch(
           }
         }, 1000);
       }
+    }
+  },
+);
+
+// 問題で始まるシナリオでは盤面拡大確認ダイアログを表示
+watch(
+  () => scenarioNav.scenario.value,
+  async (scenario) => {
+    if (!scenario) {
+      return;
+    }
+    const [firstSection] = scenario.sections;
+    if (firstSection?.type === "question") {
+      await nextTick();
+      showLargeBoardConfirmIfNeeded();
     }
   },
 );
@@ -377,6 +398,33 @@ const handleGoToList = (): void => {
   scenarioNav.completeScenario();
 };
 
+// 盤面拡大確認ダイアログ
+const largeBoardConfirmRef = ref<InstanceType<
+  typeof FeatureConfirmDialog
+> | null>(null);
+let largeBoardConfirmShown = false;
+
+function showLargeBoardConfirmIfNeeded(): void {
+  if (
+    preferencesStore.largeBoardHasBeenAsked ||
+    preferencesStore.largeBoardEnabled ||
+    largeBoardConfirmShown
+  ) {
+    return;
+  }
+  largeBoardConfirmShown = true;
+  largeBoardConfirmRef.value?.showModal();
+}
+
+function handleLargeBoardEnable(): void {
+  preferencesStore.largeBoardEnabled = true;
+  preferencesStore.largeBoardHasBeenAsked = true;
+}
+
+function handleLargeBoardDismiss(): void {
+  preferencesStore.largeBoardHasBeenAsked = true;
+}
+
 // 盤面拡大モード（問題セクションのみ）
 const isLargeBoard = computed(() => {
   if (scenarioNav.currentSection.value?.type !== "question") {
@@ -507,6 +555,18 @@ const handleLayoutClick = (event: MouseEvent): void => {
     >
       {{ boardAnnouncer?.politeMessage.value }}
     </div>
+
+    <!-- 盤面拡大確認ダイアログ -->
+    <FeatureConfirmDialog
+      ref="largeBoardConfirmRef"
+      title="盤面拡大設定"
+      message="盤面を拡大して表示しますか？"
+      note="この設定は後から設定画面で変更できます"
+      primary-text="拡大する"
+      secondary-text="そのまま"
+      @primary="handleLargeBoardEnable"
+      @secondary="handleLargeBoardDismiss"
+    />
   </div>
 </template>
 

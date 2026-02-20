@@ -378,6 +378,11 @@ describe("preferencesStore", () => {
         const store = usePreferencesStore();
         expect(store.largeBoardScope).toBe("both");
       });
+
+      it("largeBoardHasBeenAskedがfalse", () => {
+        const store = usePreferencesStore();
+        expect(store.largeBoardHasBeenAsked).toBe(false);
+      });
     });
 
     describe("初回起動時の小画面自動有効化", () => {
@@ -390,6 +395,16 @@ describe("preferencesStore", () => {
         setActivePinia(createPinia());
         const store = usePreferencesStore();
         expect(store.largeBoardEnabled).toBe(true);
+      });
+
+      it("小画面で初回起動時にlargeBoardHasBeenAskedもtrue", () => {
+        vi.stubGlobal("window", {
+          matchMedia: vi.fn(() => ({ matches: true })),
+          localStorage: localStorageMock,
+        });
+        setActivePinia(createPinia());
+        const store = usePreferencesStore();
+        expect(store.largeBoardHasBeenAsked).toBe(true);
       });
 
       it("保存データがある場合は画面サイズ判定しない", () => {
@@ -424,6 +439,12 @@ describe("preferencesStore", () => {
         const store = usePreferencesStore();
         store.largeBoardScope = "cpuPlay";
         expect(store.largeBoardScope).toBe("cpuPlay");
+      });
+
+      it("largeBoardHasBeenAskedを変更できる", () => {
+        const store = usePreferencesStore();
+        store.largeBoardHasBeenAsked = true;
+        expect(store.largeBoardHasBeenAsked).toBe(true);
       });
     });
 
@@ -475,6 +496,22 @@ describe("preferencesStore", () => {
         expect(store.largeBoardEnabled).toBe(false);
         expect(store.largeBoardScope).toBe("both");
       });
+
+      it("largeBoardHasBeenAskedがない旧データでもデフォルトfalseが適用される", () => {
+        localStorageMock.setItem(
+          "holorenju_preferences",
+          JSON.stringify({
+            display: {
+              textSize: "large",
+              largeBoardEnabled: true,
+              largeBoardScope: "both",
+            },
+          }),
+        );
+        setActivePinia(createPinia());
+        const store = usePreferencesStore();
+        expect(store.largeBoardHasBeenAsked).toBe(false);
+      });
     });
   });
 
@@ -498,6 +535,7 @@ describe("preferencesStore", () => {
           textSize: "normal",
           largeBoardEnabled: false,
           largeBoardScope: "both",
+          largeBoardHasBeenAsked: false,
         },
         cpu: {
           fastMove: false,

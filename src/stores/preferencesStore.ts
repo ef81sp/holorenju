@@ -32,6 +32,7 @@ interface Preferences {
     textSize: TextSize;
     largeBoardEnabled: boolean;
     largeBoardScope: LargeBoardScope;
+    largeBoardHasBeenAsked: boolean;
   };
   accessibility: {
     boardAnnounce: boolean;
@@ -65,6 +66,7 @@ const defaultPreferences: Preferences = {
     textSize: "large",
     largeBoardEnabled: false,
     largeBoardScope: "both",
+    largeBoardHasBeenAsked: false,
   },
   accessibility: {
     boardAnnounce: true,
@@ -146,6 +148,7 @@ export const usePreferencesStore = defineStore("preferences", () => {
       window.matchMedia("(max-width: 768px)").matches
     ) {
       defaults.display.largeBoardEnabled = true;
+      defaults.display.largeBoardHasBeenAsked = true;
     }
     return defaults;
   }
@@ -181,6 +184,11 @@ export const usePreferencesStore = defineStore("preferences", () => {
   const largeBoardEnabled = computed({
     get: () => preferences.value.display.largeBoardEnabled,
     set: (v) => (preferences.value.display.largeBoardEnabled = v),
+  });
+
+  const largeBoardHasBeenAsked = computed({
+    get: () => preferences.value.display.largeBoardHasBeenAsked,
+    set: (v) => (preferences.value.display.largeBoardHasBeenAsked = v),
   });
 
   const largeBoardScope = computed({
@@ -340,6 +348,7 @@ export const usePreferencesStore = defineStore("preferences", () => {
     effectSpeed,
     textSize,
     largeBoardEnabled,
+    largeBoardHasBeenAsked,
     largeBoardScope,
     isLargeBoardForCpuPlay,
     isLargeBoardForQuestion,

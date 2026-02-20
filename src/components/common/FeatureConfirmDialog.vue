@@ -1,20 +1,28 @@
 <script setup lang="ts">
 import { ref } from "vue";
 
+defineProps<{
+  title: string;
+  message: string;
+  note?: string;
+  primaryText: string;
+  secondaryText: string;
+}>();
+
 const emit = defineEmits<{
-  enable: [];
-  disable: [];
+  primary: [];
+  secondary: [];
 }>();
 
 const dialogRef = ref<HTMLDialogElement | null>(null);
 
-const handleEnable = (): void => {
-  emit("enable");
+const handlePrimary = (): void => {
+  emit("primary");
   dialogRef.value?.close();
 };
 
-const handleDisable = (): void => {
-  emit("disable");
+const handleSecondary = (): void => {
+  emit("secondary");
   dialogRef.value?.close();
 };
 
@@ -27,27 +35,33 @@ defineExpose({
 <template>
   <dialog
     ref="dialogRef"
-    class="audio-confirm-dialog"
+    class="feature-confirm-dialog"
+    @cancel.prevent
   >
     <div class="dialog-content">
-      <h2 class="dialog-title">サウンド設定</h2>
-      <p class="dialog-message">BGMや効果音を再生しますか？</p>
-      <p class="dialog-note">この設定は後から設定画面で変更できます</p>
+      <h2 class="dialog-title">{{ title }}</h2>
+      <p class="dialog-message">{{ message }}</p>
+      <p
+        v-if="note"
+        class="dialog-note"
+      >
+        {{ note }}
+      </p>
 
       <div class="dialog-buttons">
         <button
           type="button"
           class="btn btn-secondary"
-          @click="handleDisable"
+          @click="handleSecondary"
         >
-          再生しない
+          {{ secondaryText }}
         </button>
         <button
           type="button"
           class="btn btn-primary"
-          @click="handleEnable"
+          @click="handlePrimary"
         >
-          再生する
+          {{ primaryText }}
         </button>
       </div>
     </div>
@@ -55,7 +69,7 @@ defineExpose({
 </template>
 
 <style scoped>
-.audio-confirm-dialog {
+.feature-confirm-dialog {
   position: fixed;
   top: 50%;
   left: 50%;

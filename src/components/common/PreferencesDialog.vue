@@ -36,6 +36,13 @@ const largeBoardScopeLabels = {
   both: "両方",
 } as const;
 
+// 盤面拡大モードの切り替え
+const handleLargeBoardEnabledChange = (event: Event): void => {
+  const { checked } = event.target as HTMLInputElement;
+  preferencesStore.largeBoardEnabled = checked;
+  preferencesStore.largeBoardHasBeenAsked = true;
+};
+
 // オーディオ有効/無効の切り替え
 const handleAudioEnabledChange = (event: Event): void => {
   const { checked } = event.target as HTMLInputElement;
@@ -259,9 +266,10 @@ defineExpose({
                 </span>
               </span>
               <input
-                v-model="preferencesStore.largeBoardEnabled"
+                :checked="preferencesStore.largeBoardEnabled"
                 type="checkbox"
                 class="checkbox"
+                @change="handleLargeBoardEnabledChange"
               />
             </label>
             <hr class="setting-divider" />

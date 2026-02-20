@@ -2,7 +2,7 @@
 import { onMounted, useTemplateRef, watch } from "vue";
 import MainView from "./components/MainView.vue";
 import FullscreenPrompt from "./components/common/FullscreenPrompt.vue";
-import AudioConfirmDialog from "./components/common/AudioConfirmDialog.vue";
+import FeatureConfirmDialog from "./components/common/FeatureConfirmDialog.vue";
 import { useFullscreenPrompt } from "./logic/useFullscreenPrompt";
 import { usePreferencesStore } from "./stores/preferencesStore";
 import { useAudioStore } from "./stores/audioStore";
@@ -12,7 +12,7 @@ const fullscreenPromptRef = useTemplateRef<
 >("fullscreenPromptRef");
 
 const audioConfirmRef =
-  useTemplateRef<InstanceType<typeof AudioConfirmDialog>>("audioConfirmRef");
+  useTemplateRef<InstanceType<typeof FeatureConfirmDialog>>("audioConfirmRef");
 
 const {
   showFullscreenPrompt,
@@ -102,10 +102,15 @@ onMounted(() => {
       @fullscreen="showAudioConfirmIfNeeded"
       @close="showAudioConfirmIfNeeded"
     />
-    <AudioConfirmDialog
+    <FeatureConfirmDialog
       ref="audioConfirmRef"
-      @enable="handleAudioEnable"
-      @disable="handleAudioDisable"
+      title="サウンド設定"
+      message="BGMや効果音を再生しますか？"
+      note="この設定は後から設定画面で変更できます"
+      primary-text="再生する"
+      secondary-text="再生しない"
+      @primary="handleAudioEnable"
+      @secondary="handleAudioDisable"
     />
   </div>
 </template>
