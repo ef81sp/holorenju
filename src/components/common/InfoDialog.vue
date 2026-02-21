@@ -42,12 +42,32 @@ defineExpose({
             </p>
             <ul>
               <li>
-                <strong>デモモード</strong>
-                ：対話形式で戦略を説明
+                <strong>学習</strong>
+                ：フブみこさんの解説で連珠の戦略を学ぶ
+                <ul>
+                  <li>
+                    <strong>説明セクション</strong>
+                    ：対話形式で定石や戦略をわかりやすく解説
+                  </li>
+                  <li>
+                    <strong>問題セクション</strong>
+                    ：実際に石を打って正解手を見つける練習問題
+                  </li>
+                </ul>
               </li>
               <li>
-                <strong>問題モード</strong>
-                ：実践練習でスキルを磨く
+                <strong>ホロメン対戦</strong>
+                ：フブみこさんと対局して実力を試す
+                <ul>
+                  <li>
+                    <strong>対戦モード</strong>
+                    ：フブみこさん(CPU)と真剣勝負。難易度を選んで対局できる
+                  </li>
+                  <li>
+                    <strong>振り返りモード</strong>
+                    ：対局後に指し手を一手ずつ分析できる
+                  </li>
+                </ul>
               </li>
             </ul>
           </div>
@@ -319,6 +339,11 @@ defineExpose({
       &:not(:last-child) {
         margin-bottom: var(--size-4);
       }
+    }
+
+    ul {
+      margin-top: var(--size-4);
+      list-style-type: circle;
     }
   }
 
