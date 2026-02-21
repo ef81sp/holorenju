@@ -5,6 +5,8 @@ import PageHeader from "@/components/common/PageHeader.vue";
 import FullscreenButton from "@/components/common/FullscreenButton.vue";
 import InfoControl from "@/components/common/InfoControl.vue";
 import TitleLogo from "@/components/common/TitleLogo.vue";
+import miniFubuki from "@/assets/characters/mini-fubuki.png";
+import miniMiko from "@/assets/characters/mini-miko.png";
 
 const appStore = useAppStore();
 const trainingDescId = useId();
@@ -41,7 +43,14 @@ const handleSelectCPU = (): void => {
             @click="handleSelectTraining"
           >
             <div class="button-circle">
-              <span class="button-text">学習</span>
+              <span class="button-circle-inner">
+                <span class="button-text">学習</span>
+                <img
+                  :src="miniFubuki"
+                  alt=""
+                  class="button-mascot button-mascot--fubuki"
+                />
+              </span>
             </div>
           </button>
           <p
@@ -60,7 +69,14 @@ const handleSelectCPU = (): void => {
             @click="handleSelectCPU"
           >
             <div class="button-circle">
-              <span class="button-text">ホロメン対戦</span>
+              <span class="button-circle-inner">
+                <span class="button-text">ホロメン対戦</span>
+                <img
+                  :src="miniMiko"
+                  alt=""
+                  class="button-mascot button-mascot--miko"
+                />
+              </span>
             </div>
           </button>
           <p
@@ -222,9 +238,43 @@ const handleSelectCPU = (): void => {
   }
 }
 
+.button-circle-inner {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .button-text {
   font-size: var(--font-size-20);
   font-weight: var(--font-weight-bold);
+}
+
+.button-mascot {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: var(--size-56);
+  height: auto;
+  image-rendering: pixelated;
+  transition: transform 0.3s ease;
+  pointer-events: none;
+}
+
+.button-mascot--fubuki {
+  transform: translateX(-50%) translateY(48%);
+}
+
+.button-mascot--miko {
+  transform: translateX(-50%) translateY(46%);
+}
+
+.menu-button:hover .button-mascot,
+.menu-button:focus-visible .button-mascot {
+  transform: translateX(-50%) translateY(15%);
 }
 
 .button-description {
@@ -245,6 +295,10 @@ const handleSelectCPU = (): void => {
 @media (prefers-reduced-motion: reduce) {
   .button-circle::after {
     animation: none;
+  }
+
+  .button-mascot {
+    transition: none;
   }
 
   .menu-button {
