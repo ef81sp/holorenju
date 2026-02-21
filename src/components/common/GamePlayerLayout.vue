@@ -93,7 +93,6 @@ defineExpose({
   grid-row: 1;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
   gap: var(--size-12);
   overflow: hidden;
   container-type: inline-size;

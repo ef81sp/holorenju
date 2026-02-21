@@ -574,6 +574,10 @@ const handleLayoutClick = (event: MouseEvent): void => {
 .scenario-player-root {
   width: 100%;
   height: 100%;
+
+  :deep(.control-info-wrapper) {
+    margin-top: auto;
+  }
 }
 
 .info-wrapper {
