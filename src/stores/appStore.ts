@@ -1,3 +1,4 @@
+/// <reference types="navigation-api-types" />
 import { defineStore } from "pinia";
 
 import type { CpuDifficulty } from "@/types/cpu";
@@ -11,6 +12,23 @@ export type Scene =
   | "cpuSetup"
   | "cpuPlay"
   | "cpuReview";
+
+const VALID_SCENES = new Set<string>([
+  "menu",
+  "difficulty",
+  "scenarioList",
+  "scenarioPlay",
+  "cpuSetup",
+  "cpuPlay",
+  "cpuReview",
+]);
+
+/** ゲーム画面はランタイム状態が消えるため親画面にフォールバック */
+const GAME_SCENE_FALLBACK: Partial<Record<Scene, Scene>> = {
+  scenarioPlay: "scenarioList",
+  cpuPlay: "cpuSetup",
+  cpuReview: "cpuSetup",
+};
 export type Mode = "training" | "cpu";
 export type Difficulty = ScenarioDifficulty;
 export type TransitionDirection = "forward" | "back";
@@ -190,8 +208,9 @@ export const useAppStore = defineStore("app", {
       }
     },
 
-    pushHistory() {
-      const state: AppState = {
+    /** 現在の状態をシリアライズ */
+    _buildState(): AppState {
+      return {
         scene: this.scene,
         selectedMode: this.selectedMode,
         selectedDifficulty: this.selectedDifficulty,
@@ -202,7 +221,101 @@ export const useAppStore = defineStore("app", {
         reviewRecordId: this.reviewRecordId,
         reviewImported: this.reviewImported,
       };
-      window.history.pushState(state, "", `#${this.scene}`);
+    },
+
+    pushHistory() {
+      const state = this._buildState();
+      const url = `#${this.scene}`;
+      if (window.navigation) {
+        window.navigation.navigate(url, {
+          state,
+          history: "push",
+        });
+      } else {
+        window.history.pushState(state, "", url);
+      }
+    },
+
+    replaceHistory() {
+      const state = this._buildState();
+      const url = `#${this.scene}`;
+      if (window.navigation) {
+        window.navigation.navigate(url, {
+          state,
+          history: "replace",
+        });
+      } else {
+        window.history.replaceState(state, "", url);
+      }
+    },
+
+    /**
+     * ブラウザの履歴 state またはハッシュから画面を復元する。
+     * リロードやハッシュ直指定に対応。
+     * @returns 復元できた場合 true
+     */
+    tryRestoreFromBrowser(): boolean {
+      // 1. history.state / Navigation API state から復元（リロード時）
+      const browserState = window.navigation
+        ? (window.navigation.currentEntry?.getState() as
+            | AppState
+            | undefined
+            | null)
+        : (window.history.state as AppState | undefined | null);
+
+      if (browserState?.scene && VALID_SCENES.has(browserState.scene)) {
+        const state = { ...browserState };
+
+        // ゲーム画面は親にフォールバック
+        const fallback = GAME_SCENE_FALLBACK[state.scene];
+        if (fallback) {
+          state.scene = fallback;
+          state.selectedScenarioId = null;
+          state.reviewRecordId = null;
+          state.reviewImported = false;
+        }
+
+        // 必須状態が欠けていたらさらにフォールバック
+        if (state.scene === "scenarioList" && !state.selectedDifficulty) {
+          state.scene = state.selectedMode ? "difficulty" : "menu";
+        }
+        if (state.scene === "difficulty" && !state.selectedMode) {
+          state.scene = "menu";
+        }
+        if (state.scene === "cpuSetup") {
+          state.selectedMode = "cpu";
+        }
+
+        if (state.scene === "menu") {
+          return false; // デフォルトと同じなので復元不要
+        }
+
+        this.restoreState(state);
+        this.replaceHistory();
+        return true;
+      }
+
+      // 2. ハッシュのみ（直リンク、state なし）
+      const hash = location.hash.slice(1);
+      if (!hash || !VALID_SCENES.has(hash) || hash === "menu") {
+        return false;
+      }
+
+      switch (hash as Scene) {
+        case "cpuSetup":
+          this.selectedMode = "cpu";
+          this.scene = "cpuSetup";
+          break;
+        case "difficulty":
+          this.selectedMode = "training";
+          this.scene = "difficulty";
+          break;
+        default:
+          return false; // 他は必要な状態が推定できないため復元不可
+      }
+
+      this.replaceHistory();
+      return true;
     },
   },
 });

@@ -454,6 +454,7 @@ const handleLayoutClick = (event: MouseEvent): void => {
     class="scenario-player-root"
     @click="handleLayoutClick"
   >
+    <h1 class="visually-hidden">シナリオプレイ</h1>
     <GamePlayerLayout
       v-if="scenarioNav.scenario.value"
       ref="layoutRef"

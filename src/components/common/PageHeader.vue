@@ -18,7 +18,7 @@ defineEmits<{
       v-if="showBack"
       @back="$emit('back')"
     />
-    <h1>
+    <h1 tabindex="-1">
       <slot name="title">{{ title }}</slot>
     </h1>
     <slot name="right" />
@@ -41,5 +41,9 @@ defineEmits<{
   color: var(--color-text-primary);
   margin: 0;
   flex: 1;
+}
+
+.page-header h1:focus:not(:focus-visible) {
+  outline: none;
 }
 </style>

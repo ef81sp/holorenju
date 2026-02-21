@@ -50,6 +50,7 @@
     "eslint-plugin-vue": "^10.6.2",
     "globals": "^16.5.0",
     "lefthook": "^2.1.0",
+    "navigation-api-types": "^0.6.1",
     "oxfmt": "^0.21.0",
     "oxlint": "^1.36.0",
     "playwright": "^1.57.0",

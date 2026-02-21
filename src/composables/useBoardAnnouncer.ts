@@ -29,12 +29,16 @@ interface BoardAnnouncerOptions {
 interface BoardAnnouncerReturn {
   /** aria-live="polite" 用テキスト（カーソル移動時） */
   politeMessage: Ref<string>;
-  /** aria-live="assertive" 用テキスト（CPU着手時） */
+  /** aria-live="assertive" 用テキスト（CPU着手時・勝敗確定時） */
   assertiveMessage: Ref<string>;
   /** カーソル移動を読み上げる */
   announceCursorMove: () => void;
   /** CPUの着手を読み上げる */
   announceCpuMove: (position: Position) => void;
+  /** プレイヤーの着手を読み上げる */
+  announcePlayerMove: (position: Position) => void;
+  /** 勝敗結果を読み上げる */
+  announceGameResult: (result: "win" | "lose" | "draw") => void;
 }
 
 /**
@@ -83,10 +87,32 @@ export function useBoardAnnouncer(
     assertiveMessage.value = `相手の着手: ${formatMove(position)}`;
   }
 
+  function announcePlayerMove(position: Position): void {
+    if (!preferencesStore.boardAnnounce) {
+      return;
+    }
+    politeMessage.value = `${formatMove(position)}に着手しました`;
+  }
+
+  const GAME_RESULT_TEXT: Record<"win" | "lose" | "draw", string> = {
+    win: "あなたの勝ちです",
+    lose: "相手の勝ちです",
+    draw: "引き分けです",
+  };
+
+  function announceGameResult(result: "win" | "lose" | "draw"): void {
+    if (!preferencesStore.boardAnnounce) {
+      return;
+    }
+    assertiveMessage.value = GAME_RESULT_TEXT[result];
+  }
+
   return {
     politeMessage,
     assertiveMessage,
     announceCursorMove,
     announceCpuMove,
+    announcePlayerMove,
+    announceGameResult,
   };
 }

@@ -275,6 +275,7 @@ function handleLayoutClick(event: MouseEvent): void {
     class="cpu-review-player"
     @click="handleLayoutClick"
   >
+    <h1 class="visually-hidden">対戦の振り返り</h1>
     <GamePlayerLayout ref="layoutRef">
       <template #back-button>
         <BackButton @back="handleBack" />

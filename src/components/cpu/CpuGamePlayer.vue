@@ -193,6 +193,7 @@ function handlePlaceStone(position: Position): void {
   // 石を配置
   cpuGameStore.addMove(position, cpuGameStore.currentTurn);
   audioStore.playSfx("stone-place");
+  boardAnnouncer?.announcePlayerMove(position);
 
   // 勝敗判定
   if (cpuGameStore.isGameOver) {
@@ -273,6 +274,9 @@ function handleGameEnd(): void {
     cpuGameStore.moveCount,
     moveHistoryStr,
   );
+
+  // 勝敗結果を読み上げ
+  boardAnnouncer?.announceGameResult(result);
 
   // カットイン表示（自動消滅タイマー付き）
   showCutin(cutinType.value);
@@ -368,6 +372,7 @@ const gameEndMessage = computed(() => {
 
 <template>
   <div class="cpu-game-player">
+    <h1 class="visually-hidden">ホロメン対戦</h1>
     <GamePlayerLayout
       ref="layoutRef"
       :large-board="isLargeBoard"

@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, Transition } from "vue";
-import { useAppStore, type AppState } from "@/stores/appStore";
+import { computed, onMounted, onUnmounted, ref, Transition, watch } from "vue";
+import { useAppStore, type AppState, type Scene } from "@/stores/appStore";
+import { APP_NAME, SCENE_TITLES } from "@/constants/sceneTitles";
 import MenuPage from "./pages/MenuPage.vue";
 import DifficultyPage from "./pages/DifficultyPage.vue";
 import ScenarioListPage from "./pages/ScenarioListPage.vue";
@@ -22,74 +23,136 @@ const transitionName = computed(() =>
     : "scale-fade-forward",
 );
 
-// 戻る確認用の状態
-const pendingPopState = ref<AppState | null>(null);
+// --- 確認ダイアログの Promise 化 ---
+let pendingResolve: ((value: boolean) => void) | null = null;
 
-// ブラウザの戻る・進むボタン処理
-const handlePopState = (event: PopStateEvent): void => {
-  const state = event.state as AppState | null;
-
-  // シナリオプレイ中またはCPU対戦中の場合は確認ダイアログを表示
-  if (
-    currentScene.value === "scenarioPlay" ||
-    currentScene.value === "cpuPlay"
-  ) {
-    event.preventDefault();
-    pendingPopState.value = state;
+function showConfirmDialog(): Promise<boolean> {
+  return new Promise((resolve) => {
+    pendingResolve = resolve;
     confirmDialogRef.value?.showModal();
+  });
+}
+
+const handleConfirmBack = (): void => {
+  pendingResolve?.(true);
+  pendingResolve = null;
+};
+
+const handleCancelBack = (): void => {
+  pendingResolve?.(false);
+  pendingResolve = null;
+};
+
+function isGameScene(): boolean {
+  return (
+    currentScene.value === "scenarioPlay" || currentScene.value === "cpuPlay"
+  );
+}
+
+// --- Navigation API ハンドラー ---
+const handleNavigate = (event: NavigateEvent): void => {
+  // 戻る/進む（traverse）のみ処理。push は appStore のアクションが処理済み
+  if (event.navigationType !== "traverse" || !event.canIntercept) {
     return;
   }
 
-  // それ以外のシーンでは直接状態を復元
+  event.intercept({
+    focusReset: "manual",
+    async handler() {
+      const state = event.destination.getState() as AppState | null;
+
+      // ゲーム中は確認ダイアログ
+      if (isGameScene()) {
+        const confirmed = await showConfirmDialog();
+        if (!confirmed) {
+          // 現在のシーンに戻す（traverseはキャンセル不可のため新規pushで対応）
+          appStore.pushHistory();
+          return;
+        }
+      }
+
+      if (state) {
+        appStore.restoreState(state);
+      }
+    },
+  });
+};
+
+// --- popstate フォールバック ---
+const pendingPopState = ref<AppState | null>(null);
+
+const handlePopState = (event: PopStateEvent): void => {
+  const state = event.state as AppState | null;
+
+  if (isGameScene()) {
+    event.preventDefault();
+    pendingPopState.value = state;
+    showConfirmDialog().then((confirmed) => {
+      if (confirmed && pendingPopState.value) {
+        appStore.restoreState(pendingPopState.value);
+      } else if (!confirmed) {
+        appStore.pushHistory();
+      }
+      pendingPopState.value = null;
+    });
+    return;
+  }
+
   if (state) {
     appStore.restoreState(state);
   }
 };
 
-// 確認ダイアログの確認処理
-const handleConfirmBack = (): void => {
-  if (pendingPopState.value) {
-    appStore.restoreState(pendingPopState.value);
+// トランジション完了後にフォーカスを移動
+const GAME_SCENES: Scene[] = ["scenarioPlay", "cpuPlay", "cpuReview"];
+
+const handleAfterEnter = (el: Element): void => {
+  // ゲーム画面は各コンポーネントがボードフォーカスを管理するので介入しない
+  if (GAME_SCENES.includes(currentScene.value)) {
+    return;
   }
-  pendingPopState.value = null;
+
+  const heading = (el as HTMLElement).querySelector("h1");
+  heading?.focus({ preventScroll: true });
 };
 
-// 確認ダイアログのキャンセル処理
-const handleCancelBack = (): void => {
-  // 履歴を進めて元に戻す
-  window.history.pushState(
-    {
-      scene: appStore.scene,
-      selectedMode: appStore.selectedMode,
-      selectedDifficulty: appStore.selectedDifficulty,
-      currentPage: appStore.currentPage,
-      selectedScenarioId: appStore.selectedScenarioId,
-      cpuDifficulty: appStore.cpuDifficulty,
-      cpuPlayerFirst: appStore.cpuPlayerFirst,
-      reviewRecordId: appStore.reviewRecordId,
-      reviewImported: appStore.reviewImported,
-    } satisfies AppState,
-    "",
-    `#${appStore.scene}`,
-  );
-  pendingPopState.value = null;
-};
+// document.title を現在のシーンに連動して更新
+watch(
+  currentScene,
+  (scene) => {
+    document.title = `${SCENE_TITLES[scene]} - ${APP_NAME}`;
+  },
+  { immediate: true },
+);
 
 onMounted(() => {
-  window.addEventListener("popstate", handlePopState);
+  if (window.navigation) {
+    window.navigation.addEventListener("navigate", handleNavigate);
+  } else {
+    window.addEventListener("popstate", handlePopState);
+  }
 
-  // 初回の履歴状態を設定
-  appStore.pushHistory();
+  // リロードやハッシュ直指定からの復元を試みる
+  if (!appStore.tryRestoreFromBrowser()) {
+    appStore.pushHistory();
+  }
 });
 
 onUnmounted(() => {
-  window.removeEventListener("popstate", handlePopState);
+  if (window.navigation) {
+    window.navigation.removeEventListener("navigate", handleNavigate);
+  } else {
+    window.removeEventListener("popstate", handlePopState);
+  }
 });
 </script>
 
 <template>
-  <div class="main-container">
-    <Transition :name="transitionName">
+  <main class="main-container">
+    <Transition
+      :name="transitionName"
+      @after-enter="handleAfterEnter"
+    >
       <MenuPage v-if="currentScene === 'menu'" />
       <DifficultyPage v-else-if="currentScene === 'difficulty'" />
       <ScenarioListPage v-else-if="currentScene === 'scenarioList'" />
@@ -101,7 +164,7 @@ onUnmounted(() => {
       <CpuGamePlayer v-else-if="currentScene === 'cpuPlay'" />
       <CpuReviewPlayer v-else-if="currentScene === 'cpuReview'" />
     </Transition>
-  </div>
+  </main>
 
   <!-- 戻る確認ダイアログ -->
   <ConfirmDialog

@@ -56,12 +56,19 @@ defineExpose({
       tabindex="0"
       role="application"
       aria-label="連珠盤"
+      aria-describedby="board-instructions"
       style="anchor-name: --board-area"
     >
       <slot
         name="board"
         :board-size="boardSize"
       />
+      <p
+        id="board-instructions"
+        class="visually-hidden"
+      >
+        WASDキーでカーソル移動、Spaceキーで着手。座標は中心がH8、左下がA1、右上がO15、。
+      </p>
     </div>
 
     <!-- 説明・コントロール部（右側 4×7）-->
