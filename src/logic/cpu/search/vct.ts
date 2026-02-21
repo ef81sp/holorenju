@@ -210,7 +210,7 @@ export function hasVCT(
 
   // 相手に活三があればVCT（三脅威）は不成立（VCFのみ有効）
   // VCFは上で既にチェック済みなので、ここではfalseを返す
-  if (depth === 0 && hasOpenThree(board, opponentColor)) {
+  if (hasOpenThree(board, opponentColor)) {
     return false;
   }
 
@@ -712,6 +712,34 @@ function validateVCTSequence(
         valid = false;
         break;
       }
+      // 防御手配置後に相手の活三が存在する → 次の攻撃手が四/五連でなければVCT手順崩壊
+      // （探索開始時点で相手に活三がないことはfindVCTSequenceRecursiveが保証する）
+      if (hasOpenThree(board, opponentColor)) {
+        const nextIdx = i + 1;
+        if (nextIdx >= sequence.length) {
+          valid = false;
+          break;
+        }
+        const nextPos = sequence[nextIdx];
+        if (!nextPos) {
+          valid = false;
+          break;
+        }
+        const nextRow = board[nextPos.row];
+        if (nextRow) {
+          nextRow[nextPos.col] = color;
+        }
+        const makesFourOrFive =
+          createsFour(board, nextPos.row, nextPos.col, color) ||
+          checkFive(board, nextPos.row, nextPos.col, color);
+        if (nextRow) {
+          nextRow[nextPos.col] = null;
+        }
+        if (!makesFourOrFive) {
+          valid = false;
+          break;
+        }
+      }
     }
   }
 
@@ -849,7 +877,7 @@ function findVCTSequenceRecursive(
 
   // 相手に活三があればVCT（三脅威）は不成立（VCFのみ有効）
   // VCFは上で既にチェック済みなので、ここではfalseを返す
-  if (depth === 0 && hasOpenThree(board, opponentColor)) {
+  if (hasOpenThree(board, opponentColor)) {
     return false;
   }
 

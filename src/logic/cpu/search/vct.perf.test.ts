@@ -15,6 +15,7 @@ import {
   checkDefenseCounterThreat,
   getFourDefensePosition,
 } from "./threatPatterns";
+import { hasVCF } from "./vcf";
 import {
   findVCTMove,
   findVCTSequence,
@@ -1254,5 +1255,113 @@ describe("findVCTSequenceFromFirstMove", () => {
       "black",
     );
     expect(result).toBeNull();
+  });
+});
+
+describe("防御手が活三を作る場合のVCT探索（depth > 0）", () => {
+  // 棋譜: H8 I9 I7 G9 H6 H9 J9 J8 H7 H10 G11 F8 E7 K7 L6
+  // 15手目局面（白番）でVCT探索が不正な手順 I11 J12 I10 I8 K12 ... を返す
+  // 19手目の黒I8で活三（H7-I8-J9の/斜め）が生じ、VCT手順が崩壊する
+  const record = "H8 I9 I7 G9 H6 H9 J9 J8 H7 H10 G11 F8 E7 K7 L6";
+  const options = {
+    maxDepth: 6,
+    timeLimit: 10000,
+    vcfOptions: { maxDepth: 16, timeLimit: 10000 },
+  };
+
+  it("18手目(I10)後にI8防御を置くと黒に活三がある", () => {
+    // 棋譜の18手目までを再現: + I11 J12 I10
+    const extRecord = `${record} I11 J12 I10`;
+    const { board } = createBoardFromRecord(extRecord);
+    // I8に黒（防御手）を配置
+    // I8 → row=7, col=8
+    board[7]![8] = "black";
+    // 黒に活三がある（H7-I8-J9の/斜め）
+    expect(hasOpenThree(board, "black")).toBe(true);
+    // undo
+    board[7]![8] = null;
+  });
+
+  it("防御手で活三ができた場合、VCFがなければVCT不成立（depth > 0）", () => {
+    // 18手目(I10)後にI8防御を置いた局面
+    const extRecord = `${record} I11 J12 I10`;
+    const { board } = createBoardFromRecord(extRecord);
+    board[7]![8] = "black"; // I8防御
+    // 黒に活三があるので白のVCTは三脅威では不成立
+    // VCFがない限りfalse
+    const whiteHasVcf = hasVCF(board, "white", undefined, undefined, {
+      maxDepth: 16,
+      timeLimit: 5000,
+    });
+    // このシナリオではVCFがないはず
+    expect(whiteHasVcf).toBe(false);
+    expect(hasVCT(board, "white", 0, undefined, options)).toBe(false);
+    // undo
+    board[7]![8] = null;
+  });
+
+  it("防御手で活三ができてもVCFがあればVCT成立", () => {
+    // 活三+VCFが両方ある局面
+    const board = createBoardWithStones([
+      // 白の活三リソース
+      { row: 3, col: 5, color: "white" },
+      { row: 3, col: 6, color: "white" },
+      { row: 3, col: 7, color: "white" },
+      // 黒の活三（相手の脅威）
+      { row: 10, col: 5, color: "black" },
+      { row: 10, col: 6, color: "black" },
+      { row: 10, col: 7, color: "black" },
+    ]);
+    // 黒に活三があるが白にVCFがある（(3,4)or(3,8)で活四）
+    expect(hasOpenThree(board, "black")).toBe(true);
+    expect(hasVCF(board, "white")).toBe(true);
+    expect(hasVCT(board, "white")).toBe(true);
+  });
+
+  it(
+    "findVCTSequence が不正な手順を返さない（15手目局面）",
+    { timeout: 15000 },
+    () => {
+      const { board } = createBoardFromRecord(record);
+      const snapshot = copyBoard(board);
+      const result = findVCTSequence(board, "white", options);
+
+      // 盤面不変性
+      expect(board).toEqual(snapshot);
+
+      // 手順が返された場合、防御手で活三ができたら次の攻撃手は四/五連であること
+      if (result) {
+        const replayBoard = copyBoard(board);
+        for (let i = 0; i < result.sequence.length; i++) {
+          const pos = result.sequence[i]!;
+          const isDefense = i % 2 === 1;
+          const stoneColor: "black" | "white" = isDefense ? "black" : "white";
+          replayBoard[pos.row]![pos.col] = stoneColor;
+
+          if (isDefense && hasOpenThree(replayBoard, "black")) {
+            // 次の攻撃手が四/五連でなければ不正手順
+            const nextIdx = i + 1;
+            if (nextIdx < result.sequence.length) {
+              const nextPos = result.sequence[nextIdx]!;
+              replayBoard[nextPos.row]![nextPos.col] = "white";
+              const makesFourOrFive =
+                createsFour(replayBoard, nextPos.row, nextPos.col, "white") ||
+                checkFive(replayBoard, nextPos.row, nextPos.col, "white");
+              expect(makesFourOrFive).toBe(true);
+              replayBoard[nextPos.row]![nextPos.col] = null;
+            }
+          }
+        }
+      }
+    },
+  );
+
+  it("盤面不変性", () => {
+    const { board } = createBoardFromRecord(record);
+    const snapshot = copyBoard(board);
+    hasVCT(board, "white", 0, undefined, options);
+    expect(board).toEqual(snapshot);
+    findVCTSequence(board, "white", options);
+    expect(board).toEqual(snapshot);
   });
 });

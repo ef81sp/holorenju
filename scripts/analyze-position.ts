@@ -13,14 +13,15 @@
 
 import type { StoneColor } from "../src/types/game.ts";
 
+import { countStones } from "../src/logic/cpu/core/boardUtils.ts";
 import { findMiseVCFSequence } from "../src/logic/cpu/search/miseVcf.ts";
-import { findFourMoves, findVCFSequence } from "../src/logic/cpu/search/vcf.ts";
+import { findFourMoves } from "../src/logic/cpu/search/threatPatterns.ts";
+import { findVCFSequence } from "../src/logic/cpu/search/vcf.ts";
 import {
   findVCTSequence,
-  hasOpenThree,
-  countStones,
   VCT_STONE_THRESHOLD,
 } from "../src/logic/cpu/search/vct.ts";
+import { hasOpenThree } from "../src/logic/cpu/search/vctHelpers.ts";
 import { formatMove } from "../src/logic/gameRecordParser.ts";
 import { formatPositionSummary, loadPosition } from "./lib/positionLoader.ts";
 
@@ -195,26 +196,33 @@ console.log(`次の手番: ${nextLabel}`);
 
 const opponentColor: StoneColor = pos.nextColor === "black" ? "white" : "black";
 const opponentLabel = opponentColor === "black" ? "黒" : "白";
+const selfVerdict = verdictData.find((v) => v.color === pos.nextColor);
 const opponentVerdict = verdictData.find((v) => v.color === opponentColor);
 
-if (
+// 判定優先順位:
+// 1. 手番側にVCFあり → 先に打てるので勝ち
+// 2. 相手にVCFあり → 負け
+// 3. 手番側にMise-VCF/VCTあり → 勝ち
+// 4. 相手にMise-VCF/VCTあり → 負け
+// 5. 未確定
+if (selfVerdict?.vcf) {
+  const trapSuffix = selfVerdict.isForbiddenTrap ? " [禁手追い込み]" : "";
+  console.log(`判定: 勝ち確定（VCFあり${trapSuffix}）`);
+} else if (opponentVerdict?.vcf) {
+  const trapSuffix = opponentVerdict.isForbiddenTrap ? " [禁手追い込み]" : "";
+  console.log(`判定: 負け確定（${opponentLabel}にVCFあり${trapSuffix}）`);
+} else if (selfVerdict && (selfVerdict.miseVcf || selfVerdict.vct)) {
+  const method = getVerdictMethod(selfVerdict);
+  const trapSuffix = selfVerdict.isForbiddenTrap ? " [禁手追い込み]" : "";
+  console.log(`判定: 勝ち確定（${method}あり${trapSuffix}）`);
+} else if (
   opponentVerdict &&
-  (opponentVerdict.vcf || opponentVerdict.vct || opponentVerdict.miseVcf)
+  (opponentVerdict.miseVcf || opponentVerdict.vct)
 ) {
   const method = getVerdictMethod(opponentVerdict);
   const trapSuffix = opponentVerdict.isForbiddenTrap ? " [禁手追い込み]" : "";
   console.log(`判定: 負け確定（${opponentLabel}に${method}あり${trapSuffix}）`);
 } else {
-  const selfVerdict = verdictData.find((v) => v.color === pos.nextColor);
-  if (
-    selfVerdict &&
-    (selfVerdict.vcf || selfVerdict.vct || selfVerdict.miseVcf)
-  ) {
-    const method = getVerdictMethod(selfVerdict);
-    const trapSuffix = selfVerdict.isForbiddenTrap ? " [禁手追い込み]" : "";
-    console.log(`判定: 勝ち確定（${method}あり${trapSuffix}）`);
-  } else {
-    console.log("判定: 未確定");
-  }
+  console.log("判定: 未確定");
 }
 console.log("");
