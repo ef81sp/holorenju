@@ -66,6 +66,8 @@ onMounted(() => {
       return;
     }
     reviewStore.openReview(record);
+    // 棋譜をURLに反映（pushHistory時点ではcpuReviewStoreに棋譜未ロード）
+    appStore.replaceHistory();
   } else if (appStore.reviewImported) {
     // 新パス: cpuReviewStore に既にセット済みか確認
     if (!reviewStore.reviewSource) {

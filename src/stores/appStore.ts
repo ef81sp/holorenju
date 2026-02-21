@@ -2,7 +2,58 @@
 import { defineStore } from "pinia";
 
 import type { CpuDifficulty } from "@/types/cpu";
+import type { PlayerSide } from "@/types/review";
 import type { ScenarioDifficulty } from "@/types/scenario";
+
+import { validateGameRecord } from "@/logic/gameRecordValidator";
+
+import { useCpuReviewStore } from "./cpuReviewStore";
+
+/** シナリオ難易度 → URL略称 */
+const DIFFICULTY_TO_ABBR: Record<ScenarioDifficulty, string> = {
+  gomoku_beginner: "gb",
+  gomoku_intermediate: "gi",
+  renju_beginner: "rb",
+  renju_intermediate: "ri",
+  renju_advanced: "ra",
+  renju_expert: "re",
+};
+
+/** URL略称 → シナリオ難易度 */
+const ABBR_TO_DIFFICULTY: Record<string, ScenarioDifficulty> =
+  Object.fromEntries(
+    Object.entries(DIFFICULTY_TO_ABBR).map(([k, v]) => [
+      v,
+      k as ScenarioDifficulty,
+    ]),
+  ) as Record<string, ScenarioDifficulty>;
+
+/** CPU難易度 → URL略称 */
+const CPU_DIFF_TO_ABBR: Record<CpuDifficulty, string> = {
+  beginner: "b",
+  easy: "e",
+  medium: "m",
+  hard: "h",
+};
+
+/** URL略称 → CPU難易度 */
+const ABBR_TO_CPU_DIFF: Record<string, CpuDifficulty> = Object.fromEntries(
+  Object.entries(CPU_DIFF_TO_ABBR).map(([k, v]) => [v, k as CpuDifficulty]),
+) as Record<string, CpuDifficulty>;
+
+/** PlayerSide → URL略称 */
+const PLAYER_SIDE_TO_ABBR: Record<PlayerSide, string> = {
+  black: "b",
+  white: "w",
+  both: "a",
+};
+
+/** URL略称 → PlayerSide */
+const ABBR_TO_PLAYER_SIDE: Record<string, PlayerSide> = {
+  b: "black",
+  w: "white",
+  a: "both",
+};
 
 export type Scene =
   | "menu"
@@ -208,6 +259,56 @@ export const useAppStore = defineStore("app", {
       }
     },
 
+    /** 現在の状態からURL文字列を構築（ハッシュの中身） */
+    _buildUrl(): string {
+      const u = new URL(this.scene, "http://x");
+
+      switch (this.scene) {
+        case "scenarioList":
+        case "scenarioPlay":
+          if (this.selectedDifficulty) {
+            u.searchParams.set(
+              "d",
+              DIFFICULTY_TO_ABBR[this.selectedDifficulty],
+            );
+          }
+          if (this.scene === "scenarioList" && this.currentPage > 0) {
+            u.searchParams.set("p", String(this.currentPage));
+          }
+          if (this.scene === "scenarioPlay" && this.selectedScenarioId) {
+            u.searchParams.set("s", this.selectedScenarioId);
+          }
+          break;
+        case "cpuPlay":
+          if (this.cpuDifficulty) {
+            u.searchParams.set("cd", CPU_DIFF_TO_ABBR[this.cpuDifficulty]);
+          }
+          if (this.cpuPlayerFirst !== null) {
+            u.searchParams.set("f", this.cpuPlayerFirst ? "1" : "0");
+          }
+          break;
+        case "cpuReview": {
+          const reviewStore = useCpuReviewStore();
+          const history = reviewStore.moveHistory;
+          if (history) {
+            u.searchParams.set("g", history.replace(/ /g, "."));
+            u.searchParams.set(
+              "ps",
+              PLAYER_SIDE_TO_ABBR[reviewStore.currentPlayerSide],
+            );
+          }
+          if (this.reviewRecordId) {
+            u.searchParams.set("r", this.reviewRecordId);
+          }
+          break;
+        }
+        default:
+          break;
+      }
+
+      return u.pathname.slice(1) + u.search;
+    },
+
     /** 現在の状態をシリアライズ */
     _buildState(): AppState {
       return {
@@ -225,7 +326,7 @@ export const useAppStore = defineStore("app", {
 
     pushHistory() {
       const state = this._buildState();
-      const url = `#${this.scene}`;
+      const url = `#${this._buildUrl()}`;
       if (window.navigation) {
         window.navigation.navigate(url, {
           state,
@@ -238,7 +339,7 @@ export const useAppStore = defineStore("app", {
 
     replaceHistory() {
       const state = this._buildState();
-      const url = `#${this.scene}`;
+      const url = `#${this._buildUrl()}`;
       if (window.navigation) {
         window.navigation.navigate(url, {
           state,
@@ -250,72 +351,145 @@ export const useAppStore = defineStore("app", {
     },
 
     /**
-     * ブラウザの履歴 state またはハッシュから画面を復元する。
-     * リロードやハッシュ直指定に対応。
+     * ブラウザの履歴 state またはハッシュ+クエリパラメータから画面を復元する。
+     * SSoT = URL: クエリパラメータ最優先、history.stateは transitionDirection のみ。
      * @returns 復元できた場合 true
      */
     tryRestoreFromBrowser(): boolean {
-      // 1. history.state / Navigation API state から復元（リロード時）
-      const browserState = window.navigation
-        ? (window.navigation.currentEntry?.getState() as
-            | AppState
-            | undefined
-            | null)
-        : (window.history.state as AppState | undefined | null);
+      const raw = location.hash.slice(1); // "#scenarioList?d=rb" → "scenarioList?d=rb"
+      if (!raw) {
+        return false;
+      }
 
-      if (browserState?.scene && VALID_SCENES.has(browserState.scene)) {
-        const state = { ...browserState };
+      // URLパース
+      const u = new URL(raw, location.origin);
+      const sceneName = u.pathname.slice(1);
 
-        // ゲーム画面は親にフォールバック
-        const fallback = GAME_SCENE_FALLBACK[state.scene];
+      if (!VALID_SCENES.has(sceneName)) {
+        return false;
+      }
+
+      let scene = sceneName as Scene;
+      const params = u.searchParams;
+
+      // シーンからモードを推定
+      const mode = this._inferMode(scene);
+
+      // 状態をパースして構築
+      const state: Partial<AppState> = {
+        scene,
+        selectedMode: mode,
+      };
+
+      // シーン別パラメータ解析
+      switch (scene) {
+        case "scenarioList":
+        case "scenarioPlay": {
+          const dAbbr = params.get("d");
+          const difficulty = dAbbr ? ABBR_TO_DIFFICULTY[dAbbr] : undefined;
+          state.selectedDifficulty = difficulty ?? null;
+
+          if (scene === "scenarioList") {
+            const pStr = params.get("p");
+            state.currentPage = pStr ? parseInt(pStr, 10) || 0 : 0;
+          }
+          if (scene === "scenarioPlay") {
+            state.selectedScenarioId = params.get("s");
+          }
+          break;
+        }
+        case "cpuPlay": {
+          const cdAbbr = params.get("cd");
+          state.cpuDifficulty = cdAbbr
+            ? (ABBR_TO_CPU_DIFF[cdAbbr] ?? null)
+            : null;
+          const fStr = params.get("f");
+          if (fStr === "1") {
+            state.cpuPlayerFirst = true;
+          } else if (fStr === "0") {
+            state.cpuPlayerFirst = false;
+          } else {
+            state.cpuPlayerFirst = null;
+          }
+          break;
+        }
+        case "cpuReview": {
+          const gParam = params.get("g");
+          if (gParam) {
+            // g パラメータ優先（r と同時の場合も g を使用）
+            const moveHistoryStr = gParam.replace(/\./g, " ");
+            const validation = validateGameRecord(moveHistoryStr);
+            if (validation.valid) {
+              const psAbbr = params.get("ps");
+              const playerSide: PlayerSide =
+                (psAbbr ? ABBR_TO_PLAYER_SIDE[psAbbr] : undefined) ?? "both";
+              const reviewStore = useCpuReviewStore();
+              reviewStore.openReviewFromImport(
+                validation.normalizedRecord,
+                playerSide,
+              );
+              state.reviewImported = true;
+              state.reviewRecordId = null;
+            } else {
+              // 不正な棋譜 → フォールバック
+              state.reviewImported = false;
+              state.reviewRecordId = null;
+            }
+          } else {
+            state.reviewRecordId = params.get("r") ?? null;
+            state.reviewImported = false;
+          }
+          break;
+        }
+        default:
+          break;
+      }
+
+      // ゲーム画面は親にフォールバック（reviewImported時は棋譜がURLにあるため抑制）
+      if (!state.reviewImported) {
+        const fallback = GAME_SCENE_FALLBACK[scene];
         if (fallback) {
           state.scene = fallback;
           state.selectedScenarioId = null;
           state.reviewRecordId = null;
           state.reviewImported = false;
         }
-
-        // 必須状態が欠けていたらさらにフォールバック
-        if (state.scene === "scenarioList" && !state.selectedDifficulty) {
-          state.scene = state.selectedMode ? "difficulty" : "menu";
-        }
-        if (state.scene === "difficulty" && !state.selectedMode) {
-          state.scene = "menu";
-        }
-        if (state.scene === "cpuSetup") {
-          state.selectedMode = "cpu";
-        }
-
-        if (state.scene === "menu") {
-          return false; // デフォルトと同じなので復元不要
-        }
-
-        this.restoreState(state);
-        this.replaceHistory();
-        return true;
       }
 
-      // 2. ハッシュのみ（直リンク、state なし）
-      const hash = location.hash.slice(1);
-      if (!hash || !VALID_SCENES.has(hash) || hash === "menu") {
+      // 必須状態が欠けていたらさらにフォールバック
+      if (state.scene === "scenarioList" && !state.selectedDifficulty) {
+        state.scene = state.selectedMode ? "difficulty" : "menu";
+      }
+      if (state.scene === "difficulty" && !state.selectedMode) {
+        state.scene = "menu";
+      }
+      if (state.scene === "cpuSetup") {
+        state.selectedMode = "cpu";
+      }
+
+      if (state.scene === "menu") {
         return false;
       }
 
-      switch (hash as Scene) {
-        case "cpuSetup":
-          this.selectedMode = "cpu";
-          this.scene = "cpuSetup";
-          break;
-        case "difficulty":
-          this.selectedMode = "training";
-          this.scene = "difficulty";
-          break;
-        default:
-          return false; // 他は必要な状態が推定できないため復元不可
-      }
-
+      this.restoreState(state as AppState);
       this.replaceHistory();
       return true;
+    },
+
+    /** シーン名からモードを推定 */
+    _inferMode(scene: Scene): Mode | null {
+      switch (scene) {
+        case "difficulty":
+        case "scenarioList":
+        case "scenarioPlay":
+          return "training";
+        case "cpuSetup":
+        case "cpuPlay":
+        case "cpuReview":
+          return "cpu";
+        default:
+          return null;
+      }
     },
   },
 });

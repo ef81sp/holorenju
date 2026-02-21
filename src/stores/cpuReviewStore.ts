@@ -139,6 +139,17 @@ export const useCpuReviewStore = defineStore("cpuReview", () => {
       reviewSource.value.playerSide === "both",
   );
 
+  /** プレイヤー視点（URL構築用） */
+  const currentPlayerSide = computed<PlayerSide>(() => {
+    if (!reviewSource.value) {
+      return "black";
+    }
+    if (reviewSource.value.type === "imported") {
+      return reviewSource.value.playerSide;
+    }
+    return reviewSource.value.record.playerFirst ? "black" : "white";
+  });
+
   /** 決着結果（importedでは五連検出、検出不可ならnull） */
   const gameResult = computed<BattleResult | null>(() => {
     if (!reviewSource.value) {
@@ -360,6 +371,7 @@ export const useCpuReviewStore = defineStore("cpuReview", () => {
     moveHistory,
     playerFirst,
     isAnalyzeAll,
+    currentPlayerSide,
     gameResult,
     boardAtCurrentMove,
     currentEvaluation,
