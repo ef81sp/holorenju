@@ -10,6 +10,7 @@ import { ref } from "vue";
 import CloseIcon from "@/assets/icons/close.svg?component";
 import { useLightDismiss } from "@/composables/useLightDismiss";
 import { validateGameRecord } from "@/logic/gameRecordValidator";
+import { convertSgfToRecord, isSgfFormat } from "@/logic/sgfParser";
 import { useAppStore } from "@/stores/appStore";
 import { useCpuReviewStore } from "@/stores/cpuReviewStore";
 import type { PlayerSide } from "@/types/review";
@@ -35,7 +36,11 @@ function resetState(): void {
 }
 
 function handleSubmit(): void {
-  const result = validateGameRecord(input.value);
+  const recordToValidate = isSgfFormat(input.value)
+    ? (convertSgfToRecord(input.value) ?? input.value)
+    : input.value;
+
+  const result = validateGameRecord(recordToValidate);
   if (!result.valid) {
     errorMessage.value = result.error;
     return;
@@ -80,7 +85,7 @@ defineExpose({
         <textarea
           v-model="input"
           class="record-input"
-          placeholder="H8 G7 I9 I8 ..."
+          placeholder="H8 G7 I9 I8 ... / SGF形式にも対応"
           rows="3"
           autofocus
         />
