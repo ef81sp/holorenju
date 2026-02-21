@@ -11,6 +11,10 @@ pre-commit:
     test:
       run: pnpm test:browser:headless
 
+    test-related:
+      run: pnpm vitest related --run {staged_files}
+      glob: "*.{ts,vue}"
+
 pre-push:
   parallel: true
   commands:

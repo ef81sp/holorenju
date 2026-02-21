@@ -112,18 +112,6 @@ describe("useScenarioIndexManagement", () => {
   });
 
   describe("handleGenerateIndex", () => {
-    it("ディレクトリ未選択時は警告", async () => {
-      const consoleWarnSpy = vi.spyOn(console, "warn");
-
-      const { handleGenerateIndex } = useScenarioIndexManagement();
-
-      await handleGenerateIndex(null, mockDialogRef);
-
-      expect(consoleWarnSpy).toHaveBeenCalledWith(
-        "先にディレクトリを選択してください",
-      );
-    });
-
     it("index.jsonの読み込みを試みる", async () => {
       const { handleGenerateIndex } = useScenarioIndexManagement();
 

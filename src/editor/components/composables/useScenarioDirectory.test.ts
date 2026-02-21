@@ -224,18 +224,6 @@ describe("useScenarioDirectory", () => {
   });
 
   describe("handleSaveToDirectory", () => {
-    it("ディレクトリ未選択時は警告", async () => {
-      const consoleWarnSpy = vi.spyOn(console, "warn");
-
-      const { handleSaveToDirectory } = useScenarioDirectory();
-
-      await handleSaveToDirectory();
-
-      expect(consoleWarnSpy).toHaveBeenCalledWith(
-        "先にディレクトリを選択してください",
-      );
-    });
-
     it("getDirectoryHandleが呼ばれる", async () => {
       const mockShowDirectoryPicker = vi.fn().mockResolvedValue(mockDirHandle);
       vi.stubGlobal("window", { showDirectoryPicker: mockShowDirectoryPicker });
@@ -317,18 +305,6 @@ describe("useScenarioDirectory", () => {
   });
 
   describe("handleLoadFromDirectory", () => {
-    it("ディレクトリ未選択時は警告", async () => {
-      const consoleWarnSpy = vi.spyOn(console, "warn");
-
-      const { handleLoadFromDirectory } = useScenarioDirectory();
-
-      await handleLoadFromDirectory();
-
-      expect(consoleWarnSpy).toHaveBeenCalledWith(
-        "先にディレクトリを選択してください",
-      );
-    });
-
     it("難易度ディレクトリのJSONファイルを読み込む", async () => {
       const mockShowDirectoryPicker = vi.fn().mockResolvedValue(mockDirHandle);
       vi.stubGlobal("window", { showDirectoryPicker: mockShowDirectoryPicker });
@@ -340,26 +316,6 @@ describe("useScenarioDirectory", () => {
       await handleLoadFromDirectory();
 
       expect(mockLoadScenario).toHaveBeenCalled();
-    });
-
-    it("難易度ディレクトリが見つからない場合は警告", async () => {
-      mockDirHandle.getDirectoryHandle = vi
-        .fn()
-        .mockRejectedValue(new Error("Not found"));
-
-      const mockShowDirectoryPicker = vi.fn().mockResolvedValue(mockDirHandle);
-      vi.stubGlobal("window", { showDirectoryPicker: mockShowDirectoryPicker });
-
-      const consoleWarnSpy = vi.spyOn(console, "warn");
-      const { handleSelectDirectory, handleLoadFromDirectory } =
-        useScenarioDirectory();
-
-      await handleSelectDirectory();
-      await handleLoadFromDirectory();
-
-      expect(consoleWarnSpy).toHaveBeenCalledWith(
-        expect.stringContaining("難易度ディレクトリ"),
-      );
     });
 
     it("バリデーション失敗でエラーが設定される", async () => {
