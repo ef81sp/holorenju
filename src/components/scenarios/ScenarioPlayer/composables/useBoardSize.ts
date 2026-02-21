@@ -30,20 +30,11 @@ export const useBoardSize = (
 
     // 初期値が0の場合は計算しない（最小サイズを返す）
     if (availableWidth === 0 || availableHeight === 0) {
-      console.warn("[useBoardSize] width or height is 0");
       return 400; // 最小デフォルトサイズ
     }
 
     // 高さ優先で計算（グリッド行の7frに合わせる）
-    const calculatedSize = availableHeight;
-
-    console.warn("[useBoardSize] computed:", {
-      availableWidth,
-      availableHeight,
-      calculatedSize,
-    });
-
-    return calculatedSize;
+    return availableHeight;
   });
 
   return {

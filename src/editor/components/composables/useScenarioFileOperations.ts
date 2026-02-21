@@ -50,39 +50,24 @@ export function useScenarioFileOperations(): UseScenarioFileOperationsReturn {
     reader.onload = (e) => {
       try {
         const text = e.target?.result as string;
-        console.warn("📄 ファイル読み込み開始");
         const data = JSON.parse(text);
-        console.warn("✅ JSON パース成功:", data);
         jsonInput.value = text;
 
         // バリデーション実行
-        console.warn("🔍 バリデーション開始...");
         const result = validateScenarioCompletely(data);
-        console.warn("🔍 バリデーション結果:", result);
 
         if (result.isValid) {
-          console.warn("✅ バリデーション成功 - シナリオをパース中...");
           const scenario = parseScenario(data);
-          console.warn("✅ パース成功:", scenario);
           editorStore.loadScenario(scenario);
           editorStore.clearValidationErrors();
           showJsonInput.value = false;
-          console.warn("✅ シナリオ読み込み完了");
         } else {
-          console.warn("❌ バリデーションエラーを検出しました:");
-          result.errors.forEach((error) => {
-            console.warn(`  [${error.type}] ${error.path}: ${error.message}`);
-          });
           editorStore.setValidationErrors(
             result.errors.map((e) => ({ path: e.path, message: e.message })),
           );
         }
       } catch (error) {
-        console.error("❌ ファイルの読み込みに失敗しました:", error);
-        if (error instanceof Error) {
-          console.error("エラー詳細:", error.message);
-          console.error("スタックトレース:", error.stack);
-        }
+        console.error("ファイルの読み込みに失敗しました:", error);
       }
     };
     reader.readAsText(file);
@@ -96,12 +81,10 @@ export function useScenarioFileOperations(): UseScenarioFileOperationsReturn {
     scenarioDir: FileSystemDirectoryHandle,
   ): Promise<void> => {
     if (!scenarioDir) {
-      console.warn("先にディレクトリを選択してください");
       return;
     }
 
     try {
-      console.warn(`📄 ファイル読み込み開始: ${path}`);
       const pathParts = path.split("/");
       const fileName = pathParts.pop();
       const difficultyName = pathParts[0] || DIFFICULTIES[0];
@@ -120,39 +103,23 @@ export function useScenarioFileOperations(): UseScenarioFileOperationsReturn {
 
       const file = await fileHandle.getFile();
       const text = await file.text();
-      console.warn("✅ ファイル読み込み成功");
-      console.warn("📄 JSON文字列:", `${text.substring(0, 200)}...`);
 
       const data = JSON.parse(text);
-      console.warn("✅ JSON パース成功:", data);
 
-      console.warn("🔍 バリデーション開始...");
       const result = validateScenarioCompletely(data);
-      console.warn("🔍 バリデーション結果:", result);
 
       if (result.isValid) {
-        console.warn("✅ バリデーション成功 - シナリオをパース中...");
         const scenario = parseScenario(data);
-        console.warn("✅ パース成功:", scenario);
         editorStore.loadScenario(scenario);
         editorStore.clearValidationErrors();
         jsonInput.value = text;
-        console.warn(`✅ ${path} を読み込みました`);
       } else {
-        console.warn("❌ JSONにエラーがあります:");
-        result.errors.forEach((error) => {
-          console.warn(`  [${error.type}] ${error.path}: ${error.message}`);
-        });
         editorStore.setValidationErrors(
           result.errors.map((e) => ({ path: e.path, message: e.message })),
         );
       }
     } catch (error) {
-      console.error("❌ ファイル読み込みに失敗しました:", error);
-      if (error instanceof Error) {
-        console.error("エラー詳細:", error.message);
-        console.error("スタックトレース:", error.stack);
-      }
+      console.error("ファイル読み込みに失敗しました:", error);
     }
   };
 
@@ -176,7 +143,6 @@ export function useScenarioFileOperations(): UseScenarioFileOperationsReturn {
   const reloadCurrentFile = async (): Promise<boolean> => {
     const fileHandle = editorStore.currentFileHandle;
     if (!fileHandle) {
-      console.warn("再読み込み対象のファイルがありません");
       return false;
     }
 
@@ -216,7 +182,6 @@ export function useScenarioFileOperations(): UseScenarioFileOperationsReturn {
         editorStore.goToDialogueIndex(currentDialogueIndex);
       }
 
-      console.warn("✅ ファイルを再読み込みしました");
       return true;
     } catch (error) {
       console.error("再読み込みに失敗しました:", error);

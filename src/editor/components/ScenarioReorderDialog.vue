@@ -112,7 +112,6 @@ const initializeState = async (): Promise<void> => {
         }
       } catch {
         // ディレクトリが存在しない場合はスキップ
-        console.warn(`難易度ディレクトリ '${difficulty}' が見つかりません`);
       }
     }),
   );
@@ -211,9 +210,6 @@ const handleCancel = (): void => {
 // 外部から開く用メソッド
 const showModal = (): void => {
   if (!props.currentData || !props.dirHandle) {
-    console.warn(
-      "ScenarioReorderDialog: currentData または dirHandle が未設定です",
-    );
     return;
   }
   initializeState().catch((error) => {

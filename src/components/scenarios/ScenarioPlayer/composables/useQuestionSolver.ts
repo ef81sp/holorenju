@@ -70,7 +70,6 @@ export const useQuestionSolver = (
   };
 
   const handleIncorrectMove = (questionSection: QuestionSection): void => {
-    console.warn("[handleIncorrectMove] Called");
     restoreAttemptBoard();
     resetAttemptBaseBoard();
 
@@ -102,7 +101,6 @@ export const useQuestionSolver = (
 
     // すでに石が置かれている場合はスキップ
     if (boardStore.board[position.row]?.[position.col] !== null) {
-      console.warn("[handlePlaceStone] Cell already occupied", position);
       return;
     }
 
@@ -119,10 +117,6 @@ export const useQuestionSolver = (
     }
     boardStore.setBoard(newBoard, "question");
     audioStore.playSfx("stone-place");
-
-    console.warn(
-      `[handlePlaceStone] Placed ${playerColor} stone at (${position.row}, ${position.col})`,
-    );
 
     // 成功条件をチェック
     const operator = questionSection.successOperator ?? "or";
@@ -162,7 +156,6 @@ export const useQuestionSolver = (
    * 成功時の処理
    */
   const handleCorrectMove = (questionSection: QuestionSection): void => {
-    console.warn("[handleCorrectMove] Called");
     onSectionComplete();
 
     // ○カットインを表示
@@ -172,7 +165,6 @@ export const useQuestionSolver = (
     if (questionSection.feedback.success.length > 0) {
       const [msg] = questionSection.feedback.success;
       if (msg) {
-        console.warn("[handleCorrectMove] Showing success feedback:", msg.text);
         dialogStore.showMessage({
           id: `feedback-success-${msg.character}`,
           character: msg.character as CharacterType,
@@ -192,17 +184,7 @@ export const useQuestionSolver = (
   const checkAllConditions = (
     conditions: SuccessCondition[],
     operator: SuccessOperator = "or",
-  ): boolean => {
-    const result = evaluateAllConditions(
-      conditions,
-      boardStore.board,
-      operator,
-    );
-    console.warn(
-      `[checkAllConditions] All conditions check result: ${result} (operator=${operator})`,
-    );
-    return result;
-  };
+  ): boolean => evaluateAllConditions(conditions, boardStore.board, operator);
 
   /**
    * 個別の成功条件をチェック

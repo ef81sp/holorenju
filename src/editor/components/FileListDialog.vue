@@ -141,8 +141,6 @@ const handleDeleteConfirm = async (): Promise<void> => {
 
     // ファイルを削除
     await diffDir.removeEntry(fileName);
-    console.warn(`🗑️ ファイルを削除しました: ${scenario.path}`);
-
     // index.jsonを再生成
     await regenerateScenarioIndex(props.dirHandle, null);
 

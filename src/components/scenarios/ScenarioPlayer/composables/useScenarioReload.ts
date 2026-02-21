@@ -9,9 +9,7 @@ export const useScenarioReload = (
   reload: () => Promise<void>;
 } => {
   const reload = async (): Promise<void> => {
-    console.warn("🔃 シナリオを再読み込み中...");
     await loadScenario();
-    console.warn("✅ シナリオを再読み込みしました");
   };
 
   return { reload };

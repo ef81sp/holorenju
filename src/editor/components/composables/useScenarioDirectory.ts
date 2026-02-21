@@ -32,7 +32,6 @@ export function useScenarioDirectory(): UseScenarioDirReturn {
       const savedHandle = await loadDirectoryHandle();
       if (savedHandle) {
         scenarioDir.value = savedHandle;
-        console.warn("保存されたディレクトリハンドルを復元しました");
       }
     } catch (error) {
       console.error("Failed to restore directory handle:", error);
@@ -56,12 +55,10 @@ export function useScenarioDirectory(): UseScenarioDirReturn {
       scenarioDir.value = dirHandle;
       // IndexedDB に保存
       await saveDirectoryHandle(dirHandle);
-      console.warn("シナリオ保存先ディレクトリを選択しました:", dirHandle.name);
     } catch (error) {
       const err = error as DOMException;
       // Playwright環境での傍受はテスト用なので無視
       if (err.name === "AbortError" && err.message.includes("Intercepted")) {
-        console.warn("ディレクトリピッカーが傍受されました（Playwright環境）");
         return;
       }
       // その他のエラーは報告
@@ -78,14 +75,10 @@ export function useScenarioDirectory(): UseScenarioDirReturn {
    */
   const handleSaveToDirectory = async (): Promise<void> => {
     if (!scenarioDir.value) {
-      console.warn("先にディレクトリを選択してください");
       return;
     }
 
     try {
-      console.warn("💾 保存開始...");
-      console.warn("📋 シナリオデータ:", editorStore.scenario);
-
       // バリデーション実行（保存時は文字数チェックも行う）
       const result = validateScenarioCompletely(editorStore.scenario, {
         checkLength: true,
@@ -105,9 +98,6 @@ export function useScenarioDirectory(): UseScenarioDirReturn {
       editorStore.clearValidationErrors();
 
       const fileName = `${editorStore.scenario.id}.json`;
-      console.warn(
-        `💾 ファイル名: ${editorStore.scenario.difficulty}/${fileName}`,
-      );
 
       // 難易度に対応したディレクトリを取得（自動作成）
       const difficultyDir = await scenarioDir.value.getDirectoryHandle(
@@ -119,7 +109,6 @@ export function useScenarioDirectory(): UseScenarioDirReturn {
       });
       const writable = await fileHandle.createWritable();
       const json = scenarioToJSON(editorStore.scenario);
-      console.warn("📄 JSON文字列:", `${json.substring(0, 200)}...`);
 
       await writable.write(json);
       await writable.close();
@@ -134,15 +123,12 @@ export function useScenarioDirectory(): UseScenarioDirReturn {
             { create: false },
           );
           await oldDir.removeEntry(fileName);
-          console.warn(
-            `🗑️ 古いファイル ${originalDiff}/${fileName} を削除しました`,
-          );
         } catch (error) {
           // NotFoundError は無視（ファイルが既に存在しない場合）
           if (
             !(error instanceof DOMException && error.name === "NotFoundError")
           ) {
-            console.warn("古いファイルの削除に失敗しました:", error);
+            console.error("古いファイルの削除に失敗しました:", error);
           }
         }
       }
@@ -150,15 +136,8 @@ export function useScenarioDirectory(): UseScenarioDirReturn {
       // 保存成功後、元の難易度を更新
       editorStore.updateOriginalDifficulty(currentDiff);
       editorStore.markClean();
-      console.warn(
-        `✅ ${editorStore.scenario.difficulty}/${fileName} を保存しました`,
-      );
     } catch (error) {
-      console.error("❌ ファイル保存に失敗しました:", error);
-      if (error instanceof Error) {
-        console.error("エラー詳細:", error.message);
-        console.error("スタックトレース:", error.stack);
-      }
+      console.error("ファイル保存に失敗しました:", error);
     }
   };
 
@@ -167,7 +146,6 @@ export function useScenarioDirectory(): UseScenarioDirReturn {
    */
   const handleLoadFromDirectory = async (): Promise<void> => {
     if (!scenarioDir.value) {
-      console.warn("先にディレクトリを選択してください");
       return;
     }
 
@@ -182,9 +160,6 @@ export function useScenarioDirectory(): UseScenarioDirReturn {
           },
         );
       } catch {
-        console.warn(
-          `難易度ディレクトリ '${editorStore.scenario.difficulty}' が見つかりません`,
-        );
         return;
       }
 
@@ -197,9 +172,6 @@ export function useScenarioDirectory(): UseScenarioDirReturn {
       };
 
       if (!typedTargetDir.entries) {
-        console.warn(
-          "entries() がサポートされていないディレクトリハンドルです",
-        );
         return;
       }
 
@@ -211,9 +183,6 @@ export function useScenarioDirectory(): UseScenarioDirReturn {
       }
 
       if (entries.length === 0) {
-        console.warn(
-          `難易度ディレクトリ '${editorStore.scenario.difficulty}' にJSONファイルが見つかりません`,
-        );
         return;
       }
 
@@ -222,7 +191,7 @@ export function useScenarioDirectory(): UseScenarioDirReturn {
         return;
       }
 
-      const [fileName, fileHandle] = firstEntry;
+      const [, fileHandle] = firstEntry;
       const file = await fileHandle.getFile();
       const text = await file.text();
       const data = JSON.parse(text);
@@ -232,14 +201,10 @@ export function useScenarioDirectory(): UseScenarioDirReturn {
         const scenario = parseScenario(data);
         editorStore.loadScenario(scenario);
         editorStore.clearValidationErrors();
-        console.warn(
-          `${editorStore.scenario.difficulty}/${fileName} を読み込みました`,
-        );
       } else {
         editorStore.setValidationErrors(
           result.errors.map((e) => ({ path: e.path, message: e.message })),
         );
-        console.warn("JSONにエラーがあります");
       }
     } catch (error) {
       console.error("ファイル読み込みに失敗しました:", error);

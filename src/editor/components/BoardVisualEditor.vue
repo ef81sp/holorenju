@@ -113,7 +113,6 @@ const handleCopyToClipboard = async (): Promise<void> => {
   try {
     const text = props.board.join("\n");
     await navigator.clipboard.writeText(text);
-    console.warn("クリップボードにコピーしました");
   } catch (err) {
     console.error("クリップボードへのコピーに失敗しました", err);
   }

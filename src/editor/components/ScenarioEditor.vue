@@ -61,7 +61,6 @@ watch(
 // Methods
 const handleOpenFileListDialog = (): void => {
   if (!dirOps.scenarioDir.value) {
-    console.warn("先にディレクトリを選択してください");
     return;
   }
   fileListDialogRef.value?.showModal();

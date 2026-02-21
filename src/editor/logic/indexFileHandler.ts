@@ -48,7 +48,6 @@ const saveIndexJson = async (
   });
   const writable = await indexHandle.createWritable();
   const json = `${JSON.stringify(data, null, 2)}\n`;
-  console.warn("📄 index.json 内容:", `${json.substring(0, 200)}...`);
   await writable.write(json);
   await writable.close();
 };
@@ -135,12 +134,11 @@ export const regenerateScenarioIndexWithOrder = async (
       }
     } catch {
       // ディレクトリが存在しない場合はスキップ
-      console.warn(`難易度ディレクトリ '${difficulty}' が見つかりません`);
+      // ディレクトリが存在しない場合はスキップ
     }
   }
 
   await saveIndexJson(dirHandle, indexData);
-  console.warn("✅ index.json を再生成しました");
 };
 
 export const regenerateScenarioIndex = async (
@@ -188,11 +186,10 @@ export const regenerateScenarioIndex = async (
         }
       } catch {
         // ディレクトリが存在しない場合はスキップ
-        console.warn(`難易度ディレクトリ '${difficulty}' が見つかりません`);
+        // ディレクトリが存在しない場合はスキップ
       }
     }
   }
 
   await saveIndexJson(dirHandle, indexData);
-  console.warn("✅ index.json を再生成しました");
 };

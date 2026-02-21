@@ -76,7 +76,6 @@ export function useScenarioIndexManagement(): UseScenarioIndexManagementReturn {
     reorderDialogRef: DialogRefType | null,
   ): Promise<void> => {
     if (!scenarioDir) {
-      console.warn("先にディレクトリを選択してください");
       return;
     }
 
@@ -113,18 +112,13 @@ export function useScenarioIndexManagement(): UseScenarioIndexManagementReturn {
     }
 
     try {
-      console.warn("🔄 index.json を再生成中...");
       await regenerateScenarioIndexWithOrder(
         scenarioDir,
         currentIndexData.value,
         reorderedData,
       );
-      console.warn("✅ index.json を再生成しました");
     } catch (error) {
-      console.error("❌ index.json の生成に失敗しました:", error);
-      if (error instanceof Error) {
-        console.error("エラー詳細:", error.message);
-      }
+      console.error("index.json の生成に失敗しました:", error);
     }
   };
 
