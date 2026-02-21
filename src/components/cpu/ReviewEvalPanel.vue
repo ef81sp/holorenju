@@ -591,7 +591,10 @@ function isPlayed(candidate: { position: Position }): boolean {
       class="cpu-move"
     >
       <div class="eval-header">
-        <span class="move-label">第{{ moveIndex }}手 {{ moveCoord }}</span>
+        <span class="move-label">
+          <span class="move-index">{{ moveIndex }}:</span>
+          {{ moveCoord }}
+        </span>
       </div>
       <div class="cpu-move-text analyzing-text">解析中...</div>
     </div>
@@ -602,7 +605,10 @@ function isPlayed(candidate: { position: Position }): boolean {
       class="cpu-move"
     >
       <div class="eval-header">
-        <span class="move-label">第{{ moveIndex }}手 {{ moveCoord }}</span>
+        <span class="move-label">
+          <span class="move-index">{{ moveIndex }}:</span>
+          {{ moveCoord }}
+        </span>
         <span
           v-if="cpuForcedWinLabel"
           class="cpu-forced-win-badge"
@@ -620,7 +626,10 @@ function isPlayed(candidate: { position: Position }): boolean {
     >
       <!-- ヘッダ: 手番号 + 座標 + 品質ラベル + ヘルプ -->
       <div class="eval-header">
-        <span class="move-label">第{{ moveIndex }}手 {{ moveCoord }}</span>
+        <span class="move-label">
+          <span class="move-index">{{ moveIndex }}:</span>
+          {{ moveCoord }}
+        </span>
         <span
           class="quality-badge"
           :style="{ backgroundColor: qualityColor }"
@@ -1008,6 +1017,12 @@ function isPlayed(candidate: { position: Position }): boolean {
   font-size: var(--font-size-13);
   font-weight: 500;
   color: var(--color-text-primary);
+  white-space: nowrap;
+}
+
+.move-index {
+  font-size: var(--font-size-11);
+  color: var(--color-text-secondary);
 }
 
 .quality-badge {
@@ -1016,6 +1031,7 @@ function isPlayed(candidate: { position: Position }): boolean {
   color: white;
   font-size: var(--font-size-10);
   font-weight: 500;
+  white-space: nowrap;
 }
 
 .forced-win-badge {
@@ -1024,6 +1040,7 @@ function isPlayed(candidate: { position: Position }): boolean {
   color: white;
   font-size: var(--font-size-10);
   font-weight: 500;
+  white-space: nowrap;
   background-color: hsl(270, 50%, 55%);
 }
 
@@ -1033,6 +1050,7 @@ function isPlayed(candidate: { position: Position }): boolean {
   color: white;
   font-size: var(--font-size-10);
   font-weight: 500;
+  white-space: nowrap;
   background-color: hsl(0, 65%, 50%);
 }
 
@@ -1042,6 +1060,7 @@ function isPlayed(candidate: { position: Position }): boolean {
   color: white;
   font-size: var(--font-size-10);
   font-weight: 500;
+  white-space: nowrap;
   background-color: hsl(270, 50%, 55%);
 }
 
