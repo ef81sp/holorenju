@@ -38,7 +38,7 @@ const emits = defineEmits<{
   display: none;
 }
 
-@container (max-width: 140px) {
+@container (max-width: 100px) {
   .back-text-full {
     display: none;
   }

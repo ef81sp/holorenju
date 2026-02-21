@@ -36,7 +36,9 @@ defineExpose({
     <!-- 操作セクション（左上 4×7）-->
     <div class="control-section-slot">
       <div class="control-header">
-        <slot name="back-button" />
+        <div class="back-button-area">
+          <slot name="back-button" />
+        </div>
         <div class="header-controls">
           <slot name="header-controls" />
         </div>
@@ -95,19 +97,25 @@ defineExpose({
   flex-direction: column;
   gap: var(--size-12);
   overflow: hidden;
-  container-type: inline-size;
 }
 
 .control-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: var(--size-8);
+}
+
+.back-button-area {
+  flex: 1;
+  min-width: 0;
+  container-type: inline-size;
 }
 
 .header-controls {
   display: flex;
   align-items: center;
   gap: var(--size-8);
+  flex-shrink: 0;
 }
 
 .board-section-wrapper {
