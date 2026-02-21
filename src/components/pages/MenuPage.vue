@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useId } from "vue";
 import { useAppStore } from "@/stores/appStore";
 import PageHeader from "@/components/common/PageHeader.vue";
 import FullscreenButton from "@/components/common/FullscreenButton.vue";
@@ -6,6 +7,8 @@ import InfoControl from "@/components/common/InfoControl.vue";
 import TitleLogo from "@/components/common/TitleLogo.vue";
 
 const appStore = useAppStore();
+const trainingDescId = useId();
+const cpuDescId = useId();
 
 const handleSelectTraining = (): void => {
   appStore.selectMode("training");
@@ -31,26 +34,44 @@ const handleSelectCPU = (): void => {
     </PageHeader>
     <div class="content">
       <div class="menu-buttons">
-        <button
-          class="menu-button"
-          @click="handleSelectTraining"
-        >
-          <div class="button-icon">📚</div>
-          <div class="button-text-area">
-            <span class="button-text">学習</span>
-            <p class="button-description">難易度別シナリオで五目並べを学習</p>
-          </div>
-        </button>
-        <button
-          class="menu-button"
-          @click="handleSelectCPU"
-        >
-          <div class="button-icon">🎮</div>
-          <div class="button-text-area">
-            <span class="button-text">ホロメン対戦</span>
-            <p class="button-description">ホロメン(CPU)と対局して腕を磨こう</p>
-          </div>
-        </button>
+        <div class="menu-button-group">
+          <button
+            class="menu-button menu-button--light"
+            :aria-describedby="trainingDescId"
+            @click="handleSelectTraining"
+          >
+            <div class="button-circle">
+              <span class="button-text">学習</span>
+            </div>
+          </button>
+          <p
+            :id="trainingDescId"
+            class="button-description"
+          >
+            難易度別シナリオで
+            <br />
+            五目並べを学習
+          </p>
+        </div>
+        <div class="menu-button-group">
+          <button
+            class="menu-button menu-button--dark"
+            :aria-describedby="cpuDescId"
+            @click="handleSelectCPU"
+          >
+            <div class="button-circle">
+              <span class="button-text">ホロメン対戦</span>
+            </div>
+          </button>
+          <p
+            :id="cpuDescId"
+            class="button-description"
+          >
+            ホロメン(CPU)と対局して
+            <br />
+            腕を磨こう
+          </p>
+        </div>
       </div>
     </div>
   </div>
@@ -64,8 +85,7 @@ const handleSelectCPU = (): void => {
 }
 
 .menu-page {
-  display: flex;
-  flex-direction: column;
+  position: relative;
   width: 100%;
   height: 100%;
   padding: var(--size-40) var(--size-20);
@@ -74,89 +94,169 @@ const handleSelectCPU = (): void => {
 }
 
 .content {
-  flex: 1;
+  position: absolute;
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
+  pointer-events: none;
 }
 
 .menu-buttons {
   display: flex;
   flex-direction: row;
-  gap: var(--size-30);
-  max-width: var(--size-600);
-  width: 100%;
+  gap: var(--size-48);
+  pointer-events: auto;
 }
 
-.menu-button {
-  flex: 1;
-  padding: var(--size-24);
-  background: var(--gradient-button-primary);
-  border: var(--size-2) solid rgba(255, 255, 255, 0.3);
-  border-radius: var(--size-16);
-  cursor: pointer;
-  transition: all 0.3s ease;
-  box-shadow: 0 var(--size-5) var(--size-16) rgba(0, 0, 0, 0.2);
+.menu-button-group {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--size-12);
+}
+
+.menu-button {
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: none;
+  }
+
+  &:hover:not(:disabled),
+  &:focus-visible {
+    .button-circle::after {
+      opacity: 1;
+    }
+  }
+
+  &:active:not(:disabled) {
+    .button-circle::after {
+      opacity: 0.5;
+      animation-play-state: paused;
+    }
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.button-circle {
   position: relative;
-}
-
-.menu-button:hover:not(:disabled) {
-  transform: translateY(calc(-1 * var(--size-5)));
-  box-shadow: 0 var(--size-8) var(--size-20) rgba(0, 0, 0, 0.3);
-}
-
-.menu-button:active:not(:disabled) {
-  transform: translateY(calc(-1 * var(--size-2)));
-}
-
-.menu-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  background: linear-gradient(
-    135deg,
-    var(--color-border-heavy) 0%,
-    var(--color-text-secondary) 100%
-  );
-}
-
-.button-icon {
-  font-size: var(--font-size-32);
-}
-
-.button-text-area {
+  width: var(--size-180);
+  height: var(--size-180);
+  border-radius: 50%;
   display: flex;
-  flex-direction: column;
-  gap: var(--size-5);
-  text-align: center;
+  align-items: center;
+  justify-content: center;
+
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    opacity: 0;
+    transition: opacity 0.4s ease-out;
+    pointer-events: none;
+    outline: var(--size-2) solid transparent;
+    outline-offset: 0;
+    animation:
+      glow-pulse 1.5s ease-in-out infinite,
+      ring-expand 1.5s ease-out infinite;
+  }
+}
+
+@keyframes glow-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 var(--size-20) hsl(199, 72%, 55%, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 var(--size-40) hsl(199, 72%, 55%, 1);
+  }
+}
+
+@keyframes ring-expand {
+  0% {
+    outline-color: hsl(199, 72%, 55%, 1);
+    outline-offset: 0;
+  }
+  100% {
+    outline-color: hsl(199, 72%, 55%, 0);
+    outline-offset: var(--size-16);
+  }
+}
+
+.menu-button--light {
+  .button-circle {
+    background: radial-gradient(
+      circle,
+      rgba(255, 255, 255, 0.95) 0%,
+      rgba(255, 255, 255, 0.7) 70%,
+      rgba(255, 255, 255, 0) 100%
+    );
+  }
+
+  .button-text {
+    color: var(--color-text-primary);
+  }
+}
+
+.menu-button--dark {
+  .button-circle {
+    background: radial-gradient(
+      circle,
+      rgba(0, 0, 0, 0.7) 0%,
+      rgba(0, 0, 0, 0.5) 70%,
+      rgba(0, 0, 0, 0) 100%
+    );
+  }
+
+  .button-text {
+    color: white;
+  }
 }
 
 .button-text {
   font-size: var(--font-size-20);
-  font-weight: bold;
-  color: var(--color-text-primary);
+  font-weight: var(--font-weight-bold);
 }
 
 .button-description {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: var(--size-200);
+  margin: var(--size-12) 0 0;
+  padding: 0;
   font-size: var(--font-size-12);
   color: var(--color-text-secondary);
-  margin: 0;
-  padding: 0;
+  text-align: center;
   word-break: auto-phrase;
 }
 
-.badge {
-  position: absolute;
-  right: var(--size-8);
-  top: var(--size-8);
-  background: var(--color-error);
-  color: white;
-  font-size: var(--font-size-12);
-  padding: var(--size-5) var(--size-8);
-  border-radius: var(--size-8);
-  font-weight: bold;
+@media (prefers-reduced-motion: reduce) {
+  .button-circle::after {
+    animation: none;
+  }
+
+  .menu-button {
+    &:hover:not(:disabled),
+    &:focus-visible {
+      .button-circle::after {
+        opacity: 1;
+        box-shadow: 0 0 var(--size-20) hsl(199, 72%, 55%, 0.7);
+        outline-color: hsl(199, 72%, 55%, 1);
+        outline-offset: var(--size-4);
+      }
+    }
+  }
 }
 </style>
