@@ -63,7 +63,7 @@ const defaultPreferences: Preferences = {
     sfxVolume: 0.7,
   },
   display: {
-    textSize: "large",
+    textSize: "normal",
     largeBoardEnabled: false,
     largeBoardScope: "both",
     largeBoardHasBeenAsked: false,
