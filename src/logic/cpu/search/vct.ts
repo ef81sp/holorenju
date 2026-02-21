@@ -30,6 +30,7 @@ import {
 import {
   findThreatMoves,
   getThreatDefensePositions,
+  hasFourThreeAvailable,
   hasOpenThree,
   isThreat,
 } from "./vctHelpers";
@@ -210,6 +211,8 @@ export function hasVCT(
 
   // 相手に活三があればVCT（三脅威）は不成立（VCFのみ有効）
   // VCFは上で既にチェック済みなので、ここではfalseを返す
+  // 注: ミセ手(hasFourThreeAvailable)のチェックはper-nodeでは性能上見送り。
+  // エントリポイントのガード + validateVCTSequenceの事後検証で対応する。
   if (hasOpenThree(board, opponentColor)) {
     return false;
   }
@@ -402,10 +405,13 @@ export function findVCTMove(
   };
   const vcfCache = createVCFCache();
 
-  // 相手に活三があればVCT不成立（四追いでしか勝てない）
+  // 相手に活三またはミセ手があればVCT不成立（四追いでしか勝てない）
   const opponentColor = color === "black" ? "white" : "black";
-  if (hasOpenThree(board, opponentColor)) {
-    // VCFのみ試す（四追いなら活三があっても有効）
+  if (
+    hasOpenThree(board, opponentColor) ||
+    hasFourThreeAvailable(board, opponentColor)
+  ) {
+    // VCFのみ試す（四追いなら活三/ミセ手があっても有効）
     return cachedFindVCFMove(
       board,
       color,
@@ -586,10 +592,13 @@ export function findVCTSequence(
   };
   const vcfCache = createVCFCache();
 
-  // 相手に活三があればVCT不成立（四追いでしか勝てない）
+  // 相手に活三またはミセ手があればVCT不成立（四追いでしか勝てない）
   const opponentColor = color === "black" ? "white" : "black";
-  if (hasOpenThree(board, opponentColor)) {
-    // VCFのみ試す（四追いなら活三があっても有効）
+  if (
+    hasOpenThree(board, opponentColor) ||
+    hasFourThreeAvailable(board, opponentColor)
+  ) {
+    // VCFのみ試す（四追いなら活三/ミセ手があっても有効）
     const vcfOnly = cachedFindVCFSequence(
       board,
       color,
@@ -712,9 +721,12 @@ function validateVCTSequence(
         valid = false;
         break;
       }
-      // 防御手配置後に相手の活三が存在する → 次の攻撃手が四/五連でなければVCT手順崩壊
-      // （探索開始時点で相手に活三がないことはfindVCTSequenceRecursiveが保証する）
-      if (hasOpenThree(board, opponentColor)) {
+      // 防御手配置後に相手の活三またはミセ手が存在する → 次の攻撃手が四/五連でなければVCT手順崩壊
+      // （探索開始時点で相手に活三/ミセ手がないことはfindVCTSequenceRecursiveが保証する）
+      if (
+        hasOpenThree(board, opponentColor) ||
+        hasFourThreeAvailable(board, opponentColor)
+      ) {
         const nextIdx = i + 1;
         if (nextIdx >= sequence.length) {
           valid = false;
@@ -877,6 +889,8 @@ function findVCTSequenceRecursive(
 
   // 相手に活三があればVCT（三脅威）は不成立（VCFのみ有効）
   // VCFは上で既にチェック済みなので、ここではfalseを返す
+  // 注: ミセ手(hasFourThreeAvailable)のチェックはper-nodeでは性能上見送り。
+  // エントリポイントのガード + validateVCTSequenceの事後検証で対応する。
   if (hasOpenThree(board, opponentColor)) {
     return false;
   }
@@ -1069,9 +1083,12 @@ export function findVCTSequenceFromFirstMove(
     return null;
   }
 
-  // 相手に活三があればVCT開始手として無効（四追いでしか勝てない）
+  // 相手に活三またはミセ手があればVCT開始手として無効（四追いでしか勝てない）
   const opponentColor = color === "black" ? "white" : "black";
-  if (hasOpenThree(board, opponentColor)) {
+  if (
+    hasOpenThree(board, opponentColor) ||
+    hasFourThreeAvailable(board, opponentColor)
+  ) {
     return null;
   }
 
@@ -1205,9 +1222,12 @@ export function isVCTFirstMove(
   };
   const vcfCache = createVCFCache();
 
-  // 相手に活三があればVCT開始手として無効（四追いでしか勝てない）
+  // 相手に活三またはミセ手があればVCT開始手として無効（四追いでしか勝てない）
   const opponentColor = color === "black" ? "white" : "black";
-  if (hasOpenThree(board, opponentColor)) {
+  if (
+    hasOpenThree(board, opponentColor) ||
+    hasFourThreeAvailable(board, opponentColor)
+  ) {
     return false;
   }
 

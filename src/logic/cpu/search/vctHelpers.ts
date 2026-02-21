@@ -24,12 +24,49 @@ import {
   isValidJumpThree,
 } from "../evaluation/jumpPatterns";
 import { getOpenThreeDefensePositions } from "../evaluation/threatDetection";
+import { createsFourThree } from "../evaluation/winningPatterns";
 import { isNearExistingStone } from "../moveGenerator";
 import {
   findJumpGapPosition,
   getJumpThreeDefensePositions,
 } from "../patterns/threatAnalysis";
 import { classifyThreat } from "./threatMoves";
+
+/**
+ * 指定色がミセ手（1手で四三を作れる手）を持っているかチェック
+ *
+ * ミセ手は活三より強い反撃脅威（四三は止められない）であり、
+ * 活三と同様にVCTの三脅威を無効化する。
+ *
+ * @param board 盤面
+ * @param color チェック対象の色
+ * @returns ミセ手があればtrue
+ */
+export function hasFourThreeAvailable(
+  board: BoardState,
+  color: "black" | "white",
+): boolean {
+  for (let row = 0; row < BOARD_SIZE; row++) {
+    for (let col = 0; col < BOARD_SIZE; col++) {
+      if (board[row]?.[col] !== null) {
+        continue;
+      }
+      if (!isNearExistingStone(board, row, col)) {
+        continue;
+      }
+      if (color === "black") {
+        const forbidden = checkForbiddenMove(board, row, col);
+        if (forbidden.isForbidden) {
+          continue;
+        }
+      }
+      if (createsFourThree(board, row, col, color)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
 
 /**
  * 指定色が活三（連続三で両端空き）を持っているかチェック

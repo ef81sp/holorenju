@@ -26,6 +26,7 @@ import {
 } from "./vct";
 import {
   getThreatDefensePositions,
+  hasFourThreeAvailable,
   hasOpenThree,
   isThreat,
 } from "./vctHelpers";
@@ -1362,6 +1363,66 @@ describe("防御手が活三を作る場合のVCT探索（depth > 0）", () => {
     hasVCT(board, "white", 0, undefined, options);
     expect(board).toEqual(snapshot);
     findVCTSequence(board, "white", options);
+    expect(board).toEqual(snapshot);
+  });
+});
+
+describe("hasFourThreeAvailable", () => {
+  it("四三が作れる配置で true", () => {
+    // 白: (7,5)(7,6)(7,7) 横三 + (5,8)(6,8) 縦二
+    // → (7,8)で横四+縦三 → 四三
+    const board = createBoardWithStones([
+      { row: 7, col: 5, color: "white" },
+      { row: 7, col: 6, color: "white" },
+      { row: 7, col: 7, color: "white" },
+      { row: 5, col: 8, color: "white" },
+      { row: 6, col: 8, color: "white" },
+    ]);
+    expect(hasFourThreeAvailable(board, "white")).toBe(true);
+  });
+
+  it("四三が作れない配置で false", () => {
+    const board = createBoardWithStones([{ row: 7, col: 7, color: "white" }]);
+    expect(hasFourThreeAvailable(board, "white")).toBe(false);
+  });
+
+  it("盤面不変性", () => {
+    const board = createBoardWithStones([
+      { row: 7, col: 5, color: "white" },
+      { row: 7, col: 6, color: "white" },
+      { row: 7, col: 7, color: "white" },
+      { row: 5, col: 8, color: "white" },
+      { row: 6, col: 8, color: "white" },
+    ]);
+    const snapshot = copyBoard(board);
+    hasFourThreeAvailable(board, "white");
+    expect(board).toEqual(snapshot);
+  });
+});
+
+describe("相手にミセ手がある場合のVCTスキップ", () => {
+  // ユーザー報告棋譜: 14手目でH10のVCTが誤検出される
+  const record14 = "H8 G7 I10 G8 H9 H7 F9 G9 G10 E7 D7 F7 I7 E8";
+  const options = {
+    maxDepth: 6,
+    timeLimit: 10000,
+    vcfOptions: { maxDepth: 16, timeLimit: 10000 },
+  };
+
+  it("14手目盤面で白にミセ手がある", () => {
+    const { board } = createBoardFromRecord(record14);
+    expect(hasFourThreeAvailable(board, "white")).toBe(true);
+  });
+
+  it("相手にミセ手がある場合、黒のVCTは不成立", { timeout: 15000 }, () => {
+    const { board } = createBoardFromRecord(record14);
+    expect(findVCTSequence(board, "black", options)).toBeNull();
+  });
+
+  it("盤面不変性", { timeout: 15000 }, () => {
+    const { board } = createBoardFromRecord(record14);
+    const snapshot = copyBoard(board);
+    findVCTSequence(board, "black", options);
     expect(board).toEqual(snapshot);
   });
 });
