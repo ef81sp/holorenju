@@ -380,11 +380,13 @@ export function detectOpponentThreats(
 
         // 跳び四をチェック（●●・●● など、連続4石以外のパターン）
         // 跳び四は中の空きを埋めると五連になるため、止め四と同等の脅威
+        let isJumpFour = false;
         if (
           pattern.count !== 4 &&
           renjuDirIndex >= 0 &&
           checkJumpFour(board, row, col, renjuDirIndex, opponentColor)
         ) {
+          isJumpFour = true;
           // 跳び四の防御位置は中の空きマス（埋めると五連になる）
           const gapPos = findJumpGapPosition(
             board,
@@ -401,7 +403,9 @@ export function detectOpponentThreats(
         }
 
         // 活三をチェック（両端が空いている3連）
+        // 跳び四の一部である連続三は活三ではない
         if (
+          !isJumpFour &&
           pattern.count === 3 &&
           pattern.end1 === "empty" &&
           pattern.end2 === "empty"

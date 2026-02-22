@@ -338,21 +338,22 @@ export function sortMoves(
 
     if (hasThreats) {
       // 防御位置のセットを構築
-      const allDefensePositions = [
-        ...threats.openFours,
-        ...threats.fours,
-        ...threats.openThrees,
-      ];
+      // 四がある場合は四の防御のみ（活三防御は四を止めないため無意味）
+      const hasFours = threats.openFours.length > 0 || threats.fours.length > 0;
+      const allDefensePositions = hasFours
+        ? [...threats.openFours, ...threats.fours]
+        : threats.openThrees;
       const defenseSet = new Set(
         allDefensePositions.map((p) => `${p.row},${p.col}`),
       );
 
-      // 未評価の手で防御位置にない手を-Infinityに
       for (const sm of scoredMoves) {
-        if (
-          !sm.staticEvalDone &&
-          !defenseSet.has(`${sm.move.row},${sm.move.col}`)
-        ) {
+        if (defenseSet.has(`${sm.move.row},${sm.move.col}`)) {
+          continue;
+        }
+        // 四がある場合: 四を止めない手は評価済みでも除外（必ず負ける）
+        // 活三のみの場合: 未評価の手のみ除外（評価済みは静的評価に委ねる）
+        if (hasFours || !sm.staticEvalDone) {
           sm.score = -Infinity;
         }
       }

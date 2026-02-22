@@ -569,3 +569,92 @@ describe("Mise-VCFの偽陽性対策", () => {
     expect(result.completedDepth).toBeGreaterThanOrEqual(1);
   }, 15000);
 });
+
+// =============================================================================
+// checkMustDefend: 跳び四の一部を活三と誤検出しない
+// =============================================================================
+
+describe("checkMustDefend: 跳び四と活三の判別", () => {
+  it("跳び四の連続三部分を活三と誤検出しない", () => {
+    // H8 G8 I7 G9 G7 J10 H7 F7 J7 K7 H11 I9 H9
+    // 黒の列H: H7-H8-H9-[gap]-H11 = 跳び四（●●●_●）
+    // H7-H8-H9の部分は跳び四の一部であり、活三ではない
+    // → 四＋活三（四三）と誤判定されない
+    const { board } = createBoardFromRecord(
+      "H8 G8 I7 G9 G7 J10 H7 F7 J7 K7 H11 I9 H9",
+    );
+
+    const result = findBestMoveIterativeWithTT(
+      board,
+      "white",
+      4,
+      5000,
+      0,
+      FULL_EVAL_OPTIONS,
+    );
+
+    // 跳び四の防御手（H10）が返り、四三ではないので -FIVE にならない
+    expect(result.score).toBeGreaterThan(-PATTERN_SCORES.FIVE);
+  }, 15000);
+
+  it("NMP: 止め四防御後に偽の五連を検出しない", () => {
+    // H8 G8 I7 G9 G7 J10 H7 F7 (8手)
+    // J7(黒)で止め四 → K7(白)で防御必須
+    // NMPがK7経由で偽の五連(checkFive(K7,black)=true)を検出していた
+    const { board } = createBoardFromRecord("H8 G8 I7 G9 G7 J10 H7 F7");
+
+    const result = findBestMoveIterativeWithTT(
+      board,
+      "black",
+      5,
+      10000,
+      0,
+      FULL_EVAL_OPTIONS,
+    );
+
+    // J7 が偽の +100000 にならない
+    const j7Candidate = result.candidates?.find(
+      (c) => c.move.row === 8 && c.move.col === 9,
+    );
+    if (j7Candidate) {
+      expect(j7Candidate.score).toBeLessThan(PATTERN_SCORES.FIVE);
+    }
+    // 全体のスコアも FIVE 未満
+    expect(result.score).toBeLessThan(PATTERN_SCORES.FIVE);
+  }, 15000);
+
+  it("独立した四と活三がある場合は -FIVE になる", () => {
+    // 黒が四（列方向）と活三（行方向）を独立に持つ局面を構築
+    // 四: E8-F8-G8-H8 (行8, 列4-7) → 防御位置 I8 (行8, 列8)
+    // 活三: E10-E11-E12 (列4, 行9-11) → I8を止めても活三は残る
+    const board = createEmptyBoard();
+    placeStonesOnBoard(board, [
+      // 黒の四（行8）: E8-F8-G8-H8
+      { row: 7, col: 4, color: "black" },
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+      // 黒の活三（列E）: E10-E11-E12
+      { row: 9, col: 4, color: "black" },
+      { row: 10, col: 4, color: "black" },
+      { row: 11, col: 4, color: "black" },
+      // 白のダミー石
+      { row: 0, col: 0, color: "white" },
+      { row: 0, col: 14, color: "white" },
+      { row: 14, col: 0, color: "white" },
+      { row: 14, col: 14, color: "white" },
+    ]);
+
+    const result = findBestMoveIterativeWithTT(
+      board,
+      "white",
+      2,
+      5000,
+      0,
+      FULL_EVAL_OPTIONS,
+    );
+
+    // 独立した四＋活三 = 四三 → -FIVE
+    expect(result.score).toBe(-PATTERN_SCORES.FIVE);
+  }, 15000);
+});

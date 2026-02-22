@@ -96,6 +96,7 @@ function evaluatePlayedForcedWin(
   bestMove: Position,
   bestScore: number,
   result: { candidates?: MoveScoreEntry[]; score: number },
+  bypassVctThreshold?: boolean,
 ): { playedScore: number; playedForcedWinSequence: Position[] | undefined } {
   if (
     playedRow < 0 ||
@@ -121,7 +122,7 @@ function evaluatePlayedForcedWin(
   }
 
   // VCT シーケンス取得を試行
-  if (countStones(board) >= VCT_STONE_THRESHOLD) {
+  if (bypassVctThreshold || countStones(board) >= VCT_STONE_THRESHOLD) {
     const vctFromPlayed = findVCTSequenceFromFirstMove(
       board,
       playedPos,
@@ -231,7 +232,7 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
         ? findMiseVCFSequence(board, color, REVIEW_MISE_VCF_OPTIONS)
         : null;
 
-    const forcedWin =
+    let forcedWin =
       vcfResult ??
       miseVcfResult ??
       (countStones(board) >= VCT_STONE_THRESHOLD && !opponentHasFour
@@ -310,6 +311,16 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
       REVIEW_SEARCH_PARAMS.absoluteTimeLimit,
     );
 
+    // minimax が FIVE を返したが VCF/VCT 未検出 → VCT 閾値バイパスで再試行
+    if (!forcedWin && result.score >= PATTERN_SCORES.FIVE && !opponentHasFour) {
+      const vctRetry = findVCTSequence(board, color, REVIEW_VCT_OPTIONS);
+      if (vctRetry) {
+        forcedWin = vctRetry;
+        forcedWinType = vctRetry.isForbiddenTrap ? "forbidden-trap" : "vct";
+      }
+      // VCT でも未検出なら forcedWin は設定しない（「必勝」ラベル非表示）
+    }
+
     // 候補手エントリから内訳付きデータを構築するヘルパー
     const buildCandidate = (entry: MoveScoreEntry): ReviewCandidate => {
       const { score: breakdownScore, breakdown } =
@@ -361,6 +372,7 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
         bestMove,
         bestScore,
         result,
+        countStones(board) < VCT_STONE_THRESHOLD,
       );
 
       // 候補手リスト構築

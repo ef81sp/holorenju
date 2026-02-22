@@ -956,3 +956,44 @@ describe("evaluatePosition - 三三脅威防御", () => {
     expect(score).toBe(-Infinity);
   });
 });
+
+describe("detectOpponentThreats - 跳び四と活三の判別", () => {
+  it("跳び四の連続三部分を活三として検出しない", () => {
+    const board = createEmptyBoard();
+    // 跳び四パターン: ●●●_● (列H: row4-row7-row8-row9)
+    // H11(row4)-[gap H10(row5)]-H9(row6)-H8(row7)-H7(row8)
+    // ※座標系: row=14-行番号 → H7=row8, H8=row7, H9=row6, H10=row5, H11=row4
+    placeStonesOnBoard(board, [
+      { row: 8, col: 7, color: "black" }, // H7
+      { row: 7, col: 7, color: "black" }, // H8
+      { row: 6, col: 7, color: "black" }, // H9
+      // gap at row 5 (H10)
+      { row: 4, col: 7, color: "black" }, // H11
+    ]);
+
+    const threats = detectOpponentThreats(board, "black");
+
+    // 跳び四として検出される
+    expect(threats.fours.length).toBeGreaterThan(0);
+    const hasH10 = threats.fours.some((p) => p.row === 5 && p.col === 7);
+    expect(hasH10).toBe(true);
+
+    // H7-H8-H9 を活三として検出しない（跳び四の一部）
+    expect(threats.openThrees).toHaveLength(0);
+  });
+
+  it("独立した連続三は正しく活三として検出される", () => {
+    const board = createEmptyBoard();
+    // 独立した活三: ●●● 両端空き（跳び四ではない）
+    placeStonesOnBoard(board, [
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+    ]);
+
+    const threats = detectOpponentThreats(board, "black");
+
+    // 活三として検出される
+    expect(threats.openThrees.length).toBeGreaterThan(0);
+  });
+});

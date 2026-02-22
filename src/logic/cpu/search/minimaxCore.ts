@@ -217,7 +217,7 @@ export function minimaxWithTT(
       perspective,
       alpha,
       beta,
-      lastMove,
+      null, // NMPでは手を打たないため、lastMoveをnullにして偽の終端判定を防止
       ctx,
       false, // 連続NMP防止
     );

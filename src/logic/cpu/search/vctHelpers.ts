@@ -98,11 +98,12 @@ export function hasOpenThree(
         }
         const [dr, dc] = direction;
         const pattern = analyzeDirection(board, row, col, dr, dc, color);
-        // 連続活三
+        // 連続活三（跳び四の一部である連続三は活三ではない）
         if (
           pattern.count === 3 &&
           pattern.end1 === "empty" &&
-          pattern.end2 === "empty"
+          pattern.end2 === "empty" &&
+          !checkJumpFour(board, row, col, dirIndex, color)
         ) {
           return true;
         }
@@ -305,11 +306,12 @@ export function getCreatedOpenThreeDefenses(
     }
     const [dr, dc] = direction;
     const pattern = analyzeDirection(board, row, col, dr, dc, color);
-    // 連続活三（黒の場合はウソの三を除外）
+    // 連続活三（跳び四の一部は除外、黒の場合はウソの三を除外）
     if (
       pattern.count === 3 &&
       pattern.end1 === "empty" &&
       pattern.end2 === "empty" &&
+      !checkJumpFour(board, row, col, dirIndex, color) &&
       (color !== "black" || isValidConsecutiveThree(board, row, col, dirIndex))
     ) {
       defenses.push(
