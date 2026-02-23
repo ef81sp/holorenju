@@ -80,6 +80,8 @@ export interface ForbiddenVulnerabilityWeakness extends WeaknessBase {
   type: "forbidden-vulnerability";
   /** 禁手追い込みが成立した手番号 */
   trapMoveNumber: number;
+  /** 白の禁手追い込み(forced-trap) か黒の自滅禁手(self-inflicted) か */
+  subType: "forced-trap" | "self-inflicted";
 }
 
 /** time-pressure-error: 時間切れ中断による劣化 */

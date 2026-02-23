@@ -465,6 +465,7 @@ function detectForbiddenVulnerability(
       color: "black", // 黒が弱点を突かれた
       position: { row: lastMove.row, col: lastMove.col },
       trapMoveNumber: trapMoveIndex + 1,
+      subType: "forced-trap",
       description: `手${lastMoveNumber}: 白の禁手追い込みで黒が敗北`,
     });
   } else {
@@ -476,6 +477,7 @@ function detectForbiddenVulnerability(
       color: lastColor,
       position: { row: lastMove.row, col: lastMove.col },
       trapMoveNumber: lastMoveNumber,
+      subType: "self-inflicted",
       description: `手${lastMoveNumber}: 黒が禁手を自滅的に着手`,
     });
   }
@@ -489,8 +491,12 @@ function detectForbiddenVulnerability(
 
 /**
  * 弱点パターンを集計
+ *
+ * forbidden-vulnerability は self-inflicted のみカウントする
+ * （forced-trap は白の正当な勝ち筋であり黒の弱点ではないため）
  */
-function summarizePatterns(
+/** @internal テスト用にエクスポート */
+export function summarizePatterns(
   weaknesses: WeaknessInstance[],
   totalGames: number,
 ): WeaknessPatternSummary[] {
@@ -505,18 +511,33 @@ function summarizePatterns(
 
   return types.map((type) => {
     const matching = weaknesses.filter((w) => w.type === type);
+    // forbidden-vulnerability は self-inflicted のみ弱点としてカウント
+    const effectiveMatching =
+      type === "forbidden-vulnerability"
+        ? matching.filter(
+            (w) =>
+              isForbiddenVulnerability(w) && w.subType === "self-inflicted",
+          )
+        : matching;
+
     const byColor = { black: 0, white: 0 };
-    for (const w of matching) {
+    for (const w of effectiveMatching) {
       byColor[w.color]++;
     }
 
     return {
       type,
-      count: matching.length,
-      rate: totalGames > 0 ? matching.length / totalGames : 0,
+      count: effectiveMatching.length,
+      rate: totalGames > 0 ? effectiveMatching.length / totalGames : 0,
       byColor,
     };
   });
+}
+
+function isForbiddenVulnerability(
+  w: WeaknessInstance,
+): w is ForbiddenVulnerabilityWeakness {
+  return w.type === "forbidden-vulnerability";
 }
 
 // ============================================================================
