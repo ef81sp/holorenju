@@ -21,7 +21,7 @@ describe("PATTERN_SCORES", () => {
   });
 
   it("新しいスコア定数が正しく定義されている", () => {
-    expect(PATTERN_SCORES.FORBIDDEN_TRAP_STRONG).toBe(5000);
+    expect(PATTERN_SCORES.FORBIDDEN_TRAP_STRONG).toBe(8000);
     expect(PATTERN_SCORES.FUKUMI_BONUS).toBe(1500);
     expect(PATTERN_SCORES.FORBIDDEN_TRAP_SETUP).toBe(1500);
     expect(PATTERN_SCORES.MISE_BONUS).toBe(1000);

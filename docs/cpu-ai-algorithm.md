@@ -239,7 +239,7 @@ OPEN_FOUR(10000) + OPEN_THREE(1000) + FOUR_THREE_BONUS(5000) = 16000
 
 | 状況                     | スコア                       |
 | ------------------------ | ---------------------------- |
-| 黒の防御位置が禁手       | FORBIDDEN_TRAP_STRONG (5000) |
+| 黒の防御位置が禁手       | FORBIDDEN_TRAP_STRONG (8000) |
 | 禁手への誘導セットアップ | FORBIDDEN_TRAP_SETUP (1500)  |
 
 ### 先読み評価

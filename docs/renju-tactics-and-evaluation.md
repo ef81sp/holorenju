@@ -249,7 +249,7 @@ VCTの例:
 ### AI実装
 
 ```typescript
-// 防御位置が禁手: +5000 (FORBIDDEN_TRAP_STRONG)
+// 防御位置が禁手: +8000 (FORBIDDEN_TRAP_STRONG)
 // 誘導セットアップ: +1500 (FORBIDDEN_TRAP_SETUP)
 ```
 
