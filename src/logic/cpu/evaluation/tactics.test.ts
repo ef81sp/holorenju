@@ -643,7 +643,7 @@ describe("禁手追い込み三（FORBIDDEN_TRAP_THREE）", () => {
     // F9(row=6, col=5)の黒石があるので、10Fに黒が打つと三三or四四の禁手
     expect(forbidden10F.isForbidden).toBe(true);
 
-    // 達四点の一方が禁手なら FORBIDDEN_TRAP_STRONG (8000点) 以上のスコア
+    // 達四点の一方が禁手なら FORBIDDEN_TRAP_STRONG (5000点) 以上のスコア
     expect(score10G).toBeGreaterThanOrEqual(
       PATTERN_SCORES.FORBIDDEN_TRAP_STRONG,
     );
