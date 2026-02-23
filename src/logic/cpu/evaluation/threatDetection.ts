@@ -93,7 +93,17 @@ export function countThreatDirections(
       continue;
     }
 
-    // 活三
+    // 跳び四をチェック（連続四がない場合のみ）
+    // 跳び四の一部である連続三を活三と誤分類しないよう、活三チェックの前に実施
+    if (
+      pattern.count !== 4 &&
+      checkJumpFour(board, row, col, dirIndex, color)
+    ) {
+      threatCount++;
+      continue;
+    }
+
+    // 活三（跳び四チェックで continue 済みのため、跳び四の一部は到達しない）
     if (
       pattern.count === 3 &&
       pattern.end1 === "empty" &&
@@ -107,15 +117,6 @@ export function countThreatDirections(
         threatCount++;
         continue;
       }
-    }
-
-    // 跳び四をチェック（連続四がない場合のみ）
-    if (
-      pattern.count !== 4 &&
-      checkJumpFour(board, row, col, dirIndex, color)
-    ) {
-      threatCount++;
-      continue;
     }
 
     // 跳び三をチェック（連続三がない場合のみ）

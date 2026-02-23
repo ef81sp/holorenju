@@ -13,6 +13,7 @@ import { detectOpponentThreats, evaluatePosition } from "../evaluation";
 import { placeStonesOnBoard } from "../testUtils";
 import {
   addUniquePositions,
+  countThreatDirections,
   getOpenThreeDefensePositions,
   hasDefenseThatBlocksBoth,
 } from "./threatDetection";
@@ -995,5 +996,64 @@ describe("detectOpponentThreats - 跳び四と活三の判別", () => {
 
     // 活三として検出される
     expect(threats.openThrees.length).toBeGreaterThan(0);
+  });
+});
+
+describe("countThreatDirections - 跳び四と活三の分類整合性", () => {
+  it("跳び四 + 別方向の活三 → 脅威方向数=2（二重カウントなし）", () => {
+    const board = createEmptyBoard();
+    // 横方向: E8-F8-G8-[gap H8]-I8 = 跳び四
+    // 縦方向: G7-G8-G9 = 活三
+    placeStonesOnBoard(board, [
+      { row: 7, col: 4, color: "black" }, // E8
+      { row: 7, col: 5, color: "black" }, // F8
+      { row: 7, col: 6, color: "black" }, // G8
+      // gap at col 7 (H8)
+      { row: 7, col: 8, color: "black" }, // I8
+      { row: 8, col: 6, color: "black" }, // G7
+      { row: 6, col: 6, color: "black" }, // G9
+    ]);
+
+    // G8 から見て横=跳び四(+1)、縦=活三(+1) → 計2
+    const count = countThreatDirections(board, 7, 6, "black");
+    expect(count).toBe(2);
+  });
+
+  it("跳び四でない連続活三 → 活三としてカウント", () => {
+    const board = createEmptyBoard();
+    // ●●● 横方向: F8-G8-H8（両端空き）
+    placeStonesOnBoard(board, [
+      { row: 7, col: 5, color: "black" }, // F8
+      { row: 7, col: 6, color: "black" }, // G8
+      { row: 7, col: 7, color: "black" }, // H8
+    ]);
+
+    const count = countThreatDirections(board, 7, 6, "black");
+    expect(count).toBe(1);
+  });
+
+  it("黒のウソの三かつ跳び四 → 跳び四としてカウント", () => {
+    const board = createEmptyBoard();
+    // 横方向: E8-F8-G8-[gap H8]-I8 = 跳び四
+    // E8-F8-G8 は両端空きの連続三だが:
+    //   D8 への達四は D列の縦石で四四（禁手）
+    //   H8 への達四は五連（四ではない）
+    //   → ウソの三
+    // しかし跳び四としてはカウントされるべき
+    placeStonesOnBoard(board, [
+      { row: 7, col: 4, color: "black" }, // E8
+      { row: 7, col: 5, color: "black" }, // F8
+      { row: 7, col: 6, color: "black" }, // G8
+      // gap at col 7 (H8)
+      { row: 7, col: 8, color: "black" }, // I8
+      // D列の縦石（D8に達四すると四四=禁手）
+      { row: 9, col: 3, color: "black" }, // D6
+      { row: 8, col: 3, color: "black" }, // D7
+      { row: 6, col: 3, color: "black" }, // D9
+    ]);
+
+    // G8 から見て横方向は跳び四 → カウントされる
+    const count = countThreatDirections(board, 7, 6, "black");
+    expect(count).toBe(1);
   });
 });
