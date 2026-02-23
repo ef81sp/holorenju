@@ -96,7 +96,7 @@ function evaluatePlayedForcedWin(
   bestMove: Position,
   bestScore: number,
   result: { candidates?: MoveScoreEntry[]; score: number },
-  bypassVctThreshold?: boolean,
+  skipVctThresholdCheck?: boolean,
 ): { playedScore: number; playedForcedWinSequence: Position[] | undefined } {
   if (
     playedRow < 0 ||
@@ -122,7 +122,7 @@ function evaluatePlayedForcedWin(
   }
 
   // VCT シーケンス取得を試行
-  if (bypassVctThreshold || countStones(board) >= VCT_STONE_THRESHOLD) {
+  if (skipVctThresholdCheck || countStones(board) >= VCT_STONE_THRESHOLD) {
     const vctFromPlayed = findVCTSequenceFromFirstMove(
       board,
       playedPos,
@@ -311,7 +311,9 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
       REVIEW_SEARCH_PARAMS.absoluteTimeLimit,
     );
 
-    // minimax が FIVE を返したが VCF/VCT 未検出 → VCT 閾値バイパスで再試行
+    // minimax が FIVE を返したが VCF/VCT 未検出
+    // 石数 < VCT_STONE_THRESHOLD(14) の序盤ではVCT探索がスキップされるため、
+    // ここで閾値を無視してVCT探索を実行し、必勝手順を取得する
     if (!forcedWin && result.score >= PATTERN_SCORES.FIVE && !opponentHasFour) {
       const vctRetry = findVCTSequence(board, color, REVIEW_VCT_OPTIONS);
       if (vctRetry) {
