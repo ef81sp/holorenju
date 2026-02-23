@@ -98,7 +98,8 @@ export function analyzeWeaknesses(
 /**
  * 1対局を分析して弱点インスタンスを返す
  */
-function analyzeGameWeaknesses(
+/** @internal テスト用にエクスポート */
+export function analyzeGameWeaknesses(
   game: GameResult,
   gameIndex: number,
 ): WeaknessInstance[] {
@@ -173,8 +174,10 @@ function detectMoveWeaknesses(
     }
 
     // --- time-pressure-error 検出 ---
+    // フォールバック済み（前の深度の高スコア結果に復帰済み）なら除外
     if (
       move.stats?.interrupted &&
+      !move.timePressureFallback &&
       move.depthHistory &&
       move.depthHistory.length >= 2
     ) {

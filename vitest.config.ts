@@ -45,6 +45,15 @@ export default defineConfig({
       {
         ...baseConfig,
         test: {
+          name: "scripts",
+          globals: true,
+          include: ["scripts/**/*.test.ts"],
+          environment: "node",
+        },
+      },
+      {
+        ...baseConfig,
+        test: {
           name: "browser",
           globals: true,
           include: ["src/**/*.browser.test.ts"],
