@@ -16,6 +16,8 @@ import {
   checkJumpThree,
 } from "@/logic/renjuRules";
 
+import type { DirectionPattern } from "../evaluation/patternScores";
+
 import { DIRECTION_INDICES, DIRECTIONS } from "../core/constants";
 import { checkEnds, countLine, getLineEnds } from "../core/lineAnalysis";
 import { analyzeDirection } from "../evaluation/directionAnalysis";
@@ -31,6 +33,28 @@ import {
   getJumpThreeDefensePositions,
 } from "../patterns/threatAnalysis";
 import { classifyThreat } from "./threatMoves";
+
+/**
+ * 連続活三（跳び四の一部でない）かを判定するヘルパー
+ *
+ * hasOpenThree と getCreatedOpenThreeDefenses で共通使用。
+ * detectOpponentThreats は isJumpFour フラグ方式で二重呼び出しを回避しているため適用しない。
+ */
+function isConsecutiveOpenThree(
+  board: BoardState,
+  row: number,
+  col: number,
+  dirIndex: number,
+  color: "black" | "white",
+  pattern: DirectionPattern,
+): boolean {
+  return (
+    pattern.count === 3 &&
+    pattern.end1 === "empty" &&
+    pattern.end2 === "empty" &&
+    !checkJumpFour(board, row, col, dirIndex, color)
+  );
+}
 
 /**
  * 指定色がミセ手（1手で四三を作れる手）を持っているかチェック
@@ -99,12 +123,7 @@ export function hasOpenThree(
         const [dr, dc] = direction;
         const pattern = analyzeDirection(board, row, col, dr, dc, color);
         // 連続活三（跳び四の一部である連続三は活三ではない）
-        if (
-          pattern.count === 3 &&
-          pattern.end1 === "empty" &&
-          pattern.end2 === "empty" &&
-          !checkJumpFour(board, row, col, dirIndex, color)
-        ) {
+        if (isConsecutiveOpenThree(board, row, col, dirIndex, color, pattern)) {
           return true;
         }
         // 跳び三（○○_○ や ○_○○）
@@ -308,10 +327,7 @@ export function getCreatedOpenThreeDefenses(
     const pattern = analyzeDirection(board, row, col, dr, dc, color);
     // 連続活三（跳び四の一部は除外、黒の場合はウソの三を除外）
     if (
-      pattern.count === 3 &&
-      pattern.end1 === "empty" &&
-      pattern.end2 === "empty" &&
-      !checkJumpFour(board, row, col, dirIndex, color) &&
+      isConsecutiveOpenThree(board, row, col, dirIndex, color, pattern) &&
       (color !== "black" || isValidConsecutiveThree(board, row, col, dirIndex))
     ) {
       defenses.push(
