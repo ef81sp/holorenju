@@ -9,6 +9,7 @@ import type { BoardState } from "@/types/game";
 
 import { DIRECTIONS } from "../core/constants";
 import { isNearExistingStone } from "../moveGenerator";
+import { incrementEvaluationCalls } from "../profiling/counters";
 import { countInDirection } from "./directionAnalysis";
 import {
   type BoardEvaluationBreakdown,
@@ -113,6 +114,7 @@ export function evaluateBoard(
   perspective: "black" | "white",
   options?: LeafEvaluationOptions,
 ): number {
+  incrementEvaluationCalls();
   const opponentColor = perspective === "black" ? "white" : "black";
   let myScore = 0;
   let opponentScore = 0;
