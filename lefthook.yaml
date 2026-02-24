@@ -9,11 +9,7 @@ pre-commit:
       stage_fixed: true
 
     test:
-      run: pnpm test:browser:headless
-
-    test-related:
-      run: pnpm vitest related --run {staged_files}
-      glob: "*.{ts,vue}"
+      run: pnpm test
 
 pre-push:
   parallel: true
