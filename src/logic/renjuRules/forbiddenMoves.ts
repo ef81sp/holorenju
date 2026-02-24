@@ -154,8 +154,14 @@ function checkDoubleThree(
       continue;
     }
 
-    // 連続三をチェック
     const pattern = checkOpenPattern(board, row, col, dir1Index, "black");
+
+    // この方向が四（連続四または飛び四）なら、三ではない
+    if (pattern.four || checkJumpFour(board, row, col, dir1Index, "black")) {
+      continue;
+    }
+
+    // 連続三をチェック
     if (pattern.open3) {
       const straightFourPoints = getConsecutiveThreeStraightFourPoints(
         board,

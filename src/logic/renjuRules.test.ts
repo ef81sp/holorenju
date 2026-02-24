@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { createBoardFromRecord } from "@/logic/gameRecordParser";
+
 import {
   checkDraw,
   checkFive,
@@ -1502,6 +1504,41 @@ describe("checkForbiddenMoveWithContext（グローバルキャッシュ活用�
     expect(getCalled).toBe(2); // 2回目のgetで+1
     // キャッシュヒット時はcheckForbiddenMoveWithContext内部では
     // setは呼ばれない（ヒットしたらそのまま返す）
+    expect(result.isForbidden).toBe(false);
+  });
+});
+
+describe("飛び四の一部を三と誤認識しない", () => {
+  it("実局面: 棋譜の局面でF9は四三（合法）であり三三禁ではない", () => {
+    // 棋譜: H8 I8 G6 I7 I9 G7 H5 J9 K7 H7 F7 I4 I6 H10 E6 I10 G10 I11 F6 H6 C6 D6 E8 D9
+    // F9 = col=5, row=15-9=6 → (6, 5)
+    // 斜め右(↘): C6(●) ・ E8(●) F9(●) G10(●) → ●・●●● = 飛び四（四であり三ではない）
+    // 縦:      ・ F9(●) ・ F7(●) F6(●) → ●・●● = 飛び三（三）
+    // 正しくは: 四×1 + 三×1 → 四三(合法)
+    const { board } = createBoardFromRecord(
+      "H8 I8 G6 I7 I9 G7 H5 J9 K7 H7 F7 I4 I6 H10 E6 I10 G10 I11 F6 H6 C6 D6 E8 D9",
+    );
+
+    const result = checkForbiddenMove(board, 6, 5);
+    expect(result.isForbidden).toBe(false);
+  });
+
+  it("合成テスト: 飛び四(●・●●[*]) + 縦活三 → 四三で合法", () => {
+    const board = createEmptyBoard();
+    // 横方向: 飛び四 ●・●●* (row=7, col=3=石, col=4=空, col=5=石, col=6=石, col=7=置く)
+    board[7][3] = "black";
+    // col=4 は空き（飛びの空き）
+    board[7][5] = "black";
+    board[7][6] = "black";
+    // col=7 が置く位置
+    // 置いた後: ●・●●● = 飛び四
+
+    // 縦方向: 活三 ・●●*・ (col=7, rows 5,6=石, row=7=置く)
+    board[5][7] = "black";
+    board[6][7] = "black";
+
+    // 横は飛び四（四であり三ではない）、縦は活三 → 四三(合法)
+    const result = checkForbiddenMove(board, 7, 7);
     expect(result.isForbidden).toBe(false);
   });
 });
