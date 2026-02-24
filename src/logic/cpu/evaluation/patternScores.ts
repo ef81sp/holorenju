@@ -144,6 +144,19 @@ export function applyPatternScoreOverrides(
       mutable[key] = value;
     }
   }
+  // PACKED_TO_SCORE/TYPE をスコア値に同期
+  rebuildPackedTablesCallback?.();
+}
+
+/**
+ * lineScan.ts が登録するコールバック。
+ * 直接 import すると循環参照になるため、コールバック方式で解決。
+ */
+let rebuildPackedTablesCallback: (() => void) | null = null;
+
+/** lineScan.ts から呼び出してコールバックを登録する */
+export function registerRebuildPackedTables(fn: () => void): void {
+  rebuildPackedTablesCallback = fn;
 }
 
 /**

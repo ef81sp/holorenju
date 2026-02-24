@@ -35,6 +35,28 @@ export const CELL_TO_LINES: readonly LineMappingEntry[][] = buildCellToLines();
  */
 export const CELL_LINES_FLAT: Uint16Array = buildCellLinesFlat();
 
+/**
+ * ライン逆引きテーブル
+ * LINE_BIT_TO_CELL[lineId * 16 + bitPos] = row * 15 + col
+ * 72 * 16 = 1152 entries (Uint16Array, 2304 bytes)
+ * bitPos がライン長超過の場合は 0xFFFF (sentinel)
+ */
+export const LINE_BIT_TO_CELL: Uint16Array = buildLineBitToCell();
+
+/** lineId から方向インデックス (0:横, 1:縦, 2:↘, 3:↗) を返す */
+export function getDirIndexFromLineId(lineId: number): number {
+  if (lineId < 15) {
+    return 0;
+  }
+  if (lineId < 30) {
+    return 1;
+  }
+  if (lineId < 51) {
+    return 2;
+  }
+  return 3;
+}
+
 /** 指定セルが属するラインのエントリ配列を返す（事前計算済み配列への参照）。 */
 export function getCellLines(row: number, col: number): LineMappingEntry[] {
   return CELL_TO_LINES[row * BOARD_SIZE + col]!;
@@ -109,6 +131,23 @@ function buildCellToLines(): LineMappingEntry[][] {
       }
 
       table[r * BOARD_SIZE + c] = entries;
+    }
+  }
+
+  return table;
+}
+
+function buildLineBitToCell(): Uint16Array {
+  const table = new Uint16Array(72 * 16);
+  table.fill(0xffff); // sentinel
+
+  for (let r = 0; r < BOARD_SIZE; r++) {
+    for (let c = 0; c < BOARD_SIZE; c++) {
+      const cellIndex = r * BOARD_SIZE + c;
+      const entries = CELL_TO_LINES[cellIndex]!;
+      for (const entry of entries) {
+        table[entry.lineId * 16 + entry.bitPos] = cellIndex;
+      }
     }
   }
 

@@ -10,7 +10,13 @@ import type { BoardState } from "@/types/game";
 import type { LineTable } from "../lineTable/lineTable";
 
 import { DIRECTIONS } from "../core/constants";
-import { hasFourThreePotentialBit } from "../lineTable/lineThreats";
+import {
+  precomputedBlackFlags,
+  precomputedBlackPatterns,
+  precomputedWhiteFlags,
+  precomputedWhitePatterns,
+  precomputeLineFeatures,
+} from "../lineTable/lineScan";
 import { isNearExistingStone } from "../moveGenerator";
 import { incrementEvaluationCalls } from "../profiling/counters";
 import { countInDirection } from "./directionAnalysis";
@@ -22,9 +28,10 @@ import {
 } from "./patternScores";
 import {
   evaluateStonePatternsLight,
+  evaluateStonePatternsPrecomputed,
   evaluateStonePatternsWithBreakdown,
 } from "./stonePatterns";
-import { createsFourThree } from "./winningPatterns";
+import { createsFourThree, createsFourThreeBit } from "./winningPatterns";
 
 /**
  * 四三の必要条件を安価に判定（第二プレフィルタ）
@@ -74,60 +81,67 @@ function hasFourThreePotential(
   return false;
 }
 
+/* eslint-disable no-bitwise -- ビットマスク操作に必要 */
+
 /**
- * 指定色の四三脅威をスキャン
+ * 指定色の四三脅威をスキャン（Board走査フォールバック、lineTable なし時）
  * 空き交点に仮置きして四三が作れるか判定。最初の1件で打ち切り。
  */
 function scanFourThreeThreat(
   board: BoardState,
   color: "black" | "white",
   stoneCount: number,
-  lineTable?: LineTable,
 ): boolean {
-  // 四三 = 四(3石+仮置き) + 活三(2石+仮置き) で方向が異なるため最低5石必要
   if (stoneCount < 5) {
     return false;
   }
   for (let r = 0; r < 15; r++) {
-    if (lineTable) {
-      // ビットマスクパス: 行ごとに占有マスクを1回計算し、15列に再利用
-      // (横ライン: lineId=row, bitPos=col なので blacks[r]|whites[r] で行の占有を取得)
-      const rowOccupied = lineTable.blacks[r]! | lineTable.whites[r]!;
-      for (let c = 0; c < 15; c++) {
-        if (rowOccupied & (1 << c)) {
-          continue;
-        } // 占有セル skip（ビット演算）
-        // isNearExistingStone は不要: 近接に同色石なし → total=0 → hasFourThreePotentialBit が false
-        if (
-          !hasFourThreePotentialBit(
-            lineTable.blacks,
-            lineTable.whites,
-            r,
-            c,
-            color,
-          )
-        ) {
-          continue;
-        }
-        if (createsFourThree(board, r, c, color)) {
-          return true;
-        }
+    for (let c = 0; c < 15; c++) {
+      if (board[r]?.[c] !== null) {
+        continue;
       }
-    } else {
-      // Board走査フォールバック（lineTable なし時）
-      for (let c = 0; c < 15; c++) {
-        if (board[r]?.[c] !== null) {
-          continue;
-        }
-        if (!isNearExistingStone(board, r, c, 1)) {
-          continue;
-        }
-        if (!hasFourThreePotential(board, r, c, color)) {
-          continue;
-        }
-        if (createsFourThree(board, r, c, color)) {
-          return true;
-        }
+      if (!isNearExistingStone(board, r, c, 1)) {
+        continue;
+      }
+      if (!hasFourThreePotential(board, r, c, color)) {
+        continue;
+      }
+      if (createsFourThree(board, r, c, color)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * 事前計算フラグを使った四三脅威スキャン（lineTable あり時）
+ *
+ * precomputeLineFeatures で計算済みの四/三候補フラグを使い、
+ * 候補セルのみを createsFourThreeBit で検証する。
+ */
+function scanFourThreeThreatFromFlags(
+  board: BoardState,
+  lineTable: LineTable,
+  flags: Uint8Array,
+  color: "black" | "white",
+  stoneCount: number,
+): boolean {
+  if (stoneCount < 5) {
+    return false;
+  }
+  for (let i = 0; i < 225; i++) {
+    const f = flags[i]!;
+    if (f === 0) {
+      continue;
+    }
+    const fourDirs = f & 0x0f;
+    const threeDirs = (f >> 4) & 0x0f;
+    if (fourDirs && threeDirs) {
+      const row = (i / 15) | 0;
+      const col = i % 15;
+      if (createsFourThreeBit(board, lineTable, row, col, color)) {
+        return true;
       }
     }
   }
@@ -162,6 +176,21 @@ export function evaluateBoard(
   const connectivityBonus =
     options?.connectivityBonusValue ?? PATTERN_SCORES.CONNECTIVITY_BONUS;
 
+  // ── 事前計算 ──
+  if (lineTable) {
+    precomputeLineFeatures(lineTable.blacks, lineTable.whites);
+  }
+
+  // perspective に対応する precomputed 配列を選択
+  const myPatterns =
+    perspective === "black"
+      ? precomputedBlackPatterns
+      : precomputedWhitePatterns;
+  const oppPatterns =
+    perspective === "black"
+      ? precomputedWhitePatterns
+      : precomputedBlackPatterns;
+
   // 全ての石について評価
   for (let row = 0; row < 15; row++) {
     for (let col = 0; col < 15; col++) {
@@ -170,13 +199,10 @@ export function evaluateBoard(
         continue;
       }
 
-      const result = evaluateStonePatternsLight(
-        board,
-        row,
-        col,
-        stone,
-        lineTable,
-      );
+      const patterns = stone === perspective ? myPatterns : oppPatterns;
+      const result = lineTable
+        ? evaluateStonePatternsPrecomputed(board, row, col, stone, patterns)
+        : evaluateStonePatternsLight(board, row, col, stone);
 
       let adjustedScore = result.score;
       if (result.activeDirectionCount >= 2 && connectivityBonus > 0) {
@@ -214,13 +240,39 @@ export function evaluateBoard(
 
   // 四三脅威スキャン
   const threatBonus = PATTERN_SCORES.LEAF_FOUR_THREE_THREAT;
-  if (threatBonus > 0) {
-    if (scanFourThreeThreat(board, perspective, myStoneCount, lineTable)) {
+  if (threatBonus > 0 && lineTable) {
+    const myFlags =
+      perspective === "black" ? precomputedBlackFlags : precomputedWhiteFlags;
+    const oppFlags =
+      perspective === "black" ? precomputedWhiteFlags : precomputedBlackFlags;
+    if (
+      scanFourThreeThreatFromFlags(
+        board,
+        lineTable,
+        myFlags,
+        perspective,
+        myStoneCount,
+      )
+    ) {
       myScore += threatBonus;
     }
     if (
-      scanFourThreeThreat(board, opponentColor, opponentStoneCount, lineTable)
+      scanFourThreeThreatFromFlags(
+        board,
+        lineTable,
+        oppFlags,
+        opponentColor,
+        opponentStoneCount,
+      )
     ) {
+      opponentScore += threatBonus;
+    }
+  } else if (threatBonus > 0) {
+    // Board走査フォールバック（lineTable なし時）
+    if (scanFourThreeThreat(board, perspective, myStoneCount)) {
+      myScore += threatBonus;
+    }
+    if (scanFourThreeThreat(board, opponentColor, opponentStoneCount)) {
       opponentScore += threatBonus;
     }
   }

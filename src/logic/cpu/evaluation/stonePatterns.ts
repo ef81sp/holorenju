@@ -11,10 +11,18 @@ import type { LineTable } from "../lineTable/lineTable";
 
 import { DIRECTIONS } from "../core/constants";
 import { getDirectionPattern } from "../lineTable/adapter";
+import {
+  END_STATE_FROM_CODE,
+  PACKED_TO_SCORE,
+  PACKED_TO_TYPE,
+  TYPE_FOUR,
+  TYPE_OPEN_THREE,
+} from "../lineTable/lineScan";
 import { getPatternScore, getPatternType } from "./directionAnalysis";
 import { analyzeJumpPatterns, getJumpPatternScore } from "./jumpPatterns";
 import {
   type DirectionPattern,
+  type EndState,
   emptyPatternBreakdown,
   type PatternBreakdown,
   type PatternType,
@@ -119,6 +127,85 @@ export function evaluateStonePatternsLight(
   const jumpResult = analyzeJumpPatterns(board, row, col, color, precomputed);
   score += getJumpPatternScore(jumpResult);
 
+  if (jumpResult.jumpFourCount > 0) {
+    fourScore += PATTERN_SCORES.FOUR * jumpResult.jumpFourCount;
+  }
+  if (jumpResult.hasValidOpenThree) {
+    openThreeScore += PATTERN_SCORES.OPEN_THREE;
+  }
+
+  return { score, fourScore, openThreeScore, activeDirectionCount };
+}
+
+/* eslint-disable no-bitwise -- ビットマスク操作に必要 */
+
+const END_STATE_TABLE: EndState[] = END_STATE_FROM_CODE;
+
+/**
+ * 事前計算データから石パターンスコアを算出
+ *
+ * evaluateStonePatternsLight の precomputed 版。
+ * CELL_LINES_FLAT lookup + analyzeLinePattern 呼び出しを
+ * PACKED_TO_SCORE/TYPE 配列参照に置換。
+ */
+export function evaluateStonePatternsPrecomputed(
+  board: BoardState,
+  row: number,
+  col: number,
+  color: "black" | "white",
+  packedPatterns: Uint8Array,
+): {
+  score: number;
+  fourScore: number;
+  openThreeScore: number;
+  activeDirectionCount: number;
+} {
+  const cellIndex = row * 15 + col;
+  const base = cellIndex * 4;
+  let score = 0;
+  let fourScore = 0;
+  let openThreeScore = 0;
+  let activeDirectionCount = 0;
+
+  const patterns: DirectionPattern[] = [];
+
+  for (let dir = 0; dir < 4; dir++) {
+    const packed = packedPatterns[base + dir]!;
+    const count = packed >> 4;
+    const end1Code = (packed >> 2) & 3;
+    const end2Code = packed & 3;
+
+    patterns.push({
+      count: count === 0 ? 1 : count,
+      end1: count === 0 ? "edge" : END_STATE_TABLE[end1Code]!,
+      end2: count === 0 ? "edge" : END_STATE_TABLE[end2Code]!,
+    });
+
+    const baseScore = PACKED_TO_SCORE[packed]!;
+    const type = PACKED_TO_TYPE[packed]!;
+
+    if (baseScore > 0) {
+      activeDirectionCount++;
+    }
+
+    let finalScore = baseScore;
+    if ((dir === 2 || dir === 3) && baseScore > 0) {
+      finalScore = Math.round(
+        baseScore * PATTERN_SCORES.DIAGONAL_BONUS_MULTIPLIER,
+      );
+    }
+
+    score += finalScore;
+    if (type === TYPE_FOUR) {
+      fourScore += finalScore;
+    } else if (type === TYPE_OPEN_THREE) {
+      openThreeScore += finalScore;
+    }
+  }
+
+  // 跳びパターン（board アクセスが必要、precomputed では代替不可）
+  const jumpResult = analyzeJumpPatterns(board, row, col, color, patterns);
+  score += getJumpPatternScore(jumpResult);
   if (jumpResult.jumpFourCount > 0) {
     fourScore += PATTERN_SCORES.FOUR * jumpResult.jumpFourCount;
   }

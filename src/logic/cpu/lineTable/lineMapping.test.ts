@@ -9,8 +9,10 @@ import { describe, expect, it } from "vitest";
 import {
   CELL_LINES_FLAT,
   CELL_TO_LINES,
+  LINE_BIT_TO_CELL,
   LINE_LENGTHS,
   getCellLines,
+  getDirIndexFromLineId,
 } from "./lineMapping";
 
 describe("LINE_LENGTHS", () => {
@@ -205,5 +207,72 @@ describe("CELL_LINES_FLAT", () => {
     // (0,0) は dirIndex=3 (↗) がない
     const packed = CELL_LINES_FLAT[(0 * 15 + 0) * 4 + 3]!;
     expect(packed).toBe(0xffff);
+  });
+});
+
+describe("LINE_BIT_TO_CELL", () => {
+  it("全225セル × 全方向で CELL_TO_LINES と逆引きが一致", () => {
+    for (let r = 0; r < 15; r++) {
+      for (let c = 0; c < 15; c++) {
+        const cellIndex = r * 15 + c;
+        const entries = CELL_TO_LINES[cellIndex]!;
+        for (const entry of entries) {
+          const result = LINE_BIT_TO_CELL[entry.lineId * 16 + entry.bitPos]!;
+          expect(
+            result,
+            `cell(${r},${c}) lineId=${entry.lineId} bitPos=${entry.bitPos}`,
+          ).toBe(cellIndex);
+        }
+      }
+    }
+  });
+
+  it("sentinel (0xFFFF) が LINE_LENGTHS 超過のビット位置にのみ存在する", () => {
+    for (let lineId = 0; lineId < 72; lineId++) {
+      const len = LINE_LENGTHS[lineId]!;
+      // ライン範囲内は有効なセルインデックス
+      for (let bitPos = 0; bitPos < len; bitPos++) {
+        const val = LINE_BIT_TO_CELL[lineId * 16 + bitPos]!;
+        expect(
+          val,
+          `lineId=${lineId} bitPos=${bitPos} should not be sentinel`,
+        ).not.toBe(0xffff);
+        expect(val).toBeLessThan(225);
+      }
+      // ライン範囲外は sentinel
+      for (let bitPos = len; bitPos < 16; bitPos++) {
+        const val = LINE_BIT_TO_CELL[lineId * 16 + bitPos]!;
+        expect(
+          val,
+          `lineId=${lineId} bitPos=${bitPos} should be sentinel`,
+        ).toBe(0xffff);
+      }
+    }
+  });
+});
+
+describe("getDirIndexFromLineId", () => {
+  it("横ライン (0~14) → 0", () => {
+    for (let i = 0; i < 15; i++) {
+      expect(getDirIndexFromLineId(i)).toBe(0);
+    }
+  });
+
+  it("縦ライン (15~29) → 1", () => {
+    for (let i = 15; i < 30; i++) {
+      expect(getDirIndexFromLineId(i)).toBe(1);
+    }
+  });
+
+  it("斜め↘ (30~50) → 2", () => {
+    for (let i = 30; i < 51; i++) {
+      expect(getDirIndexFromLineId(i)).toBe(2);
+    }
+  });
+
+  it("斜め↗ (51~71) → 3", () => {
+    for (let i = 51; i < 72; i++) {
+      expect(getDirIndexFromLineId(i)).toBe(3);
+    }
   });
 });

@@ -4,11 +4,19 @@
  * 白の三三・四四パターン検出と四三判定
  */
 
+/* eslint-disable no-bitwise -- ビットマスク操作に必要 */
+
 import type { BoardState } from "@/types/game";
 
 import { checkJumpFour, checkJumpThree } from "@/logic/renjuRules";
 
+import type { LineTable } from "../lineTable/lineTable";
+import type { DirectionPattern } from "./patternScores";
+
 import { DIRECTION_INDICES, DIRECTIONS } from "../core/constants";
+import { CELL_LINES_FLAT } from "../lineTable/lineMapping";
+import { analyzeLinePattern } from "../lineTable/linePatterns";
+import { placeStone, removeStone } from "../lineTable/lineTable";
 import { analyzeDirection } from "./directionAnalysis";
 import { analyzeJumpPatterns } from "./jumpPatterns";
 
@@ -172,6 +180,70 @@ export function createsFourThree(
   if (targetRow) {
     targetRow[col] = null;
   }
+
+  return result;
+}
+
+/**
+ * createsFourThree のハイブリッド版
+ *
+ * 連続パターン検出を LineTable 版 (analyzeLinePattern) に置換し、
+ * board 走査の ~80 reads を 4× ビットマスク演算に削減。
+ *
+ * 跳びパターン検出 (checkJumpFour/checkJumpThree) は
+ * renjuRules.ts の board ベース実装をそのまま使用（board place/remove が必要）。
+ *
+ * analyzeJumpPatterns の precomputed パラメータ経由で
+ * LineTable から得た DirectionPattern[] を渡す。
+ */
+export function createsFourThreeBit(
+  board: BoardState,
+  lineTable: LineTable,
+  row: number,
+  col: number,
+  color: "black" | "white",
+): boolean {
+  // 盤面 + LineTable 両方に仮置き
+  const targetRow = board[row];
+  if (targetRow) {
+    targetRow[col] = color;
+  }
+  placeStone(lineTable, row, col, color);
+
+  // LineTable から4方向の DirectionPattern を取得（board 走査を回避）
+  const patterns: DirectionPattern[] = [];
+  const base = (row * 15 + col) * 4;
+  for (let d = 0; d < 4; d++) {
+    const packed = CELL_LINES_FLAT[base + d]!;
+    if (packed === 0xffff) {
+      patterns.push({ count: 1, end1: "edge", end2: "edge" });
+      continue;
+    }
+    const lineId = packed >> 8;
+    const bitPos = packed & 0xff;
+    patterns.push(
+      analyzeLinePattern(
+        lineTable.blacks,
+        lineTable.whites,
+        lineId,
+        bitPos,
+        color,
+        d === 3,
+      ),
+    );
+  }
+
+  // analyzeJumpPatterns に precomputed patterns を渡す
+  // → 内部の computePatterns (= 4× analyzeDirection board走査) をスキップ
+  // → checkJumpFour/checkJumpThree は board を使用（仮置き済み）
+  const jumpResult = analyzeJumpPatterns(board, row, col, color, patterns);
+  const result = jumpResult.hasFour && jumpResult.hasValidOpenThree;
+
+  // 復元
+  if (targetRow) {
+    targetRow[col] = null;
+  }
+  removeStone(lineTable, row, col, color);
 
   return result;
 }
