@@ -19,7 +19,10 @@ import {
   type LeafEvaluationOptions,
   PATTERN_SCORES,
 } from "./patternScores";
-import { evaluateStonePatternsWithBreakdown } from "./stonePatterns";
+import {
+  evaluateStonePatternsLight,
+  evaluateStonePatternsWithBreakdown,
+} from "./stonePatterns";
 import { createsFourThree } from "./winningPatterns";
 
 /**
@@ -139,24 +142,29 @@ export function evaluateBoard(
         continue;
       }
 
-      const { score, breakdown, activeDirectionCount } =
-        evaluateStonePatternsWithBreakdown(board, row, col, stone, lineTable);
+      const result = evaluateStonePatternsLight(
+        board,
+        row,
+        col,
+        stone,
+        lineTable,
+      );
 
-      let adjustedScore = score;
-      if (activeDirectionCount >= 2 && connectivityBonus > 0) {
-        adjustedScore += connectivityBonus * (activeDirectionCount - 1);
+      let adjustedScore = result.score;
+      if (result.activeDirectionCount >= 2 && connectivityBonus > 0) {
+        adjustedScore += connectivityBonus * (result.activeDirectionCount - 1);
       }
 
       if (stone === perspective) {
         myStoneCount++;
         myScore += adjustedScore;
-        myFourScore += breakdown.four.final;
-        myOpenThreeScore += breakdown.openThree.final;
+        myFourScore += result.fourScore;
+        myOpenThreeScore += result.openThreeScore;
       } else if (stone === opponentColor) {
         opponentStoneCount++;
         opponentScore += adjustedScore;
-        opponentFourScore += breakdown.four.final;
-        opponentOpenThreeScore += breakdown.openThree.final;
+        opponentFourScore += result.fourScore;
+        opponentOpenThreeScore += result.openThreeScore;
       }
     }
   }

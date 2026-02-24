@@ -15,7 +15,7 @@ import type { BoardState } from "@/types/game";
 
 import { BOARD_SIZE } from "@/constants";
 
-import { getCellLines } from "./lineMapping";
+import { CELL_LINES_FLAT, getCellLines } from "./lineMapping";
 
 export interface LineTable {
   blacks: Uint16Array; // 各ラインの黒石ビットマスク
@@ -58,30 +58,38 @@ export function buildLineTable(board: BoardState): LineTable {
   return lt;
 }
 
-/** 石を配置: 4ラインの該当ビットをOR。 */
+/** 石を配置: 4ラインの該当ビットをOR。CELL_LINES_FLAT で高速ルックアップ。 */
 export function placeStone(
   lt: LineTable,
   row: number,
   col: number,
   color: "black" | "white",
 ): void {
-  const entries = getCellLines(row, col);
   const arr = color === "black" ? lt.blacks : lt.whites;
-  for (const entry of entries) {
-    arr[entry.lineId]! |= 1 << entry.bitPos;
+  const base = (row * 15 + col) * 4;
+  for (let d = 0; d < 4; d++) {
+    const packed = CELL_LINES_FLAT[base + d]!;
+    if (packed === 0xffff) {
+      continue;
+    }
+    arr[packed >> 8]! |= 1 << (packed & 0xff);
   }
 }
 
-/** 石を除去: 4ラインの該当ビットをAND NOT。 */
+/** 石を除去: 4ラインの該当ビットをAND NOT。CELL_LINES_FLAT で高速ルックアップ。 */
 export function removeStone(
   lt: LineTable,
   row: number,
   col: number,
   color: "black" | "white",
 ): void {
-  const entries = getCellLines(row, col);
   const arr = color === "black" ? lt.blacks : lt.whites;
-  for (const entry of entries) {
-    arr[entry.lineId]! &= ~(1 << entry.bitPos);
+  const base = (row * 15 + col) * 4;
+  for (let d = 0; d < 4; d++) {
+    const packed = CELL_LINES_FLAT[base + d]!;
+    if (packed === 0xffff) {
+      continue;
+    }
+    arr[packed >> 8]! &= ~(1 << (packed & 0xff));
   }
 }

@@ -58,7 +58,7 @@ export function getDirectionPattern(
  * 五連判定アダプタ
  *
  * LineTable があればビットマスク版、なければ renjuRules 版を使用。
- * 前提: 判定対象の石は盤面（および LineTable）に配置済みであること。
+ * 配置済み・未配置どちらの石にも対応（countLineBit が起点を常に+1するため）。
  */
 export function isFive(
   board: BoardState,

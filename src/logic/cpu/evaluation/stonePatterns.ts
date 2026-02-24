@@ -17,6 +17,7 @@ import {
   type DirectionPattern,
   emptyPatternBreakdown,
   type PatternBreakdown,
+  type PatternType,
   PATTERN_SCORES,
 } from "./patternScores";
 
@@ -62,6 +63,70 @@ export function evaluateStonePatterns(
   score += getJumpPatternScore(jumpResult);
 
   return score;
+}
+
+/**
+ * evaluateBoard 用の軽量版石パターン評価
+ *
+ * PatternBreakdown の7オブジェクト生成を回避し、
+ * evaluateBoard が必要とする4つのプリミティブ値のみを返す。
+ */
+export function evaluateStonePatternsLight(
+  board: BoardState,
+  row: number,
+  col: number,
+  color: "black" | "white",
+  lineTable?: LineTable,
+): {
+  score: number;
+  fourScore: number;
+  openThreeScore: number;
+  activeDirectionCount: number;
+} {
+  let score = 0;
+  let fourScore = 0;
+  let openThreeScore = 0;
+  let activeDirectionCount = 0;
+  const precomputed: DirectionPattern[] = [];
+
+  for (let i = 0; i < DIRECTIONS.length; i++) {
+    const pattern = getDirectionPattern(board, row, col, i, color, lineTable);
+    precomputed.push(pattern);
+    const baseScore = getPatternScore(pattern);
+    const patternType: PatternType = getPatternType(pattern);
+
+    if (baseScore > 0) {
+      activeDirectionCount++;
+    }
+
+    const isDiagonal = i === 2 || i === 3;
+    let finalScore = baseScore;
+    if (isDiagonal && baseScore > 0) {
+      finalScore = Math.round(
+        baseScore * PATTERN_SCORES.DIAGONAL_BONUS_MULTIPLIER,
+      );
+    }
+
+    score += finalScore;
+
+    if (patternType === "four") {
+      fourScore += finalScore;
+    } else if (patternType === "openThree") {
+      openThreeScore += finalScore;
+    }
+  }
+
+  const jumpResult = analyzeJumpPatterns(board, row, col, color, precomputed);
+  score += getJumpPatternScore(jumpResult);
+
+  if (jumpResult.jumpFourCount > 0) {
+    fourScore += PATTERN_SCORES.FOUR * jumpResult.jumpFourCount;
+  }
+  if (jumpResult.hasValidOpenThree) {
+    openThreeScore += PATTERN_SCORES.OPEN_THREE;
+  }
+
+  return { score, fourScore, openThreeScore, activeDirectionCount };
 }
 
 /**
