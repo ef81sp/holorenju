@@ -56,6 +56,9 @@ export function hasFourThreePotentialBit(
     const posCount = countConsecutive(ownMask, bitPos, 1, len);
     const negCount = countConsecutive(ownMask, bitPos, -1, len);
     const total = posCount + negCount;
+    if (total < 2) {
+      continue;
+    } // 四(>=3)も活三(>=2)も不可能 → endStateAt 不要
 
     const posEnd = endStateAt(oppMask, bitPos + posCount + 1, len);
     const negEnd = endStateAt(oppMask, bitPos - negCount - 1, len);

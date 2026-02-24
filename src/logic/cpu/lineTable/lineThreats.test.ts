@@ -12,6 +12,8 @@ import { BOARD_SIZE } from "@/constants";
 
 import { DIRECTIONS } from "../core/constants";
 import { countInDirection } from "../evaluation/directionAnalysis";
+import { createsFourThree } from "../evaluation/winningPatterns";
+import { isNearExistingStone } from "../moveGenerator";
 import { buildLineTable } from "./lineTable";
 import { hasFourThreePotentialBit } from "./lineThreats";
 
@@ -241,6 +243,105 @@ describe("hasFourThreePotentialBit vs hasFourThreePotentialBoard", () => {
       for (let i = 0; i < RANDOM_BOARD_COUNT; i++) {
         const board = randomBoard(rng, stoneCount);
         verifyBoardMatch(board);
+      }
+    });
+  }
+});
+
+/**
+ * scanFourThreeThreat の旧ロジック（isNearExistingStone あり）
+ *
+ * boardEvaluation.ts の private 関数を再実装。isNearExistingStone を含む旧パス。
+ */
+function scanFourThreeThreatOld(
+  board: BoardState,
+  color: "black" | "white",
+  stoneCount: number,
+): boolean {
+  if (stoneCount < 5) {
+    return false;
+  }
+  for (let r = 0; r < BOARD_SIZE; r++) {
+    for (let c = 0; c < BOARD_SIZE; c++) {
+      if (board[r]?.[c] !== null) {
+        continue;
+      }
+      if (!isNearExistingStone(board, r, c, 1)) {
+        continue;
+      }
+      if (!hasFourThreePotentialBoard(board, r, c, color)) {
+        continue;
+      }
+      if (createsFourThree(board, r, c, color)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * scanFourThreeThreat の新ロジック（isNearExistingStone 排除、ビットマスクパス）
+ *
+ * lineTable パスのみ。rowOccupied で占有判定し、hasFourThreePotentialBit で直接フィルタ。
+ */
+function scanFourThreeThreatNew(
+  board: BoardState,
+  color: "black" | "white",
+  stoneCount: number,
+): boolean {
+  if (stoneCount < 5) {
+    return false;
+  }
+  const lt = buildLineTable(board);
+  for (let r = 0; r < BOARD_SIZE; r++) {
+    const rowOccupied = lt.blacks[r]! | lt.whites[r]!; // eslint-disable-line no-bitwise
+    for (let c = 0; c < BOARD_SIZE; c++) {
+      if (rowOccupied & (1 << c)) {
+        continue;
+      } // eslint-disable-line no-bitwise
+      if (!hasFourThreePotentialBit(lt.blacks, lt.whites, r, c, color)) {
+        continue;
+      }
+      if (createsFourThree(board, r, c, color)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+describe("scanFourThreeThreat: isNearExistingStone 排除後の等価性", () => {
+  /** 盤面の石数をカウント */
+  function countStones(board: BoardState, color: "black" | "white"): number {
+    let count = 0;
+    for (let r = 0; r < BOARD_SIZE; r++) {
+      for (let c = 0; c < BOARD_SIZE; c++) {
+        if (board[r]?.[c] === color) {
+          count++;
+        }
+      }
+    }
+    return count;
+  }
+
+  const RANDOM_BOARD_COUNT = 200;
+  const STONE_COUNTS = [6, 10, 16, 24];
+
+  for (const stoneCount of STONE_COUNTS) {
+    it(`ランダム盤面 ${RANDOM_BOARD_COUNT}局 (${stoneCount}石) で旧版と新版が一致`, () => {
+      const rng = createRng(stoneCount * 12345);
+      for (let i = 0; i < RANDOM_BOARD_COUNT; i++) {
+        const board = randomBoard(rng, stoneCount);
+        for (const color of ["black", "white"] as const) {
+          const sc = countStones(board, color);
+          const oldResult = scanFourThreeThreatOld(board, color, sc);
+          const newResult = scanFourThreeThreatNew(board, color, sc);
+          expect(
+            newResult,
+            `board#${i} color=${color}: old=${oldResult} new=${newResult}`,
+          ).toBe(oldResult);
+        }
       }
     });
   }

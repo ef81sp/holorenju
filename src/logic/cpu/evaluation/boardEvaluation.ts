@@ -89,28 +89,45 @@ function scanFourThreeThreat(
     return false;
   }
   for (let r = 0; r < 15; r++) {
-    for (let c = 0; c < 15; c++) {
-      if (board[r]?.[c] !== null) {
-        continue;
-      }
-      // range=1: 四三の仮置き位置は必ず既存石に直接隣接する
-      if (!isNearExistingStone(board, r, c, 1)) {
-        continue;
-      }
-      const hasPotential = lineTable
-        ? hasFourThreePotentialBit(
+    if (lineTable) {
+      // ビットマスクパス: 行ごとに占有マスクを1回計算し、15列に再利用
+      // (横ライン: lineId=row, bitPos=col なので blacks[r]|whites[r] で行の占有を取得)
+      const rowOccupied = lineTable.blacks[r]! | lineTable.whites[r]!;
+      for (let c = 0; c < 15; c++) {
+        if (rowOccupied & (1 << c)) {
+          continue;
+        } // 占有セル skip（ビット演算）
+        // isNearExistingStone は不要: 近接に同色石なし → total=0 → hasFourThreePotentialBit が false
+        if (
+          !hasFourThreePotentialBit(
             lineTable.blacks,
             lineTable.whites,
             r,
             c,
             color,
           )
-        : hasFourThreePotential(board, r, c, color);
-      if (!hasPotential) {
-        continue;
+        ) {
+          continue;
+        }
+        if (createsFourThree(board, r, c, color)) {
+          return true;
+        }
       }
-      if (createsFourThree(board, r, c, color)) {
-        return true;
+    } else {
+      // Board走査フォールバック（lineTable なし時）
+      for (let c = 0; c < 15; c++) {
+        if (board[r]?.[c] !== null) {
+          continue;
+        }
+        if (!isNearExistingStone(board, r, c, 1)) {
+          continue;
+        }
+        if (!hasFourThreePotential(board, r, c, color)) {
+          continue;
+        }
+        if (createsFourThree(board, r, c, color)) {
+          return true;
+        }
       }
     }
   }
