@@ -10,7 +10,11 @@ import { describe, expect, it } from "vitest";
 import { createBoardFromRecord } from "@/logic/gameRecordParser";
 
 import { evaluateBoard } from "../evaluation/boardEvaluation";
-import { FULL_EVAL_OPTIONS } from "../evaluation/patternScores";
+import {
+  applyPatternScoreOverrides,
+  FULL_EVAL_OPTIONS,
+  PATTERN_SCORES,
+} from "../evaluation/patternScores";
 import { evaluatePosition } from "../evaluation/positionEvaluation";
 import { buildLineTable } from "../lineTable/lineTable";
 import { findBestMoveIterativeWithTT } from "../search/iterativeDeepening";
@@ -273,4 +277,87 @@ describe("Phase 0: ボトルネック計測", () => {
 
     expect(evalPercentLT).not.toBeNaN();
   }, 30000);
+
+  it("evaluateBoard 内部コスト分解: scanFourThreeThreat の占有率", () => {
+    const { board, nextColor } = createBoardFromRecord(MIDGAME_RECORD);
+    const lt = buildLineTable(board);
+
+    const EVAL_ITERATIONS = 1000;
+
+    // ウォームアップ
+    evaluateBoard(board, nextColor, undefined, lt);
+
+    // 1. フル evaluateBoard（scanFourThreeThreat 有効）
+    const startFull = performance.now();
+    for (let i = 0; i < EVAL_ITERATIONS; i++) {
+      evaluateBoard(board, nextColor, undefined, lt);
+    }
+    const perCallFull = (performance.now() - startFull) / EVAL_ITERATIONS;
+
+    // 2. scanFourThreeThreat 無効化
+    const savedThreat = PATTERN_SCORES.LEAF_FOUR_THREE_THREAT;
+    applyPatternScoreOverrides({ LEAF_FOUR_THREE_THREAT: 0 });
+
+    evaluateBoard(board, nextColor, undefined, lt); // ウォームアップ
+    const startNoThreat = performance.now();
+    for (let i = 0; i < EVAL_ITERATIONS; i++) {
+      evaluateBoard(board, nextColor, undefined, lt);
+    }
+    const perCallNoThreat =
+      (performance.now() - startNoThreat) / EVAL_ITERATIONS;
+
+    // 元に戻す
+    applyPatternScoreOverrides({ LEAF_FOUR_THREE_THREAT: savedThreat });
+
+    const threatCost = perCallFull - perCallNoThreat;
+    const threatPercent =
+      perCallFull > 0 ? (threatCost / perCallFull) * 100 : 0;
+
+    console.log("\n=== evaluateBoard 内部コスト分解（中盤 16手, with LT）===");
+    console.log(`  evaluateBoard フル: ${perCallFull.toFixed(4)}ms`);
+    console.log(
+      `  evaluateBoard (threat無効): ${perCallNoThreat.toFixed(4)}ms`,
+    );
+    console.log(`  scanFourThreeThreat コスト: ${threatCost.toFixed(4)}ms`);
+    console.log(`  scanFourThreeThreat 占有率: ${threatPercent.toFixed(1)}%`);
+    console.log(
+      `  残り（石パターン評価等）: ${(100 - threatPercent).toFixed(1)}%`,
+    );
+
+    // 終盤でも計測
+    const { board: board2, nextColor: nc2 } =
+      createBoardFromRecord(ENDGAME_RECORD2);
+    const lt2 = buildLineTable(board2);
+
+    evaluateBoard(board2, nc2, undefined, lt2);
+    const startFull2 = performance.now();
+    for (let i = 0; i < EVAL_ITERATIONS; i++) {
+      evaluateBoard(board2, nc2, undefined, lt2);
+    }
+    const perCallFull2 = (performance.now() - startFull2) / EVAL_ITERATIONS;
+
+    applyPatternScoreOverrides({ LEAF_FOUR_THREE_THREAT: 0 });
+    evaluateBoard(board2, nc2, undefined, lt2);
+    const startNoThreat2 = performance.now();
+    for (let i = 0; i < EVAL_ITERATIONS; i++) {
+      evaluateBoard(board2, nc2, undefined, lt2);
+    }
+    const perCallNoThreat2 =
+      (performance.now() - startNoThreat2) / EVAL_ITERATIONS;
+    applyPatternScoreOverrides({ LEAF_FOUR_THREE_THREAT: savedThreat });
+
+    const threatCost2 = perCallFull2 - perCallNoThreat2;
+    const threatPercent2 =
+      perCallFull2 > 0 ? (threatCost2 / perCallFull2) * 100 : 0;
+
+    console.log("\n=== evaluateBoard 内部コスト分解（終盤 26手, with LT）===");
+    console.log(`  evaluateBoard フル: ${perCallFull2.toFixed(4)}ms`);
+    console.log(
+      `  evaluateBoard (threat無効): ${perCallNoThreat2.toFixed(4)}ms`,
+    );
+    console.log(`  scanFourThreeThreat コスト: ${threatCost2.toFixed(4)}ms`);
+    console.log(`  scanFourThreeThreat 占有率: ${threatPercent2.toFixed(1)}%`);
+
+    expect(threatPercent).toBeGreaterThanOrEqual(0);
+  });
 });

@@ -10,6 +10,7 @@ import type { BoardState } from "@/types/game";
 import type { LineTable } from "../lineTable/lineTable";
 
 import { DIRECTIONS } from "../core/constants";
+import { hasFourThreePotentialBit } from "../lineTable/lineThreats";
 import { isNearExistingStone } from "../moveGenerator";
 import { incrementEvaluationCalls } from "../profiling/counters";
 import { countInDirection } from "./directionAnalysis";
@@ -81,6 +82,7 @@ function scanFourThreeThreat(
   board: BoardState,
   color: "black" | "white",
   stoneCount: number,
+  lineTable?: LineTable,
 ): boolean {
   // 四三 = 四(3石+仮置き) + 活三(2石+仮置き) で方向が異なるため最低5石必要
   if (stoneCount < 5) {
@@ -95,7 +97,16 @@ function scanFourThreeThreat(
       if (!isNearExistingStone(board, r, c, 1)) {
         continue;
       }
-      if (!hasFourThreePotential(board, r, c, color)) {
+      const hasPotential = lineTable
+        ? hasFourThreePotentialBit(
+            lineTable.blacks,
+            lineTable.whites,
+            r,
+            c,
+            color,
+          )
+        : hasFourThreePotential(board, r, c, color);
+      if (!hasPotential) {
         continue;
       }
       if (createsFourThree(board, r, c, color)) {
@@ -187,10 +198,12 @@ export function evaluateBoard(
   // 四三脅威スキャン
   const threatBonus = PATTERN_SCORES.LEAF_FOUR_THREE_THREAT;
   if (threatBonus > 0) {
-    if (scanFourThreeThreat(board, perspective, myStoneCount)) {
+    if (scanFourThreeThreat(board, perspective, myStoneCount, lineTable)) {
       myScore += threatBonus;
     }
-    if (scanFourThreeThreat(board, opponentColor, opponentStoneCount)) {
+    if (
+      scanFourThreeThreat(board, opponentColor, opponentStoneCount, lineTable)
+    ) {
       opponentScore += threatBonus;
     }
   }

@@ -14,7 +14,7 @@ import { LINE_LENGTHS } from "./lineMapping";
 /**
  * ビットマスク上で bitPos から指定方向に連続する同色ビットを数える（起点は含まない）
  */
-function countConsecutive(
+export function countConsecutive(
   mask: number,
   bitPos: number,
   delta: number,
@@ -32,7 +32,7 @@ function countConsecutive(
 /**
  * ビットマスク上の指定位置の端状態を判定
  */
-function endStateAt(
+export function endStateAt(
   oppMask: number,
   pos: number,
   lineLength: number,
