@@ -10,7 +10,9 @@ import { describe, expect, it } from "vitest";
 import { createBoardFromRecord } from "@/logic/gameRecordParser";
 
 import { evaluateBoard } from "../evaluation/boardEvaluation";
+import { FULL_EVAL_OPTIONS } from "../evaluation/patternScores";
 import { evaluatePosition } from "../evaluation/positionEvaluation";
+import { buildLineTable } from "../lineTable/lineTable";
 import { findBestMoveIterativeWithTT } from "../search/iterativeDeepening";
 import { globalTT } from "../transpositionTable";
 
@@ -196,5 +198,79 @@ describe("Phase 0: ボトルネック計測", () => {
 
     // 結果が計算できていることのチェック
     expect(evalPercent).not.toBeNaN();
+  }, 30000);
+
+  it("hard条件（FULL_EVAL_OPTIONS）での時間占有率を概算", () => {
+    const { board, nextColor } = createBoardFromRecord(MIDGAME_RECORD);
+    const hardOptions = {
+      ...FULL_EVAL_OPTIONS,
+    };
+    const lt = buildLineTable(board);
+
+    // 1. evaluateBoard 1回あたりの時間を計測（LineTable あり/なし両方）
+    const EVAL_ITERATIONS = 1000;
+    evaluateBoard(board, nextColor); // ウォームアップ
+    evaluateBoard(board, nextColor, undefined, lt); // ウォームアップ
+
+    const evalStartNoLT = performance.now();
+    for (let i = 0; i < EVAL_ITERATIONS; i++) {
+      evaluateBoard(board, nextColor);
+    }
+    const evalPerCallNoLT =
+      (performance.now() - evalStartNoLT) / EVAL_ITERATIONS;
+
+    const evalStartLT = performance.now();
+    for (let i = 0; i < EVAL_ITERATIONS; i++) {
+      evaluateBoard(board, nextColor, undefined, lt);
+    }
+    const evalPerCallLT = (performance.now() - evalStartLT) / EVAL_ITERATIONS;
+
+    // 2. hard条件で探索を実行
+    globalTT.clear();
+    const searchStart = performance.now();
+    const result = findBestMoveIterativeWithTT(
+      board,
+      nextColor,
+      4, // hard depth
+      8000, // hard timeLimit
+      0,
+      hardOptions,
+      600000, // hard maxNodes
+    );
+    const searchTotal = performance.now() - searchStart;
+
+    // 3. evaluateBoard の推定占有時間（LineTable あり版で計算）
+    const evalCalls = result.stats.evaluationCalls;
+    const estimatedEvalTimeLT = evalCalls * evalPerCallLT;
+    const evalPercentLT =
+      searchTotal > 0 ? (estimatedEvalTimeLT / searchTotal) * 100 : 0;
+
+    console.log("\n=== hard条件 evaluateBoard 時間占有率推定（中盤 16手） ===");
+    console.log(`  探索総時間: ${searchTotal.toFixed(1)}ms`);
+    console.log(`  完了深度: ${result.completedDepth}`);
+    console.log(`  探索ノード: ${result.stats.nodes}`);
+    console.log(
+      `  NPS: ${(result.stats.nodes / (searchTotal / 1000)).toFixed(0)}`,
+    );
+    console.log(`  evaluateBoard (no LT): ${evalPerCallNoLT.toFixed(3)}ms`);
+    console.log(`  evaluateBoard (with LT): ${evalPerCallLT.toFixed(3)}ms`);
+    console.log(
+      `  LineTable 高速化率: ${((1 - evalPerCallLT / evalPerCallNoLT) * 100).toFixed(1)}%`,
+    );
+    console.log(`  evaluateBoard 呼出回数: ${evalCalls}`);
+    console.log(
+      `  evaluateBoard 推定時間 (LT): ${estimatedEvalTimeLT.toFixed(1)}ms`,
+    );
+    console.log(
+      `  evaluateBoard 推定占有率 (LT): ${evalPercentLT.toFixed(1)}%`,
+    );
+    console.log(`  禁手判定呼出: ${result.stats.forbiddenCheckCalls}`);
+    console.log(`  脅威検出呼出: ${result.stats.threatDetectionCalls}`);
+    console.log(`  盤面コピー: ${result.stats.boardCopies}`);
+    console.log(
+      `  残り（VCF/VCT/禁手等）: ${(100 - evalPercentLT).toFixed(1)}%`,
+    );
+
+    expect(evalPercentLT).not.toBeNaN();
   }, 30000);
 });
