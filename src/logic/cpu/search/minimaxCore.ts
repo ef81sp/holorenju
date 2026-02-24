@@ -39,7 +39,6 @@ import {
   FUTILITY_MARGINS_SELF,
   hasImmediateThreat,
   INFINITY,
-  isTacticalMove,
   LMR_MIN_DEPTH,
   LMR_MOVE_THRESHOLD,
   LMR_REDUCTION,
@@ -297,8 +296,7 @@ export function minimaxWithTT(
       depth <= 4 &&
       moveIndex > 0 &&
       bestScore > -PATTERN_SCORES.FIVE + 5000 &&
-      bestScore < PATTERN_SCORES.FIVE - 5000 &&
-      !isTacticalMove(board, move, currentColor)
+      bestScore < PATTERN_SCORES.FIVE - 5000
     ) {
       futilityMeasureStaticEval = evaluatePosition(
         board,
@@ -317,8 +315,7 @@ export function minimaxWithTT(
       depth <= 3 &&
       moveIndex > 0 && // 最初の手はスキップしない
       bestScore > -PATTERN_SCORES.FIVE + 5000 && // 勝ち/負け確定でない
-      bestScore < PATTERN_SCORES.FIVE - 5000 &&
-      !isTacticalMove(board, move, currentColor) // 四を作る手は除外
+      bestScore < PATTERN_SCORES.FIVE - 5000
     ) {
       const futilityMargins = isMaximizing
         ? FUTILITY_MARGINS_SELF
@@ -341,12 +338,10 @@ export function minimaxWithTT(
       }
     }
 
-    // LMR判定は石を置く前に行う（isTacticalMoveが元の盤面を参照するため）
     const canApplyLMR =
       moveIndex >= LMR_MOVE_THRESHOLD &&
       depth >= LMR_MIN_DEPTH &&
-      bestScore > -PATTERN_SCORES.FIVE + 1000 && // 負けが確定していない
-      !isTacticalMove(board, move, currentColor); // 四を作る手は除外
+      bestScore > -PATTERN_SCORES.FIVE + 1000; // 負けが確定していない
 
     // 石を配置（インプレース変更）
     applyMoveInPlace(board, move, currentColor);
@@ -359,7 +354,6 @@ export function minimaxWithTT(
 
     // LMR (Late Move Reductions)
     // 後半の候補手は浅く探索し、有望なら再探索
-    // ただし、四を作る手（タクティカルな手）は除外
     if (canApplyLMR) {
       // 浅い探索
       score = minimaxWithTT(

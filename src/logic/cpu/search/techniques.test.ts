@@ -13,8 +13,8 @@ import { placeStonesOnBoard } from "../testUtils";
 import { findBestMoveIterativeWithTT } from "./minimax";
 import { hasImmediateThreat, isTacticalMove } from "./techniques";
 
-describe("LMR タクティカルムーブ除外", () => {
-  it("四を作る手が正しく検出される", () => {
+describe("LMR と四を作る手", () => {
+  it("四を作る手もLMR対象だが、最善手として正しく選ばれる", () => {
     const board = createEmptyBoard();
     // 黒が3つ並んでいる状態（四を作れる）
     placeStonesOnBoard(board, [
@@ -23,8 +23,8 @@ describe("LMR タクティカルムーブ除外", () => {
       { row: 7, col: 6, color: "black" },
     ]);
 
-    // 四を作る手(7,3)か(7,7)が最善手として選ばれるはず
-    // LMRでスキップされずに正しく評価される
+    // 四を作る手はLMR対象だが、move orderingで上位に来るため
+    // LMR_MOVE_THRESHOLD未満で探索され、正しく評価される
     const result = findBestMoveIterativeWithTT(
       board,
       "black",
@@ -39,7 +39,7 @@ describe("LMR タクティカルムーブ除外", () => {
     expect([3, 7]).toContain(result.position.col);
   });
 
-  it("複数の四がある局面で正しく最善手を選ぶ", () => {
+  it("VCFがある局面で正しく勝ちを見つける", () => {
     const board = createEmptyBoard();
     // 黒が複数方向に四を作れる状態
     // 横方向: 3つ並び（7,4）（7,5）（7,6）→ (7,3)または(7,7)で四
@@ -55,7 +55,8 @@ describe("LMR タクティカルムーブ除外", () => {
       { row: 6, col: 7, color: "black" },
     ]);
 
-    // 複数の四を作れる手がある中で、最善手が選ばれる
+    // VCFがある局面では pre-search で検出されるため、
+    // LMR の四免除がなくても勝ちを見つける
     const result = findBestMoveIterativeWithTT(
       board,
       "black",
@@ -65,18 +66,10 @@ describe("LMR タクティカルムーブ除外", () => {
       DEFAULT_EVAL_OPTIONS,
     );
 
-    // 有効な手が選ばれる
-    expect(result.position.row).toBeGreaterThanOrEqual(0);
-    expect(result.position.row).toBeLessThan(15);
-
-    // この局面では、CPUはVCF（四追い勝ち）を発見する
-    // (3,7)で四を作り、(2,7)で勝利確定
-    // そのため、最善手は (2,7)（VCFの開始手）や (3,7)（直接の四）など
-    // 高スコア（勝利確定相当）が返されることを確認
     expect(result.score).toBeGreaterThanOrEqual(PATTERN_SCORES.FIVE);
   });
 
-  it("跳び四を作る手もLMRから除外される", () => {
+  it("四を作る手がmove orderingで上位に来るため正しく評価される", () => {
     const board = createEmptyBoard();
     // 跳び四パターン（●●●・●）を作れる状態
     // (7,4), (7,5), (7,6) に黒、(7,8) に打つと跳び四
@@ -84,10 +77,10 @@ describe("LMR タクティカルムーブ除外", () => {
       { row: 7, col: 4, color: "black" },
       { row: 7, col: 5, color: "black" },
       { row: 7, col: 6, color: "black" },
-      // (7,7) は空けておく
     ]);
 
-    // 跳び四を作れる手が正しく評価される
+    // 四を作る手はmove orderingで高スコアになるため、
+    // LMR_MOVE_THRESHOLD より前に探索されフル深度で読まれる
     const result = findBestMoveIterativeWithTT(
       board,
       "black",
@@ -97,10 +90,7 @@ describe("LMR タクティカルムーブ除外", () => {
       DEFAULT_EVAL_OPTIONS,
     );
 
-    // 有効な手が選ばれる（通常は連続四の方が優先されるが、跳び四も考慮される）
     expect(result.position.row).toBe(7);
-    // 連続四: (7,3) または (7,7)
-    // 跳び四: (7,8) で ●●●・●
     expect([3, 7, 8]).toContain(result.position.col);
   });
 });
