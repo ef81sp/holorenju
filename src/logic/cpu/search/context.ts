@@ -5,6 +5,8 @@
  * VCF/VCT共通の時間制限コンテキストもここで定義。
  */
 
+import type { LineTable } from "../lineTable/lineTable";
+
 import {
   DEFAULT_EVAL_OPTIONS,
   type EvaluationOptions,
@@ -74,6 +76,8 @@ export interface SearchContext {
   stats: SearchStats;
   /** 評価オプション */
   evaluationOptions: EvaluationOptions;
+  /** ビットマスク版ラインテーブル */
+  lineTable?: LineTable;
   /** 探索停止タイムスタンプ（deadline ベース） */
   deadline?: number;
   /** 時間切れフラグ */

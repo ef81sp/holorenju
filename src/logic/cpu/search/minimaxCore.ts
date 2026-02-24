@@ -24,6 +24,7 @@ import {
 import { evaluateBoard } from "../evaluation/boardEvaluation";
 import { PATTERN_SCORES } from "../evaluation/patternScores";
 import { evaluatePosition } from "../evaluation/positionEvaluation";
+import { placeStone, removeStone } from "../lineTable/lineTable";
 import {
   generateSortedMoves,
   recordKillerMove,
@@ -135,10 +136,15 @@ export function minimaxWithTT(
     ctx.nodeCountExceeded ||
     ctx.absoluteDeadlineExceeded
   ) {
-    return evaluateBoard(board, perspective, {
-      singleFourPenaltyMultiplier:
-        ctx.evaluationOptions.singleFourPenaltyMultiplier,
-    });
+    return evaluateBoard(
+      board,
+      perspective,
+      {
+        singleFourPenaltyMultiplier:
+          ctx.evaluationOptions.singleFourPenaltyMultiplier,
+      },
+      ctx.lineTable,
+    );
   }
 
   // 現在の手番を決定
@@ -190,10 +196,15 @@ export function minimaxWithTT(
 
   // 探索深度が0になった場合は盤面評価
   if (depth === 0) {
-    const score = evaluateBoard(board, perspective, {
-      singleFourPenaltyMultiplier:
-        ctx.evaluationOptions.singleFourPenaltyMultiplier,
-    });
+    const score = evaluateBoard(
+      board,
+      perspective,
+      {
+        singleFourPenaltyMultiplier:
+          ctx.evaluationOptions.singleFourPenaltyMultiplier,
+      },
+      ctx.lineTable,
+    );
     ctx.tt.store(hash, score, depth, "EXACT", null);
     return score;
   }
@@ -345,6 +356,9 @@ export function minimaxWithTT(
 
     // 石を配置（インプレース変更）
     applyMoveInPlace(board, move, currentColor);
+    if (ctx.lineTable) {
+      placeStone(ctx.lineTable, move.row, move.col, currentColor);
+    }
     const newHash = updateHash(hash, move.row, move.col, currentColor);
 
     // 禁手キャッシュ用に現在の盤面ハッシュを更新
@@ -401,6 +415,9 @@ export function minimaxWithTT(
 
     // 石を元に戻す（Undo）
     undoMove(board, move);
+    if (ctx.lineTable) {
+      removeStone(ctx.lineTable, move.row, move.col, currentColor);
+    }
 
     // 禁手キャッシュ用に盤面ハッシュを元に戻す
     setCurrentBoardHash(hash);
@@ -546,6 +563,11 @@ export function findBestMoveWithTT(
     const newBoard = applyMove(board, move, color);
     const newHash = updateHash(hash, move.row, move.col, color);
 
+    // LineTable を同期（ルート探索はコピー盤面だがLineTableは共有）
+    if (ctx.lineTable) {
+      placeStone(ctx.lineTable, move.row, move.col, color);
+    }
+
     const score = minimaxWithTT(
       newBoard,
       newHash,
@@ -557,6 +579,10 @@ export function findBestMoveWithTT(
       move,
       ctx,
     );
+
+    if (ctx.lineTable) {
+      removeStone(ctx.lineTable, move.row, move.col, color);
+    }
 
     // PVを抽出
     const pvResult = extractPV(board, hash, move, color, ctx.tt, depth);

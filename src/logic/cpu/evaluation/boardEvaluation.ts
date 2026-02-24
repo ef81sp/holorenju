@@ -7,6 +7,8 @@
 
 import type { BoardState } from "@/types/game";
 
+import type { LineTable } from "../lineTable/lineTable";
+
 import { DIRECTIONS } from "../core/constants";
 import { isNearExistingStone } from "../moveGenerator";
 import { incrementEvaluationCalls } from "../profiling/counters";
@@ -113,6 +115,7 @@ export function evaluateBoard(
   board: BoardState,
   perspective: "black" | "white",
   options?: LeafEvaluationOptions,
+  lineTable?: LineTable,
 ): number {
   incrementEvaluationCalls();
   const opponentColor = perspective === "black" ? "white" : "black";
@@ -137,7 +140,7 @@ export function evaluateBoard(
       }
 
       const { score, breakdown, activeDirectionCount } =
-        evaluateStonePatternsWithBreakdown(board, row, col, stone);
+        evaluateStonePatternsWithBreakdown(board, row, col, stone, lineTable);
 
       let adjustedScore = score;
       if (activeDirectionCount >= 2 && connectivityBonus > 0) {
@@ -197,6 +200,7 @@ export function evaluateBoard(
 export function evaluateBoardWithBreakdown(
   board: BoardState,
   perspective: "black" | "white",
+  lineTable?: LineTable,
 ): BoardEvaluationBreakdown {
   const opponentColor = perspective === "black" ? "white" : "black";
 
@@ -212,7 +216,7 @@ export function evaluateBoardWithBreakdown(
       }
 
       const { score, breakdown, activeDirectionCount } =
-        evaluateStonePatternsWithBreakdown(board, row, col, stone);
+        evaluateStonePatternsWithBreakdown(board, row, col, stone, lineTable);
 
       let adjustedScore = score;
       if (activeDirectionCount >= 2) {

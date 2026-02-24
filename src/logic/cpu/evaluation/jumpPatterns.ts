@@ -17,7 +17,11 @@ import {
 
 import { DIRECTION_INDICES, DIRECTIONS } from "../core/constants";
 import { analyzeDirection } from "./directionAnalysis";
-import { type JumpPatternResult, PATTERN_SCORES } from "./patternScores";
+import {
+  type DirectionPattern,
+  type JumpPatternResult,
+  PATTERN_SCORES,
+} from "./patternScores";
 
 /**
  * 連続三が有効（ウソの三でない）かをチェック
@@ -109,6 +113,7 @@ export function analyzeJumpPatterns(
   row: number,
   col: number,
   color: "black" | "white",
+  precomputed?: DirectionPattern[],
 ): JumpPatternResult {
   const result: JumpPatternResult = {
     hasFour: false,
@@ -122,18 +127,17 @@ export function analyzeJumpPatterns(
   // 同じ方向に跳び四がある場合、連続三を活三としてカウントしないため
   const jumpFourDirections = new Set<number>();
 
+  // パターンキャッシュ（precomputed がない場合のみ計算）
+  const patterns: DirectionPattern[] =
+    precomputed ?? computePatterns(board, row, col, color);
+
   for (let i = 0; i < DIRECTION_INDICES.length; i++) {
     const dirIndex = DIRECTION_INDICES[i];
     if (dirIndex === undefined) {
       continue;
     }
 
-    const direction = DIRECTIONS[i];
-    if (!direction) {
-      continue;
-    }
-    const [dr, dc] = direction;
-    const pattern = analyzeDirection(board, row, col, dr, dc, color);
+    const pattern = patterns[i]!;
 
     // 連続四がなく、跳び四がある場合を記録
     if (
@@ -150,13 +154,7 @@ export function analyzeJumpPatterns(
       continue;
     }
 
-    // 連続パターンを先にチェック（DIRECTIONSの順に）
-    const direction = DIRECTIONS[i];
-    if (!direction) {
-      continue;
-    }
-    const [dr, dc] = direction;
-    const pattern = analyzeDirection(board, row, col, dr, dc, color);
+    const pattern = patterns[i]!;
 
     // 連続四をチェック（少なくとも片端が空いていなければ五を作れないため除外）
     if (
@@ -226,4 +224,24 @@ export function getJumpPatternScore(jumpResult: JumpPatternResult): number {
   }
 
   return score;
+}
+
+/** precomputed がない場合のフォールバック */
+function computePatterns(
+  board: BoardState,
+  row: number,
+  col: number,
+  color: "black" | "white",
+): DirectionPattern[] {
+  const patterns: DirectionPattern[] = [];
+  for (let i = 0; i < DIRECTIONS.length; i++) {
+    const direction = DIRECTIONS[i];
+    if (!direction) {
+      patterns.push({ count: 1, end1: "edge", end2: "edge" });
+      continue;
+    }
+    const [dr, dc] = direction;
+    patterns.push(analyzeDirection(board, row, col, dr, dc, color));
+  }
+  return patterns;
 }

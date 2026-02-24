@@ -19,6 +19,7 @@ import {
   type ThreatInfo,
 } from "../evaluation/patternScores";
 import { detectOpponentThreats } from "../evaluation/threatDetection";
+import { buildLineTable } from "../lineTable/lineTable";
 import { generateSortedMoves } from "../moveGenerator";
 import { getCounters, resetCounters } from "../profiling/counters";
 import { globalTT } from "../transpositionTable";
@@ -396,6 +397,7 @@ export function findBestMoveIterativeWithTT(
 ): IterativeDeepingResult & { stats: SearchStats } {
   const startTime = performance.now();
   const ctx = createSearchContext(globalTT, evaluationOptions);
+  ctx.lineTable = buildLineTable(board);
 
   // プロファイリングカウンターをリセット
   resetCounters();

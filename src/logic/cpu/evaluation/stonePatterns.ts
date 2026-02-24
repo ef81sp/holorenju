@@ -7,14 +7,14 @@
 
 import type { BoardState } from "@/types/game";
 
+import type { LineTable } from "../lineTable/lineTable";
+
 import { DIRECTIONS } from "../core/constants";
-import {
-  analyzeDirection,
-  getPatternScore,
-  getPatternType,
-} from "./directionAnalysis";
+import { getDirectionPattern } from "../lineTable/adapter";
+import { getPatternScore, getPatternType } from "./directionAnalysis";
 import { analyzeJumpPatterns, getJumpPatternScore } from "./jumpPatterns";
 import {
+  type DirectionPattern,
   emptyPatternBreakdown,
   type PatternBreakdown,
   PATTERN_SCORES,
@@ -35,18 +35,16 @@ export function evaluateStonePatterns(
   row: number,
   col: number,
   color: "black" | "white",
+  lineTable?: LineTable,
 ): number {
   let score = 0;
+  const precomputed: DirectionPattern[] = [];
 
   // 連続パターンのスコア
   // DIRECTIONSのインデックス: 0=横, 1=縦, 2=右下斜め, 3=右上斜め
   for (let i = 0; i < DIRECTIONS.length; i++) {
-    const direction = DIRECTIONS[i];
-    if (!direction) {
-      continue;
-    }
-    const [dr, dc] = direction;
-    const pattern = analyzeDirection(board, row, col, dr, dc, color);
+    const pattern = getDirectionPattern(board, row, col, i, color, lineTable);
+    precomputed.push(pattern);
     let dirScore = getPatternScore(pattern);
 
     // 斜め方向（インデックス2,3）にボーナスを適用
@@ -59,8 +57,8 @@ export function evaluateStonePatterns(
     score += dirScore;
   }
 
-  // 跳びパターンのスコア
-  const jumpResult = analyzeJumpPatterns(board, row, col, color);
+  // 跳びパターンのスコア（precomputed で重複 analyzeDirection を排除）
+  const jumpResult = analyzeJumpPatterns(board, row, col, color, precomputed);
   score += getJumpPatternScore(jumpResult);
 
   return score;
@@ -74,6 +72,7 @@ export function evaluateStonePatternsWithBreakdown(
   row: number,
   col: number,
   color: "black" | "white",
+  lineTable?: LineTable,
 ): {
   score: number;
   breakdown: PatternBreakdown;
@@ -82,15 +81,12 @@ export function evaluateStonePatternsWithBreakdown(
   let score = 0;
   const breakdown: PatternBreakdown = emptyPatternBreakdown();
   let activeDirectionCount = 0;
+  const precomputed: DirectionPattern[] = [];
 
   // 連続パターンのスコア
   for (let i = 0; i < DIRECTIONS.length; i++) {
-    const direction = DIRECTIONS[i];
-    if (!direction) {
-      continue;
-    }
-    const [dr, dc] = direction;
-    const pattern = analyzeDirection(board, row, col, dr, dc, color);
+    const pattern = getDirectionPattern(board, row, col, i, color, lineTable);
+    precomputed.push(pattern);
     const baseScore = getPatternScore(pattern);
     const patternType = getPatternType(pattern);
 
@@ -120,8 +116,8 @@ export function evaluateStonePatternsWithBreakdown(
     }
   }
 
-  // 跳びパターンのスコア
-  const jumpResult = analyzeJumpPatterns(board, row, col, color);
+  // 跳びパターンのスコア（precomputed で重複 analyzeDirection を排除）
+  const jumpResult = analyzeJumpPatterns(board, row, col, color, precomputed);
   const jumpScore = getJumpPatternScore(jumpResult);
   score += jumpScore;
 
