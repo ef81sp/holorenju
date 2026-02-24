@@ -170,19 +170,19 @@ export function evaluateStonePatternsPrecomputed(
   const patterns: DirectionPattern[] = [];
 
   for (let dir = 0; dir < 4; dir++) {
-    const packed = packedPatterns[base + dir]!;
+    const packed = packedPatterns[base + dir] ?? 0;
     const count = packed >> 4;
     const end1Code = (packed >> 2) & 3;
     const end2Code = packed & 3;
 
     patterns.push({
       count: count === 0 ? 1 : count,
-      end1: count === 0 ? "edge" : END_STATE_TABLE[end1Code]!,
-      end2: count === 0 ? "edge" : END_STATE_TABLE[end2Code]!,
+      end1: count === 0 ? "edge" : (END_STATE_TABLE[end1Code] ?? "edge"),
+      end2: count === 0 ? "edge" : (END_STATE_TABLE[end2Code] ?? "edge"),
     });
 
-    const baseScore = PACKED_TO_SCORE[packed]!;
-    const type = PACKED_TO_TYPE[packed]!;
+    const baseScore = PACKED_TO_SCORE[packed] ?? 0;
+    const type = PACKED_TO_TYPE[packed] ?? 0;
 
     if (baseScore > 0) {
       activeDirectionCount++;

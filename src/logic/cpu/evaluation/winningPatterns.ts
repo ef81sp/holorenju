@@ -10,13 +10,16 @@ import type { BoardState } from "@/types/game";
 
 import { checkJumpFour, checkJumpThree } from "@/logic/renjuRules";
 
-import type { LineTable } from "../lineTable/lineTable";
 import type { DirectionPattern } from "./patternScores";
 
 import { DIRECTION_INDICES, DIRECTIONS } from "../core/constants";
 import { CELL_LINES_FLAT } from "../lineTable/lineMapping";
 import { analyzeLinePattern } from "../lineTable/linePatterns";
-import { placeStone, removeStone } from "../lineTable/lineTable";
+import {
+  placeStone,
+  removeStone,
+  type LineTable,
+} from "../lineTable/lineTable";
 import { analyzeDirection } from "./directionAnalysis";
 import { analyzeJumpPatterns } from "./jumpPatterns";
 
@@ -214,7 +217,7 @@ export function createsFourThreeBit(
   const patterns: DirectionPattern[] = [];
   const base = (row * 15 + col) * 4;
   for (let d = 0; d < 4; d++) {
-    const packed = CELL_LINES_FLAT[base + d]!;
+    const packed = CELL_LINES_FLAT[base + d] ?? 0xffff;
     if (packed === 0xffff) {
       patterns.push({ count: 1, end1: "edge", end2: "edge" });
       continue;

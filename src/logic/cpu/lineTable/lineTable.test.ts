@@ -42,7 +42,7 @@ describe("placeStone / removeStone", () => {
 
     for (const entry of entries) {
       // eslint-disable-next-line no-bitwise
-      expect(lt.blacks[entry.lineId]! & (1 << entry.bitPos)).not.toBe(0);
+      expect((lt.blacks[entry.lineId] ?? 0) & (1 << entry.bitPos)).not.toBe(0);
       // 白は未変更
       expect(lt.whites[entry.lineId]).toBe(0);
     }
@@ -56,7 +56,7 @@ describe("placeStone / removeStone", () => {
     for (const entry of entries) {
       expect(lt.blacks[entry.lineId]).toBe(0);
       // eslint-disable-next-line no-bitwise
-      expect(lt.whites[entry.lineId]! & (1 << entry.bitPos)).not.toBe(0);
+      expect((lt.whites[entry.lineId] ?? 0) & (1 << entry.bitPos)).not.toBe(0);
     }
   });
 
@@ -81,19 +81,19 @@ describe("placeStone / removeStone", () => {
     const entries77 = getCellLines(7, 7);
     for (const entry of entries77) {
       // eslint-disable-next-line no-bitwise
-      expect(lt.blacks[entry.lineId]! & (1 << entry.bitPos)).not.toBe(0);
+      expect((lt.blacks[entry.lineId] ?? 0) & (1 << entry.bitPos)).not.toBe(0);
     }
 
     // (7,8) の白ビットが立っている
     const entries78 = getCellLines(7, 8);
     for (const entry of entries78) {
       // eslint-disable-next-line no-bitwise
-      expect(lt.whites[entry.lineId]! & (1 << entry.bitPos)).not.toBe(0);
+      expect((lt.whites[entry.lineId] ?? 0) & (1 << entry.bitPos)).not.toBe(0);
     }
 
     // (7,8) に黒を置いていないので黒ビットはない（横ラインで共有されているが別bitPos）
     // 横ラインでは lineId=7 が共有されるので、黒の bitPos=7 が (7,7)、白の bitPos=8 が (7,8)
-    const row7HorizBlack = lt.blacks[7]!;
+    const row7HorizBlack = lt.blacks[7] ?? 0;
     // eslint-disable-next-line no-bitwise
     expect(row7HorizBlack & (1 << 7)).not.toBe(0); // (7,7) の黒
     // eslint-disable-next-line no-bitwise
@@ -110,7 +110,7 @@ describe("placeStone / removeStone", () => {
 
     for (const entry of entries) {
       // eslint-disable-next-line no-bitwise
-      expect(lt.blacks[entry.lineId]! & (1 << entry.bitPos)).not.toBe(0);
+      expect((lt.blacks[entry.lineId] ?? 0) & (1 << entry.bitPos)).not.toBe(0);
     }
 
     removeStone(lt, 0, 0, "black");
@@ -126,7 +126,7 @@ describe("placeStone / removeStone", () => {
     const entries = getCellLines(14, 14);
     for (const entry of entries) {
       // eslint-disable-next-line no-bitwise
-      expect(lt.whites[entry.lineId]! & (1 << entry.bitPos)).not.toBe(0);
+      expect((lt.whites[entry.lineId] ?? 0) & (1 << entry.bitPos)).not.toBe(0);
     }
 
     removeStone(lt, 14, 14, "white");
@@ -171,7 +171,10 @@ describe("buildLineTable", () => {
 
     // 盤面に配置
     for (const p of positions) {
-      board[p.row]![p.col] = p.color;
+      const row = board[p.row];
+      if (row) {
+        row[p.col] = p.color;
+      }
     }
 
     // buildLineTable で一括構築
@@ -203,7 +206,10 @@ describe("buildLineTable", () => {
     ] as const;
 
     for (const [r, c, color] of moves) {
-      board[r]![c] = color;
+      const row = board[r];
+      if (row) {
+        row[c] = color;
+      }
     }
 
     const lt = buildLineTable(board);
@@ -211,13 +217,15 @@ describe("buildLineTable", () => {
     // 全ラインで黒と白のビットが重複しない
     for (let i = 0; i < 72; i++) {
       // eslint-disable-next-line no-bitwise
-      expect(lt.blacks[i]! & lt.whites[i]!).toBe(0);
+      expect((lt.blacks[i] ?? 0) & (lt.whites[i] ?? 0)).toBe(0);
     }
   });
 
   it("buildLineTable の各ビットが正しいラインに対応", () => {
     const board = emptyBoard();
-    board[3]![5] = "black";
+    if (board[3]) {
+      board[3][5] = "black";
+    }
 
     const lt = buildLineTable(board);
     const entries = getCellLines(3, 5);
@@ -225,7 +233,7 @@ describe("buildLineTable", () => {
     // 対応ラインのビットが立っている
     for (const entry of entries) {
       // eslint-disable-next-line no-bitwise
-      expect(lt.blacks[entry.lineId]! & (1 << entry.bitPos)).not.toBe(0);
+      expect((lt.blacks[entry.lineId] ?? 0) & (1 << entry.bitPos)).not.toBe(0);
     }
 
     // 対応ライン以外のビットはすべて0（1石しかないので）
@@ -240,7 +248,9 @@ describe("buildLineTable", () => {
   it("横一列に5石配置→横ラインのビットマスクが連続5ビット", () => {
     const board = emptyBoard();
     for (let c = 3; c <= 7; c++) {
-      board[7]![c] = "black";
+      if (board[7]) {
+        board[7][c] = "black";
+      }
     }
 
     const lt = buildLineTable(board);
@@ -255,14 +265,17 @@ describe("buildLineTable", () => {
     // 全セルに交互に配置
     for (let r = 0; r < BOARD_SIZE; r++) {
       for (let c = 0; c < BOARD_SIZE; c++) {
-        board[r]![c] = (r + c) % 2 === 0 ? "black" : "white";
+        const row = board[r];
+        if (row) {
+          row[c] = (r + c) % 2 === 0 ? "black" : "white";
+        }
       }
     }
 
     const lt = buildLineTable(board);
     for (let i = 0; i < 72; i++) {
-      const mask = lt.blacks[i]! | lt.whites[i]!; // eslint-disable-line no-bitwise
-      const maxBit = LINE_LENGTHS[i]!;
+      const mask = (lt.blacks[i] ?? 0) | (lt.whites[i] ?? 0); // eslint-disable-line no-bitwise
+      const maxBit = LINE_LENGTHS[i] ?? 0;
       // mask が maxBit ビット以内に収まっている
       // eslint-disable-next-line no-bitwise
       expect(mask >> maxBit).toBe(0);

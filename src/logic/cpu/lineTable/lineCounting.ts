@@ -58,8 +58,9 @@ export function countLineBit(
   bitPos: number,
   color: "black" | "white",
 ): number {
-  const mask = color === "black" ? blacks[lineId]! : whites[lineId]!;
-  const len = LINE_LENGTHS[lineId]!;
+  const mask =
+    color === "black" ? (blacks[lineId] ?? 0) : (whites[lineId] ?? 0);
+  const len = LINE_LENGTHS[lineId] ?? 0;
   return (
     countConsecutive(mask, bitPos, 1, len) +
     countConsecutive(mask, bitPos, -1, len) +
@@ -81,9 +82,11 @@ export function checkEndsBit(
   bitPos: number,
   color: "black" | "white",
 ): { end1: EndState; end2: EndState } {
-  const ownMask = color === "black" ? blacks[lineId]! : whites[lineId]!;
-  const oppMask = color === "black" ? whites[lineId]! : blacks[lineId]!;
-  const len = LINE_LENGTHS[lineId]!;
+  const ownMask =
+    color === "black" ? (blacks[lineId] ?? 0) : (whites[lineId] ?? 0);
+  const oppMask =
+    color === "black" ? (whites[lineId] ?? 0) : (blacks[lineId] ?? 0);
+  const len = LINE_LENGTHS[lineId] ?? 0;
 
   const posCount = countConsecutive(ownMask, bitPos, 1, len);
   const negCount = countConsecutive(ownMask, bitPos, -1, len);

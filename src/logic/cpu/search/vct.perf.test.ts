@@ -1276,18 +1276,24 @@ describe("防御手が活三を作る場合のVCT探索（depth > 0）", () => {
     const { board } = createBoardFromRecord(extRecord);
     // I8に黒（防御手）を配置
     // I8 → row=7, col=8
-    board[7]![8] = "black";
+    if (board[7]) {
+      board[7][8] = "black";
+    }
     // 黒に活三がある（H7-I8-J9の/斜め）
     expect(hasOpenThree(board, "black")).toBe(true);
     // undo
-    board[7]![8] = null;
+    if (board[7]) {
+      board[7][8] = null;
+    }
   });
 
   it("防御手で活三ができた場合、VCFがなければVCT不成立（depth > 0）", () => {
     // 18手目(I10)後にI8防御を置いた局面
     const extRecord = `${record} I11 J12 I10`;
     const { board } = createBoardFromRecord(extRecord);
-    board[7]![8] = "black"; // I8防御
+    if (board[7]) {
+      board[7][8] = "black";
+    } // I8防御
     // 黒に活三があるので白のVCTは三脅威では不成立
     // VCFがない限りfalse
     const whiteHasVcf = hasVCF(board, "white", undefined, undefined, {
@@ -1298,7 +1304,9 @@ describe("防御手が活三を作る場合のVCT探索（depth > 0）", () => {
     expect(whiteHasVcf).toBe(false);
     expect(hasVCT(board, "white", 0, undefined, options)).toBe(false);
     // undo
-    board[7]![8] = null;
+    if (board[7]) {
+      board[7][8] = null;
+    }
   });
 
   it("防御手で活三ができてもVCFがあればVCT成立", () => {
@@ -1331,27 +1339,43 @@ describe("防御手が活三を作る場合のVCT探索（depth > 0）", () => {
       expect(board).toEqual(snapshot);
 
       // 手順が返された場合、防御手で活三ができたら次の攻撃手は四/五連であること
-      if (result) {
-        const replayBoard = copyBoard(board);
-        for (let i = 0; i < result.sequence.length; i++) {
-          const pos = result.sequence[i]!;
-          const isDefense = i % 2 === 1;
-          const stoneColor: "black" | "white" = isDefense ? "black" : "white";
-          replayBoard[pos.row]![pos.col] = stoneColor;
+      if (!result) {
+        return;
+      }
 
-          if (isDefense && hasOpenThree(replayBoard, "black")) {
-            // 次の攻撃手が四/五連でなければ不正手順
-            const nextIdx = i + 1;
-            if (nextIdx < result.sequence.length) {
-              const nextPos = result.sequence[nextIdx]!;
-              replayBoard[nextPos.row]![nextPos.col] = "white";
-              const makesFourOrFive =
-                createsFour(replayBoard, nextPos.row, nextPos.col, "white") ||
-                checkFive(replayBoard, nextPos.row, nextPos.col, "white");
-              expect(makesFourOrFive).toBe(true);
-              replayBoard[nextPos.row]![nextPos.col] = null;
-            }
-          }
+      const replayBoard = copyBoard(board);
+      for (let i = 0; i < result.sequence.length; i++) {
+        const pos = result.sequence[i];
+        if (!pos) {
+          continue;
+        }
+        const isDefense = i % 2 === 1;
+        const stoneColor: "black" | "white" = isDefense ? "black" : "white";
+        if (replayBoard[pos.row]) {
+          replayBoard[pos.row][pos.col] = stoneColor;
+        }
+
+        if (!isDefense || !hasOpenThree(replayBoard, "black")) {
+          continue;
+        }
+        // 次の攻撃手が四/五連でなければ不正手順
+        const nextIdx = i + 1;
+        if (nextIdx >= result.sequence.length) {
+          continue;
+        }
+        const nextPos = result.sequence[nextIdx];
+        if (!nextPos) {
+          continue;
+        }
+        if (replayBoard[nextPos.row]) {
+          replayBoard[nextPos.row][nextPos.col] = "white";
+        }
+        const makesFourOrFive =
+          createsFour(replayBoard, nextPos.row, nextPos.col, "white") ||
+          checkFive(replayBoard, nextPos.row, nextPos.col, "white");
+        expect(makesFourOrFive).toBe(true);
+        if (replayBoard[nextPos.row]) {
+          replayBoard[nextPos.row][nextPos.col] = null;
         }
       }
     },

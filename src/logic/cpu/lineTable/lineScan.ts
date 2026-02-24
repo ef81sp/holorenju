@@ -11,13 +11,14 @@
 
 /* eslint-disable no-bitwise -- ビットマスク操作に必要 */
 
-import type { EndState } from "../evaluation/patternScores";
-
 import {
   getPatternScore,
   getPatternType,
 } from "../evaluation/directionAnalysis";
-import { registerRebuildPackedTables } from "../evaluation/patternScores";
+import {
+  registerRebuildPackedTables,
+  type EndState,
+} from "../evaluation/patternScores";
 import { countConsecutive, endStateAt } from "./lineCounting";
 import {
   getDirIndexFromLineId,
@@ -58,8 +59,8 @@ function unpackPattern(packed: number): {
 } {
   return {
     count: packed >> 4,
-    end1: END_STATE_FROM_CODE[(packed >> 2) & 3]!,
-    end2: END_STATE_FROM_CODE[packed & 3]!,
+    end1: END_STATE_FROM_CODE[(packed >> 2) & 3] ?? "edge",
+    end2: END_STATE_FROM_CODE[packed & 3] ?? "edge",
   };
 }
 
@@ -151,9 +152,9 @@ export function precomputeLineFeatures(
   _whiteFlags.fill(0);
 
   for (let lineId = 0; lineId < 72; lineId++) {
-    const bMask = blacks[lineId]!;
-    const wMask = whites[lineId]!;
-    const len = LINE_LENGTHS[lineId]!;
+    const bMask = blacks[lineId] ?? 0;
+    const wMask = whites[lineId] ?? 0;
+    const len = LINE_LENGTHS[lineId] ?? 0;
     const dirIndex = getDirIndexFromLineId(lineId);
     const isReversed = dirIndex === 3;
 
@@ -239,7 +240,7 @@ function processOccupied(
     const e1Code = endStateToCode(e1);
     const e2Code = endStateToCode(e2);
 
-    const cellIndex = LINE_BIT_TO_CELL[lineId * 16 + bitPos]!;
+    const cellIndex = LINE_BIT_TO_CELL[lineId * 16 + bitPos] ?? 0;
     out[cellIndex * 4 + dirIndex] = (count << 4) | (e1Code << 2) | e2Code;
   }
 }
@@ -272,16 +273,16 @@ function processEmpty(
     const posEnd = endStateAt(oppMask, bitPos + posCount + 1, len);
     const negEnd = endStateAt(oppMask, bitPos - negCount - 1, len);
 
-    const cellIndex = LINE_BIT_TO_CELL[lineId * 16 + bitPos]!;
+    const cellIndex = LINE_BIT_TO_CELL[lineId * 16 + bitPos] ?? 0;
 
     // 四候補: total >= 3, 片端 open
     if (total >= 3 && (posEnd === "empty" || negEnd === "empty")) {
-      out[cellIndex] = out[cellIndex]! | fourBit;
+      out[cellIndex] = (out[cellIndex] ?? 0) | fourBit;
     }
     // 活三候補: total >= 2, 両端 open
     // else if により同方向のビットが fourDirs/threeDirs に同時に立つことはない
     else if (posEnd === "empty" && negEnd === "empty") {
-      out[cellIndex] = out[cellIndex]! | threeBit;
+      out[cellIndex] = (out[cellIndex] ?? 0) | threeBit;
     }
   }
 }

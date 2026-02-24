@@ -92,9 +92,9 @@ function analyzeGames(
     }
   }
 
-  const avg = (arr: number[]) =>
+  const avg = (arr: number[]): number =>
     arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
-  const percentile = (arr: number[], p: number) => {
+  const percentile = (arr: number[], p: number): number => {
     const sorted = [...arr].sort((a, b) => a - b);
     return sorted[Math.floor(sorted.length * p)] ?? 0;
   };

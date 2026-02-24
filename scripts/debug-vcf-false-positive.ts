@@ -398,7 +398,7 @@ if (args.length < 2) {
   process.exit(1);
 }
 
-const benchFile = args[0]!;
+const benchFile = args[0] ?? "";
 const data: BenchData = JSON.parse(fs.readFileSync(benchFile, "utf-8"));
 
 if (args[1] === "all") {
@@ -415,8 +415,8 @@ if (args[1] === "all") {
     }
   }
 } else {
-  const gameIndex = parseInt(args[1]!, 10);
-  const moveNumber = parseInt(args[2]!, 10);
+  const gameIndex = parseInt(args[1] ?? "0", 10);
+  const moveNumber = parseInt(args[2] ?? "0", 10);
   const game = data.games[gameIndex];
   if (!game) {
     console.error(`Game ${gameIndex} not found`);

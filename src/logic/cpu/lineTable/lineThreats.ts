@@ -41,16 +41,18 @@ export function hasFourThreePotentialBit(
   const base = (row * 15 + col) * 4;
 
   for (let d = 0; d < 4; d++) {
-    const packed = CELL_LINES_FLAT[base + d]!;
+    const packed = CELL_LINES_FLAT[base + d] ?? 0xffff;
     if (packed === 0xffff) {
       continue;
     }
 
     const lineId = packed >> 8;
     const bitPos = packed & 0xff;
-    const ownMask = color === "black" ? blacks[lineId]! : whites[lineId]!;
-    const oppMask = color === "black" ? whites[lineId]! : blacks[lineId]!;
-    const len = LINE_LENGTHS[lineId]!;
+    const ownMask =
+      color === "black" ? (blacks[lineId] ?? 0) : (whites[lineId] ?? 0);
+    const oppMask =
+      color === "black" ? (whites[lineId] ?? 0) : (blacks[lineId] ?? 0);
+    const len = LINE_LENGTHS[lineId] ?? 0;
 
     // 仮置き石は LineTable に未配置なので、bitPos 自体は含まない（countConsecutive の仕様通り）
     const posCount = countConsecutive(ownMask, bitPos, 1, len);

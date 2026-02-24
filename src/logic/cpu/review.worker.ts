@@ -413,11 +413,10 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
         const existingIdx = candidates.findIndex(
           (c) => c.position.row === playedRow && c.position.col === playedCol,
         );
-        if (existingIdx >= 0) {
+        if (existingIdx >= 0 && candidates[existingIdx]) {
           // minimax 候補の PV を追い詰めシーケンスで上書き
-          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
           candidates[existingIdx] = {
-            ...candidates[existingIdx]!,
+            ...candidates[existingIdx],
             principalVariation: playedForcedWinSequence,
             searchScore: PATTERN_SCORES.FIVE,
           };

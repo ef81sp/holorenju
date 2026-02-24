@@ -28,9 +28,11 @@ export function analyzeLinePattern(
   color: "black" | "white",
   reversed?: boolean,
 ): DirectionPattern {
-  const ownMask = color === "black" ? blacks[lineId]! : whites[lineId]!;
-  const oppMask = color === "black" ? whites[lineId]! : blacks[lineId]!;
-  const len = LINE_LENGTHS[lineId]!;
+  const ownMask =
+    color === "black" ? (blacks[lineId] ?? 0) : (whites[lineId] ?? 0);
+  const oppMask =
+    color === "black" ? (whites[lineId] ?? 0) : (blacks[lineId] ?? 0);
+  const len = LINE_LENGTHS[lineId] ?? 0;
 
   // bitPos から正方向に連続する同色ビット数（起点含まない）
   let posCount = 0;

@@ -174,7 +174,7 @@ describe("CELL_TO_LINES / getCellLines", () => {
         const entries = getCellLines(r, c);
         for (const entry of entries) {
           expect(entry.bitPos).toBeGreaterThanOrEqual(0);
-          expect(entry.bitPos).toBeLessThan(LINE_LENGTHS[entry.lineId]!);
+          expect(entry.bitPos).toBeLessThan(LINE_LENGTHS[entry.lineId] ?? 0);
         }
       }
     }
@@ -191,7 +191,8 @@ describe("CELL_LINES_FLAT", () => {
       for (let c = 0; c < 15; c++) {
         const entries = getCellLines(r, c);
         for (const entry of entries) {
-          const packed = CELL_LINES_FLAT[(r * 15 + c) * 4 + entry.dirIndex]!;
+          const packed =
+            CELL_LINES_FLAT[(r * 15 + c) * 4 + entry.dirIndex] ?? 0;
           // eslint-disable-next-line no-bitwise
           const lineId = packed >> 8;
           // eslint-disable-next-line no-bitwise
@@ -205,7 +206,7 @@ describe("CELL_LINES_FLAT", () => {
 
   it("エントリなし方向は 0xFFFF", () => {
     // (0,0) は dirIndex=3 (↗) がない
-    const packed = CELL_LINES_FLAT[(0 * 15 + 0) * 4 + 3]!;
+    const packed = CELL_LINES_FLAT[(0 * 15 + 0) * 4 + 3] ?? 0;
     expect(packed).toBe(0xffff);
   });
 });
@@ -215,9 +216,10 @@ describe("LINE_BIT_TO_CELL", () => {
     for (let r = 0; r < 15; r++) {
       for (let c = 0; c < 15; c++) {
         const cellIndex = r * 15 + c;
-        const entries = CELL_TO_LINES[cellIndex]!;
+        const entries = CELL_TO_LINES[cellIndex] ?? [];
         for (const entry of entries) {
-          const result = LINE_BIT_TO_CELL[entry.lineId * 16 + entry.bitPos]!;
+          const result =
+            LINE_BIT_TO_CELL[entry.lineId * 16 + entry.bitPos] ?? 0;
           expect(
             result,
             `cell(${r},${c}) lineId=${entry.lineId} bitPos=${entry.bitPos}`,
@@ -229,10 +231,10 @@ describe("LINE_BIT_TO_CELL", () => {
 
   it("sentinel (0xFFFF) が LINE_LENGTHS 超過のビット位置にのみ存在する", () => {
     for (let lineId = 0; lineId < 72; lineId++) {
-      const len = LINE_LENGTHS[lineId]!;
+      const len = LINE_LENGTHS[lineId] ?? 0;
       // ライン範囲内は有効なセルインデックス
       for (let bitPos = 0; bitPos < len; bitPos++) {
-        const val = LINE_BIT_TO_CELL[lineId * 16 + bitPos]!;
+        const val = LINE_BIT_TO_CELL[lineId * 16 + bitPos] ?? 0xffff;
         expect(
           val,
           `lineId=${lineId} bitPos=${bitPos} should not be sentinel`,
@@ -241,7 +243,7 @@ describe("LINE_BIT_TO_CELL", () => {
       }
       // ライン範囲外は sentinel
       for (let bitPos = len; bitPos < 16; bitPos++) {
-        const val = LINE_BIT_TO_CELL[lineId * 16 + bitPos]!;
+        const val = LINE_BIT_TO_CELL[lineId * 16 + bitPos] ?? 0xffff;
         expect(
           val,
           `lineId=${lineId} bitPos=${bitPos} should be sentinel`,

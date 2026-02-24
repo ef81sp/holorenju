@@ -34,7 +34,7 @@ export function getDirectionPattern(
   lineTable?: LineTable,
 ): DirectionPattern {
   if (lineTable) {
-    const packed = CELL_LINES_FLAT[(row * 15 + col) * 4 + dirIndex]!;
+    const packed = CELL_LINES_FLAT[(row * 15 + col) * 4 + dirIndex] ?? 0xffff;
     if (packed === 0xffff) {
       // ラインが5未満（短い斜め）: 盤外と同等
       return { count: 1, end1: "edge", end2: "edge" };
@@ -50,7 +50,7 @@ export function getDirectionPattern(
       dirIndex === 3, // ↗方向はビット方向が物理方向と逆転
     );
   }
-  const dir = DIRECTIONS[dirIndex]!;
+  const dir = DIRECTIONS[dirIndex] ?? [0, 0];
   return analyzeDirection(board, row, col, dir[0], dir[1], color);
 }
 

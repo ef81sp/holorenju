@@ -59,7 +59,7 @@ export function getDirIndexFromLineId(lineId: number): number {
 
 /** 指定セルが属するラインのエントリ配列を返す（事前計算済み配列への参照）。 */
 export function getCellLines(row: number, col: number): LineMappingEntry[] {
-  return CELL_TO_LINES[row * BOARD_SIZE + col]!;
+  return CELL_TO_LINES[row * BOARD_SIZE + col] ?? [];
 }
 
 // === 内部ビルド関数 ===
@@ -144,7 +144,7 @@ function buildLineBitToCell(): Uint16Array {
   for (let r = 0; r < BOARD_SIZE; r++) {
     for (let c = 0; c < BOARD_SIZE; c++) {
       const cellIndex = r * BOARD_SIZE + c;
-      const entries = CELL_TO_LINES[cellIndex]!;
+      const entries = CELL_TO_LINES[cellIndex] ?? [];
       for (const entry of entries) {
         table[entry.lineId * 16 + entry.bitPos] = cellIndex;
       }
@@ -160,7 +160,7 @@ function buildCellLinesFlat(): Uint16Array {
 
   for (let r = 0; r < BOARD_SIZE; r++) {
     for (let c = 0; c < BOARD_SIZE; c++) {
-      const entries = CELL_TO_LINES[r * BOARD_SIZE + c]!;
+      const entries = CELL_TO_LINES[r * BOARD_SIZE + c] ?? [];
       for (const entry of entries) {
         flat[(r * BOARD_SIZE + c) * 4 + entry.dirIndex] =
           (entry.lineId << 8) | entry.bitPos;

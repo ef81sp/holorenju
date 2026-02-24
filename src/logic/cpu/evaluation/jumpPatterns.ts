@@ -137,7 +137,10 @@ export function analyzeJumpPatterns(
       continue;
     }
 
-    const pattern = patterns[i]!;
+    const pattern = patterns[i];
+    if (!pattern) {
+      continue;
+    }
 
     // 連続四がなく、跳び四がある場合を記録
     if (
@@ -154,7 +157,10 @@ export function analyzeJumpPatterns(
       continue;
     }
 
-    const pattern = patterns[i]!;
+    const pattern = patterns[i];
+    if (!pattern) {
+      continue;
+    }
 
     // 連続四をチェック（少なくとも片端が空いていなければ五を作れないため除外）
     if (
@@ -234,8 +240,7 @@ function computePatterns(
   color: "black" | "white",
 ): DirectionPattern[] {
   const patterns: DirectionPattern[] = [];
-  for (let i = 0; i < DIRECTIONS.length; i++) {
-    const direction = DIRECTIONS[i];
+  for (const direction of DIRECTIONS) {
     if (!direction) {
       patterns.push({ count: 1, end1: "edge", end2: "edge" });
       continue;

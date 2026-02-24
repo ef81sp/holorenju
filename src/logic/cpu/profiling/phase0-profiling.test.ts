@@ -143,7 +143,7 @@ describe("Phase 0: ボトルネック計測", () => {
 
     const start = performance.now();
     for (let i = 0; i < ITERATIONS; i++) {
-      const cell = emptyCells[i % emptyCells.length]!;
+      const cell = emptyCells[i % emptyCells.length] ?? { row: 7, col: 7 };
       evaluatePosition(board, cell.row, cell.col, "black");
     }
     const elapsed = performance.now() - start;
@@ -358,6 +358,7 @@ describe("Phase 0: ボトルネック計測", () => {
     console.log(`  scanFourThreeThreat コスト: ${threatCost2.toFixed(4)}ms`);
     console.log(`  scanFourThreeThreat 占有率: ${threatPercent2.toFixed(1)}%`);
 
-    expect(threatPercent).toBeGreaterThanOrEqual(0);
+    // マイクロベンチマーク計測誤差で微小な負値になりうるため -5% まで許容
+    expect(threatPercent).toBeGreaterThanOrEqual(-5);
   });
 });

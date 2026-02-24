@@ -59,11 +59,23 @@ function randomBoard(rng: () => number, stoneCount: number): BoardState {
   }
   for (let i = positions.length - 1; i > 0; i--) {
     const j = Math.floor(rng() * (i + 1));
-    [positions[i], positions[j]] = [positions[j]!, positions[i]!];
+    const pi = positions[i];
+    const pj = positions[j];
+    if (pi && pj) {
+      positions[i] = pj;
+      positions[j] = pi;
+    }
   }
   for (let i = 0; i < stoneCount && i < positions.length; i++) {
-    const { r, c } = positions[i]!;
-    board[r]![c] = i % 2 === 0 ? "black" : "white";
+    const pos = positions[i];
+    if (!pos) {
+      continue;
+    }
+    const { r, c } = pos;
+    const row = board[r];
+    if (row) {
+      row[c] = i % 2 === 0 ? "black" : "white";
+    }
   }
   return board;
 }
@@ -109,7 +121,7 @@ describe("PACKED_TO_TYPE", () => {
         continue;
       }
       const expected = getPatternType({ count, end1, end2 });
-      const actual = TYPE_CODE_TO_NAME[PACKED_TO_TYPE[packed]!] ?? null;
+      const actual = TYPE_CODE_TO_NAME[PACKED_TO_TYPE[packed] ?? 0] ?? null;
       expect(
         actual,
         `packed=${packed} count=${count} e1=${end1} e2=${end2}`,
@@ -133,6 +145,45 @@ describe("rebuildPackedTables", () => {
   });
 });
 
+function verifyPrecomputedPatterns(board: BoardState, trial: number): void {
+  const lt = buildLineTable(board);
+  precomputeLineFeatures(lt.blacks, lt.whites);
+
+  for (let r = 0; r < BOARD_SIZE; r++) {
+    for (let c = 0; c < BOARD_SIZE; c++) {
+      const stone = board[r]?.[c];
+      if (stone === null || stone === undefined) {
+        continue;
+      }
+
+      const patterns =
+        stone === "black" ? precomputedBlackPatterns : precomputedWhitePatterns;
+      const base = (r * 15 + c) * 4;
+
+      for (let dir = 0; dir < 4; dir++) {
+        const flat = CELL_LINES_FLAT[(r * 15 + c) * 4 + dir] ?? 0xffff; // eslint-disable-line no-bitwise
+        if (flat === 0xffff) {
+          continue;
+        }
+
+        const packed = patterns[base + dir] ?? 0;
+        const { count, end1, end2 } = unpackPattern(packed);
+        const expected = getDirectionPattern(board, r, c, dir, stone, lt);
+
+        expect(count, `board#${trial} (${r},${c}) dir=${dir} count`).toBe(
+          expected.count,
+        );
+        expect(end1, `board#${trial} (${r},${c}) dir=${dir} end1`).toBe(
+          expected.end1,
+        );
+        expect(end2, `board#${trial} (${r},${c}) dir=${dir} end2`).toBe(
+          expected.end2,
+        );
+      }
+    }
+  }
+}
+
 describe("precomputed patterns", () => {
   const RANDOM_BOARD_COUNT = 200;
   const STONE_COUNTS = [6, 10, 16, 24];
@@ -142,49 +193,7 @@ describe("precomputed patterns", () => {
       const rng = createRng(stoneCount * 77777);
       for (let trial = 0; trial < RANDOM_BOARD_COUNT; trial++) {
         const board = randomBoard(rng, stoneCount);
-        const lt = buildLineTable(board);
-        precomputeLineFeatures(lt.blacks, lt.whites);
-
-        for (let r = 0; r < BOARD_SIZE; r++) {
-          for (let c = 0; c < BOARD_SIZE; c++) {
-            const stone = board[r]?.[c];
-            if (stone === null || stone === undefined) {
-              continue;
-            }
-
-            const patterns =
-              stone === "black"
-                ? precomputedBlackPatterns
-                : precomputedWhitePatterns;
-            const cellIndex = r * 15 + c;
-            const base = cellIndex * 4;
-
-            for (let dir = 0; dir < 4; dir++) {
-              // sentinel 方向（ラインが存在しない）はスキップ
-              // precomputed は 0（count=0）、getDirectionPattern は {count:1, edge, edge}
-              // どちらもスコア=0 で等価だがデータ形式が異なる
-              const flat = CELL_LINES_FLAT[(r * 15 + c) * 4 + dir]!; // eslint-disable-line no-bitwise
-              if (flat === 0xffff) {
-                continue;
-              }
-
-              const packed = patterns[base + dir]!;
-              const { count, end1, end2 } = unpackPattern(packed);
-
-              const expected = getDirectionPattern(board, r, c, dir, stone, lt);
-
-              expect(count, `board#${trial} (${r},${c}) dir=${dir} count`).toBe(
-                expected.count,
-              );
-              expect(end1, `board#${trial} (${r},${c}) dir=${dir} end1`).toBe(
-                expected.end1,
-              );
-              expect(end2, `board#${trial} (${r},${c}) dir=${dir} end2`).toBe(
-                expected.end2,
-              );
-            }
-          }
-        }
+        verifyPrecomputedPatterns(board, trial);
       }
     });
   }
@@ -214,7 +223,7 @@ describe("precomputed flags", () => {
                   ? precomputedBlackFlags
                   : precomputedWhiteFlags;
               const cellIndex = r * 15 + c;
-              const f = flags[cellIndex]!;
+              const f = flags[cellIndex] ?? 0;
               const fourDirs = f & 0x0f; // eslint-disable-line no-bitwise
               const threeDirs = (f >> 4) & 0x0f; // eslint-disable-line no-bitwise
               const hasPotential = Boolean(fourDirs && threeDirs);
@@ -243,17 +252,24 @@ describe("fill(0) リセット", () => {
   it("2回連続呼び出しで前回のデータが残らない", () => {
     // 1回目: 石のある盤面
     const board1 = emptyBoard();
-    board1[7]![5] = "black";
-    board1[7]![6] = "black";
-    board1[7]![7] = "black";
-    board1[5]![4] = "black";
-    board1[6]![4] = "black";
+    const [, , , , , row5, row6, row7] = board1;
+    if (row7) {
+      row7[5] = "black";
+      row7[6] = "black";
+      row7[7] = "black";
+    }
+    if (row5) {
+      row5[4] = "black";
+    }
+    if (row6) {
+      row6[4] = "black";
+    }
     const lt1 = buildLineTable(board1);
     precomputeLineFeatures(lt1.blacks, lt1.whites);
 
     // 何かデータがあることを確認
     const cellIndex1 = 7 * 15 + 5;
-    expect(precomputedBlackPatterns[cellIndex1 * 4]!).not.toBe(0);
+    expect(precomputedBlackPatterns[cellIndex1 * 4] ?? 0).not.toBe(0);
 
     // 2回目: 空盤
     const board2 = emptyBoard();
@@ -261,8 +277,8 @@ describe("fill(0) リセット", () => {
     precomputeLineFeatures(lt2.blacks, lt2.whites);
 
     // 前回のデータが残っていないことを確認
-    expect(precomputedBlackPatterns[cellIndex1 * 4]!).toBe(0);
-    expect(precomputedWhitePatterns[cellIndex1 * 4]!).toBe(0);
+    expect(precomputedBlackPatterns[cellIndex1 * 4] ?? 0).toBe(0);
+    expect(precomputedWhitePatterns[cellIndex1 * 4] ?? 0).toBe(0);
 
     // flags も確認
     for (let i = 0; i < 225; i++) {

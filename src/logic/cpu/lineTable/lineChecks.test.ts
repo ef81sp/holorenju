@@ -23,6 +23,19 @@ function emptyBoard(): BoardState {
   );
 }
 
+/** 盤面のセルに安全に値をセット */
+function setCell(
+  board: BoardState,
+  r: number,
+  c: number,
+  value: "black" | "white" | null,
+): void {
+  const row = board[r];
+  if (row) {
+    row[c] = value;
+  }
+}
+
 /** シード付き擬似乱数生成器 */
 function createRng(seed: number): () => number {
   let s = seed;
@@ -43,11 +56,17 @@ function randomBoard(rng: () => number, stoneCount: number): BoardState {
   }
   for (let i = positions.length - 1; i > 0; i--) {
     const j = Math.floor(rng() * (i + 1));
-    [positions[i], positions[j]] = [positions[j]!, positions[i]!];
+    const tmp = positions[i];
+    positions[i] = positions[j] ?? { r: 0, c: 0 };
+    positions[j] = tmp ?? { r: 0, c: 0 };
   }
   for (let i = 0; i < stoneCount && i < positions.length; i++) {
-    const { r, c } = positions[i]!;
-    board[r]![c] = i % 2 === 0 ? "black" : "white";
+    const pos = positions[i];
+    if (!pos) {
+      continue;
+    }
+    const { r, c } = pos;
+    setCell(board, r, c, i % 2 === 0 ? "black" : "white");
   }
   return board;
 }
@@ -57,11 +76,11 @@ describe("checkFiveBit vs checkFive", () => {
     const board = emptyBoard();
     // 横に4つ並べて5つ目を確認
     for (let c = 5; c <= 8; c++) {
-      board[7]![c] = "black";
+      setCell(board, 7, c, "black");
     }
     const lt = buildLineTable(board);
     // (7,9) に置くと五連
-    board[7]![9] = "black";
+    setCell(board, 7, 9, "black");
     placeStone(lt, 7, 9, "black");
     expect(checkFiveBit(lt.blacks, lt.whites, 7, 9, "black")).toBe(true);
     expect(checkFive(board, 7, 9, "black")).toBe(true);
@@ -70,10 +89,10 @@ describe("checkFiveBit vs checkFive", () => {
   it("白の五連", () => {
     const board = emptyBoard();
     for (let r = 3; r <= 6; r++) {
-      board[r]![7] = "white";
+      setCell(board, r, 7, "white");
     }
     const lt = buildLineTable(board);
-    board[7]![7] = "white";
+    setCell(board, 7, 7, "white");
     placeStone(lt, 7, 7, "white");
     expect(checkFiveBit(lt.blacks, lt.whites, 7, 7, "white")).toBe(true);
     expect(checkFive(board, 7, 7, "white")).toBe(true);
@@ -82,10 +101,10 @@ describe("checkFiveBit vs checkFive", () => {
   it("四では false", () => {
     const board = emptyBoard();
     for (let c = 5; c <= 7; c++) {
-      board[7]![c] = "black";
+      setCell(board, 7, c, "black");
     }
     const lt = buildLineTable(board);
-    board[7]![8] = "black";
+    setCell(board, 7, 8, "black");
     placeStone(lt, 7, 8, "black");
     expect(checkFiveBit(lt.blacks, lt.whites, 7, 8, "black")).toBe(false);
     expect(checkFive(board, 7, 8, "black")).toBe(false);
@@ -94,10 +113,10 @@ describe("checkFiveBit vs checkFive", () => {
   it("六連（長連）では false", () => {
     const board = emptyBoard();
     for (let c = 4; c <= 8; c++) {
-      board[7]![c] = "black";
+      setCell(board, 7, c, "black");
     }
     const lt = buildLineTable(board);
-    board[7]![9] = "black";
+    setCell(board, 7, 9, "black");
     placeStone(lt, 7, 9, "black");
     // 6連 → checkFive は false（exactly 5 のみ）
     expect(checkFiveBit(lt.blacks, lt.whites, 7, 9, "black")).toBe(false);
@@ -106,12 +125,12 @@ describe("checkFiveBit vs checkFive", () => {
 
   it("斜め↗方向の五連", () => {
     const board = emptyBoard();
-    board[10]![3] = "white";
-    board[9]![4] = "white";
-    board[8]![5] = "white";
-    board[7]![6] = "white";
+    setCell(board, 10, 3, "white");
+    setCell(board, 9, 4, "white");
+    setCell(board, 8, 5, "white");
+    setCell(board, 7, 6, "white");
     const lt = buildLineTable(board);
-    board[6]![7] = "white";
+    setCell(board, 6, 7, "white");
     placeStone(lt, 6, 7, "white");
     expect(checkFiveBit(lt.blacks, lt.whites, 6, 7, "white")).toBe(true);
     expect(checkFive(board, 6, 7, "white")).toBe(true);
@@ -135,7 +154,7 @@ describe("checkFiveBit vs checkFive", () => {
             continue;
           }
           for (const color of ["black", "white"] as const) {
-            board[r]![c] = color;
+            setCell(board, r, c, color);
             placeStone(lt, r, c, color);
 
             const expected = checkFive(board, r, c, color);
@@ -143,7 +162,7 @@ describe("checkFiveBit vs checkFive", () => {
             expect(actual, `(${r},${c}) ${color} board#${i}`).toBe(expected);
 
             // 復元
-            board[r]![c] = null;
+            setCell(board, r, c, null);
             // rebuild lineTable for next iteration
             const ltFresh = buildLineTable(board);
             lt.blacks.set(ltFresh.blacks);
@@ -159,10 +178,10 @@ describe("checkOverlineBit vs checkOverline", () => {
   it("六連を検出", () => {
     const board = emptyBoard();
     for (let c = 4; c <= 8; c++) {
-      board[7]![c] = "black";
+      setCell(board, 7, c, "black");
     }
     const lt = buildLineTable(board);
-    board[7]![9] = "black";
+    setCell(board, 7, 9, "black");
     placeStone(lt, 7, 9, "black");
     expect(checkOverlineBit(lt.blacks, lt.whites, 7, 9)).toBe(true);
     expect(checkOverline(board, 7, 9)).toBe(true);
@@ -171,10 +190,10 @@ describe("checkOverlineBit vs checkOverline", () => {
   it("五連は長連ではない", () => {
     const board = emptyBoard();
     for (let c = 5; c <= 8; c++) {
-      board[7]![c] = "black";
+      setCell(board, 7, c, "black");
     }
     const lt = buildLineTable(board);
-    board[7]![9] = "black";
+    setCell(board, 7, 9, "black");
     placeStone(lt, 7, 9, "black");
     expect(checkOverlineBit(lt.blacks, lt.whites, 7, 9)).toBe(false);
     expect(checkOverline(board, 7, 9)).toBe(false);
@@ -195,14 +214,14 @@ describe("checkOverlineBit vs checkOverline", () => {
           if (board[r]?.[c] !== null) {
             continue;
           }
-          board[r]![c] = "black";
+          setCell(board, r, c, "black");
           placeStone(lt, r, c, "black");
 
           const expected = checkOverline(board, r, c);
           const actual = checkOverlineBit(lt.blacks, lt.whites, r, c);
           expect(actual, `(${r},${c}) board#${i}`).toBe(expected);
 
-          board[r]![c] = null;
+          setCell(board, r, c, null);
           const ltFresh = buildLineTable(board);
           lt.blacks.set(ltFresh.blacks);
           lt.whites.set(ltFresh.whites);

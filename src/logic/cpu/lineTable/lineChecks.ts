@@ -26,7 +26,7 @@ export function checkFiveBit(
   color: "black" | "white",
 ): boolean {
   for (let dirIndex = 0; dirIndex < 4; dirIndex++) {
-    const packed = CELL_LINES_FLAT[(row * 15 + col) * 4 + dirIndex]!;
+    const packed = CELL_LINES_FLAT[(row * 15 + col) * 4 + dirIndex] ?? 0xffff;
     if (packed === 0xffff) {
       continue;
     }
@@ -52,7 +52,7 @@ export function checkOverlineBit(
   col: number,
 ): boolean {
   for (let dirIndex = 0; dirIndex < 4; dirIndex++) {
-    const packed = CELL_LINES_FLAT[(row * 15 + col) * 4 + dirIndex]!;
+    const packed = CELL_LINES_FLAT[(row * 15 + col) * 4 + dirIndex] ?? 0xffff;
     if (packed === 0xffff) {
       continue;
     }

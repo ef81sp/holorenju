@@ -131,7 +131,7 @@ function scanFourThreeThreatFromFlags(
     return false;
   }
   for (let i = 0; i < 225; i++) {
-    const f = flags[i]!;
+    const f = flags[i] ?? 0;
     if (f === 0) {
       continue;
     }

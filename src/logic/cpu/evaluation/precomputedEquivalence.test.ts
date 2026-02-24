@@ -55,11 +55,23 @@ function randomBoard(rng: () => number, stoneCount: number): BoardState {
   }
   for (let i = positions.length - 1; i > 0; i--) {
     const j = Math.floor(rng() * (i + 1));
-    [positions[i], positions[j]] = [positions[j]!, positions[i]!];
+    const pi = positions[i];
+    const pj = positions[j];
+    if (pi && pj) {
+      positions[i] = pj;
+      positions[j] = pi;
+    }
   }
   for (let i = 0; i < stoneCount && i < positions.length; i++) {
-    const { r, c } = positions[i]!;
-    board[r]![c] = i % 2 === 0 ? "black" : "white";
+    const pos = positions[i];
+    if (!pos) {
+      continue;
+    }
+    const { r, c } = pos;
+    const row = board[r];
+    if (row) {
+      row[c] = i % 2 === 0 ? "black" : "white";
+    }
   }
   return board;
 }
@@ -180,7 +192,7 @@ describe("scanFourThreeThreatFromFlags vs scanFourThreeThreat", () => {
     }
     const lt = buildLineTable(board);
     for (let r = 0; r < BOARD_SIZE; r++) {
-      const rowOccupied = lt.blacks[r]! | lt.whites[r]!;
+      const rowOccupied = (lt.blacks[r] ?? 0) | (lt.whites[r] ?? 0);
       for (let c = 0; c < BOARD_SIZE; c++) {
         if (rowOccupied & (1 << c)) {
           continue;
@@ -213,7 +225,7 @@ describe("scanFourThreeThreatFromFlags vs scanFourThreeThreat", () => {
     const flags =
       color === "black" ? precomputedBlackFlags : precomputedWhiteFlags;
     for (let i = 0; i < 225; i++) {
-      const f = flags[i]!;
+      const f = flags[i] ?? 0;
       if (f === 0) {
         continue;
       }

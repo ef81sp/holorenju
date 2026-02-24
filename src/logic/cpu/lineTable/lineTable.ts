@@ -35,7 +35,7 @@ export function buildLineTable(board: BoardState): LineTable {
   const lt = createEmptyLineTable();
 
   for (let r = 0; r < BOARD_SIZE; r++) {
-    const row = board[r]!;
+    const row = board[r] ?? [];
     for (let c = 0; c < BOARD_SIZE; c++) {
       const cell = row[c];
       if (cell === null) {
@@ -45,11 +45,13 @@ export function buildLineTable(board: BoardState): LineTable {
       const entries = getCellLines(r, c);
       if (cell === "black") {
         for (const entry of entries) {
-          lt.blacks[entry.lineId]! |= 1 << entry.bitPos;
+          lt.blacks[entry.lineId] =
+            (lt.blacks[entry.lineId] ?? 0) | (1 << entry.bitPos);
         }
       } else {
         for (const entry of entries) {
-          lt.whites[entry.lineId]! |= 1 << entry.bitPos;
+          lt.whites[entry.lineId] =
+            (lt.whites[entry.lineId] ?? 0) | (1 << entry.bitPos);
         }
       }
     }
@@ -68,11 +70,12 @@ export function placeStone(
   const arr = color === "black" ? lt.blacks : lt.whites;
   const base = (row * 15 + col) * 4;
   for (let d = 0; d < 4; d++) {
-    const packed = CELL_LINES_FLAT[base + d]!;
+    const packed = CELL_LINES_FLAT[base + d] ?? 0xffff;
     if (packed === 0xffff) {
       continue;
     }
-    arr[packed >> 8]! |= 1 << (packed & 0xff);
+    const idx = packed >> 8;
+    arr[idx] = (arr[idx] ?? 0) | (1 << (packed & 0xff));
   }
 }
 
@@ -86,10 +89,11 @@ export function removeStone(
   const arr = color === "black" ? lt.blacks : lt.whites;
   const base = (row * 15 + col) * 4;
   for (let d = 0; d < 4; d++) {
-    const packed = CELL_LINES_FLAT[base + d]!;
+    const packed = CELL_LINES_FLAT[base + d] ?? 0xffff;
     if (packed === 0xffff) {
       continue;
     }
-    arr[packed >> 8]! &= ~(1 << (packed & 0xff));
+    const idx = packed >> 8;
+    arr[idx] = (arr[idx] ?? 0) & ~(1 << (packed & 0xff));
   }
 }

@@ -24,6 +24,19 @@ function emptyBoard(): BoardState {
   );
 }
 
+/** 盤面のセルに安全に値をセット */
+function setCell(
+  board: BoardState,
+  r: number,
+  c: number,
+  value: "black" | "white" | null,
+): void {
+  const row = board[r];
+  if (row) {
+    row[c] = value;
+  }
+}
+
 /**
  * board版 hasFourThreePotential（boardEvaluation.ts の private 関数を再実装）
  *
@@ -82,11 +95,17 @@ function randomBoard(rng: () => number, stoneCount: number): BoardState {
   }
   for (let i = positions.length - 1; i > 0; i--) {
     const j = Math.floor(rng() * (i + 1));
-    [positions[i], positions[j]] = [positions[j]!, positions[i]!];
+    const tmp = positions[i];
+    positions[i] = positions[j] ?? { r: 0, c: 0 };
+    positions[j] = tmp ?? { r: 0, c: 0 };
   }
   for (let i = 0; i < stoneCount && i < positions.length; i++) {
-    const { r, c } = positions[i]!;
-    board[r]![c] = i % 2 === 0 ? "black" : "white";
+    const pos = positions[i];
+    if (!pos) {
+      continue;
+    }
+    const { r, c } = pos;
+    setCell(board, r, c, i % 2 === 0 ? "black" : "white");
   }
   return board;
 }
@@ -129,12 +148,12 @@ describe("hasFourThreePotentialBit vs hasFourThreePotentialBoard", () => {
     // 縦に活三を作るため追加
     const board = emptyBoard();
     // 横に3連: (7,5)(7,6)(7,7)
-    board[7]![5] = "black";
-    board[7]![6] = "black";
-    board[7]![7] = "black";
+    setCell(board, 7, 5, "black");
+    setCell(board, 7, 6, "black");
+    setCell(board, 7, 7, "black");
     // 縦に2連: (5,4)(6,4) → (7,4) に置くと縦に3連両端open
-    board[5]![4] = "black";
-    board[6]![4] = "black";
+    setCell(board, 5, 4, "black");
+    setCell(board, 6, 4, "black");
 
     const lt = buildLineTable(board);
 
@@ -148,9 +167,9 @@ describe("hasFourThreePotentialBit vs hasFourThreePotentialBoard", () => {
   it("四のみ: 活三がない場合は false", () => {
     const board = emptyBoard();
     // 横に3連のみ
-    board[7]![5] = "black";
-    board[7]![6] = "black";
-    board[7]![7] = "black";
+    setCell(board, 7, 5, "black");
+    setCell(board, 7, 6, "black");
+    setCell(board, 7, 7, "black");
 
     const lt = buildLineTable(board);
 
@@ -164,11 +183,11 @@ describe("hasFourThreePotentialBit vs hasFourThreePotentialBoard", () => {
   it("活三のみ: 四がない場合は false", () => {
     const board = emptyBoard();
     // 横に2連: (7,5)(7,6)
-    board[7]![5] = "black";
-    board[7]![6] = "black";
+    setCell(board, 7, 5, "black");
+    setCell(board, 7, 6, "black");
     // 縦に2連: (5,4)(6,4)
-    board[5]![4] = "black";
-    board[6]![4] = "black";
+    setCell(board, 5, 4, "black");
+    setCell(board, 6, 4, "black");
 
     const lt = buildLineTable(board);
 
@@ -182,11 +201,11 @@ describe("hasFourThreePotentialBit vs hasFourThreePotentialBoard", () => {
   it("盤端のセル: sentinel 0xffff 処理が正常", () => {
     const board = emptyBoard();
     // (0,0) 付近: 斜め↗ラインがない
-    board[0]![1] = "black";
-    board[0]![2] = "black";
-    board[0]![3] = "black";
-    board[1]![0] = "black";
-    board[2]![0] = "black";
+    setCell(board, 0, 1, "black");
+    setCell(board, 0, 2, "black");
+    setCell(board, 0, 3, "black");
+    setCell(board, 1, 0, "black");
+    setCell(board, 2, 0, "black");
 
     verifyBoardMatch(board);
   });
@@ -194,22 +213,22 @@ describe("hasFourThreePotentialBit vs hasFourThreePotentialBoard", () => {
   it("短斜めライン上のセル", () => {
     const board = emptyBoard();
     // (0,4) 付近: ↗の短い斜めライン
-    board[0]![5] = "black";
-    board[0]![6] = "black";
-    board[0]![7] = "black";
-    board[1]![3] = "black";
-    board[2]![3] = "black";
+    setCell(board, 0, 5, "black");
+    setCell(board, 0, 6, "black");
+    setCell(board, 0, 7, "black");
+    setCell(board, 1, 3, "black");
+    setCell(board, 2, 3, "black");
 
     verifyBoardMatch(board);
   });
 
   it("白色でも正しく判定", () => {
     const board = emptyBoard();
-    board[7]![5] = "white";
-    board[7]![6] = "white";
-    board[7]![7] = "white";
-    board[5]![4] = "white";
-    board[6]![4] = "white";
+    setCell(board, 7, 5, "white");
+    setCell(board, 7, 6, "white");
+    setCell(board, 7, 7, "white");
+    setCell(board, 5, 4, "white");
+    setCell(board, 6, 4, "white");
 
     const lt = buildLineTable(board);
 
@@ -222,14 +241,14 @@ describe("hasFourThreePotentialBit vs hasFourThreePotentialBoard", () => {
   it("相手石がある方向は端がopponent", () => {
     const board = emptyBoard();
     // 横3連だが片端に相手石
-    board[7]![4] = "white"; // 相手石
-    board[7]![5] = "black";
-    board[7]![6] = "black";
-    board[7]![7] = "black";
+    setCell(board, 7, 4, "white"); // 相手石
+    setCell(board, 7, 5, "black");
+    setCell(board, 7, 6, "black");
+    setCell(board, 7, 7, "black");
     // (7,8) に置くと四になるが、end2がopponent
     // 縦に活三
-    board[6]![8] = "black";
-    board[5]![8] = "black";
+    setCell(board, 6, 8, "black");
+    setCell(board, 5, 8, "black");
 
     verifyBoardMatch(board);
   });
@@ -295,11 +314,12 @@ function scanFourThreeThreatNew(
   }
   const lt = buildLineTable(board);
   for (let r = 0; r < BOARD_SIZE; r++) {
-    const rowOccupied = lt.blacks[r]! | lt.whites[r]!; // eslint-disable-line no-bitwise
+    const rowOccupied = (lt.blacks[r] ?? 0) | (lt.whites[r] ?? 0); // eslint-disable-line no-bitwise
     for (let c = 0; c < BOARD_SIZE; c++) {
+      // eslint-disable-next-line no-bitwise
       if (rowOccupied & (1 << c)) {
         continue;
-      } // eslint-disable-line no-bitwise
+      }
       if (!hasFourThreePotentialBit(lt.blacks, lt.whites, r, c, color)) {
         continue;
       }
