@@ -1,5 +1,5 @@
 /**
- * 方向パターン取得アダプタ
+ * LineTable アダプタ
  *
  * LineTable があればビットマスク版、なければ従来版を使用。
  * フォールバック分岐を消費者に散在させず、この1箇所に集約する。
@@ -9,11 +9,14 @@
 
 import type { BoardState } from "@/types/game";
 
+import { checkFive, checkOverline } from "@/logic/renjuRules";
+
 import type { DirectionPattern } from "../evaluation/patternScores";
 import type { LineTable } from "./lineTable";
 
 import { DIRECTIONS } from "../core/constants";
 import { analyzeDirection } from "../evaluation/directionAnalysis";
+import { checkFiveBit, checkOverlineBit } from "./lineChecks";
 import { CELL_LINES_FLAT } from "./lineMapping";
 import { analyzeLinePattern } from "./linePatterns";
 
@@ -49,4 +52,38 @@ export function getDirectionPattern(
   }
   const dir = DIRECTIONS[dirIndex]!;
   return analyzeDirection(board, row, col, dir[0], dir[1], color);
+}
+
+/**
+ * 五連判定アダプタ
+ *
+ * LineTable があればビットマスク版、なければ renjuRules 版を使用。
+ * 前提: 判定対象の石は盤面（および LineTable）に配置済みであること。
+ */
+export function isFive(
+  board: BoardState,
+  row: number,
+  col: number,
+  color: "black" | "white",
+  lineTable?: LineTable,
+): boolean {
+  if (lineTable) {
+    return checkFiveBit(lineTable.blacks, lineTable.whites, row, col, color);
+  }
+  return checkFive(board, row, col, color);
+}
+
+/**
+ * 長連判定アダプタ
+ */
+export function isOverline(
+  board: BoardState,
+  row: number,
+  col: number,
+  lineTable?: LineTable,
+): boolean {
+  if (lineTable) {
+    return checkOverlineBit(lineTable.blacks, lineTable.whites, row, col);
+  }
+  return checkOverline(board, row, col);
 }

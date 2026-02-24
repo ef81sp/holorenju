@@ -7,7 +7,7 @@
 
 import type { BoardState, Position } from "@/types/game";
 
-import { checkFive, checkWin } from "@/logic/renjuRules";
+import { checkWin } from "@/logic/renjuRules";
 
 import type { ScoreType } from "../transpositionTable";
 
@@ -24,7 +24,12 @@ import {
 import { evaluateBoard } from "../evaluation/boardEvaluation";
 import { PATTERN_SCORES } from "../evaluation/patternScores";
 import { evaluatePosition } from "../evaluation/positionEvaluation";
-import { placeStone, removeStone } from "../lineTable/lineTable";
+import { isFive } from "../lineTable/adapter";
+import {
+  type LineTable,
+  placeStone,
+  removeStone,
+} from "../lineTable/lineTable";
 import {
   generateSortedMoves,
   recordKillerMove,
@@ -59,9 +64,13 @@ function isTerminal(
   board: BoardState,
   lastMove: Position | null,
   color: "black" | "white",
+  lineTable?: LineTable,
 ): boolean {
   if (!lastMove || !color) {
     return false;
+  }
+  if (lineTable) {
+    return isFive(board, lastMove.row, lastMove.col, color, lineTable);
   }
   return checkWin(board, lastMove, color);
 }
@@ -157,7 +166,7 @@ export function minimaxWithTT(
   let beta = betaInit;
 
   // 終端条件チェック
-  if (lastMove && isTerminal(board, lastMove, lastMoveColor)) {
+  if (lastMove && isTerminal(board, lastMove, lastMoveColor, ctx.lineTable)) {
     if (lastMoveColor === perspective) {
       return PATTERN_SCORES.FIVE;
     }
@@ -286,7 +295,7 @@ export function minimaxWithTT(
     // Alpha-Beta枝刈りで探索されない手は禁手チェック不要なため、ここで判定
     if (isBlackTurn) {
       // 五連が作れる場合は禁手でも打てる
-      if (!checkFive(board, move.row, move.col, "black")) {
+      if (!isFive(board, move.row, move.col, "black", ctx.lineTable)) {
         const forbiddenResult = checkForbiddenMoveWithCache(
           board,
           move.row,
