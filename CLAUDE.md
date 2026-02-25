@@ -64,6 +64,7 @@ pnpm build         # Production build
 
 - Do SSoT, DRY, SOLID, t-wada TDD
 - commit by phase
+- /review the plan before exitPlanMode
 
 ### package manager / scripts
 

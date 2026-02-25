@@ -6,6 +6,7 @@
 
 import type { BoardState, Position } from "@/types/game";
 
+import { BOARD_SIZE } from "@/constants";
 import { checkForbiddenMove, isValidPosition } from "@/logic/renjuRules";
 
 import { DIRECTIONS } from "../core/constants";
@@ -343,4 +344,54 @@ export function computeMiseBonus(
     return PATTERN_SCORES.DOUBLE_MISE_BONUS;
   }
   return targets.length > 0 ? PATTERN_SCORES.MISE_BONUS : 0;
+}
+
+/**
+ * 盤面上の全空きセルから両ミセ手を列挙
+ *
+ * lineTable を1回構築し、各セルで placeStone/removeStone で同期。
+ * hasPotentialMiseTarget でプリフィルタし、通過したセルのみ
+ * computeMiseBonus で完全検証する。
+ *
+ * @param board 盤面
+ * @param color 石の色
+ * @param lineTable 統合 lineTable があれば流用
+ * @returns 両ミセ手の位置配列
+ */
+export function findDoubleMiseMoves(
+  board: BoardState,
+  color: "black" | "white",
+  lineTable?: LineTable,
+): Position[] {
+  const lt = lineTable ?? buildLineTable(board);
+  const moves: Position[] = [];
+
+  for (let r = 0; r < BOARD_SIZE; r++) {
+    for (let c = 0; c < BOARD_SIZE; c++) {
+      if (board[r]?.[c] !== null) {
+        continue;
+      }
+      const row = board[r];
+      if (!row) {
+        continue;
+      }
+
+      // 仮置き + lineTable 同期
+      row[c] = color;
+      placeStone(lt, r, c, color);
+
+      // プリフィルタ: 安価に両ミセ候補か判定
+      if (hasPotentialMiseTarget(board, r, c, color)) {
+        const bonus = computeMiseBonus(board, r, c, color, lt);
+        if (bonus >= PATTERN_SCORES.DOUBLE_MISE_BONUS) {
+          moves.push({ row: r, col: c });
+        }
+      }
+
+      // 復元
+      removeStone(lt, r, c, color);
+      row[c] = null;
+    }
+  }
+  return moves;
 }

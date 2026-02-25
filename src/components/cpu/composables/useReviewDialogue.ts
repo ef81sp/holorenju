@@ -50,6 +50,7 @@ const FORCED_WIN_LABELS: Record<
   NonNullable<EvaluatedMove["forcedWinType"]>,
   string
 > = {
+  "double-mise": "両ミセ",
   vcf: "四追い",
   vct: "追い詰め",
   "forbidden-trap": "禁手追い込み",
@@ -138,6 +139,7 @@ export interface UseReviewDialogueReturn {
     bestMove: Position,
     forcedWinType?: EvaluatedMove["forcedWinType"],
     forcedLossType?: EvaluatedMove["forcedLossType"],
+    missedDoubleMise?: Position[],
   ) => void;
   /** CPU手のセリフを表示 */
   showCpuMoveDialogue: (forcedWinType?: EvaluatedMove["forcedWinType"]) => void;
@@ -203,10 +205,31 @@ export function useReviewDialogue(): UseReviewDialogueReturn {
     bestMove: Position,
     forcedWinType?: EvaluatedMove["forcedWinType"],
     forcedLossType?: EvaluatedMove["forcedLossType"],
+    missedDoubleMise?: Position[],
   ): void {
+    // excellent + 両ミセ局面だが打った手は両ミセではない場合の専用セリフ
+    if (
+      quality === "excellent" &&
+      forcedWinType === "double-mise" &&
+      missedDoubleMise &&
+      missedDoubleMise.length > 0
+    ) {
+      const label = FORCED_WIN_LABELS[forcedWinType];
+      const text = `いい手！でも${formatMove(bestMove)}の${label}の方が速いよ`;
+      showMessage(text, QUALITY_EMOTIONS.good);
+      return;
+    }
+
+    // 両ミセを打てているときは通常の品質セリフ（「すごい！最善手だよ！」等）
+    const effectiveForcedWinType =
+      forcedWinType === "double-mise" &&
+      (!missedDoubleMise || missedDoubleMise.length === 0)
+        ? undefined
+        : forcedWinType;
+
     const { templates, emotion } = selectTemplateAndEmotion(
       quality,
-      forcedWinType,
+      effectiveForcedWinType,
       forcedLossType,
     );
     const template = randomChoice(templates);

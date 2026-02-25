@@ -549,9 +549,9 @@ onBeforeUnmount(() => {
                 }"
               />
             </template>
-            <!-- Arrow mark -->
+            <!-- Arrow mark (label がない場合のみ線を描画) -->
             <v-line
-              v-else-if="mark.markType === 'arrow'"
+              v-else-if="mark.markType === 'arrow' && !mark.label"
               :config="{
                 points: [
                   layout.positionToPixels(pos.row, pos.col).x,
@@ -567,6 +567,28 @@ onBeforeUnmount(() => {
                 pointerWidth: 10,
                 pointerAtBeginning: false,
                 pointerAtEnding: true,
+              }"
+            />
+            <!-- Mark label (e.g. "A", "B") -->
+            <v-text
+              v-if="mark.label"
+              :config="{
+                x:
+                  layout.positionToPixels(pos.row, pos.col).x -
+                  layout.STONE_RADIUS.value,
+                y:
+                  layout.positionToPixels(pos.row, pos.col).y -
+                  layout.CELL_SIZE.value * 0.7 * 0.5,
+                width: layout.STONE_RADIUS.value * 2,
+                height: layout.CELL_SIZE.value * 0.7,
+                text: mark.label,
+                fontSize: layout.CELL_SIZE.value * 0.7,
+                fontFamily: 'sans-serif',
+                fontStyle: '900',
+                fill: BOARD_COLORS.markAccent,
+                align: 'center',
+                verticalAlign: 'middle',
+                listening: false,
               }"
             />
           </template>

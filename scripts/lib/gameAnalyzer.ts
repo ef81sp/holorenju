@@ -19,6 +19,9 @@ import type {
 import {
   createsFourThree,
   evaluateForbiddenTrap,
+  findDoubleMiseMoves,
+  findMiseTargets,
+  isDoubleMise,
 } from "../../src/logic/cpu/evaluation/tactics.ts";
 import { detectOpponentThreats } from "../../src/logic/cpu/evaluation/threatDetection.ts";
 import { getOpeningPatternInfo } from "../../src/logic/cpu/opening.ts";
@@ -81,6 +84,16 @@ export function analyzeMove(
     tags.push("four-three");
   }
 
+  // 両ミセ見逃し検出（石を置く前の盤面で判定）
+  // 四三を打った手や五連は見逃しチェック不要（それらは両ミセより強い）
+  let isMissedDoubleMise = false;
+  if (!isFourThree) {
+    const dmMoves = findDoubleMiseMoves(board, color);
+    if (dmMoves.length > 0) {
+      isMissedDoubleMise = true;
+    }
+  }
+
   // === 手を打つ ===
   const row = board[position.row];
   if (row) {
@@ -116,6 +129,24 @@ export function analyzeMove(
     if (trapScore > 0) {
       tags.push("forbidden-trap");
     }
+  }
+
+  // 両ミセ検出（四三でない場合のみ）
+  let isDoubleMiseMove = false;
+  if (!isFourThree) {
+    const targets = findMiseTargets(board, position.row, position.col, color);
+    if (
+      targets.length >= 2 &&
+      isDoubleMise(board, position.row, position.col, color, targets)
+    ) {
+      tags.push("double-mise");
+      isDoubleMiseMove = true;
+    }
+  }
+
+  // 両ミセ見逃しタグ付与（自分が両ミセを打っておらず、五連でもない場合）
+  if (isMissedDoubleMise && !isDoubleMiseMove && !isFive) {
+    tags.push("missed-double-mise");
   }
 
   // 開局手

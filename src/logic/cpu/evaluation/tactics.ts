@@ -23,6 +23,7 @@ export {
 // ミセ手戦術
 export {
   computeMiseBonus,
+  findDoubleMiseMoves,
   findMiseTargets,
   findMiseTargetsLite,
   hasPotentialMiseTarget,

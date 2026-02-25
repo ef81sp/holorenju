@@ -83,6 +83,8 @@ export function buildEvaluatedMove(
     forcedLossType: result.forcedLossType,
     forcedLossSequence: result.forcedLossSequence,
     isLightEval: result.isLightEval,
+    missedDoubleMise: result.missedDoubleMise,
+    doubleMiseTargets: result.doubleMiseTargets,
   };
 }
 

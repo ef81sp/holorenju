@@ -149,7 +149,7 @@ watch(
   () => {
     overlay.clearPreview();
 
-    // 最終手 = 五連（決着）
+    // 最終手で五連（決着）があれば決着セリフを表示
     const isLastMove =
       reviewStore.currentMoveIndex === reviewStore.moves.length &&
       reviewStore.currentMoveIndex > 0;
@@ -157,8 +157,9 @@ watch(
       const result = reviewStore.gameResult;
       if (result) {
         dialogue.showGameEndDialogue(result);
+        return;
       }
-      return;
+      // 五連でない最終手は通常の評価セリフにフォールバック
     }
 
     const evaluation = reviewStore.currentEvaluation;
@@ -168,6 +169,7 @@ watch(
         evaluation.bestMove,
         evaluation.forcedWinType,
         evaluation.forcedLossType,
+        evaluation.missedDoubleMise,
       );
     } else if (evaluation) {
       dialogue.showCpuMoveDialogue(evaluation.forcedWinType);

@@ -27,10 +27,12 @@ export type ThreatSequenceTag =
   | `vcf-${number}` // VCF手数（例: vcf-3 = 3手のVCF）
   | "four-three"; // 四三同時
 
-/** 戦術系タグ（将来の拡張用） */
+/** 戦術系タグ */
 export type TacticalTag =
   | "good-move" // 好手（評価上位）
-  | "bad-move"; // 悪手（評価下位）
+  | "bad-move" // 悪手（評価下位）
+  | "double-mise" // 両ミセ（防御不能のミセ手）
+  | "missed-double-mise"; // 両ミセ見逃し（他に両ミセ手があった）
 
 /** パターン系タグ */
 export type PatternTag =

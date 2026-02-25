@@ -25,6 +25,7 @@ import { PATTERN_SCORES } from "./patternScores";
 import {
   canContinueFourAfterDefense,
   computeMiseBonus,
+  findDoubleMiseMoves,
   findMiseTargets,
   findMiseTargetsLite,
   hasFollowUpThreat,
@@ -1399,5 +1400,52 @@ describe("computeMiseBonus / evaluatePosition: double mise scoring", () => {
     expect(scoreWithMise - scoreWithoutMise).toBe(
       PATTERN_SCORES.DOUBLE_MISE_BONUS,
     );
+  });
+});
+
+describe("findDoubleMiseMoves", () => {
+  it("空盤面 -> 空配列", () => {
+    const board = createEmptyBoard();
+    const moves = findDoubleMiseMoves(board, "black");
+    expect(moves).toEqual([]);
+  });
+
+  it("盤面A: (7,7) が両ミセ手として検出される", () => {
+    // 盤面A から M=(7,7) を除いた状態（まだ置いていない盤面）
+    const board = createBoardWithStones([
+      // 横の二
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      // 縦の二
+      { row: 8, col: 7, color: "black" },
+      { row: 9, col: 7, color: "black" },
+      // T1の縦活三サポート
+      { row: 5, col: 4, color: "black" },
+      { row: 6, col: 4, color: "black" },
+      // T2の横活三サポート
+      { row: 10, col: 5, color: "black" },
+      { row: 10, col: 6, color: "black" },
+      // 白: 横四の片端塞ぎ
+      { row: 7, col: 3, color: "white" },
+      // 白: 縦四の片端塞ぎ
+      { row: 6, col: 7, color: "white" },
+    ]);
+
+    const moves = findDoubleMiseMoves(board, "black");
+    const has77 = moves.some((m) => m.row === 7 && m.col === 7);
+    expect(has77).toBe(true);
+  });
+
+  it("両ミセ手が存在しない局面 -> 空配列", () => {
+    // 通常ミセ手のみの局面（ターゲット1つ）
+    const board = createBoardWithStones([
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 5, col: 8, color: "black" },
+      { row: 6, col: 8, color: "black" },
+    ]);
+
+    const moves = findDoubleMiseMoves(board, "black");
+    expect(moves).toEqual([]);
   });
 });

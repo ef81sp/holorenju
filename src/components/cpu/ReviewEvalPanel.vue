@@ -92,7 +92,11 @@ const qualityLabel = computed(() => {
 
 /** 必勝手順インジケーターのテキスト（プレイヤー手用） */
 const forcedWinLabel = computed(() => {
+  // 両ミセ見逃し時は missedDoubleMiseLabel に委譲（重複バッジを防止）
+  const missed = props.evaluation?.missedDoubleMise;
   switch (props.evaluation?.forcedWinType) {
+    case "double-mise":
+      return missed && missed.length > 0 ? null : "両ミセ";
     case "vcf":
       return "四追";
     case "vct":
@@ -109,6 +113,8 @@ const forcedWinLabel = computed(() => {
 /** 負け確定インジケーターのテキスト */
 const forcedLossLabel = computed(() => {
   switch (props.evaluation?.forcedLossType) {
+    case "double-mise":
+      return "被両ミセ";
     case "vcf":
       return "被四追";
     case "vct":
@@ -122,9 +128,20 @@ const forcedLossLabel = computed(() => {
   }
 });
 
+/** 両ミセ見逃しラベル */
+const missedDoubleMiseLabel = computed(() => {
+  const moves = props.evaluation?.missedDoubleMise;
+  if (!moves || moves.length === 0) {
+    return null;
+  }
+  return "両ミセ見逃";
+});
+
 /** コンピュータ手の強制勝ちラベル（「〜中」） */
 const cpuForcedWinLabel = computed(() => {
   switch (props.evaluation?.forcedWinType) {
+    case "double-mise":
+      return "両ミセ中";
     case "vcf":
       return "四追い中";
     case "vct":
@@ -648,6 +665,12 @@ function isPlayed(candidate: { position: Position }): boolean {
         >
           {{ forcedLossLabel }}
         </span>
+        <span
+          v-if="missedDoubleMiseLabel"
+          class="missed-double-mise-badge"
+        >
+          {{ missedDoubleMiseLabel }}
+        </span>
         <button
           type="button"
           class="help-button"
@@ -1052,6 +1075,16 @@ function isPlayed(candidate: { position: Position }): boolean {
   font-weight: 500;
   white-space: nowrap;
   background-color: hsl(0, 65%, 50%);
+}
+
+.missed-double-mise-badge {
+  padding: var(--size-1) var(--size-6);
+  border-radius: var(--size-4);
+  color: white;
+  font-size: var(--font-size-10);
+  font-weight: 500;
+  white-space: nowrap;
+  background-color: hsl(30, 80%, 50%);
 }
 
 .cpu-forced-win-badge {

@@ -180,14 +180,19 @@ export function useReviewBoardOverlay(): UseReviewBoardOverlayReturn {
       }
     }
 
-    // 評価がinaccuracy以上の場合、最善手をcrossマークで表示（"best" モード時は非表示）
+    // 最善手をcrossマークで表示（"best" モード時は非表示）
+    // - inaccuracy以上: 常に表示
+    // - double-mise + missedDoubleMise: 品質に関わらず表示（excellentでも最善手を示す）
     const evaluation = reviewStore.currentEvaluation;
     if (
       !isBestMode &&
       evaluation?.isPlayerMove &&
       (evaluation.quality === "inaccuracy" ||
         evaluation.quality === "mistake" ||
-        evaluation.quality === "blunder")
+        evaluation.quality === "blunder" ||
+        (evaluation.forcedWinType === "double-mise" &&
+          evaluation.missedDoubleMise &&
+          evaluation.missedDoubleMise.length > 0))
     ) {
       marks.push({
         id: "review-best",
@@ -195,6 +200,28 @@ export function useReviewBoardOverlay(): UseReviewBoardOverlayReturn {
         markType: "cross",
         placedAtDialogueIndex: -2,
       });
+    }
+
+    // 両ミセターゲットのラベル付き circle マーク（PV 未ホバー時に表示）
+    if (
+      !isBestMode &&
+      evaluation?.forcedWinType === "double-mise" &&
+      evaluation.doubleMiseTargets
+    ) {
+      const labels = "ABCDEFGHIJ";
+      for (let i = 0; i < evaluation.doubleMiseTargets.length; i++) {
+        const target = evaluation.doubleMiseTargets[i];
+        if (!target) {
+          continue;
+        }
+        marks.push({
+          id: `review-dm-target-${target.row}-${target.col}`,
+          positions: [target],
+          markType: "arrow",
+          label: labels[i] ?? String(i + 1),
+          placedAtDialogueIndex: -2,
+        });
+      }
     }
 
     // 候補手ホバー時のcircleマーク

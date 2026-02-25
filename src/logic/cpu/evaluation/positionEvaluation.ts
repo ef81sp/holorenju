@@ -27,6 +27,7 @@ import {
   DEFAULT_EVAL_OPTIONS,
   emptyPatternBreakdown,
   type EvaluationOptions,
+  type MiseType,
   type PatternBreakdown,
   PATTERN_SCORES,
   type ScoreBreakdown,
@@ -387,6 +388,7 @@ export function evaluatePositionWithBreakdown(
     fourThree: 0,
     fukumi: 0,
     mise: 0,
+    miseType: "none",
     center: 0,
     multiThreat: 0,
     defenseMultiThreat: 0,
@@ -610,6 +612,14 @@ export function evaluatePositionWithBreakdown(
     singleFourPenalty -
     forbiddenVulnerabilityPenalty;
 
+  // miseType を導出
+  let miseType: MiseType = "none";
+  if (miseBonus >= PATTERN_SCORES.DOUBLE_MISE_BONUS) {
+    miseType = "double-mise";
+  } else if (miseBonus > 0) {
+    miseType = "mise";
+  }
+
   return {
     score: totalScore,
     breakdown: {
@@ -618,6 +628,7 @@ export function evaluatePositionWithBreakdown(
       fourThree: fourThreeBonus,
       fukumi: fukumiBonus,
       mise: miseBonus,
+      miseType,
       center: centerBonus,
       multiThreat: multiThreatBonus,
       defenseMultiThreat: defenseMultiThreatBonus,

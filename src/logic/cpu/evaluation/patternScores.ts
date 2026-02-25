@@ -344,6 +344,8 @@ export interface ScoreBreakdown {
   fukumi: number;
   /** ミセ手ボーナス */
   mise: number;
+  /** ミセ手の種類（表示ラベル解決用） */
+  miseType: MiseType;
   /** 中央ボーナス */
   center: number;
   /** 複数方向脅威ボーナス */
@@ -369,6 +371,11 @@ export interface LeafEvaluationOptions {
   /** 直前着手者が perspective 側か（undefined で無効、後方互換） */
   lastMoverIsPerspective?: boolean;
 }
+
+/**
+ * ミセ手の種類
+ */
+export type MiseType = "none" | "mise" | "double-mise";
 
 /**
  * パターンスコア内訳（探索末端用）
