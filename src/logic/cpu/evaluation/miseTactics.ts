@@ -9,8 +9,15 @@ import type { BoardState, Position } from "@/types/game";
 import { checkForbiddenMove, isValidPosition } from "@/logic/renjuRules";
 
 import { DIRECTIONS } from "../core/constants";
+import {
+  buildLineTable,
+  placeStone,
+  removeStone,
+  type LineTable,
+} from "../lineTable/lineTable";
 import { analyzeDirection } from "./directionAnalysis";
-import { createsFourThree } from "./winningPatterns";
+import { PATTERN_SCORES } from "./patternScores";
+import { createsFourThree, createsFourThreeBit } from "./winningPatterns";
 
 /**
  * ミセターゲット（四三点）を軽量検出
@@ -171,6 +178,12 @@ export function findMiseTargets(
     }
     if (isValidPosition(r, c) && board[r]?.[c] === null) {
       tryAdd(r, c);
+      // 飛び四ターゲット: ギャップの1つ先もチェック
+      const nr = r + dr;
+      const nc = c + dc;
+      if (isValidPosition(nr, nc) && board[nr]?.[nc] === null) {
+        tryAdd(nr, nc);
+      }
     }
 
     // 負方向の端
@@ -182,6 +195,12 @@ export function findMiseTargets(
     }
     if (isValidPosition(r, c) && board[r]?.[c] === null) {
       tryAdd(r, c);
+      // 飛び四ターゲット: ギャップの1つ先もチェック
+      const nr = r - dr;
+      const nc = c - dc;
+      if (isValidPosition(nr, nc) && board[nr]?.[nc] === null) {
+        tryAdd(nr, nc);
+      }
     }
   }
 
@@ -215,4 +234,113 @@ export function isMiseMove(
   color: "black" | "white",
 ): boolean {
   return findMiseTargets(board, row, col, color).length > 0;
+}
+
+/**
+ * 両ミセ判定（近似的な検出）
+ *
+ * ターゲット位置への防御のみをシミュレートする。
+ * ターゲット外の防御（三を壊す割り込み等）は検証しない。
+ * 偽陽性は構造的に稀であり、探索木が補完する。
+ *
+ * lineTable が渡された場合はそのまま使用（探索中の一元管理 lineTable を流用）。
+ * 渡されない場合は buildLineTable でローカル構築（テストやスタンドアロン呼び出し用）。
+ *
+ * @param board 盤面（石を置いた状態）
+ * @param row 石を置いた行
+ * @param col 石を置いた列
+ * @param color 石の色
+ * @param precomputedTargets findMiseTargets の結果（省略時は内部で計算）
+ * @param lineTable 探索中の一元管理 lineTable（省略時は buildLineTable で構築）
+ * @returns 両ミセ（どのターゲットを防いでも別のターゲットで四三が残る）なら true
+ */
+export function isDoubleMise(
+  board: BoardState,
+  row: number,
+  col: number,
+  color: "black" | "white",
+  precomputedTargets?: Position[],
+  lineTable?: LineTable,
+): boolean {
+  const targets = precomputedTargets ?? findMiseTargets(board, row, col, color);
+  if (targets.length < 2) {
+    return false;
+  }
+
+  const lt = lineTable ?? buildLineTable(board);
+  const opponent = color === "black" ? "white" : "black";
+
+  // 各ターゲット T_i を防御した場合、残りのターゲットのいずれかで四三が成立するか検証
+  for (let i = 0; i < targets.length; i++) {
+    const ti = targets[i];
+    if (!ti) {
+      continue;
+    }
+
+    // T_i に相手の石を仮配置
+    const tiRow = board[ti.row];
+    if (tiRow) {
+      tiRow[ti.col] = opponent;
+    }
+    placeStone(lt, ti.row, ti.col, opponent);
+
+    // 残りのターゲットのいずれかが四三を作れるか
+    let survived = false;
+    for (let j = 0; j < targets.length; j++) {
+      if (i === j) {
+        continue;
+      }
+      const tj = targets[j];
+      if (!tj) {
+        continue;
+      }
+      if (createsFourThreeBit(board, lt, tj.row, tj.col, color)) {
+        survived = true;
+        break;
+      }
+    }
+
+    // 仮配置を復元
+    if (tiRow) {
+      tiRow[ti.col] = null;
+    }
+    removeStone(lt, ti.row, ti.col, opponent);
+
+    // いずれかの防御で全ターゲットが潰れる → 両ミセではない
+    if (!survived) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+/**
+ * ミセボーナスを計算
+ *
+ * 両ミセなら DOUBLE_MISE_BONUS、通常ミセなら MISE_BONUS、ミセなしなら 0。
+ * evaluatePositionCore と evaluatePositionWithBreakdown の両方から呼び出す。
+ *
+ * @param board 盤面（石を置いた状態）
+ * @param row 石を置いた行
+ * @param col 石を置いた列
+ * @param color 石の色
+ * @param lineTable 探索中の一元管理 lineTable（省略可）
+ * @returns ミセボーナスのスコア
+ */
+export function computeMiseBonus(
+  board: BoardState,
+  row: number,
+  col: number,
+  color: "black" | "white",
+  lineTable?: LineTable,
+): number {
+  const targets = findMiseTargets(board, row, col, color);
+  if (
+    targets.length >= 2 &&
+    isDoubleMise(board, row, col, color, targets, lineTable)
+  ) {
+    return PATTERN_SCORES.DOUBLE_MISE_BONUS;
+  }
+  return targets.length > 0 ? PATTERN_SCORES.MISE_BONUS : 0;
 }

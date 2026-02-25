@@ -13,6 +13,11 @@ import { checkFive, copyBoard } from "@/logic/renjuRules";
 
 import { includesPosition } from "../core/boardUtils";
 import {
+  placeStone,
+  removeStone,
+  type LineTable,
+} from "../lineTable/lineTable";
+import {
   applyDefenseMultiplier,
   DEFENSE_MULTIPLIERS,
   getCenterBonus,
@@ -33,11 +38,11 @@ import {
 } from "./stonePatterns";
 import {
   checkWhiteWinningPattern,
+  computeMiseBonus,
   evaluateForbiddenTrap,
   evaluateForbiddenVulnerability,
   hasFollowUpThreat,
   isFukumiMove,
-  isMiseMove,
 } from "./tactics";
 import {
   countThreatDirections,
@@ -62,6 +67,7 @@ export function evaluatePosition(
   col: number,
   color: StoneColor,
   options: EvaluationOptions = DEFAULT_EVAL_OPTIONS,
+  lineTable?: LineTable,
 ): number {
   // プロファイリング: 評価関数呼び出し回数をカウント
   incrementEvaluationCalls();
@@ -75,16 +81,30 @@ export function evaluatePosition(
     return PATTERN_SCORES.FIVE;
   }
 
-  // インプレースで石を配置
+  // インプレースで石を配置（board + lineTable を同期）
   const boardRow = board[row];
   if (boardRow) {
     boardRow[col] = color;
   }
+  if (lineTable) {
+    placeStone(lineTable, row, col, color);
+  }
 
   // 内部関数で全評価ロジックを実行（early returnが自由にできる）
-  const score = evaluatePositionCore(board, boardRow, row, col, color, options);
+  const score = evaluatePositionCore(
+    board,
+    boardRow,
+    row,
+    col,
+    color,
+    options,
+    lineTable,
+  );
 
   // 確実にUndoする（唯一のUndoポイント）
+  if (lineTable) {
+    removeStone(lineTable, row, col, color);
+  }
   if (boardRow) {
     boardRow[col] = null;
   }
@@ -98,6 +118,7 @@ function evaluatePositionCore(
   col: number,
   color: "black" | "white",
   options: EvaluationOptions,
+  lineTable?: LineTable,
 ): number {
   const opponentColor = color === "black" ? "white" : "black";
 
@@ -239,9 +260,15 @@ function evaluatePositionCore(
   }
 
   // ミセ手ボーナス: 次に四三を作れる手（オプションで有効時のみ）
+  // fourThreeBonus > 0 なら四三が既にあるためミセ計算をスキップ（二重加算防止）
+  // attackScore >= OPEN_FOUR なら活四以上で既に勝ちなのでスキップ
   let miseBonus = 0;
-  if (options.enableMise && isMiseMove(board, row, col, color)) {
-    miseBonus = PATTERN_SCORES.MISE_BONUS;
+  if (
+    options.enableMise &&
+    fourThreeBonus === 0 &&
+    attackScore < PATTERN_SCORES.OPEN_FOUR
+  ) {
+    miseBonus = computeMiseBonus(board, row, col, color, lineTable);
   }
 
   // 複数方向脅威ボーナス: 2方向以上で脅威を作る手（オプションで有効時のみ）
@@ -430,15 +457,21 @@ export function evaluatePositionWithBreakdown(
     fourThreeBonus = PATTERN_SCORES.FOUR_THREE_BONUS;
   }
 
-  // ミセ手ボーナス
-  let miseBonus = 0;
-  if (options.enableMise && isMiseMove(testBoard, row, col, color)) {
-    miseBonus = PATTERN_SCORES.MISE_BONUS;
-  }
-
   // フクミ手ボーナス
   let fukumiBonus = 0;
   const attackScore = evaluateStonePatterns(testBoard, row, col, color);
+
+  // ミセ手ボーナス
+  // fourThreeBonus > 0 なら四三が既にあるためミセ計算をスキップ（二重加算防止）
+  // attackScore >= OPEN_FOUR なら活四以上で既に勝ちなのでスキップ
+  let miseBonus = 0;
+  if (
+    options.enableMise &&
+    fourThreeBonus === 0 &&
+    attackScore < PATTERN_SCORES.OPEN_FOUR
+  ) {
+    miseBonus = computeMiseBonus(testBoard, row, col, color);
+  }
   if (
     options.enableFukumi &&
     attackScore < PATTERN_SCORES.OPEN_FOUR &&

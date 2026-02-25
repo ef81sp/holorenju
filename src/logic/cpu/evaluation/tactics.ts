@@ -22,9 +22,11 @@ export {
 
 // ミセ手戦術
 export {
+  computeMiseBonus,
   findMiseTargets,
   findMiseTargetsLite,
   hasPotentialMiseTarget,
+  isDoubleMise,
   isMiseMove,
 } from "./miseTactics";
 
