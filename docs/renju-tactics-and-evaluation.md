@@ -249,7 +249,7 @@ VCTの例:
 ### AI実装
 
 ```typescript
-// 防御位置が禁手: +8000 (FORBIDDEN_TRAP_STRONG)
+// 防御位置が禁手: +5000 (FORBIDDEN_TRAP_STRONG)
 // 誘導セットアップ: +1500 (FORBIDDEN_TRAP_SETUP)
 ```
 
@@ -348,7 +348,7 @@ VCTの例:
 | --------------------- | ------- | ------------------------------ |
 | FIVE                  | 100,000 | 五連（勝利）                   |
 | OPEN_FOUR             | 10,000  | 活四                           |
-| FORBIDDEN_TRAP_STRONG | 8,000   | 禁手追い込み（防御位置が禁手） |
+| FORBIDDEN_TRAP_STRONG | 5,000   | 禁手追い込み（防御位置が禁手） |
 | VCT_BONUS             | 8,000   | VCT勝ち筋                      |
 | FOUR_THREE_BONUS      | 5,000   | 四三同時作成                   |
 | FUKUMI_BONUS          | 1,500   | フクミ手（次にVCF）            |
