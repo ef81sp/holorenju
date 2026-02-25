@@ -48,4 +48,8 @@ describe("PATTERN_SCORES", () => {
   it("末端四三脅威ボーナスはスコア安定性のため 2000 に設定", () => {
     expect(PATTERN_SCORES.LEAF_FOUR_THREE_THREAT).toBe(2000);
   });
+
+  it("テンポ補正割引率が 0.5 に設定されている", () => {
+    expect(PATTERN_SCORES.TEMPO_OPEN_THREE_DISCOUNT).toBe(0.5);
+  });
 });

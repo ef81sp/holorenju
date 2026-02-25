@@ -238,6 +238,16 @@ export function evaluateBoard(
     }
   }
 
+  // テンポ補正: 直前着手者の活三を割引（奇偶振動抑制）
+  if (options?.lastMoverIsPerspective !== undefined) {
+    const discount = PATTERN_SCORES.TEMPO_OPEN_THREE_DISCOUNT;
+    if (options.lastMoverIsPerspective) {
+      myScore -= myOpenThreeScore * discount;
+    } else {
+      opponentScore -= opponentOpenThreeScore * discount;
+    }
+  }
+
   // 四三脅威スキャン
   const threatBonus = PATTERN_SCORES.LEAF_FOUR_THREE_THREAT;
   if (threatBonus > 0 && lineTable) {

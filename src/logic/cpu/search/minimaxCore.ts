@@ -151,6 +151,7 @@ export function minimaxWithTT(
       {
         singleFourPenaltyMultiplier:
           ctx.evaluationOptions.singleFourPenaltyMultiplier,
+        lastMoverIsPerspective: !isMaximizing,
       },
       ctx.lineTable,
     );
@@ -211,6 +212,7 @@ export function minimaxWithTT(
       {
         singleFourPenaltyMultiplier:
           ctx.evaluationOptions.singleFourPenaltyMultiplier,
+        lastMoverIsPerspective: !isMaximizing,
       },
       ctx.lineTable,
     );

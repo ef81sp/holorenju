@@ -482,7 +482,62 @@ describe("evaluatePosition 盤面不変性", () => {
 
     expect(board).toEqual(snapshot);
   });
+});
 
+describe("evaluateBoard テンポ補正", () => {
+  it("lastMoverIsPerspective 未指定で既存動作（割引なし）", () => {
+    // perspective(黒)の活三を作る
+    const board = createBoardWithStones([
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+    ]);
+
+    const scoreDefault = evaluateBoard(board, "black");
+    const scoreExplicitUndefined = evaluateBoard(board, "black", {
+      lastMoverIsPerspective: undefined,
+    });
+
+    // undefined の場合は補正なし → 同じスコア
+    expect(scoreDefault).toBe(scoreExplicitUndefined);
+  });
+
+  it("perspective の活三 + lastMoverIsPerspective=true → スコアが割引される", () => {
+    // perspective(黒)の活三を作る
+    const board = createBoardWithStones([
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+    ]);
+
+    const scoreNoTempo = evaluateBoard(board, "black");
+    const scoreWithTempo = evaluateBoard(board, "black", {
+      lastMoverIsPerspective: true,
+    });
+
+    // perspective が直前着手者 → perspective の活三が割引 → スコア低下
+    expect(scoreWithTempo).toBeLessThan(scoreNoTempo);
+  });
+
+  it("opponent の活三 + lastMoverIsPerspective=false → スコアが上昇する", () => {
+    // opponent(白)の活三のみ作る
+    const board = createBoardWithStones([
+      { row: 7, col: 5, color: "white" },
+      { row: 7, col: 6, color: "white" },
+      { row: 7, col: 7, color: "white" },
+    ]);
+
+    const scoreNoTempo = evaluateBoard(board, "black");
+    const scoreWithTempo = evaluateBoard(board, "black", {
+      lastMoverIsPerspective: false,
+    });
+
+    // opponent が直前着手者 → opponent の活三が割引 → 黒から見たスコア上昇
+    expect(scoreWithTempo).toBeGreaterThan(scoreNoTempo);
+  });
+});
+
+describe("evaluatePosition 盤面不変性（白番禁手追い込み）", () => {
   it("呼び出し前後で盤面が変化しない（白番禁手追い込み）", () => {
     const board = createBoardWithStones([
       { row: 7, col: 5, color: "white" },

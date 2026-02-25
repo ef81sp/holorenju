@@ -100,6 +100,13 @@ export const PATTERN_SCORES = {
    * OPEN_TWO(50) の約0.6倍 — 方向追加1つごとの控えめなボーナス。
    */
   CONNECTIVITY_BONUS: 30,
+  /**
+   * テンポ補正: 直前着手者の活三割引率（evaluateBoard 末端評価用）
+   * 末端評価で直前着手者の活三は相手未応答のため過大評価される。
+   * この割引率を活三スコアに乗じて減算することで奇偶振動を抑制する。
+   * 0.5 = 活三スコアの50%を割引（50%保持）
+   */
+  TEMPO_OPEN_THREE_DISCOUNT: 0.5,
 } as const;
 
 /**
@@ -357,6 +364,8 @@ export interface LeafEvaluationOptions {
   singleFourPenaltyMultiplier?: number;
   /** パターン連携ボーナス値（デフォルト: CONNECTIVITY_BONUS=30、0で無効） */
   connectivityBonusValue?: number;
+  /** 直前着手者が perspective 側か（undefined で無効、後方互換） */
+  lastMoverIsPerspective?: boolean;
 }
 
 /**
