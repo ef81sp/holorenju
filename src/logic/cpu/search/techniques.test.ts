@@ -11,7 +11,11 @@ import { createEmptyBoard } from "@/logic/renjuRules";
 import { DEFAULT_EVAL_OPTIONS, PATTERN_SCORES } from "../evaluation";
 import { placeStonesOnBoard } from "../testUtils";
 import { findBestMoveIterativeWithTT } from "./minimax";
-import { hasImmediateThreat, isTacticalMove } from "./techniques";
+import {
+  calculateDynamicTimeLimit,
+  hasImmediateThreat,
+  isTacticalMove,
+} from "./techniques";
 
 describe("LMR と四を作る手", () => {
   it("四を作る手もLMR対象だが、最善手として正しく選ばれる", () => {
@@ -260,5 +264,64 @@ describe("活三防御", () => {
         (result.position.row === 7 && result.position.col === 9);
       expect(isDefending).toBe(true);
     }
+  });
+});
+
+describe("calculateDynamicTimeLimit", () => {
+  it("唯一の候補手（moveCount <= 1）→ 0 を返す", () => {
+    const board = createEmptyBoard();
+    expect(calculateDynamicTimeLimit(5000, board, 1)).toBe(0);
+    expect(calculateDynamicTimeLimit(5000, board, 0)).toBe(0);
+  });
+
+  it("序盤（stones <= 6）→ baseTimeLimit * 0.7", () => {
+    const board = createEmptyBoard();
+    // 6手配置（stones = 6）
+    placeStonesOnBoard(board, [
+      { row: 7, col: 7, color: "black" },
+      { row: 7, col: 8, color: "white" },
+      { row: 8, col: 7, color: "black" },
+      { row: 8, col: 8, color: "white" },
+      { row: 6, col: 7, color: "black" },
+      { row: 6, col: 8, color: "white" },
+    ]);
+    expect(calculateDynamicTimeLimit(5000, board, 10)).toBe(
+      Math.floor(5000 * 0.7),
+    );
+  });
+
+  it("候補手が少ない（moveCount <= 3）→ baseTimeLimit * 0.3", () => {
+    const board = createEmptyBoard();
+    // 7手以上で序盤を抜ける
+    placeStonesOnBoard(board, [
+      { row: 7, col: 7, color: "black" },
+      { row: 7, col: 8, color: "white" },
+      { row: 8, col: 7, color: "black" },
+      { row: 8, col: 8, color: "white" },
+      { row: 6, col: 7, color: "black" },
+      { row: 6, col: 8, color: "white" },
+      { row: 5, col: 7, color: "black" },
+    ]);
+    expect(calculateDynamicTimeLimit(5000, board, 3)).toBe(
+      Math.floor(5000 * 0.3),
+    );
+    expect(calculateDynamicTimeLimit(5000, board, 2)).toBe(
+      Math.floor(5000 * 0.3),
+    );
+  });
+
+  it("通常ケース → baseTimeLimit をそのまま返す", () => {
+    const board = createEmptyBoard();
+    // 7手以上で序盤を抜ける
+    placeStonesOnBoard(board, [
+      { row: 7, col: 7, color: "black" },
+      { row: 7, col: 8, color: "white" },
+      { row: 8, col: 7, color: "black" },
+      { row: 8, col: 8, color: "white" },
+      { row: 6, col: 7, color: "black" },
+      { row: 6, col: 8, color: "white" },
+      { row: 5, col: 7, color: "black" },
+    ]);
+    expect(calculateDynamicTimeLimit(5000, board, 10)).toBe(5000);
   });
 });

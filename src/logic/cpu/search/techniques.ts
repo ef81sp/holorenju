@@ -18,6 +18,12 @@ import { checkEnds, countLine } from "../core/lineAnalysis";
 // 動的時間配分
 // =============================================================================
 
+/** 序盤（stones <= 6）の時間倍率 */
+export const EARLY_GAME_TIME_FACTOR = 0.7;
+
+/** 候補手が少ない（moveCount <= 3）時の時間倍率 */
+export const FEW_CANDIDATES_TIME_FACTOR = 0.3;
+
 /**
  * 動的時間配分の計算
  *
@@ -40,12 +46,12 @@ export function calculateDynamicTimeLimit(
 
   // 序盤（6手以下）: 時間を短縮
   if (stones <= 6) {
-    return Math.floor(baseTimeLimit * 0.5);
+    return Math.floor(baseTimeLimit * EARLY_GAME_TIME_FACTOR);
   }
 
   // 候補手が少ない（緊急手の可能性）: 時間を短縮
   if (moveCount <= 3) {
-    return Math.floor(baseTimeLimit * 0.3);
+    return Math.floor(baseTimeLimit * FEW_CANDIDATES_TIME_FACTOR);
   }
 
   // 通常

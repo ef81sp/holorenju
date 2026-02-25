@@ -92,7 +92,7 @@ export const PATTERN_SCORES = {
    * FOUR_THREE_BONUS(5000) より保守的: 手番が不明なため確実性が低い。
    * --score-override=LEAF_FOUR_THREE_THREAT:0 で無効化可能。
    */
-  LEAF_FOUR_THREE_THREAT: 3000,
+  LEAF_FOUR_THREE_THREAT: 2000,
   /**
    * パターン連携ボーナス（evaluateBoard 末端評価用）
    * 2方向以上にパターンを持つ石への加点（方向数-1 × この値）。
