@@ -207,9 +207,10 @@ export function useReviewDialogue(): UseReviewDialogueReturn {
     forcedLossType?: EvaluatedMove["forcedLossType"],
     missedDoubleMise?: Position[],
   ): void {
-    // excellent + 両ミセ局面だが打った手は両ミセではない場合の専用セリフ
+    // 両ミセ局面だが打った手は両ミセではない場合の専用セリフ
+    // quality が good 以上（excellent→good ダウングレード含む）の場合のみ
     if (
-      quality === "excellent" &&
+      (quality === "excellent" || quality === "good") &&
       forcedWinType === "double-mise" &&
       missedDoubleMise &&
       missedDoubleMise.length > 0

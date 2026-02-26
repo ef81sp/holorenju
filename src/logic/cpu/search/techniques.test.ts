@@ -13,6 +13,7 @@ import { placeStonesOnBoard } from "../testUtils";
 import { findBestMoveIterativeWithTT } from "./minimax";
 import {
   calculateDynamicTimeLimit,
+  detectPlainFour,
   hasImmediateThreat,
   isTacticalMove,
 } from "./techniques";
@@ -264,6 +265,73 @@ describe("活三防御", () => {
         (result.position.row === 7 && result.position.col === 9);
       expect(isDefending).toBe(true);
     }
+  });
+});
+
+describe("detectPlainFour", () => {
+  it("四のみ（活三なし）→ true", () => {
+    const board = createEmptyBoard();
+    // 横方向に黒4つ → 四を形成、他方向に活三なし
+    placeStonesOnBoard(board, [
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+      { row: 7, col: 8, color: "black" }, // この石を置いた手を判定
+    ]);
+    expect(detectPlainFour(board, 7, 8, "black")).toBe(true);
+  });
+
+  it("四三（四＋活三）→ false", () => {
+    const board = createEmptyBoard();
+    // 横方向に四、縦方向に活三（交差点で四三）
+    placeStonesOnBoard(board, [
+      // 横方向: 4つ並び → 四
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+      { row: 7, col: 8, color: "black" },
+      // 縦方向: (7,8)を含めて3つ → 活三
+      { row: 6, col: 8, color: "black" },
+      { row: 5, col: 8, color: "black" },
+    ]);
+    // (7,8)は四を作りつつ、縦方向に活三もある → 四三
+    expect(detectPlainFour(board, 7, 8, "black")).toBe(false);
+  });
+
+  it("四なし → false", () => {
+    const board = createEmptyBoard();
+    // 横方向に3つだけ → 三であり四ではない
+    placeStonesOnBoard(board, [
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+    ]);
+    expect(detectPlainFour(board, 7, 7, "black")).toBe(false);
+  });
+
+  it("跳び四のみ（活三なし）→ true", () => {
+    const board = createEmptyBoard();
+    // 跳び四パターン: ●●●_● （横方向、(7,7)に空き）
+    placeStonesOnBoard(board, [
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 8, color: "black" },
+      { row: 7, col: 9, color: "black" }, // この石を置いた手を判定
+    ]);
+    expect(detectPlainFour(board, 7, 9, "black")).toBe(true);
+  });
+
+  it("五連 → false", () => {
+    const board = createEmptyBoard();
+    // 横方向に5つ → 五連であり四ではない
+    placeStonesOnBoard(board, [
+      { row: 7, col: 4, color: "white" },
+      { row: 7, col: 5, color: "white" },
+      { row: 7, col: 6, color: "white" },
+      { row: 7, col: 7, color: "white" },
+      { row: 7, col: 8, color: "white" },
+    ]);
+    expect(detectPlainFour(board, 7, 8, "white")).toBe(false);
   });
 });
 

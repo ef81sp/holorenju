@@ -71,6 +71,9 @@ export const LMR_MIN_DEPTH = 3;
 /** LMRによる探索深度の削減量 */
 export const LMR_REDUCTION = 1;
 
+/** 非生産的四伸びに対するLMR追加リダクション量 */
+export const LMR_PLAIN_FOUR_EXTRA_REDUCTION = 1;
+
 /**
  * 四を作る手かどうかをチェック（LMR除外用）
  *
@@ -146,6 +149,76 @@ export function isTacticalMove(
   row[move.col] = null;
 
   return isTactical;
+}
+
+/**
+ * 非生産的四伸び（plain four）を検出
+ *
+ * 石は配置済み前提（applyMoveInPlace 後に呼ぶ）。
+ * 四（連続四・跳び四）を作るが、他方向に活三（連続三のみ）がない手を検出する。
+ * 四三は生産的手なので除外。五連も除外。
+ *
+ * 既知の制限: 跳び三は検出しない。四＋跳び三の組み合わせは plain four と
+ * 誤判定されるが、この組み合わせは稀であり re-search で保護される。
+ *
+ * @param board 盤面（石配置済み）
+ * @param row 石を置いた行
+ * @param col 石を置いた列
+ * @param color 石の色
+ * @returns 非生産的四伸びなら true
+ */
+export function detectPlainFour(
+  board: BoardState,
+  row: number,
+  col: number,
+  color: "black" | "white",
+): boolean {
+  let hasFour = false;
+  let hasOpenThree = false;
+
+  for (let i = 0; i < DIRECTIONS.length; i++) {
+    const direction = DIRECTIONS[i];
+    if (!direction) {
+      continue;
+    }
+    const [dr, dc] = direction;
+
+    const count = countLine(board, row, col, dr, dc, color);
+
+    // 五連以上は plain four ではない
+    if (count >= 5) {
+      return false;
+    }
+
+    // 連続四チェック（片端以上が空いている）
+    if (count === 4) {
+      const ends = checkEnds(board, row, col, dr, dc, color);
+      if (ends.end1Open || ends.end2Open) {
+        hasFour = true;
+      }
+    }
+
+    // 跳び四チェック（連続四でない場合のみ）
+    if (count !== 4) {
+      const dirIndex = DIRECTION_INDICES[i];
+      if (
+        dirIndex !== undefined &&
+        checkJumpFour(board, row, col, dirIndex, color)
+      ) {
+        hasFour = true;
+      }
+    }
+
+    // 活三チェック（両端が空いている連続三）
+    if (count === 3) {
+      const ends = checkEnds(board, row, col, dr, dc, color);
+      if (ends.end1Open && ends.end2Open) {
+        hasOpenThree = true;
+      }
+    }
+  }
+
+  return hasFour && !hasOpenThree;
 }
 
 // =============================================================================

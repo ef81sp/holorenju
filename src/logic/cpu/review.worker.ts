@@ -221,6 +221,87 @@ function checkForcedLoss(
   return undefined;
 }
 
+/**
+ * 両ミセの分岐情報を構築
+ *
+ * Main PV: [bestMove, targets[0], targets[1]]
+ * 各分岐: opponent が targets[i] (i≥1) を防御 → self が surviving target で四三完成
+ */
+function buildDoubleMiseBranches(
+  board: BoardState,
+  bestMove: Position,
+  color: "black" | "white",
+  opponentColor: "black" | "white",
+  targets: Position[],
+): ForcedWinBranch[] | undefined {
+  const bmRow = board[bestMove.row];
+  if (!bmRow) {
+    return undefined;
+  }
+
+  bmRow[bestMove.col] = color;
+  const branches: ForcedWinBranch[] = [];
+
+  for (let i = 1; i < targets.length; i++) {
+    const defense = targets[i];
+    if (!defense) {
+      continue;
+    }
+    const surviving = findSurvivingTarget(
+      board,
+      defense,
+      i,
+      targets,
+      color,
+      opponentColor,
+    );
+    if (surviving) {
+      branches.push({
+        defenseIndex: 1,
+        defenseMove: defense,
+        continuation: [surviving],
+      });
+    }
+  }
+
+  bmRow[bestMove.col] = null;
+  return branches.length > 0 ? branches : undefined;
+}
+
+/**
+ * 防御手を仮配置し、残りのターゲットで四三が成立するものを探す
+ */
+function findSurvivingTarget(
+  board: BoardState,
+  defense: Position,
+  defenseIdx: number,
+  targets: Position[],
+  color: "black" | "white",
+  opponentColor: "black" | "white",
+): Position | undefined {
+  const defRow = board[defense.row];
+  if (!defRow) {
+    return undefined;
+  }
+
+  defRow[defense.col] = opponentColor;
+
+  let result: Position | undefined = undefined;
+  for (let j = 0; j < targets.length; j++) {
+    if (j === defenseIdx) {
+      continue;
+    }
+    const target = targets[j];
+    if (target && createsFourThree(board, target.row, target.col, color)) {
+      result = target;
+      break;
+    }
+  }
+
+  defRow[defense.col] = null;
+  return result;
+}
+
 self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
   const {
     moveHistory,
@@ -476,6 +557,23 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
         doubleMiseMoves,
       );
 
+      // 両ミセターゲット算出（四三を作る位置）
+      // PV構築とレスポンスの両方で使うため、候補手構築前に算出
+      let doubleMiseTargets: Position[] | undefined = undefined;
+      if (doubleMiseBestMove) {
+        const dmRow = board[doubleMiseBestMove.row];
+        if (dmRow) {
+          dmRow[doubleMiseBestMove.col] = color;
+          doubleMiseTargets = findMiseTargets(
+            board,
+            doubleMiseBestMove.row,
+            doubleMiseBestMove.col,
+            color,
+          );
+          dmRow[doubleMiseBestMove.col] = null;
+        }
+      }
+
       // 候補手リスト構築
       const candidates: ReviewCandidate[] = [];
 
@@ -488,12 +586,25 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
           color,
           REVIEW_SEARCH_PARAMS.evaluationOptions,
         );
+      // 両ミセ: targets から読み筋を構築（sequence が1手しかないため）
+      // [両ミセ手, 相手がtarget[0]を防御, 自分がtarget[1]で四三完成]
+      let bestPV: Position[] = forcedWin.sequence;
+      if (
+        forcedWinType === "double-mise" &&
+        doubleMiseTargets &&
+        doubleMiseTargets.length >= 2 &&
+        doubleMiseTargets[0] &&
+        doubleMiseTargets[1]
+      ) {
+        bestPV = [bestMove, doubleMiseTargets[0], doubleMiseTargets[1]];
+      }
+
       candidates.push({
         position: bestMove,
         score: Math.round(fwBreakdownScore),
         searchScore: PATTERN_SCORES.FIVE,
         breakdown: fwBreakdown as ScoreBreakdown,
-        principalVariation: forcedWin.sequence,
+        principalVariation: bestPV,
       });
 
       // minimaxの候補手をマージ
@@ -552,33 +663,32 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
         }
       }
 
-      // VCT分岐情報の変換（VCTSequenceResultのみbranches有）
-      const rawBranches =
-        "branches" in forcedWin
-          ? (forcedWin.branches as VCTBranch[] | undefined)
-          : undefined;
-      const forcedWinBranches: ForcedWinBranch[] | undefined = rawBranches?.map(
-        (b) => ({
+      // 分岐情報の構築
+      let forcedWinBranches: ForcedWinBranch[] | undefined = undefined;
+
+      if (
+        forcedWinType === "double-mise" &&
+        doubleMiseTargets &&
+        doubleMiseTargets.length >= 2
+      ) {
+        forcedWinBranches = buildDoubleMiseBranches(
+          board,
+          bestMove,
+          color,
+          opponentColor,
+          doubleMiseTargets,
+        );
+      } else {
+        // VCT分岐情報の変換（VCTSequenceResultのみbranches有）
+        const rawBranches =
+          "branches" in forcedWin
+            ? (forcedWin.branches as VCTBranch[] | undefined)
+            : undefined;
+        forcedWinBranches = rawBranches?.map((b) => ({
           defenseIndex: b.defenseIndex,
           defenseMove: b.defenseMove,
           continuation: b.continuation,
-        }),
-      );
-
-      // 両ミセターゲット算出（四三を作る位置）
-      let doubleMiseTargets: Position[] | undefined = undefined;
-      if (doubleMiseBestMove) {
-        const row = board[doubleMiseBestMove.row];
-        if (row) {
-          row[doubleMiseBestMove.col] = color;
-          doubleMiseTargets = findMiseTargets(
-            board,
-            doubleMiseBestMove.row,
-            doubleMiseBestMove.col,
-            color,
-          );
-          row[doubleMiseBestMove.col] = null;
-        }
+        }));
       }
 
       const response: ReviewWorkerResult = {

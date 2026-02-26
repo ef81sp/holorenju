@@ -67,11 +67,16 @@ export function buildEvaluatedMove(
 
   const scoreDiff = result.bestScore - result.playedScore;
 
+  let quality = classifyMoveQuality(scoreDiff);
+  if (quality === "excellent" && result.missedDoubleMise?.length) {
+    quality = "good";
+  }
+
   return {
     moveIndex: result.moveIndex,
     position: move?.position ?? { row: 7, col: 7 },
     isPlayerMove,
-    quality: classifyMoveQuality(scoreDiff),
+    quality,
     playedScore: result.playedScore,
     bestScore: result.bestScore,
     scoreDiff,

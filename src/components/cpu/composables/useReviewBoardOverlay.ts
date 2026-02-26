@@ -202,9 +202,9 @@ export function useReviewBoardOverlay(): UseReviewBoardOverlayReturn {
       });
     }
 
-    // 両ミセターゲットのラベル付き circle マーク（PV 未ホバー時に表示）
+    // 両ミセターゲットのラベル付き circle マーク（PV ホバー中は非表示）
     if (
-      !isBestMode &&
+      pvHoverType.value === null &&
       evaluation?.forcedWinType === "double-mise" &&
       evaluation.doubleMiseTargets
     ) {
