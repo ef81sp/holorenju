@@ -27,6 +27,9 @@ import {
   evaluateBoardWithBreakdown,
   PATTERN_SCORES,
 } from "./evaluation";
+import { findMiseTargets } from "./evaluation/miseTactics";
+import { findDoubleMiseMoves } from "./evaluation/tactics";
+import { createsFourThree } from "./evaluation/winningPatterns";
 import { findBestMoveIterativeWithTT } from "./search/minimax";
 import {
   findMiseVCFSequence,
@@ -78,7 +81,12 @@ const REVIEW_MISE_VCF_OPTIONS: MiseVCFSearchOptions = {
   timeLimit: 500,
 };
 
-type ForcedLossType = "vcf" | "vct" | "forbidden-trap" | "mise-vcf";
+type ForcedLossType =
+  | "vcf"
+  | "vct"
+  | "forbidden-trap"
+  | "mise-vcf"
+  | "double-mise";
 
 interface ForcedLossResult {
   type: ForcedLossType;
@@ -97,6 +105,7 @@ function evaluatePlayedForcedWin(
   bestScore: number,
   result: { candidates?: MoveScoreEntry[]; score: number },
   skipVctThresholdCheck?: boolean,
+  doubleMiseMoves?: Position[],
 ): { playedScore: number; playedForcedWinSequence: Position[] | undefined } {
   if (
     playedRow < 0 ||
@@ -106,6 +115,16 @@ function evaluatePlayedForcedWin(
   }
 
   const playedPos = { row: playedRow, col: playedCol };
+
+  // 両ミセ手チェック（VCFより前に）
+  if (
+    doubleMiseMoves?.some((m) => m.row === playedRow && m.col === playedCol)
+  ) {
+    return {
+      playedScore: PATTERN_SCORES.FIVE,
+      playedForcedWinSequence: undefined,
+    };
+  }
 
   // VCF シーケンス取得を試行
   const vcfFromPlayed = findVCFSequenceFromFirstMove(
@@ -162,6 +181,12 @@ function checkForcedLoss(
   opponentColor: "black" | "white",
   stoneCountAfter: number,
 ): ForcedLossResult | undefined {
+  // 両ミセ（最速: ~5ms。見つかればVCF探索をスキップ）
+  const oppDM = findDoubleMiseMoves(boardAfter, opponentColor);
+  if (oppDM.length > 0 && oppDM[0]) {
+    return { type: "double-mise", sequence: [oppDM[0]] };
+  }
+
   const oppVCF = findVCFSequence(boardAfter, opponentColor, REVIEW_VCF_OPTIONS);
   if (oppVCF) {
     return {
@@ -220,32 +245,83 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
     const opponentHasFour =
       opponentThreats.fours.length > 0 || opponentThreats.openFours.length > 0;
 
+    // 両ミセ検出（VCF探索より前に1回だけ呼ぶ、~5ms）
+    const doubleMiseMoves =
+      !isLightEval && !opponentHasFour ? findDoubleMiseMoves(board, color) : [];
+    const doubleMiseBestMove =
+      doubleMiseMoves.length > 0 ? (doubleMiseMoves[0] ?? null) : null;
+
     // 拡張VCF/VCT探索（高速パス）
     // 相手の四がある場合はVCF/VCTをスキップ（四を止めなければ即負け）
+    // 両ミセがある場合: maxDepth 2 で1手四三を検出（四三はVCF的に3手=depth 2）
+    // 両ミセがない場合: 通常のVCF全探索
     const vcfResult = opponentHasFour
       ? null
-      : findVCFSequence(board, color, REVIEW_VCF_OPTIONS);
+      : findVCFSequence(
+          board,
+          color,
+          doubleMiseBestMove
+            ? { ...REVIEW_VCF_OPTIONS, maxDepth: 2 }
+            : REVIEW_VCF_OPTIONS,
+        );
 
-    // Mise-VCF検出（VCFが見つからない場合のみ）
+    // 1手四三: VCFの初手が四三を作る場合、両ミセより優先
+    // （VCF sequence ≤ 1 は即五/活四、≤ 3 かつ初手が四三なら1手四三）
+    const isImmediateFourThree =
+      vcfResult &&
+      (vcfResult.sequence.length <= 1 ||
+        (doubleMiseBestMove &&
+          createsFourThree(
+            board,
+            vcfResult.firstMove.row,
+            vcfResult.firstMove.col,
+            color,
+          )));
+
+    // Mise-VCF検出（VCFも両ミセもない場合のみ）
     const miseVcfResult =
-      !vcfResult && !opponentHasFour
+      !vcfResult && !doubleMiseBestMove && !opponentHasFour
         ? findMiseVCFSequence(board, color, REVIEW_MISE_VCF_OPTIONS)
         : null;
 
-    let forcedWin =
-      vcfResult ??
-      miseVcfResult ??
-      (countStones(board) >= VCT_STONE_THRESHOLD && !opponentHasFour
-        ? findVCTSequence(board, color, REVIEW_VCT_OPTIONS)
-        : null);
+    // forcedWin 構築（優先順: 1手四三 > 両ミセ ≥ 長VCF > Mise-VCF > VCT）
+    let forcedWin: {
+      firstMove: Position;
+      sequence: Position[];
+      isForbiddenTrap: boolean;
+      branches?: unknown;
+    } | null = null;
+    if (isImmediateFourThree) {
+      forcedWin = vcfResult;
+    } else if (doubleMiseBestMove) {
+      forcedWin = {
+        firstMove: doubleMiseBestMove,
+        sequence: [doubleMiseBestMove],
+        isForbiddenTrap: false,
+      };
+    } else {
+      forcedWin =
+        vcfResult ??
+        miseVcfResult ??
+        (countStones(board) >= VCT_STONE_THRESHOLD && !opponentHasFour
+          ? findVCTSequence(board, color, REVIEW_VCT_OPTIONS)
+          : null);
+    }
+
+    // forcedWinType 判定
     let forcedWinType:
       | "vcf"
       | "vct"
       | "forbidden-trap"
       | "mise-vcf"
+      | "double-mise"
       | undefined = undefined;
     if (forcedWin?.isForbiddenTrap) {
       forcedWinType = "forbidden-trap";
+    } else if (isImmediateFourThree) {
+      forcedWinType = "vcf";
+    } else if (doubleMiseBestMove) {
+      forcedWinType = "double-mise";
     } else if (vcfResult) {
       forcedWinType = "vcf";
     } else if (miseVcfResult) {
@@ -258,7 +334,8 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
     if (isLightEval) {
       const response: ReviewWorkerResult = {
         moveIndex,
-        bestMove: forcedWin?.firstMove ?? { row: 7, col: 7 },
+        bestMove: forcedWin?.firstMove ??
+          doubleMiseBestMove ?? { row: 7, col: 7 },
         bestScore: 0,
         playedScore: 0,
         candidates: [],
@@ -314,7 +391,12 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
     // minimax が FIVE を返したが VCF/VCT 未検出
     // 石数 < VCT_STONE_THRESHOLD(14) の序盤ではVCT探索がスキップされるため、
     // ここで閾値を無視してVCT探索を実行し、必勝手順を取得する
-    if (!forcedWin && result.score >= PATTERN_SCORES.FIVE && !opponentHasFour) {
+    if (
+      !forcedWin &&
+      !doubleMiseBestMove &&
+      result.score >= PATTERN_SCORES.FIVE &&
+      !opponentHasFour
+    ) {
       const vctRetry = findVCTSequence(board, color, REVIEW_VCT_OPTIONS);
       if (vctRetry) {
         forcedWin = vctRetry;
@@ -360,6 +442,22 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
       playedRow = 15 - playedRowNum;
     }
 
+    // 両ミセ見逃し検出（forcedWinType が double-mise の場合のみ）
+    // 1手四三など上位の勝ち筋がある場合は両ミセ見逃しを表示しない
+    let missedDoubleMise: Position[] | undefined = undefined;
+    if (
+      forcedWinType === "double-mise" &&
+      doubleMiseMoves.length > 0 &&
+      playedRow >= 0
+    ) {
+      const playedIsDoubleMise = doubleMiseMoves.some(
+        (m) => m.row === playedRow && m.col === playedCol,
+      );
+      if (!playedIsDoubleMise) {
+        missedDoubleMise = doubleMiseMoves;
+      }
+    }
+
     // VCT/VCF検出時のスコア・候補手オーバーライド
     if (forcedWin) {
       const bestScore = PATTERN_SCORES.FIVE;
@@ -375,6 +473,7 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
         bestScore,
         result,
         countStones(board) < VCT_STONE_THRESHOLD,
+        doubleMiseMoves,
       );
 
       // 候補手リスト構築
@@ -466,6 +565,22 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
         }),
       );
 
+      // 両ミセターゲット算出（四三を作る位置）
+      let doubleMiseTargets: Position[] | undefined = undefined;
+      if (doubleMiseBestMove) {
+        const row = board[doubleMiseBestMove.row];
+        if (row) {
+          row[doubleMiseBestMove.col] = color;
+          doubleMiseTargets = findMiseTargets(
+            board,
+            doubleMiseBestMove.row,
+            doubleMiseBestMove.col,
+            color,
+          );
+          row[doubleMiseBestMove.col] = null;
+        }
+      }
+
       const response: ReviewWorkerResult = {
         moveIndex,
         bestMove,
@@ -475,6 +590,8 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
         completedDepth: result.completedDepth,
         forcedWinType,
         forcedWinBranches,
+        missedDoubleMise,
+        doubleMiseTargets,
       };
 
       self.postMessage(response);
@@ -521,6 +638,7 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
         completedDepth: result.completedDepth,
         forcedLossType,
         forcedLossSequence,
+        missedDoubleMise,
       };
 
       self.postMessage(response);

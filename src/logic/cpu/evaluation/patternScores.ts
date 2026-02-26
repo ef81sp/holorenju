@@ -37,6 +37,8 @@ export const PATTERN_SCORES = {
   FORBIDDEN_TRAP_SETUP: 1500,
   /** 禁手追い込み三（三の達四点の一つが禁手、もう一方を止めても四で勝ち） */
   FORBIDDEN_TRAP_THREE: 3000,
+  /** 両ミセボーナス（防御不能、1手後に四三確定）— FOUR_THREE_BONUS(5000)を超えない */
+  DOUBLE_MISE_BONUS: 4000,
   /** ミセ手ボーナス（次に四三を作れる手）— 1手後に四三が確定する先手脅威 */
   MISE_BONUS: 1000,
   /**
@@ -342,6 +344,8 @@ export interface ScoreBreakdown {
   fukumi: number;
   /** ミセ手ボーナス */
   mise: number;
+  /** ミセ手の種類（表示ラベル解決用） */
+  miseType: MiseType;
   /** 中央ボーナス */
   center: number;
   /** 複数方向脅威ボーナス */
@@ -367,6 +371,11 @@ export interface LeafEvaluationOptions {
   /** 直前着手者が perspective 側か（undefined で無効、後方互換） */
   lastMoverIsPerspective?: boolean;
 }
+
+/**
+ * ミセ手の種類
+ */
+export type MiseType = "none" | "mise" | "double-mise";
 
 /**
  * パターンスコア内訳（探索末端用）

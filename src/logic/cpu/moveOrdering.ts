@@ -9,6 +9,8 @@ import type { BoardState, Position, StoneColor } from "@/types/game";
 
 import { BOARD_SIZE } from "@/constants";
 
+import type { LineTable } from "./lineTable/lineTable";
+
 import {
   DEFAULT_EVAL_OPTIONS,
   detectOpponentThreats,
@@ -187,6 +189,8 @@ export interface MoveOrderingOptions {
   evaluationOptions?: EvaluationOptions;
   /** 静的評価を実行する最大候補数（Lazy Evaluation用、デフォルト: 全て） */
   maxStaticEvalCount?: number;
+  /** 探索中の一元管理 lineTable（evaluatePosition に流す） */
+  lineTable?: LineTable;
 }
 
 /**
@@ -222,6 +226,7 @@ export function sortMoves(
     useStaticEval = true,
     evaluationOptions = DEFAULT_EVAL_OPTIONS,
     maxStaticEvalCount,
+    lineTable,
   } = options;
 
   // スコア計算用の配列
@@ -298,6 +303,7 @@ export function sortMoves(
             sm.move.col,
             color,
             effectiveEvalOptions,
+            lineTable,
           );
           sm.staticEvalDone = true;
         }
@@ -311,6 +317,7 @@ export function sortMoves(
           sm.move.col,
           color,
           evaluationOptions,
+          lineTable,
         );
         sm.staticEvalDone = true;
       }

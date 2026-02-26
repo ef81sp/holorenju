@@ -24,11 +24,14 @@ import { createBoardWithStones } from "../testUtils";
 import { PATTERN_SCORES } from "./patternScores";
 import {
   canContinueFourAfterDefense,
+  computeMiseBonus,
+  findDoubleMiseMoves,
   findMiseTargets,
   findMiseTargetsLite,
   hasFollowUpThreat,
   hasMixedForbiddenPoints,
   hasPotentialMiseTarget,
+  isDoubleMise,
   isMiseMove,
 } from "./tactics";
 
@@ -1172,5 +1175,277 @@ describe("防御交差点ボーナス", () => {
     );
 
     expect(breakdown.defenseMultiThreat).toBe(0);
+  });
+});
+
+// =============================================================================
+// 両ミセ（Double Mise）
+// =============================================================================
+
+describe("isDoubleMise", () => {
+  it("盤面A: 異方向の独立した2ターゲット → true", () => {
+    // M = (7,7) に黒を置いた状態
+    // T1 = (7,4): 横四 (7,4)-(7,5)-(7,6)-(7,7) + 縦活三 (5,4)-(6,4)-(7,4)
+    // T2 = (10,7): 縦四 (7,7)-(8,7)-(9,7)-(10,7) + 横活三 (10,5)-(10,6)-(10,7)
+    const board = createBoardWithStones([
+      // M（既に配置済み）
+      { row: 7, col: 7, color: "black" },
+      // 横の二（T1の横四サポート）
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      // 縦の二（T2の縦四サポート）
+      { row: 8, col: 7, color: "black" },
+      { row: 9, col: 7, color: "black" },
+      // T1の縦活三サポート
+      { row: 5, col: 4, color: "black" },
+      { row: 6, col: 4, color: "black" },
+      // T2の横活三サポート
+      { row: 10, col: 5, color: "black" },
+      { row: 10, col: 6, color: "black" },
+      // 白: 横四の片端塞ぎ
+      { row: 7, col: 3, color: "white" },
+      // 白: 縦四の片端塞ぎ
+      { row: 6, col: 7, color: "white" },
+    ]);
+
+    expect(isDoubleMise(board, 7, 7, "black")).toBe(true);
+  });
+
+  it("盤面B: 依存関係を共有する2ターゲット → false", () => {
+    // M = (7,7) に黒を置いた状態
+    //
+    //      col: 3  4  5  6  7  8  9
+    // row 4:    ·  ○  ·  ·  ·  ·  ·
+    // row 5:    ·  ·  ●  ·  ○  ●  ·
+    // row 6:    ·  ·  ·  ●  ·  ●  ·
+    // row 7:    ·  ·  ●  ●  M T1  ·    M=(7,7), T1=(7,8)
+    // row 8:    ·  ·  ·  ●  ● T2  ·    T2=(8,8)
+    // row 9:    ·  ·  ·  ·  ·  ·  ·
+    //
+    // T1 = (7,8): 横活四 (7,5)-(7,6)-(7,7)-(7,8) + 縦活三 (5,8)-(6,8)-(7,8)
+    //             ※ 縦活三は (8,8) が空きであることに依存
+    // T2 = (8,8): 斜め四↘ (5,5)-(6,6)-(7,7)-(8,8) + 横活三 (8,6)-(8,7)-(8,8)
+    // → T2を防ぐ（(8,8)に白石）→ T1の縦活三が止め三に → T1は四三不成立
+    // (5,7)=白: (5,6)での跳び三 (5,5)-(5,6)__(5,8) を阻止し偽ターゲットを除去
+    const board = createBoardWithStones([
+      // M（既に配置済み）
+      { row: 7, col: 7, color: "black" },
+      // 横の二（T1の横四サポート）
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      // T1の縦活三サポート
+      { row: 5, col: 8, color: "black" },
+      { row: 6, col: 8, color: "black" },
+      // T2の斜め四↘サポート
+      { row: 5, col: 5, color: "black" },
+      { row: 6, col: 6, color: "black" },
+      // T2の横活三サポート
+      { row: 8, col: 6, color: "black" },
+      { row: 8, col: 7, color: "black" },
+      // 白: 斜め四の片端塞ぎ
+      { row: 4, col: 4, color: "white" },
+      // 白: (5,6)の跳び三を阻止
+      { row: 5, col: 7, color: "white" },
+    ]);
+
+    expect(isDoubleMise(board, 7, 7, "black")).toBe(false);
+  });
+
+  it("盤面C: 飛び四+飛び活三の実戦的な両ミセ → true", () => {
+    // 実戦的な両ミセ例（飛び四と飛び活三の組み合わせ）
+    //
+    //      col: 4  5  6  7  8  9  10
+    // row 4:    ·  ·  ·  ·  ○  ·  ·
+    // row 5:    ·  ·  ●  ○  ●  ●  ·
+    // row 6:    ·  ●  ·  ○  ●  ○  ○
+    // row 7:    A  ·  ●  ●  M  ○  ·    M=(7,8)
+    // row 8:    ·  ·  ○  ·  ·  ·  ·
+    // row 9:    ·  ·  ·  ·  B  ·  ·
+    //
+    // M = (7,8) に黒を置いた状態
+    // T1 = A(7,4): 横飛び四 (7,4)_(7,5)(7,6)(7,7)(7,8) + 斜め↗活三 (7,4)(6,5)(5,6)
+    // T2 = B(9,8): 縦飛び四 (5,8)(6,8)(7,8)_(8,8)(9,8) + 斜め↘飛び活三 (6,5)(7,6)_(8,7)(9,8)
+    // → Aを防いでもBは無傷、逆も同様 → isDoubleMise = true
+    const board = createBoardWithStones([
+      // M（既に配置済み）
+      { row: 7, col: 8, color: "black" },
+      // 横の二（T1の横飛び四サポート）
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+      // 縦の二（T2の縦飛び四サポート）
+      { row: 5, col: 8, color: "black" },
+      { row: 6, col: 8, color: "black" },
+      // T1の斜め↗活三サポート + T2の斜め↘飛び活三サポート（共有石）
+      { row: 5, col: 6, color: "black" },
+      { row: 6, col: 5, color: "black" },
+      // T2の斜め↘飛び活三サポート追加
+      // (7,6) は既に横の二で配置済み
+      // 白石
+      { row: 5, col: 9, color: "black" },
+      { row: 4, col: 8, color: "white" },
+      { row: 5, col: 7, color: "white" },
+      { row: 6, col: 7, color: "white" },
+      { row: 6, col: 9, color: "white" },
+      { row: 6, col: 10, color: "white" },
+      { row: 7, col: 9, color: "white" },
+      { row: 8, col: 6, color: "white" },
+    ]);
+
+    expect(isDoubleMise(board, 7, 8, "black")).toBe(true);
+  });
+
+  it("ターゲットが1つだけの局面 → false", () => {
+    // 通常のミセ手（四三点が1つだけ）
+    const board = createBoardWithStones([
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+      { row: 5, col: 8, color: "black" },
+      { row: 6, col: 8, color: "black" },
+    ]);
+
+    // (7,8) が四三点（横四+縦活三）
+    expect(isMiseMove(board, 7, 7, "black")).toBe(true);
+    expect(isDoubleMise(board, 7, 7, "black")).toBe(false);
+  });
+
+  it("ターゲットが0個の局面 → false", () => {
+    const board = createBoardWithStones([{ row: 7, col: 7, color: "black" }]);
+
+    expect(isDoubleMise(board, 7, 7, "black")).toBe(false);
+  });
+});
+
+describe("computeMiseBonus / evaluatePosition: double mise scoring", () => {
+  const miseOnlyOptions = {
+    enableFukumi: false,
+    enableMise: true,
+    enableForbiddenTrap: false,
+    enableMultiThreat: false,
+    enableCounterFour: false,
+    enableDoubleThreeBonus: false,
+    enableMandatoryDefense: false,
+    enableSingleFourPenalty: false,
+    singleFourPenaltyMultiplier: 1.0,
+    enableMiseThreat: false,
+    enableDoubleThreeThreat: false,
+    enableNullMovePruning: false,
+    enableFutilityPruning: false,
+    enableForbiddenVulnerability: false,
+    enableVCT: false,
+  };
+
+  it("盤面A: DOUBLE_MISE_BONUS が加算される", () => {
+    const board = createBoardWithStones([
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+      { row: 8, col: 7, color: "black" },
+      { row: 9, col: 7, color: "black" },
+      { row: 5, col: 4, color: "black" },
+      { row: 6, col: 4, color: "black" },
+      { row: 10, col: 5, color: "black" },
+      { row: 10, col: 6, color: "black" },
+      { row: 7, col: 3, color: "white" },
+      { row: 6, col: 7, color: "white" },
+    ]);
+
+    // computeMiseBonus は石が既に置かれた状態で呼ぶ
+    const bonus = computeMiseBonus(board, 7, 7, "black");
+
+    expect(bonus).toBe(PATTERN_SCORES.DOUBLE_MISE_BONUS);
+  });
+
+  it("通常ミセ局面: MISE_BONUS のまま", () => {
+    const board = createBoardWithStones([
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+      { row: 5, col: 8, color: "black" },
+      { row: 6, col: 8, color: "black" },
+    ]);
+
+    const bonus = computeMiseBonus(board, 7, 7, "black");
+
+    expect(bonus).toBe(PATTERN_SCORES.MISE_BONUS);
+  });
+
+  it("enableMise=false: 両ミセボーナスも無効", () => {
+    const board = createBoardWithStones([
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 8, col: 7, color: "black" },
+      { row: 9, col: 7, color: "black" },
+      { row: 5, col: 4, color: "black" },
+      { row: 6, col: 4, color: "black" },
+      { row: 10, col: 5, color: "black" },
+      { row: 10, col: 6, color: "black" },
+      { row: 7, col: 3, color: "white" },
+      { row: 6, col: 7, color: "white" },
+    ]);
+
+    const scoreWithMise = evaluatePosition(
+      board,
+      7,
+      7,
+      "black",
+      miseOnlyOptions,
+    );
+    const scoreWithoutMise = evaluatePosition(board, 7, 7, "black", {
+      ...miseOnlyOptions,
+      enableMise: false,
+    });
+
+    // enableMise=true 時は DOUBLE_MISE_BONUS 分高い
+    expect(scoreWithMise - scoreWithoutMise).toBe(
+      PATTERN_SCORES.DOUBLE_MISE_BONUS,
+    );
+  });
+});
+
+describe("findDoubleMiseMoves", () => {
+  it("空盤面 -> 空配列", () => {
+    const board = createEmptyBoard();
+    const moves = findDoubleMiseMoves(board, "black");
+    expect(moves).toEqual([]);
+  });
+
+  it("盤面A: (7,7) が両ミセ手として検出される", () => {
+    // 盤面A から M=(7,7) を除いた状態（まだ置いていない盤面）
+    const board = createBoardWithStones([
+      // 横の二
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      // 縦の二
+      { row: 8, col: 7, color: "black" },
+      { row: 9, col: 7, color: "black" },
+      // T1の縦活三サポート
+      { row: 5, col: 4, color: "black" },
+      { row: 6, col: 4, color: "black" },
+      // T2の横活三サポート
+      { row: 10, col: 5, color: "black" },
+      { row: 10, col: 6, color: "black" },
+      // 白: 横四の片端塞ぎ
+      { row: 7, col: 3, color: "white" },
+      // 白: 縦四の片端塞ぎ
+      { row: 6, col: 7, color: "white" },
+    ]);
+
+    const moves = findDoubleMiseMoves(board, "black");
+    const has77 = moves.some((m) => m.row === 7 && m.col === 7);
+    expect(has77).toBe(true);
+  });
+
+  it("両ミセ手が存在しない局面 -> 空配列", () => {
+    // 通常ミセ手のみの局面（ターゲット1つ）
+    const board = createBoardWithStones([
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 5, col: 8, color: "black" },
+      { row: 6, col: 8, color: "black" },
+    ]);
+
+    const moves = findDoubleMiseMoves(board, "black");
+    expect(moves).toEqual([]);
   });
 });

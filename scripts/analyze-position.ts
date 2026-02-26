@@ -14,6 +14,7 @@
 import type { StoneColor } from "../src/types/game.ts";
 
 import { countStones } from "../src/logic/cpu/core/boardUtils.ts";
+import { findDoubleMiseMoves } from "../src/logic/cpu/evaluation/tactics.ts";
 import { findMiseVCFSequence } from "../src/logic/cpu/search/miseVcf.ts";
 import { findFourMoves } from "../src/logic/cpu/search/threatPatterns.ts";
 import { findVCFSequence } from "../src/logic/cpu/search/vcf.ts";
@@ -165,6 +166,16 @@ for (const color of colors) {
     }
   } else {
     console.log(`  VCT: スキップ (石数${stones} < 閾値${VCT_STONE_THRESHOLD})`);
+  }
+
+  // 両ミセ手の検出
+  const dmMoves = findDoubleMiseMoves(pos.board, color);
+  if (dmMoves.length > 0) {
+    console.log(
+      `  両ミセ手: ${dmMoves.map(formatMove).join(", ")} (${dmMoves.length}箇所)`,
+    );
+  } else {
+    console.log("  両ミセ手: なし");
   }
 
   verdictData.push({

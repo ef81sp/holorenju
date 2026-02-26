@@ -711,15 +711,28 @@ function validateVCTSequence(
     placed.push(pos);
 
     if (isDefense) {
-      // 防御手が五連を作る → 攻撃側敗北
-      if (checkFive(board, pos.row, pos.col, opponentColor)) {
+      const ct = checkDefenseCounterThreat(
+        board,
+        pos.row,
+        pos.col,
+        opponentColor,
+      );
+      if (ct === "win") {
         valid = false;
         break;
       }
-      // 防御手が四を作る → 攻撃側はブロック必須、VCT手順が崩壊
-      if (createsFour(board, pos.row, pos.col, opponentColor)) {
-        valid = false;
-        break;
+      if (ct === "four") {
+        const blockPos = getFourDefensePosition(board, pos, opponentColor);
+        if (!blockPos) {
+          valid = false;
+          break;
+        }
+        // 暗黙ブロック: シーケンスには含めず盤面にのみ配置
+        const bRow = board[blockPos.row];
+        if (bRow) {
+          bRow[blockPos.col] = color;
+        }
+        placed.push(blockPos);
       }
       // 防御手配置後に相手の活三またはミセ手が存在する → 次の攻撃手が四/五連でなければVCT手順崩壊
       // （探索開始時点で相手に活三/ミセ手がないことはfindVCTSequenceRecursiveが保証する）
@@ -848,6 +861,70 @@ function buildBranches(
 }
 
 /**
+ * ct=three の防御処理ヘルパー
+ *
+ * 防御側が活三を作った場合、VCFのみで勝てるかチェックする。
+ * 成功時は { seq } を返し、失敗時は null を返す。
+ * 盤面の undo は呼び出し側で行う。
+ */
+function handleCtThreeDefense(
+  board: BoardState,
+  color: "black" | "white",
+  defensePos: Position,
+  limiter: TimeLimiter,
+  options: VCTSearchOptions | undefined,
+  vcfCache: VCFResultCache | undefined,
+  context: VCTRecursiveContext,
+  needSequence: boolean,
+  defenseSequences: DefenseSeqEntry[],
+): { seq: Position[] | null } | null {
+  if (isTimeExceeded(limiter)) {
+    return null;
+  }
+  const ctThreeVcfOptions: VCFSearchOptions = {
+    ...options?.vcfOptions,
+    maxDepth: Math.min(
+      options?.vcfOptions?.maxDepth ?? CT_THREE_VCF_MAX_DEPTH,
+      CT_THREE_VCF_MAX_DEPTH,
+    ),
+  };
+
+  if (context.collectBranches || needSequence) {
+    const vcfSeq = cachedFindVCFSequence(
+      board,
+      color,
+      limiter,
+      ctThreeVcfOptions,
+      vcfCache,
+    );
+    if (!vcfSeq) {
+      return null;
+    }
+    if (context.collectBranches) {
+      defenseSequences.push({
+        defense: defensePos,
+        seq: vcfSeq.sequence,
+        childBranches: [],
+        isForbiddenTrap: false,
+      });
+    }
+    return { seq: vcfSeq.sequence };
+  }
+
+  const vcfResult = cachedHasVCF(
+    board,
+    color,
+    limiter,
+    ctThreeVcfOptions,
+    vcfCache,
+  );
+  if (!vcfResult) {
+    return null;
+  }
+  return { seq: null };
+}
+
+/**
  * VCT手順の再帰探索
  */
 function findVCTSequenceRecursive(
@@ -960,8 +1037,16 @@ function findVCTSequenceRecursive(
         defenseRow[defensePos.col] = opponentColor;
       }
 
+      // 防御手のカウンター脅威チェック
+      const ct = checkDefenseCounterThreat(
+        board,
+        defensePos.row,
+        defensePos.col,
+        opponentColor,
+      );
+
       // 防御手で五連完成 → VCT不成立
-      if (checkFive(board, defensePos.row, defensePos.col, opponentColor)) {
+      if (ct === "win") {
         if (defenseRow) {
           defenseRow[defensePos.col] = null;
         }
@@ -969,8 +1054,55 @@ function findVCTSequenceRecursive(
         break;
       }
 
-      // シーケンス収集のため通常再帰（ct=four/threeの特別処理なし）
+      // ct=four: ブロック配置
+      const blockPos =
+        ct === "four"
+          ? getFourDefensePosition(board, defensePos, opponentColor)
+          : null;
+      if (ct === "four" && !blockPos) {
+        // 活四でブロック不可 → VCT不成立
+        if (defenseRow) {
+          defenseRow[defensePos.col] = null;
+        }
+        allDefenseLeadsToVCT = false;
+        break;
+      }
+      if (blockPos) {
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        board[blockPos.row]![blockPos.col] = color;
+      }
+
+      if (ct === "three") {
+        // ct=three: 防御側が活三 → VCFのみで勝てるかチェック
+        const ctThreeOk = handleCtThreeDefense(
+          board,
+          color,
+          defensePos,
+          limiter,
+          options,
+          vcfCache,
+          context,
+          firstDefenseSequence === null,
+          defenseSequences,
+        );
+
+        // 元に戻す（Undo）- 防御手
+        if (defenseRow) {
+          defenseRow[defensePos.col] = null;
+        }
+
+        if (!ctThreeOk) {
+          allDefenseLeadsToVCT = false;
+          break;
+        }
+        if (ctThreeOk.seq && firstDefenseSequence === null) {
+          firstDefenseSequence = [defensePos, ...ctThreeOk.seq];
+        }
+        continue;
+      }
+
       if (context.collectBranches || firstDefenseSequence === null) {
+        // ct=four（ブロック配置済み）or ct=none: 通常の再帰（シーケンス収集）
         // 分岐収集時は全防御で手順を収集、通常時は最初の防御のみ
         const subSequence: Position[] = [];
         const subContext: VCTRecursiveContext = {
@@ -990,7 +1122,11 @@ function findVCTSequenceRecursive(
           vcfCache,
         );
 
-        // 元に戻す（Undo）- 防御手
+        // 元に戻す（Undo）- ブロック → 防御
+        if (blockPos) {
+          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+          board[blockPos.row]![blockPos.col] = null;
+        }
         if (defenseRow) {
           defenseRow[defensePos.col] = null;
         }
@@ -1016,6 +1152,7 @@ function findVCTSequenceRecursive(
           firstDefenseSequence = [defensePos, ...subSequence];
         }
       } else {
+        // ct=four（ブロック配置済み）or ct=none: hasVCTでチェックのみ
         const vctResult = hasVCT(
           board,
           color,
@@ -1025,7 +1162,11 @@ function findVCTSequenceRecursive(
           vcfCache,
         );
 
-        // 元に戻す（Undo）- 防御手
+        // 元に戻す（Undo）- ブロック → 防御
+        if (blockPos) {
+          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+          board[blockPos.row]![blockPos.col] = null;
+        }
         if (defenseRow) {
           defenseRow[defensePos.col] = null;
         }
@@ -1068,9 +1209,8 @@ function findVCTSequenceRecursive(
  * isVCTFirstMove と同等のロジックだが、boolean ではなく
  * VCTSequenceResult | null を返す。
  *
- * 注意: isVCTFirstMove は evaluateCounterThreat でカウンターフォーを処理するが、
- * findVCTSequence にはこのロジックがない。そのため isVCTFirstMove が true でも
- * 本関数が null を返すケースがある。
+ * 防御手のカウンター脅威（ct=four/three）は checkDefenseCounterThreat で処理し、
+ * isVCTFirstMove と同等の判定精度を持つ。
  */
 export function findVCTSequenceFromFirstMove(
   board: BoardState,
@@ -1152,8 +1292,16 @@ export function findVCTSequenceFromFirstMove(
       defRow[defensePos.col] = opponentColor;
     }
 
+    // 防御手のカウンター脅威チェック
+    const ct = checkDefenseCounterThreat(
+      board,
+      defensePos.row,
+      defensePos.col,
+      opponentColor,
+    );
+
     // 防御手で五連完成 → VCT不成立
-    if (checkFive(board, defensePos.row, defensePos.col, opponentColor)) {
+    if (ct === "win") {
       if (defRow) {
         defRow[defensePos.col] = null;
       }
@@ -1161,11 +1309,55 @@ export function findVCTSequenceFromFirstMove(
       return null;
     }
 
-    // collectBranches: false で探索（シーケンス取得のみ）
-    const continuation = findVCTSequence(board, color, {
-      ...options,
-      collectBranches: false,
-    });
+    let continuation: VCTSequenceResult | null = null;
+
+    if (ct === "four") {
+      const blockPos = getFourDefensePosition(board, defensePos, opponentColor);
+      if (!blockPos) {
+        // 活四でブロック不可 → VCT不成立
+        if (defRow) {
+          defRow[defensePos.col] = null;
+        }
+        moveRow[move.col] = null;
+        return null;
+      }
+      // 暗黙ブロック配置
+      const blockRow = board[blockPos.row];
+      if (blockRow) {
+        blockRow[blockPos.col] = color;
+      }
+      continuation = findVCTSequence(board, color, {
+        ...options,
+        collectBranches: false,
+      });
+      // undo block
+      if (blockRow) {
+        blockRow[blockPos.col] = null;
+      }
+    } else if (ct === "three") {
+      // VCFのみで勝てるかチェック
+      const ctThreeVcfOptions: VCFSearchOptions = {
+        ...options?.vcfOptions,
+        maxDepth: Math.min(
+          options?.vcfOptions?.maxDepth ?? CT_THREE_VCF_MAX_DEPTH,
+          CT_THREE_VCF_MAX_DEPTH,
+        ),
+      };
+      const vcfSeq = findVCFSequence(board, color, ctThreeVcfOptions);
+      if (vcfSeq) {
+        continuation = {
+          firstMove: vcfSeq.firstMove,
+          sequence: vcfSeq.sequence,
+          isForbiddenTrap: false,
+        };
+      }
+    } else {
+      // ct=none: 通常のVCT探索
+      continuation = findVCTSequence(board, color, {
+        ...options,
+        collectBranches: false,
+      });
+    }
 
     if (defRow) {
       defRow[defensePos.col] = null;

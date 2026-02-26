@@ -81,15 +81,24 @@ export interface EvaluatedMove {
   /** 探索が完了した深度 */
   completedDepth?: number;
   /** 必勝手順の種類 */
-  forcedWinType?: "vcf" | "vct" | "forbidden-trap" | "mise-vcf";
+  forcedWinType?: "vcf" | "vct" | "forbidden-trap" | "mise-vcf" | "double-mise";
   /** 必勝手順の分岐情報 */
   forcedWinBranches?: ForcedWinBranch[];
   /** 相手の必勝手順（自分が負け確定） */
-  forcedLossType?: "vcf" | "vct" | "forbidden-trap" | "mise-vcf";
+  forcedLossType?:
+    | "vcf"
+    | "vct"
+    | "forbidden-trap"
+    | "mise-vcf"
+    | "double-mise";
   /** 相手の必勝手順のシーケンス */
   forcedLossSequence?: Position[];
   /** 軽量評価（minimax省略、強制勝ち検出のみ） */
   isLightEval?: boolean;
+  /** 両ミセ手の見逃し（打つ前の盤面で両ミセ手が存在した） */
+  missedDoubleMise?: Position[];
+  /** 両ミセのターゲット位置（四三を作る位置） */
+  doubleMiseTargets?: Position[];
 }
 
 /**
@@ -135,13 +144,22 @@ export interface ReviewWorkerResult {
   /** 探索が完了した深度 */
   completedDepth: number;
   /** 必勝手順の種類 */
-  forcedWinType?: "vcf" | "vct" | "forbidden-trap" | "mise-vcf";
+  forcedWinType?: "vcf" | "vct" | "forbidden-trap" | "mise-vcf" | "double-mise";
   /** 必勝手順の分岐情報 */
   forcedWinBranches?: ForcedWinBranch[];
   /** 相手の必勝手順（自分が負け確定） */
-  forcedLossType?: "vcf" | "vct" | "forbidden-trap" | "mise-vcf";
+  forcedLossType?:
+    | "vcf"
+    | "vct"
+    | "forbidden-trap"
+    | "mise-vcf"
+    | "double-mise";
   /** 相手の必勝手順のシーケンス */
   forcedLossSequence?: Position[];
   /** 軽量評価（minimax省略、強制勝ち検出のみ） */
   isLightEval?: boolean;
+  /** 両ミセ手の見逃し（打つ前の盤面で両ミセ手が存在した） */
+  missedDoubleMise?: Position[];
+  /** 両ミセのターゲット位置（四三を作る位置） */
+  doubleMiseTargets?: Position[];
 }

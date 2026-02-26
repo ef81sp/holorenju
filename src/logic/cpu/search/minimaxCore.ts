@@ -275,6 +275,7 @@ export function minimaxWithTT(
     useStaticEval,
     evaluationOptions: ctx.evaluationOptions,
     maxStaticEvalCount,
+    lineTable: ctx.lineTable,
     // 黒番の禁手判定を遅延（Alpha-Beta枝刈りで探索されない手はチェック不要）
     skipForbiddenCheck: isBlackTurn,
   });
@@ -326,6 +327,7 @@ export function minimaxWithTT(
         move.col,
         currentColor,
         ctx.evaluationOptions,
+        ctx.lineTable,
       );
     }
 
@@ -349,6 +351,7 @@ export function minimaxWithTT(
         move.col,
         currentColor,
         ctx.evaluationOptions,
+        ctx.lineTable,
       );
       if (
         isMaximizing
@@ -519,6 +522,7 @@ export function findBestMoveWithTT(
       history: ctx.history,
       useStaticEval: true,
       evaluationOptions: ctx.evaluationOptions,
+      lineTable: ctx.lineTable,
     });
 
   if (moves.length === 0) {
@@ -544,6 +548,7 @@ export function findBestMoveWithTT(
       move.col,
       color,
       ctx.evaluationOptions,
+      ctx.lineTable,
     );
     return {
       position: move,

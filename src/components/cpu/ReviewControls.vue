@@ -54,6 +54,8 @@ function getForcedWinLabel(
   type: EvaluatedMove["forcedWinType"],
 ): string | undefined {
   switch (type) {
+    case "double-mise":
+      return "両ミセ";
     case "vcf":
       return "四追い";
     case "vct":
@@ -72,6 +74,8 @@ function getForcedLossLabel(
   type: EvaluatedMove["forcedLossType"],
 ): string | undefined {
   switch (type) {
+    case "double-mise":
+      return "被両ミセ";
     case "vcf":
       return "被四追い";
     case "vct":

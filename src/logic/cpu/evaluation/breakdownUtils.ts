@@ -82,20 +82,30 @@ export function getNonZeroBreakdown(breakdown: ScoreBreakdown): {
       detail: detail as PatternScoreDetail,
     }));
 
-  // ボーナス内訳
+  // ボーナス内訳（miseType は表示用メタデータなのでスキップ）
   const bonuses = Object.entries(breakdown)
     .filter(
-      ([key, value]) => key !== "pattern" && key !== "defense" && value !== 0,
+      ([key, value]) =>
+        key !== "pattern" &&
+        key !== "defense" &&
+        key !== "miseType" &&
+        value !== 0,
     )
-    .map(([key, value]) => ({
-      key,
-      label: bonusLabels[key] ?? key,
-      // ペナルティは減点なので符号を反転
-      value:
-        key === "singleFourPenalty" || key === "forbiddenVulnerability"
-          ? -(value as number)
-          : (value as number),
-    }));
+    .map(([key, value]) => {
+      let label = bonusLabels[key] ?? key;
+      if (key === "mise" && breakdown.miseType === "double-mise") {
+        label = "両ミセ";
+      }
+      return {
+        key,
+        label,
+        // ペナルティは減点なので符号を反転
+        value:
+          key === "singleFourPenalty" || key === "forbiddenVulnerability"
+            ? -(value as number)
+            : (value as number),
+      };
+    });
 
   return { patterns, defense, bonuses };
 }
