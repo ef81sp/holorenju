@@ -1040,10 +1040,10 @@ describe("isVCTFirstMove: ct=three の hasVCF フォールバック", () => {
 
 describe("findVCTSequence の事後検証", () => {
   it(
-    "返された手順の防御手がカウンターフォーを作らない＋盤面不変性",
+    "防御手のカウンター脅威が正しく処理される＋盤面不変性",
     { timeout: 35000 },
     () => {
-      // 16手目まで（黒番）: 探索がカウンターフォー防御を含む偽VCTを返さないことを確認
+      // 16手目まで（黒番）: 探索がカウンター脅威を正しく処理することを確認
       const record = "H8 I7 G9 I8 I9 G7 H10 J9 I11 F8 H7 H6 H9 H11 E9 F9";
       const { board } = createBoardFromRecord(record);
       const snapshot = copyBoard(board);
@@ -1057,29 +1057,37 @@ describe("findVCTSequence の事後検証", () => {
       // 盤面不変性チェック
       expect(board).toEqual(snapshot);
 
-      // 返された手順があれば、全防御手がカウンターフォーを作らないことを検証
+      // 返された手順があれば、全防御手のカウンター脅威を検証
       if (result) {
+        const replayBoard = copyBoard(board);
         for (let i = 0; i < result.sequence.length; i++) {
           // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
           const pos = result.sequence[i]!;
           const isDefense = i % 2 === 1;
+          const stoneColor: "black" | "white" = isDefense ? "white" : "black";
+          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+          replayBoard[pos.row]![pos.col] = stoneColor;
+
           if (isDefense) {
-            // 手順をリプレイして防御手の状態を確認
-            const replayBoard = copyBoard(board);
-            for (let j = 0; j <= i; j++) {
+            const ct = checkDefenseCounterThreat(
+              replayBoard,
+              pos.row,
+              pos.col,
+              "white",
+            );
+            // ct=win は拒否されるべき
+            expect(ct).not.toBe("win");
+            // ct=four には有効なブロック位置が存在する
+            if (ct === "four") {
+              const blockPos = getFourDefensePosition(
+                replayBoard,
+                pos,
+                "white",
+              );
+              expect(blockPos).not.toBeNull();
               // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-              const p = result.sequence[j]!;
-              const stoneColor: "black" | "white" =
-                j % 2 === 0 ? "black" : "white";
-              // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-              replayBoard[p.row]![p.col] = stoneColor;
+              replayBoard[blockPos!.row]![blockPos!.col] = "black";
             }
-            expect(checkFive(replayBoard, pos.row, pos.col, "white")).toBe(
-              false,
-            );
-            expect(createsFour(replayBoard, pos.row, pos.col, "white")).toBe(
-              false,
-            );
           }
         }
       }
@@ -1257,6 +1265,118 @@ describe("findVCTSequenceFromFirstMove", () => {
     );
     expect(result).toBeNull();
   });
+});
+
+describe("findVCTSequenceFromFirstMove: ct=four ハンドリング", () => {
+  it("バグ再現: L9 の VCT シーケンスが返る", { timeout: 30000 }, () => {
+    // 棋譜14手目までの盤面で L9 のVCTシーケンス取得
+    const record = "H8 H9 I7 I8 J7 H7 J9 J8 K8 K7 L7 I10 J6 G9";
+    const { board } = createBoardFromRecord(record);
+    const snapshot = copyBoard(board);
+    const move = { row: 6, col: 11 }; // L9
+    const options = {
+      maxDepth: 6,
+      timeLimit: 25000,
+      vcfOptions: { maxDepth: 16, timeLimit: 25000 },
+    };
+    const result = findVCTSequenceFromFirstMove(board, move, "black", options);
+    // 盤面不変性
+    expect(board).toEqual(snapshot);
+    // シーケンスが返り、3手より長い
+    expect(result).not.toBeNull();
+    if (result) {
+      expect(result.sequence.length).toBeGreaterThan(3);
+    }
+  });
+
+  it(
+    "isVCTFirstMove と findVCTSequenceFromFirstMove の一致性",
+    { timeout: 30000 },
+    () => {
+      const record = "H8 H9 I7 I8 J7 H7 J9 J8 K8 K7 L7 I10 J6 G9";
+      const { board } = createBoardFromRecord(record);
+      const move = { row: 6, col: 11 }; // L9
+      const options = {
+        maxDepth: 6,
+        timeLimit: 25000,
+        vcfOptions: { maxDepth: 16, timeLimit: 25000 },
+      };
+      const isFirst = isVCTFirstMove(board, move, "black", options);
+      const seq = findVCTSequenceFromFirstMove(board, move, "black", options);
+      // isVCTFirstMove が true なら findVCTSequenceFromFirstMove も non-null
+      if (isFirst) {
+        expect(seq).not.toBeNull();
+      }
+    },
+  );
+
+  it("ct=four でブロック後 VCT 継続 → シーケンスが返る", () => {
+    // 既存の ct=four テストボード（hasVCT=true）
+    const board = createBoardWithStones([
+      { row: 3, col: 3, color: "white" },
+      { row: 7, col: 4, color: "white" },
+      { row: 7, col: 5, color: "white" },
+      { row: 8, col: 4, color: "white" },
+      { row: 8, col: 5, color: "white" },
+      { row: 4, col: 3, color: "black" },
+      { row: 5, col: 3, color: "black" },
+      { row: 6, col: 3, color: "black" },
+    ]);
+    const snapshot = copyBoard(board);
+    const seq = findVCTSequence(board, "white", { timeLimit: 1000 });
+    expect(seq).not.toBeNull();
+    if (seq) {
+      const fromFirst = findVCTSequenceFromFirstMove(
+        board,
+        seq.firstMove,
+        "white",
+        { timeLimit: 1000 },
+      );
+      expect(fromFirst).not.toBeNull();
+    }
+    // 盤面不変性
+    expect(board).toEqual(snapshot);
+  });
+
+  it("ct=four でブロック後 VCT 不成立 → null", () => {
+    // ブロック後にVCT継続不能な盤面
+    const board = createBoardWithStones([
+      { row: 3, col: 3, color: "white" },
+      { row: 7, col: 4, color: "white" },
+      { row: 7, col: 5, color: "white" },
+      { row: 4, col: 3, color: "black" },
+      { row: 5, col: 3, color: "black" },
+      { row: 6, col: 3, color: "black" },
+    ]);
+    const snapshot = copyBoard(board);
+    const seq = findVCTSequence(board, "white", { timeLimit: 1000 });
+    expect(seq).toBeNull();
+    // 盤面不変性
+    expect(board).toEqual(snapshot);
+  });
+});
+
+describe("VCT手順中にカウンターフォーが複数回発生", () => {
+  it(
+    "validateVCTSequence がカウンターフォーの暗黙ブロックを累積処理する",
+    { timeout: 30000 },
+    () => {
+      // 14手目までの盤面でVCTシーケンスを取得し、検証が通ることを確認
+      const record = "H8 H9 I7 I8 J7 H7 J9 J8 K8 K7 L7 I10 J6 G9";
+      const { board } = createBoardFromRecord(record);
+      const options = {
+        maxDepth: 6,
+        timeLimit: 25000,
+        vcfOptions: { maxDepth: 16, timeLimit: 25000 },
+      };
+      const result = findVCTSequence(board, "black", options);
+      // findVCTSequence は内部で validateVCTSequence を呼ぶので、
+      // 結果が返ればカウンターフォーの暗黙ブロック累積が正しく処理されている
+      if (result) {
+        expect(result.sequence.length).toBeGreaterThan(1);
+      }
+    },
+  );
 });
 
 describe("防御手が活三を作る場合のVCT探索（depth > 0）", () => {
