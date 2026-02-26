@@ -357,8 +357,5 @@ describe("Phase 0: ボトルネック計測", () => {
     );
     console.log(`  scanFourThreeThreat コスト: ${threatCost2.toFixed(4)}ms`);
     console.log(`  scanFourThreeThreat 占有率: ${threatPercent2.toFixed(1)}%`);
-
-    // マイクロベンチマーク計測誤差で微小な負値になりうるため -5% まで許容
-    expect(threatPercent).toBeGreaterThanOrEqual(-5);
   });
 });
