@@ -231,6 +231,91 @@ export function isValidPVMove(
 }
 
 /**
+ * PV末尾の非生産的四伸び（四＋ブロック）ペアを切り詰め
+ *
+ * 探索で混入する後続脅威のない四伸び（plain four）を PV 表示品質のために除去する。
+ * 末尾から連続するペアのみ切り詰め、中間のペアは除去しない（盤面整合性のため）。
+ *
+ * @param pvResult PV抽出結果
+ * @param board PV適用前の元盤面
+ * @param color PV開始時の手番
+ * @returns 切り詰め後のPV結果（変更なしの場合は入力をそのまま返す）
+ */
+export function truncateUnproductiveFours(
+  pvResult: PVExtractionResult,
+  board: BoardState,
+  color: "black" | "white",
+): PVExtractionResult {
+  const { pv } = pvResult;
+  if (pv.length <= 1) {
+    return pvResult;
+  }
+
+  // PV を元盤面からリプレイし、各手の plain four 判定を記録
+  const isPlainFour: boolean[] = [];
+  const boards: BoardState[] = [];
+  const colors: ("black" | "white")[] = [];
+
+  let currentBoard = board;
+  let currentColor = color;
+
+  for (const move of pv) {
+    currentBoard = applyMove(currentBoard, move, currentColor);
+    const jumpResult = analyzeJumpPatterns(
+      currentBoard,
+      move.row,
+      move.col,
+      currentColor,
+    );
+    isPlainFour.push(jumpResult.hasFour && !jumpResult.hasValidOpenThree);
+    boards.push(currentBoard);
+    colors.push(currentColor);
+    currentColor = getOppositeColor(currentColor);
+  }
+
+  // 末尾から連続する非生産的四ペアを検出
+  let truncateFrom = pv.length;
+
+  // 末尾の単独 plain four を処理（PV長が奇数の場合）
+  if (isPlainFour[pv.length - 1]) {
+    truncateFrom = pv.length - 1;
+  }
+
+  // 末尾のペア（四＋ブロック）を逆順走査
+  while (truncateFrom >= 2) {
+    const fourIdx = truncateFrom - 2;
+    if (isPlainFour[fourIdx]) {
+      truncateFrom = fourIdx;
+    } else {
+      break;
+    }
+  }
+
+  if (truncateFrom >= pv.length) {
+    return pvResult; // 切り詰めなし
+  }
+
+  const truncatedPv = pv.slice(0, truncateFrom);
+
+  if (truncateFrom === 0) {
+    return { pv: truncatedPv, leafBoard: board, leafColor: color };
+  }
+
+  const lastBoard = boards[truncateFrom - 1];
+  const lastColor = colors[truncateFrom - 1];
+
+  if (!lastBoard || !lastColor) {
+    return { pv: truncatedPv, leafBoard: board, leafColor: color };
+  }
+
+  return {
+    pv: truncatedPv,
+    leafBoard: lastBoard,
+    leafColor: getOppositeColor(lastColor),
+  };
+}
+
+/**
  * TranspositionTableからPrincipal Variation（予想手順）を抽出
  *
  * TTに保存されたbestMoveを辿って、予想される手順を復元する。

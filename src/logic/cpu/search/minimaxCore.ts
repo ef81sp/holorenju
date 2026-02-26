@@ -38,15 +38,22 @@ import {
 import { computeBoardHash, updateHash } from "../zobrist";
 import { createSearchContext, type SearchContext } from "./context";
 import { isMeasuringFutility, recordFutilityGain } from "./futilityMeasurement";
-import { extractPV, type MinimaxResult, type MoveScoreEntry } from "./results";
+import {
+  extractPV,
+  type MinimaxResult,
+  type MoveScoreEntry,
+  truncateUnproductiveFours,
+} from "./results";
 import {
   ASPIRATION_WINDOW,
+  detectPlainFour,
   FUTILITY_MARGINS_OPPONENT,
   FUTILITY_MARGINS_SELF,
   hasImmediateThreat,
   INFINITY,
   LMR_MIN_DEPTH,
   LMR_MOVE_THRESHOLD,
+  LMR_PLAIN_FOUR_EXTRA_REDUCTION,
   LMR_REDUCTION,
   NMP_MIN_DEPTH,
   NMP_REDUCTION,
@@ -380,14 +387,27 @@ export function minimaxWithTT(
 
     let score = 0;
 
+    // 非生産的四伸び判定（LMR追加リダクション用）
+    // 四を作るが活三を伴わない手は depth を浪費するため追加削減
+    // moveIndex === 0 はLMR対象外なのでスキップ
+    const isPlainFour =
+      moveIndex >= 1 &&
+      depth >= LMR_MIN_DEPTH &&
+      detectPlainFour(board, move.row, move.col, currentColor);
+
     // LMR (Late Move Reductions)
     // 後半の候補手は浅く探索し、有望なら再探索
-    if (canApplyLMR) {
+    // 非生産的四伸びは moveIndex >= 1 でも追加リダクション適用
+    if (canApplyLMR || isPlainFour) {
+      const reduction = isPlainFour
+        ? LMR_REDUCTION + LMR_PLAIN_FOUR_EXTRA_REDUCTION
+        : LMR_REDUCTION;
+
       // 浅い探索
       score = minimaxWithTT(
         board,
         newHash,
-        depth - 1 - LMR_REDUCTION,
+        depth - 1 - reduction,
         !isMaximizing,
         perspective,
         alpha,
@@ -600,8 +620,9 @@ export function findBestMoveWithTT(
       removeStone(ctx.lineTable, move.row, move.col, color);
     }
 
-    // PVを抽出
-    const pvResult = extractPV(board, hash, move, color, ctx.tt, depth);
+    // PVを抽出し、末尾の非生産的四伸びを切り詰め
+    const rawPV = extractPV(board, hash, move, color, ctx.tt, depth);
+    const pvResult = truncateUnproductiveFours(rawPV, board, color);
 
     moveScores.push({
       move,
