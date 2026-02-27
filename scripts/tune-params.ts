@@ -68,7 +68,7 @@ function parseArgs(): CliOptions {
     iterations: DEFAULT_SPSA_CONFIG.iterations,
     games: DEFAULT_SPSA_CONFIG.gamesPerIteration,
     parallel: false,
-    workers: Math.max(1, cpuCount - 1),
+    workers: Math.min(3, Math.max(1, cpuCount - 1)),
     resume: null,
     verbose: false,
   };
@@ -91,7 +91,7 @@ function parseArgs(): CliOptions {
     } else if (arg.startsWith("--workers=")) {
       const value = parseInt(arg.slice("--workers=".length), 10);
       if (!isNaN(value) && value > 0) {
-        options.workers = value;
+        options.workers = Math.min(3, value);
         options.parallel = true;
       }
     } else if (arg.startsWith("--resume=")) {
@@ -119,7 +119,7 @@ Options:
   --iterations=<n>       SPSAイテレーション数 (default: 100)
   --games=<n>            各イテレーションの対局数 (default: 40)
   --parallel, -p         並列実行
-  --workers=<n>          並列ワーカー数 (implies --parallel)
+  --workers=<n>          並列ワーカー数 (max 3, implies --parallel)
   --resume=<path>        チェックポイントから再開
   --verbose, -v          詳細ログ
   --help, -h             ヘルプを表示

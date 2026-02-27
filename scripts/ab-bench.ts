@@ -60,7 +60,7 @@ function parseArgs(): CliOptions {
     candidateFile: null,
     games: 100,
     parallel: false,
-    workers: Math.max(1, cpuCount - 1),
+    workers: Math.min(3, Math.max(1, cpuCount - 1)),
     useSPRT: false,
     sprtElo0: DEFAULT_SPRT_CONFIG.elo0,
     sprtElo1: DEFAULT_SPRT_CONFIG.elo1,
@@ -86,7 +86,7 @@ function parseArgs(): CliOptions {
     } else if (arg.startsWith("--workers=")) {
       const value = parseInt(arg.slice("--workers=".length), 10);
       if (!isNaN(value) && value > 0) {
-        options.workers = value;
+        options.workers = Math.min(3, value);
         options.parallel = true;
       }
     } else if (arg === "--sprt") {
@@ -147,7 +147,7 @@ Options:
   --candidate-file=<path>    パラメータJSONファイル
   --games=<n>                対局数 (default: 100, 各サイド半分ずつ)
   --parallel, -p             並列実行
-  --workers=<n>              並列ワーカー数 (implies --parallel)
+  --workers=<n>              並列ワーカー数 (max 3, implies --parallel)
   --sprt                     SPRT判定を有効化
   --elo0=<n>                 H0のElo差 (default: 0)
   --elo1=<n>                 H1のElo差 (default: 30)
