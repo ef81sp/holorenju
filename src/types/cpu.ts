@@ -80,16 +80,17 @@ export interface DifficultyParams {
  * 難易度ごとのパラメータ設定
  *
  * 評価オプション:
- * - beginner/easy: 全機能無効（高速モード）
+ * - beginner: 防御のみ有効
+ * - easy: 防御+戦術認識有効
  * - medium: ミセ手・複数方向脅威・カウンターフォー有効
  * - hard: 全機能有効（VCT含む）
  */
 export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
   beginner: {
-    depth: 1,
-    timeLimit: 1000,
-    randomFactor: 0.8, // 80%で悪手（さらに弱体化してeasyとの差を広げる）
-    maxNodes: 10000,
+    depth: 2, // depth 2 で easyとの差はrandomFactor/機能で付ける
+    timeLimit: 1500,
+    randomFactor: 0.25, // 25%で悪手
+    maxNodes: 30000,
     evaluationOptions: {
       enableFukumi: false,
       enableMise: false,
@@ -97,44 +98,44 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
       enableMultiThreat: false,
       enableCounterFour: false,
       enableVCT: false,
-      enableMandatoryDefense: false,
-      enableSingleFourPenalty: false,
-      singleFourPenaltyMultiplier: 1.0, // ペナルティなし（初心者らしく四を打ちがち）
+      enableMandatoryDefense: true, // 活四/活三への最低限の防御（強化）
+      enableSingleFourPenalty: true, // 無駄な四を減らす（強化）
+      singleFourPenaltyMultiplier: 0.6, // 40%減点
       enableMiseThreat: false,
       enableDoubleThreeThreat: false,
       enableNullMovePruning: false,
       enableFutilityPruning: false,
       enableForbiddenVulnerability: false,
     },
-    scoreThreshold: 1200, // 広いスコア差まで悪手候補に
+    scoreThreshold: 400, // ランダム選択幅（easyより広め）
   },
   easy: {
     depth: 2,
     timeLimit: 2000,
-    randomFactor: 0.25, // 25%で悪手（medium/hardに搾取されにくくする）
-    maxNodes: 50000,
+    randomFactor: 0.12, // 12%で悪手
+    maxNodes: 100000, // 探索予算倍増
     evaluationOptions: {
       enableFukumi: false,
       enableMise: true, // 計算コスト低で戦術認識向上（medium-easy格差対策）
       enableForbiddenTrap: false,
       enableMultiThreat: true, // 計算コスト低で戦術認識向上（medium-easy格差対策）
-      enableCounterFour: false,
+      enableCounterFour: true, // カウンターフォー認識（強化）
       enableVCT: false,
       enableMandatoryDefense: true, // 致命的ミスを減らす
       enableSingleFourPenalty: true, // 無駄な四を減らす
-      singleFourPenaltyMultiplier: 0.6, // 40%減点（mild）
-      enableMiseThreat: false,
-      enableDoubleThreeThreat: false,
+      singleFourPenaltyMultiplier: 0.4, // 60%減点（より厳しく）
+      enableMiseThreat: true, // ミセ手脅威への防御（強化）
+      enableDoubleThreeThreat: true, // 三三脅威への防御（強化）
       enableNullMovePruning: false,
       enableFutilityPruning: false,
       enableForbiddenVulnerability: false,
     },
-    scoreThreshold: 200, // ランダム選択時もより良い手に限定
+    scoreThreshold: 150, // ランダム選択幅を狭める（強化）
   },
   medium: {
     depth: 3,
-    timeLimit: 4000,
-    randomFactor: 0.1, // 10%で悪手（medium-easy差を広げる）
+    timeLimit: 5000, // TPE対策
+    randomFactor: 0.08, // 8%で悪手
     maxNodes: 200000,
     evaluationOptions: {
       enableFukumi: false, // 探索効率を優先
@@ -152,11 +153,11 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
       enableFutilityPruning: true, // depth 3 でも浅い末端の効率化に有用
       enableForbiddenVulnerability: false,
     },
-    scoreThreshold: 150, // より最善手寄りに（medium-easy差を広げる）
+    scoreThreshold: 150, // ランダム選択幅
   },
   hard: {
     depth: 4,
-    timeLimit: 8000,
+    timeLimit: 10000, // TPE対策（強さ維持/微強化）
     randomFactor: 0,
     maxNodes: 600000,
     evaluationOptions: {
