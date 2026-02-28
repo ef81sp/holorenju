@@ -346,6 +346,7 @@ function evaluateCounterThreat(
   if (ct === "four") {
     // 防御側がカウンターフォーを作った
     // → 攻撃側は四のブロック位置に限定される
+    // → ブロックが三か四を作らなければイニシアチブ喪失 → VCT不成立
     // → ブロック後にVCTが継続するか再帰的に検証
     const opponentColor = color === "black" ? "white" : "black";
     const blockPos = getFourDefensePosition(board, defensePos, opponentColor);
@@ -355,6 +356,20 @@ function evaluateCounterThreat(
     const blockRow = board[blockPos.row];
     if (blockRow) {
       blockRow[blockPos.col] = color;
+    }
+    // ブロック石が攻撃側の脅威（三か四）を作るか検証
+    const blockThreat = checkDefenseCounterThreat(
+      board,
+      blockPos.row,
+      blockPos.col,
+      color,
+    );
+    if (blockThreat === "none") {
+      // ブロックが脅威を作れない → 相手にフリームーブを与えるためVCT不成立
+      if (blockRow) {
+        blockRow[blockPos.col] = null;
+      }
+      return false;
     }
     const result = hasVCT(board, color, depth + 1, limiter, options, vcfCache);
     if (blockRow) {
@@ -732,6 +747,17 @@ function validateVCTSequence(
         if (bRow) {
           bRow[blockPos.col] = color;
         }
+        // ブロック石が攻撃側の脅威（三か四）を作らなければVCT不成立
+        const blockThreat = checkDefenseCounterThreat(
+          board,
+          blockPos.row,
+          blockPos.col,
+          color,
+        );
+        if (blockThreat === "none") {
+          valid = false;
+          break;
+        }
         placed.push(blockPos);
       }
       // 防御手配置後に相手の活三またはミセ手が存在する → 次の攻撃手が四/五連でなければVCT手順崩壊
@@ -1071,6 +1097,20 @@ function findVCTSequenceRecursive(
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         board[blockPos.row]![blockPos.col] = color;
       }
+      // ブロック石が攻撃側の脅威（三か四）を作らなければVCT不成立
+      if (
+        blockPos &&
+        checkDefenseCounterThreat(board, blockPos.row, blockPos.col, color) ===
+          "none"
+      ) {
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        board[blockPos.row]![blockPos.col] = null;
+        if (defenseRow) {
+          defenseRow[defensePos.col] = null;
+        }
+        allDefenseLeadsToVCT = false;
+        break;
+      }
 
       if (ct === "three") {
         // ct=three: 防御側が活三 → VCFのみで勝てるかチェック
@@ -1326,10 +1366,19 @@ export function findVCTSequenceFromFirstMove(
       if (blockRow) {
         blockRow[blockPos.col] = color;
       }
-      continuation = findVCTSequence(board, color, {
-        ...options,
-        collectBranches: false,
-      });
+      // ブロック石が攻撃側の脅威（三か四）を作らなければVCT不成立
+      const blockThreat = checkDefenseCounterThreat(
+        board,
+        blockPos.row,
+        blockPos.col,
+        color,
+      );
+      if (blockThreat !== "none") {
+        continuation = findVCTSequence(board, color, {
+          ...options,
+          collectBranches: false,
+        });
+      }
       // undo block
       if (blockRow) {
         blockRow[blockPos.col] = null;
