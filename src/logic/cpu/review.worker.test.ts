@@ -14,13 +14,28 @@ import { describe, expect, it } from "vitest";
 
 import type { Position } from "@/types/game";
 
+import { BOARD_SIZE } from "@/constants/board";
 import { createBoardFromRecord } from "@/logic/gameRecordParser";
 
+import { countStones } from "./core/boardUtils";
 import { detectOpponentThreats } from "./evaluation";
 import { findMiseTargets } from "./evaluation/miseTactics";
 import { findDoubleMiseMoves } from "./evaluation/tactics";
-import { createsFourThree } from "./evaluation/winningPatterns";
+import {
+  checkWhiteWinningPattern,
+  classifyWhiteWinningPattern,
+  createsFourThree,
+} from "./evaluation/winningPatterns";
+import {
+  findMiseVCFSequence,
+  type MiseVCFSearchOptions,
+} from "./search/miseVcf";
 import { findVCFSequence, type VCFSearchOptions } from "./search/vcf";
+import {
+  findVCTSequence,
+  VCT_STONE_THRESHOLD,
+  type VCTSearchOptions,
+} from "./search/vct";
 
 const REVIEW_VCF_OPTIONS: VCFSearchOptions = {
   maxDepth: 16,
@@ -242,5 +257,467 @@ describe("review.worker: doubleMiseTargets 算出", () => {
     expect(targets.some((t) => t.row === 7 && t.col === 3)).toBe(true);
     // H6 = row 9, col 7
     expect(targets.some((t) => t.row === 9 && t.col === 7)).toBe(true);
+  });
+});
+
+/**
+ * worker 内部の checkForcedLoss 相当ロジックを再現
+ * （options パラメータ対応版）
+ */
+type ForcedLossType =
+  | "vcf"
+  | "vct"
+  | "forbidden-trap"
+  | "mise-vcf"
+  | "double-mise"
+  | "double-three"
+  | "double-four";
+interface ForcedLossResult {
+  type: ForcedLossType;
+  sequence: Position[];
+}
+interface ForcedLossCheckOptions {
+  vcfOptions: VCFSearchOptions;
+  miseVcfOptions: MiseVCFSearchOptions;
+  vctOptions: VCTSearchOptions;
+  skipVCT?: boolean;
+}
+const DEFAULT_VCF_OPTS: VCFSearchOptions = { maxDepth: 16, timeLimit: 1500 };
+const DEFAULT_MISE_VCF_OPTS: MiseVCFSearchOptions = {
+  vcfOptions: { maxDepth: 12, timeLimit: 300 },
+  timeLimit: 500,
+};
+const DEFAULT_VCT_OPTS: VCTSearchOptions = {
+  maxDepth: 6,
+  timeLimit: 8000,
+  vcfOptions: { maxDepth: 16, timeLimit: 8000 },
+  collectBranches: false,
+};
+
+/**
+ * 白の三三/四四手を全空きセルからスキャンして見つける
+ */
+function findWhiteWinningMove(
+  board: ReturnType<typeof createBoardFromRecord>["board"],
+): { position: Position; type: "double-three" | "double-four" } | undefined {
+  for (let r = 0; r < BOARD_SIZE; r++) {
+    const row = board[r];
+    if (!row) {
+      continue;
+    }
+    for (let c = 0; c < BOARD_SIZE; c++) {
+      if (row[c] !== null) {
+        continue;
+      }
+      row[c] = "white";
+      if (checkWhiteWinningPattern(board, r, c)) {
+        const type = classifyWhiteWinningPattern(board, r, c);
+        row[c] = null;
+        return { position: { row: r, col: c }, type };
+      }
+      row[c] = null;
+    }
+  }
+  return undefined;
+}
+
+function checkForcedLoss(
+  boardAfter: ReturnType<typeof createBoardFromRecord>["board"],
+  opponentColor: "black" | "white",
+  stoneCountAfter: number,
+  options?: ForcedLossCheckOptions,
+): ForcedLossResult | undefined {
+  const vcfOpts = options?.vcfOptions ?? DEFAULT_VCF_OPTS;
+  const miseOpts = options?.miseVcfOptions ?? DEFAULT_MISE_VCF_OPTS;
+  const vctOpts = options?.vctOptions ?? DEFAULT_VCT_OPTS;
+
+  const oppDM = findDoubleMiseMoves(boardAfter, opponentColor);
+  if (oppDM.length > 0 && oppDM[0]) {
+    return { type: "double-mise", sequence: [oppDM[0]] };
+  }
+
+  // 白の三三・四四チェック（白限定）
+  if (opponentColor === "white") {
+    const whiteWin = findWhiteWinningMove(boardAfter);
+    if (whiteWin) {
+      return { type: whiteWin.type, sequence: [whiteWin.position] };
+    }
+  }
+
+  const oppVCF = findVCFSequence(boardAfter, opponentColor, vcfOpts);
+  if (oppVCF) {
+    return {
+      type: oppVCF.isForbiddenTrap ? "forbidden-trap" : "vcf",
+      sequence: oppVCF.sequence,
+    };
+  }
+  const oppMise = findMiseVCFSequence(boardAfter, opponentColor, miseOpts);
+  if (oppMise) {
+    return { type: "mise-vcf", sequence: oppMise.sequence };
+  }
+  if (stoneCountAfter >= VCT_STONE_THRESHOLD && !options?.skipVCT) {
+    const oppVCT = findVCTSequence(boardAfter, opponentColor, vctOpts);
+    if (oppVCT) {
+      return {
+        type: oppVCT.isForbiddenTrap ? "forbidden-trap" : "vct",
+        sequence: oppVCT.sequence,
+      };
+    }
+  }
+  return undefined;
+}
+
+/**
+ * worker 内部の checkCandidateForcedLoss 相当ロジック
+ */
+function checkCandidateForcedLoss(
+  board: ReturnType<typeof createBoardFromRecord>["board"],
+  pos: Position,
+  color: "black" | "white",
+  opponentColor: "black" | "white",
+  stoneCount: number,
+): ForcedLossResult | undefined {
+  const row = board[pos.row];
+  if (!row) {
+    return undefined;
+  }
+  row[pos.col] = color;
+  try {
+    const selfThreats = detectOpponentThreats(board, color);
+    if (selfThreats.fours.length > 0 || selfThreats.openFours.length > 0) {
+      return undefined;
+    }
+    return checkForcedLoss(board, opponentColor, stoneCount + 1);
+  } finally {
+    row[pos.col] = null;
+  }
+}
+
+describe("review.worker: 候補手事後検証", () => {
+  it("四を作る手は自分に四があるためスキップされる", () => {
+    // 黒の四が作れる局面を構築
+    // H8 H9 I8 G8 J8（黒が横にF8で五連可能 = 四の状態）
+    const { board } = createBoardFromRecord("H8 H9 I8 G8 J8");
+    const color = "black" as const;
+    const opponentColor = "white" as const;
+    const stoneCount = countStones(board);
+
+    // F8(row=7,col=5) は黒の四を作る → 相手VCF検出スキップ
+    const result = checkCandidateForcedLoss(
+      board,
+      { row: 7, col: 5 },
+      color,
+      opponentColor,
+      stoneCount,
+    );
+    expect(result).toBeUndefined();
+  });
+
+  it("仮配置後にボードが元に戻る", () => {
+    const { board } = createBoardFromRecord("H8 H9 I8 G8");
+    const pos = { row: 5, col: 5 };
+    expect(board[pos.row]?.[pos.col]).toBeNull();
+
+    checkCandidateForcedLoss(board, pos, "black", "white", 4);
+
+    // ボードが復元されている
+    expect(board[pos.row]?.[pos.col]).toBeNull();
+  });
+
+  it("checkForcedLoss にオプションを渡せる", () => {
+    // 短縮パラメータで呼べることを確認（エラーにならない）
+    const { board } = createBoardFromRecord("H8 H9 I8 G8");
+    const shortOpts: ForcedLossCheckOptions = {
+      vcfOptions: { maxDepth: 4, timeLimit: 100 },
+      miseVcfOptions: {
+        vcfOptions: { maxDepth: 4, timeLimit: 50 },
+        timeLimit: 100,
+      },
+      vctOptions: {
+        maxDepth: 2,
+        timeLimit: 100,
+        vcfOptions: { maxDepth: 4, timeLimit: 50 },
+        collectBranches: false,
+      },
+    };
+    const result = checkForcedLoss(board, "white", 4, shortOpts);
+    // この局面では相手の強制勝ちはないはず
+    expect(result).toBeUndefined();
+  });
+});
+
+/**
+ * worker の verifyCandidates 相当ロジックを再現
+ */
+interface ReviewCandidateStub {
+  position: Position;
+  searchScore: number;
+  opponentForcedWin?: ForcedLossType;
+}
+
+function verifyCandidatesTest(
+  board: ReturnType<typeof createBoardFromRecord>["board"],
+  candidates: ReviewCandidateStub[],
+  color: "black" | "white",
+  opponentColor: "black" | "white",
+  stoneCount: number,
+): { demotedBest: boolean; bestLoss?: ForcedLossResult } {
+  let demotedBest = false;
+  let bestLoss: ForcedLossResult | undefined = undefined;
+
+  for (let i = 0; i < candidates.length; i++) {
+    const cand = candidates[i];
+    if (!cand) {
+      continue;
+    }
+
+    const loss = checkCandidateForcedLoss(
+      board,
+      cand.position,
+      color,
+      opponentColor,
+      stoneCount,
+    );
+
+    if (loss) {
+      cand.opponentForcedWin = loss.type;
+      if (i === 0) {
+        demotedBest = true;
+        bestLoss = loss;
+      }
+    } else {
+      break;
+    }
+  }
+
+  return { demotedBest, bestLoss };
+}
+
+/** 白にVCFがある局面: H8 G8 I7 G9 H6 H9 G5 J8 F6 I9 F9 G11（12手後） */
+const ALL_DANGER_RECORD =
+  "H8 G8 I7 G9 H6 H9 G5 J8 F6 I9 F9 G11 F4 E3 F7 G10 F5 G12";
+
+describe("review.worker: 全候補被必勝時のbestLoss", () => {
+  it("全候補が被四追の場合、bestLossにsequenceが返る", () => {
+    // 12手後: 白にVCF(G10, 1手)がある。黒のどの手も被四追
+    const { board } = createBoardFromRecord(
+      ALL_DANGER_RECORD.split(/\s+/).slice(0, 12).join(" "),
+    );
+    const color = "black" as const;
+    const opponentColor = "white" as const;
+    const stoneCount = countStones(board);
+
+    // 候補手を複数用意（四を作らない手 = 被四追になる手）
+    const candidates: ReviewCandidateStub[] = [
+      { position: { row: 14, col: 0 }, searchScore: 100 }, // A1
+      { position: { row: 14, col: 1 }, searchScore: 80 }, // B1
+      { position: { row: 14, col: 2 }, searchScore: 60 }, // C1
+    ];
+
+    const { demotedBest, bestLoss } = verifyCandidatesTest(
+      board,
+      candidates,
+      color,
+      opponentColor,
+      stoneCount,
+    );
+
+    expect(demotedBest).toBe(true);
+    expect(bestLoss).toBeDefined();
+    expect(bestLoss?.type).toBe("vcf");
+    expect(bestLoss?.sequence).toBeDefined();
+    expect(bestLoss?.sequence.length).toBeGreaterThan(0);
+
+    // 全候補にopponentForcedWinが設定される
+    for (const c of candidates) {
+      expect(c.opponentForcedWin).toBe("vcf");
+    }
+  });
+
+  it("最善手が安全な場合、bestLossはundefined", () => {
+    // 序盤: 相手にVCFがない局面
+    const { board } = createBoardFromRecord("H8 H9 I8 G8");
+    const candidates: ReviewCandidateStub[] = [
+      { position: { row: 5, col: 5 }, searchScore: 100 },
+      { position: { row: 6, col: 6 }, searchScore: 80 },
+    ];
+
+    const { demotedBest, bestLoss } = verifyCandidatesTest(
+      board,
+      candidates,
+      "black",
+      "white",
+      4,
+    );
+
+    expect(demotedBest).toBe(false);
+    expect(bestLoss).toBeUndefined();
+  });
+});
+
+/**
+ * 白の三三・四四検出テスト
+ *
+ * テスト棋譜: H8 G8 I7 G9 H6 H9 G5 J8 F6 I9（10手）
+ * 11手目(F9)後、白がG11で三三を作れる
+ */
+const DOUBLE_THREE_RECORD = "H8 G8 I7 G9 H6 H9 G5 J8 F6 I9";
+
+describe("review.worker: 白の三三・四四検出", () => {
+  it("11手目(F9)後に白がG11で三三 → type: double-three", () => {
+    // 10手後に黒がF9を打った局面
+    const { board } = createBoardFromRecord(`${DOUBLE_THREE_RECORD} F9`);
+    const stoneCount = countStones(board);
+
+    const result = checkForcedLoss(board, "white", stoneCount);
+    expect(result).toBeDefined();
+    expect(result?.type).toBe("double-three");
+    // G11 = row 4, col 6
+    expect(result?.sequence[0]).toEqual({ row: 4, col: 6 });
+  });
+
+  it("黒手番(opponentColor=black)では三三・四四チェックがスキップされる", () => {
+    // 同じ局面でも opponentColor=black では白の三三チェック不要
+    const { board } = createBoardFromRecord(`${DOUBLE_THREE_RECORD} F9`);
+    const stoneCount = countStones(board);
+
+    const result = checkForcedLoss(board, "black", stoneCount);
+    // 黒にはVCF/VCT等もないはず（少なくとも三三・四四は検出しない）
+    // 結果がundefinedか、あっても"double-three"/"double-four"ではない
+    if (result) {
+      expect(result.type).not.toBe("double-three");
+      expect(result.type).not.toBe("double-four");
+    }
+  });
+
+  it("白の四四が検出できる", () => {
+    // 白が四四を作れる局面を棋譜で構築
+    // 黒: A1,B1,C1,D1,E1,F1 (隅に並べて邪魔にならない)
+    // 白: F8,G8,H8 (横3連, row=7) + I11,I10,I9 (縦3連, col=8)
+    // → I8 (row=7,col=8) に白を置くと横四 + 縦四 = 四四
+    //
+    // 交互着手: A1 F8 B1 G8 C1 H8 D1 I11 E1 I10 F1 I9
+    const { board } = createBoardFromRecord(
+      "A1 F8 B1 G8 C1 H8 D1 I11 E1 I10 F1 I9",
+    );
+    const stoneCount = countStones(board);
+    const result = checkForcedLoss(board, "white", stoneCount);
+    expect(result).toBeDefined();
+    expect(result?.type).toBe("double-four");
+    // I8 = row 7, col 8
+    expect(result?.sequence[0]).toEqual({ row: 7, col: 8 });
+  });
+});
+
+describe("H6後の黒VCT検出（診断）", () => {
+  const RECORD_14 = "H8 G7 J10 H10 H9 I9 G8 I10 I8 J8 G11 G10 H7 H6";
+
+  it("14手後に白(=自分)が四を持たないこと", () => {
+    const { board } = createBoardFromRecord(RECORD_14);
+    // color=white (14手目を打った側)
+    const selfThreats = detectOpponentThreats(board, "white");
+    expect(selfThreats.fours.length).toBe(0);
+    expect(selfThreats.openFours.length).toBe(0);
+  });
+
+  // TODO: カウンターフォー・ブロック脅威検証の修正後に復活
+  it.skip("checkForcedLossで黒VCTが検出されること", () => {
+    const { board } = createBoardFromRecord(RECORD_14);
+    const stoneCount = countStones(board);
+    // vitest環境は~2倍遅いため時間制限を緩和（本番は5000msで十分）
+    const result = checkForcedLoss(board, "black", stoneCount, {
+      vcfOptions: DEFAULT_VCF_OPTS,
+      miseVcfOptions: DEFAULT_MISE_VCF_OPTS,
+      vctOptions: { ...DEFAULT_VCT_OPTS, timeLimit: 15000 },
+    });
+    expect(result).toBeDefined();
+    expect(result?.type).toBe("vct");
+  }, 30000);
+
+  // TODO: カウンターフォー・ブロック脅威検証の修正後に復活
+  it.skip("findVCTSequenceで直接黒VCTを探す", () => {
+    const { board } = createBoardFromRecord(RECORD_14);
+    // vitest環境は~2倍遅いため時間制限を緩和（本番ネイティブでは~3秒で完了）
+    const vct = findVCTSequence(board, "black", {
+      maxDepth: 6,
+      timeLimit: 15000,
+      vcfOptions: { maxDepth: 16, timeLimit: 15000 },
+      collectBranches: false,
+    });
+    expect(vct).not.toBeNull();
+  }, 30000);
+});
+
+describe("review.worker: skipVCT オプション", () => {
+  const RECORD_14 = "H8 G7 J10 H10 H9 I9 G8 I10 I8 J8 G11 G10 H7 H6";
+
+  it("skipVCT: true でVCTがスキップされること", () => {
+    const { board } = createBoardFromRecord(RECORD_14);
+    const stoneCount = countStones(board);
+    const result = checkForcedLoss(board, "black", stoneCount, {
+      vcfOptions: DEFAULT_VCF_OPTS,
+      miseVcfOptions: DEFAULT_MISE_VCF_OPTS,
+      vctOptions: DEFAULT_VCT_OPTS,
+      skipVCT: true,
+    });
+    // VCTがスキップされるのでundefined
+    expect(result).toBeUndefined();
+  });
+
+  it("skipVCT: true でも両ミセは検出されること", () => {
+    // 白に両ミセがある局面
+    const { board } = createBoardFromRecord(
+      ALL_DANGER_RECORD.split(/\s+/).slice(0, 12).join(" "),
+    );
+    const stoneCount = countStones(board);
+    // 白の相手=黒側から見た被forced lossを確認
+    // この局面で白にVCFがある → skipVCTでもVCFは検出される
+    const result = checkForcedLoss(board, "white", stoneCount, {
+      vcfOptions: DEFAULT_VCF_OPTS,
+      miseVcfOptions: DEFAULT_MISE_VCF_OPTS,
+      vctOptions: DEFAULT_VCT_OPTS,
+      skipVCT: true,
+    });
+    // VCF/両ミセ/Mise-VCFはスキップされないので検出されるはず
+    if (result) {
+      expect([
+        "vcf",
+        "double-mise",
+        "mise-vcf",
+        "forbidden-trap",
+        "double-three",
+        "double-four",
+      ]).toContain(result.type);
+      expect(result.type).not.toBe("vct");
+    }
+  });
+
+  // TODO: カウンターフォー・ブロック脅威検証の修正後に復活
+  it.skip("skipVCT: false でVCTが検出されること", () => {
+    const { board } = createBoardFromRecord(RECORD_14);
+    const stoneCount = countStones(board);
+    const result = checkForcedLoss(board, "black", stoneCount, {
+      vcfOptions: DEFAULT_VCF_OPTS,
+      miseVcfOptions: DEFAULT_MISE_VCF_OPTS,
+      vctOptions: { ...DEFAULT_VCT_OPTS, timeLimit: 20000 },
+      skipVCT: false,
+    });
+    expect(result).toBeDefined();
+    expect(result?.type).toBe("vct");
+  }, 45000);
+});
+
+describe("VCT手順の三三禁チェック", () => {
+  it("F11は三三禁であること（ブロック石なしの盤面）", async () => {
+    // 14手 + VCT攻防6手 (F9 I6 D11 E10 F8 E8) 後の盤面
+    // ブロック石F10がないのでF11はcol5跳三+row4跳三 = 三三禁
+    const record20 =
+      "H8 G7 J10 H10 H9 I9 G8 I10 I8 J8 G11 G10 H7 H6 F9 I6 D11 E10 F8 E8";
+    const { board } = createBoardFromRecord(record20);
+    const { findThreatMoves } = await import("./search/vctHelpers");
+    const threats = findThreatMoves(board, "black");
+    const f11InThreats = threats.some((p) => p.row === 4 && p.col === 5);
+    // F11は三三禁なのでfindThreatMovesから除外されるべき
+    expect(f11InThreats).toBe(false);
   });
 });

@@ -123,6 +123,10 @@ const forcedLossLabel = computed(() => {
       return "被禁手追込";
     case "mise-vcf":
       return "被ミセ四追";
+    case "double-three":
+      return "被三三";
+    case "double-four":
+      return "被四四";
     default:
       return null;
   }
@@ -467,18 +471,19 @@ const forcedLossPVLine = computed<PVLine | null>(() => {
   });
 
   // 相手の必勝手順（着手後の局面から算出）
-  const startMoveNum = props.moveIndex + 1;
+  let moveNum = props.moveIndex + 1;
   for (let i = 0; i < eval_.forcedLossSequence.length; i++) {
     const pos = eval_.forcedLossSequence[i];
     if (!pos) {
       break;
     }
     items.push({
-      text: `${startMoveNum + i}.${formatMove(pos)}`,
-      // 相手の必勝手順: 偶数手=相手（攻撃側）、奇数手=自分（防御側）
+      text: `${moveNum}.${formatMove(pos)}`,
+      // 偶数=相手（攻撃側）、奇数=自分（防御側）
       isSelf: i % 2 !== 0,
       position: pos,
     });
+    moveNum++;
   }
 
   return { label, searchScore: 0, items };
@@ -578,6 +583,27 @@ function handlePVMoveClick(
 function isPvPinned(line: "best" | "played", index: number): boolean {
   const pin = pinnedPv.value;
   return pin !== null && pin.line === line && index <= pin.index;
+}
+
+function candidateForcedLossLabel(type: string): string {
+  switch (type) {
+    case "double-mise":
+      return "両ミセ";
+    case "vcf":
+      return "四追";
+    case "vct":
+      return "追詰";
+    case "forbidden-trap":
+      return "禁手追込";
+    case "mise-vcf":
+      return "ミセ四追";
+    case "double-three":
+      return "三三";
+    case "double-four":
+      return "四四";
+    default:
+      return "必勝";
+  }
 }
 
 function isPlayed(candidate: { position: Position }): boolean {
@@ -747,6 +773,12 @@ function isPlayed(candidate: { position: Position }): boolean {
             class="chip-tag"
           >
             ◂
+          </span>
+          <span
+            v-if="candidate.opponentForcedWin"
+            class="chip-tag chip-danger"
+          >
+            危:{{ candidateForcedLossLabel(candidate.opponentForcedWin) }}
           </span>
         </span>
       </div>
@@ -1175,6 +1207,11 @@ function isPlayed(candidate: { position: Position }): boolean {
 
 .chip-tag {
   color: hsl(186, 60%, 40%);
+}
+
+.chip-danger {
+  color: hsl(0, 65%, 50%);
+  font-weight: 500;
 }
 
 /* 内訳比較セクション */

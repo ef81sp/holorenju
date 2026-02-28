@@ -15,6 +15,7 @@ import type {
   ReviewWorkerResult,
 } from "@/types/review";
 
+import { BOARD_SIZE } from "@/constants/board";
 import { createBoardFromRecord } from "@/logic/gameRecordParser";
 import { DIFFICULTY_PARAMS, type ScoreBreakdown } from "@/types/cpu";
 
@@ -29,7 +30,11 @@ import {
 } from "./evaluation";
 import { findMiseTargets } from "./evaluation/miseTactics";
 import { findDoubleMiseMoves } from "./evaluation/tactics";
-import { createsFourThree } from "./evaluation/winningPatterns";
+import {
+  checkWhiteWinningPattern,
+  classifyWhiteWinningPattern,
+  createsFourThree,
+} from "./evaluation/winningPatterns";
 import { findBestMoveIterativeWithTT } from "./search/minimax";
 import {
   findMiseVCFSequence,
@@ -58,7 +63,7 @@ const REVIEW_SEARCH_PARAMS = {
   evaluationOptions: DIFFICULTY_PARAMS.hard.evaluationOptions,
 } as const;
 
-/** 振り返り用VCT探索パラメータ */
+/** 振り返り用VCT探索パラメータ（forcedWin表示用、分岐収集あり） */
 const REVIEW_VCT_OPTIONS: VCTSearchOptions = {
   maxDepth: 6,
   timeLimit: 3000,
@@ -67,6 +72,17 @@ const REVIEW_VCT_OPTIONS: VCTSearchOptions = {
     timeLimit: 3000,
   },
   collectBranches: true,
+};
+
+/** checkForcedLoss用VCT探索パラメータ（存在検出のみ、分岐収集なし、Phase 2で単一ワーカー実行） */
+const FORCED_LOSS_VCT_OPTIONS: VCTSearchOptions = {
+  maxDepth: 6,
+  timeLimit: 10000,
+  vcfOptions: {
+    maxDepth: 16,
+    timeLimit: 10000,
+  },
+  collectBranches: false,
 };
 
 /** 振り返り用VCF探索パラメータ */
@@ -81,16 +97,41 @@ const REVIEW_MISE_VCF_OPTIONS: MiseVCFSearchOptions = {
   timeLimit: 500,
 };
 
+/** 候補手検証用の短縮パラメータ */
+const CANDIDATE_VERIFY_VCF_OPTIONS: VCFSearchOptions = {
+  maxDepth: 12,
+  timeLimit: 500,
+};
+const CANDIDATE_VERIFY_MISE_VCF_OPTIONS: MiseVCFSearchOptions = {
+  vcfOptions: { maxDepth: 10, timeLimit: 150 },
+  timeLimit: 250,
+};
+const CANDIDATE_VERIFY_VCT_OPTIONS: VCTSearchOptions = {
+  maxDepth: 4,
+  timeLimit: 750,
+  vcfOptions: { maxDepth: 12, timeLimit: 250 },
+  collectBranches: false,
+};
+
 type ForcedLossType =
   | "vcf"
   | "vct"
   | "forbidden-trap"
   | "mise-vcf"
-  | "double-mise";
+  | "double-mise"
+  | "double-three"
+  | "double-four";
 
 interface ForcedLossResult {
   type: ForcedLossType;
   sequence: Position[];
+}
+
+interface ForcedLossCheckOptions {
+  vcfOptions: VCFSearchOptions;
+  miseVcfOptions: MiseVCFSearchOptions;
+  vctOptions: VCTSearchOptions;
+  skipVCT?: boolean;
 }
 
 /**
@@ -174,20 +215,62 @@ function evaluatePlayedForcedWin(
 }
 
 /**
+ * 白の三三/四四手を全空きセルからスキャンして見つける
+ *
+ * @returns 最初に見つかった三三/四四手の位置と種類、なければ undefined
+ */
+function findWhiteWinningMove(
+  board: BoardState,
+): { position: Position; type: "double-three" | "double-four" } | undefined {
+  for (let r = 0; r < BOARD_SIZE; r++) {
+    const row = board[r];
+    if (!row) {
+      continue;
+    }
+    for (let c = 0; c < BOARD_SIZE; c++) {
+      if (row[c] !== null) {
+        continue;
+      }
+      row[c] = "white";
+      if (checkWhiteWinningPattern(board, r, c)) {
+        const type = classifyWhiteWinningPattern(board, r, c);
+        row[c] = null;
+        return { position: { row: r, col: c }, type };
+      }
+      row[c] = null;
+    }
+  }
+  return undefined;
+}
+
+/**
  * 相手の必勝手順（VCF→Mise-VCF→VCT）を検出する
  */
 function checkForcedLoss(
   boardAfter: BoardState,
   opponentColor: "black" | "white",
   stoneCountAfter: number,
+  options?: ForcedLossCheckOptions,
 ): ForcedLossResult | undefined {
+  const vcfOpts = options?.vcfOptions ?? REVIEW_VCF_OPTIONS;
+  const miseOpts = options?.miseVcfOptions ?? REVIEW_MISE_VCF_OPTIONS;
+  const vctOpts = options?.vctOptions ?? FORCED_LOSS_VCT_OPTIONS;
+
   // 両ミセ（最速: ~5ms。見つかればVCF探索をスキップ）
   const oppDM = findDoubleMiseMoves(boardAfter, opponentColor);
   if (oppDM.length > 0 && oppDM[0]) {
     return { type: "double-mise", sequence: [oppDM[0]] };
   }
 
-  const oppVCF = findVCFSequence(boardAfter, opponentColor, REVIEW_VCF_OPTIONS);
+  // 白の三三・四四（白限定、両ミセの直後・VCFの前）
+  if (opponentColor === "white") {
+    const whiteWin = findWhiteWinningMove(boardAfter);
+    if (whiteWin) {
+      return { type: whiteWin.type, sequence: [whiteWin.position] };
+    }
+  }
+
+  const oppVCF = findVCFSequence(boardAfter, opponentColor, vcfOpts);
   if (oppVCF) {
     return {
       type: oppVCF.isForbiddenTrap ? "forbidden-trap" : "vcf",
@@ -195,21 +278,13 @@ function checkForcedLoss(
     };
   }
 
-  const oppMise = findMiseVCFSequence(
-    boardAfter,
-    opponentColor,
-    REVIEW_MISE_VCF_OPTIONS,
-  );
+  const oppMise = findMiseVCFSequence(boardAfter, opponentColor, miseOpts);
   if (oppMise) {
     return { type: "mise-vcf", sequence: oppMise.sequence };
   }
 
-  if (stoneCountAfter >= VCT_STONE_THRESHOLD) {
-    const oppVCT = findVCTSequence(
-      boardAfter,
-      opponentColor,
-      REVIEW_VCT_OPTIONS,
-    );
+  if (stoneCountAfter >= VCT_STONE_THRESHOLD && !options?.skipVCT) {
+    const oppVCT = findVCTSequence(boardAfter, opponentColor, vctOpts);
     if (oppVCT) {
       return {
         type: oppVCT.isForbiddenTrap ? "forbidden-trap" : "vct",
@@ -302,16 +377,161 @@ function findSurvivingTarget(
   return result;
 }
 
+/**
+ * 候補手を仮配置して相手の強制勝ちを検出する
+ */
+function checkCandidateForcedLoss(
+  board: BoardState,
+  pos: Position,
+  color: "black" | "white",
+  opponentColor: "black" | "white",
+  stoneCount: number,
+): ForcedLossResult | undefined {
+  const row = board[pos.row];
+  if (!row) {
+    return undefined;
+  }
+
+  row[pos.col] = color;
+  try {
+    // 自分に四があれば相手はVCF/VCTどころではない
+    const selfThreats = detectOpponentThreats(board, color);
+    if (selfThreats.fours.length > 0 || selfThreats.openFours.length > 0) {
+      return undefined;
+    }
+    const verifyOptions: ForcedLossCheckOptions = {
+      vcfOptions: CANDIDATE_VERIFY_VCF_OPTIONS,
+      miseVcfOptions: CANDIDATE_VERIFY_MISE_VCF_OPTIONS,
+      vctOptions: CANDIDATE_VERIFY_VCT_OPTIONS,
+    };
+    return checkForcedLoss(board, opponentColor, stoneCount + 1, verifyOptions);
+  } finally {
+    row[pos.col] = null;
+  }
+}
+
+/**
+ * 候補手リストを事後検証し、相手に強制勝ちを許す手にフラグを付ける
+ *
+ * 最善手（index 0）から順に検証し、安全な手が見つかった時点で打ち切る。
+ * @returns demotedBest - 最善手が降格されたか
+ */
+function verifyCandidates(
+  board: BoardState,
+  candidates: ReviewCandidate[],
+  color: "black" | "white",
+  opponentColor: "black" | "white",
+  stoneCount: number,
+  timeBudgetMs: number,
+): { demotedBest: boolean; bestLoss?: ForcedLossResult } {
+  const deadline = performance.now() + timeBudgetMs;
+  let demotedBest = false;
+  let bestLoss: ForcedLossResult | undefined = undefined;
+
+  for (let i = 0; i < candidates.length; i++) {
+    if (performance.now() > deadline) {
+      break;
+    }
+    const cand = candidates[i];
+    if (!cand) {
+      continue;
+    }
+
+    const loss = checkCandidateForcedLoss(
+      board,
+      cand.position,
+      color,
+      opponentColor,
+      stoneCount,
+    );
+
+    if (loss) {
+      cand.opponentForcedWin = loss.type;
+      if (i === 0) {
+        demotedBest = true;
+        bestLoss = loss;
+      }
+    } else {
+      // 安全な手を発見 → 以降の検証不要
+      break;
+    }
+  }
+
+  return { demotedBest, bestLoss };
+}
+
+/**
+ * 候補手を安全度→スコア順にソートし、最上位の安全な候補を返す
+ */
+function findSafeBest(
+  candidates: ReviewCandidate[],
+): ReviewCandidate | undefined {
+  candidates.sort((a, b) => {
+    const aUnsafe = a.opponentForcedWin ? 1 : 0;
+    const bUnsafe = b.opponentForcedWin ? 1 : 0;
+    if (aUnsafe !== bUnsafe) {
+      return aUnsafe - bUnsafe;
+    }
+    return b.searchScore - a.searchScore;
+  });
+  return candidates.find((c) => !c.opponentForcedWin);
+}
+
 self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
   const {
     moveHistory,
     moveIndex,
     playerFirst: _playerFirst,
     isLightEval,
+    vctCheckOnly,
   } = event.data;
+
+  const workerStartTime = performance.now();
 
   try {
     const moves = moveHistory.trim().split(/\s+/);
+
+    // Phase 2: VCTチェックのみ実行
+    if (vctCheckOnly) {
+      const { board: boardAfter } = createBoardFromRecord(
+        moves.slice(0, moveIndex + 1).join(" "),
+      );
+      const color = moveIndex % 2 === 0 ? "black" : "white";
+      const opponentColor = color === "black" ? "white" : "black";
+      const stoneCountAfter = countStones(boardAfter);
+
+      // 自分に四があれば相手はVCT不可
+      const selfThreats = detectOpponentThreats(boardAfter, color);
+      const selfHasFour =
+        selfThreats.fours.length > 0 || selfThreats.openFours.length > 0;
+
+      let forcedLossType: ForcedLossType | undefined = undefined;
+      let forcedLossSequence: Position[] | undefined = undefined;
+      if (!selfHasFour && stoneCountAfter >= VCT_STONE_THRESHOLD) {
+        const oppVCT = findVCTSequence(
+          boardAfter,
+          opponentColor,
+          FORCED_LOSS_VCT_OPTIONS,
+        );
+        if (oppVCT) {
+          forcedLossType = oppVCT.isForbiddenTrap ? "forbidden-trap" : "vct";
+          forcedLossSequence = oppVCT.sequence;
+        }
+      }
+
+      const response: ReviewWorkerResult = {
+        moveIndex,
+        bestMove: { row: 0, col: 0 },
+        bestScore: 0,
+        playedScore: 0,
+        candidates: [],
+        completedDepth: 0,
+        forcedLossType,
+        forcedLossSequence,
+      };
+      self.postMessage(response);
+      return;
+    }
 
     // moveIndex時点の盤面を再構築（moveIndex手目の前の局面）
     const { board, nextColor } = createBoardFromRecord(
@@ -432,7 +652,8 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
     // プレイヤーの手を打った後の局面で相手のVCF/VCT等を探す
     let forcedLossType: ForcedLossType | undefined = undefined;
     let forcedLossSequence: Position[] | undefined = undefined;
-    if (!forcedWin && moves[moveIndex]) {
+    let needsVCTCheck = false;
+    if (moves[moveIndex]) {
       const { board: boardAfter } = createBoardFromRecord(
         moves.slice(0, moveIndex + 1).join(" "),
       );
@@ -449,10 +670,18 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
           boardAfter,
           opponentColor,
           stoneCountAfter,
+          {
+            vcfOptions: REVIEW_VCF_OPTIONS,
+            miseVcfOptions: REVIEW_MISE_VCF_OPTIONS,
+            vctOptions: FORCED_LOSS_VCT_OPTIONS,
+            skipVCT: true,
+          },
         );
         if (loss) {
           forcedLossType = loss.type;
           forcedLossSequence = loss.sequence;
+        } else if (stoneCountAfter >= VCT_STONE_THRESHOLD) {
+          needsVCTCheck = true;
         }
       }
     }
@@ -691,17 +920,63 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
         }));
       }
 
+      // forcedWin初手の事後検証: 相手に強制勝ちを許さないか確認
+      // VCF系は初手が四なので checkCandidateForcedLoss 内で即スキップ（コスト≒0）
+      const stoneCountFW = countStones(board);
+      const elapsedFW = performance.now() - workerStartTime;
+      const timeBudgetFW = Math.max(1000, Math.min(5000, 25_000 - elapsedFW));
+      const { demotedBest: fwDemoted, bestLoss: fwBestLoss } = verifyCandidates(
+        board,
+        candidates,
+        color,
+        opponentColor,
+        stoneCountFW,
+        timeBudgetFW,
+      );
+
+      // 打たれた手の候補エントリにforcedLossTypeを反映
+      // forcedWinパスでも、実際の手が被必勝を許す場合にフラグを付ける
+      if (forcedLossType && playedRow >= 0) {
+        const playedCand = candidates.find(
+          (c) => c.position.row === playedRow && c.position.col === playedCol,
+        );
+        if (playedCand && !playedCand.opponentForcedWin) {
+          playedCand.opponentForcedWin = forcedLossType;
+        }
+      }
+
+      let finalBestMove = bestMove;
+      let finalBestScore: number = bestScore;
+      let fwForcedLossType: ForcedLossType | undefined =
+        forcedLossType ?? undefined;
+      let fwForcedLossSequence: Position[] | undefined =
+        forcedLossSequence ?? undefined;
+      if (fwDemoted) {
+        const safeBest = findSafeBest(candidates);
+        if (safeBest) {
+          finalBestMove = safeBest.position;
+          finalBestScore = safeBest.searchScore;
+        } else if (fwBestLoss) {
+          // 全候補が被必勝 → 局面自体が被必勝
+          fwForcedLossType = fwBestLoss.type;
+          fwForcedLossSequence = fwBestLoss.sequence;
+        }
+      }
+
       const response: ReviewWorkerResult = {
         moveIndex,
-        bestMove,
-        bestScore,
+        bestMove: finalBestMove,
+        bestScore: finalBestScore,
         playedScore,
         candidates,
         completedDepth: result.completedDepth,
         forcedWinType,
         forcedWinBranches,
+        forcedLossType: fwForcedLossType,
+        forcedLossSequence: fwForcedLossSequence,
         missedDoubleMise,
         doubleMiseTargets,
+        needsVCTCheck: needsVCTCheck || undefined,
       };
 
       self.postMessage(response);
@@ -739,16 +1014,56 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
         }
       }
 
+      // 候補手の事後検証: 相手に強制勝ちを許す手を検出
+      const stoneCount = countStones(board);
+      const elapsed = performance.now() - workerStartTime;
+      const timeBudget = Math.max(1000, Math.min(5000, 25_000 - elapsed));
+      const { demotedBest, bestLoss } = verifyCandidates(
+        board,
+        candidates,
+        color,
+        opponentColor,
+        stoneCount,
+        timeBudget,
+      );
+
+      // 打たれた手の候補エントリにforcedLossTypeを反映
+      if (forcedLossType && playedRow >= 0) {
+        const playedCand = candidates.find(
+          (c) => c.position.row === playedRow && c.position.col === playedCol,
+        );
+        if (playedCand && !playedCand.opponentForcedWin) {
+          playedCand.opponentForcedWin = forcedLossType;
+        }
+      }
+
+      let finalBestMove = result.position;
+      let finalBestScore = result.score;
+      let finalForcedLossType = forcedLossType;
+      let finalForcedLossSequence = forcedLossSequence;
+      if (demotedBest) {
+        const safeBest = findSafeBest(candidates);
+        if (safeBest) {
+          finalBestMove = safeBest.position;
+          finalBestScore = safeBest.searchScore;
+        } else if (bestLoss && !finalForcedLossType) {
+          // 全候補が被必勝 → 局面自体が被必勝
+          finalForcedLossType = bestLoss.type;
+          finalForcedLossSequence = bestLoss.sequence;
+        }
+      }
+
       const response: ReviewWorkerResult = {
         moveIndex,
-        bestMove: result.position,
-        bestScore: result.score,
+        bestMove: finalBestMove,
+        bestScore: finalBestScore,
         playedScore,
         candidates,
         completedDepth: result.completedDepth,
-        forcedLossType,
-        forcedLossSequence,
+        forcedLossType: finalForcedLossType,
+        forcedLossSequence: finalForcedLossSequence,
         missedDoubleMise,
+        needsVCTCheck: needsVCTCheck || undefined,
       };
 
       self.postMessage(response);

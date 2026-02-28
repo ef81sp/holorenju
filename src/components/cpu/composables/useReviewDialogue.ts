@@ -47,7 +47,7 @@ const QUALITY_EMOTIONS: Record<MoveQuality, EmotionId> = {
 
 /** 強制勝ち種別の表示名 */
 const FORCED_WIN_LABELS: Record<
-  NonNullable<EvaluatedMove["forcedWinType"]>,
+  NonNullable<EvaluatedMove["forcedWinType"] | EvaluatedMove["forcedLossType"]>,
   string
 > = {
   "double-mise": "両ミセ",
@@ -55,6 +55,8 @@ const FORCED_WIN_LABELS: Record<
   vct: "追い詰め",
   "forbidden-trap": "禁手追い込み",
   "mise-vcf": "ミセ四追い",
+  "double-three": "三三",
+  "double-four": "四四",
 };
 
 /** 負け確定（相手の必勝手順あり）時のセリフ（品質別） */

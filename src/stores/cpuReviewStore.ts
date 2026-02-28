@@ -313,6 +313,30 @@ export const useCpuReviewStore = defineStore("cpuReview", () => {
   }
 
   /**
+   * 評価済みの手を部分更新（Phase 2 VCT結果反映用）
+   */
+  function updateEvaluatedMove(
+    moveIndex: number,
+    updates: Partial<
+      Pick<EvaluatedMove, "forcedLossType" | "forcedLossSequence">
+    >,
+  ): void {
+    const idx = evaluatedMoves.value.findIndex(
+      (m) => m.moveIndex === moveIndex,
+    );
+    if (idx < 0) {
+      return;
+    }
+    const updated = [...evaluatedMoves.value];
+    const existing = evaluatedMoves.value[idx];
+    if (!existing) {
+      return;
+    }
+    updated[idx] = { ...existing, ...updates };
+    evaluatedMoves.value = updated;
+  }
+
+  /**
    * 評価結果を設定
    */
   function setEvaluationResults(results: EvaluatedMove[]): void {
@@ -386,6 +410,7 @@ export const useCpuReviewStore = defineStore("cpuReview", () => {
     goToStart,
     goToEnd,
     addEvaluatedMove,
+    updateEvaluatedMove,
     setEvaluationResults,
     clearCacheForRecord,
     clearEvaluation,

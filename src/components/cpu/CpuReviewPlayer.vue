@@ -121,6 +121,14 @@ async function startEvaluation(): Promise<void> {
       );
       reviewStore.addEvaluatedMove(evaluated);
     },
+    (moveIndex, vctResult) => {
+      if (vctResult.forcedLossType) {
+        reviewStore.updateEvaluatedMove(moveIndex, {
+          forcedLossType: vctResult.forcedLossType,
+          forcedLossSequence: vctResult.forcedLossSequence,
+        });
+      }
+    },
   );
   if (results.length === 0) {
     return;

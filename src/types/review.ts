@@ -44,6 +44,15 @@ export interface ReviewCandidate {
   principalVariation?: Position[];
   /** 探索末端の評価内訳 */
   leafEvaluation?: LeafEvaluation;
+  /** この手を打つと相手に強制勝ちを許す場合のタイプ */
+  opponentForcedWin?:
+    | "vcf"
+    | "vct"
+    | "forbidden-trap"
+    | "mise-vcf"
+    | "double-mise"
+    | "double-three"
+    | "double-four";
 }
 
 /**
@@ -90,7 +99,9 @@ export interface EvaluatedMove {
     | "vct"
     | "forbidden-trap"
     | "mise-vcf"
-    | "double-mise";
+    | "double-mise"
+    | "double-three"
+    | "double-four";
   /** 相手の必勝手順のシーケンス */
   forcedLossSequence?: Position[];
   /** 軽量評価（minimax省略、強制勝ち検出のみ） */
@@ -125,6 +136,8 @@ export interface ReviewEvalRequest {
   playerFirst: boolean;
   /** 軽量評価モード（コンピュータ手用） */
   isLightEval?: boolean;
+  /** Phase 2: VCTチェックのみ実行 */
+  vctCheckOnly?: boolean;
 }
 
 /**
@@ -153,7 +166,9 @@ export interface ReviewWorkerResult {
     | "vct"
     | "forbidden-trap"
     | "mise-vcf"
-    | "double-mise";
+    | "double-mise"
+    | "double-three"
+    | "double-four";
   /** 相手の必勝手順のシーケンス */
   forcedLossSequence?: Position[];
   /** 軽量評価（minimax省略、強制勝ち検出のみ） */
@@ -162,4 +177,6 @@ export interface ReviewWorkerResult {
   missedDoubleMise?: Position[];
   /** 両ミセのターゲット位置（四三を作る位置） */
   doubleMiseTargets?: Position[];
+  /** Phase 1でVCTをスキップし、Phase 2でのVCTチェックが必要 */
+  needsVCTCheck?: boolean;
 }
