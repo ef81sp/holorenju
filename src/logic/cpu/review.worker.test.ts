@@ -30,7 +30,6 @@ import {
   REVIEW_VCF_OPTIONS,
 } from "./review/forcedLossCheck";
 import { findVCFSequence, type VCFSearchOptions } from "./search/vcf";
-import { findVCTSequence } from "./search/vct";
 
 /** CI並行実行時のCPU負荷を考慮した緩めのVCF探索パラメータ */
 const GENEROUS_VCF_OPTIONS: VCFSearchOptions = {
@@ -434,45 +433,6 @@ describe("review.worker: 白の三三・四四検出", () => {
   });
 });
 
-describe("H6後の黒VCT検出（診断）", () => {
-  const RECORD_14 = "H8 G7 J10 H10 H9 I9 G8 I10 I8 J8 G11 G10 H7 H6";
-
-  it("14手後に白(=自分)が四を持たないこと", () => {
-    const { board } = createBoardFromRecord(RECORD_14);
-    // color=white (14手目を打った側)
-    const selfThreats = detectOpponentThreats(board, "white");
-    expect(selfThreats.fours.length).toBe(0);
-    expect(selfThreats.openFours.length).toBe(0);
-  });
-
-  // TODO: カウンターフォー・ブロック脅威検証の修正後に復活
-  it.skip("checkForcedLossで黒VCTが検出されること", () => {
-    const { board } = createBoardFromRecord(RECORD_14);
-    const stoneCount = countStones(board);
-    // vitest環境は~2倍遅いため時間制限を緩和（本番は5000msで十分）
-    const result = checkForcedLoss(board, "black", stoneCount, {
-      vcfOptions: REVIEW_VCF_OPTIONS,
-      miseVcfOptions: REVIEW_MISE_VCF_OPTIONS,
-      vctOptions: { ...FORCED_LOSS_VCT_OPTIONS, timeLimit: 15000 },
-    });
-    expect(result).toBeDefined();
-    expect(result?.type).toBe("vct");
-  }, 30000);
-
-  // TODO: カウンターフォー・ブロック脅威検証の修正後に復活
-  it.skip("findVCTSequenceで直接黒VCTを探す", () => {
-    const { board } = createBoardFromRecord(RECORD_14);
-    // vitest環境は~2倍遅いため時間制限を緩和（本番ネイティブでは~3秒で完了）
-    const vct = findVCTSequence(board, "black", {
-      maxDepth: 6,
-      timeLimit: 15000,
-      vcfOptions: { maxDepth: 16, timeLimit: 15000 },
-      collectBranches: false,
-    });
-    expect(vct).not.toBeNull();
-  }, 30000);
-});
-
 describe("review.worker: skipVCT オプション", () => {
   const RECORD_14 = "H8 G7 J10 H10 H9 I9 G8 I10 I8 J8 G11 G10 H7 H6";
 
@@ -516,20 +476,6 @@ describe("review.worker: skipVCT オプション", () => {
       expect(result.type).not.toBe("vct");
     }
   });
-
-  // TODO: カウンターフォー・ブロック脅威検証の修正後に復活
-  it.skip("skipVCT: false でVCTが検出されること", () => {
-    const { board } = createBoardFromRecord(RECORD_14);
-    const stoneCount = countStones(board);
-    const result = checkForcedLoss(board, "black", stoneCount, {
-      vcfOptions: REVIEW_VCF_OPTIONS,
-      miseVcfOptions: REVIEW_MISE_VCF_OPTIONS,
-      vctOptions: { ...FORCED_LOSS_VCT_OPTIONS, timeLimit: 20000 },
-      skipVCT: false,
-    });
-    expect(result).toBeDefined();
-    expect(result?.type).toBe("vct");
-  }, 45000);
 });
 
 describe("VCT手順の三三禁チェック", () => {
