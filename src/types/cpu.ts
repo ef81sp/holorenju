@@ -319,6 +319,8 @@ export interface CpuBattleRecord {
   moves: number;
   /** 棋譜文字列（"H8 G7 I9 ..."形式、gameRecordParser互換） */
   moveHistory?: string;
+  /** 使用した珠型名 */
+  jushu?: string;
 }
 
 /**

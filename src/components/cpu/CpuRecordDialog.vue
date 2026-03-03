@@ -139,6 +139,12 @@ defineExpose({
             >
               {{ resultLabels[record.result] }}
             </span>
+            <span
+              v-if="record.jushu"
+              class="record-jushu"
+            >
+              {{ record.jushu }}
+            </span>
             <span class="record-moves">{{ record.moves }}手</span>
             <button
               v-if="record.moveHistory"
@@ -348,6 +354,14 @@ defineExpose({
 
 .result-draw {
   color: var(--color-text-secondary);
+}
+
+.record-jushu {
+  font-size: var(--size-10);
+  color: var(--color-text-secondary);
+  background: var(--color-background-tertiary);
+  padding: 0 var(--size-4);
+  border-radius: var(--size-2);
 }
 
 .record-moves {

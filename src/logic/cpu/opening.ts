@@ -20,25 +20,28 @@ export { TENGEN } from "@/constants";
  * - diagonal: 斜め（直打ち）
  * - orthogonal: 縦横（間打ち）
  */
-type SecondMoveType = "diagonal" | "orthogonal";
+export type SecondMoveType = "diagonal" | "orthogonal";
 
 /**
  * 2手目の候補位置（天元からのオフセット）
  * 8方向すべてをカバー
  */
-const SECOND_MOVE_OFFSETS: { dr: number; dc: number; type: SecondMoveType }[] =
-  [
-    // 斜め（直打ち）
-    { dr: -1, dc: -1, type: "diagonal" },
-    { dr: -1, dc: 1, type: "diagonal" },
-    { dr: 1, dc: -1, type: "diagonal" },
-    { dr: 1, dc: 1, type: "diagonal" },
-    // 縦横（間打ち）
-    { dr: -1, dc: 0, type: "orthogonal" },
-    { dr: 1, dc: 0, type: "orthogonal" },
-    { dr: 0, dc: -1, type: "orthogonal" },
-    { dr: 0, dc: 1, type: "orthogonal" },
-  ];
+export const SECOND_MOVE_OFFSETS: {
+  dr: number;
+  dc: number;
+  type: SecondMoveType;
+}[] = [
+  // 斜め（直打ち）
+  { dr: -1, dc: -1, type: "diagonal" },
+  { dr: -1, dc: 1, type: "diagonal" },
+  { dr: 1, dc: -1, type: "diagonal" },
+  { dr: 1, dc: 1, type: "diagonal" },
+  // 縦横（間打ち）
+  { dr: -1, dc: 0, type: "orthogonal" },
+  { dr: 1, dc: 0, type: "orthogonal" },
+  { dr: 0, dc: -1, type: "orthogonal" },
+  { dr: 0, dc: 1, type: "orthogonal" },
+];
 
 /**
  * 珠型パターン定義
@@ -55,7 +58,7 @@ const SECOND_MOVE_OFFSETS: { dr: number; dc: number; type: SecondMoveType }[] =
  * 白が天元の斜め（例: 8,8）に置いた場合の黒3手目候補
  * 座標は天元(0,0)を基準とした相対座標
  */
-interface JushuPattern {
+export interface JushuPattern {
   name: string;
   /** 天元からの相対座標 (dr, dc) */
   offset: { dr: number; dc: number };
@@ -65,40 +68,40 @@ interface JushuPattern {
  * 間接打ち（斜め）の珠型
  * 白が右下(+1,+1)に置いた場合を基準
  */
-const DIAGONAL_PATTERNS: JushuPattern[] = [
-  { name: "彗星", offset: { dr: -2, dc: -2 } },
-  { name: "名月", offset: { dr: -2, dc: -1 } },
-  { name: "明星", offset: { dr: -2, dc: 0 } },
-  { name: "嵐月", offset: { dr: -2, dc: 1 } },
-  { name: "流星", offset: { dr: -2, dc: 2 } },
-  { name: "斜月", offset: { dr: -1, dc: -1 } },
-  { name: "銀月", offset: { dr: -1, dc: 0 } },
+export const DIAGONAL_PATTERNS: JushuPattern[] = [
+  { name: "長星", offset: { dr: 2, dc: 2 } },
+  { name: "峡月", offset: { dr: 1, dc: 2 } },
+  { name: "恒星", offset: { dr: 0, dc: 2 } },
+  { name: "雲月", offset: { dr: 0, dc: 1 } },
   { name: "浦月", offset: { dr: -1, dc: 1 } },
   { name: "水月", offset: { dr: -1, dc: 2 } },
-  { name: "雲月", offset: { dr: 0, dc: 1 } },
-  { name: "恒星", offset: { dr: 0, dc: 2 } },
-  { name: "峡月", offset: { dr: 1, dc: 2 } },
-  { name: "長星", offset: { dr: 2, dc: 2 } },
+  { name: "斜月", offset: { dr: -1, dc: -1 } },
+  { name: "銀月", offset: { dr: -1, dc: 0 } },
+  { name: "明星", offset: { dr: -2, dc: 0 } },
+  { name: "名月", offset: { dr: -2, dc: -1 } },
+  { name: "彗星", offset: { dr: -2, dc: -2 } },
+  { name: "流星", offset: { dr: -2, dc: 2 } },
+  { name: "嵐月", offset: { dr: -2, dc: 1 } },
 ];
 
 /**
  * 直接打ち（縦横）の珠型
  * 白が下(+1,0)に置いた場合を基準
  */
-const ORTHOGONAL_PATTERNS: JushuPattern[] = [
-  { name: "瑞星", offset: { dr: -2, dc: 0 } },
-  { name: "山月", offset: { dr: -2, dc: 1 } },
-  { name: "遊星", offset: { dr: -2, dc: 2 } },
-  { name: "松月", offset: { dr: -1, dc: 0 } },
-  { name: "丘月", offset: { dr: -1, dc: 1 } },
-  { name: "新月", offset: { dr: -1, dc: 2 } },
-  { name: "雨月", offset: { dr: 0, dc: 1 } },
-  { name: "金星", offset: { dr: 0, dc: 2 } },
-  { name: "花月", offset: { dr: 1, dc: 1 } },
-  { name: "残月", offset: { dr: 1, dc: 2 } },
+export const ORTHOGONAL_PATTERNS: JushuPattern[] = [
   { name: "寒星", offset: { dr: 2, dc: 0 } },
   { name: "渓月", offset: { dr: 2, dc: 1 } },
   { name: "疎星", offset: { dr: 2, dc: 2 } },
+  { name: "花月", offset: { dr: 1, dc: 1 } },
+  { name: "残月", offset: { dr: 1, dc: 2 } },
+  { name: "雨月", offset: { dr: 0, dc: 1 } },
+  { name: "金星", offset: { dr: 0, dc: 2 } },
+  { name: "松月", offset: { dr: -1, dc: 0 } },
+  { name: "丘月", offset: { dr: -1, dc: 1 } },
+  { name: "新月", offset: { dr: -1, dc: 2 } },
+  { name: "瑞星", offset: { dr: -2, dc: 0 } },
+  { name: "山月", offset: { dr: -2, dc: 1 } },
+  { name: "遊星", offset: { dr: -2, dc: 2 } },
 ];
 
 /**
@@ -378,6 +381,76 @@ export const JUSHU_EVALUATION: Record<string, number> = {
   嵐月: -200, // 間接打ち
   長星: -200, // 間接打ち
 };
+
+/** パターン名からパターンとタイプを検索 */
+function findPattern(
+  patternName: string,
+): { pattern: JushuPattern; type: SecondMoveType } | null {
+  const diag = DIAGONAL_PATTERNS.find((p) => p.name === patternName);
+  if (diag) {
+    return { pattern: diag, type: "diagonal" };
+  }
+  const ortho = ORTHOGONAL_PATTERNS.find((p) => p.name === patternName);
+  if (ortho) {
+    return { pattern: ortho, type: "orthogonal" };
+  }
+  return null;
+}
+
+/** 斜め4方向（先頭が fixedDirection=true の基準方向: 右上） */
+const DIAGONAL_DIRECTIONS: { dr: number; dc: number }[] = [
+  { dr: -1, dc: 1 },
+  { dr: 1, dc: 1 },
+  { dr: 1, dc: -1 },
+  { dr: -1, dc: -1 },
+];
+
+/** 縦横4方向（先頭が fixedDirection=true の基準方向: 上） */
+const ORTHOGONAL_DIRECTIONS: { dr: number; dc: number }[] = [
+  { dr: -1, dc: 0 },
+  { dr: 1, dc: 0 },
+  { dr: 0, dc: 1 },
+  { dr: 0, dc: -1 },
+];
+
+/**
+ * 珠型名と方向固定フラグから3石の座標を計算
+ *
+ * @param patternName 珠型名
+ * @param fixedDirection true: 基準方向を使用（直接打ち→白が下、間接打ち→白が右下）、false: 4方向からランダム選択
+ * @returns [天元, 白2手目, 黒3手目] の座標タプル。不正な珠型名の場合はnull
+ */
+export function getJushuPositions(
+  patternName: string,
+  fixedDirection: boolean,
+): [Position, Position, Position] | null {
+  const found = findPattern(patternName);
+  if (!found) {
+    return null;
+  }
+
+  const { pattern, type } = found;
+
+  // 白の方向を決定（固定: 基準方向=配列先頭、ランダム: 4方向からランダム選択）
+  const directions =
+    type === "diagonal" ? DIAGONAL_DIRECTIONS : ORTHOGONAL_DIRECTIONS;
+
+  const selected = fixedDirection ? directions[0] : selectRandom(directions);
+  if (!selected) {
+    return null;
+  }
+
+  // 白の位置
+  const whitePos: Position = {
+    row: TENGEN.row + selected.dr,
+    col: TENGEN.col + selected.dc,
+  };
+
+  // 黒3手目の位置
+  const black3Pos = transformOffset(pattern.offset, selected, type);
+
+  return [{ ...TENGEN }, whitePos, black3Pos];
+}
 
 /**
  * 開局評価ボーナスを取得

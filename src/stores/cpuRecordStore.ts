@@ -96,6 +96,7 @@ export const useCpuRecordStore = defineStore("cpuRecord", () => {
     result: BattleResult,
     moves: number,
     moveHistory?: string,
+    jushu?: string,
   ): void {
     const record: CpuBattleRecord = {
       id: generateId(),
@@ -105,6 +106,7 @@ export const useCpuRecordStore = defineStore("cpuRecord", () => {
       result,
       moves,
       moveHistory,
+      jushu,
     };
 
     // 先頭に追加

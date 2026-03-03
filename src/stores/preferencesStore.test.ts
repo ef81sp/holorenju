@@ -541,6 +541,8 @@ describe("preferencesStore", () => {
           fastMove: false,
           lastDifficulty: "medium",
           lastPlayerFirst: true,
+          lastJushu: null,
+          lastFixedDirection: true,
         },
         debug: {
           showCpuInfo: false,
