@@ -414,7 +414,7 @@ describe("review.worker: 白の三三・四四検出", () => {
     }
   });
 
-  it("白の四四が検出できる", () => {
+  it("白の四四が検出できる（VCFが見つかればVCF優先）", () => {
     // 白が四四を作れる局面を棋譜で構築
     // 黒: A1,B1,C1,D1,E1,F1 (隅に並べて邪魔にならない)
     // 白: F8,G8,H8 (横3連, row=7) + I11,I10,I9 (縦3連, col=8)
@@ -427,9 +427,30 @@ describe("review.worker: 白の三三・四四検出", () => {
     const stoneCount = countStones(board);
     const result = checkForcedLoss(board, "white", stoneCount);
     expect(result).toBeDefined();
-    expect(result?.type).toBe("double-four");
-    // I8 = row 7, col 8
-    expect(result?.sequence[0]).toEqual({ row: 7, col: 8 });
+    // VCFが四四を含む形で検出される（VCFは四四より高優先）
+    expect(["vcf", "double-four"]).toContain(result?.type);
+    expect(result?.sequence.length).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * VCFが三三より優先されるテスト
+ *
+ * 棋譜: H8 G8 J10 G7 G9 H7 F9 F7 I7 F10 I9 H9 I10 I8 I11 E7 D7 E8 A15
+ * 19手目(A15)後、白はE6で四三→VCFが成立し、G6で三三も成立する。
+ * VCFは三三より優先されるべき。
+ */
+const VCF_PRIORITY_RECORD =
+  "H8 G8 J10 G7 G9 H7 F9 F7 I7 F10 I9 H9 I10 I8 I11 E7 D7 E8 A15";
+
+describe("review.worker: VCFが三三より優先される", () => {
+  it("19手目(A15)後に白のVCFが三三より優先される → type: vcf", () => {
+    const { board } = createBoardFromRecord(VCF_PRIORITY_RECORD);
+    const stoneCount = countStones(board);
+
+    const result = checkForcedLoss(board, "white", stoneCount);
+    expect(result).toBeDefined();
+    expect(result?.type).toBe("vcf");
   });
 });
 

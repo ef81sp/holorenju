@@ -72,14 +72,18 @@ export interface ForcedLossCheckOptions {
   skipVCT?: boolean;
 }
 
+interface WhiteWinningMoves {
+  doubleFour?: Position;
+  doubleThree?: Position;
+}
+
 /**
- * 白の三三/四四手を全空きセルからスキャンして見つける
+ * 白の四四・三三手を全空きセルから1パスでスキャンして収集する
  *
- * @returns 最初に見つかった三三/四四手の位置と種類、なければ undefined
+ * 四四と三三を別々の優先レベルで使うため、それぞれ最初の1手ずつ返す。
  */
-function findWhiteWinningMove(
-  board: BoardState,
-): { position: Position; type: "double-three" | "double-four" } | undefined {
+function findWhiteWinningMoves(board: BoardState): WhiteWinningMoves {
+  const result: WhiteWinningMoves = {};
   for (let r = 0; r < BOARD_SIZE; r++) {
     const row = board[r];
     if (!row) {
@@ -92,13 +96,20 @@ function findWhiteWinningMove(
       row[c] = "white";
       if (checkWhiteWinningPattern(board, r, c)) {
         const type = classifyWhiteWinningPattern(board, r, c);
-        row[c] = null;
-        return { position: { row: r, col: c }, type };
+        if (type === "double-four" && !result.doubleFour) {
+          result.doubleFour = { row: r, col: c };
+        } else if (type === "double-three" && !result.doubleThree) {
+          result.doubleThree = { row: r, col: c };
+        }
+        if (result.doubleFour && result.doubleThree) {
+          row[c] = null;
+          return result;
+        }
       }
       row[c] = null;
     }
   }
-  return undefined;
+  return result;
 }
 
 /**
@@ -114,20 +125,11 @@ export function checkForcedLoss(
   const miseOpts = options?.miseVcfOptions ?? REVIEW_MISE_VCF_OPTIONS;
   const vctOpts = options?.vctOptions ?? FORCED_LOSS_VCT_OPTIONS;
 
-  // 両ミセ（最速: ~5ms。見つかればVCF探索をスキップ）
-  const oppDM = findDoubleMiseMoves(boardAfter, opponentColor);
-  if (oppDM.length > 0 && oppDM[0]) {
-    return { type: "double-mise", sequence: [oppDM[0]] };
-  }
+  // 0. 白パターンの事前スキャン（高速、結果は後段で使用）
+  const whiteWins =
+    opponentColor === "white" ? findWhiteWinningMoves(boardAfter) : undefined;
 
-  // 白の三三・四四（白限定、両ミセの直後・VCFの前）
-  if (opponentColor === "white") {
-    const whiteWin = findWhiteWinningMove(boardAfter);
-    if (whiteWin) {
-      return { type: whiteWin.type, sequence: [whiteWin.position] };
-    }
-  }
-
+  // 1. VCF（最優先: 四追いで確定した手順）
   const oppVCF = findVCFSequence(boardAfter, opponentColor, vcfOpts);
   if (oppVCF) {
     return {
@@ -136,11 +138,29 @@ export function checkForcedLoss(
     };
   }
 
+  // 2. 四四（VCFが時間切れ等で見逃した場合のフォールバック）
+  if (whiteWins?.doubleFour) {
+    return { type: "double-four", sequence: [whiteWins.doubleFour] };
+  }
+
+  // 3. 両ミセ
+  const oppDM = findDoubleMiseMoves(boardAfter, opponentColor);
+  if (oppDM.length > 0 && oppDM[0]) {
+    return { type: "double-mise", sequence: [oppDM[0]] };
+  }
+
+  // 4. Mise-VCF
   const oppMise = findMiseVCFSequence(boardAfter, opponentColor, miseOpts);
   if (oppMise) {
     return { type: "mise-vcf", sequence: oppMise.sequence };
   }
 
+  // 5. 三三（VCTと同等レベル）
+  if (whiteWins?.doubleThree) {
+    return { type: "double-three", sequence: [whiteWins.doubleThree] };
+  }
+
+  // 6. VCT
   if (stoneCountAfter >= VCT_STONE_THRESHOLD && !options?.skipVCT) {
     const oppVCT = findVCTSequence(boardAfter, opponentColor, vctOpts);
     if (oppVCT) {
