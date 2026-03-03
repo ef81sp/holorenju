@@ -8,7 +8,12 @@
 
 import { ref, onUnmounted, type Ref } from "vue";
 
-import type { ReviewEvalRequest, ReviewWorkerResult } from "@/types/review";
+import type {
+  FullEvalResult,
+  LightEvalResult,
+  ReviewEvalRequest,
+  VCTCheckResult,
+} from "@/types/review";
 
 import ReviewWorker from "@/logic/cpu/review.worker?worker";
 import { isOpeningMove } from "@/logic/reviewLogic";
@@ -30,9 +35,9 @@ export interface UseReviewEvaluatorReturn {
     moveHistory: string,
     playerFirst: boolean,
     analyzeAll?: boolean,
-    onResult?: (result: ReviewWorkerResult) => void,
-    onVCTResult?: (moveIndex: number, result: ReviewWorkerResult) => void,
-  ) => Promise<ReviewWorkerResult[]>;
+    onResult?: (result: FullEvalResult | LightEvalResult) => void,
+    onVCTResult?: (moveIndex: number, result: VCTCheckResult) => void,
+  ) => Promise<(FullEvalResult | LightEvalResult)[]>;
   /** 評価をキャンセル */
   cancel: () => void;
 }
@@ -48,7 +53,9 @@ export function useReviewEvaluator(): UseReviewEvaluatorReturn {
 
   let workers: Worker[] = [];
   let cancelled = false;
-  let resolveAll: ((results: ReviewWorkerResult[]) => void) | null = null;
+  let resolveAll:
+    | ((results: (FullEvalResult | LightEvalResult)[]) => void)
+    | null = null;
 
   /**
    * Workerプールを初期化
@@ -80,9 +87,9 @@ export function useReviewEvaluator(): UseReviewEvaluatorReturn {
     moveHistory: string,
     playerFirst: boolean,
     analyzeAll?: boolean,
-    onResult?: (result: ReviewWorkerResult) => void,
-    onVCTResult?: (moveIndex: number, result: ReviewWorkerResult) => void,
-  ): Promise<ReviewWorkerResult[]> {
+    onResult?: (result: FullEvalResult | LightEvalResult) => void,
+    onVCTResult?: (moveIndex: number, result: VCTCheckResult) => void,
+  ): Promise<(FullEvalResult | LightEvalResult)[]> {
     const moves = moveHistory.trim().split(/\s+/);
 
     // 珠型(3手)以降の全手をキューに入れる
@@ -114,19 +121,21 @@ export function useReviewEvaluator(): UseReviewEvaluatorReturn {
     progress.value = 0;
 
     const pool = initPool();
-    const results: ReviewWorkerResult[] = [];
+    const results: (FullEvalResult | LightEvalResult)[] = [];
     const queue = [...allMoveItems];
 
-    const promise = new Promise<ReviewWorkerResult[]>((resolve) => {
-      resolveAll = resolve;
-    });
+    const promise = new Promise<(FullEvalResult | LightEvalResult)[]>(
+      (resolve) => {
+        resolveAll = resolve;
+      },
+    );
 
     /**
      * Phase 2: VCTチェックを逐次ディスパッチ
      */
     function dispatchVCT(
       worker: Worker,
-      items: ReviewWorkerResult[],
+      items: FullEvalResult[],
       index: number,
     ): void {
       if (cancelled || index >= items.length) {
@@ -140,7 +149,7 @@ export function useReviewEvaluator(): UseReviewEvaluatorReturn {
         dispatchVCT(worker, items, index + 1);
         return;
       }
-      worker.onmessage = (event: MessageEvent<ReviewWorkerResult>) => {
+      worker.onmessage = (event: MessageEvent<VCTCheckResult>) => {
         if (cancelled) {
           return;
         }
@@ -180,7 +189,10 @@ export function useReviewEvaluator(): UseReviewEvaluatorReturn {
         // キューが空 → 全完了チェック
         if (completedCount.value === totalCount.value) {
           // Phase 1 完了 → Phase 2 開始チェック
-          const vctItems = results.filter((r) => r.needsVCTCheck);
+          const vctItems = results.filter(
+            (r): r is FullEvalResult =>
+              r.mode === "fullEval" && Boolean(r.needsVCTCheck),
+          );
           if (vctItems.length > 0) {
             totalCount.value += vctItems.length;
             const [vctWorker] = pool;
@@ -203,7 +215,9 @@ export function useReviewEvaluator(): UseReviewEvaluatorReturn {
         isLightEval: item.isLightEval || undefined,
       };
 
-      worker.onmessage = (event: MessageEvent<ReviewWorkerResult>) => {
+      worker.onmessage = (
+        event: MessageEvent<FullEvalResult | LightEvalResult>,
+      ) => {
         if (cancelled) {
           return;
         }

@@ -1,9 +1,16 @@
 import { describe, expect, it } from "vitest";
 
-import type { EvaluatedMove } from "@/types/review";
+import type {
+  EvaluatedMove,
+  FullEvalResult,
+  LightEvalResult,
+  VCTCheckResult,
+} from "@/types/review";
 
 import {
   OPENING_MOVES,
+  applyVCTResult,
+  buildEvaluatedMove,
   buildGameReview,
   classifyMoveQuality,
   isOpeningMove,
@@ -119,5 +126,76 @@ describe("buildGameReview", () => {
     const moves = [makeMove(false, "blunder")];
     const review = buildGameReview(moves);
     expect(review.accuracy).toBe(100);
+  });
+});
+
+describe("buildEvaluatedMove: モード別", () => {
+  const moveHistory = "H8 H9 I8 G8";
+
+  it("fullEval: スコア差から品質を算出", () => {
+    const result: FullEvalResult = {
+      mode: "fullEval",
+      moveIndex: 3,
+      bestMove: { row: 7, col: 7 },
+      bestScore: 500,
+      playedScore: 500,
+      candidates: [],
+      completedDepth: 6,
+    };
+    const evaluated = buildEvaluatedMove(result, moveHistory, true);
+    expect(evaluated.quality).toBe("excellent");
+    expect(evaluated.scoreDiff).toBe(0);
+    expect(evaluated.completedDepth).toBe(6);
+    expect(evaluated.isLightEval).toBeUndefined();
+  });
+
+  it("lightEval: isLightEval=true、quality=excellent固定", () => {
+    const result: LightEvalResult = {
+      mode: "lightEval",
+      moveIndex: 3,
+      bestMove: { row: 5, col: 5 },
+      forcedWinType: "vcf",
+    };
+    const evaluated = buildEvaluatedMove(result, moveHistory, true);
+    expect(evaluated.isLightEval).toBe(true);
+    expect(evaluated.quality).toBe("excellent");
+    expect(evaluated.forcedWinType).toBe("vcf");
+    expect(evaluated.candidates).toEqual([]);
+  });
+});
+
+describe("applyVCTResult", () => {
+  const base: EvaluatedMove = {
+    moveIndex: 3,
+    position: { row: 7, col: 7 },
+    isPlayerMove: true,
+    quality: "good",
+    playedScore: 300,
+    bestScore: 400,
+    scoreDiff: 100,
+    bestMove: { row: 6, col: 6 },
+    candidates: [],
+  };
+
+  it("forcedLossType があれば既存にマージ", () => {
+    const vct: VCTCheckResult = {
+      mode: "vctCheck",
+      moveIndex: 3,
+      forcedLossType: "vct",
+      forcedLossSequence: [{ row: 5, col: 5 }],
+    };
+    const merged = applyVCTResult(base, vct);
+    expect(merged.forcedLossType).toBe("vct");
+    expect(merged.forcedLossSequence).toEqual([{ row: 5, col: 5 }]);
+    expect(merged.quality).toBe("good"); // 元の品質は維持
+  });
+
+  it("forcedLossType がなければ元のまま返す", () => {
+    const vct: VCTCheckResult = {
+      mode: "vctCheck",
+      moveIndex: 3,
+    };
+    const merged = applyVCTResult(base, vct);
+    expect(merged).toBe(base); // 同一参照
   });
 });

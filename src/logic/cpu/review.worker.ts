@@ -13,9 +13,11 @@ import type {
   ForcedLossType,
   ForcedWinBranch,
   ForcedWinType,
+  FullEvalResult,
+  LightEvalResult,
   ReviewCandidate,
   ReviewEvalRequest,
-  ReviewWorkerResult,
+  VCTCheckResult,
 } from "@/types/review";
 
 import { createBoardFromRecord } from "@/logic/gameRecordParser";
@@ -352,13 +354,9 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
         }
       }
 
-      const response: ReviewWorkerResult = {
+      const response: VCTCheckResult = {
+        mode: "vctCheck",
         moveIndex,
-        bestMove: { row: 0, col: 0 },
-        bestScore: 0,
-        playedScore: 0,
-        candidates: [],
-        completedDepth: 0,
         forcedLossType,
         forcedLossSequence,
       };
@@ -460,16 +458,12 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
 
     // 軽量評価モード（コンピュータ手用）: 強制勝ち検出のみ
     if (isLightEval) {
-      const response: ReviewWorkerResult = {
+      const response: LightEvalResult = {
+        mode: "lightEval",
         moveIndex,
         bestMove: forcedWin?.firstMove ??
           doubleMiseBestMove ?? { row: 7, col: 7 },
-        bestScore: 0,
-        playedScore: 0,
-        candidates: [],
-        completedDepth: 0,
         forcedWinType,
-        isLightEval: true,
       };
       self.postMessage(response);
       return;
@@ -794,7 +788,8 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
         }
       }
 
-      const response: ReviewWorkerResult = {
+      const response: FullEvalResult = {
+        mode: "fullEval",
         moveIndex,
         bestMove: finalBestMove,
         bestScore: finalBestScore,
@@ -884,7 +879,8 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
         }
       }
 
-      const response: ReviewWorkerResult = {
+      const response: FullEvalResult = {
+        mode: "fullEval",
         moveIndex,
         bestMove: finalBestMove,
         bestScore: finalBestScore,
@@ -902,7 +898,8 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
   } catch (error) {
     console.error("Review Worker error:", error);
     // エラー時はデフォルト結果を返す
-    const response: ReviewWorkerResult = {
+    const response: FullEvalResult = {
+      mode: "fullEval",
       moveIndex,
       bestMove: { row: 7, col: 7 },
       bestScore: 0,
@@ -914,4 +911,9 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
   }
 };
 
-export type { ReviewEvalRequest, ReviewWorkerResult };
+export type {
+  FullEvalResult,
+  LightEvalResult,
+  ReviewEvalRequest,
+  VCTCheckResult,
+};
