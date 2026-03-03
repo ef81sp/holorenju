@@ -1,0 +1,471 @@
+#!/usr/bin/env node
+/**
+ * コミット間CPU強度比較ベンチマーク CLI
+ *
+ * 2つのgit commitのCPU実装を対戦させ、強度の変化を検証する。
+ *
+ * 使用例:
+ *   pnpm commit:bench --commitA=HEAD~1 --commitB=HEAD --games=10
+ *   pnpm commit:bench --commitA=abc1234 --commitB=def5678 --sprt
+ *   pnpm commit:bench --games=200 --difficulty=medium
+ */
+
+import { execSync } from "node:child_process";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { fileURLToPath } from "node:url";
+import { Worker } from "node:worker_threads";
+
+import type { CpuDifficulty } from "../src/types/cpu.ts";
+import type { SPRTConfig, WDLCount } from "./types/ab.ts";
+import type { CommitBenchResult, CommitInfo } from "./types/commit-bench.ts";
+
+import { runCommitGame } from "./commit-game-runner.ts";
+import { estimateEloDiff, formatEloDiff } from "./lib/eloDiff.ts";
+import { DEFAULT_SPRT_CONFIG, formatSPRT, updateSPRT } from "./lib/sprt.ts";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const PROJECT_ROOT = path.resolve(__dirname, "..");
+const OUTPUT_DIR = path.join(PROJECT_ROOT, "bench-results");
+const WORKTREES_DIR = path.join(PROJECT_ROOT, ".git", "worktrees-bench");
+
+// ============================================================================
+// CLI引数パース
+// ============================================================================
+
+interface CliOptions {
+  refA: string;
+  refB: string;
+  games: number;
+  difficulty: CpuDifficulty;
+  useSPRT: boolean;
+  sprtElo0: number;
+  sprtElo1: number;
+  sprtAlpha: number;
+  sprtBeta: number;
+  verbose: boolean;
+}
+
+function parseArgs(): CliOptions {
+  const args = process.argv.slice(2);
+  const options: CliOptions = {
+    refA: "HEAD~1",
+    refB: "HEAD",
+    games: 100,
+    difficulty: "hard",
+    useSPRT: false,
+    sprtElo0: DEFAULT_SPRT_CONFIG.elo0,
+    sprtElo1: DEFAULT_SPRT_CONFIG.elo1,
+    sprtAlpha: DEFAULT_SPRT_CONFIG.alpha,
+    sprtBeta: DEFAULT_SPRT_CONFIG.beta,
+    verbose: false,
+  };
+
+  for (const arg of args) {
+    if (arg.startsWith("--commitA=")) {
+      options.refA = arg.slice("--commitA=".length);
+    } else if (arg.startsWith("--commitB=")) {
+      options.refB = arg.slice("--commitB=".length);
+    } else if (arg.startsWith("--games=")) {
+      const value = parseInt(arg.slice("--games=".length), 10);
+      if (!isNaN(value) && value > 0) {
+        options.games = value;
+      }
+    } else if (arg.startsWith("--difficulty=")) {
+      const value = arg.slice("--difficulty=".length);
+      if (["beginner", "easy", "medium", "hard"].includes(value)) {
+        options.difficulty = value as CpuDifficulty;
+      }
+    } else if (arg === "--sprt") {
+      options.useSPRT = true;
+    } else if (arg.startsWith("--elo0=")) {
+      const value = parseFloat(arg.slice("--elo0=".length));
+      if (!isNaN(value)) {
+        options.sprtElo0 = value;
+        options.useSPRT = true;
+      }
+    } else if (arg.startsWith("--elo1=")) {
+      const value = parseFloat(arg.slice("--elo1=".length));
+      if (!isNaN(value)) {
+        options.sprtElo1 = value;
+        options.useSPRT = true;
+      }
+    } else if (arg === "--verbose" || arg === "-v") {
+      options.verbose = true;
+    } else if (arg === "--help" || arg === "-h") {
+      printHelp();
+      process.exit(0);
+    }
+  }
+
+  return options;
+}
+
+function printHelp(): void {
+  console.log(`
+コミット間CPU強度比較ベンチマーク
+
+Usage:
+  pnpm commit:bench [options]
+
+Options:
+  --commitA=<sha|ref>    比較元コミット (default: HEAD~1)
+  --commitB=<sha|ref>    比較先コミット (default: HEAD)
+  --games=<n>            対局数 (default: 100)
+  --difficulty=<d>       難易度 beginner|easy|medium|hard (default: hard)
+  --sprt                 SPRT早期停止を有効化
+  --elo0=<n>             SPRT帰無仮説Elo差 (default: 0)
+  --elo1=<n>             SPRT対立仮説Elo差 (default: 30)
+  --verbose, -v          詳細ログ
+  --help, -h             ヘルプを表示
+
+Examples:
+  pnpm commit:bench --commitA=HEAD~1 --commitB=HEAD --games=10
+  pnpm commit:bench --commitA=abc1234 --commitB=def5678 --sprt --elo0=0 --elo1=30
+`);
+}
+
+// ============================================================================
+// ステータス表示
+// ============================================================================
+
+function writeStatus(message: string): void {
+  process.stdout.write(`\r${message.padEnd(100)}`);
+}
+
+function clearStatus(): void {
+  process.stdout.write(`\r${" ".repeat(100)}\r`);
+}
+
+// ============================================================================
+// Gitユーティリティ
+// ============================================================================
+
+function getCommitInfo(refOrSha: string): CommitInfo {
+  try {
+    const sha = execSync(`git rev-parse ${refOrSha}`, {
+      cwd: PROJECT_ROOT,
+      encoding: "utf-8",
+    }).trim();
+    const shortSha = sha.slice(0, 7);
+    const message = execSync(`git log --format=%s -1 ${sha}`, {
+      cwd: PROJECT_ROOT,
+      encoding: "utf-8",
+    }).trim();
+    const date = execSync(`git log --format=%ci -1 ${sha}`, {
+      cwd: PROJECT_ROOT,
+      encoding: "utf-8",
+    }).trim();
+    return { sha, shortSha, message, date };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`Error: コミット情報の取得に失敗 (${refOrSha}): ${msg}`);
+    process.exit(1);
+  }
+}
+
+function createWorktree(sha: string, label: string): string {
+  const worktreePath = path.join(WORKTREES_DIR, `${label}-${sha.slice(0, 7)}`);
+
+  // 既存のworktreeがあれば除去
+  if (fs.existsSync(worktreePath)) {
+    console.log(`Removing existing worktree at ${worktreePath}...`);
+    execSync(`git worktree remove --force "${worktreePath}"`, {
+      cwd: PROJECT_ROOT,
+    });
+  }
+
+  // worktreesディレクトリを作成
+  if (!fs.existsSync(WORKTREES_DIR)) {
+    fs.mkdirSync(WORKTREES_DIR, { recursive: true });
+  }
+
+  // worktreeを作成
+  console.log(`Creating worktree for ${label} (${sha.slice(0, 7)})...`);
+  execSync(`git worktree add "${worktreePath}" ${sha}`, {
+    cwd: PROJECT_ROOT,
+  });
+
+  // node_modulesが存在しない場合のみpnpm install
+  // --ignore-scripts: worktreeでlefthook prepare が失敗するのを回避
+  if (!fs.existsSync(path.join(worktreePath, "node_modules"))) {
+    console.log(`Installing node_modules for ${label}...`);
+    execSync("pnpm install --frozen-lockfile --ignore-scripts", {
+      cwd: worktreePath,
+      stdio: "inherit",
+    });
+  }
+
+  // register-loader.mjsが存在しない場合はコピー
+  const worktreeLoaderMjs = path.join(
+    worktreePath,
+    "scripts",
+    "register-loader.mjs",
+  );
+  if (!fs.existsSync(worktreeLoaderMjs)) {
+    const currentLoaderMjs = path.join(__dirname, "register-loader.mjs");
+    fs.copyFileSync(currentLoaderMjs, worktreeLoaderMjs);
+    console.log(`Copied register-loader.mjs to ${label} worktree`);
+  }
+
+  // loader.tsが存在しない場合はコピー
+  const worktreeLoaderTs = path.join(worktreePath, "scripts", "loader.ts");
+  if (!fs.existsSync(worktreeLoaderTs)) {
+    const currentLoaderTs = path.join(__dirname, "loader.ts");
+    fs.copyFileSync(currentLoaderTs, worktreeLoaderTs);
+    console.log(`Copied loader.ts to ${label} worktree`);
+  }
+
+  return worktreePath;
+}
+
+function removeWorktree(worktreePath: string): void {
+  if (fs.existsSync(worktreePath)) {
+    try {
+      execSync(`git worktree remove --force "${worktreePath}"`, {
+        cwd: PROJECT_ROOT,
+        stdio: "pipe",
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(`Warning: worktree removal failed: ${msg}`);
+    }
+  }
+}
+
+// ============================================================================
+// Bridge Worker管理
+// ============================================================================
+
+function createBridgeWorker(
+  worktreePath: string,
+  difficulty: string,
+): Promise<Worker> {
+  return new Promise<Worker>((resolve, reject) => {
+    const workerPath = path.join(__dirname, "cpu-bridge-worker.ts");
+
+    const worker = new Worker(workerPath, {
+      workerData: { worktreePath, difficulty },
+      execArgv: [
+        "--experimental-strip-types",
+        "--disable-warning=ExperimentalWarning",
+        "--import",
+        path.join(worktreePath, "scripts", "register-loader.mjs"),
+      ],
+    });
+
+    const initTimeout = setTimeout(() => {
+      worker.terminate();
+      reject(
+        new Error(`Bridge worker initialization timed out for ${worktreePath}`),
+      );
+    }, 60000);
+
+    const readyHandler = (msg: unknown): void => {
+      if (
+        typeof msg === "object" &&
+        msg !== null &&
+        "ready" in msg &&
+        (msg as { ready: unknown }).ready === true
+      ) {
+        clearTimeout(initTimeout);
+        worker.off("message", readyHandler);
+        resolve(worker);
+      }
+    };
+
+    worker.on("message", readyHandler);
+
+    worker.on("error", (err) => {
+      clearTimeout(initTimeout);
+      reject(err);
+    });
+  });
+}
+
+// ============================================================================
+// メイン処理
+// ============================================================================
+
+async function main(): Promise<void> {
+  const options = parseArgs();
+  const startTime = performance.now();
+
+  // コミット情報を取得
+  const commitA = getCommitInfo(options.refA);
+  const commitB = getCommitInfo(options.refB);
+
+  const sprtConfig: SPRTConfig | null = options.useSPRT
+    ? {
+        elo0: options.sprtElo0,
+        elo1: options.sprtElo1,
+        alpha: options.sprtAlpha,
+        beta: options.sprtBeta,
+      }
+    : null;
+
+  console.log(`\n=== コミット間CPU強度比較ベンチマーク ===`);
+  console.log(
+    `commitA: ${commitA.shortSha} "${commitA.message}" (${commitA.date})`,
+  );
+  console.log(
+    `commitB: ${commitB.shortSha} "${commitB.message}" (${commitB.date})`,
+  );
+  console.log(`難易度: ${options.difficulty}`);
+  console.log(`対局数: ${options.games}`);
+  if (sprtConfig) {
+    console.log(
+      `SPRT: elo0=${sprtConfig.elo0}, elo1=${sprtConfig.elo1}, ` +
+        `alpha=${sprtConfig.alpha}, beta=${sprtConfig.beta}`,
+    );
+  }
+  console.log();
+
+  let worktreePathA: string | null = null;
+  let worktreePathB: string | null = null;
+  let workerA: Worker | null = null;
+  let workerB: Worker | null = null;
+
+  // クリーンアップ関数
+  const cleanup = (): void => {
+    if (workerA) {
+      workerA.terminate();
+      workerA = null;
+    }
+    if (workerB) {
+      workerB.terminate();
+      workerB = null;
+    }
+    if (worktreePathA) {
+      removeWorktree(worktreePathA);
+      worktreePathA = null;
+    }
+    if (worktreePathB) {
+      removeWorktree(worktreePathB);
+      worktreePathB = null;
+    }
+  };
+
+  // SIGINT ハンドラー（Ctrl+C）
+  process.on("SIGINT", () => {
+    clearStatus();
+    console.log("\n中断されました。クリーンアップ中...");
+    cleanup();
+    process.exit(130);
+  });
+
+  try {
+    // worktreeを作成
+    worktreePathA = createWorktree(commitA.sha, "A");
+    worktreePathB = createWorktree(commitB.sha, "B");
+
+    // bridge workerを起動
+    console.log("Bridge workerを初期化中...");
+    [workerA, workerB] = await Promise.all([
+      createBridgeWorker(worktreePathA, options.difficulty),
+      createBridgeWorker(worktreePathB, options.difficulty),
+    ]);
+    console.log("Bridge worker初期化完了\n");
+
+    // WDL集計（commitA視点）
+    const wdl: WDLCount = { wins: 0, draws: 0, losses: 0 };
+    let completedGames = 0;
+
+    // N ゲームを逐次実行（同じworkerを使い回すため意図的な順次実行）
+    for (let i = 0; i < options.games; i++) {
+      const isABlack = i % 2 === 0;
+
+      const result = await runCommitGame(workerA, workerB, isABlack, {
+        verbose: options.verbose,
+        moveTimeoutMs: 30000,
+      });
+
+      // WDL更新（commitA = playerA 視点）
+      if (result.winner === "draw") {
+        wdl.draws++;
+      } else if (result.winner === "A") {
+        wdl.wins++;
+      } else {
+        wdl.losses++;
+      }
+
+      completedGames++;
+
+      // ステータス表示
+      const elapsed = ((performance.now() - startTime) / 1000).toFixed(0);
+      const elo = estimateEloDiff(wdl);
+      let statusMsg = `[${elapsed}s] ${completedGames}/${options.games} +${wdl.wins}=${wdl.draws}-${wdl.losses} Elo:${elo.eloDiff > 0 ? "+" : ""}${elo.eloDiff}`;
+
+      if (sprtConfig) {
+        const sprt = updateSPRT(wdl, sprtConfig);
+        statusMsg += ` LLR:${sprt.llr.toFixed(2)}`;
+        if (sprt.decision !== "continue") {
+          writeStatus(statusMsg);
+          clearStatus();
+          console.log(
+            `SPRT判定: ${sprt.decision} (${completedGames}局目で停止)`,
+          );
+          break;
+        }
+      }
+
+      writeStatus(statusMsg);
+    }
+
+    clearStatus();
+
+    const elapsedSeconds = (performance.now() - startTime) / 1000;
+
+    // 結果表示
+    console.log(`\n=== 結果 ===`);
+    console.log(`commitA: ${commitA.shortSha} "${commitA.message}"`);
+    console.log(`commitB: ${commitB.shortSha} "${commitB.message}"`);
+    console.log(`対局数: ${completedGames}`);
+    console.log(`WDL (commitA視点): +${wdl.wins} =${wdl.draws} -${wdl.losses}`);
+
+    const eloDiffResult = estimateEloDiff(wdl);
+    console.log(formatEloDiff(eloDiffResult));
+
+    let sprtState = null;
+    if (sprtConfig) {
+      sprtState = updateSPRT(wdl, sprtConfig);
+      console.log(formatSPRT(sprtState, wdl));
+    }
+
+    console.log(`所要時間: ${elapsedSeconds.toFixed(1)}秒`);
+
+    // 結果保存
+    const benchResult: CommitBenchResult = {
+      type: "commit-bench",
+      timestamp: new Date().toISOString(),
+      commitA,
+      commitB,
+      config: {
+        difficulty: options.difficulty,
+        gamesPerSide: Math.floor(options.games / 2),
+        sprt: sprtConfig,
+      },
+      totalGames: completedGames,
+      wdl,
+      eloDiff: eloDiffResult,
+      sprt: sprtState,
+      elapsedSeconds,
+    };
+
+    if (!fs.existsSync(OUTPUT_DIR)) {
+      fs.mkdirSync(OUTPUT_DIR, { recursive: true });
+    }
+    const timestamp = benchResult.timestamp.replace(/[:.]/g, "-");
+    const outputPath = path.join(OUTPUT_DIR, `commit-bench-${timestamp}.json`);
+    fs.writeFileSync(outputPath, JSON.stringify(benchResult, null, 2));
+    console.log(`\n結果を保存: ${outputPath}`);
+  } finally {
+    cleanup();
+  }
+}
+
+main().catch((err: unknown) => {
+  const message = err instanceof Error ? err.message : String(err);
+  console.error(`Error: ${message}`);
+  process.exit(1);
+});
