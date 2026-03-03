@@ -12,6 +12,7 @@ import type {
   ForcedLossResult,
   ForcedLossType,
   ForcedWinBranch,
+  ForcedWinType,
   ReviewCandidate,
   ReviewEvalRequest,
   ReviewWorkerResult,
@@ -442,13 +443,7 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
     }
 
     // forcedWinType 判定
-    let forcedWinType:
-      | "vcf"
-      | "vct"
-      | "forbidden-trap"
-      | "mise-vcf"
-      | "double-mise"
-      | undefined = undefined;
+    let forcedWinType: ForcedWinType | undefined = undefined;
     if (forcedWin?.isForbiddenTrap) {
       forcedWinType = "forbidden-trap";
     } else if (isImmediateFourThree) {

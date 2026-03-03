@@ -17,6 +17,12 @@ export type ForcedLossType =
   | "double-three"
   | "double-four";
 
+/** 強制勝ちの種類（ForcedLossType から白パターン系を除外） */
+export type ForcedWinType = Exclude<
+  ForcedLossType,
+  "double-three" | "double-four"
+>;
+
 /**
  * 強制負け検出の結果
  */
@@ -103,7 +109,7 @@ export interface EvaluatedMove {
   /** 探索が完了した深度 */
   completedDepth?: number;
   /** 必勝手順の種類 */
-  forcedWinType?: "vcf" | "vct" | "forbidden-trap" | "mise-vcf" | "double-mise";
+  forcedWinType?: ForcedWinType;
   /** 必勝手順の分岐情報 */
   forcedWinBranches?: ForcedWinBranch[];
   /** 相手の必勝手順（自分が負け確定） */
@@ -163,7 +169,7 @@ export interface ReviewWorkerResult {
   /** 探索が完了した深度 */
   completedDepth: number;
   /** 必勝手順の種類 */
-  forcedWinType?: "vcf" | "vct" | "forbidden-trap" | "mise-vcf" | "double-mise";
+  forcedWinType?: ForcedWinType;
   /** 必勝手順の分岐情報 */
   forcedWinBranches?: ForcedWinBranch[];
   /** 相手の必勝手順（自分が負け確定） */
