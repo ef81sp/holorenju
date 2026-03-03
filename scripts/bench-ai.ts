@@ -92,7 +92,7 @@ function parseArgs(): CliOptions {
     format: "json",
     verbose: false,
     parallel: false,
-    workers: Math.max(1, cpuCount - 1),
+    workers: Math.min(3, Math.max(1, cpuCount - 1)),
     self: false,
     scoreOverrides: {},
   };
@@ -127,7 +127,7 @@ function parseArgs(): CliOptions {
     } else if (arg.startsWith("--workers=")) {
       const value = parseInt(arg.slice("--workers=".length), 10);
       if (!isNaN(value) && value > 0) {
-        options.workers = value;
+        options.workers = Math.min(3, value);
         options.parallel = true;
       }
     } else if (arg === "--self" || arg === "-s") {
@@ -167,7 +167,7 @@ Options:
   --format=<fmt>     Output format (json|csv). Default: json
   --verbose, -v      Enable verbose logging
   --parallel, -p     Enable parallel execution using worker threads
-  --workers=<n>      Number of worker threads. Default: ${cpuCount - 1}
+  --workers=<n>      Number of worker threads (max 3). Default: ${Math.min(3, cpuCount - 1)}
                      (implies --parallel)
   --self, -s         Self-play only mode: each difficulty plays only against
                      itself (excludes cross-difficulty matchups)

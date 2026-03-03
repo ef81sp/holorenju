@@ -92,6 +92,57 @@ export function checkWhiteWinningPattern(
 }
 
 /**
+ * 白の三三・四四パターンを判別して種類を返す
+ *
+ * checkWhiteWinningPattern と同じロジックで fourCount をカウントし、
+ * 四四か三三かを判別する。checkWhiteWinningPattern が true の場合のみ呼ぶ。
+ *
+ * @param board 盤面（石を置いた状態）
+ * @param row 石を置いた行
+ * @param col 石を置いた列
+ * @returns "double-four"（四四）または "double-three"（三三）
+ */
+export function classifyWhiteWinningPattern(
+  board: BoardState,
+  row: number,
+  col: number,
+): "double-three" | "double-four" {
+  let fourCount = 0;
+
+  for (let i = 0; i < DIRECTION_INDICES.length; i++) {
+    const dirIndex = DIRECTION_INDICES[i];
+    if (dirIndex === undefined) {
+      continue;
+    }
+
+    const direction = DIRECTIONS[i];
+    if (!direction) {
+      continue;
+    }
+    const [dr, dc] = direction;
+    const pattern = analyzeDirection(board, row, col, dr, dc, "white");
+
+    // 四カウント（活四・止め四両方）
+    if (
+      pattern.count === 4 &&
+      (pattern.end1 === "empty" || pattern.end2 === "empty")
+    ) {
+      fourCount++;
+    }
+
+    // 跳び四をチェック（連続四がない場合のみ）
+    if (
+      pattern.count !== 4 &&
+      checkJumpFour(board, row, col, dirIndex, "white")
+    ) {
+      fourCount++;
+    }
+  }
+
+  return fourCount >= 2 ? "double-four" : "double-three";
+}
+
+/**
  * 指定位置に石を置くと三三ができるかチェック
  * checkWhiteWinningPattern の三三判定ロジックを抽出した軽量版（四四チェック省略）
  *

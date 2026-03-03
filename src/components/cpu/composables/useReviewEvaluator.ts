@@ -2,6 +2,8 @@
  * 振り返り評価Composable
  *
  * Workerプールによる並列評価を管理
+ * Phase 1: 全ワーカーで並列評価（VCTスキップ）
+ * Phase 2: 単一ワーカーでVCTチェックを逐次実行
  */
 
 import { ref, onUnmounted, type Ref } from "vue";
@@ -29,6 +31,7 @@ export interface UseReviewEvaluatorReturn {
     playerFirst: boolean,
     analyzeAll?: boolean,
     onResult?: (result: ReviewWorkerResult) => void,
+    onVCTResult?: (moveIndex: number, result: ReviewWorkerResult) => void,
   ) => Promise<ReviewWorkerResult[]>;
   /** 評価をキャンセル */
   cancel: () => void;
@@ -78,6 +81,7 @@ export function useReviewEvaluator(): UseReviewEvaluatorReturn {
     playerFirst: boolean,
     analyzeAll?: boolean,
     onResult?: (result: ReviewWorkerResult) => void,
+    onVCTResult?: (moveIndex: number, result: ReviewWorkerResult) => void,
   ): Promise<ReviewWorkerResult[]> {
     const moves = moveHistory.trim().split(/\s+/);
 
@@ -118,6 +122,52 @@ export function useReviewEvaluator(): UseReviewEvaluatorReturn {
     });
 
     /**
+     * Phase 2: VCTチェックを逐次ディスパッチ
+     */
+    function dispatchVCT(
+      worker: Worker,
+      items: ReviewWorkerResult[],
+      index: number,
+    ): void {
+      if (cancelled || index >= items.length) {
+        isEvaluating.value = false;
+        resolveAll?.(results.sort((a, b) => a.moveIndex - b.moveIndex));
+        return;
+      }
+
+      const item = items[index];
+      if (!item) {
+        dispatchVCT(worker, items, index + 1);
+        return;
+      }
+      worker.onmessage = (event: MessageEvent<ReviewWorkerResult>) => {
+        if (cancelled) {
+          return;
+        }
+        if (event.data.forcedLossType) {
+          onVCTResult?.(item.moveIndex, event.data);
+        }
+        completedCount.value++;
+        progress.value = completedCount.value / totalCount.value;
+        dispatchVCT(worker, items, index + 1);
+      };
+
+      worker.onerror = () => {
+        completedCount.value++;
+        progress.value = completedCount.value / totalCount.value;
+        dispatchVCT(worker, items, index + 1);
+      };
+
+      const request: ReviewEvalRequest = {
+        moveHistory,
+        moveIndex: item.moveIndex,
+        playerFirst,
+        vctCheckOnly: true,
+      };
+      worker.postMessage(request);
+    }
+
+    /**
      * 空きWorkerに次のタスクをディスパッチ
      */
     function dispatch(worker: Worker): void {
@@ -129,9 +179,19 @@ export function useReviewEvaluator(): UseReviewEvaluatorReturn {
       if (item === undefined) {
         // キューが空 → 全完了チェック
         if (completedCount.value === totalCount.value) {
-          isEvaluating.value = false;
-          const sorted = results.sort((a, b) => a.moveIndex - b.moveIndex);
-          resolveAll?.(sorted);
+          // Phase 1 完了 → Phase 2 開始チェック
+          const vctItems = results.filter((r) => r.needsVCTCheck);
+          if (vctItems.length > 0) {
+            totalCount.value += vctItems.length;
+            const [vctWorker] = pool;
+            if (vctWorker) {
+              dispatchVCT(vctWorker, vctItems, 0);
+            }
+          } else {
+            isEvaluating.value = false;
+            const sorted = results.sort((a, b) => a.moveIndex - b.moveIndex);
+            resolveAll?.(sorted);
+          }
         }
         return;
       }

@@ -20,11 +20,11 @@ pnpm bench:cpu --verbose
 # CSV形式で出力
 pnpm bench:cpu --format=csv
 
-# 並列実行（CPUコア数-1のワーカーを使用）
+# 並列実行（最大3ワーカー）
 pnpm bench:cpu --parallel
 
-# ワーカー数を指定して並列実行
-pnpm bench:cpu --parallel --workers=4
+# ワーカー数を指定して並列実行（最大3）
+pnpm bench:cpu --parallel --workers=2
 
 # 組み合わせ例
 pnpm bench:cpu --players=easy,medium,hard --games=20 --parallel
@@ -32,15 +32,15 @@ pnpm bench:cpu --players=easy,medium,hard --games=20 --parallel
 
 ### CLI オプション
 
-| オプション         | 説明                           | デフォルト      |
-| ------------------ | ------------------------------ | --------------- |
-| `--players=<list>` | 対戦する難易度（カンマ区切り） | 全難易度        |
-| `--games=<n>`      | 各組み合わせの対局数           | 50              |
-| `--output=<dir>`   | 結果出力ディレクトリ           | `bench-results` |
-| `--format=<fmt>`   | 出力形式（json/csv）           | json            |
-| `--verbose`, `-v`  | 詳細ログ出力                   | false           |
-| `--parallel`, `-p` | 並列実行（worker_threads）     | false           |
-| `--workers=<n>`    | ワーカー数（--parallel 暗黙）  | CPUコア数-1     |
+| オプション         | 説明                                 | デフォルト          |
+| ------------------ | ------------------------------------ | ------------------- |
+| `--players=<list>` | 対戦する難易度（カンマ区切り）       | 全難易度            |
+| `--games=<n>`      | 各組み合わせの対局数                 | 50                  |
+| `--output=<dir>`   | 結果出力ディレクトリ                 | `bench-results`     |
+| `--format=<fmt>`   | 出力形式（json/csv）                 | json                |
+| `--verbose`, `-v`  | 詳細ログ出力                         | false               |
+| `--parallel`, `-p` | 並列実行（worker_threads）           | false               |
+| `--workers=<n>`    | ワーカー数（--parallel 暗黙、最大3） | min(3, CPUコア数-1) |
 
 ### 出力例
 

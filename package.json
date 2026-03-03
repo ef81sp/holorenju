@@ -28,7 +28,8 @@
     "tune:params": "node --experimental-strip-types --disable-warning=ExperimentalWarning --import ./scripts/register-loader.mjs scripts/tune-params.ts",
     "analyze:position": "node --experimental-strip-types --disable-warning=ExperimentalWarning --import ./scripts/register-loader.mjs scripts/analyze-position.ts",
     "analyze:deep": "node --experimental-strip-types --disable-warning=ExperimentalWarning --import ./scripts/register-loader.mjs scripts/analyze-bench-deep.ts",
-    "debug:vcf": "node --experimental-strip-types --disable-warning=ExperimentalWarning --import ./scripts/register-loader.mjs scripts/debug-vcf-false-positive.ts"
+    "debug:vcf": "node --experimental-strip-types --disable-warning=ExperimentalWarning --import ./scripts/register-loader.mjs scripts/debug-vcf-false-positive.ts",
+    "commit:bench": "node --experimental-strip-types --disable-warning=ExperimentalWarning --import ./scripts/register-loader.mjs scripts/commit-bench.ts"
   },
   "dependencies": {
     "@vueuse/core": "^14.1.0",

@@ -48,7 +48,7 @@ function parseArgs(): CliOptions {
     run: false,
     games: 20,
     parallel: false,
-    workers: Math.max(1, cpuCount - 1),
+    workers: Math.min(3, Math.max(1, cpuCount - 1)),
     verbose: false,
   };
 
@@ -67,7 +67,7 @@ function parseArgs(): CliOptions {
     } else if (arg.startsWith("--workers=")) {
       const value = parseInt(arg.slice("--workers=".length), 10);
       if (!isNaN(value) && value > 0) {
-        options.workers = value;
+        options.workers = Math.min(3, value);
         options.parallel = true;
       }
     } else if (arg === "--verbose" || arg === "-v") {
@@ -93,7 +93,7 @@ Options:
   --run              hard同士の対局を実行してから分析
   --games=<n>        --run時の対局数 (default: 20)
   --parallel, -p     --run時に並列実行
-  --workers=<n>      並列ワーカー数 (implies --parallel)
+  --workers=<n>      並列ワーカー数 (max 3, implies --parallel)
   --verbose, -v      詳細ログ
   --help, -h         ヘルプを表示
 

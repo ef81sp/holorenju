@@ -6,6 +6,26 @@ import type { CpuBattleRecord, LeafEvaluation, ScoreBreakdown } from "./cpu";
 import type { Position } from "./game";
 
 /**
+ * 強制負けの種類（VCF/VCT/禁手トラップ/ミセ四追い/両ミセ/三三/四四）
+ */
+export type ForcedLossType =
+  | "vcf"
+  | "vct"
+  | "forbidden-trap"
+  | "mise-vcf"
+  | "double-mise"
+  | "double-three"
+  | "double-four";
+
+/**
+ * 強制負け検出の結果
+ */
+export interface ForcedLossResult {
+  type: ForcedLossType;
+  sequence: Position[];
+}
+
+/**
  * プレイヤー視点の手番
  */
 export type PlayerSide = "black" | "white" | "both";
@@ -44,6 +64,8 @@ export interface ReviewCandidate {
   principalVariation?: Position[];
   /** 探索末端の評価内訳 */
   leafEvaluation?: LeafEvaluation;
+  /** この手を打つと相手に強制勝ちを許す場合のタイプ */
+  opponentForcedWin?: ForcedLossType;
 }
 
 /**
@@ -85,12 +107,7 @@ export interface EvaluatedMove {
   /** 必勝手順の分岐情報 */
   forcedWinBranches?: ForcedWinBranch[];
   /** 相手の必勝手順（自分が負け確定） */
-  forcedLossType?:
-    | "vcf"
-    | "vct"
-    | "forbidden-trap"
-    | "mise-vcf"
-    | "double-mise";
+  forcedLossType?: ForcedLossType;
   /** 相手の必勝手順のシーケンス */
   forcedLossSequence?: Position[];
   /** 軽量評価（minimax省略、強制勝ち検出のみ） */
@@ -125,6 +142,8 @@ export interface ReviewEvalRequest {
   playerFirst: boolean;
   /** 軽量評価モード（コンピュータ手用） */
   isLightEval?: boolean;
+  /** Phase 2: VCTチェックのみ実行 */
+  vctCheckOnly?: boolean;
 }
 
 /**
@@ -148,12 +167,7 @@ export interface ReviewWorkerResult {
   /** 必勝手順の分岐情報 */
   forcedWinBranches?: ForcedWinBranch[];
   /** 相手の必勝手順（自分が負け確定） */
-  forcedLossType?:
-    | "vcf"
-    | "vct"
-    | "forbidden-trap"
-    | "mise-vcf"
-    | "double-mise";
+  forcedLossType?: ForcedLossType;
   /** 相手の必勝手順のシーケンス */
   forcedLossSequence?: Position[];
   /** 軽量評価（minimax省略、強制勝ち検出のみ） */
@@ -162,4 +176,6 @@ export interface ReviewWorkerResult {
   missedDoubleMise?: Position[];
   /** 両ミセのターゲット位置（四三を作る位置） */
   doubleMiseTargets?: Position[];
+  /** Phase 1でVCTをスキップし、Phase 2でのVCTチェックが必要 */
+  needsVCTCheck?: boolean;
 }

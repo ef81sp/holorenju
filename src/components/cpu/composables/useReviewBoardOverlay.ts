@@ -142,18 +142,19 @@ export function useReviewBoardOverlay(): UseReviewBoardOverlayReturn {
     // PVホバー石の番号ラベル（手数ベース）
     const previewStones = pvPreviewStones.value;
     if (previewStones.length > 0) {
-      for (let i = 0; i < previewStones.length; i++) {
-        const stone = previewStones[i];
+      let moveNum = reviewStore.currentMoveIndex;
+      for (const stone of previewStones) {
         if (!stone) {
           continue;
         }
         const key = `${stone.position.row},${stone.position.col}`;
         if (!labels.has(key)) {
           labels.set(key, {
-            text: String(reviewStore.currentMoveIndex + i),
+            text: String(moveNum),
             color: stone.color === "black" ? "#ffffff" : "#000000",
           });
         }
+        moveNum++;
       }
     }
 

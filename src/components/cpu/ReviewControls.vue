@@ -84,6 +84,10 @@ function getForcedLossLabel(
       return "被禁手追い込み";
     case "mise-vcf":
       return "被ミセ四追い";
+    case "double-three":
+      return "被三三";
+    case "double-four":
+      return "被四四";
     default:
       return undefined;
   }
