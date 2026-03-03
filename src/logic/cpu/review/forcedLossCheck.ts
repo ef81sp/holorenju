@@ -11,10 +11,7 @@ import { BOARD_SIZE } from "@/constants/board";
 
 import { detectOpponentThreats } from "../evaluation";
 import { findDoubleMiseMoves } from "../evaluation/tactics";
-import {
-  checkWhiteWinningPattern,
-  classifyWhiteWinningPattern,
-} from "../evaluation/winningPatterns";
+import { detectWhiteWinningPattern } from "../evaluation/winningPatterns";
 import {
   findMiseVCFSequence,
   type MiseVCFSearchOptions,
@@ -94,17 +91,15 @@ function findWhiteWinningMoves(board: BoardState): WhiteWinningMoves {
         continue;
       }
       row[c] = "white";
-      if (checkWhiteWinningPattern(board, r, c)) {
-        const type = classifyWhiteWinningPattern(board, r, c);
-        if (type === "double-four" && !result.doubleFour) {
-          result.doubleFour = { row: r, col: c };
-        } else if (type === "double-three" && !result.doubleThree) {
-          result.doubleThree = { row: r, col: c };
-        }
-        if (result.doubleFour && result.doubleThree) {
-          row[c] = null;
-          return result;
-        }
+      const type = detectWhiteWinningPattern(board, r, c);
+      if (type === "double-four" && !result.doubleFour) {
+        result.doubleFour = { row: r, col: c };
+      } else if (type === "double-three" && !result.doubleThree) {
+        result.doubleThree = { row: r, col: c };
+      }
+      if (result.doubleFour && result.doubleThree) {
+        row[c] = null;
+        return result;
       }
       row[c] = null;
     }

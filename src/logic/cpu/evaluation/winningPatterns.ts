@@ -92,21 +92,22 @@ export function checkWhiteWinningPattern(
 }
 
 /**
- * 白の三三・四四パターンを判別して種類を返す
+ * 白の三三・四四パターンを1パスで検出・分類する
  *
- * checkWhiteWinningPattern と同じロジックで fourCount をカウントし、
- * 四四か三三かを判別する。checkWhiteWinningPattern が true の場合のみ呼ぶ。
+ * checkWhiteWinningPattern + classifyWhiteWinningPattern を統合し、
+ * 同じ8方向を2回走査する冗長性を解消。
  *
  * @param board 盤面（石を置いた状態）
  * @param row 石を置いた行
  * @param col 石を置いた列
- * @returns "double-four"（四四）または "double-three"（三三）
+ * @returns "double-four"（四四）、"double-three"（三三）、該当なしなら null
  */
-export function classifyWhiteWinningPattern(
+export function detectWhiteWinningPattern(
   board: BoardState,
   row: number,
   col: number,
-): "double-three" | "double-four" {
+): "double-three" | "double-four" | null {
+  let openThreeCount = 0;
   let fourCount = 0;
 
   for (let i = 0; i < DIRECTION_INDICES.length; i++) {
@@ -122,12 +123,29 @@ export function classifyWhiteWinningPattern(
     const [dr, dc] = direction;
     const pattern = analyzeDirection(board, row, col, dr, dc, "white");
 
+    // 活三カウント
+    if (
+      pattern.count === 3 &&
+      pattern.end1 === "empty" &&
+      pattern.end2 === "empty"
+    ) {
+      openThreeCount++;
+    }
+
     // 四カウント（活四・止め四両方）
     if (
       pattern.count === 4 &&
       (pattern.end1 === "empty" || pattern.end2 === "empty")
     ) {
       fourCount++;
+    }
+
+    // 跳び三をチェック（連続三がない場合のみ）
+    if (
+      pattern.count !== 3 &&
+      checkJumpThree(board, row, col, dirIndex, "white")
+    ) {
+      openThreeCount++;
     }
 
     // 跳び四をチェック（連続四がない場合のみ）
@@ -139,7 +157,13 @@ export function classifyWhiteWinningPattern(
     }
   }
 
-  return fourCount >= 2 ? "double-four" : "double-three";
+  if (fourCount >= 2) {
+    return "double-four";
+  }
+  if (openThreeCount >= 2) {
+    return "double-three";
+  }
+  return null;
 }
 
 /**
