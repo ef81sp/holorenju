@@ -10,6 +10,7 @@ import { createBoardFromRecord } from "@/logic/gameRecordParser";
 import { checkForbiddenMove, createEmptyBoard } from "@/logic/renjuRules";
 
 import { findMiseVCFMove, findMiseVCFSequence } from "./miseVcf";
+import { hasFourThreeAvailable } from "./vctHelpers";
 
 // 並行テスト実行時のCPU負荷で内部タイムアウトが早期発動するのを防ぐ
 const GENEROUS_TIME_LIMIT = { timeLimit: 5000 };
@@ -162,6 +163,26 @@ describe("相手に活三がある場合のMise-VCFスキップ", () => {
 
     const result = findMiseVCFSequence(board, "black", GENEROUS_TIME_LIMIT);
     expect(result).not.toBeNull();
+  });
+});
+
+describe("相手に四三がある場合のMise-VCFスキップ", () => {
+  it("前提確認: 白がE6で四三を作れる", () => {
+    const { board } = createBoardFromRecord(
+      "H8 G8 J10 G7 G9 H7 F9 F7 I7 F10 I9 H9 I10 I8 I11 E7 D7 E8",
+    );
+    expect(hasFourThreeAvailable(board, "white")).toBe(true);
+  });
+
+  it("相手に四三(ミセ手)がある場合、Mise-VCFを検出しない", () => {
+    // 18手目まで: 白がE6で四三を作れる
+    // (対角線E6-F7-G8-H9=四, 縦E6-E7-E8=三)
+    const { board } = createBoardFromRecord(
+      "H8 G8 J10 G7 G9 H7 F9 F7 I7 F10 I9 H9 I10 I8 I11 E7 D7 E8",
+    );
+
+    const result = findMiseVCFSequence(board, "black", GENEROUS_TIME_LIMIT);
+    expect(result).toBeNull();
   });
 });
 
