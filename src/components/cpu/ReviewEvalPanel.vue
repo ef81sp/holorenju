@@ -13,6 +13,7 @@ import type {
   ReviewCandidate,
 } from "@/types/review";
 import type { Position } from "@/types/game";
+import { CPU_WIN_LABELS, SHORT_LABELS } from "@/logic/forcedTypeLabels";
 import { formatMove } from "@/logic/gameRecordParser";
 import { getQualityLabel, getQualityColor } from "@/logic/reviewLogic";
 import ReviewEvalHelpDialog from "./ReviewEvalHelpDialog.vue";
@@ -92,44 +93,22 @@ const qualityLabel = computed(() => {
 
 /** 必勝手順インジケーターのテキスト（プレイヤー手用） */
 const forcedWinLabel = computed(() => {
-  // 両ミセ見逃し時は missedDoubleMiseLabel に委譲（重複バッジを防止）
-  const missed = props.evaluation?.missedDoubleMise;
-  switch (props.evaluation?.forcedWinType) {
-    case "double-mise":
-      return missed && missed.length > 0 ? null : "両ミセ";
-    case "vcf":
-      return "四追";
-    case "vct":
-      return "追詰";
-    case "forbidden-trap":
-      return "禁手追込";
-    case "mise-vcf":
-      return "ミセ四追";
-    default:
-      return null;
+  const type = props.evaluation?.forcedWinType;
+  if (!type) {
+    return null;
   }
+  // 両ミセ見逃し時は missedDoubleMiseLabel に委譲（重複バッジを防止）
+  if (type === "double-mise") {
+    const missed = props.evaluation?.missedDoubleMise;
+    return missed && missed.length > 0 ? null : SHORT_LABELS[type];
+  }
+  return SHORT_LABELS[type];
 });
 
 /** 負け確定インジケーターのテキスト */
 const forcedLossLabel = computed(() => {
-  switch (props.evaluation?.forcedLossType) {
-    case "double-mise":
-      return "被両ミセ";
-    case "vcf":
-      return "被四追";
-    case "vct":
-      return "被追詰";
-    case "forbidden-trap":
-      return "被禁手追込";
-    case "mise-vcf":
-      return "被ミセ四追";
-    case "double-three":
-      return "被三三";
-    case "double-four":
-      return "被四四";
-    default:
-      return null;
-  }
+  const type = props.evaluation?.forcedLossType;
+  return type ? `被${SHORT_LABELS[type]}` : null;
 });
 
 /** 両ミセ見逃しラベル */
@@ -143,20 +122,8 @@ const missedDoubleMiseLabel = computed(() => {
 
 /** コンピュータ手の強制勝ちラベル（「〜中」） */
 const cpuForcedWinLabel = computed(() => {
-  switch (props.evaluation?.forcedWinType) {
-    case "double-mise":
-      return "両ミセ中";
-    case "vcf":
-      return "四追い中";
-    case "vct":
-      return "追詰中";
-    case "forbidden-trap":
-      return "禁手追込中";
-    case "mise-vcf":
-      return "ミセ四追中";
-    default:
-      return null;
-  }
+  const type = props.evaluation?.forcedWinType;
+  return type ? CPU_WIN_LABELS[type] : null;
 });
 
 /** ヘッダの座標表示 */
@@ -586,24 +553,7 @@ function isPvPinned(line: "best" | "played", index: number): boolean {
 }
 
 function candidateForcedLossLabel(type: string): string {
-  switch (type) {
-    case "double-mise":
-      return "両ミセ";
-    case "vcf":
-      return "四追";
-    case "vct":
-      return "追詰";
-    case "forbidden-trap":
-      return "禁手追込";
-    case "mise-vcf":
-      return "ミセ四追";
-    case "double-three":
-      return "三三";
-    case "double-four":
-      return "四四";
-    default:
-      return "必勝";
-  }
+  return SHORT_LABELS[type as keyof typeof SHORT_LABELS] ?? "必勝";
 }
 
 function isPlayed(candidate: { position: Position }): boolean {

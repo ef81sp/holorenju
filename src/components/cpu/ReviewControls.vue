@@ -8,6 +8,7 @@
 import { computed } from "vue";
 
 import type { EvaluatedMove } from "@/types/review";
+import { FULL_LABELS } from "@/logic/forcedTypeLabels";
 import { getQualityColor, getQualityLabel } from "@/logic/reviewLogic";
 
 interface Props {
@@ -53,44 +54,14 @@ function getUnderlineCount(
 function getForcedWinLabel(
   type: EvaluatedMove["forcedWinType"],
 ): string | undefined {
-  switch (type) {
-    case "double-mise":
-      return "両ミセ";
-    case "vcf":
-      return "四追い";
-    case "vct":
-      return "追い詰め";
-    case "forbidden-trap":
-      return "禁手追い込み";
-    case "mise-vcf":
-      return "ミセ四追い";
-    default:
-      return undefined;
-  }
+  return type ? FULL_LABELS[type] : undefined;
 }
 
 /** 負け確定の種別ラベル */
 function getForcedLossLabel(
   type: EvaluatedMove["forcedLossType"],
 ): string | undefined {
-  switch (type) {
-    case "double-mise":
-      return "被両ミセ";
-    case "vcf":
-      return "被四追い";
-    case "vct":
-      return "被追い詰め";
-    case "forbidden-trap":
-      return "被禁手追い込み";
-    case "mise-vcf":
-      return "被ミセ四追い";
-    case "double-three":
-      return "被三三";
-    case "double-four":
-      return "被四四";
-    default:
-      return undefined;
-  }
+  return type ? `被${FULL_LABELS[type]}` : undefined;
 }
 
 /** 各手の品質ドット表示データ */
