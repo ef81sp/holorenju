@@ -83,4 +83,42 @@ PW[:OyajiBot (1463)]
   it("重複する手はスキップする", () => {
     expect(convertSgfToRecord("(;B[hh];W[hh];B[ii])")).toBe("H8 I7");
   });
+
+  describe("SFG形式（珠型局）", () => {
+    it("QPR+QSLW+B/Wの完全なSFGから開局手を含めて抽出する", () => {
+      // 33手のB/W（うちW[jf]はQPRと重複）→ 開局4 + 本譜32 = 36手
+      const sgf = `(;GM[4]FF[4]SZ[15]GN[gomokuquest]RE[B+]
+PB[player1 (1800)]PW[player2 (1750)]
+;QPR[hh,hg,jf];QSLW[ig];B[gg];W[ii];B[ih];W[jg];B[gi];W[jf];B[hi];W[kh];B[gf];W[fh];B[fg];W[hf];B[ge];W[gd];B[he];W[ie];B[hd];W[id];B[if];W[jd];B[ic];W[jc];B[hc];W[ib];B[jb];W[kb];B[je];W[ke];B[kd];W[kf];B[kc];W[lc];B[ja])`;
+      const result = convertSgfToRecord(sgf);
+      const moves = result?.split(" ") ?? [];
+      expect(moves).toHaveLength(36);
+      // 開局4手が先頭にある
+      expect(moves[0]).toBe("H8"); // QPR[0] 黒1
+      expect(moves[1]).toBe("H9"); // QPR[1] 白2
+      expect(moves[2]).toBe("J10"); // QPR[2] 黒3
+      expect(moves[3]).toBe("I9"); // QSLW 白4
+      // 5手目以降はB/W
+      expect(moves[4]).toBe("G9"); // B[gg]
+    });
+
+    it("QPRのみ（QSLWなし）で開局3手+B/Wを抽出する", () => {
+      const sgf = `(;GM[4]SZ[15];QPR[hh,hg,jf];B[ig];W[gg])`;
+      const result = convertSgfToRecord(sgf);
+      expect(result).toBe("H8 H9 J10 I9 G9");
+    });
+
+    it("QPRとB/Wで座標が重複する場合はスキップする", () => {
+      const sgf = `(;GM[4]SZ[15];QPR[hh,hg,jf];QSLW[ig];B[hh];W[gg])`;
+      const result = convertSgfToRecord(sgf);
+      // B[hh]はQPRのH8と重複するのでスキップ
+      expect(result).toBe("H8 H9 J10 I9 G9");
+    });
+
+    it("QSLWのみ（QPRなし）で1手が先頭に追加される", () => {
+      const sgf = `(;GM[4]SZ[15];QSLW[ig];B[hh];W[gg])`;
+      const result = convertSgfToRecord(sgf);
+      expect(result).toBe("I9 H8 G9");
+    });
+  });
 });

@@ -34,6 +34,24 @@ export function parseSgfCoord(coord: string): Position {
   return { row, col };
 }
 
+/** QPR[coord,coord,...] から開局石を抽出 */
+function extractQprMoves(input: string): Position[] {
+  const match = /QPR\[([a-o,]+)\]/.exec(input);
+  if (!match?.[1]) {
+    return [];
+  }
+  return match[1]
+    .split(",")
+    .filter((c) => c.length === 2)
+    .map(parseSgfCoord);
+}
+
+/** QSLW[coord] から白の選択手を抽出 */
+function extractQslwMove(input: string): Position | null {
+  const match = /QSLW\[([a-o]{2})\]/.exec(input);
+  return match?.[1] ? parseSgfCoord(match[1]) : null;
+}
+
 /**
  * SGF文字列から手を抽出してネイティブ棋譜文字列に変換する
  *
@@ -43,14 +61,26 @@ export function convertSgfToRecord(input: string): string | null {
   const moves: string[] = [];
   const seen = new Set<number>();
 
-  for (const match of input.matchAll(SGF_MOVE_PATTERN)) {
-    const pos = parseSgfCoord(match[1] ?? "");
+  function addMove(pos: Position): void {
     const key = pos.row * BOARD_SIZE + pos.col;
-    if (seen.has(key)) {
-      continue;
+    if (!seen.has(key)) {
+      seen.add(key);
+      moves.push(formatMove(pos));
     }
-    seen.add(key);
-    moves.push(formatMove(pos));
+  }
+
+  // 開局手（QPR → QSLW → B/W の順）
+  for (const pos of extractQprMoves(input)) {
+    addMove(pos);
+  }
+  const qslw = extractQslwMove(input);
+  if (qslw) {
+    addMove(qslw);
+  }
+
+  // 通常手
+  for (const match of input.matchAll(SGF_MOVE_PATTERN)) {
+    addMove(parseSgfCoord(match[1] ?? ""));
   }
 
   return moves.length > 0 ? moves.join(" ") : null;
