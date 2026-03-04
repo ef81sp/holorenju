@@ -80,6 +80,15 @@ describe("detectForcedWin: 活三がある場合の両ミセ無効化", () => {
     expect(result.forcedWinType).not.toBe("double-mise");
     expect(result.doubleMiseMoves).toEqual([]);
   });
+
+  it("相手にミセ手がある局面では両ミセを検出しない", () => {
+    // 18手後: 黒番。J5で構造的に両ミセだが白にF9でミセ手（四三）あり
+    // → 白は両ミセ防御を無視して四三を打てるため両ミセ不成立
+    const record = "H8 H7 I8 G8 I6 G9 G7 G6 J7 K8 I7 I9 K6 H9 J9 F7 E6 F8";
+    const result = detect(record);
+    expect(result.forcedWinType).not.toBe("double-mise");
+    expect(result.doubleMiseMoves).toEqual([]);
+  });
 });
 
 describe("detectForcedWin: 返り値の型安全性", () => {

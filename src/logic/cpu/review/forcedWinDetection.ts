@@ -14,7 +14,7 @@ import { findMiseVCFSequence } from "../search/miseVcf";
 import { findVCFSequence } from "../search/vcf";
 import { findVCTSequence, VCT_STONE_THRESHOLD } from "../search/vct";
 import {
-  filterDoubleMiseByOpenThree,
+  filterDoubleMiseByCounterThreats,
   REVIEW_MISE_VCF_OPTIONS,
   REVIEW_VCF_OPTIONS,
 } from "./forcedLossCheck";
@@ -46,11 +46,11 @@ export function detectForcedWin(
   isLightEval: boolean,
 ): ForcedWinDetectionResult {
   // 両ミセ検出（VCF探索より前に1回だけ呼ぶ、~5ms）
-  // 相手に活三がある場合、両ミセ手で活三も潰していなければ不成立
-  // （相手は四三防御を無視して棒四を打てるため）
+  // 相手に活三やミセ手がある場合、両ミセ手で脅威も潰していなければ不成立
+  // （相手は四三防御を無視して棒四や四三を打てるため）
   const doubleMiseMoves =
     !isLightEval && !opponentHasFour
-      ? filterDoubleMiseByOpenThree(
+      ? filterDoubleMiseByCounterThreats(
           board,
           color,
           findDoubleMiseMoves(board, color),
