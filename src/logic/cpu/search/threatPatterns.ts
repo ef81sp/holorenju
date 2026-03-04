@@ -17,10 +17,15 @@ import {
 } from "@/logic/renjuRules";
 
 import { DIRECTION_INDICES, DIRECTIONS } from "../core/constants";
-import { checkEnds, countLine, getLineEnds } from "../core/lineAnalysis";
+import {
+  checkEnds,
+  checkEndsForFour,
+  countLine,
+  getLineEnds,
+} from "../core/lineAnalysis";
 import { isNearExistingStone } from "../moveGenerator";
 import { findJumpGapPosition } from "../patterns/threatAnalysis";
-import { createsFour } from "./threatMoves";
+import { createsFour, isJumpFourOverline } from "./threatMoves";
 
 /**
  * 即勝ち手を探す（五連を完成できる位置）
@@ -248,9 +253,9 @@ export function checkDefenseCounterThreat(
     const [dr, dc] = direction;
     const count = countLine(board, row, col, dr, dc, opponentColor);
 
-    // 連続四 → 即リターン
+    // 連続四 → 即リターン（黒は長連チェック付き）
     if (count === 4) {
-      const { end1Open, end2Open } = checkEnds(
+      const { end1Open, end2Open } = checkEndsForFour(
         board,
         row,
         col,
@@ -268,7 +273,9 @@ export function checkDefenseCounterThreat(
       count !== 4 &&
       checkJumpFour(board, row, col, dirIndex, opponentColor)
     ) {
-      return "four";
+      if (!isJumpFourOverline(board, row, col, dr, dc, opponentColor)) {
+        return "four";
+      }
     }
 
     // 連続活三

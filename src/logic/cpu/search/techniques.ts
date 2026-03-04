@@ -12,7 +12,8 @@ import { checkJumpFour, isValidPosition } from "@/logic/renjuRules";
 
 import { countStones } from "../core/boardUtils";
 import { DIRECTION_INDICES, DIRECTIONS } from "../core/constants";
-import { checkEnds, countLine } from "../core/lineAnalysis";
+import { checkEnds, checkEndsForFour, countLine } from "../core/lineAnalysis";
+import { isJumpFourOverline } from "./threatMoves";
 
 // =============================================================================
 // 動的時間配分
@@ -100,9 +101,16 @@ function checkTacticalPatterns(
       return true;
     }
 
-    // 連続四をチェック（count === 4 で片端以上が開いている）
+    // 連続四をチェック（count === 4 で片端以上が開いている、黒は長連チェック付き）
     if (count === 4) {
-      const { end1Open, end2Open } = checkEnds(board, row, col, dr, dc, color);
+      const { end1Open, end2Open } = checkEndsForFour(
+        board,
+        row,
+        col,
+        dr,
+        dc,
+        color,
+      );
       if (end1Open || end2Open) {
         return true;
       }
@@ -112,7 +120,9 @@ function checkTacticalPatterns(
     const dirIndex = DIRECTION_INDICES[i];
     if (dirIndex !== undefined && count !== 4) {
       if (checkJumpFour(board, row, col, dirIndex, color)) {
-        return true;
+        if (!isJumpFourOverline(board, row, col, dr, dc, color)) {
+          return true;
+        }
       }
     }
   }
@@ -192,7 +202,7 @@ function analyzeFourAndThree(
     }
 
     if (count === 4) {
-      const ends = checkEnds(board, row, col, dr, dc, color);
+      const ends = checkEndsForFour(board, row, col, dr, dc, color);
       if (ends.end1Open || ends.end2Open) {
         hasFour = true;
       }
@@ -205,7 +215,9 @@ function analyzeFourAndThree(
         dirIndex !== undefined &&
         checkJumpFour(board, row, col, dirIndex, color)
       ) {
-        hasFour = true;
+        if (!isJumpFourOverline(board, row, col, dr, dc, color)) {
+          hasFour = true;
+        }
       }
     }
 

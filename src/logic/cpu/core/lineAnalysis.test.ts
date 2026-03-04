@@ -7,7 +7,12 @@ import { describe, expect, it } from "vitest";
 import { createEmptyBoard } from "@/logic/renjuRules";
 
 import { placeStonesOnBoard } from "../testUtils";
-import { checkEnds, countLine, getLineEnds } from "./lineAnalysis";
+import {
+  checkEnds,
+  checkEndsForFour,
+  countLine,
+  getLineEnds,
+} from "./lineAnalysis";
 
 describe("countLine", () => {
   it("単独の石は1", () => {
@@ -114,6 +119,87 @@ describe("checkEnds", () => {
     const { end1Open, end2Open } = checkEnds(board, 7, 6, 0, 1, "black");
     // col=8方向は空き、col=4方向は相手の石
     expect(end1Open).toBe(true);
+    expect(end2Open).toBe(false);
+  });
+});
+
+describe("checkEndsForFour", () => {
+  it("・●●●●・ → 両端 true", () => {
+    const board = createEmptyBoard();
+    placeStonesOnBoard(board, [
+      { row: 7, col: 4, color: "black" },
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+    ]);
+
+    const { end1Open, end2Open } = checkEndsForFour(board, 7, 6, 0, 1, "black");
+    expect(end1Open).toBe(true);
+    expect(end2Open).toBe(true);
+  });
+
+  it("・●●●●・● → 長連側 false、反対側 true", () => {
+    const board = createEmptyBoard();
+    // ・●●●●・● : col3空 col4-7黒 col8空 col9黒
+    placeStonesOnBoard(board, [
+      { row: 7, col: 4, color: "black" },
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+      { row: 7, col: 9, color: "black" }, // 1マス空けて黒石
+    ]);
+
+    const { end1Open, end2Open } = checkEndsForFour(board, 7, 6, 0, 1, "black");
+    // end1(正方向=col8) → col9に黒石があるので長連 → false
+    expect(end1Open).toBe(false);
+    // end2(負方向=col3) → その先に黒石なし → true
+    expect(end2Open).toBe(true);
+  });
+
+  it("●・●●●●・● → 両端 false", () => {
+    const board = createEmptyBoard();
+    placeStonesOnBoard(board, [
+      { row: 7, col: 2, color: "black" }, // 1マス空けて黒石
+      { row: 7, col: 4, color: "black" },
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+      { row: 7, col: 9, color: "black" }, // 1マス空けて黒石
+    ]);
+
+    const { end1Open, end2Open } = checkEndsForFour(board, 7, 6, 0, 1, "black");
+    expect(end1Open).toBe(false);
+    expect(end2Open).toBe(false);
+  });
+
+  it("白で同パターン → 両端 true（長連ルールなし）", () => {
+    const board = createEmptyBoard();
+    placeStonesOnBoard(board, [
+      { row: 7, col: 4, color: "white" },
+      { row: 7, col: 5, color: "white" },
+      { row: 7, col: 6, color: "white" },
+      { row: 7, col: 7, color: "white" },
+      { row: 7, col: 9, color: "white" },
+    ]);
+
+    const { end1Open, end2Open } = checkEndsForFour(board, 7, 6, 0, 1, "white");
+    expect(end1Open).toBe(true);
+    expect(end2Open).toBe(true);
+  });
+
+  it("盤端 |●●●●・ → 盤端側 false、開き側 true", () => {
+    const board = createEmptyBoard();
+    placeStonesOnBoard(board, [
+      { row: 7, col: 0, color: "black" },
+      { row: 7, col: 1, color: "black" },
+      { row: 7, col: 2, color: "black" },
+      { row: 7, col: 3, color: "black" },
+    ]);
+
+    const { end1Open, end2Open } = checkEndsForFour(board, 7, 2, 0, 1, "black");
+    // end1(正方向=col4) → 先に黒石なし → true
+    expect(end1Open).toBe(true);
+    // end2(負方向=col-1) → 盤外 → false
     expect(end2Open).toBe(false);
   });
 });
