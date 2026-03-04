@@ -452,6 +452,14 @@ export function getJushuPositions(
   return [{ ...TENGEN }, whitePos, black3Pos];
 }
 
+/** 全26珠型の名前リストを返す */
+export function getAllJushuNames(): string[] {
+  return [
+    ...DIAGONAL_PATTERNS.map((p) => p.name),
+    ...ORTHOGONAL_PATTERNS.map((p) => p.name),
+  ];
+}
+
 /**
  * 開局評価ボーナスを取得
  *

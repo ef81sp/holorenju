@@ -17,9 +17,18 @@ import { fileURLToPath } from "node:url";
 import { Worker } from "node:worker_threads";
 
 import type { CpuDifficulty } from "../src/types/cpu.ts";
+import type { Position } from "../src/types/game.ts";
 import type { SPRTConfig, WDLCount } from "./types/ab.ts";
-import type { CommitBenchResult, CommitInfo } from "./types/commit-bench.ts";
+import type {
+  CommitBenchResult,
+  CommitGameResult,
+  CommitInfo,
+} from "./types/commit-bench.ts";
 
+import {
+  getAllJushuNames,
+  getJushuPositions,
+} from "../src/logic/cpu/opening.ts";
 import { runCommitGame } from "./commit-game-runner.ts";
 import { estimateEloDiff, formatEloDiff } from "./lib/eloDiff.ts";
 import { DEFAULT_SPRT_CONFIG, formatSPRT, updateSPRT } from "./lib/sprt.ts";
@@ -36,7 +45,7 @@ const WORKTREES_DIR = path.join(PROJECT_ROOT, ".git", "worktrees-bench");
 interface CliOptions {
   refA: string;
   refB: string;
-  games: number;
+  sets: number;
   difficulty: CpuDifficulty;
   useSPRT: boolean;
   sprtElo0: number;
@@ -51,7 +60,7 @@ function parseArgs(): CliOptions {
   const options: CliOptions = {
     refA: "HEAD~1",
     refB: "HEAD",
-    games: 100,
+    sets: 1,
     difficulty: "hard",
     useSPRT: false,
     sprtElo0: DEFAULT_SPRT_CONFIG.elo0,
@@ -66,10 +75,10 @@ function parseArgs(): CliOptions {
       options.refA = arg.slice("--commitA=".length);
     } else if (arg.startsWith("--commitB=")) {
       options.refB = arg.slice("--commitB=".length);
-    } else if (arg.startsWith("--games=")) {
-      const value = parseInt(arg.slice("--games=".length), 10);
+    } else if (arg.startsWith("--sets=")) {
+      const value = parseInt(arg.slice("--sets=".length), 10);
       if (!isNaN(value) && value > 0) {
-        options.games = value;
+        options.sets = value;
       }
     } else if (arg.startsWith("--difficulty=")) {
       const value = arg.slice("--difficulty=".length);
@@ -111,7 +120,7 @@ Usage:
 Options:
   --commitA=<sha|ref>    比較元コミット (default: HEAD~1)
   --commitB=<sha|ref>    比較先コミット (default: HEAD)
-  --games=<n>            対局数 (default: 100)
+  --sets=<n>             セット数 (1セット = 26珠型 × 2色 = 52局, default: 1)
   --difficulty=<d>       難易度 beginner|easy|medium|hard (default: hard)
   --sprt                 SPRT早期停止を有効化
   --elo0=<n>             SPRT帰無仮説Elo差 (default: 0)
@@ -120,7 +129,7 @@ Options:
   --help, -h             ヘルプを表示
 
 Examples:
-  pnpm commit:bench --commitA=HEAD~1 --commitB=HEAD --games=10
+  pnpm commit:bench --commitA=HEAD~1 --commitB=HEAD --sets=1
   pnpm commit:bench --commitA=abc1234 --commitB=def5678 --sprt --elo0=0 --elo1=30
 `);
 }
@@ -304,6 +313,10 @@ async function main(): Promise<void> {
       }
     : null;
 
+  const jushuNames = getAllJushuNames();
+  const gamesPerSet = jushuNames.length * 2; // 26珠型 × 2色
+  const totalGames = options.sets * gamesPerSet;
+
   console.log(`\n=== コミット間CPU強度比較ベンチマーク ===`);
   console.log(
     `commitA: ${commitA.shortSha} "${commitA.message}" (${commitA.date})`,
@@ -312,7 +325,9 @@ async function main(): Promise<void> {
     `commitB: ${commitB.shortSha} "${commitB.message}" (${commitB.date})`,
   );
   console.log(`難易度: ${options.difficulty}`);
-  console.log(`対局数: ${options.games}`);
+  console.log(
+    `セット数: ${options.sets} (${gamesPerSet}局/セット, 計${totalGames}局)`,
+  );
   if (sprtConfig) {
     console.log(
       `SPRT: elo0=${sprtConfig.elo0}, elo1=${sprtConfig.elo1}, ` +
@@ -367,17 +382,36 @@ async function main(): Promise<void> {
     ]);
     console.log("Bridge worker初期化完了\n");
 
+    // 珠型タスクリスト生成（フラット化）
+    interface CommitJushuTask {
+      jushuName: string;
+      positions: [Position, Position, Position];
+      isABlack: boolean;
+    }
+    const jushuTasks: CommitJushuTask[] = [];
+    for (let set = 0; set < options.sets; set++) {
+      for (const jn of jushuNames) {
+        const pos = getJushuPositions(jn, true);
+        if (!pos) {
+          continue;
+        }
+        for (const ab of [true, false]) {
+          jushuTasks.push({ jushuName: jn, positions: pos, isABlack: ab });
+        }
+      }
+    }
+
     // WDL集計（commitA視点）
     const wdl: WDLCount = { wins: 0, draws: 0, losses: 0 };
+    const games: CommitGameResult[] = [];
     let completedGames = 0;
 
-    // N ゲームを逐次実行（同じworkerを使い回すため意図的な順次実行）
-    for (let i = 0; i < options.games; i++) {
-      const isABlack = i % 2 === 0;
-
+    // 珠型セット制で逐次実行（同じworkerを使い回すため意図的な順次実行）
+    for (const { jushuName, positions, isABlack } of jushuTasks) {
       const result = await runCommitGame(workerA, workerB, isABlack, {
         verbose: options.verbose,
         moveTimeoutMs: 30000,
+        openingMoves: positions,
       });
 
       // WDL更新（commitA = playerA 視点）
@@ -389,12 +423,14 @@ async function main(): Promise<void> {
         wdl.losses++;
       }
 
+      games.push({ ...result, jushuName });
+
       completedGames++;
 
       // ステータス表示
       const elapsed = ((performance.now() - startTime) / 1000).toFixed(0);
       const elo = estimateEloDiff(wdl);
-      let statusMsg = `[${elapsed}s] ${completedGames}/${options.games} +${wdl.wins}=${wdl.draws}-${wdl.losses} Elo:${elo.eloDiff > 0 ? "+" : ""}${elo.eloDiff}`;
+      let statusMsg = `[${elapsed}s] ${completedGames}/${totalGames} ${jushuName} ${isABlack ? "A黒" : "A白"} +${wdl.wins}=${wdl.draws}-${wdl.losses} Elo:${elo.eloDiff > 0 ? "+" : ""}${elo.eloDiff}`;
 
       if (sprtConfig) {
         const sprt = updateSPRT(wdl, sprtConfig);
@@ -442,13 +478,15 @@ async function main(): Promise<void> {
       commitB,
       config: {
         difficulty: options.difficulty,
-        gamesPerSide: Math.floor(options.games / 2),
+        sets: options.sets,
+        gamesPerSet,
         sprt: sprtConfig,
       },
       totalGames: completedGames,
       wdl,
       eloDiff: eloDiffResult,
       sprt: sprtState,
+      games,
       elapsedSeconds,
     };
 

@@ -5,6 +5,8 @@
 
 import { parentPort, workerData } from "node:worker_threads";
 
+import type { Position } from "../src/types/game.ts";
+
 import {
   runHeadlessGame,
   type GameResult,
@@ -21,6 +23,7 @@ interface WorkerData {
   playerB: PlayerConfig;
   verbose: boolean;
   scoreOverrides?: Partial<PatternScoreValues>;
+  openingMoves?: [Position, Position, Position];
 }
 
 interface WorkerResult {
@@ -36,6 +39,7 @@ if (data.scoreOverrides && Object.keys(data.scoreOverrides).length > 0) {
 
 const result = runHeadlessGame(data.playerA, data.playerB, {
   verbose: data.verbose,
+  openingMoves: data.openingMoves,
 });
 
 const response: WorkerResult = {

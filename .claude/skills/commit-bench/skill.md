@@ -16,25 +16,25 @@ allowed-tools:
 ## 使用方法
 
 ```
-/commit-bench main vs impl                   # ブランチ間比較（100局 hard）
+/commit-bench main vs impl                   # ブランチ間比較（1セット=52局 hard）
 /commit-bench --commitA=main --commitB=HEAD   # コミット指定
-/commit-bench --commitA=abc1234 --commitB=def5678 --games=200 --sprt
+/commit-bench --commitA=abc1234 --commitB=def5678 --sets=4 --sprt
 ```
 
 ユーザーが「mainとimplで対戦」「ブランチ間比較」等の表現を使った場合はこのスキル。
 
 ## CLI オプション
 
-| オプション         | 説明                  | デフォルト |
-| ------------------ | --------------------- | ---------- |
-| `--commitA=<ref>`  | 比較元（git ref/sha） | `HEAD~1`   |
-| `--commitB=<ref>`  | 比較先（git ref/sha） | `HEAD`     |
-| `--games=<n>`      | 対局数                | `100`      |
-| `--difficulty=<d>` | 難易度                | `hard`     |
-| `--sprt`           | SPRT早期停止を有効化  | 無効       |
-| `--elo0=<n>`       | SPRT帰無仮説Elo差     | `0`        |
-| `--elo1=<n>`       | SPRT対立仮説Elo差     | `30`       |
-| `--verbose`, `-v`  | 詳細ログ出力          | false      |
+| オプション         | 説明                                      | デフォルト |
+| ------------------ | ----------------------------------------- | ---------- |
+| `--commitA=<ref>`  | 比較元（git ref/sha）                     | `HEAD~1`   |
+| `--commitB=<ref>`  | 比較先（git ref/sha）                     | `HEAD`     |
+| `--sets=<n>`       | セット数（1セット = 26珠型 × 2色 = 52局） | `1`        |
+| `--difficulty=<d>` | 難易度                                    | `hard`     |
+| `--sprt`           | SPRT早期停止を有効化                      | 無効       |
+| `--elo0=<n>`       | SPRT帰無仮説Elo差                         | `0`        |
+| `--elo1=<n>`       | SPRT対立仮説Elo差                         | `30`       |
+| `--verbose`, `-v`  | 詳細ログ出力                              | false      |
 
 ## 出力
 
@@ -60,7 +60,7 @@ bench-results/commit-bench-<timestamp>.json
 
 ## 注意事項
 
-- 100局のhard対戦は10-30分程度かかるため、バックグラウンド実行を推奨
+- デフォルト1セット（52局）のhard対戦は5-15分程度かかるため、バックグラウンド実行を推奨
 - worktree 作成＋依存インストールで初回起動に時間がかかる
 - 進捗は tail でログを確認可能
 - Ctrl+C で中断しても worktree はクリーンアップされる
