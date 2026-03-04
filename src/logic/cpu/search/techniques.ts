@@ -75,6 +75,51 @@ export const LMR_REDUCTION = 1;
 export const LMR_PLAIN_FOUR_EXTRA_REDUCTION = 1;
 
 /**
+ * 戦術的パターン判定の内部関数（石配置済み前提）
+ *
+ * 五連以上、連続四（片端以上開き）、跳び四のいずれかがあれば true。
+ * isTacticalMove / isTacticalMoveOnBoard の共通ロジック。
+ */
+function checkTacticalPatterns(
+  board: BoardState,
+  row: number,
+  col: number,
+  color: "black" | "white",
+): boolean {
+  for (let i = 0; i < DIRECTIONS.length; i++) {
+    const direction = DIRECTIONS[i];
+    if (!direction) {
+      continue;
+    }
+    const [dr, dc] = direction;
+
+    const count = countLine(board, row, col, dr, dc, color);
+
+    // 五連以上をチェック（完勝手は最も戦術的）
+    if (count >= 5) {
+      return true;
+    }
+
+    // 連続四をチェック（count === 4 で片端以上が開いている）
+    if (count === 4) {
+      const { end1Open, end2Open } = checkEnds(board, row, col, dr, dc, color);
+      if (end1Open || end2Open) {
+        return true;
+      }
+    }
+
+    // 跳び四をチェック（連続四でない場合のみ）
+    const dirIndex = DIRECTION_INDICES[i];
+    if (dirIndex !== undefined && count !== 4) {
+      if (checkJumpFour(board, row, col, dirIndex, color)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/**
  * 四を作る手かどうかをチェック（LMR除外用）
  *
  * 連珠では一手で形勢が激変するため、四を作る手にLMRを適用すると
@@ -97,12 +142,42 @@ export function isTacticalMove(
   }
 
   // 盤面を一時的に変更（copyBoardを避けて高速化）
-  // 候補手の位置は常に空きなので、復元時はnullに戻す
   row[move.col] = color;
+  const result = checkTacticalPatterns(board, move.row, move.col, color);
+  // 盤面を復元
+  row[move.col] = null;
 
-  let isTactical = false;
+  return result;
+}
 
-  // 4方向をチェック
+/**
+ * 戦術的手判定（石配置済み版）
+ *
+ * applyMoveInPlace 後に呼ぶ用。place/restore をスキップする。
+ */
+export function isTacticalMoveOnBoard(
+  board: BoardState,
+  move: Position,
+  color: "black" | "white",
+): boolean {
+  return checkTacticalPatterns(board, move.row, move.col, color);
+}
+
+/**
+ * 四と活三の有無を分析（石配置済み前提）
+ *
+ * hasFourAndOpenThree / detectPlainFour の共通ロジック。
+ * 五連がある場合は hasFive: true を返す。
+ */
+function analyzeFourAndThree(
+  board: BoardState,
+  row: number,
+  col: number,
+  color: "black" | "white",
+): { hasFive: boolean; hasFour: boolean; hasOpenThree: boolean } {
+  let hasFour = false;
+  let hasOpenThree = false;
+
   for (let i = 0; i < DIRECTIONS.length; i++) {
     const direction = DIRECTIONS[i];
     if (!direction) {
@@ -110,45 +185,66 @@ export function isTacticalMove(
     }
     const [dr, dc] = direction;
 
-    const count = countLine(board, move.row, move.col, dr, dc, color);
+    const count = countLine(board, row, col, dr, dc, color);
 
-    // 五連以上をチェック（完勝手は最も戦術的）
     if (count >= 5) {
-      isTactical = true;
-      break;
+      return { hasFive: true, hasFour: false, hasOpenThree: false };
     }
 
-    // 連続四をチェック（count === 4 で片端以上が開いている）
     if (count === 4) {
-      const { end1Open, end2Open } = checkEnds(
-        board,
-        move.row,
-        move.col,
-        dr,
-        dc,
-        color,
-      );
-      if (end1Open || end2Open) {
-        isTactical = true;
-        break;
+      const ends = checkEnds(board, row, col, dr, dc, color);
+      if (ends.end1Open || ends.end2Open) {
+        hasFour = true;
       }
     }
 
-    // 跳び四をチェック（連続四でない場合のみ）
-    // DIRECTION_INDICES[i] で 8方向のインデックスに変換
-    const dirIndex = DIRECTION_INDICES[i];
-    if (dirIndex !== undefined && count !== 4) {
-      if (checkJumpFour(board, move.row, move.col, dirIndex, color)) {
-        isTactical = true;
-        break;
+    // 跳び四チェック
+    if (count !== 4) {
+      const dirIndex = DIRECTION_INDICES[i];
+      if (
+        dirIndex !== undefined &&
+        checkJumpFour(board, row, col, dirIndex, color)
+      ) {
+        hasFour = true;
+      }
+    }
+
+    // 活三チェック
+    if (count === 3) {
+      const ends = checkEnds(board, row, col, dr, dc, color);
+      if (ends.end1Open && ends.end2Open) {
+        hasOpenThree = true;
       }
     }
   }
 
-  // 盤面を復元（候補手の位置は常に空きだったのでnullに戻す）
-  row[move.col] = null;
+  return { hasFive: false, hasFour, hasOpenThree };
+}
 
-  return isTactical;
+// =============================================================================
+// Threat Extension
+// =============================================================================
+
+/** 1パスあたりの最大延長回数 */
+export const MAX_EXTENSIONS = 2;
+
+/**
+ * Threat Extension の候補かどうか判定（条件2: 自分の四三）
+ *
+ * 自分の手が四三を作った場合に延長対象。
+ * 条件1（相手の四に対する応手）は呼び出し側で石配置前に判定する。
+ *
+ * @param board 盤面（move 配置済み）
+ * @param move 現在の手
+ * @param currentColor 現在の手番
+ */
+export function isThreatExtensionCandidate(
+  board: BoardState,
+  move: Position,
+  currentColor: "black" | "white",
+): boolean {
+  const r = analyzeFourAndThree(board, move.row, move.col, currentColor);
+  return !r.hasFive && r.hasFour && r.hasOpenThree;
 }
 
 /**
@@ -173,52 +269,8 @@ export function detectPlainFour(
   col: number,
   color: "black" | "white",
 ): boolean {
-  let hasFour = false;
-  let hasOpenThree = false;
-
-  for (let i = 0; i < DIRECTIONS.length; i++) {
-    const direction = DIRECTIONS[i];
-    if (!direction) {
-      continue;
-    }
-    const [dr, dc] = direction;
-
-    const count = countLine(board, row, col, dr, dc, color);
-
-    // 五連以上は plain four ではない
-    if (count >= 5) {
-      return false;
-    }
-
-    // 連続四チェック（片端以上が空いている）
-    if (count === 4) {
-      const ends = checkEnds(board, row, col, dr, dc, color);
-      if (ends.end1Open || ends.end2Open) {
-        hasFour = true;
-      }
-    }
-
-    // 跳び四チェック（連続四でない場合のみ）
-    if (count !== 4) {
-      const dirIndex = DIRECTION_INDICES[i];
-      if (
-        dirIndex !== undefined &&
-        checkJumpFour(board, row, col, dirIndex, color)
-      ) {
-        hasFour = true;
-      }
-    }
-
-    // 活三チェック（両端が空いている連続三）
-    if (count === 3) {
-      const ends = checkEnds(board, row, col, dr, dc, color);
-      if (ends.end1Open && ends.end2Open) {
-        hasOpenThree = true;
-      }
-    }
-  }
-
-  return hasFour && !hasOpenThree;
+  const r = analyzeFourAndThree(board, row, col, color);
+  return !r.hasFive && r.hasFour && !r.hasOpenThree;
 }
 
 // =============================================================================

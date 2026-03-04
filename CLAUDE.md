@@ -1,132 +1,134 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+このファイルは、Claude Code (claude.ai/code) がこのリポジトリのコードを扱う際のガイダンスを提供します。
 
-## Project Overview
+## プロジェクト概要
 
-A Renju (五目並べ/Gomoku) learning game featuring:
+連珠（五目並べ/Gomoku）学習ゲーム：
 
-- **Demo mode**: Characters (VTubers Fubuki & Miko) explain Renju strategies through dialogue
-- **Question mode**: Players practice moves with immediate feedback
-- **Scenario editor**: Built-in editor for creating learning scenarios
+- **デモモード**: キャラクター（VTuber フブキ＆ミコ）が対話形式で連珠の戦略を解説
+- **問題モード**: プレイヤーが即座にフィードバックを受けながら着手を練習
+- **シナリオエディタ**: 学習シナリオを作成するための内蔵エディタ
 
-## Commands
+## コマンド
 
 ```bash
-pnpm check-fix     # Type-check + format + lint (use this, not individual commands)
-pnpm dev           # Dev server (usually already running)
-pnpm build         # Production build
+pnpm check-fix     # 型チェック + フォーマット + lint（個別コマンドではなくこれを使う）
+pnpm dev           # 開発サーバー（通常は起動済み）
+pnpm build         # 本番ビルド
 ```
 
 ### Git
 
-- Don't use `git -C`. Do `pwd` if needed.
+- `git -C` は使わないこと。必要なら `pwd` で確認する。
+- コミットメッセージを作るのにパイプや `$()` を使わないこと。普通に。
 
-## Planning
+## 計画
 
-- Do TDD
-- Ask anything because your boss is fool so his instructions have overlooks.
-- Use `/review` skill (user skill) to review plans and implementations with subagents.
+- TDDで進める
+- 何でも質問すること。ボスはアホなので指示に見落としがある。
+- `/review` スキル（ユーザースキル）を使ってサブエージェントでプランや実装をレビューする。
+- プラン実行後考慮漏れや誤りに気づいた場合、そこで作業を止め、判明した事象を踏まえてプランを練り直す。場当たり的な実装を避ける。
 
-## Architecture
+## アーキテクチャ
 
-### State Management (Pinia stores in `src/stores/`)
+### 状態管理（Pinia stores: `src/stores/`）
 
-- **appStore**: Navigation state (scenes: menu → difficulty → scenarioList → scenarioPlay/editor)
-- **gameStore**: Game logic, turn management, win detection (delegates board state to boardStore)
-- **boardStore**: Board state, stones, marks, lines with animation callbacks
-- **dialogStore**: Character dialogue display state
-- **progressStore**: Learning progress tracking
-- **preferencesStore**: User settings (text size, etc.)
+- **appStore**: ナビゲーション状態（scenes: menu → difficulty → scenarioList → scenarioPlay/editor）
+- **gameStore**: ゲームロジック、ターン管理、勝利判定（盤面状態は boardStore に委譲）
+- **boardStore**: 盤面状態、石、マーク、ラインとアニメーションコールバック
+- **dialogStore**: キャラクター対話の表示状態
+- **progressStore**: 学習進捗の追跡
+- **preferencesStore**: ユーザー設定（文字サイズなど）
 
-### Core Game Logic (`src/logic/`)
+### コアゲームロジック（`src/logic/`）
 
-- **renjuRules.ts**: Renju rules including forbidden moves (double-three, double-four, overline) for black stones
-- **boardParser.ts**: Parse board state from string notation
-- **scenarioParser.ts**: Parse scenario JSON files
+- **renjuRules.ts**: 連珠ルール（黒石の禁手：三三、四四、長連を含む）
+- **boardParser.ts**: 文字列表記から盤面状態をパース
+- **scenarioParser.ts**: シナリオJSONファイルをパース
 
-### Component Structure
+### コンポーネント構成
 
-- **ScenarioPlayer** (`src/components/scenarios/ScenarioPlayer/`): Main gameplay component with composables for navigation, keyboard input, question solving, cutin display
-- **RenjuBoard** (`src/components/game/RenjuBoard/`): Vue Konva-based board with composables for layout, interaction, animation
-- **Editor** (`src/editor/`): Full scenario editing suite with File System Access API integration
+- **ScenarioPlayer**（`src/components/scenarios/ScenarioPlayer/`）: メインのゲームプレイコンポーネント。ナビゲーション、キーボード入力、問題解答、カットイン表示のcomposableを持つ
+- **RenjuBoard**（`src/components/game/RenjuBoard/`）: Vue Konvaベースの盤面。レイアウト、インタラクション、アニメーションのcomposableを持つ
+- **Editor**（`src/editor/`）: File System Access API統合を備えたシナリオ編集スイート
 
-### Type System (`src/types/`)
+### 型システム（`src/types/`）
 
-- **scenario.ts**: Core types - Scenario, DemoSection, QuestionSection, BoardAction, SuccessCondition
-- **game.ts**: BoardState (15x15 grid), Position, StoneColor
+- **scenario.ts**: コア型 - Scenario, DemoSection, QuestionSection, BoardAction, SuccessCondition
+- **game.ts**: BoardState（15×15グリッド）, Position, StoneColor
 - **character.ts**: CharacterType, EmotionId
-- **text.ts**: TextNode for rich text with ruby annotations
+- **text.ts**: TextNode（ルビ注釈付きリッチテキスト用）
 
-## Development Guidelines
+## 開発ガイドライン
 
-### Planning
+### 計画
 
-- Do SSoT, DRY, SOLID, t-wada TDD
-- commit by phase
-- /review the plan before exitPlanMode
+- SSoT, DRY, SOLID, t-wada TDD を実践する
+- フェーズごとにコミット
+- exitPlanMode の前に /review でプランをレビュー
 
-### package manager / scripts
+### パッケージマネージャ / スクリプト
 
-- Use `pnpm` for package management
-- Don't use `npx`. Run scripts via `pnpm <script>`.
-- Write a README document near any component or module with non-trivial logic.
-- **Don't use `rm` command directly** - it triggers confirmation prompts. Use `git clean` or ask the user.
+- パッケージ管理には `pnpm` を使用
+- `npx` は使わない。スクリプトは `pnpm <script>` で実行する。
+- 非自明なロジックを持つコンポーネントやモジュールの近くにREADMEを書く。
+- **`rm` コマンドを直接使わない** — 確認プロンプトが出る。`git clean` を使うかユーザーに確認する。
 
 ### Vue/TypeScript
 
-- Use `<script setup lang="ts">` with generic-style defineProps
-- Use `<dialog>` element for modals (see existing components)
-- When referencing component methods via refs, use optional chaining (`ref?.method()`)
-- Keep SFCs under ~400 lines; extract composables or split components
-- When handling union types, don't use if-else chains; use type guards or switch statements
-- When develop some scripts, use `node --expperimental-strip-types`, not `ts-node` or `tsx`
+- `<script setup lang="ts">` とジェネリック形式の defineProps を使用
+- モーダルには `<dialog>` 要素を使用（既存コンポーネントを参照）
+- ref 経由でコンポーネントメソッドを参照する際はオプショナルチェイニング（`ref?.method()`）を使用
+- SFC は約400行以内に収める。composable を抽出するかコンポーネントを分割する
+- union型を扱う際は if-else チェーンではなく、型ガードまたは switch 文を使用
+- スクリプト開発時は `ts-node` や `tsx` ではなく `node --experimental-strip-types` を使用
 
 ### CSS
 
-- **Fixed 960×540 viewport**: Use CSS variables from `style.css` (e.g., `--size-16`, `--size-24`)
-- **Never use rem/px** for layout - use `--size-*` variables with clamp()
-- Colors: Use `:root` variables (e.g., `--color-fubuki-primary`, `--color-text-primary`)
-- Font weights: normal=300, bold=500
-- Scoped styles don't inherit across component boundaries; put utilities in `style.css`
-- Never set `display` directly on `<dialog>` or popover elements
+- **固定 960×540 ビューポート**: `style.css` の CSS変数を使用（例: `--size-16`, `--size-24`）
+- **レイアウトに rem/px を使わない** — `--size-*` 変数と clamp() を使用
+- カラー: `:root` 変数を使用（例: `--color-fubuki-primary`, `--color-text-primary`）
+- フォントウェイト: normal=300, bold=500
+- スコープ付きスタイルはコンポーネント境界を超えて継承されない。ユーティリティは `style.css` に置く
+- `<dialog>` や popover 要素に `display` を直接設定しない
 
-### Icons
+### アイコン
 
-- Use **Material Symbols Outlined** (weight 400) for all UI icons (Apache-2.0)
-- SVG files in `src/assets/icons/` with `fill="currentColor"`
-- Import as component: `import InfoIcon from "@/assets/icons/info.svg?component"`
-- Use in template: `<InfoIcon />`
-- Source: https://github.com/google/material-design-icons/tree/master/symbols/web
-- To add new icons, use the `/download-icon` skill
+- すべてのUIアイコンに **Material Symbols Outlined**（weight 400）を使用（Apache-2.0）
+- SVGファイルは `src/assets/icons/` に `fill="currentColor"` で配置
+- コンポーネントとしてインポート: `import InfoIcon from "@/assets/icons/info.svg?component"`
+- テンプレートで使用: `<InfoIcon />`
+- ソース: https://github.com/google/material-design-icons/tree/master/symbols/web
+- 新しいアイコンを追加するには `/download-icon` スキルを使用
 
 ### Konva
 
-- Use Vue Konva components (`v-stage`, `v-layer`, `v-circle`, etc.)
-- Board rendering uses composables for layout calculations and animations
+- Vue Konva コンポーネント（`v-stage`, `v-layer`, `v-circle` 等）を使用
+- 盤面レンダリングはレイアウト計算とアニメーション用のcomposableを使用
 
-### Testing
+### テスト
 
-- Playwright MCP available for E2E testing
-- Browser viewport: 960×540 (fixed)
-- Minimize screenshots during testing (context limit)
-- Use `pnpm test:browser:headless` for headless browser tests (useful for agents/CI)
+- E2Eテスト用に Playwright MCP が利用可能
+- ブラウザビューポート: 960×540（固定）
+- テスト中のスクリーンショットは最小限に（コンテキスト制限）
+- ヘッドレスブラウザテストには `pnpm test:browser:headless` を使用（エージェント/CI向け）
 
-### Before Committing
+### コミット前
 
-- Run `pnpm check-fix` to ensure type-checking, formatting, and linting pass
-- Do `/review` your edits with subagents
+- `pnpm check-fix` を実行して型チェック、フォーマット、lintをパスさせる
+- サブエージェントで `/review` を実行する
 
-## Task Planning
+## タスク計画
 
-- Check `docs/` for implementation plans and TODOs
-- Generalize learnings to AGENTS.md
+- `docs/` で実装プランやTODOを確認する
+- 学びをAGENTS.mdに一般化する
 
-## Renju Knowledge
+## 連珠の知識
 
-- Renju is played on a 15x15 grid
-- Black plays first, with forbidden moves (double-three, double-four, overline)
-- Winning condition: first to align five stones horizontally, vertically, or diagonally
-- Coordinate notation: origin at bottom-left, e.g., 15A, 1O
-- Game record example:
+- 連珠は15×15の盤で行う
+- 黒が先手で、禁手あり（三三、四四、長連）
+- 勝利条件: 横・縦・斜めに先に5つ石を並べること
+- 座標表記: 左下が原点。例: 15A, 1O
+- 棋譜の例:
   - H8 H9 I8 G8 I9 I10 F7 G7 G9 H10 F9 J11

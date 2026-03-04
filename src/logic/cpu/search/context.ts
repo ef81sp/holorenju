@@ -5,6 +5,10 @@
  * VCF/VCT共通の時間制限コンテキストもここで定義。
  */
 
+import type { Position } from "@/types/game";
+
+import { BOARD_SIZE } from "@/constants";
+
 import type { LineTable } from "../lineTable/lineTable";
 
 import {
@@ -18,6 +22,28 @@ import {
   type KillerMoves,
 } from "../moveGenerator";
 import { globalTT, TranspositionTable } from "../transpositionTable";
+
+// =============================================================================
+// Counter-move Table
+// =============================================================================
+
+/**
+ * Counter-move テーブル
+ *
+ * [row][col] => Position | null
+ * 「相手がこの位置に打った後のベスト応手」を記録。
+ * 連珠では各マスに一度しか石を置けないため、色別にする必要なし。
+ */
+export type CounterMoveTable = (Position | null)[][];
+
+/**
+ * Counter-move テーブルを初期化
+ */
+export function createCounterMoveTable(): CounterMoveTable {
+  return Array.from({ length: BOARD_SIZE }, () =>
+    new Array<Position | null>(BOARD_SIZE).fill(null),
+  );
+}
 
 /**
  * VCF/VCT共通の時間制限コンテキスト
@@ -58,6 +84,8 @@ export interface SearchStats {
   nullMoveCutoffs: number;
   /** Futility Pruning によるスキップ数 */
   futilityPrunes: number;
+  /** Threat Extension 発動回数 */
+  threatExtensions: number;
 }
 
 /**
@@ -72,6 +100,8 @@ export interface SearchContext {
   history: HistoryTable;
   /** Killer Moves */
   killers: KillerMoves;
+  /** Counter-move Table */
+  counterMoves: CounterMoveTable;
   /** 探索統計 */
   stats: SearchStats;
   /** 評価オプション */
@@ -103,6 +133,7 @@ export function createSearchContext(
     tt,
     history: createHistoryTable(),
     killers: createKillerMoves(),
+    counterMoves: createCounterMoveTable(),
     stats: {
       nodes: 0,
       ttHits: 0,
@@ -114,6 +145,7 @@ export function createSearchContext(
       evaluationCalls: 0,
       nullMoveCutoffs: 0,
       futilityPrunes: 0,
+      threatExtensions: 0,
     },
     evaluationOptions,
   };

@@ -26,8 +26,20 @@ describe("createSearchContext", () => {
       evaluationCalls: 0,
       nullMoveCutoffs: 0,
       futilityPrunes: 0,
+      threatExtensions: 0,
     });
     expect(ctx.evaluationOptions).toEqual(DEFAULT_EVAL_OPTIONS);
+  });
+
+  it("Counter-move Tableは初期化されている", () => {
+    const ctx = createSearchContext();
+
+    // 全ての位置がnull
+    for (let row = 0; row < 15; row++) {
+      for (let col = 0; col < 15; col++) {
+        expect(ctx.counterMoves[row]?.[col]).toBeNull();
+      }
+    }
   });
 
   it("カスタムTTで作成", () => {

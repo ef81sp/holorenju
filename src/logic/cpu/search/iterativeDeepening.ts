@@ -647,6 +647,53 @@ export function findBestMoveIterativeWithTT(
     completedDepth = depth;
   }
 
+  // =========================================================================
+  // Score Verification Extension
+  // スコアが大幅に変化した場合に+1深度を追加探索
+  // 主な対象: d3完了→d4中断のケース（time-pressure-error の軽減）
+  // =========================================================================
+  const VERIFICATION_THRESHOLD = 1500; // FOUR相当
+  if (
+    depthHistory.length >= 2 &&
+    completedDepth < maxDepth &&
+    !ctx.absoluteDeadlineExceeded &&
+    !ctx.nodeCountExceeded &&
+    performance.now() < loopDeadline
+  ) {
+    const last = depthHistory[depthHistory.length - 1];
+    const prev = depthHistory[depthHistory.length - 2];
+    if (
+      last &&
+      prev &&
+      Math.abs(last.score - prev.score) >= VERIFICATION_THRESHOLD
+    ) {
+      // Aspiration Window付きで検証探索
+      const verifyResult = findBestMoveWithTT(
+        board,
+        color,
+        completedDepth + 1,
+        randomFactor,
+        ctx,
+        { previousScore: last.score, windowSize: ASPIRATION_WINDOW },
+        moves,
+        scoreThreshold,
+      );
+      if (
+        !ctx.timeoutFlag &&
+        !ctx.nodeCountExceeded &&
+        !ctx.absoluteDeadlineExceeded
+      ) {
+        depthHistory.push({
+          depth: completedDepth + 1,
+          position: verifyResult.position,
+          score: verifyResult.score,
+        });
+        bestResult = verifyResult;
+        completedDepth += 1;
+      }
+    }
+  }
+
   const finalResult: IterativeDeepingResult & { stats: SearchStats } = {
     position: bestResult.position,
     score: bestResult.score,

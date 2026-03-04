@@ -51,10 +51,13 @@ import {
   FUTILITY_MARGINS_SELF,
   hasImmediateThreat,
   INFINITY,
+  isTacticalMoveOnBoard,
+  isThreatExtensionCandidate,
   LMR_MIN_DEPTH,
   LMR_MOVE_THRESHOLD,
   LMR_PLAIN_FOUR_EXTRA_REDUCTION,
   LMR_REDUCTION,
+  MAX_EXTENSIONS,
   NMP_MIN_DEPTH,
   NMP_REDUCTION,
 } from "./techniques";
@@ -107,6 +110,136 @@ interface AspirationOptions {
  * @returns 評価スコア
  */
 
+/**
+ * LMR + PVS の3段階再探索 (maximizing)
+ *
+ * LMR浅い探索 → Null Window再探索 → フル再探索
+ */
+function lmrPvsMaximizing(
+  board: BoardState,
+  newHash: bigint,
+  effectiveDepth: number,
+  reduction: number,
+  perspective: "black" | "white",
+  alpha: number,
+  beta: number,
+  move: Position,
+  ctx: SearchContext,
+  newExtensions: number,
+): number {
+  // LMR + Null Window
+  let score = minimaxWithTT(
+    board,
+    newHash,
+    effectiveDepth - reduction,
+    false,
+    perspective,
+    alpha,
+    alpha + 1,
+    move,
+    ctx,
+    true,
+    newExtensions,
+  );
+  if (score > alpha) {
+    // Null Window 再探索（フル深度）
+    score = minimaxWithTT(
+      board,
+      newHash,
+      effectiveDepth,
+      false,
+      perspective,
+      alpha,
+      alpha + 1,
+      move,
+      ctx,
+      true,
+      newExtensions,
+    );
+    if (score > alpha && score < beta) {
+      // フル再探索
+      score = minimaxWithTT(
+        board,
+        newHash,
+        effectiveDepth,
+        false,
+        perspective,
+        alpha,
+        beta,
+        move,
+        ctx,
+        true,
+        newExtensions,
+      );
+    }
+  }
+  return score;
+}
+
+/**
+ * LMR + PVS の3段階再探索 (minimizing)
+ */
+function lmrPvsMinimizing(
+  board: BoardState,
+  newHash: bigint,
+  effectiveDepth: number,
+  reduction: number,
+  perspective: "black" | "white",
+  alpha: number,
+  beta: number,
+  move: Position,
+  ctx: SearchContext,
+  newExtensions: number,
+): number {
+  // LMR + Null Window
+  let score = minimaxWithTT(
+    board,
+    newHash,
+    effectiveDepth - reduction,
+    true,
+    perspective,
+    beta - 1,
+    beta,
+    move,
+    ctx,
+    true,
+    newExtensions,
+  );
+  if (score < beta) {
+    // Null Window 再探索（フル深度）
+    score = minimaxWithTT(
+      board,
+      newHash,
+      effectiveDepth,
+      true,
+      perspective,
+      beta - 1,
+      beta,
+      move,
+      ctx,
+      true,
+      newExtensions,
+    );
+    if (score < beta && score > alpha) {
+      // フル再探索
+      score = minimaxWithTT(
+        board,
+        newHash,
+        effectiveDepth,
+        true,
+        perspective,
+        alpha,
+        beta,
+        move,
+        ctx,
+        true,
+        newExtensions,
+      );
+    }
+  }
+  return score;
+}
+
 export function minimaxWithTT(
   board: BoardState,
   hash: bigint,
@@ -118,6 +251,7 @@ export function minimaxWithTT(
   lastMove: Position | null,
   ctx: SearchContext,
   allowNullMove = true,
+  extensions = 0,
 ): number {
   ctx.stats.nodes++;
 
@@ -274,11 +408,16 @@ export function minimaxWithTT(
   };
   const maxStaticEvalCount = getMaxStaticEvalCount(depth);
   const isBlackTurn = currentColor === "black";
+  // Counter-move: 相手の直前の手に対する最善応手を取得
+  const counterMove = lastMove
+    ? (ctx.counterMoves[lastMove.row]?.[lastMove.col] ?? null)
+    : null;
   const moves = generateSortedMoves(board, currentColor, {
     ttMove,
     killers: ctx.killers,
     depth,
     history: ctx.history,
+    counterMove,
     useStaticEval,
     evaluationOptions: ctx.evaluationOptions,
     maxStaticEvalCount,
@@ -375,6 +514,13 @@ export function minimaxWithTT(
       depth >= LMR_MIN_DEPTH &&
       bestScore > -PATTERN_SCORES.FIVE + 1000; // 負けが確定していない
 
+    // Threat Extension 条件1: 相手の直前の手が四を作ったか（石配置前にチェック）
+    // 配置後だと現在の手が四をブロックし、四が検出されなくなるため
+    const lastMoveTactical =
+      extensions < MAX_EXTENSIONS &&
+      lastMove !== null &&
+      isTacticalMoveOnBoard(board, lastMove, lastMoveColor);
+
     // 石を配置（インプレース変更）
     applyMoveInPlace(board, move, currentColor);
     if (ctx.lineTable) {
@@ -387,6 +533,21 @@ export function minimaxWithTT(
 
     let score = 0;
 
+    // Threat Extension: 戦術的に重要な局面で探索を1手延長
+    // 条件1: 相手の四に対する応手（配置前に判定済み）
+    // 条件2: 自分の四三成立（配置後に判定）
+    let extension = 0;
+    if (
+      lastMoveTactical ||
+      (extensions < MAX_EXTENSIONS &&
+        isThreatExtensionCandidate(board, move, currentColor))
+    ) {
+      extension = 1;
+      ctx.stats.threatExtensions++;
+    }
+    const newExtensions = extensions + extension;
+    const effectiveDepth = depth - 1 + extension;
+
     // 非生産的四伸び判定（LMR追加リダクション用）
     // 四を作るが活三を伴わない手は depth を浪費するため追加削減
     // moveIndex === 0 はLMR対象外なのでスキップ
@@ -395,56 +556,118 @@ export function minimaxWithTT(
       depth >= LMR_MIN_DEPTH &&
       detectPlainFour(board, move.row, move.col, currentColor);
 
-    // LMR (Late Move Reductions)
-    // 後半の候補手は浅く探索し、有望なら再探索
-    // 非生産的四伸びは moveIndex >= 1 でも追加リダクション適用
-    if (canApplyLMR || isPlainFour) {
+    // PVS (Principal Variation Search) + LMR (Late Move Reductions)
+    // moveIndex === 0: PV手はフルウィンドウで探索
+    // moveIndex >= 1: Null Window で探索し、有望なら再探索
+    // LMR適用手は「LMR浅い探索 → Null Window再探索 → フル再探索」の3段階
+    if (moveIndex === 0) {
+      // PV手: フルウィンドウ
+      score = minimaxWithTT(
+        board,
+        newHash,
+        effectiveDepth,
+        !isMaximizing,
+        perspective,
+        alpha,
+        beta,
+        move,
+        ctx,
+        true,
+        newExtensions,
+      );
+    } else if (canApplyLMR || isPlainFour) {
       const reduction = isPlainFour
         ? LMR_REDUCTION + LMR_PLAIN_FOUR_EXTRA_REDUCTION
         : LMR_REDUCTION;
 
-      // 浅い探索
-      score = minimaxWithTT(
-        board,
-        newHash,
-        depth - 1 - reduction,
-        !isMaximizing,
-        perspective,
-        alpha,
-        beta,
-        move,
-        ctx,
-      );
-
-      // 有望な結果なら再探索
-      const needsResearch = isMaximizing ? score > alpha : score < beta;
-
-      if (needsResearch) {
+      score = isMaximizing
+        ? lmrPvsMaximizing(
+            board,
+            newHash,
+            effectiveDepth,
+            reduction,
+            perspective,
+            alpha,
+            beta,
+            move,
+            ctx,
+            newExtensions,
+          )
+        : lmrPvsMinimizing(
+            board,
+            newHash,
+            effectiveDepth,
+            reduction,
+            perspective,
+            alpha,
+            beta,
+            move,
+            ctx,
+            newExtensions,
+          );
+    } else {
+      // 非LMR手: Null Window で探索
+      if (isMaximizing) {
         score = minimaxWithTT(
           board,
           newHash,
-          depth - 1,
+          effectiveDepth,
           !isMaximizing,
           perspective,
           alpha,
+          alpha + 1,
+          move,
+          ctx,
+          true,
+          newExtensions,
+        );
+        if (score > alpha && score < beta) {
+          // フル再探索
+          score = minimaxWithTT(
+            board,
+            newHash,
+            effectiveDepth,
+            !isMaximizing,
+            perspective,
+            alpha,
+            beta,
+            move,
+            ctx,
+            true,
+            newExtensions,
+          );
+        }
+      } else {
+        score = minimaxWithTT(
+          board,
+          newHash,
+          effectiveDepth,
+          !isMaximizing,
+          perspective,
+          beta - 1,
           beta,
           move,
           ctx,
+          true,
+          newExtensions,
         );
+        if (score < beta && score > alpha) {
+          // フル再探索
+          score = minimaxWithTT(
+            board,
+            newHash,
+            effectiveDepth,
+            !isMaximizing,
+            perspective,
+            alpha,
+            beta,
+            move,
+            ctx,
+            true,
+            newExtensions,
+          );
+        }
       }
-    } else {
-      // 通常の探索
-      score = minimaxWithTT(
-        board,
-        newHash,
-        depth - 1,
-        !isMaximizing,
-        perspective,
-        alpha,
-        beta,
-        move,
-        ctx,
-      );
     }
 
     // 石を元に戻す（Undo）
@@ -483,6 +706,13 @@ export function minimaxWithTT(
       ctx.stats.betaCutoffs++;
       recordKillerMove(ctx.killers, depth, move);
       updateHistory(ctx.history, move, depth);
+      // Counter-move: 相手の直前の手に対する最善応手を記録
+      if (lastMove) {
+        const cmRow = ctx.counterMoves[lastMove.row];
+        if (cmRow) {
+          cmRow[lastMove.col] = move;
+        }
+      }
       scoreType = isMaximizing ? "LOWER_BOUND" : "UPPER_BOUND";
       break;
     }
