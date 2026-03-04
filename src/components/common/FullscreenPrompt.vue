@@ -15,6 +15,15 @@ const neverShowAgain = ref(false);
 const handleFullscreen = async (): Promise<void> => {
   try {
     await document.documentElement.requestFullscreen();
+    (
+      screen.orientation as ScreenOrientation & {
+        lock?: (o: string) => Promise<void>;
+      }
+    )
+      .lock?.("landscape")
+      .catch(() => {
+        /* unsupported */
+      });
     if (neverShowAgain.value) {
       emit("neverShow", true);
     }

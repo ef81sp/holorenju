@@ -236,8 +236,9 @@ const handleBack = (): void => {
 .content {
   flex: 1;
   display: flex;
-  align-items: center;
+  align-items: safe center;
   justify-content: center;
+  overflow-y: auto;
 }
 
 .setup-container {

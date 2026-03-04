@@ -16,6 +16,15 @@ const toggle = async (): Promise<void> => {
     await document.exitFullscreen();
   } else {
     await document.documentElement.requestFullscreen();
+    (
+      screen.orientation as ScreenOrientation & {
+        lock?: (o: string) => Promise<void>;
+      }
+    )
+      .lock?.("landscape")
+      .catch(() => {
+        /* unsupported */
+      });
   }
 };
 </script>
