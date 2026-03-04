@@ -22,6 +22,7 @@ import {
   VCT_STONE_THRESHOLD,
   type VCTSearchOptions,
 } from "../search/vct";
+import { hasOpenThree } from "../search/vctHelpers";
 
 /** 振り返り用VCF探索パラメータ */
 export const REVIEW_VCF_OPTIONS: VCFSearchOptions = {
@@ -138,10 +139,14 @@ export function checkForcedLoss(
     return { type: "double-four", sequence: [whiteWins.doubleFour] };
   }
 
-  // 3. 両ミセ
-  const oppDM = findDoubleMiseMoves(boardAfter, opponentColor);
-  if (oppDM.length > 0 && oppDM[0]) {
-    return { type: "double-mise", sequence: [oppDM[0]] };
+  // 3. 両ミセ（防御側に活三がある場合は不成立）
+  const validDM = filterDoubleMiseByOpenThree(
+    boardAfter,
+    opponentColor,
+    findDoubleMiseMoves(boardAfter, opponentColor),
+  );
+  if (validDM.length > 0 && validDM[0]) {
+    return { type: "double-mise", sequence: [validDM[0]] };
   }
 
   // 4. Mise-VCF
@@ -196,4 +201,35 @@ export function checkCandidateForcedLoss(
   } finally {
     row[pos.col] = null;
   }
+}
+
+/**
+ * 相手の活三がある場合に無効な両ミセ手を除外する
+ *
+ * 両ミセは次に四三を作る手だが、相手に活三があると
+ * 相手は四三防御を無視して棒四を打てるため両ミセが成立しない。
+ * ただし、両ミセ手が同時に相手の活三をブロックする場合は有効。
+ */
+export function filterDoubleMiseByOpenThree(
+  board: BoardState,
+  doubleMiseColor: "black" | "white",
+  candidates: Position[],
+): Position[] {
+  if (candidates.length === 0) {
+    return candidates;
+  }
+  const defenderColor = doubleMiseColor === "black" ? "white" : "black";
+  if (!hasOpenThree(board, defenderColor)) {
+    return candidates;
+  }
+  return candidates.filter((move) => {
+    const row = board[move.row];
+    if (!row) {
+      return false;
+    }
+    row[move.col] = doubleMiseColor;
+    const valid = !hasOpenThree(board, defenderColor);
+    row[move.col] = null;
+    return valid;
+  });
 }

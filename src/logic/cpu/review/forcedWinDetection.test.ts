@@ -71,6 +71,17 @@ describe("detectForcedWin: 優先順位", () => {
   });
 });
 
+describe("detectForcedWin: 活三がある場合の両ミセ無効化", () => {
+  it("相手に活三がある局面では両ミセを検出しない", () => {
+    // 16手後: 黒番。H6/J5で構造的に両ミセだが白に活三あり
+    // → 白は四三防御を無視して棒四を打てるため両ミセ不成立
+    const record = "H8 H7 I8 G8 I6 G9 G7 G6 J7 K8 I7 I9 K6 H9 J9 F7";
+    const result = detect(record);
+    expect(result.forcedWinType).not.toBe("double-mise");
+    expect(result.doubleMiseMoves).toEqual([]);
+  });
+});
+
 describe("detectForcedWin: 返り値の型安全性", () => {
   it("forcedWin=nullの場合、forcedWinTypeもundefined", () => {
     // 序盤は強制勝ちなし
