@@ -238,13 +238,12 @@ function analyzeFourAndThree(
 // =============================================================================
 
 /** 1パスあたりの最大延長回数 */
-export const MAX_EXTENSIONS = 2;
+export const MAX_EXTENSIONS = 1;
 
 /**
- * Threat Extension の候補かどうか判定（条件2: 自分の四三）
+ * Threat Extension の候補かどうか判定（自分の四三）
  *
  * 自分の手が四三を作った場合に延長対象。
- * 条件1（相手の四に対する応手）は呼び出し側で石配置前に判定する。
  *
  * @param board 盤面（move 配置済み）
  * @param move 現在の手

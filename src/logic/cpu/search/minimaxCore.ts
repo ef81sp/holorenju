@@ -51,7 +51,6 @@ import {
   FUTILITY_MARGINS_SELF,
   hasImmediateThreat,
   INFINITY,
-  isTacticalMoveOnBoard,
   isThreatExtensionCandidate,
   LMR_MIN_DEPTH,
   LMR_MOVE_THRESHOLD,
@@ -514,13 +513,6 @@ export function minimaxWithTT(
       depth >= LMR_MIN_DEPTH &&
       bestScore > -PATTERN_SCORES.FIVE + 1000; // 負けが確定していない
 
-    // Threat Extension 条件1: 相手の直前の手が四を作ったか（石配置前にチェック）
-    // 配置後だと現在の手が四をブロックし、四が検出されなくなるため
-    const lastMoveTactical =
-      extensions < MAX_EXTENSIONS &&
-      lastMove !== null &&
-      isTacticalMoveOnBoard(board, lastMove, lastMoveColor);
-
     // 石を配置（インプレース変更）
     applyMoveInPlace(board, move, currentColor);
     if (ctx.lineTable) {
@@ -533,14 +525,11 @@ export function minimaxWithTT(
 
     let score = 0;
 
-    // Threat Extension: 戦術的に重要な局面で探索を1手延長
-    // 条件1: 相手の四に対する応手（配置前に判定済み）
-    // 条件2: 自分の四三成立（配置後に判定）
+    // Threat Extension: 四三成立時に探索を1手延長
     let extension = 0;
     if (
-      lastMoveTactical ||
-      (extensions < MAX_EXTENSIONS &&
-        isThreatExtensionCandidate(board, move, currentColor))
+      extensions < MAX_EXTENSIONS &&
+      isThreatExtensionCandidate(board, move, currentColor)
     ) {
       extension = 1;
       ctx.stats.threatExtensions++;
