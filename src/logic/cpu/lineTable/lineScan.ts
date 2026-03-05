@@ -19,7 +19,11 @@ import {
   registerRebuildPackedTables,
   type EndState,
 } from "../evaluation/patternScores";
-import { countConsecutive, endStateAt } from "./lineCounting";
+import {
+  countConsecutive,
+  endStateAt,
+  endStateForBlackFour,
+} from "./lineCounting";
 import {
   getDirIndexFromLineId,
   LINE_BIT_TO_CELL,
@@ -168,6 +172,7 @@ export function precomputeLineFeatures(
         dirIndex,
         isReversed,
         _blackPatterns,
+        true,
       );
     }
     if (wMask) {
@@ -179,6 +184,7 @@ export function precomputeLineFeatures(
         dirIndex,
         isReversed,
         _whitePatterns,
+        false,
       );
     }
 
@@ -220,6 +226,7 @@ function processOccupied(
   dirIndex: number,
   isReversed: boolean,
   out: Uint8Array,
+  isBlack: boolean,
 ): void {
   let bits = ownMask;
   while (bits) {
@@ -230,8 +237,17 @@ function processOccupied(
     const negCount = countConsecutive(ownMask, bitPos, -1, len);
     const count = posCount + negCount + 1;
 
-    const posEnd = endStateAt(oppMask, bitPos + posCount + 1, len);
-    const negEnd = endStateAt(oppMask, bitPos - negCount - 1, len);
+    const posEndPos = bitPos + posCount + 1;
+    const negEndPos = bitPos - negCount - 1;
+
+    // 黒 count=4 はオーバーライン補正付き端状態判定を使用
+    const isBlackFour = isBlack && count === 4;
+    const posEnd = isBlackFour
+      ? endStateForBlackFour(oppMask, ownMask, posEndPos, 1, len)
+      : endStateAt(oppMask, posEndPos, len);
+    const negEnd = isBlackFour
+      ? endStateForBlackFour(oppMask, ownMask, negEndPos, -1, len)
+      : endStateAt(oppMask, negEndPos, len);
 
     // ↗方向は end1/end2 を反転
     const e1 = isReversed ? negEnd : posEnd;

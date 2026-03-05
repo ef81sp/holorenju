@@ -80,12 +80,30 @@ export function analyzeDirection(
   const pos = countInDirection(board, row, col, dr, dc, color);
   // 負方向
   const neg = countInDirection(board, row, col, -dr, -dc, color);
+  const count = pos.count + neg.count + 1; // +1は起点自身
+  let end1 = pos.endState;
+  let end2 = neg.endState;
 
-  return {
-    count: pos.count + neg.count + 1, // +1は起点自身
-    end1: pos.endState,
-    end2: neg.endState,
-  };
+  // 黒の count=4: オーバーライン補正
+  // empty 端の先に自色石がある場合、伸ばすと6連になるため塞がりとして扱う
+  if (color === "black" && count === 4) {
+    if (end1 === "empty") {
+      const bR = row + dr * (pos.count + 2);
+      const bC = col + dc * (pos.count + 2);
+      if (isValidPosition(bR, bC) && board[bR]?.[bC] === "black") {
+        end1 = "opponent";
+      }
+    }
+    if (end2 === "empty") {
+      const bR = row - dr * (neg.count + 2);
+      const bC = col - dc * (neg.count + 2);
+      if (isValidPosition(bR, bC) && board[bR]?.[bC] === "black") {
+        end2 = "opponent";
+      }
+    }
+  }
+
+  return { count, end1, end2 };
 }
 
 /**
