@@ -155,9 +155,16 @@ export function checkForcedLoss(
     return { type: "mise-vcf", sequence: oppMise.sequence };
   }
 
-  // 5. 三三（VCTと同等レベル）
+  // 5. 三三（VCTと同等レベル、防御側に活三がある場合は不成立）
   if (whiteWins?.doubleThree) {
-    return { type: "double-three", sequence: [whiteWins.doubleThree] };
+    const validDT = filterDoubleMiseByCounterThreats(
+      boardAfter,
+      opponentColor,
+      [whiteWins.doubleThree],
+    );
+    if (validDT.length > 0 && validDT[0]) {
+      return { type: "double-three", sequence: [validDT[0]] };
+    }
   }
 
   // 6. VCT
