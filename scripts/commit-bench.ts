@@ -52,6 +52,7 @@ interface CliOptions {
   sprtElo1: number;
   sprtAlpha: number;
   sprtBeta: number;
+  randomFactor?: number;
   verbose: boolean;
 }
 
@@ -99,6 +100,16 @@ function parseArgs(): CliOptions {
         options.sprtElo1 = value;
         options.useSPRT = true;
       }
+    } else if (arg.startsWith("--randomFactor=")) {
+      const value = parseFloat(arg.slice("--randomFactor=".length));
+      if (!isNaN(value) && value >= 0 && value <= 1) {
+        options.randomFactor = value;
+      } else {
+        console.error(
+          `Error: --randomFactor は 0〜1 の範囲で指定してください (got: ${arg.slice("--randomFactor=".length)})`,
+        );
+        process.exit(1);
+      }
     } else if (arg === "--verbose" || arg === "-v") {
       options.verbose = true;
     } else if (arg === "--help" || arg === "-h") {
@@ -125,6 +136,7 @@ Options:
   --sprt                 SPRT早期停止を有効化
   --elo0=<n>             SPRT帰無仮説Elo差 (default: 0)
   --elo1=<n>             SPRT対立仮説Elo差 (default: 30)
+  --randomFactor=<n>     探索にゆらぎを加える (0〜1, default: なし)
   --verbose, -v          詳細ログ
   --help, -h             ヘルプを表示
 
@@ -249,12 +261,16 @@ function removeWorktree(worktreePath: string): void {
 function createBridgeWorker(
   worktreePath: string,
   difficulty: string,
+  randomFactor?: number,
 ): Promise<Worker> {
   return new Promise<Worker>((resolve, reject) => {
     const workerPath = path.join(__dirname, "cpu-bridge-worker.ts");
 
+    const customParams =
+      randomFactor === undefined ? undefined : { randomFactor };
+
     const worker = new Worker(workerPath, {
-      workerData: { worktreePath, difficulty },
+      workerData: { worktreePath, difficulty, customParams },
       execArgv: [
         "--experimental-strip-types",
         "--disable-warning=ExperimentalWarning",
@@ -324,7 +340,9 @@ async function main(): Promise<void> {
   console.log(
     `commitB: ${commitB.shortSha} "${commitB.message}" (${commitB.date})`,
   );
-  console.log(`難易度: ${options.difficulty}`);
+  console.log(
+    `難易度: ${options.difficulty}${options.randomFactor === undefined ? "" : ` (randomFactor=${options.randomFactor})`}`,
+  );
   console.log(
     `セット数: ${options.sets} (${gamesPerSet}局/セット, 計${totalGames}局)`,
   );
@@ -377,8 +395,16 @@ async function main(): Promise<void> {
     // bridge workerを起動
     console.log("Bridge workerを初期化中...");
     [workerA, workerB] = await Promise.all([
-      createBridgeWorker(worktreePathA, options.difficulty),
-      createBridgeWorker(worktreePathB, options.difficulty),
+      createBridgeWorker(
+        worktreePathA,
+        options.difficulty,
+        options.randomFactor,
+      ),
+      createBridgeWorker(
+        worktreePathB,
+        options.difficulty,
+        options.randomFactor,
+      ),
     ]);
     console.log("Bridge worker初期化完了\n");
 
@@ -480,6 +506,7 @@ async function main(): Promise<void> {
         difficulty: options.difficulty,
         sets: options.sets,
         gamesPerSet,
+        randomFactor: options.randomFactor,
         sprt: sprtConfig,
       },
       totalGames: completedGames,

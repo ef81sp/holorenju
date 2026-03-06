@@ -37,6 +37,7 @@ export interface CommitBenchResult {
     difficulty: CpuDifficulty;
     sets: number;
     gamesPerSet: number;
+    randomFactor?: number;
     sprt: SPRTConfig | null;
   };
   /** 対局数 */
