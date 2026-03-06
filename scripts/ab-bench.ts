@@ -30,6 +30,10 @@ import type {
   WDLCount,
 } from "./types/ab.ts";
 
+import {
+  PATTERN_SCORES,
+  type EvaluationOptions,
+} from "../src/logic/cpu/evaluation/patternScores.ts";
 import { estimateEloDiff, formatEloDiff } from "./lib/eloDiff.ts";
 import { DEFAULT_SPRT_CONFIG, formatSPRT, updateSPRT } from "./lib/sprt.ts";
 
@@ -40,6 +44,8 @@ const OUTPUT_DIR = path.join(PROJECT_ROOT, "ab-results");
 interface CliOptions {
   candidateParams: Partial<DifficultyParams> | null;
   candidateFile: string | null;
+  scoreOverrides: Record<string, number> | null;
+  evalOptions: Record<string, unknown> | null;
   games: number;
   parallel: boolean;
   workers: number;
@@ -58,6 +64,8 @@ function parseArgs(): CliOptions {
   const options: CliOptions = {
     candidateParams: null,
     candidateFile: null,
+    scoreOverrides: null,
+    evalOptions: null,
     games: 100,
     parallel: false,
     workers: Math.min(3, Math.max(1, cpuCount - 1)),
@@ -103,6 +111,14 @@ function parseArgs(): CliOptions {
         options.sprtElo1 = value;
         options.useSPRT = true;
       }
+    } else if (arg.startsWith("--score-override=")) {
+      options.scoreOverrides = parseScoreOverrides(
+        arg.slice("--score-override=".length),
+      );
+    } else if (arg.startsWith("--eval-option=")) {
+      options.evalOptions = parseEvalOptions(
+        arg.slice("--eval-option=".length),
+      );
     } else if (arg === "--verbose" || arg === "-v") {
       options.verbose = true;
     } else if (arg === "--help" || arg === "-h") {
@@ -135,6 +151,103 @@ function parseInlineParams(str: string): Partial<DifficultyParams> {
   return params as Partial<DifficultyParams>;
 }
 
+/**
+ * --score-override=KEY:VALUE,... をパース
+ * KEY は PATTERN_SCORES のキーと照合してバリデーション
+ */
+function parseScoreOverrides(str: string): Record<string, number> {
+  const overrides: Record<string, number> = {};
+  for (const pair of str.split(",")) {
+    const [key, value] = pair.split(":");
+    if (!key || value === undefined) {
+      continue;
+    }
+    const trimKey = key.trim();
+    const trimValue = value.trim();
+
+    if (!(trimKey in PATTERN_SCORES)) {
+      console.error(
+        `Error: 無効なスコアキー "${trimKey}"。有効なキー: ${Object.keys(PATTERN_SCORES).join(", ")}`,
+      );
+      process.exit(1);
+    }
+
+    const num = Number(trimValue);
+    if (isNaN(num)) {
+      console.error(
+        `Error: "${trimKey}" の値は数値でなければなりません: "${trimValue}"`,
+      );
+      process.exit(1);
+    }
+    overrides[trimKey] = num;
+  }
+  return overrides;
+}
+
+/** EvaluationOptions で boolean として扱うキー */
+const EVAL_OPTION_BOOLEAN_KEYS: ReadonlySet<string> = new Set([
+  "enableFukumi",
+  "enableMise",
+  "enableForbiddenTrap",
+  "enableMultiThreat",
+  "enableCounterFour",
+  "enableVCT",
+  "enableMandatoryDefense",
+  "enableSingleFourPenalty",
+  "enableMiseThreat",
+  "enableDoubleThreeThreat",
+  "enableNullMovePruning",
+  "enableFutilityPruning",
+  "enableForbiddenVulnerability",
+]);
+
+/** EvaluationOptions で number として扱うキー */
+const EVAL_OPTION_NUMBER_KEYS: ReadonlySet<string> = new Set([
+  "singleFourPenaltyMultiplier",
+]);
+
+/**
+ * --eval-option=KEY:VALUE,... をパース
+ * KEY は EvaluationOptions のキーと照合してバリデーション
+ */
+function parseEvalOptions(str: string): Record<string, unknown> {
+  const options: Record<string, unknown> = {};
+  for (const pair of str.split(",")) {
+    const [key, value] = pair.split(":");
+    if (!key || value === undefined) {
+      continue;
+    }
+    const trimKey = key.trim();
+    const trimValue = value.trim();
+
+    if (EVAL_OPTION_BOOLEAN_KEYS.has(trimKey)) {
+      if (trimValue !== "true" && trimValue !== "false") {
+        console.error(
+          `Error: "${trimKey}" の値は true/false でなければなりません: "${trimValue}"`,
+        );
+        process.exit(1);
+      }
+      options[trimKey] = trimValue === "true";
+    } else if (EVAL_OPTION_NUMBER_KEYS.has(trimKey)) {
+      const num = Number(trimValue);
+      if (isNaN(num)) {
+        console.error(
+          `Error: "${trimKey}" の値は数値でなければなりません: "${trimValue}"`,
+        );
+        process.exit(1);
+      }
+      options[trimKey] = num;
+    } else {
+      const allKeys = [...EVAL_OPTION_BOOLEAN_KEYS, ...EVAL_OPTION_NUMBER_KEYS];
+      console.error(
+        `Error: 無効な評価オプションキー "${trimKey}"。有効なキー: ${allKeys.join(", ")}`,
+      );
+      process.exit(1);
+    }
+  }
+  return options;
+}
+
 function printHelp(): void {
   console.log(`
 A/B ベンチマーク比較 CLI
@@ -145,6 +258,8 @@ Usage:
 Options:
   --candidate=<params>       インラインパラメータ (例: "depth:5,timeLimit:10000")
   --candidate-file=<path>    パラメータJSONファイル
+  --score-override=<k:v,...> PATTERN_SCORES オーバーライド (例: "THREE:150,OPEN_TWO:100")
+  --eval-option=<k:v,...>    EvaluationOptions 切り替え (例: "enableFukumi:false")
   --games=<n>                対局数 (default: 100, 各サイド半分ずつ)
   --parallel, -p             並列実行
   --workers=<n>              並列ワーカー数 (max 3, implies --parallel)
@@ -157,6 +272,8 @@ Options:
 Examples:
   pnpm ab:bench --candidate="depth:5,timeLimit:10000" --games=200 --parallel
   pnpm ab:bench --candidate-file=params/candidate.json --sprt
+  pnpm ab:bench --score-override=THREE:150 --sprt
+  pnpm ab:bench --eval-option=enableFukumi:false --games=100
   pnpm ab:bench --games=100   # null test (baseline vs baseline)
 `);
 }
@@ -177,10 +294,15 @@ function clearStatus(): void {
 
 /**
  * candidate パラメータを解決
+ *
+ * --candidate, --candidate-file, --score-override, --eval-option を統合して
+ * Partial<DifficultyParams> を構築する。
  */
 function resolveCandidateParams(
   options: CliOptions,
 ): Partial<DifficultyParams> | undefined {
+  let base: Partial<DifficultyParams> | undefined = undefined;
+
   if (options.candidateFile) {
     const filePath = path.resolve(options.candidateFile);
     if (!fs.existsSync(filePath)) {
@@ -188,15 +310,32 @@ function resolveCandidateParams(
       process.exit(1);
     }
     const content = fs.readFileSync(filePath, "utf-8");
-    return JSON.parse(content);
+    base = JSON.parse(content);
+  } else if (options.candidateParams) {
+    base = options.candidateParams;
   }
 
-  if (options.candidateParams) {
-    return options.candidateParams;
+  // --score-override / --eval-option があれば evaluationOptions に注入
+  if (options.scoreOverrides || options.evalOptions) {
+    const baseEval = (base?.evaluationOptions ??
+      {}) as Partial<EvaluationOptions>;
+    const evalOverrides: Partial<EvaluationOptions> = {
+      ...baseEval,
+      ...(options.evalOptions as Partial<EvaluationOptions>),
+    };
+    if (options.scoreOverrides) {
+      evalOverrides.patternScoreOverrides = {
+        ...baseEval.patternScoreOverrides,
+        ...options.scoreOverrides,
+      };
+    }
+    return {
+      ...base,
+      evaluationOptions: evalOverrides as EvaluationOptions,
+    };
   }
 
-  // パラメータなし = null test（baseline vs baseline）
-  return undefined;
+  return base;
 }
 
 interface GameTask {
@@ -350,6 +489,12 @@ async function main(): Promise<void> {
     console.log(`Candidate: hard (default) — null test`);
   } else {
     console.log(`Candidate: hard + ${JSON.stringify(candidateCustomParams)}`);
+    if (options.scoreOverrides) {
+      console.log(`Score overrides: ${JSON.stringify(options.scoreOverrides)}`);
+    }
+    if (options.evalOptions) {
+      console.log(`Eval options: ${JSON.stringify(options.evalOptions)}`);
+    }
   }
   console.log(`対局数: ${options.games}`);
 
