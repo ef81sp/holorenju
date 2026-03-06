@@ -14,7 +14,7 @@ import { findMiseVCFSequence } from "../search/miseVcf";
 import { findVCFSequence } from "../search/vcf";
 import { findVCTSequence, VCT_STONE_THRESHOLD } from "../search/vct";
 import {
-  filterDoubleMiseByCounterThreats,
+  filterByCounterThreats,
   REVIEW_MISE_VCF_OPTIONS,
   REVIEW_VCF_OPTIONS,
 } from "./forcedLossCheck";
@@ -50,11 +50,7 @@ export function detectForcedWin(
   // （相手は四三防御を無視して棒四や四三を打てるため）
   const doubleMiseMoves =
     !isLightEval && !opponentHasFour
-      ? filterDoubleMiseByCounterThreats(
-          board,
-          color,
-          findDoubleMiseMoves(board, color),
-        )
+      ? filterByCounterThreats(board, color, findDoubleMiseMoves(board, color))
       : [];
   const doubleMiseBestMove =
     doubleMiseMoves.length > 0 ? (doubleMiseMoves[0] ?? null) : null;

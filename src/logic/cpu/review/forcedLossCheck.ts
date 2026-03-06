@@ -110,6 +110,15 @@ function findWhiteWinningMoves(board: BoardState): WhiteWinningMoves {
 
 /**
  * 相手の必勝手順（VCF→Mise-VCF→VCT）を検出する
+ *
+ * 脅威優先度と防御条件の対応:
+ * | 優先度 | 脅威タイプ | カウンター脅威条件          | 処理方式       |
+ * | 1      | VCF       | カウンター四（探索内部）      | 探索内部       |
+ * | 2      | 四四      | 四/活四（L1ガード）          | L1で全スキップ |
+ * | 3      | 両ミセ    | 活三 or ミセ手               | 外部フィルタ   |
+ * | 4      | Mise-VCF  | 活三 or ミセ手               | エントリーガード|
+ * | 5      | 三三      | 活三 or ミセ手               | 外部フィルタ   |
+ * | 6      | VCT       | 活三(per-node) + ct分岐      | 探索内部       |
  */
 export function checkForcedLoss(
   boardAfter: BoardState,
@@ -140,7 +149,7 @@ export function checkForcedLoss(
   }
 
   // 3. 両ミセ（防御側に活三がある場合は不成立）
-  const validDM = filterDoubleMiseByCounterThreats(
+  const validDM = filterByCounterThreats(
     boardAfter,
     opponentColor,
     findDoubleMiseMoves(boardAfter, opponentColor),
@@ -157,11 +166,9 @@ export function checkForcedLoss(
 
   // 5. 三三（VCTと同等レベル、防御側に活三がある場合は不成立）
   if (whiteWins?.doubleThree) {
-    const validDT = filterDoubleMiseByCounterThreats(
-      boardAfter,
-      opponentColor,
-      [whiteWins.doubleThree],
-    );
+    const validDT = filterByCounterThreats(boardAfter, opponentColor, [
+      whiteWins.doubleThree,
+    ]);
     if (validDT.length > 0 && validDT[0]) {
       return { type: "double-three", sequence: [validDT[0]] };
     }
@@ -199,7 +206,9 @@ export function checkCandidateForcedLoss(
 
   row[pos.col] = color;
   try {
-    // 自分に四があれば相手はVCF/VCTどころではない
+    // L1ガード: 自分に四/活四があれば相手の全脅威をスキップ
+    // （四を止めなければ即負けのため、相手はVCF/VCT/両ミセ等を実行できない）
+    // L2（個別脅威の活三/ミセ手チェック）は各探索関数・filterByCounterThreats で処理
     const selfThreats = detectOpponentThreats(board, color);
     if (selfThreats.fours.length > 0 || selfThreats.openFours.length > 0) {
       return undefined;
@@ -211,21 +220,21 @@ export function checkCandidateForcedLoss(
 }
 
 /**
- * 相手に反撃脅威（活三またはミセ手）がある場合に無効な両ミセ手を除外する
+ * 相手に反撃脅威（活三またはミセ手）がある場合に無効な候補手を除外する
  *
- * 両ミセは次に四三を作る手だが、相手に活三やミセ手があると
- * 相手は四三防御を無視して棒四や四三を打てるため両ミセが成立しない。
- * ただし、両ミセ手が同時に相手の脅威をブロックする場合は有効。
+ * 両ミセ・三三など「次に四三を作る」系の脅威は、相手に活三やミセ手があると
+ * 相手は防御を無視して棒四や四三を打てるため成立しない。
+ * ただし、候補手が同時に相手の脅威をブロックする場合は有効。
  */
-export function filterDoubleMiseByCounterThreats(
+export function filterByCounterThreats(
   board: BoardState,
-  doubleMiseColor: "black" | "white",
+  attackerColor: "black" | "white",
   candidates: Position[],
 ): Position[] {
   if (candidates.length === 0) {
     return candidates;
   }
-  const defenderColor = doubleMiseColor === "black" ? "white" : "black";
+  const defenderColor = attackerColor === "black" ? "white" : "black";
   if (
     !hasOpenThree(board, defenderColor) &&
     !hasFourThreeAvailable(board, defenderColor)
@@ -237,7 +246,7 @@ export function filterDoubleMiseByCounterThreats(
     if (!row) {
       return false;
     }
-    row[move.col] = doubleMiseColor;
+    row[move.col] = attackerColor;
     const valid =
       !hasOpenThree(board, defenderColor) &&
       !hasFourThreeAvailable(board, defenderColor);
