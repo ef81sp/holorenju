@@ -11,6 +11,8 @@ import PageHeader from "@/components/common/PageHeader.vue";
 // oxlint-disable-next-line consistent-type-imports
 import CpuRecordDialog from "./CpuRecordDialog.vue";
 // oxlint-disable-next-line consistent-type-imports
+import GameRecordImportDialog from "./GameRecordImportDialog.vue";
+// oxlint-disable-next-line consistent-type-imports
 import JushuSelectDialog from "./JushuSelectDialog.vue";
 import { getCharacterSpriteUrl } from "@/logic/characterSprites";
 import { useAppStore } from "@/stores/appStore";
@@ -22,6 +24,9 @@ const appStore = useAppStore();
 const preferencesStore = usePreferencesStore();
 
 const recordDialogRef = ref<InstanceType<typeof CpuRecordDialog> | null>(null);
+const importDialogRef = ref<InstanceType<typeof GameRecordImportDialog> | null>(
+  null,
+);
 const jushuDialogRef = ref<InstanceType<typeof JushuSelectDialog> | null>(null);
 
 // 選択状態（ストアに値がなければ未選択）
@@ -208,11 +213,18 @@ const handleBack = (): void => {
           >
             対戦記録
           </button>
+          <button
+            class="record-button"
+            @click="importDialogRef?.showModal()"
+          >
+            棋譜読込
+          </button>
         </div>
       </div>
     </div>
 
     <CpuRecordDialog ref="recordDialogRef" />
+    <GameRecordImportDialog ref="importDialogRef" />
     <JushuSelectDialog
       ref="jushuDialogRef"
       :selected-jushu="selectedJushu"
