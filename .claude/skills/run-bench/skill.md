@@ -23,9 +23,9 @@ CPU AI同士のベンチマーク対局を実行する。
 ## 使用方法
 
 ```
-/run-bench                                    # デフォルト（全難易度50局）
-/run-bench --games=100 --workers=2            # 100局、2ワーカー
-/run-bench --self --players=hard --games=100  # hard vs hard 100局
+/run-bench                                    # デフォルト（全難易度1セット=52局）
+/run-bench --sets=1 --workers=2               # 1セット52局、2ワーカー
+/run-bench --self --players=hard --sets=2     # hard vs hard 2セット
 /run-bench <任意のオプション>                  # 引数をそのまま pnpm bench に渡す
 ```
 
@@ -38,17 +38,17 @@ CPU AI同士のベンチマーク対局を実行する。
 
 ## CLI オプション（クイックリファレンス）
 
-| オプション              | 説明                                 | デフォルト          |
-| ----------------------- | ------------------------------------ | ------------------- |
-| `--players=<list>`      | 対戦する難易度（カンマ区切り）       | 全難易度            |
-| `--games=<n>`           | 各組み合わせの対局数                 | 50                  |
-| `--workers=<n>`         | ワーカー数（--parallel 暗黙、最大3） | min(3, CPUコア数-1) |
-| `--parallel`, `-p`      | 並列実行                             | false               |
-| `--self`, `-s`          | セルフプレイのみ                     | false               |
-| `--output=<dir>`        | 結果出力ディレクトリ                 | `bench-results`     |
-| `--format=<fmt>`        | 出力形式（json/csv）                 | json                |
-| `--verbose`, `-v`       | 詳細ログ出力                         | false               |
-| `--score-override=<kv>` | PATTERN_SCORES上書き（A/Bテスト用）  | なし                |
+| オプション              | 説明                                      | デフォルト          |
+| ----------------------- | ----------------------------------------- | ------------------- |
+| `--players=<list>`      | 対戦する難易度（カンマ区切り）            | 全難易度            |
+| `--sets=<n>`            | セット数（1セット = 26珠型 × 2色 = 52局） | 1                   |
+| `--workers=<n>`         | ワーカー数（--parallel 暗黙、最大3）      | min(3, CPUコア数-1) |
+| `--parallel`, `-p`      | 並列実行                                  | false               |
+| `--self`, `-s`          | セルフプレイのみ                          | false               |
+| `--output=<dir>`        | 結果出力ディレクトリ                      | `bench-results`     |
+| `--format=<fmt>`        | 出力形式（json/csv）                      | json                |
+| `--verbose`, `-v`       | 詳細ログ出力                              | false               |
+| `--score-override=<kv>` | PATTERN_SCORES上書き（A/Bテスト用）       | なし                |
 
 ## 出力
 

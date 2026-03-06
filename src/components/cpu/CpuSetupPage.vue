@@ -10,6 +10,8 @@ import { computed, ref } from "vue";
 import PageHeader from "@/components/common/PageHeader.vue";
 // oxlint-disable-next-line consistent-type-imports
 import CpuRecordDialog from "./CpuRecordDialog.vue";
+// oxlint-disable-next-line consistent-type-imports
+import JushuSelectDialog from "./JushuSelectDialog.vue";
 import { getCharacterSpriteUrl } from "@/logic/characterSprites";
 import { useAppStore } from "@/stores/appStore";
 import { usePreferencesStore } from "@/stores/preferencesStore";
@@ -20,6 +22,7 @@ const appStore = useAppStore();
 const preferencesStore = usePreferencesStore();
 
 const recordDialogRef = ref<InstanceType<typeof CpuRecordDialog> | null>(null);
+const jushuDialogRef = ref<InstanceType<typeof JushuSelectDialog> | null>(null);
 
 // 選択状態（ストアに値がなければ未選択）
 const selectedDifficulty = ref<CpuDifficulty | null>(
@@ -28,6 +31,23 @@ const selectedDifficulty = ref<CpuDifficulty | null>(
 const selectedFirst = ref<boolean | null>(
   preferencesStore.lastCpuPlayerFirst ?? null,
 );
+
+// 珠型選択状態
+const selectedJushu = ref<string | null>(preferencesStore.lastCpuJushu);
+const selectedFixedDirection = ref(preferencesStore.lastCpuFixedDirection);
+
+const jushuDisplayLabel = computed(() =>
+  selectedJushu.value ? selectedJushu.value : "ランダム",
+);
+
+function handleJushuSelect(jushu: string, fixedDirection: boolean): void {
+  selectedJushu.value = jushu;
+  selectedFixedDirection.value = fixedDirection;
+}
+
+function handleJushuClear(): void {
+  selectedJushu.value = null;
+}
 
 const isReady = computed(
   () => selectedDifficulty.value !== null && selectedFirst.value !== null,
@@ -67,7 +87,14 @@ const handleStartGame = (): void => {
   }
   preferencesStore.lastCpuDifficulty = selectedDifficulty.value;
   preferencesStore.lastCpuPlayerFirst = selectedFirst.value;
-  appStore.startCpuGame(selectedDifficulty.value, selectedFirst.value);
+  preferencesStore.lastCpuJushu = selectedJushu.value;
+  preferencesStore.lastCpuFixedDirection = selectedFixedDirection.value;
+  appStore.startCpuGame(
+    selectedDifficulty.value,
+    selectedFirst.value,
+    selectedJushu.value ?? undefined,
+    selectedJushu.value ? selectedFixedDirection.value : undefined,
+  );
 };
 
 const handleBack = (): void => {
@@ -145,6 +172,19 @@ const handleBack = (): void => {
           </div>
         </fieldset>
 
+        <!-- 珠型選択 -->
+        <fieldset class="setup-section">
+          <legend class="section-title">珠型（オプション）</legend>
+          <button
+            type="button"
+            class="jushu-select-button"
+            @click="jushuDialogRef?.showModal()"
+          >
+            <span class="jushu-label">{{ jushuDisplayLabel }}</span>
+            <span class="jushu-arrow">▼</span>
+          </button>
+        </fieldset>
+
         <!-- ボタン群 -->
         <div class="action-buttons">
           <div class="start-area">
@@ -173,6 +213,13 @@ const handleBack = (): void => {
     </div>
 
     <CpuRecordDialog ref="recordDialogRef" />
+    <JushuSelectDialog
+      ref="jushuDialogRef"
+      :selected-jushu="selectedJushu"
+      :fixed-direction="selectedFixedDirection"
+      @select="handleJushuSelect"
+      @clear="handleJushuClear"
+    />
   </div>
 </template>
 
@@ -326,6 +373,35 @@ const handleBack = (): void => {
 }
 
 .order-description {
+  font-size: var(--size-10);
+  color: var(--color-text-secondary);
+}
+
+.jushu-select-button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: var(--size-10) var(--size-16);
+  background: var(--color-background-secondary);
+  border: var(--size-2) solid var(--color-border-light);
+  border-radius: var(--size-10);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.jushu-select-button:hover {
+  border-color: var(--color-primary);
+  box-shadow: 0 var(--size-2) var(--size-8) rgba(0, 0, 0, 0.1);
+}
+
+.jushu-label {
+  font-size: var(--size-14);
+  font-weight: 500;
+  color: var(--color-text-primary);
+}
+
+.jushu-arrow {
   font-size: var(--size-10);
   color: var(--color-text-secondary);
 }

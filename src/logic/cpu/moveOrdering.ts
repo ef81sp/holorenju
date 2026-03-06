@@ -183,6 +183,8 @@ export interface MoveOrderingOptions {
   depth?: number;
   /** History Table */
   history?: HistoryTable;
+  /** Counter-move（相手の直前の手に対する最善応手） */
+  counterMove?: Position | null;
   /** 静的評価を使用するか */
   useStaticEval?: boolean;
   /** 評価オプション（重い機能の有効/無効） */
@@ -223,6 +225,7 @@ export function sortMoves(
     killers,
     depth,
     history,
+    counterMove,
     useStaticEval = true,
     evaluationOptions = DEFAULT_EVAL_OPTIONS,
     maxStaticEvalCount,
@@ -276,6 +279,15 @@ export function sortMoves(
         score += 100000 - i * 10000;
         break;
       }
+    }
+
+    // 3. Counter-move
+    if (
+      counterMove &&
+      move.row === counterMove.row &&
+      move.col === counterMove.col
+    ) {
+      score += 50000;
     }
 
     // 4. History Heuristic（静的評価より先に適用）

@@ -13,6 +13,7 @@ import { type TimeLimiter, isTimeExceeded } from "./context";
 import { createsFour } from "./threatMoves";
 import {
   checkDefenseCounterThreat,
+  findFourMoves,
   getFourDefensePosition,
 } from "./threatPatterns";
 import {
@@ -691,6 +692,10 @@ export function findVCTSequence(
     if (!validateVCTSequence(board, color, sequence)) {
       continue;
     }
+    // カウンター四耐性チェック: 攻撃の三に対し防御側が別位置で四を打ち手順を破壊しないか
+    if (!isResilientToCounterFours(board, color, sequence)) {
+      continue;
+    }
 
     const result: VCTSequenceResult = {
       firstMove: sequence[0],
@@ -719,11 +724,26 @@ function validateVCTSequence(
   color: "black" | "white",
   sequence: Position[],
 ): boolean {
+  return validateSubsequence(board, color, sequence, 0);
+}
+
+/**
+ * VCT手順の部分検証（内部ヘルパー）
+ *
+ * validateVCTSequence と hasBreakingCounterFour の共通ロジック。
+ * sequence[startIndex] から末尾までリプレイし、防御の ct 値を検証する。
+ */
+function validateSubsequence(
+  board: BoardState,
+  color: "black" | "white",
+  sequence: Position[],
+  startIndex: number,
+): boolean {
   const opponentColor = color === "black" ? "white" : "black";
   const placed: Position[] = [];
 
   let valid = true;
-  for (let i = 0; i < sequence.length; i++) {
+  for (let i = startIndex; i < sequence.length; i++) {
     const pos = sequence[i];
     if (!pos) {
       continue;
@@ -831,6 +851,221 @@ function validateVCTSequence(
   }
 
   return valid;
+}
+
+/**
+ * VCT手順がカウンター四に耐性があるか検証
+ *
+ * 攻撃手が三を作る各ステップで、防御側がカウンター四を打てるか調べ、
+ * CF+ブロック配置後に元手順の残りが崩壊しないか検証する。
+ *
+ * validateVCTSequence（手順整合性検証）とは独立した責務。
+ * 呼び出し元で2段階バリデーション: 手順検証 → カウンター四耐性チェック。
+ */
+function isResilientToCounterFours(
+  board: BoardState,
+  color: "black" | "white",
+  sequence: Position[],
+): boolean {
+  const opponentColor = color === "black" ? "white" : "black";
+  const placed: Position[] = [];
+  let resilient = true;
+
+  for (let i = 0; i < sequence.length; i++) {
+    const pos = sequence[i];
+    if (!pos) {
+      continue;
+    }
+
+    const isAttack = i % 2 === 0;
+    const stoneColor = isAttack ? color : opponentColor;
+
+    const row = board[pos.row];
+    if (row) {
+      row[pos.col] = stoneColor;
+    }
+    placed.push(pos);
+
+    // 攻撃手が三を作る場合のみチェック（四や五連は対象外）
+    if (
+      isAttack &&
+      !checkFive(board, pos.row, pos.col, color) &&
+      !createsFour(board, pos.row, pos.col, color)
+    ) {
+      if (hasBreakingCounterFour(board, color, sequence, i)) {
+        resilient = false;
+        break;
+      }
+    }
+  }
+
+  // 盤面を元に戻す
+  for (let j = placed.length - 1; j >= 0; j--) {
+    const p = placed[j];
+    if (!p) {
+      continue;
+    }
+    const r = board[p.row];
+    if (r) {
+      r[p.col] = null;
+    }
+  }
+
+  return resilient;
+}
+
+/**
+ * 非直接カウンター四が手順を破壊するか検査
+ *
+ * CF+ブロック配置後、元手順の残りをリプレイし、防御の ct 値変化を検証。
+ * ct=win/ct=four不一致のみチェック（活三/ミセ手チェックはCF+ブロック配置下で
+ * 偽陽性を生むため省略）。省略により偽VCTを見逃す可能性はあるが、
+ * CF+ブロック由来の活三発生は稀であり、実害は限定的。
+ *
+ * @returns いずれかのカウンター四が手順を破壊するなら true
+ */
+function hasBreakingCounterFour(
+  board: BoardState,
+  color: "black" | "white",
+  sequence: Position[],
+  attackIndex: number,
+): boolean {
+  const opponentColor = color === "black" ? "white" : "black";
+  const counterFours = findFourMoves(board, opponentColor);
+
+  for (const cf of counterFours) {
+    // CF が五連を作るか
+    const cfRow = board[cf.row];
+    if (!cfRow) {
+      continue;
+    }
+    cfRow[cf.col] = opponentColor;
+
+    if (checkFive(board, cf.row, cf.col, opponentColor)) {
+      cfRow[cf.col] = null;
+      return true;
+    }
+
+    // ブロック位置取得（null = 活四 → 防御側勝利）
+    const blockPos = getFourDefensePosition(board, cf, opponentColor);
+    if (!blockPos) {
+      cfRow[cf.col] = null;
+      return true;
+    }
+
+    // ブロック配置
+    const blockRow = board[blockPos.row];
+    if (blockRow) {
+      blockRow[blockPos.col] = color;
+    }
+
+    // CF+ブロック後、残り手順の防御手 ct 変化を検証
+    const breaks = checkSequenceBreaksByCF(
+      board,
+      color,
+      sequence,
+      attackIndex + 1,
+    );
+
+    // Undo
+    if (blockRow) {
+      blockRow[blockPos.col] = null;
+    }
+    cfRow[cf.col] = null;
+
+    if (breaks) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * CF+ブロック配置下で残り手順の防御 ct 値が破壊的に変化するか検査
+ *
+ * validateSubsequenceの簡略版。ct=win と ct=four不一致のみチェック。
+ * 活三/ミセ手チェックはCF配置下で偽陽性（正当VCTの誤棄却）を生むため省略。
+ * これにより偽VCTを見逃す方向の偽陰性が生じうるが、CF+ブロック由来の
+ * 活三発生は稀であり実害は限定的。
+ */
+function checkSequenceBreaksByCF(
+  board: BoardState,
+  color: "black" | "white",
+  sequence: Position[],
+  startIndex: number,
+): boolean {
+  const opponentColor = color === "black" ? "white" : "black";
+  const placed: Position[] = [];
+
+  let breaks = false;
+  for (let i = startIndex; i < sequence.length; i++) {
+    const pos = sequence[i];
+    if (!pos) {
+      continue;
+    }
+
+    const isDefense = i % 2 === 1;
+    const stoneColor = isDefense ? opponentColor : color;
+
+    // CF/ブロックが占有済みの位置はスキップ
+    // 異色衝突（CF at 攻撃位置等）を即breaks=trueにすると、戦略的に打たれない
+    // CFまで含めて全カウンター四をチェックするため偽陽性が生じる。
+    // lenient方向（スキップ）にすることで正当VCTの棄却を回避する。
+    if (board[pos.row]?.[pos.col] !== null) {
+      continue;
+    }
+
+    const row = board[pos.row];
+    if (row) {
+      row[pos.col] = stoneColor;
+    }
+    placed.push(pos);
+
+    if (isDefense) {
+      const ct = checkDefenseCounterThreat(
+        board,
+        pos.row,
+        pos.col,
+        opponentColor,
+      );
+      if (ct === "win") {
+        breaks = true;
+        break;
+      }
+      if (ct === "four") {
+        const fourBlockPos = getFourDefensePosition(board, pos, opponentColor);
+        if (!fourBlockPos) {
+          breaks = true;
+          break;
+        }
+        const nextIdx = i + 1;
+        const nextPos = nextIdx < sequence.length ? sequence[nextIdx] : null;
+        if (
+          !nextPos ||
+          nextPos.row !== fourBlockPos.row ||
+          nextPos.col !== fourBlockPos.col
+        ) {
+          breaks = true;
+          break;
+        }
+      }
+    }
+  }
+
+  // 盤面を元に戻す
+  for (let j = placed.length - 1; j >= 0; j--) {
+    const p = placed[j];
+    if (!p) {
+      continue;
+    }
+    const r = board[p.row];
+    if (r) {
+      r[p.col] = null;
+    }
+  }
+
+  return breaks;
 }
 
 /** 再帰探索のコンテキスト */
@@ -1742,9 +1977,15 @@ export function findVCTSequenceFromFirstMove(
     return null;
   }
 
+  const fullSequence = [move, mainDefense, ...mainContinuation.sequence];
+  // カウンター四耐性チェック: 最初の攻撃手が三の場合のCF検証を含む
+  if (!isResilientToCounterFours(board, color, fullSequence)) {
+    return null;
+  }
+
   return {
     firstMove: move,
-    sequence: [move, mainDefense, ...mainContinuation.sequence],
+    sequence: fullSequence,
     isForbiddenTrap: mainContinuation.isForbiddenTrap,
   };
 }

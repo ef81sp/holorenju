@@ -92,6 +92,8 @@ export interface AppState {
   selectedScenarioId: string | null;
   cpuDifficulty: CpuDifficulty | null;
   cpuPlayerFirst: boolean | null;
+  cpuJushu: string | null;
+  cpuFixedDirection: boolean | null;
   reviewRecordId: string | null;
   reviewImported: boolean;
 }
@@ -110,6 +112,8 @@ export const useAppStore = defineStore("app", {
     transitionDirection: "forward",
     cpuDifficulty: null,
     cpuPlayerFirst: null,
+    cpuJushu: null,
+    cpuFixedDirection: null,
     reviewRecordId: null,
     reviewImported: false,
   }),
@@ -156,6 +160,8 @@ export const useAppStore = defineStore("app", {
       this.selectedScenarioId = null;
       this.cpuDifficulty = null;
       this.cpuPlayerFirst = null;
+      this.cpuJushu = null;
+      this.cpuFixedDirection = null;
       this.reviewRecordId = null;
       this.reviewImported = false;
       this.pushHistory();
@@ -186,14 +192,23 @@ export const useAppStore = defineStore("app", {
       this.scene = "cpuSetup";
       this.cpuDifficulty = null;
       this.cpuPlayerFirst = null;
+      this.cpuJushu = null;
+      this.cpuFixedDirection = null;
       this.reviewImported = false;
       this.pushHistory();
     },
 
-    startCpuGame(difficulty: CpuDifficulty, playerFirst: boolean) {
+    startCpuGame(
+      difficulty: CpuDifficulty,
+      playerFirst: boolean,
+      jushu?: string,
+      fixedDirection?: boolean,
+    ) {
       this.transitionDirection = "forward";
       this.cpuDifficulty = difficulty;
       this.cpuPlayerFirst = playerFirst;
+      this.cpuJushu = jushu ?? null;
+      this.cpuFixedDirection = fixedDirection ?? null;
       this.scene = "cpuPlay";
       this.pushHistory();
     },
@@ -241,6 +256,12 @@ export const useAppStore = defineStore("app", {
       }
       if (state.cpuPlayerFirst !== undefined) {
         this.cpuPlayerFirst = state.cpuPlayerFirst;
+      }
+      if (state.cpuJushu !== undefined) {
+        this.cpuJushu = state.cpuJushu;
+      }
+      if (state.cpuFixedDirection !== undefined) {
+        this.cpuFixedDirection = state.cpuFixedDirection;
       }
       if (state.reviewRecordId !== undefined) {
         this.reviewRecordId = state.reviewRecordId;
@@ -319,6 +340,8 @@ export const useAppStore = defineStore("app", {
         selectedScenarioId: this.selectedScenarioId,
         cpuDifficulty: this.cpuDifficulty,
         cpuPlayerFirst: this.cpuPlayerFirst,
+        cpuJushu: this.cpuJushu,
+        cpuFixedDirection: this.cpuFixedDirection,
         reviewRecordId: this.reviewRecordId,
         reviewImported: this.reviewImported,
       };

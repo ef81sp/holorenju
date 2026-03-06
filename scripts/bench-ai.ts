@@ -14,6 +14,8 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Worker } from "node:worker_threads";
 
+import type { Position } from "../src/types/game.ts";
+
 import {
   calculateStats,
   createInitialRating,
@@ -29,13 +31,17 @@ import {
   PATTERN_SCORES,
   type PatternScoreValues,
 } from "../src/logic/cpu/evaluation/patternScores.ts";
+import {
+  getAllJushuNames,
+  getJushuPositions,
+} from "../src/logic/cpu/opening.ts";
 import { CPU_DIFFICULTIES, type CpuDifficulty } from "../src/types/cpu.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 interface CliOptions {
   players: CpuDifficulty[];
-  games: number;
+  sets: number;
   output: string;
   format: "json" | "csv";
   verbose: boolean;
@@ -58,7 +64,8 @@ interface BenchmarkResult {
   timestamp: string;
   options: {
     players: string[];
-    gamesPerMatchup: number;
+    sets: number;
+    gamesPerSet: number;
     parallel: boolean;
     workers: number;
   };
@@ -74,6 +81,8 @@ interface GameTask {
   matchupIndex: number;
   gameIndex: number;
   isABlack: boolean;
+  openingMoves?: [Position, Position, Position];
+  jushuName?: string;
 }
 
 interface WorkerResult {
@@ -87,7 +96,7 @@ function parseArgs(): CliOptions {
 
   const options: CliOptions = {
     players: [...CPU_DIFFICULTIES],
-    games: 50,
+    sets: 1,
     output: "bench-results",
     format: "json",
     verbose: false,
@@ -108,10 +117,10 @@ function parseArgs(): CliOptions {
       if (players.length > 0) {
         options.players = players;
       }
-    } else if (arg.startsWith("--games=")) {
-      const value = parseInt(arg.slice("--games=".length), 10);
+    } else if (arg.startsWith("--sets=")) {
+      const value = parseInt(arg.slice("--sets=".length), 10);
       if (!isNaN(value) && value > 0) {
-        options.games = value;
+        options.sets = value;
       }
     } else if (arg.startsWith("--output=")) {
       options.output = arg.slice("--output=".length);
@@ -162,7 +171,8 @@ Usage:
 Options:
   --players=<list>   Comma-separated list of difficulties to benchmark
                      (beginner,easy,medium,hard). Default: all
-  --games=<n>        Number of games per matchup. Default: 50
+  --sets=<n>         Number of sets per matchup (1 set = 26 jushu × 2 colors = 52 games).
+                     Default: 1 (52 games)
   --output=<dir>     Output directory. Default: bench-results
   --format=<fmt>     Output format (json|csv). Default: json
   --verbose, -v      Enable verbose logging
@@ -178,10 +188,10 @@ Options:
 
 Examples:
   pnpm bench:ai
-  pnpm bench:ai --players=medium,hard --games=20
+  pnpm bench:ai --players=medium,hard --sets=1
   pnpm bench:ai --parallel --workers=4
   pnpm bench:ai --verbose --format=csv
-  pnpm bench:ai --self --players=hard --games=100   # hard vs hard (self-play)
+  pnpm bench:ai --self --players=hard --sets=2   # hard vs hard (self-play)
   pnpm bench:ai --score-override=LEAF_COMPOUND_THREAT_BONUS:0  # A/B test
 `);
 }
@@ -218,6 +228,86 @@ function generateMatchups(
   return matchups;
 }
 
+interface JushuTask {
+  jushuName: string;
+  positions: [Position, Position, Position];
+  isABlack: boolean;
+}
+
+/** 珠型セット制のタスクリストを生成 */
+function buildJushuTasks(sets: number): JushuTask[] {
+  const jushuNames = getAllJushuNames();
+  const tasks: JushuTask[] = [];
+  for (let set = 0; set < sets; set++) {
+    for (const jushuName of jushuNames) {
+      const positions = getJushuPositions(jushuName, true);
+      if (!positions) {
+        continue;
+      }
+      for (const isABlack of [true, false]) {
+        tasks.push({ jushuName, positions, isABlack });
+      }
+    }
+  }
+  return tasks;
+}
+
+function normalizeWinner(
+  rawWinner: "A" | "B" | "draw",
+  isABlack: boolean,
+): "A" | "B" | "draw" {
+  if (rawWinner === "draw") {
+    return "draw";
+  }
+  if (isABlack) {
+    return rawWinner;
+  }
+  return rawWinner === "A" ? "B" : "A";
+}
+
+function updateMatchupResult(
+  mr: MatchupResult,
+  winner: "A" | "B" | "draw",
+): void {
+  switch (winner) {
+    case "A":
+      mr.winsA++;
+      break;
+    case "B":
+      mr.winsB++;
+      break;
+    default:
+      mr.draws++;
+  }
+}
+
+function winnerToOutcome(winner: "A" | "B" | "draw"): "win" | "loss" | "draw" {
+  if (winner === "A") {
+    return "win";
+  }
+  if (winner === "B") {
+    return "loss";
+  }
+  return "draw";
+}
+
+function updatePlayerRatings(
+  ratings: Record<string, EloRating>,
+  playerA: string,
+  playerB: string,
+  winner: "A" | "B" | "draw",
+): void {
+  const ratingA = ratings[playerA];
+  const ratingB = ratings[playerB];
+  if (!ratingA || !ratingB) {
+    return;
+  }
+  const outcome = winnerToOutcome(winner);
+  const updated = updateRatings(ratingA, ratingB, outcome);
+  ratings[playerA] = updated.ratingA;
+  ratings[playerB] = updated.ratingB;
+}
+
 /**
  * ステータス行を更新（同じ行を上書き）
  */
@@ -233,13 +323,14 @@ function clearStatus(): void {
 }
 
 function runBenchmarkSequential(options: CliOptions): BenchmarkResult {
-  const { players, games, verbose, self: selfPlay } = options;
+  const { players, sets, verbose, self: selfPlay } = options;
+  const gamesPerSet = getAllJushuNames().length * 2; // 26珠型 × 2色
 
   console.log(
     `\n=== CPU AI Benchmark (Sequential${selfPlay ? ", Self-Play Only" : ""}) ===`,
   );
   console.log(`Players: ${players.join(", ")}`);
-  console.log(`Games per matchup: ${games}`);
+  console.log(`Sets: ${sets} (${gamesPerSet} games/set)`);
   if (selfPlay) {
     console.log(`Mode: Self-play only (excludes cross-difficulty matchups)`);
   } else {
@@ -257,7 +348,8 @@ function runBenchmarkSequential(options: CliOptions): BenchmarkResult {
   const allGames: GameResult[] = [];
 
   const totalMatchups = matchups.length;
-  const totalGames = totalMatchups * games;
+  const gamesPerMatchup = sets * gamesPerSet;
+  const totalGames = totalMatchups * gamesPerMatchup;
 
   console.log(`Total matchups: ${totalMatchups}`);
   console.log(`Total games: ${totalGames}`);
@@ -275,12 +367,14 @@ function runBenchmarkSequential(options: CliOptions): BenchmarkResult {
       winsA: 0,
       winsB: 0,
       draws: 0,
-      total: games,
+      total: gamesPerMatchup,
     };
 
-    for (let i = 0; i < games; i++) {
-      const isABlack = i % 2 === 0;
+    const jushuTasks = buildJushuTasks(sets);
 
+    let matchupGameIndex = 0;
+    for (const task of jushuTasks) {
+      const { jushuName, positions, isABlack } = task;
       const configA: PlayerConfig = { id: playerA, difficulty: playerA };
       const configB: PlayerConfig = { id: playerB, difficulty: playerB };
 
@@ -290,56 +384,21 @@ function runBenchmarkSequential(options: CliOptions): BenchmarkResult {
       // ステータス行を更新
       const gameStartTime = performance.now();
       const elapsed = ((gameStartTime - benchStartTime) / 1000).toFixed(0);
+      matchupGameIndex++;
       writeStatus(
-        `[${elapsed}s] ${playerA} vs ${playerB}: Game ${i + 1}/${games} (${matchupResult.winsA}W-${matchupResult.winsB}L-${matchupResult.draws}D) - playing...`,
+        `[${elapsed}s] ${playerA} vs ${playerB}: ${jushuName} ${isABlack ? "A黒" : "A白"} ${matchupGameIndex}/${gamesPerMatchup} (${matchupResult.winsA}W-${matchupResult.winsB}L-${matchupResult.draws}D)`,
       );
 
-      const result = runHeadlessGame(black, white, { verbose });
-
-      const normalizeWinner = (): "A" | "B" | "draw" => {
-        if (result.winner === "draw") {
-          return "draw";
-        }
-        if (isABlack) {
-          return result.winner;
-        }
-        return result.winner === "A" ? "B" : "A";
-      };
-      const winner = normalizeWinner();
-
-      if (winner === "A") {
-        matchupResult.winsA++;
-      } else if (winner === "B") {
-        matchupResult.winsB++;
-      } else {
-        matchupResult.draws++;
-      }
-
-      const ratingA = ratings[playerA];
-      const ratingB = ratings[playerB];
-      if (ratingA && ratingB) {
-        const getOutcome = (): "win" | "loss" | "draw" => {
-          if (winner === "A") {
-            return "win";
-          }
-          if (winner === "B") {
-            return "loss";
-          }
-          return "draw";
-        };
-        const updated = updateRatings(ratingA, ratingB, getOutcome());
-        ratings[playerA] = updated.ratingA;
-        ratings[playerB] = updated.ratingB;
-      }
-
-      allGames.push({
-        ...result,
-        playerA,
-        playerB,
-        winner,
-        isABlack,
+      const result = runHeadlessGame(black, white, {
+        verbose,
+        openingMoves: positions,
       });
 
+      const winner = normalizeWinner(result.winner, isABlack);
+      updateMatchupResult(matchupResult, winner);
+      updatePlayerRatings(ratings, playerA, playerB, winner);
+
+      allGames.push({ ...result, playerA, playerB, winner, isABlack });
       completedGames++;
 
       // ゲーム終了後のステータス更新
@@ -347,18 +406,16 @@ function runBenchmarkSequential(options: CliOptions): BenchmarkResult {
       const gameDuration = ((gameEndTime - gameStartTime) / 1000).toFixed(1);
       const totalElapsed = ((gameEndTime - benchStartTime) / 1000).toFixed(0);
       const progress = ((completedGames / totalGames) * 100).toFixed(1);
-
-      // 最長思考時間を計算
       const maxThinkTime = Math.max(...result.moveHistory.map((m) => m.time));
 
       writeStatus(
-        `[${totalElapsed}s] ${playerA} vs ${playerB}: Game ${i + 1}/${games} done - ${result.moves}手 ${gameDuration}s (max ${(maxThinkTime / 1000).toFixed(1)}s/手) ${result.reason}`,
+        `[${totalElapsed}s] ${jushuName} done - ${result.moves}手 ${gameDuration}s (max ${(maxThinkTime / 1000).toFixed(1)}s/手) ${result.reason}`,
       );
 
-      if ((i + 1) % 10 === 0 || i + 1 === games) {
+      if (matchupGameIndex % 10 === 0 || matchupGameIndex === gamesPerMatchup) {
         clearStatus();
         console.log(
-          `  Game ${i + 1}/${games} (${progress}% total) - ${matchupResult.winsA}W-${matchupResult.winsB}L-${matchupResult.draws}D`,
+          `  Game ${matchupGameIndex}/${gamesPerMatchup} (${progress}% total) - ${matchupResult.winsA}W-${matchupResult.winsB}L-${matchupResult.draws}D`,
         );
       }
     }
@@ -392,7 +449,8 @@ function runBenchmarkSequential(options: CliOptions): BenchmarkResult {
     timestamp: new Date().toISOString(),
     options: {
       players,
-      gamesPerMatchup: games,
+      sets,
+      gamesPerSet,
       parallel: false,
       workers: 1,
     },
@@ -407,17 +465,19 @@ async function runBenchmarkParallel(
 ): Promise<BenchmarkResult> {
   const {
     players,
-    games,
+    sets,
     verbose,
     workers: numWorkers,
     self: selfPlay,
   } = options;
+  const jushuNames = getAllJushuNames();
+  const gamesPerSet = jushuNames.length * 2;
 
   console.log(
     `\n=== CPU AI Benchmark (Parallel: ${numWorkers} workers${selfPlay ? ", Self-Play Only" : ""}) ===`,
   );
   console.log(`Players: ${players.join(", ")}`);
-  console.log(`Games per matchup: ${games}`);
+  console.log(`Sets: ${sets} (${gamesPerSet} games/set)`);
   if (selfPlay) {
     console.log(`Mode: Self-play only (excludes cross-difficulty matchups)`);
   } else {
@@ -427,13 +487,14 @@ async function runBenchmarkParallel(
 
   const matchups = generateMatchups(players, selfPlay);
   const totalMatchups = matchups.length;
-  const totalGames = totalMatchups * games;
+  const gamesPerMatchup = sets * gamesPerSet;
+  const totalGames = totalMatchups * gamesPerMatchup;
 
   console.log(`Total matchups: ${totalMatchups}`);
   console.log(`Total games: ${totalGames}`);
   console.log();
 
-  // タスクを生成
+  // タスクを生成（珠型セット制）
   const tasks: GameTask[] = [];
   let taskId = 0;
 
@@ -444,21 +505,31 @@ async function runBenchmarkParallel(
     }
 
     const [playerA, playerB] = matchup;
+    let gameIndex = 0;
 
-    for (let gameIndex = 0; gameIndex < games; gameIndex++) {
-      const isABlack = gameIndex % 2 === 0;
+    for (let set = 0; set < sets; set++) {
+      for (const jushuName of jushuNames) {
+        const positions = getJushuPositions(jushuName, true);
+        if (!positions) {
+          continue;
+        }
 
-      const configA: PlayerConfig = { id: playerA, difficulty: playerA };
-      const configB: PlayerConfig = { id: playerB, difficulty: playerB };
+        for (const isABlack of [true, false]) {
+          const configA: PlayerConfig = { id: playerA, difficulty: playerA };
+          const configB: PlayerConfig = { id: playerB, difficulty: playerB };
 
-      tasks.push({
-        taskId: taskId++,
-        playerA: isABlack ? configA : configB,
-        playerB: isABlack ? configB : configA,
-        matchupIndex,
-        gameIndex,
-        isABlack,
-      });
+          tasks.push({
+            taskId: taskId++,
+            playerA: isABlack ? configA : configB,
+            playerB: isABlack ? configB : configA,
+            matchupIndex,
+            gameIndex: gameIndex++,
+            isABlack,
+            openingMoves: positions,
+            jushuName,
+          });
+        }
+      }
     }
   }
 
@@ -485,7 +556,7 @@ async function runBenchmarkParallel(
       winsA: 0,
       winsB: 0,
       draws: 0,
-      total: games,
+      total: gamesPerMatchup,
     }),
   );
 
@@ -509,38 +580,14 @@ async function runBenchmarkParallel(
     const [playerA, playerB] = matchup;
 
     // 結果を正規化
-    const normalizeWinner = (): "A" | "B" | "draw" => {
-      if (result.winner === "draw") {
-        return "draw";
-      }
-      if (task.isABlack) {
-        return result.winner;
-      }
-      return result.winner === "A" ? "B" : "A";
-    };
-    const winner = normalizeWinner();
+    const winner = normalizeWinner(result.winner, task.isABlack);
 
-    if (winner === "A") {
-      matchupResult.winsA++;
-    } else if (winner === "B") {
-      matchupResult.winsB++;
-    } else {
-      matchupResult.draws++;
-    }
+    updateMatchupResult(matchupResult, winner);
 
     const ratingA = ratings[playerA];
     const ratingB = ratings[playerB];
     if (ratingA && ratingB) {
-      const getOutcome = (): "win" | "loss" | "draw" => {
-        if (winner === "A") {
-          return "win";
-        }
-        if (winner === "B") {
-          return "loss";
-        }
-        return "draw";
-      };
-      const updated = updateRatings(ratingA, ratingB, getOutcome());
+      const updated = updateRatings(ratingA, ratingB, winnerToOutcome(winner));
       ratings[playerA] = updated.ratingA;
       ratings[playerB] = updated.ratingB;
     }
@@ -589,7 +636,8 @@ async function runBenchmarkParallel(
     timestamp: new Date().toISOString(),
     options: {
       players,
-      gamesPerMatchup: games,
+      sets,
+      gamesPerSet,
       parallel: true,
       workers: numWorkers,
     },
@@ -641,6 +689,7 @@ function runTasksWithWorkers(
           playerB: task.playerB,
           verbose,
           scoreOverrides,
+          openingMoves: task.openingMoves,
         },
         execArgv: [
           "--experimental-strip-types",

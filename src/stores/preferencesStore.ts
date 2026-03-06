@@ -41,6 +41,8 @@ interface Preferences {
     fastMove: boolean;
     lastDifficulty: CpuDifficulty;
     lastPlayerFirst: boolean;
+    lastJushu: string | null;
+    lastFixedDirection: boolean;
   };
   debug: {
     showCpuInfo: boolean;
@@ -75,6 +77,8 @@ const defaultPreferences: Preferences = {
     fastMove: false,
     lastDifficulty: "medium",
     lastPlayerFirst: true,
+    lastJushu: null,
+    lastFixedDirection: true,
   },
   debug: {
     showCpuInfo: false,
@@ -230,6 +234,16 @@ export const usePreferencesStore = defineStore("preferences", () => {
     set: (v) => (preferences.value.cpu.lastPlayerFirst = v),
   });
 
+  const lastCpuJushu = computed({
+    get: () => preferences.value.cpu.lastJushu,
+    set: (v) => (preferences.value.cpu.lastJushu = v),
+  });
+
+  const lastCpuFixedDirection = computed({
+    get: () => preferences.value.cpu.lastFixedDirection,
+    set: (v) => (preferences.value.cpu.lastFixedDirection = v),
+  });
+
   const showCpuInfo = computed({
     get: () => preferences.value.debug.showCpuInfo,
     set: (v) => (preferences.value.debug.showCpuInfo = v),
@@ -356,6 +370,8 @@ export const usePreferencesStore = defineStore("preferences", () => {
     fastCpuMove,
     lastCpuDifficulty,
     lastCpuPlayerFirst,
+    lastCpuJushu,
+    lastCpuFixedDirection,
     showCpuInfo,
     // Audio
     audioEnabled,

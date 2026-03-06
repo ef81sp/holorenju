@@ -17,6 +17,12 @@ export type ForcedLossType =
   | "double-three"
   | "double-four";
 
+/** 強制勝ちの種類（ForcedLossType から白パターン系を除外） */
+export type ForcedWinType = Exclude<
+  ForcedLossType,
+  "double-three" | "double-four"
+>;
+
 /**
  * 強制負け検出の結果
  */
@@ -103,7 +109,7 @@ export interface EvaluatedMove {
   /** 探索が完了した深度 */
   completedDepth?: number;
   /** 必勝手順の種類 */
-  forcedWinType?: "vcf" | "vct" | "forbidden-trap" | "mise-vcf" | "double-mise";
+  forcedWinType?: ForcedWinType;
   /** 必勝手順の分岐情報 */
   forcedWinBranches?: ForcedWinBranch[];
   /** 相手の必勝手順（自分が負け確定） */
@@ -147,11 +153,40 @@ export interface ReviewEvalRequest {
 }
 
 /**
- * 評価Workerの結果（1手分）
+ * 評価Workerの結果: 共通フィールド
  */
-export interface ReviewWorkerResult {
+interface ReviewWorkerResultBase {
   /** 手のインデックス */
   moveIndex: number;
+}
+
+/**
+ * Phase 2 VCTチェック結果
+ */
+export interface VCTCheckResult extends ReviewWorkerResultBase {
+  mode: "vctCheck";
+  /** 相手の必勝手順 */
+  forcedLossType?: ForcedLossType;
+  /** 相手の必勝手順のシーケンス */
+  forcedLossSequence?: Position[];
+}
+
+/**
+ * 軽量評価結果（コンピュータ手用: 強制勝ち検出のみ）
+ */
+export interface LightEvalResult extends ReviewWorkerResultBase {
+  mode: "lightEval";
+  /** 最善手 */
+  bestMove: Position;
+  /** 必勝手順の種類 */
+  forcedWinType?: ForcedWinType;
+}
+
+/**
+ * フル評価結果（プレイヤー手用: minimax探索 + 候補手検証）
+ */
+export interface FullEvalResult extends ReviewWorkerResultBase {
+  mode: "fullEval";
   /** 最善手 */
   bestMove: Position;
   /** 最善手のスコア */
@@ -163,15 +198,13 @@ export interface ReviewWorkerResult {
   /** 探索が完了した深度 */
   completedDepth: number;
   /** 必勝手順の種類 */
-  forcedWinType?: "vcf" | "vct" | "forbidden-trap" | "mise-vcf" | "double-mise";
+  forcedWinType?: ForcedWinType;
   /** 必勝手順の分岐情報 */
   forcedWinBranches?: ForcedWinBranch[];
   /** 相手の必勝手順（自分が負け確定） */
   forcedLossType?: ForcedLossType;
   /** 相手の必勝手順のシーケンス */
   forcedLossSequence?: Position[];
-  /** 軽量評価（minimax省略、強制勝ち検出のみ） */
-  isLightEval?: boolean;
   /** 両ミセ手の見逃し（打つ前の盤面で両ミセ手が存在した） */
   missedDoubleMise?: Position[];
   /** 両ミセのターゲット位置（四三を作る位置） */
@@ -179,3 +212,11 @@ export interface ReviewWorkerResult {
   /** Phase 1でVCTをスキップし、Phase 2でのVCTチェックが必要 */
   needsVCTCheck?: boolean;
 }
+
+/**
+ * 評価Workerの結果（判別共用体）
+ */
+export type ReviewWorkerResult =
+  | VCTCheckResult
+  | LightEvalResult
+  | FullEvalResult;

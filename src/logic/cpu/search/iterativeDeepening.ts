@@ -48,6 +48,7 @@ import {
 } from "./threatPatterns";
 import { findVCFSequence, type VCFSequenceResult } from "./vcf";
 import { findVCTMove, VCT_STONE_THRESHOLD } from "./vct";
+import { hasFourThreeAvailable } from "./vctHelpers";
 
 /**
  * プロファイリングカウンターの値をSearchStatsにマージ
@@ -226,10 +227,9 @@ function checkForcedWinSequences(
   let vctHintMove: Position | undefined = undefined;
 
   // Mise-VCF（ミセ→強制応手→VCF勝ち）
-  // 相手VCFがある場合は間に合わない（最低2手+VCF手数が必要）のでスキップ
-  // 強制性チェック（三/四を作らないミセ手の除外）とノリ手チェック（三防御位置での
-  // VCF検証）をアルゴリズム内で行うため、immediateMove として即座に返す
-  if (!opponentVCFResult) {
+  // 相手VCFがある場合は間に合わないのでスキップ
+  // 相手に四三が作れる場合も、ミセの強制応手の前提が崩れるためスキップ
+  if (!opponentVCFResult && !hasFourThreeAvailable(board, opponentColor)) {
     const miseVcfMove = findMiseVCFMove(board, color, {
       vcfOptions: { maxDepth: 12, timeLimit: 300 },
       timeLimit: 500,
@@ -645,6 +645,53 @@ export function findBestMoveIterativeWithTT(
 
     bestResult = result;
     completedDepth = depth;
+  }
+
+  // =========================================================================
+  // Score Verification Extension
+  // スコアが大幅に変化した場合に+1深度を追加探索
+  // 主な対象: d3完了→d4中断のケース（time-pressure-error の軽減）
+  // =========================================================================
+  const VERIFICATION_THRESHOLD = 1500; // FOUR相当
+  if (
+    depthHistory.length >= 2 &&
+    completedDepth < maxDepth &&
+    !ctx.absoluteDeadlineExceeded &&
+    !ctx.nodeCountExceeded &&
+    performance.now() < loopDeadline
+  ) {
+    const last = depthHistory[depthHistory.length - 1];
+    const prev = depthHistory[depthHistory.length - 2];
+    if (
+      last &&
+      prev &&
+      Math.abs(last.score - prev.score) >= VERIFICATION_THRESHOLD
+    ) {
+      // Aspiration Window付きで検証探索
+      const verifyResult = findBestMoveWithTT(
+        board,
+        color,
+        completedDepth + 1,
+        randomFactor,
+        ctx,
+        { previousScore: last.score, windowSize: ASPIRATION_WINDOW },
+        moves,
+        scoreThreshold,
+      );
+      if (
+        !ctx.timeoutFlag &&
+        !ctx.nodeCountExceeded &&
+        !ctx.absoluteDeadlineExceeded
+      ) {
+        depthHistory.push({
+          depth: completedDepth + 1,
+          position: verifyResult.position,
+          score: verifyResult.score,
+        });
+        bestResult = verifyResult;
+        completedDepth += 1;
+      }
+    }
   }
 
   const finalResult: IterativeDeepingResult & { stats: SearchStats } = {

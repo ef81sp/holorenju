@@ -7,9 +7,11 @@
 import type { Position, StoneColor } from "@/types/game";
 import type {
   EvaluatedMove,
+  FullEvalResult,
   GameReview,
+  LightEvalResult,
   MoveQuality,
-  ReviewWorkerResult,
+  VCTCheckResult,
 } from "@/types/review";
 
 import { parseGameRecord } from "@/logic/gameRecordParser";
@@ -47,11 +49,14 @@ export function classifyMoveQuality(scoreDiff: number): MoveQuality {
 /**
  * Worker結果から評価済みの手を構築
  *
+ * FullEvalResult または LightEvalResult を受け付ける。
+ * VCTCheckResult は applyVCTResult で既存の EvaluatedMove にマージする。
+ *
  * @param parsedMoves パース済み手順配列（省略時はmoveHistoryからパース）
  * @param analyzeAll 全手分析モード（全手をisPlayerMove: trueに）
  */
 export function buildEvaluatedMove(
-  result: ReviewWorkerResult,
+  result: FullEvalResult | LightEvalResult,
   moveHistoryOrMoves: string | { position: Position; color: StoneColor }[],
   playerFirst: boolean,
   analyzeAll?: boolean,
@@ -64,6 +69,22 @@ export function buildEvaluatedMove(
   const isPlayerMove =
     analyzeAll ||
     (playerFirst ? result.moveIndex % 2 === 0 : result.moveIndex % 2 === 1);
+
+  if (result.mode === "lightEval") {
+    return {
+      moveIndex: result.moveIndex,
+      position: move?.position ?? { row: 7, col: 7 },
+      isPlayerMove,
+      quality: "excellent",
+      playedScore: 0,
+      bestScore: 0,
+      scoreDiff: 0,
+      bestMove: result.bestMove,
+      candidates: [],
+      forcedWinType: result.forcedWinType,
+      isLightEval: true,
+    };
+  }
 
   const scoreDiff = result.bestScore - result.playedScore;
 
@@ -87,9 +108,25 @@ export function buildEvaluatedMove(
     forcedWinBranches: result.forcedWinBranches,
     forcedLossType: result.forcedLossType,
     forcedLossSequence: result.forcedLossSequence,
-    isLightEval: result.isLightEval,
     missedDoubleMise: result.missedDoubleMise,
     doubleMiseTargets: result.doubleMiseTargets,
+  };
+}
+
+/**
+ * VCTチェック結果を既存の EvaluatedMove にマージする
+ */
+export function applyVCTResult(
+  existing: EvaluatedMove,
+  result: VCTCheckResult,
+): EvaluatedMove {
+  if (!result.forcedLossType) {
+    return existing;
+  }
+  return {
+    ...existing,
+    forcedLossType: result.forcedLossType,
+    forcedLossSequence: result.forcedLossSequence,
   };
 }
 

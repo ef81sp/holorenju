@@ -47,6 +47,30 @@ export function endStateAt(
 }
 
 /**
+ * 黒 count=4 用のオーバーライン補正付き端状態判定
+ *
+ * endStateAt で "empty" と判定された端位置の1つ先に自色石がある場合、
+ * その方向に伸ばすと6連（長連）になるため "opponent"（塞がり）として返す。
+ */
+export function endStateForBlackFour(
+  oppMask: number,
+  ownMask: number,
+  pos: number,
+  dir: 1 | -1,
+  len: number,
+): EndState {
+  const end = endStateAt(oppMask, pos, len);
+  if (end !== "empty") {
+    return end;
+  }
+  const beyond = pos + dir;
+  if (beyond >= 0 && beyond < len && ownMask & (1 << beyond)) {
+    return "opponent";
+  }
+  return "empty";
+}
+
+/**
  * ビットマスク版 countLine
  *
  * bitPos から両方向に連続する同色石の数を返す（起点含む）。

@@ -11,6 +11,7 @@ import type { BattleResult } from "@/types/cpu";
 import type { Position } from "@/types/game";
 import type { EvaluatedMove, MoveQuality } from "@/types/review";
 
+import { FULL_LABELS } from "@/logic/forcedTypeLabels";
 import { formatMove } from "@/logic/gameRecordParser";
 import { parseText } from "@/logic/textParser";
 import { useDialogStore } from "@/stores/dialogStore";
@@ -43,20 +44,6 @@ const QUALITY_EMOTIONS: Record<MoveQuality, EmotionId> = {
   inaccuracy: 1, // 考え中
   mistake: 19, // 強調・指摘
   blunder: 19, // 強調・指摘（mistakeと同じ）
-};
-
-/** 強制勝ち種別の表示名 */
-const FORCED_WIN_LABELS: Record<
-  NonNullable<EvaluatedMove["forcedWinType"] | EvaluatedMove["forcedLossType"]>,
-  string
-> = {
-  "double-mise": "両ミセ",
-  vcf: "四追い",
-  vct: "追い詰め",
-  "forbidden-trap": "禁手追い込み",
-  "mise-vcf": "ミセ四追い",
-  "double-three": "三三",
-  "double-four": "四四",
 };
 
 /** 負け確定（相手の必勝手順あり）時のセリフ（品質別） */
@@ -217,7 +204,7 @@ export function useReviewDialogue(): UseReviewDialogueReturn {
       missedDoubleMise &&
       missedDoubleMise.length > 0
     ) {
-      const label = FORCED_WIN_LABELS[forcedWinType];
+      const label = FULL_LABELS[forcedWinType];
       const text = `いい手！でも${formatMove(bestMove)}の${label}の方が速いよ`;
       showMessage(text, QUALITY_EMOTIONS.good);
       return;
@@ -236,12 +223,8 @@ export function useReviewDialogue(): UseReviewDialogueReturn {
       forcedLossType,
     );
     const template = randomChoice(templates);
-    const forcedWinLabel = forcedWinType
-      ? FORCED_WIN_LABELS[forcedWinType]
-      : "";
-    const forcedLossLabel = forcedLossType
-      ? FORCED_WIN_LABELS[forcedLossType]
-      : "";
+    const forcedWinLabel = forcedWinType ? FULL_LABELS[forcedWinType] : "";
+    const forcedLossLabel = forcedLossType ? FULL_LABELS[forcedLossType] : "";
     const text = template
       .replace(/\{bestMove\}/g, formatMove(bestMove))
       .replace(/\{forcedWin\}/g, forcedWinLabel)
@@ -256,7 +239,7 @@ export function useReviewDialogue(): UseReviewDialogueReturn {
       const template = randomChoice(CPU_FORCED_WIN_DIALOGUES);
       const text = template.replace(
         /\{forcedWin\}/g,
-        FORCED_WIN_LABELS[forcedWinType],
+        FULL_LABELS[forcedWinType],
       );
       showMessage(text, 11);
     } else {

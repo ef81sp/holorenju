@@ -7,11 +7,14 @@ import { describe, expect, it } from "vitest";
 import { createEmptyBoard } from "@/logic/renjuRules";
 
 import {
+  DIAGONAL_PATTERNS,
+  getJushuPositions,
   getOpeningEvaluation,
   getOpeningMove,
   getOpeningPatternInfo,
   isOpeningPhase,
   JUSHU_EVALUATION,
+  ORTHOGONAL_PATTERNS,
   TENGEN,
 } from "./opening";
 import { placeStonesOnBoard } from "./testUtils";
@@ -546,6 +549,20 @@ describe("全26珠型の検出", () => {
     });
   });
 
+  it("白が上(-1,0)の場合は花月の座標変換が正しい", () => {
+    // 白が上(-1,0)、花月のoffsetは{dr:1,dc:1}
+    // 直接打ちで白が上の場合: sign = -1, dr = 1 * -1 = -1, dc = 1
+    // つまり黒3手目は天元 + (-1, 1) = (6, 8)
+    const board = createEmptyBoard();
+    placeStonesOnBoard(board, [
+      { row: 7, col: 7, color: "black" },
+      { row: 6, col: 7, color: "white" },
+      { row: 6, col: 8, color: "black" },
+    ]);
+    const info = getOpeningPatternInfo(board);
+    expect(info?.name).toBe("花月");
+  });
+
   it("全26珠型がユニークに検出される", () => {
     const detectedNames = new Set<string>();
 
@@ -587,5 +604,88 @@ describe("全26珠型の検出", () => {
     }
 
     expect(detectedNames.size).toBe(26);
+  });
+});
+
+describe("getJushuPositions", () => {
+  it("花月 + fixedDirection=true → 白が上の基準方向の座標", () => {
+    const result = getJushuPositions("花月", true);
+    expect(result).not.toBe(null);
+    if (!result) {
+      return;
+    }
+    const [tengen, white, black3] = result;
+    // 天元
+    expect(tengen).toEqual(TENGEN);
+    // 直接打ちの基準方向: 白が上(-1,0)
+    expect(white).toEqual({ row: 6, col: 7 });
+    // 花月のoffset: {dr:1,dc:1}、sign=-1 → 天元+(-1,1) = (6,8)
+    expect(black3).toEqual({ row: 6, col: 8 });
+  });
+
+  it("間接打ち(斜月) + fixedDirection=true → 白が右上の基準方向の座標", () => {
+    const result = getJushuPositions("斜月", true);
+    expect(result).not.toBe(null);
+    if (!result) {
+      return;
+    }
+    const [tengen, white, black3] = result;
+    expect(tengen).toEqual(TENGEN);
+    // 間接打ちの基準方向: 白が右上(-1,+1)
+    expect(white).toEqual({ row: 6, col: 8 });
+    // 斜月のoffset: {dr:-1,dc:-1}、signRow=-1,signCol=+1 → 天元+(1,-1) = (8,6)
+    expect(black3).toEqual({ row: 8, col: 6 });
+  });
+
+  it("fixedDirection=false → 有効な座標を返す（ランダム）", () => {
+    const result = getJushuPositions("花月", false);
+    expect(result).not.toBe(null);
+    if (!result) {
+      return;
+    }
+    const [tengen, white, black3] = result;
+    expect(tengen).toEqual(TENGEN);
+    // 白は天元の上下左右のいずれか
+    const wdr = white.row - TENGEN.row;
+    const wdc = white.col - TENGEN.col;
+    expect(Math.abs(wdr) + Math.abs(wdc)).toBe(1);
+    // black3は盤面内
+    expect(black3.row).toBeGreaterThanOrEqual(0);
+    expect(black3.row).toBeLessThan(15);
+    expect(black3.col).toBeGreaterThanOrEqual(0);
+    expect(black3.col).toBeLessThan(15);
+  });
+
+  it("不正な珠型名 → null", () => {
+    expect(getJushuPositions("存在しない珠型", true)).toBe(null);
+    expect(getJushuPositions("", true)).toBe(null);
+  });
+
+  it("全26珠型 × fixedDirection=true → 非null", () => {
+    const allPatterns = [...ORTHOGONAL_PATTERNS, ...DIAGONAL_PATTERNS];
+    expect(allPatterns.length).toBe(26);
+    for (const pattern of allPatterns) {
+      const result = getJushuPositions(pattern.name, true);
+      expect(result).not.toBe(null);
+    }
+  });
+
+  it("Round-trip: getJushuPositions → 盤面構築 → getOpeningPatternInfo で同じ珠型名が検出", () => {
+    const allPatterns = [...ORTHOGONAL_PATTERNS, ...DIAGONAL_PATTERNS];
+    for (const pattern of allPatterns) {
+      const result = getJushuPositions(pattern.name, true);
+      if (!result) {
+        throw new Error(`getJushuPositions returned null for ${pattern.name}`);
+      }
+      const [tengen, white, black3] = result;
+      const board = createEmptyBoard();
+      placeStonesOnBoard(board, [
+        { row: tengen.row, col: tengen.col, color: "black" },
+        { row: white.row, col: white.col, color: "white" },
+        { row: black3.row, col: black3.col, color: "black" },
+      ]);
+      const info = getOpeningPatternInfo(board);
+      expect(info?.name).toBe(pattern.name);
+    }
   });
 });

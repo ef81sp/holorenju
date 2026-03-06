@@ -128,17 +128,34 @@ function handleEscapeKey(event: KeyboardEvent): void {
   }
 }
 
+// 珠型オプションの構築
+function buildOpeningOption():
+  | { jushu: string; fixedDirection: boolean }
+  | undefined {
+  return appStore.cpuJushu
+    ? {
+        jushu: appStore.cpuJushu,
+        fixedDirection: appStore.cpuFixedDirection ?? true,
+      }
+    : undefined;
+}
+
 // ゲーム開始
 onMounted(async () => {
   if (appStore.cpuDifficulty && appStore.cpuPlayerFirst !== null) {
-    cpuGameStore.startGame(appStore.cpuDifficulty, appStore.cpuPlayerFirst);
+    const opening = buildOpeningOption();
+    cpuGameStore.startGame(
+      appStore.cpuDifficulty,
+      appStore.cpuPlayerFirst,
+      opening,
+    );
 
     // キャラクター初期化とゲーム開始セリフ
     initCharacter(appStore.cpuDifficulty);
     showDialogue("gameStart");
 
-    // 後手の場合はCPUが最初に打つ
-    if (!appStore.cpuPlayerFirst) {
+    // CPUのターンなら打つ（珠型固定で3手目以降も含む）
+    if (!cpuGameStore.isPlayerTurn) {
       cpuMove();
     }
   }
@@ -273,6 +290,7 @@ function handleGameEnd(): void {
     result,
     cpuGameStore.moveCount,
     moveHistoryStr,
+    appStore.cpuJushu ?? undefined,
   );
 
   // 勝敗結果を読み上げ
@@ -284,7 +302,7 @@ function handleGameEnd(): void {
 
 // 待った機能（2手戻す）
 function handleUndo(): void {
-  if (cpuGameStore.moveCount < 2 || isThinking.value) {
+  if (!cpuGameStore.canUndo || isThinking.value) {
     return;
   }
   hideCutin();
@@ -299,7 +317,12 @@ function handleUndo(): void {
 // もう一度
 function handleRematch(): void {
   if (appStore.cpuDifficulty && appStore.cpuPlayerFirst !== null) {
-    cpuGameStore.startGame(appStore.cpuDifficulty, appStore.cpuPlayerFirst);
+    const opening = buildOpeningOption();
+    cpuGameStore.startGame(
+      appStore.cpuDifficulty,
+      appStore.cpuPlayerFirst,
+      opening,
+    );
     clearForbiddenMark();
     hideCutin();
 
@@ -307,8 +330,8 @@ function handleRematch(): void {
     initCharacter(appStore.cpuDifficulty);
     showDialogue("gameStart");
 
-    // 後手の場合はCPUが最初に打つ
-    if (!appStore.cpuPlayerFirst) {
+    // CPUのターンなら打つ
+    if (!cpuGameStore.isPlayerTurn) {
       cpuMove();
     }
   }
@@ -435,7 +458,7 @@ const gameEndMessage = computed(() => {
           <div class="game-controls">
             <button
               class="control-button"
-              :disabled="cpuGameStore.moveCount < 2 || isThinking"
+              :disabled="!cpuGameStore.canUndo || isThinking"
               @click="handleUndo"
             >
               待った

@@ -116,7 +116,11 @@ export async function runCommitGame(
   workerA: Worker,
   workerB: Worker,
   isABlack: boolean,
-  options: { verbose?: boolean; moveTimeoutMs?: number } = {},
+  options: {
+    verbose?: boolean;
+    moveTimeoutMs?: number;
+    openingMoves?: [Position, Position, Position];
+  } = {},
 ): Promise<GameResult> {
   const { verbose = false, moveTimeoutMs = 30000 } = options;
 
@@ -139,6 +143,28 @@ export async function runCommitGame(
   log(
     `Game: commitA(${isABlack ? "black" : "white"}) vs commitB(${isABlack ? "white" : "black"})`,
   );
+
+  // 開局手が指定されている場合、盤面に配置
+  if (options.openingMoves) {
+    const [pos1, pos2, pos3] = options.openingMoves;
+    const openingEntries: [Position, "black" | "white"][] = [
+      [pos1, "black"],
+      [pos2, "white"],
+      [pos3, "black"],
+    ];
+    for (const [pos, color] of openingEntries) {
+      board = applyMove(board, pos, color);
+      moveHistory.push({
+        row: pos.row,
+        col: pos.col,
+        time: 0,
+        isOpening: true,
+      });
+      moveCount++;
+      log(`Move ${moveCount}: opening at (${pos.row}, ${pos.col})`);
+    }
+    currentColor = "white";
+  }
 
   while (moveCount < DRAW_MOVE_LIMIT) {
     const isBlack = currentColor === "black";
@@ -170,6 +196,8 @@ export async function runCommitGame(
           col: move.col,
           time: moveTime,
           isOpening: false,
+          score: response.score,
+          depth: response.depth,
         });
         return {
           playerA: "commitA",
@@ -191,6 +219,8 @@ export async function runCommitGame(
       col: move.col,
       time: moveTime,
       isOpening: false,
+      score: response.score,
+      depth: response.depth,
     });
     moveCount++;
 

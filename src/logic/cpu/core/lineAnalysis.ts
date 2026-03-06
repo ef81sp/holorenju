@@ -91,6 +91,68 @@ export function checkEnds(
 }
 
 /**
+ * 4連専用の端チェック（黒の長連判定付き）
+ *
+ * checkEnds と同じだが、黒番のとき開き端の1マス先に黒石があれば
+ * その端を閉じと判定する（打つと6連=長連になるため）。
+ * 白番では checkEnds と同一動作。
+ */
+export function checkEndsForFour(
+  board: BoardState,
+  row: number,
+  col: number,
+  dr: number,
+  dc: number,
+  color: "black" | "white",
+): { end1Open: boolean; end2Open: boolean } {
+  // 正方向の端（端位置を保持して再走査を回避）
+  let end1R = row + dr;
+  let end1C = col + dc;
+  while (isValidPosition(end1R, end1C) && board[end1R]?.[end1C] === color) {
+    end1R += dr;
+    end1C += dc;
+  }
+  let end1Open =
+    isValidPosition(end1R, end1C) && board[end1R]?.[end1C] === null;
+
+  // 負方向の端
+  let end2R = row - dr;
+  let end2C = col - dc;
+  while (isValidPosition(end2R, end2C) && board[end2R]?.[end2C] === color) {
+    end2R -= dr;
+    end2C -= dc;
+  }
+  let end2Open =
+    isValidPosition(end2R, end2C) && board[end2R]?.[end2C] === null;
+
+  // 黒番: 開き端の1マス先に黒石があれば長連 → その端は無効
+  if (color === "black") {
+    if (end1Open) {
+      const beyondR = end1R + dr;
+      const beyondC = end1C + dc;
+      if (
+        isValidPosition(beyondR, beyondC) &&
+        board[beyondR]?.[beyondC] === "black"
+      ) {
+        end1Open = false;
+      }
+    }
+    if (end2Open) {
+      const beyondR = end2R - dr;
+      const beyondC = end2C - dc;
+      if (
+        isValidPosition(beyondR, beyondC) &&
+        board[beyondR]?.[beyondC] === "black"
+      ) {
+        end2Open = false;
+      }
+    }
+  }
+
+  return { end1Open, end2Open };
+}
+
+/**
  * 連の両端の位置を取得
  *
  * @param board 盤面

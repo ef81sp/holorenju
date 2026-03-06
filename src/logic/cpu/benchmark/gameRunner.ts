@@ -33,7 +33,12 @@ import {
   type PatternScoreValues,
 } from "../evaluation/patternScores.ts";
 import { detectOpponentThreats } from "../evaluation/threatDetection.ts";
-import { getOpeningMove, isOpeningPhase } from "../opening.ts";
+import {
+  getAllJushuNames,
+  getJushuPositions,
+  getOpeningMove,
+  isOpeningPhase,
+} from "../opening.ts";
 import { findBestMoveIterativeWithTT } from "../search/minimax.ts";
 
 /**
@@ -144,6 +149,8 @@ export interface GameOptions {
   maxMoves?: number;
   /** 詳細ログ出力 */
   verbose?: boolean;
+  /** 開局手（指定時は珠型固定、開局フェーズをスキップ） */
+  openingMoves?: [Position, Position, Position];
 }
 
 /**
@@ -196,6 +203,28 @@ export function runHeadlessGame(
   };
 
   log(`Game: ${playerA.id} (black) vs ${playerB.id} (white)`);
+
+  // 開局手が指定されている場合、盤面に配置
+  if (options.openingMoves) {
+    const [pos1, pos2, pos3] = options.openingMoves;
+    const openingEntries: [Position, "black" | "white"][] = [
+      [pos1, "black"],
+      [pos2, "white"],
+      [pos3, "black"],
+    ];
+    for (const [pos, color] of openingEntries) {
+      board = applyMove(board, pos, color);
+      moveHistory.push({
+        row: pos.row,
+        col: pos.col,
+        time: 0,
+        isOpening: true,
+      });
+      moveCount++;
+      log(`Move ${moveCount}: opening at (${pos.row}, ${pos.col})`);
+    }
+    currentColor = "white";
+  }
 
   while (moveCount < maxMoves) {
     const isBlack = currentColor === "black";
@@ -499,54 +528,63 @@ export function runHeadlessGame(
 }
 
 /**
- * 複数対局を実行
+ * 複数対局を珠型セット制で実行
+ *
+ * 1セット = 26珠型 × 白黒2 = 52局
  *
  * @param playerA プレイヤーA設定
  * @param playerB プレイヤーB設定
- * @param numGames 対局数
+ * @param sets セット数
  * @param options 対局オプション
  * @returns 対局結果の配列
  */
 export function runMultipleGames(
   playerA: PlayerConfig,
   playerB: PlayerConfig,
-  numGames: number,
+  sets: number,
   options: GameOptions = {},
 ): GameResult[] {
+  const names = getAllJushuNames();
   const results: GameResult[] = [];
 
-  for (let i = 0; i < numGames; i++) {
-    // 先手/後手を交互に
-    const isABlack = i % 2 === 0;
-    const black = isABlack ? playerA : playerB;
-    const white = isABlack ? playerB : playerA;
+  const invertWinner = (w: "A" | "B" | "draw"): "A" | "B" | "draw" => {
+    if (w === "A") {
+      return "B";
+    }
+    if (w === "B") {
+      return "A";
+    }
+    return "draw";
+  };
 
-    const result = runHeadlessGame(black, white, options);
+  for (let set = 0; set < sets; set++) {
+    for (const name of names) {
+      const positions = getJushuPositions(name, true);
+      if (!positions) {
+        continue;
+      }
 
-    // 結果を正規化（常にplayerA/playerBの視点で記録）
-    if (isABlack) {
-      results.push({
-        ...result,
-        isABlack: true,
-      });
-    } else {
-      // A が白番だった場合、winner を反転
-      const invertWinner = (w: "A" | "B" | "draw"): "A" | "B" | "draw" => {
-        if (w === "A") {
-          return "B";
+      for (const isABlack of [true, false]) {
+        const black = isABlack ? playerA : playerB;
+        const white = isABlack ? playerB : playerA;
+
+        const result = runHeadlessGame(black, white, {
+          ...options,
+          openingMoves: positions,
+        });
+
+        if (isABlack) {
+          results.push({ ...result, isABlack: true });
+        } else {
+          results.push({
+            ...result,
+            playerA: playerA.id,
+            playerB: playerB.id,
+            winner: invertWinner(result.winner),
+            isABlack: false,
+          });
         }
-        if (w === "B") {
-          return "A";
-        }
-        return "draw";
-      };
-      results.push({
-        ...result,
-        playerA: playerA.id,
-        playerB: playerB.id,
-        winner: invertWinner(result.winner),
-        isABlack: false,
-      });
+      }
     }
   }
 

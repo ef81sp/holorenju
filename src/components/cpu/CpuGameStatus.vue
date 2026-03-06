@@ -80,6 +80,13 @@ async function handleCopy(): Promise<void> {
         {{ difficultyLabel }}
       </span>
     </div>
+    <div
+      v-if="cpuGameStore.jushuName"
+      class="status-row"
+    >
+      <span class="status-label">珠型</span>
+      <span class="status-value">{{ cpuGameStore.jushuName }}</span>
+    </div>
     <div class="status-row">
       <span class="status-label">手数</span>
       <span class="status-value">{{ cpuGameStore.moveCount }}</span>

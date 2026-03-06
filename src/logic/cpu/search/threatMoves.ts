@@ -6,10 +6,14 @@
 
 import type { BoardState } from "@/types/game";
 
-import { checkJumpFour, checkJumpThree } from "@/logic/renjuRules";
+import {
+  checkJumpFour,
+  checkJumpThree,
+  isValidPosition,
+} from "@/logic/renjuRules";
 
 import { DIRECTION_INDICES, DIRECTIONS } from "../core/constants";
-import { checkEnds, countLine } from "../core/lineAnalysis";
+import { checkEnds, checkEndsForFour, countLine } from "../core/lineAnalysis";
 
 /**
  * 指定位置に石を置くと四ができるかチェック
@@ -41,8 +45,15 @@ export function createsFour(
     // 連続四をチェック
     const count = countLine(board, row, col, dr, dc, color);
     if (count === 4) {
-      // 片方でも開いていれば四
-      const { end1Open, end2Open } = checkEnds(board, row, col, dr, dc, color);
+      // 片方でも開いていれば四（黒は長連チェック付き）
+      const { end1Open, end2Open } = checkEndsForFour(
+        board,
+        row,
+        col,
+        dr,
+        dc,
+        color,
+      );
       if (end1Open || end2Open) {
         return true;
       }
@@ -50,7 +61,9 @@ export function createsFour(
 
     // 跳び四をチェック
     if (count !== 4 && checkJumpFour(board, row, col, dirIndex, color)) {
-      return true;
+      if (!isJumpFourOverline(board, row, col, dr, dc, color)) {
+        return true;
+      }
     }
   }
 
@@ -142,9 +155,16 @@ export function classifyThreat(
 
     const count = countLine(board, row, col, dr, dc, color);
 
-    // 連続四をチェック
+    // 連続四をチェック（黒は長連チェック付き）
     if (count === 4) {
-      const { end1Open, end2Open } = checkEnds(board, row, col, dr, dc, color);
+      const { end1Open, end2Open } = checkEndsForFour(
+        board,
+        row,
+        col,
+        dr,
+        dc,
+        color,
+      );
       if (end1Open || end2Open) {
         hasFour = true;
       }
@@ -153,7 +173,9 @@ export function classifyThreat(
     // 跳び四をチェック
     if (!hasFour && count !== 4) {
       if (checkJumpFour(board, row, col, dirIndex, color)) {
-        hasFour = true;
+        if (!isJumpFourOverline(board, row, col, dr, dc, color)) {
+          hasFour = true;
+        }
       }
     }
 
@@ -179,4 +201,87 @@ export function classifyThreat(
   }
 
   return { createsFour: hasFour, createsOpenThree: hasOpenThree };
+}
+
+/**
+ * 跳び四が長連になるかチェック
+ *
+ * 跳び四のギャップを埋めると定義上5連になる。
+ * countLine >= 6 は窓外に黒石がある場合のみ true = 長連。
+ * 白番では常に false を返す（長連ルールなし）。
+ */
+export function isJumpFourOverline(
+  board: BoardState,
+  row: number,
+  col: number,
+  dr: number,
+  dc: number,
+  color: "black" | "white",
+): boolean {
+  if (color !== "black") {
+    return false;
+  }
+  const gapPos = findJumpFourGap(board, row, col, dr, dc);
+  if (!gapPos) {
+    return false;
+  }
+  const gapRow = board[gapPos.row];
+  if (!gapRow) {
+    return false;
+  }
+  gapRow[gapPos.col] = "black";
+  const lineLen = countLine(board, gapPos.row, gapPos.col, dr, dc, "black");
+  gapRow[gapPos.col] = null;
+  return lineLen >= 6;
+}
+
+/**
+ * 跳び四のギャップ位置を簡易検出（isJumpFourOverline 専用）
+ *
+ * 起点から正方向・負方向に走査し、連の途中にある空きマスを返す。
+ */
+function findJumpFourGap(
+  board: BoardState,
+  row: number,
+  col: number,
+  dr: number,
+  dc: number,
+): { row: number; col: number } | null {
+  // 正方向に走査
+  let gap = scanForGap(board, row, col, dr, dc);
+  if (gap) {
+    return gap;
+  }
+  // 負方向に走査
+  gap = scanForGap(board, row, col, -dr, -dc);
+  return gap;
+}
+
+function scanForGap(
+  board: BoardState,
+  row: number,
+  col: number,
+  dr: number,
+  dc: number,
+): { row: number; col: number } | null {
+  let r = row + dr;
+  let c = col + dc;
+  // 起点から正方向に連続する石をスキップ
+  while (isValidPosition(r, c) && board[r]?.[c] === "black") {
+    r += dr;
+    c += dc;
+  }
+  // 空きマスがあるか
+  if (!isValidPosition(r, c) || board[r]?.[c] !== null) {
+    return null;
+  }
+  const gapR = r;
+  const gapC = c;
+  // 空きの先に黒石が続くか
+  r += dr;
+  c += dc;
+  if (isValidPosition(r, c) && board[r]?.[c] === "black") {
+    return { row: gapR, col: gapC };
+  }
+  return null;
 }

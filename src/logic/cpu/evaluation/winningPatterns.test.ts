@@ -9,7 +9,10 @@ import { describe, expect, it } from "vitest";
 import { createEmptyBoard } from "@/logic/renjuRules";
 
 import { placeStonesOnBoard } from "../testUtils";
-import { createsDoubleThree } from "./winningPatterns";
+import {
+  createsDoubleThree,
+  detectWhiteWinningPattern,
+} from "./winningPatterns";
 
 describe("createsDoubleThree", () => {
   it("白が2方向に活三を同時に作れる局面 → true", () => {
@@ -92,5 +95,48 @@ describe("createsDoubleThree", () => {
     ]);
 
     expect(createsDoubleThree(board, 7, 8, "black")).toBe(true);
+  });
+});
+
+describe("detectWhiteWinningPattern", () => {
+  it("四四 → 'double-four'", () => {
+    // 横方向: (7,5),(7,6),(7,7) に白石 → (7,8) に置くと横4連
+    // 縦方向: (6,8),(5,8),(4,8) に白石 → (7,8) に置くと縦4連
+    const board = createEmptyBoard();
+    placeStonesOnBoard(board, [
+      { row: 7, col: 5, color: "white" },
+      { row: 7, col: 6, color: "white" },
+      { row: 7, col: 7, color: "white" },
+      { row: 6, col: 8, color: "white" },
+      { row: 5, col: 8, color: "white" },
+      { row: 4, col: 8, color: "white" },
+    ]);
+
+    expect(detectWhiteWinningPattern(board, 7, 8)).toBe("double-four");
+  });
+
+  it("三三 → 'double-three'", () => {
+    // 横方向: (7,6),(7,7) に白石 → (7,8) に置くと横活三
+    // 縦方向: (6,8),(5,8) に白石 → (7,8) に置くと縦活三
+    const board = createEmptyBoard();
+    placeStonesOnBoard(board, [
+      { row: 7, col: 6, color: "white" },
+      { row: 7, col: 7, color: "white" },
+      { row: 6, col: 8, color: "white" },
+      { row: 5, col: 8, color: "white" },
+    ]);
+
+    expect(detectWhiteWinningPattern(board, 7, 8)).toBe("double-three");
+  });
+
+  it("該当なし → null", () => {
+    // 1方向にしかパターンなし
+    const board = createEmptyBoard();
+    placeStonesOnBoard(board, [
+      { row: 7, col: 6, color: "white" },
+      { row: 7, col: 7, color: "white" },
+    ]);
+
+    expect(detectWhiteWinningPattern(board, 7, 8)).toBeNull();
   });
 });

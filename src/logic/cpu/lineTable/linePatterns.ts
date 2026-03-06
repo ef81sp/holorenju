@@ -9,6 +9,7 @@
 
 import type { DirectionPattern, EndState } from "../evaluation/patternScores";
 
+import { endStateForBlackFour } from "./lineCounting";
 import { LINE_LENGTHS } from "./lineMapping";
 
 /**
@@ -52,11 +53,21 @@ export function analyzeLinePattern(
     negCount++;
   }
 
-  const posEnd: EndState = getEndState(oppMask, bitPos + posCount + 1, len);
-  const negEnd: EndState = getEndState(oppMask, bitPos - negCount - 1, len);
+  const count = posCount + negCount + 1;
+  const posEndPos = bitPos + posCount + 1;
+  const negEndPos = bitPos - negCount - 1;
+
+  // 黒 count=4 はオーバーライン補正付き端状態判定を使用
+  const isBlackFour = color === "black" && count === 4;
+  const posEnd: EndState = isBlackFour
+    ? endStateForBlackFour(oppMask, ownMask, posEndPos, 1, len)
+    : getEndState(oppMask, posEndPos, len);
+  const negEnd: EndState = isBlackFour
+    ? endStateForBlackFour(oppMask, ownMask, negEndPos, -1, len)
+    : getEndState(oppMask, negEndPos, len);
 
   return {
-    count: posCount + negCount + 1,
+    count,
     end1: reversed ? negEnd : posEnd,
     end2: reversed ? posEnd : negEnd,
   };
