@@ -27,8 +27,7 @@ jobs:
 
       - run: pnpm build
 
-      - run: pnpm exec playwright install --with-deps chromium
-
-      - run: pnpm test
-
-      - run: pnpm test:browser:headless
+      # Temporarily disabled: tests run in pre-commit/pre-push hooks
+      # - run: pnpm exec playwright install --with-deps chromium
+      # - run: pnpm test
+      # - run: pnpm test:browser:headless
