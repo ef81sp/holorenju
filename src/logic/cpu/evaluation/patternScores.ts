@@ -28,9 +28,8 @@ export const PATTERN_SCORES = {
   FOUR_THREE_BONUS: 5000,
   /**
    * フクミ手ボーナス（次にVCFがある手）
-   * @deprecated ゲームプレイ未使用 — evaluatePosition() 内で fukumiBonus = 0 にハードコード。
-   * isFukumiMove(hasVCF) の計算コストが高いため、ルートレベル評価のみで使用想定。
-   * デバッグ表示 (evaluatePositionWithBreakdown) でのみ参照される。
+   * ルートノード専用の後処理で使用（evaluatePositionCoreには入れない）。
+   * hasVCF(timeLimit:30ms) で上位5手のみ判定し、該当手を候補リスト先頭に昇格。
    */
   FUKUMI_BONUS: 1500,
   /** 禁手追い込みセットアップ（活三の延長点が禁手） */

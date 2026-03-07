@@ -46,7 +46,7 @@ import {
   findWinningMove,
   getFourDefensePosition,
 } from "./threatPatterns";
-import { findVCFSequence, type VCFSequenceResult } from "./vcf";
+import { findVCFSequence, hasVCF, type VCFSequenceResult } from "./vcf";
 import { findVCTMove, VCT_STONE_THRESHOLD } from "./vct";
 import { hasFourThreeAvailable } from "./vctHelpers";
 
@@ -479,6 +479,45 @@ export function findBestMoveIterativeWithTT(
     const hintKey = `${hint.row},${hint.col}`;
     // 重複を除去して先頭に配置
     moves = [hint, ...moves.filter((m) => `${m.row},${m.col}` !== hintKey)];
+  }
+
+  // ルートノード専用: フクミ手優先（上位5手のみVCF判定）
+  // 着手後にVCFが生まれる手を候補リストの先頭に昇格。
+  // evaluatePositionCoreには入れない（ホットパス保護）。
+  if (evaluationOptions.enableFukumi && moves.length > 1) {
+    const stoneCount = countStones(board);
+    // 序盤（10手以下）はVCFが成立しにくいためスキップ
+    if (stoneCount > 10) {
+      const fukumiTopN = Math.min(5, moves.length);
+      const fukumiMoves: Position[] = [];
+      for (let i = 0; i < fukumiTopN; i++) {
+        const move = moves[i];
+        if (!move) {
+          continue;
+        }
+        // インプレースで石を配置してVCF判定（着手後に自分のVCFがあるか）
+        const boardRow = board[move.row];
+        if (!boardRow) {
+          continue;
+        }
+        boardRow[move.col] = color;
+        const hasFukumi = hasVCF(board, color, 0, undefined, {
+          timeLimit: 30,
+        });
+        boardRow[move.col] = null;
+        if (hasFukumi) {
+          fukumiMoves.push(move);
+        }
+      }
+      // フクミ手を候補リストの先頭に昇格
+      if (fukumiMoves.length > 0) {
+        const fukumiSet = new Set(fukumiMoves.map((m) => `${m.row},${m.col}`));
+        moves = [
+          ...fukumiMoves,
+          ...moves.filter((m) => !fukumiSet.has(`${m.row},${m.col}`)),
+        ];
+      }
+    }
   }
 
   // deadline ベースの時間設定
