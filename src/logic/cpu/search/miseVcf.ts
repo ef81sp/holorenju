@@ -191,6 +191,13 @@ export function findMiseVCFSequence(
         continue;
       }
 
+      // 四を作るミセ手はスキップ（相手は四三防御ではなく四の防御を強制される。
+      // 四→防御→VCFの手順は通常のVCF探索で検出済み）
+      if (createsFour(board, row, col, color)) {
+        moveRow[col] = null;
+        continue;
+      }
+
       // ミセターゲットを検出（ライン延長点のみの軽量版）
       const miseTargets = findMiseTargetsLite(board, row, col, color);
 
@@ -199,9 +206,9 @@ export function findMiseVCFSequence(
         continue;
       }
 
-      // 強制性チェック: ミセ手が三も四も作らない場合は非強制 → 却下
+      // 強制性チェック: ミセ手が三を作らない場合は非強制 → 却下
       const threeDefenses = getCreatedOpenThreeDefenses(board, row, col, color);
-      if (threeDefenses.length === 0 && !createsFour(board, row, col, color)) {
+      if (threeDefenses.length === 0) {
         moveRow[col] = null;
         continue;
       }

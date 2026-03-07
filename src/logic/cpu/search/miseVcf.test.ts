@@ -229,6 +229,25 @@ describe("Mise-VCFの強制性チェック", () => {
   });
 });
 
+describe("四を作るミセ手のスキップ", () => {
+  it("ミセ手が四を作る場合はmise-VCF偽陽性を返さない", () => {
+    // 32手目局面: K13はK列縦方向にジャンプ四(K9-K10-_-K12-K13)を作る
+    // 四の防御位置はK11であり、K14(四三防御点)ではない
+    // 白がK11に打つとVCFは成立しないため、K13のmise-VCFは偽陽性
+    const { board } = createBoardFromRecord(
+      "H8 H9 J10 I9 J9 J8 H10 I10 J11 I11 I8 H7 K10 I12 I13 J12 K12 L11 G9 I7 K9 K8 G8 F8 G7 G6 J14 H12 J13 H13 I14 F7",
+    );
+
+    const result = findMiseVCFSequence(board, "black", GENEROUS_TIME_LIMIT);
+    if (result) {
+      // K13=(row=2, col=10)がミセ手として返されないこと
+      expect(result.miseMove.row === 2 && result.miseMove.col === 10).toBe(
+        false,
+      );
+    }
+  });
+});
+
 describe("黒番のMise-VCF禁手チェック", () => {
   it("三々禁の位置をMise-VCF手として返さない", () => {
     // ベンチマーク#34の棋譜: H6が三々禁かつMise-VCF候補
