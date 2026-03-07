@@ -183,18 +183,40 @@ Phase 1 の `--score-override` で即座に検証可能。ローリスクなた�
 - THREE の色別重み付け（黒番の禁手リスクを考慮）
 - commit-bench で最終検証
 
-## 検証方法
+## 検証結果
 
-1. Phase 1: `pnpm ab:bench --score-override=THREE:150 --games=20` で動作確認
-2. Phase 1: `pnpm ab:bench --eval-option=enableFukumi:false --games=20` で動作確認
-3. Phase 2: `pnpm ab:bench --score-override=THREE:150 --sprt --elo0=0 --elo1=30` で検証
-4. Phase 3: `pnpm ab:bench --eval-option=enableFukumi:true --sprt --elo0=0 --elo1=30` で検証
-5. 最終: `pnpm commit:bench --randomFactor=0.02 --sets=8`
+### Phase 1: 検証基盤 ✅
+
+`--score-override` / `--eval-option` CLI 実装完了（コミット `601c43c`）。
+
+### Phase 2: スコア比率調整 ❌ 効果なし
+
+| パラメータ | 局数 | WDL        | Elo               | SPRT     | 結論         |
+| ---------- | ---- | ---------- | ----------------- | -------- | ------------ |
+| THREE=100  | 100  | +51 =3 -46 | +17.4 [-50, 86.1] | continue | ノイズの範囲 |
+| THREE=150  | 200  | +98 =4 -98 | 0 [-48, 48]       | continue | 完全互角     |
+
+**考察:** THREE のスコアを上げても深度4のminimax探索では三の価値の差が結果に直結しない。
+探索が既に三の脅威を捉えているため、静的評価のスコア比率調整は効果が薄い。
+H2 (OPEN_TWO) / H3 (CONNECTIVITY_BONUS) は THREE と同様の結果が予想されるため、検証を中止。
+
+### Phase 3: フクミ手有効化 ❌ 効果なし
+
+| テスト              | 局数 | WDL (off視点) | Elo                 | SPRT     | 結論     |
+| ------------------- | ---- | ------------- | ------------------- | -------- | -------- |
+| enableFukumi on/off | 200  | +96 =2 -102   | -10.4 [-58.9, 37.6] | continue | 効果なし |
+
+**考察:** フクミ手の先頭昇格はmove orderingの微調整に過ぎず、minimax探索で全候補手が探索されるため有意な差が出ない。
+VCF判定（5手×30ms=最大150ms）の時間コストが探索時間を圧迫するリスクもある。
+
+### 総括
+
+評価関数のパターンスコア微調整とmove orderingの変更は、現在の探索アルゴリズム（深度4 + VCF/VCT事前チェック）では
+統計的に有意な改善をもたらさない。Phase 4 の候補（呼珠、テンポ補正拡張等）も同様のアプローチのため、
+別のアプローチ（探索深度の拡大、枝刈り改善、知識ベース等）を検討すべき。
 
 ## 対象ファイル一覧
 
 - `scripts/ab-bench.ts` — Phase 1: --score-override / --eval-option CLI
-- `src/logic/cpu/evaluation/patternScores.ts` — Phase 2: スコア変更, Phase 3: @deprecated削除
-- `src/logic/cpu/search/techniques.ts` — Phase 2: futility margins（P95再測定に基づく更新）
+- `src/logic/cpu/evaluation/patternScores.ts` — Phase 3: @deprecated削除
 - `src/logic/cpu/search/iterativeDeepening.ts` — Phase 3: ルートノードのフクミ手評価
-- `src/logic/cpu/search/vcf.ts` — Phase 3: VCF時間制限調整

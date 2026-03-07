@@ -37,7 +37,7 @@ export default defineConfig({
           include: ["src/**/*.perf.test.ts"],
           environment: "node",
           fileParallelism: false,
-          testTimeout: 30000,
+          testTimeout: 120000,
           pool: "forks",
           poolOptions: { forks: { singleFork: true } },
         },

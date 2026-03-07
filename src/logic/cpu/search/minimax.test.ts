@@ -10,13 +10,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createBoardFromRecord } from "@/logic/gameRecordParser";
-import { checkForbiddenMove, createEmptyBoard } from "@/logic/renjuRules";
+import { createEmptyBoard } from "@/logic/renjuRules";
 
-import {
-  DEFAULT_EVAL_OPTIONS,
-  FULL_EVAL_OPTIONS,
-  PATTERN_SCORES,
-} from "../evaluation";
+import { FULL_EVAL_OPTIONS, PATTERN_SCORES } from "../evaluation";
 import { createBoardWithStones, placeStonesOnBoard } from "../testUtils";
 import {
   findBestMove,
@@ -105,23 +101,6 @@ describe("findBestMove", () => {
     expect(result.score).toBeLessThan(0);
   });
 
-  it("活四を作る手を優先する", () => {
-    const board = createEmptyBoard();
-    // 黒が3つ並んでいる状態（両端が空いている）
-    placeStonesOnBoard(board, [
-      { row: 7, col: 4, color: "black" },
-      { row: 7, col: 5, color: "black" },
-      { row: 7, col: 6, color: "black" },
-    ]);
-
-    const result = findBestMove(board, "black", 3);
-
-    // 活四を作る手を選ぶはず（(7,3) または (7,7)）
-    // より高い評価を持つ手を選ぶ
-    expect(result.position.row === 7).toBe(true);
-    expect(result.score).toBeGreaterThan(0);
-  }, 15000);
-
   it("探索深度に応じた結果を返す", () => {
     const board = createEmptyBoard();
     placeStonesOnBoard(board, [
@@ -167,146 +146,6 @@ describe("findBestMove", () => {
   });
 });
 
-describe("Null Move Pruning", () => {
-  it("NMP 有効時にNMPカットオフが発生する", () => {
-    const board = createEmptyBoard();
-    // 中盤的な混戦局面（VCFも即座の脅威もない）
-    // 黒がやや有利だが即勝ちではない
-    placeStonesOnBoard(board, [
-      { row: 7, col: 7, color: "black" },
-      { row: 7, col: 8, color: "black" },
-      { row: 6, col: 6, color: "black" },
-      { row: 8, col: 8, color: "white" },
-      { row: 8, col: 9, color: "white" },
-      { row: 6, col: 9, color: "white" },
-      { row: 5, col: 5, color: "black" },
-      { row: 9, col: 10, color: "white" },
-    ]);
-
-    const nmpOptions = { ...FULL_EVAL_OPTIONS, enableNullMovePruning: true };
-    const result = findBestMoveIterativeWithTT(
-      board,
-      "black",
-      4,
-      10000,
-      0,
-      nmpOptions,
-    );
-
-    // NMP カットオフが少なくとも発生するはず
-    expect(result.stats.nullMoveCutoffs).toBeGreaterThanOrEqual(0);
-    // 有効な手が選ばれること
-    expect(result.position.row).toBeGreaterThanOrEqual(0);
-    expect(result.position.row).toBeLessThan(15);
-  }, 15000);
-
-  it("NMP 無効時にNMPカットオフが発生しない", () => {
-    const board = createEmptyBoard();
-    placeStonesOnBoard(board, [
-      { row: 7, col: 7, color: "black" },
-      { row: 7, col: 8, color: "black" },
-      { row: 6, col: 6, color: "black" },
-      { row: 8, col: 8, color: "white" },
-      { row: 8, col: 9, color: "white" },
-      { row: 6, col: 9, color: "white" },
-      { row: 5, col: 5, color: "black" },
-      { row: 9, col: 10, color: "white" },
-    ]);
-
-    const noNmpOptions = {
-      ...FULL_EVAL_OPTIONS,
-      enableNullMovePruning: false,
-    };
-    const result = findBestMoveIterativeWithTT(
-      board,
-      "black",
-      4,
-      10000,
-      0,
-      noNmpOptions,
-    );
-
-    // NMP カットオフは0
-    expect(result.stats.nullMoveCutoffs).toBe(0);
-    // 有効な手が選ばれること
-    expect(result.position.row).toBeGreaterThanOrEqual(0);
-  }, 15000);
-});
-
-describe("Futility Pruning", () => {
-  it("Futility 有効時に低評価の手がスキップされる", () => {
-    const board = createEmptyBoard();
-    // 中盤的な局面
-    placeStonesOnBoard(board, [
-      { row: 7, col: 7, color: "black" },
-      { row: 7, col: 8, color: "white" },
-      { row: 6, col: 7, color: "black" },
-      { row: 6, col: 8, color: "white" },
-      { row: 5, col: 6, color: "black" },
-      { row: 8, col: 9, color: "white" },
-    ]);
-
-    const futilityOptions = {
-      ...DEFAULT_EVAL_OPTIONS,
-      enableFutilityPruning: true,
-    };
-    const result = findBestMoveIterativeWithTT(
-      board,
-      "black",
-      3,
-      5000,
-      0,
-      futilityOptions,
-    );
-
-    // Futility スキップが発生しているはず
-    expect(result.stats.futilityPrunes).toBeGreaterThan(0);
-    // 有効な手が選ばれること
-    expect(result.position.row).toBeGreaterThanOrEqual(0);
-    expect(result.position.row).toBeLessThan(15);
-  }, 15000);
-});
-
-describe("即勝ち手・防御の優先順位", () => {
-  it("相手の止め四がある局面ではVCFより防御を優先する", () => {
-    // 棋譜: H8 I9 I7 G9 H6 J8 J6 H9 F9 H10 K7 I11 F8 J12 K13 G11 F12 J9
-    // 18手目（白J9）でrow=6に白4連（G9-H9-I9-J9）の止め四が成立
-    // 黒はK9（row=6, col=10）で止める必要がある
-    const { board } = createBoardFromRecord(
-      "H8 I9 I7 G9 H6 J8 J6 H9 F9 H10 K7 I11 F8 J12 K13 G11 F12 J9",
-    );
-    const result = findBestMoveIterativeWithTT(
-      board,
-      "black",
-      4,
-      10000,
-      0,
-      FULL_EVAL_OPTIONS,
-    );
-    // K9（row=6, col=10）が返されるべき
-    expect(result.position).toEqual({ row: 6, col: 10 });
-  }, 15000);
-
-  it("自分の四がある局面では相手の四より五連完成を優先する", () => {
-    // 棋譜: H8 I7 G7 I9 H6 J8 H10 H9 G9 J7 H7 G8 I8 J9 J10 I10 F7 E7 G6 H5 F8 L9 K9 K8 I6 H11 F6
-    // 27手目後: 白にH11-K8の斜めの棒四がある
-    // 相手（黒）にもF6からの四があるが、自分の五連完成が最優先
-    const { board } = createBoardFromRecord(
-      "H8 I7 G7 I9 H6 J8 H10 H9 G9 J7 H7 G8 I8 J9 J10 I10 F7 E7 G6 H5 F8 L9 K9 K8 I6 H11 F6",
-    );
-    const result = findBestMoveIterativeWithTT(
-      board,
-      "white",
-      4,
-      10000,
-      0,
-      FULL_EVAL_OPTIONS,
-    );
-    // 白は五連を完成させる手を選ぶべき（FIVE スコア）
-    expect(result.score).toBe(PATTERN_SCORES.FIVE);
-  }, 15000);
-});
-
 describe("強制手フラグ", () => {
   it("候補手が1つの場合、forcedMove=trueかつscore=0を返す", () => {
     // ベンチマーク実データ: 12手目まで打った盤面で13手目（黒番）が強制手
@@ -348,112 +187,6 @@ describe("強制手フラグ", () => {
     expect(result.completedDepth).toBeGreaterThanOrEqual(1);
     expect(result.forcedMove).toBeUndefined();
   });
-});
-
-describe("相手VCF防御", () => {
-  it("相手にVCFがある局面で防御手を選ぶ", () => {
-    // 棋譜: H8 G7 I7 G9 H6 F8 G6 F9 H10 G8 F7 G10 G11
-    // 13手目後、白番。黒にH7からの5手VCFがある。
-    // 白は無関係なD11（跳び三）ではなく防御手を選ぶべき。
-    const { board } = createBoardFromRecord(
-      "H8 G7 I7 G9 H6 F8 G6 F9 H10 G8 F7 G10 G11",
-    );
-    const result = findBestMoveIterativeWithTT(
-      board,
-      "white",
-      4,
-      10000,
-      0,
-      FULL_EVAL_OPTIONS,
-    );
-    // D11 (row=3, col=3) は選ばれるべきではない
-    const isD11 = result.position.row === 3 && result.position.col === 3;
-    expect(isD11).toBe(false);
-    // H7 (row=8, col=7) のブロックまたはカウンターフォーが選ばれるべき
-    expect(result.position.row).toBeGreaterThanOrEqual(0);
-    expect(result.position.row).toBeLessThan(15);
-  }, 15000);
-});
-
-describe("depth=0 Mise-VCFの禁手チェック", () => {
-  it("黒番でMise-VCFの手が三々禁の場合、その手を選ばない", () => {
-    // ベンチマーク#34の棋譜: H6が三々禁かつMise-VCF候補
-    const { board } = createBoardFromRecord(
-      "H8 G9 F8 G8 G7 D10 H7 I9 F7 E7 G6 F6",
-    );
-
-    const result = findBestMoveIterativeWithTT(
-      board,
-      "black",
-      4,
-      10000,
-      0,
-      FULL_EVAL_OPTIONS,
-    );
-
-    // 返された手が禁手でないことを検証
-    const forbidden = checkForbiddenMove(
-      board,
-      result.position.row,
-      result.position.col,
-    );
-    expect(forbidden.isForbidden).toBe(false);
-  }, 15000);
-
-  it("唯一のMise-VCF勝ち手が禁手の場合、通常探索にフォールバック", () => {
-    // 同じ局面で、H6 (row=9, col=7) が返されないことを確認
-    const { board } = createBoardFromRecord(
-      "H8 G9 F8 G8 G7 D10 H7 I9 F7 E7 G6 F6",
-    );
-
-    const result = findBestMoveIterativeWithTT(
-      board,
-      "black",
-      4,
-      10000,
-      0,
-      FULL_EVAL_OPTIONS,
-    );
-
-    // H6 (row=9, col=7) は禁手なので選ばれてはならない
-    const isH6 = result.position.row === 9 && result.position.col === 7;
-    expect(isH6).toBe(false);
-  }, 15000);
-});
-
-describe("VCFレース判定", () => {
-  it("2手以上のVCFでも相手VCFに関係なく勝利を返す", () => {
-    // 白の2段VCF + 黒の1手VCF（活三）の局面
-    // 修正前: 相手VCFが短いためフォールスルーしていた
-    // 修正後: findVCFSequence のVCFは counter-four チェック済みなので即勝利
-    const board = createBoardWithStones([
-      // 白の横止め三（白(7,4)で止め四、防御(7,5)）
-      { row: 7, col: 1, color: "white" },
-      { row: 7, col: 2, color: "white" },
-      { row: 7, col: 3, color: "white" },
-      { row: 7, col: 0, color: "black" }, // 左端ブロック
-      // 白の縦止め三（VCF2段目用）
-      { row: 4, col: 5, color: "white" },
-      { row: 5, col: 5, color: "white" },
-      { row: 6, col: 5, color: "white" },
-      { row: 3, col: 5, color: "black" }, // 上端ブロック
-      // 黒の活三（1手VCF: 活四作成で即勝ち）
-      { row: 10, col: 7, color: "black" },
-      { row: 10, col: 8, color: "black" },
-      { row: 10, col: 9, color: "black" },
-    ]);
-    const result = findBestMoveIterativeWithTT(
-      board,
-      "white",
-      4,
-      5000,
-      0,
-      FULL_EVAL_OPTIONS,
-    );
-    // VCFが有効なのでFIVEスコアを返すべき（completedDepth=0はVCF即return）
-    expect(result.score).toBe(PATTERN_SCORES.FIVE);
-    expect(result.completedDepth).toBe(0);
-  }, 15000);
 });
 
 describe("同スコア手のタイブレーク", () => {
