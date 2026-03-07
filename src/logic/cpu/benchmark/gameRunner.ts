@@ -273,15 +273,15 @@ export function runHeadlessGame(
         applyPatternScoreOverrides(overrides);
       }
 
-      const result = findBestMoveIterativeWithTT(
+      const result = findBestMoveIterativeWithTT({
         board,
-        currentColor,
-        params.depth,
-        params.timeLimit,
-        params.randomFactor,
-        params.evaluationOptions,
-        params.maxNodes,
-      );
+        color: currentColor,
+        maxDepth: params.depth,
+        timeLimit: params.timeLimit,
+        randomFactor: params.randomFactor,
+        evaluationOptions: params.evaluationOptions,
+        maxNodes: params.maxNodes,
+      });
       move = result.position;
       depth = result.completedDepth;
       ({ score } = result);

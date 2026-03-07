@@ -25,15 +25,15 @@ describe("PV検証: 実棋譜での回帰テスト", () => {
     expect(nextColor).toBe("white");
 
     // hard準拠のパラメータで探索
-    const result = findBestMoveIterativeWithTT(
+    const result = findBestMoveIterativeWithTT({
       board,
-      "white",
-      4,
-      8000,
-      0, // randomFactor: 0
-      FULL_EVAL_OPTIONS,
-      600000,
-    );
+      color: "white",
+      maxDepth: 4,
+      timeLimit: 8000,
+      randomFactor: 0,
+      evaluationOptions: FULL_EVAL_OPTIONS,
+      maxNodes: 600000,
+    });
 
     // 各候補手のPVを検証
     if (result.candidates) {
@@ -74,15 +74,15 @@ describe("PV検証: 実棋譜での回帰テスト", () => {
       "H8 I7 J6 H7 G7 I9 I8 J8 H6 I5 I6 K6 G6 F6 G5 G4 H5 I4 G8 G9 H9";
     const { board } = createBoardFromRecord(record);
 
-    const result = findBestMoveIterativeWithTT(
+    const result = findBestMoveIterativeWithTT({
       board,
-      "white",
-      4,
-      8000,
-      0,
-      FULL_EVAL_OPTIONS,
-      600000,
-    );
+      color: "white",
+      maxDepth: 4,
+      timeLimit: 8000,
+      randomFactor: 0,
+      evaluationOptions: FULL_EVAL_OPTIONS,
+      maxNodes: 600000,
+    });
 
     // J5が候補に含まれているか確認
     const j5 = result.candidates?.find(

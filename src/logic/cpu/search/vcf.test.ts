@@ -980,7 +980,12 @@ describe("VCFレース判定", () => {
       { row: 6, col: 5, color: "white" },
       { row: 3, col: 5, color: "black" },
     ]);
-    const result = findBestMoveIterativeWithTT(board, "white", 4, 1000);
+    const result = findBestMoveIterativeWithTT({
+      board,
+      color: "white",
+      maxDepth: 4,
+      timeLimit: 1000,
+    });
     expect(result.score).toBe(PATTERN_SCORES.FIVE);
   });
 
@@ -1017,7 +1022,12 @@ describe("VCFレース判定", () => {
     expect(vcfAttackMoveCount(blackVCF!.sequence)).toBe(1); // 黒: 1手
 
     // 白番で白の2段VCF: counter-fourチェック済みなので勝利確定
-    const result = findBestMoveIterativeWithTT(board, "white", 4, 1000);
+    const result = findBestMoveIterativeWithTT({
+      board,
+      color: "white",
+      maxDepth: 4,
+      timeLimit: 1000,
+    });
     expect(result.score).toBe(PATTERN_SCORES.FIVE);
   });
 
@@ -1034,7 +1044,12 @@ describe("VCFレース判定", () => {
       { row: 10, col: 8, color: "black" },
       { row: 10, col: 9, color: "black" },
     ]);
-    const result = findBestMoveIterativeWithTT(board, "white", 4, 1000);
+    const result = findBestMoveIterativeWithTT({
+      board,
+      color: "white",
+      maxDepth: 4,
+      timeLimit: 1000,
+    });
     expect(result.score).toBe(PATTERN_SCORES.FIVE);
   });
 
@@ -1045,7 +1060,12 @@ describe("VCFレース判定", () => {
       { row: 7, col: 6, color: "white" },
       { row: 7, col: 7, color: "white" },
     ]);
-    const result = findBestMoveIterativeWithTT(board, "white", 4, 1000);
+    const result = findBestMoveIterativeWithTT({
+      board,
+      color: "white",
+      maxDepth: 4,
+      timeLimit: 1000,
+    });
     expect(result.score).toBe(PATTERN_SCORES.FIVE);
   });
 });

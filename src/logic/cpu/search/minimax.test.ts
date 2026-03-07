@@ -154,14 +154,14 @@ describe("強制手フラグ", () => {
       "H8 G8 J6 G9 G7 I9 J7 J8 H7 I7 I8 J9",
     );
 
-    const result = findBestMoveIterativeWithTT(
+    const result = findBestMoveIterativeWithTT({
       board,
-      "black",
-      4,
-      5000,
-      0,
-      FULL_EVAL_OPTIONS,
-    );
+      color: "black",
+      maxDepth: 4,
+      timeLimit: 5000,
+      randomFactor: 0,
+      evaluationOptions: FULL_EVAL_OPTIONS,
+    });
 
     // 候補手が1つに絞られ、forcedMoveフラグが立つ
     expect(result.forcedMove).toBe(true);
@@ -175,14 +175,14 @@ describe("強制手フラグ", () => {
       { row: 8, col: 8, color: "white" },
     ]);
 
-    const result = findBestMoveIterativeWithTT(
+    const result = findBestMoveIterativeWithTT({
       board,
-      "black",
-      2,
-      5000,
-      0,
-      FULL_EVAL_OPTIONS,
-    );
+      color: "black",
+      maxDepth: 2,
+      timeLimit: 5000,
+      randomFactor: 0,
+      evaluationOptions: FULL_EVAL_OPTIONS,
+    });
 
     expect(result.completedDepth).toBeGreaterThanOrEqual(1);
     expect(result.forcedMove).toBeUndefined();

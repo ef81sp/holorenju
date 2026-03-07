@@ -16,7 +16,10 @@ export { findBestMove, findBestMoveIterative, minimax } from "./minimaxSimple";
 export { findBestMoveWithTT, minimaxWithTT } from "./minimaxCore";
 
 // 反復深化（TT統合版）
-export { findBestMoveIterativeWithTT } from "./iterativeDeepening";
+export {
+  findBestMoveIterativeWithTT,
+  type IterativeDeepeningParams,
+} from "./iterativeDeepening";
 
 // Re-export types and functions for backward compatibility
 export {

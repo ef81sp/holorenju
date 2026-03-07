@@ -59,17 +59,16 @@ self.onmessage = (event: MessageEvent<CpuRequest>) => {
     const params = DIFFICULTY_PARAMS[request.difficulty];
 
     // Iterative Deepeningで探索（TT/Move Ordering統合版）
-    const result = findBestMoveIterativeWithTT(
-      request.board,
-      currentTurn,
-      params.depth,
-      params.timeLimit,
-      params.randomFactor,
-      params.evaluationOptions,
-      params.maxNodes,
-      undefined, // absoluteTimeLimit: デフォルト値を使用
-      params.scoreThreshold,
-    );
+    const result = findBestMoveIterativeWithTT({
+      board: request.board,
+      color: currentTurn,
+      maxDepth: params.depth,
+      timeLimit: params.timeLimit,
+      randomFactor: params.randomFactor,
+      evaluationOptions: params.evaluationOptions,
+      maxNodes: params.maxNodes,
+      scoreThreshold: params.scoreThreshold,
+    });
 
     const endTime = performance.now();
     const thinkingTime = Math.round(endTime - startTime);

@@ -30,14 +30,14 @@ describe("LMR と四を作る手", () => {
 
     // 四を作る手はLMR対象だが、move orderingで上位に来るため
     // LMR_MOVE_THRESHOLD未満で探索され、正しく評価される
-    const result = findBestMoveIterativeWithTT(
+    const result = findBestMoveIterativeWithTT({
       board,
-      "black",
-      5,
-      5000,
-      0,
-      DEFAULT_EVAL_OPTIONS,
-    );
+      color: "black",
+      maxDepth: 5,
+      timeLimit: 5000,
+      randomFactor: 0,
+      evaluationOptions: DEFAULT_EVAL_OPTIONS,
+    });
 
     // 四を作る手が選ばれる
     expect(result.position.row).toBe(7);
@@ -62,14 +62,14 @@ describe("LMR と四を作る手", () => {
 
     // VCFがある局面では pre-search で検出されるため、
     // LMR の四免除がなくても勝ちを見つける
-    const result = findBestMoveIterativeWithTT(
+    const result = findBestMoveIterativeWithTT({
       board,
-      "black",
-      5,
-      5000,
-      0,
-      DEFAULT_EVAL_OPTIONS,
-    );
+      color: "black",
+      maxDepth: 5,
+      timeLimit: 5000,
+      randomFactor: 0,
+      evaluationOptions: DEFAULT_EVAL_OPTIONS,
+    });
 
     expect(result.score).toBeGreaterThanOrEqual(PATTERN_SCORES.FIVE);
   });
@@ -86,14 +86,14 @@ describe("LMR と四を作る手", () => {
 
     // 四を作る手はmove orderingで高スコアになるため、
     // LMR_MOVE_THRESHOLD より前に探索されフル深度で読まれる
-    const result = findBestMoveIterativeWithTT(
+    const result = findBestMoveIterativeWithTT({
       board,
-      "black",
-      5,
-      5000,
-      0,
-      DEFAULT_EVAL_OPTIONS,
-    );
+      color: "black",
+      maxDepth: 5,
+      timeLimit: 5000,
+      randomFactor: 0,
+      evaluationOptions: DEFAULT_EVAL_OPTIONS,
+    });
 
     expect(result.position.row).toBe(7);
     expect([3, 7, 8]).toContain(result.position.col);
@@ -242,14 +242,14 @@ describe("活三防御", () => {
     // （VCFより活三防御が優先される場合）
     // ただし、VCFがあれば VCF を打つのが正しい動作
     // このテストでは活三防御が機能することを確認する
-    const result = findBestMoveIterativeWithTT(
+    const result = findBestMoveIterativeWithTT({
       board,
-      "white",
-      3,
-      5000,
-      0,
-      DEFAULT_EVAL_OPTIONS,
-    );
+      color: "white",
+      maxDepth: 3,
+      timeLimit: 5000,
+      randomFactor: 0,
+      evaluationOptions: DEFAULT_EVAL_OPTIONS,
+    });
 
     console.log("白の選択:", result.position);
 

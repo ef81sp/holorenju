@@ -137,15 +137,15 @@ describe("統合テスト: findBestMoveIterativeWithTT が G9 を選ばない", 
     const { board } = createBoardFromRecord(GAME_RECORD);
     const params = DIFFICULTY_PARAMS.hard;
 
-    const result = findBestMoveIterativeWithTT(
+    const result = findBestMoveIterativeWithTT({
       board,
-      "white",
-      params.depth,
-      params.timeLimit,
-      params.randomFactor,
-      params.evaluationOptions,
-      params.maxNodes,
-    );
+      color: "white",
+      maxDepth: params.depth,
+      timeLimit: params.timeLimit,
+      randomFactor: params.randomFactor,
+      evaluationOptions: params.evaluationOptions,
+      maxNodes: params.maxNodes,
+    });
 
     // G9 = (6, 6) は選ばれてはいけない
     const isG9 = result.position.row === 6 && result.position.col === 6;

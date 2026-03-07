@@ -52,6 +52,7 @@ export {
   findBestMoveIterative,
   findBestMoveWithTT,
   findBestMoveIterativeWithTT,
+  type IterativeDeepeningParams,
   minimax,
   minimaxWithTT,
   createSearchContext,

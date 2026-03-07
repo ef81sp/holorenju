@@ -75,15 +75,15 @@ describe("findBestMoveIterativeWithTT - ノード数制限", () => {
     ]);
 
     // 非常に小さいノード数上限（100ノード）
-    const result = findBestMoveIterativeWithTT(
+    const result = findBestMoveIterativeWithTT({
       board,
-      "black",
-      10, // 深度は深め
-      60000, // 時間は長め
-      0,
-      DEFAULT_EVAL_OPTIONS,
-      100, // ノード数上限
-    );
+      color: "black",
+      maxDepth: 10, // 深度は深め
+      timeLimit: 60000, // 時間は長め
+      randomFactor: 0,
+      evaluationOptions: DEFAULT_EVAL_OPTIONS,
+      maxNodes: 100, // ノード数上限
+    });
 
     // 有効な手が返される
     expect(result.position.row).toBeGreaterThanOrEqual(0);
@@ -107,15 +107,15 @@ describe("findBestMoveIterativeWithTT - ノード数制限", () => {
     ]);
 
     // 大きなノード数上限（100万ノード）と短い深度
-    const result = findBestMoveIterativeWithTT(
+    const result = findBestMoveIterativeWithTT({
       board,
-      "black",
-      2, // 浅い深度
-      60000,
-      0,
-      DEFAULT_EVAL_OPTIONS,
-      1000000, // 大きなノード数上限
-    );
+      color: "black",
+      maxDepth: 2, // 浅い深度
+      timeLimit: 60000,
+      randomFactor: 0,
+      evaluationOptions: DEFAULT_EVAL_OPTIONS,
+      maxNodes: 1000000, // 大きなノード数上限
+    });
 
     // 深度2で完了
     expect(result.completedDepth).toBe(2);
@@ -134,15 +134,14 @@ describe("findBestMoveIterativeWithTT - ノード数制限", () => {
     ]);
 
     // ノード数上限未指定
-    const result = findBestMoveIterativeWithTT(
+    const result = findBestMoveIterativeWithTT({
       board,
-      "black",
-      2,
-      10000,
-      0,
-      DEFAULT_EVAL_OPTIONS,
-      undefined, // ノード数上限未指定
-    );
+      color: "black",
+      maxDepth: 2,
+      timeLimit: 10000,
+      randomFactor: 0,
+      evaluationOptions: DEFAULT_EVAL_OPTIONS,
+    });
 
     // 有効な結果が返される
     expect(result.position.row).toBeGreaterThanOrEqual(0);
@@ -162,16 +161,15 @@ describe("findBestMoveIterativeWithTT - 絶対時間制限", () => {
 
     // 短い絶対時間制限（100ms）
     const startTime = performance.now();
-    const result = findBestMoveIterativeWithTT(
+    const result = findBestMoveIterativeWithTT({
       board,
-      "black",
-      20, // 深度は深め
-      60000, // 通常の時間制限は長め
-      0,
-      DEFAULT_EVAL_OPTIONS,
-      undefined, // ノード数上限なし
-      100, // 絶対時間制限100ms
-    );
+      color: "black",
+      maxDepth: 20, // 深度は深め
+      timeLimit: 60000, // 通常の時間制限は長め
+      randomFactor: 0,
+      evaluationOptions: DEFAULT_EVAL_OPTIONS,
+      absoluteTimeLimit: 100, // 絶対時間制限100ms
+    });
     const elapsed = performance.now() - startTime;
 
     // 有効な手が返される
@@ -190,16 +188,15 @@ describe("findBestMoveIterativeWithTT - 絶対時間制限", () => {
     placeStonesOnBoard(board, [{ row: 7, col: 7, color: "black" }]);
 
     // 絶対時間制限を指定しない（デフォルト10秒）
-    const result = findBestMoveIterativeWithTT(
+    const result = findBestMoveIterativeWithTT({
       board,
-      "white",
-      2,
-      1000,
-      0,
-      DEFAULT_EVAL_OPTIONS,
-      undefined,
+      color: "white",
+      maxDepth: 2,
+      timeLimit: 1000,
+      randomFactor: 0,
+      evaluationOptions: DEFAULT_EVAL_OPTIONS,
       // absoluteTimeLimit省略
-    );
+    });
 
     // 有効な結果が返される
     expect(result.position.row).toBeGreaterThanOrEqual(0);
@@ -396,14 +393,14 @@ describe("VCTメインフロー統合 - enableVCT=false", () => {
       { row: 8, col: 8, color: "white" },
     ]);
     // DEFAULT_EVAL_OPTIONS はenableVCT=false
-    const result = findBestMoveIterativeWithTT(
+    const result = findBestMoveIterativeWithTT({
       board,
-      "black",
-      2,
-      2000,
-      0,
-      DEFAULT_EVAL_OPTIONS,
-    );
+      color: "black",
+      maxDepth: 2,
+      timeLimit: 2000,
+      randomFactor: 0,
+      evaluationOptions: DEFAULT_EVAL_OPTIONS,
+    });
     // 正常に結果が返ることを確認
     expect(result.position.row).toBeGreaterThanOrEqual(0);
     expect(result.completedDepth).toBeGreaterThanOrEqual(1);

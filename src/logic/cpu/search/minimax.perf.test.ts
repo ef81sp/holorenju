@@ -53,14 +53,14 @@ describe("Null Move Pruning", () => {
     ]);
 
     const nmpOptions = { ...FULL_EVAL_OPTIONS, enableNullMovePruning: true };
-    const result = findBestMoveIterativeWithTT(
+    const result = findBestMoveIterativeWithTT({
       board,
-      "black",
-      4,
-      10000,
-      0,
-      nmpOptions,
-    );
+      color: "black",
+      maxDepth: 4,
+      timeLimit: 10000,
+      randomFactor: 0,
+      evaluationOptions: nmpOptions,
+    });
 
     // NMP カットオフが少なくとも発生するはず
     expect(result.stats.nullMoveCutoffs).toBeGreaterThanOrEqual(0);
@@ -86,14 +86,14 @@ describe("Null Move Pruning", () => {
       ...FULL_EVAL_OPTIONS,
       enableNullMovePruning: false,
     };
-    const result = findBestMoveIterativeWithTT(
+    const result = findBestMoveIterativeWithTT({
       board,
-      "black",
-      4,
-      10000,
-      0,
-      noNmpOptions,
-    );
+      color: "black",
+      maxDepth: 4,
+      timeLimit: 10000,
+      randomFactor: 0,
+      evaluationOptions: noNmpOptions,
+    });
 
     // NMP カットオフは0
     expect(result.stats.nullMoveCutoffs).toBe(0);
@@ -119,14 +119,14 @@ describe("Futility Pruning", () => {
       ...DEFAULT_EVAL_OPTIONS,
       enableFutilityPruning: true,
     };
-    const result = findBestMoveIterativeWithTT(
+    const result = findBestMoveIterativeWithTT({
       board,
-      "black",
-      3,
-      5000,
-      0,
-      futilityOptions,
-    );
+      color: "black",
+      maxDepth: 3,
+      timeLimit: 5000,
+      randomFactor: 0,
+      evaluationOptions: futilityOptions,
+    });
 
     // Futility スキップが発生しているはず
     expect(result.stats.futilityPrunes).toBeGreaterThan(0);
@@ -144,14 +144,14 @@ describe("即勝ち手・防御の優先順位", () => {
     const { board } = createBoardFromRecord(
       "H8 I9 I7 G9 H6 J8 J6 H9 F9 H10 K7 I11 F8 J12 K13 G11 F12 J9",
     );
-    const result = findBestMoveIterativeWithTT(
+    const result = findBestMoveIterativeWithTT({
       board,
-      "black",
-      4,
-      10000,
-      0,
-      FULL_EVAL_OPTIONS,
-    );
+      color: "black",
+      maxDepth: 4,
+      timeLimit: 10000,
+      randomFactor: 0,
+      evaluationOptions: FULL_EVAL_OPTIONS,
+    });
     // K9（row=6, col=10）が返されるべき
     expect(result.position).toEqual({ row: 6, col: 10 });
   }, 15000);
@@ -163,14 +163,14 @@ describe("即勝ち手・防御の優先順位", () => {
     const { board } = createBoardFromRecord(
       "H8 I7 G7 I9 H6 J8 H10 H9 G9 J7 H7 G8 I8 J9 J10 I10 F7 E7 G6 H5 F8 L9 K9 K8 I6 H11 F6",
     );
-    const result = findBestMoveIterativeWithTT(
+    const result = findBestMoveIterativeWithTT({
       board,
-      "white",
-      4,
-      10000,
-      0,
-      FULL_EVAL_OPTIONS,
-    );
+      color: "white",
+      maxDepth: 4,
+      timeLimit: 10000,
+      randomFactor: 0,
+      evaluationOptions: FULL_EVAL_OPTIONS,
+    });
     // 白は五連を完成させる手を選ぶべき（FIVE スコア）
     expect(result.score).toBe(PATTERN_SCORES.FIVE);
   }, 15000);
@@ -184,14 +184,14 @@ describe("相手VCF防御", () => {
     const { board } = createBoardFromRecord(
       "H8 G7 I7 G9 H6 F8 G6 F9 H10 G8 F7 G10 G11",
     );
-    const result = findBestMoveIterativeWithTT(
+    const result = findBestMoveIterativeWithTT({
       board,
-      "white",
-      4,
-      10000,
-      0,
-      FULL_EVAL_OPTIONS,
-    );
+      color: "white",
+      maxDepth: 4,
+      timeLimit: 10000,
+      randomFactor: 0,
+      evaluationOptions: FULL_EVAL_OPTIONS,
+    });
     // D11 (row=3, col=3) は選ばれるべきではない
     const isD11 = result.position.row === 3 && result.position.col === 3;
     expect(isD11).toBe(false);
@@ -208,14 +208,14 @@ describe("depth=0 Mise-VCFの禁手チェック", () => {
       "H8 G9 F8 G8 G7 D10 H7 I9 F7 E7 G6 F6",
     );
 
-    const result = findBestMoveIterativeWithTT(
+    const result = findBestMoveIterativeWithTT({
       board,
-      "black",
-      4,
-      10000,
-      0,
-      FULL_EVAL_OPTIONS,
-    );
+      color: "black",
+      maxDepth: 4,
+      timeLimit: 10000,
+      randomFactor: 0,
+      evaluationOptions: FULL_EVAL_OPTIONS,
+    });
 
     // 返された手が禁手でないことを検証
     const forbidden = checkForbiddenMove(
@@ -232,14 +232,14 @@ describe("depth=0 Mise-VCFの禁手チェック", () => {
       "H8 G9 F8 G8 G7 D10 H7 I9 F7 E7 G6 F6",
     );
 
-    const result = findBestMoveIterativeWithTT(
+    const result = findBestMoveIterativeWithTT({
       board,
-      "black",
-      4,
-      10000,
-      0,
-      FULL_EVAL_OPTIONS,
-    );
+      color: "black",
+      maxDepth: 4,
+      timeLimit: 10000,
+      randomFactor: 0,
+      evaluationOptions: FULL_EVAL_OPTIONS,
+    });
 
     // H6 (row=9, col=7) は禁手なので選ばれてはならない
     const isH6 = result.position.row === 9 && result.position.col === 7;
@@ -268,14 +268,14 @@ describe("VCFレース判定", () => {
       { row: 10, col: 8, color: "black" },
       { row: 10, col: 9, color: "black" },
     ]);
-    const result = findBestMoveIterativeWithTT(
+    const result = findBestMoveIterativeWithTT({
       board,
-      "white",
-      4,
-      5000,
-      0,
-      FULL_EVAL_OPTIONS,
-    );
+      color: "white",
+      maxDepth: 4,
+      timeLimit: 5000,
+      randomFactor: 0,
+      evaluationOptions: FULL_EVAL_OPTIONS,
+    });
     // VCFが有効なのでFIVEスコアを返すべき（completedDepth=0はVCF即return）
     expect(result.score).toBe(PATTERN_SCORES.FIVE);
     expect(result.completedDepth).toBe(0);

@@ -63,17 +63,15 @@ describe("反復深化のPV再順序付け", () => {
     ]);
 
     // depth 2以上で探索し、depthHistoryを取得
-    const result = findBestMoveIterativeWithTT(
+    const result = findBestMoveIterativeWithTT({
       board,
-      "black",
-      3,
-      5000,
-      0,
-      DEFAULT_EVAL_OPTIONS,
-      undefined,
-      undefined,
-      0,
-    );
+      color: "black",
+      maxDepth: 3,
+      timeLimit: 5000,
+      randomFactor: 0,
+      evaluationOptions: DEFAULT_EVAL_OPTIONS,
+      scoreThreshold: 0,
+    });
 
     // depth 2以上まで到達していればPV再順序付けが機能している
     expect(result.completedDepth).toBeGreaterThanOrEqual(2);
@@ -106,14 +104,14 @@ describe("VCTメインフロー統合", () => {
       { row: 2, col: 3, color: "black" },
     ]);
     // enableVCT=true（FULL_EVAL_OPTIONS）
-    const result = findBestMoveIterativeWithTT(
+    const result = findBestMoveIterativeWithTT({
       board,
-      "white",
-      3,
-      5000,
-      0,
-      FULL_EVAL_OPTIONS,
-    );
+      color: "white",
+      maxDepth: 3,
+      timeLimit: 5000,
+      randomFactor: 0,
+      evaluationOptions: FULL_EVAL_OPTIONS,
+    });
     // VCTのある局面で有効な手が返ることを確認（具体的な手は問わない）
     expect(result.position.row).toBeGreaterThanOrEqual(0);
     expect(result.position.row).toBeLessThan(15);
@@ -128,14 +126,14 @@ describe("Mise-VCFの偽陽性対策", () => {
       "H8 I9 G7 I7 G8 I6 I8 J8 G9 G10 F8 E8 H10 I11",
     );
 
-    const result = findBestMoveIterativeWithTT(
+    const result = findBestMoveIterativeWithTT({
       board,
-      "black",
-      4,
-      5000,
-      0,
-      FULL_EVAL_OPTIONS,
-    );
+      color: "black",
+      maxDepth: 4,
+      timeLimit: 5000,
+      randomFactor: 0,
+      evaluationOptions: FULL_EVAL_OPTIONS,
+    });
 
     // ノリ手チェックでMise-VCFが無効化 → score < FIVE
     expect(result.score).toBeLessThan(PATTERN_SCORES.FIVE);
@@ -149,14 +147,14 @@ describe("Mise-VCFの偽陽性対策", () => {
       "H8 I7 F10 K9 J8 H6 I8 G8 H9 G10 I9 H10 G9 F9 J10 G7 H7 J9 G12 F8 E9 H11 E8 E11 F11 I5 J4 I14 E10 D9 I12 H12 E7 E6 K5 J12 L9 H14 H13 K11 I13",
     );
 
-    const result = findBestMoveIterativeWithTT(
+    const result = findBestMoveIterativeWithTT({
       board,
-      "white",
-      4,
-      5000,
-      0,
-      FULL_EVAL_OPTIONS,
-    );
+      color: "white",
+      maxDepth: 4,
+      timeLimit: 5000,
+      randomFactor: 0,
+      evaluationOptions: FULL_EVAL_OPTIONS,
+    });
 
     // 非強制ミセ手が却下されMise-VCFなし → minimax探索 → score < FIVE
     expect(result.score).toBeLessThan(PATTERN_SCORES.FIVE);
@@ -174,14 +172,14 @@ describe("checkMustDefend: 跳び四と活三の判別", () => {
       "H8 G8 I7 G9 G7 J10 H7 F7 J7 K7 H11 I9 H9",
     );
 
-    const result = findBestMoveIterativeWithTT(
+    const result = findBestMoveIterativeWithTT({
       board,
-      "white",
-      4,
-      5000,
-      0,
-      FULL_EVAL_OPTIONS,
-    );
+      color: "white",
+      maxDepth: 4,
+      timeLimit: 5000,
+      randomFactor: 0,
+      evaluationOptions: FULL_EVAL_OPTIONS,
+    });
 
     // 跳び四の防御手（H10）が返り、四三ではないので -FIVE にならない
     expect(result.score).toBeGreaterThan(-PATTERN_SCORES.FIVE);
@@ -193,14 +191,14 @@ describe("checkMustDefend: 跳び四と活三の判別", () => {
     // NMPがK7経由で偽の五連(checkFive(K7,black)=true)を検出していた
     const { board } = createBoardFromRecord("H8 G8 I7 G9 G7 J10 H7 F7");
 
-    const result = findBestMoveIterativeWithTT(
+    const result = findBestMoveIterativeWithTT({
       board,
-      "black",
-      5,
-      10000,
-      0,
-      FULL_EVAL_OPTIONS,
-    );
+      color: "black",
+      maxDepth: 5,
+      timeLimit: 10000,
+      randomFactor: 0,
+      evaluationOptions: FULL_EVAL_OPTIONS,
+    });
 
     // J7 が偽の +100000 にならない
     const j7Candidate = result.candidates?.find(
@@ -235,14 +233,14 @@ describe("checkMustDefend: 跳び四と活三の判別", () => {
       { row: 14, col: 14, color: "white" },
     ]);
 
-    const result = findBestMoveIterativeWithTT(
+    const result = findBestMoveIterativeWithTT({
       board,
-      "white",
-      2,
-      5000,
-      0,
-      FULL_EVAL_OPTIONS,
-    );
+      color: "white",
+      maxDepth: 2,
+      timeLimit: 5000,
+      randomFactor: 0,
+      evaluationOptions: FULL_EVAL_OPTIONS,
+    });
 
     // 独立した四＋活三 = 四三 → -FIVE
     expect(result.score).toBe(-PATTERN_SCORES.FIVE);

@@ -173,16 +173,16 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
     }
 
     // 通常探索（候補手比較データ用）
-    const result = findBestMoveIterativeWithTT(
+    const result = findBestMoveIterativeWithTT({
       board,
       color,
-      REVIEW_SEARCH_PARAMS.depth,
-      REVIEW_SEARCH_PARAMS.timeLimit,
-      0, // randomFactor: 0（決定論的）
-      REVIEW_SEARCH_PARAMS.evaluationOptions,
-      REVIEW_SEARCH_PARAMS.maxNodes,
-      REVIEW_SEARCH_PARAMS.absoluteTimeLimit,
-    );
+      maxDepth: REVIEW_SEARCH_PARAMS.depth,
+      timeLimit: REVIEW_SEARCH_PARAMS.timeLimit,
+      randomFactor: 0, // 決定論的
+      evaluationOptions: REVIEW_SEARCH_PARAMS.evaluationOptions,
+      maxNodes: REVIEW_SEARCH_PARAMS.maxNodes,
+      absoluteTimeLimit: REVIEW_SEARCH_PARAMS.absoluteTimeLimit,
+    });
 
     // minimax が FIVE を返したが VCF/VCT 未検出
     // 石数 < VCT_STONE_THRESHOLD(14) の序盤ではVCT探索がスキップされるため、

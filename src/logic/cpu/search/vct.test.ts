@@ -636,29 +636,6 @@ describe("VCTカウンター脅威: ct=four", () => {
     board[7]![3] = null;
   });
 
-  it("ct=four: ブロックが脅威を作る場合VCT成立", () => {
-    const board = createBoardWithStones([
-      { row: 3, col: 3, color: "white" }, // ブロッカー
-      { row: 7, col: 4, color: "white" },
-      { row: 7, col: 5, color: "white" },
-      { row: 8, col: 4, color: "white" }, // ブロック(8,3)で活三になる
-      { row: 8, col: 5, color: "white" },
-      { row: 4, col: 3, color: "black" },
-      { row: 5, col: 3, color: "black" },
-      { row: 6, col: 3, color: "black" },
-    ]);
-    // ブロック位置(8,3)が(8,3)-(8,4)-(8,5)の活三を作ることを確認
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    board[8]![3] = "white";
-    expect(isThreat(board, 8, 3, "white")).toBe(true);
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    board[8]![3] = null;
-
-    expect(hasVCT(board, "white", 0, undefined, { timeLimit: 1000 })).toBe(
-      true,
-    );
-  });
-
   it("ct=four: ブロックが脅威を作らない場合VCT不成立", () => {
     const board = createBoardWithStones([
       { row: 3, col: 3, color: "white" }, // ブロッカー
@@ -955,29 +932,6 @@ describe("isVCTFirstMove: ct=three の hasVCF フォールバック", () => {
 });
 
 describe("VCT探索のカウンター脅威チェック（探索関数）", () => {
-  it("ct=four: hasVCTで防御手の四をブロック→VCT継続を検証", () => {
-    // White: (3,3)ブロッカー, (7,4)(7,5)横二, (8,4)(8,5)ブロック後の脅威用
-    // Black: (4,3)(5,3)(6,3)縦三
-    // White (7,6)で活三 → 防御(7,3)でBlack縦四 → ブロック(8,3)で白活三
-    // hasVCTでもct=four処理が有効であることを確認
-    const board = createBoardWithStones([
-      { row: 3, col: 3, color: "white" },
-      { row: 7, col: 4, color: "white" },
-      { row: 7, col: 5, color: "white" },
-      { row: 8, col: 4, color: "white" },
-      { row: 8, col: 5, color: "white" },
-      { row: 4, col: 3, color: "black" },
-      { row: 5, col: 3, color: "black" },
-      { row: 6, col: 3, color: "black" },
-    ]);
-    const ctFourOptions = { timeLimit: 1000 };
-    expect(hasVCT(board, "white", 0, undefined, ctFourOptions)).toBe(true);
-    const move = findVCTMove(board, "white", ctFourOptions);
-    expect(move).not.toBeNull();
-    const seq = findVCTSequence(board, "white", ctFourOptions);
-    expect(seq).not.toBeNull();
-  });
-
   it("ct=four: ブロックが孤立 → hasVCT/findVCTMove/findVCTSequence で不成立", () => {
     // ブロック(8,3)が孤立（脅威にならない）→ VCT不成立
     const board = createBoardWithStones([

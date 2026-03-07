@@ -51,8 +51,27 @@ interface ErrorResponse {
   error: string;
 }
 
-/** findBestMoveIterativeWithTT の最低限の型（worktreeから動的importする） */
-type FindBestMoveFn = (
+/** findBestMoveIterativeWithTT の結果型 */
+interface FindBestMoveResult {
+  position: Position;
+  score: number;
+  completedDepth: number;
+  interrupted: boolean;
+}
+
+/** 新シグネチャ（パラメータオブジェクト版） */
+type FindBestMoveFnNew = (params: {
+  board: BoardState;
+  color: "black" | "white";
+  maxDepth: number;
+  timeLimit: number;
+  randomFactor?: number;
+  evaluationOptions?: unknown;
+  maxNodes?: number;
+}) => FindBestMoveResult;
+
+/** 旧シグネチャ（位置引数版、古いコミットとの互換用） */
+type FindBestMoveFnOld = (
   board: BoardState,
   color: "black" | "white",
   maxDepth: number,
@@ -60,12 +79,9 @@ type FindBestMoveFn = (
   randomFactor?: number,
   evaluationOptions?: unknown,
   maxNodes?: number,
-) => {
-  position: Position;
-  score: number;
-  completedDepth: number;
-  interrupted: boolean;
-};
+) => FindBestMoveResult;
+
+type FindBestMoveFn = FindBestMoveFnNew | FindBestMoveFnOld;
 
 // ============================================================================
 // 実装
@@ -155,15 +171,27 @@ async function main(): Promise<void> {
     const startTime = performance.now();
 
     try {
-      const result = findBestMove(
-        board,
-        color,
-        params.depth,
-        params.timeLimit,
-        params.randomFactor,
-        params.evaluationOptions,
-        params.maxNodes,
-      );
+      // 新旧シグネチャの判別: fn.length === 1 → パラメータオブジェクト版
+      const result =
+        findBestMove.length === 1
+          ? (findBestMove as FindBestMoveFnNew)({
+              board,
+              color,
+              maxDepth: params.depth,
+              timeLimit: params.timeLimit,
+              randomFactor: params.randomFactor,
+              evaluationOptions: params.evaluationOptions,
+              maxNodes: params.maxNodes,
+            })
+          : (findBestMove as FindBestMoveFnOld)(
+              board,
+              color,
+              params.depth,
+              params.timeLimit,
+              params.randomFactor,
+              params.evaluationOptions,
+              params.maxNodes,
+            );
 
       const thinkingTimeMs = performance.now() - startTime;
 
