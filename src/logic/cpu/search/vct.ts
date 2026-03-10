@@ -424,13 +424,14 @@ export function findVCTMove(
   };
   const vcfCache = createVCFCache();
 
-  // 相手に活三またはミセ手があればVCT不成立（四追いでしか勝てない）
+  // 相手に活三・ミセ手・VCFがあればVCT不成立（四追いでしか勝てない）
   const opponentColor = color === "black" ? "white" : "black";
   if (
     hasOpenThree(board, opponentColor) ||
-    hasFourThreeAvailable(board, opponentColor)
+    hasFourThreeAvailable(board, opponentColor) ||
+    cachedHasVCF(board, opponentColor, limiter, options?.vcfOptions, vcfCache)
   ) {
-    // VCFのみ試す（四追いなら活三/ミセ手があっても有効）
+    // VCFのみ試す（四追いなら活三/ミセ手/VCFがあっても有効）
     return cachedFindVCFMove(
       board,
       color,
@@ -611,13 +612,14 @@ export function findVCTSequence(
   };
   const vcfCache = createVCFCache();
 
-  // 相手に活三またはミセ手があればVCT不成立（四追いでしか勝てない）
+  // 相手に活三・ミセ手・VCFがあればVCT不成立（四追いでしか勝てない）
   const opponentColor = color === "black" ? "white" : "black";
   if (
     hasOpenThree(board, opponentColor) ||
-    hasFourThreeAvailable(board, opponentColor)
+    hasFourThreeAvailable(board, opponentColor) ||
+    cachedHasVCF(board, opponentColor, limiter, options?.vcfOptions, vcfCache)
   ) {
-    // VCFのみ試す（四追いなら活三/ミセ手があっても有効）
+    // VCFのみ試す（四追いなら活三/ミセ手/VCFがあっても有効）
     const vcfOnly = cachedFindVCFSequence(
       board,
       color,
@@ -1415,11 +1417,27 @@ export function findVCTSequenceFromFirstMove(
     return null;
   }
 
-  // 相手に活三またはミセ手があればVCT開始手として無効（四追いでしか勝てない）
+  // TimeLimiter / VCFCache を先に作成（ガードの cachedHasVCF でも使用）
+  const maxDepth = options?.maxDepth ?? VCT_MAX_DEPTH;
+  const timeLimitMs = options?.timeLimit ?? VCT_TIME_LIMIT;
+  const localLimiter: TimeLimiter = {
+    startTime: performance.now(),
+    timeLimit: timeLimitMs,
+  };
+  const localCache = createVCFCache();
+
+  // 相手に活三・ミセ手・VCFがあればVCT開始手として無効（四追いでしか勝てない）
   const opponentColor = color === "black" ? "white" : "black";
   if (
     hasOpenThree(board, opponentColor) ||
-    hasFourThreeAvailable(board, opponentColor)
+    hasFourThreeAvailable(board, opponentColor) ||
+    cachedHasVCF(
+      board,
+      opponentColor,
+      localLimiter,
+      options?.vcfOptions,
+      localCache,
+    )
   ) {
     return null;
   }
@@ -1462,14 +1480,6 @@ export function findVCTSequenceFromFirstMove(
   }
 
   // 全防御に対してVCTが継続するか＆最長の継続シーケンスを記録
-  // 防御ループ全体で共有する TimeLimiter / VCFCache
-  const maxDepth = options?.maxDepth ?? VCT_MAX_DEPTH;
-  const timeLimitMs = options?.timeLimit ?? VCT_TIME_LIMIT;
-  const localLimiter: TimeLimiter = {
-    startTime: performance.now(),
-    timeLimit: timeLimitMs,
-  };
-  const localCache = createVCFCache();
 
   let mainDefense: Position | null = null;
   let mainContinuation: VCTSequenceResult | null = null;
@@ -1645,11 +1655,12 @@ export function isVCTFirstMove(
   };
   const vcfCache = createVCFCache();
 
-  // 相手に活三またはミセ手があればVCT開始手として無効（四追いでしか勝てない）
+  // 相手に活三・ミセ手・VCFがあればVCT開始手として無効（四追いでしか勝てない）
   const opponentColor = color === "black" ? "white" : "black";
   if (
     hasOpenThree(board, opponentColor) ||
-    hasFourThreeAvailable(board, opponentColor)
+    hasFourThreeAvailable(board, opponentColor) ||
+    cachedHasVCF(board, opponentColor, limiter, options?.vcfOptions, vcfCache)
   ) {
     return false;
   }

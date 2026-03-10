@@ -16,6 +16,7 @@ import {
   checkDefenseCounterThreat,
   getFourDefensePosition,
 } from "./threatPatterns";
+import { hasVCF } from "./vcf";
 import {
   findVCTMove,
   findVCTSequence,
@@ -1110,5 +1111,24 @@ describe("hasFourThreeAvailable", () => {
     const snapshot = copyBoard(board);
     hasFourThreeAvailable(board, "white");
     expect(board).toEqual(snapshot);
+  });
+});
+
+describe("防御側VCFによるVCT不成立", () => {
+  const VCT_OPTIONS = { maxDepth: 4, timeLimit: 1000 };
+
+  it("防御側にVCFがある場合、VCT開始手は無効になる", () => {
+    // 報告棋譜: 25手目（F11）後、黒にVCFがあるため白のVCTは不成立
+    const { board } = createBoardFromRecord(
+      "H8 G7 J6 G9 H10 G8 G6 H6 I5 K7 G10 I10 F7 H5 G11 I9 H11 H9 F9 I12 I11 J11 K12 K10 F11",
+    );
+    expect(hasVCF(board, "black")).toBe(true);
+
+    // J7 (row=6,col=9) は白の有効な脅威手だが、防御側VCFガードで無効化
+    const move = { row: 6, col: 9 };
+    expect(isVCTFirstMove(board, move, "white", VCT_OPTIONS)).toBe(false);
+    expect(
+      findVCTSequenceFromFirstMove(board, move, "white", VCT_OPTIONS),
+    ).toBeNull();
   });
 });
