@@ -6,9 +6,11 @@
 
 import { describe, expect, it } from "vitest";
 
+import { checkStraightFour } from "@/logic/renjuRules";
+
 import { evaluateStonePatterns } from "../evaluation";
 import { createBoardWithStones } from "../testUtils";
-import { analyzeJumpPatterns } from "./jumpPatterns";
+import { analyzeJumpPatterns, isValidConsecutiveThree } from "./jumpPatterns";
 import { PATTERN_SCORES } from "./patternScores";
 
 describe("跳びパターン評価", () => {
@@ -149,5 +151,95 @@ describe("analyzeJumpPatterns - 連続四の端チェック", () => {
     // 両端塞がりの四はhasFourにならない
     expect(result.hasFour).toBe(false);
     // したがって四三（hasFour && hasValidOpenThree）にもならない
+  });
+});
+
+describe("白の制約ライン上の偽活三", () => {
+  describe("checkStraightFour - 白対応", () => {
+    it("制約ライン上の白三の達四点 → false（活四にならない）", () => {
+      // 縦方向: B _ W W W _ B
+      // col=5: row=4=黒, row=5=空, row=6〜8=白, row=9=空, row=10=黒
+      // 達四点 row=5: 仮置きで4連→ row=4=黒で片端塞がり
+      // 達四点 row=9: 仮置きで4連→ row=10=黒で片端塞がり
+      const board = createBoardWithStones([
+        { row: 4, col: 5, color: "black" },
+        { row: 6, col: 5, color: "white" },
+        { row: 7, col: 5, color: "white" },
+        { row: 8, col: 5, color: "white" },
+        { row: 10, col: 5, color: "black" },
+      ]);
+
+      // dirIndex=0 は上方向（dr=-1, dc=0）
+      expect(checkStraightFour(board, 5, 5, 0, "white")).toBe(false);
+      expect(checkStraightFour(board, 9, 5, 0, "white")).toBe(false);
+    });
+
+    it("非制約ライン上の白三の達四点 → true（活四になる）", () => {
+      // 縦方向: _ _ W W W _ _
+      const board = createBoardWithStones([
+        { row: 6, col: 5, color: "white" },
+        { row: 7, col: 5, color: "white" },
+        { row: 8, col: 5, color: "white" },
+      ]);
+
+      // 達四点 row=5 に仮置き → 両端空き → true
+      expect(checkStraightFour(board, 5, 5, 0, "white")).toBe(true);
+    });
+  });
+
+  describe("isValidConsecutiveThree - 白対応", () => {
+    it("制約ライン [B] _ W W W _ [B] の白三 → false（活三ではない）", () => {
+      // col=5 縦方向: row=4=黒, row=6〜8=白, row=10=黒
+      // row=5, row=9 は空き（達四点）
+      // 達四点に置いても 5マスの制約で活四にならない
+      const board = createBoardWithStones([
+        { row: 4, col: 5, color: "black" },
+        { row: 6, col: 5, color: "white" },
+        { row: 7, col: 5, color: "white" },
+        { row: 8, col: 5, color: "white" },
+        { row: 10, col: 5, color: "black" },
+      ]);
+
+      // dirIndex=0 (上方向)
+      expect(isValidConsecutiveThree(board, 7, 5, 0, "white")).toBe(false);
+    });
+
+    it("非制約ラインの白三 → true", () => {
+      // col=5 縦方向: _ W W W _ （両端十分に空き）
+      const board = createBoardWithStones([
+        { row: 6, col: 5, color: "white" },
+        { row: 7, col: 5, color: "white" },
+        { row: 8, col: 5, color: "white" },
+      ]);
+
+      expect(isValidConsecutiveThree(board, 7, 5, 0, "white")).toBe(true);
+    });
+  });
+
+  describe("analyzeJumpPatterns - 白の制約ライン三", () => {
+    it("制約ライン上の白連続三 → hasValidOpenThree=false", () => {
+      // B _ W W W _ B パターン
+      const board = createBoardWithStones([
+        { row: 4, col: 5, color: "black" },
+        { row: 6, col: 5, color: "white" },
+        { row: 7, col: 5, color: "white" },
+        { row: 8, col: 5, color: "white" },
+        { row: 10, col: 5, color: "black" },
+      ]);
+
+      const result = analyzeJumpPatterns(board, 7, 5, "white");
+      expect(result.hasValidOpenThree).toBe(false);
+    });
+
+    it("非制約ラインの白連続三 → hasValidOpenThree=true", () => {
+      const board = createBoardWithStones([
+        { row: 6, col: 5, color: "white" },
+        { row: 7, col: 5, color: "white" },
+        { row: 8, col: 5, color: "white" },
+      ]);
+
+      const result = analyzeJumpPatterns(board, 7, 5, "white");
+      expect(result.hasValidOpenThree).toBe(true);
+    });
   });
 });

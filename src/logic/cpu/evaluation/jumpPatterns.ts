@@ -37,12 +37,14 @@ export function isValidConsecutiveThree(
   row: number,
   col: number,
   dirIndex: number,
+  color: "black" | "white" = "black",
 ): boolean {
   const straightFourPoints = getConsecutiveThreeStraightFourPoints(
     board,
     row,
     col,
     dirIndex,
+    color,
   );
 
   if (straightFourPoints.length === 0) {
@@ -50,11 +52,14 @@ export function isValidConsecutiveThree(
   }
 
   for (const pos of straightFourPoints) {
-    const result = checkForbiddenMove(board, pos.row, pos.col);
-    if (
-      !result.isForbidden &&
-      checkStraightFour(board, pos.row, pos.col, dirIndex)
-    ) {
+    // 白には禁手がないのでチェック不要
+    if (color === "black") {
+      const result = checkForbiddenMove(board, pos.row, pos.col);
+      if (result.isForbidden) {
+        continue;
+      }
+    }
+    if (checkStraightFour(board, pos.row, pos.col, dirIndex, color)) {
       return true;
     }
   }
@@ -75,12 +80,14 @@ export function isValidJumpThree(
   row: number,
   col: number,
   dirIndex: number,
+  color: "black" | "white" = "black",
 ): boolean {
   const straightFourPoints = getJumpThreeStraightFourPoints(
     board,
     row,
     col,
     dirIndex,
+    color,
   );
 
   if (straightFourPoints.length === 0) {
@@ -88,11 +95,14 @@ export function isValidJumpThree(
   }
 
   for (const pos of straightFourPoints) {
-    const result = checkForbiddenMove(board, pos.row, pos.col);
-    if (
-      !result.isForbidden &&
-      checkStraightFour(board, pos.row, pos.col, dirIndex)
-    ) {
+    // 白には禁手がないのでチェック不要
+    if (color === "black") {
+      const result = checkForbiddenMove(board, pos.row, pos.col);
+      if (result.isForbidden) {
+        continue;
+      }
+    }
+    if (checkStraightFour(board, pos.row, pos.col, dirIndex, color)) {
       return true;
     }
   }
@@ -178,10 +188,7 @@ export function analyzeJumpPatterns(
     // （その方向は「四を作る」方向であり「活三を作る」方向ではない）
     if (pattern.count === 3 && !jumpFourDirections.has(i)) {
       if (pattern.end1 === "empty" && pattern.end2 === "empty") {
-        if (
-          color === "white" ||
-          isValidConsecutiveThree(board, row, col, dirIndex)
-        ) {
+        if (isValidConsecutiveThree(board, row, col, dirIndex, color)) {
           result.hasValidOpenThree = true;
         }
       }
@@ -200,8 +207,7 @@ export function analyzeJumpPatterns(
       checkJumpThree(board, row, col, dirIndex, color)
     ) {
       result.hasJumpThree = true;
-      // 白番ならウソの三チェック不要、黒番なら達四点が禁点でないかチェック
-      if (color === "white" || isValidJumpThree(board, row, col, dirIndex)) {
+      if (isValidJumpThree(board, row, col, dirIndex, color)) {
         result.hasValidOpenThree = true;
       }
     }

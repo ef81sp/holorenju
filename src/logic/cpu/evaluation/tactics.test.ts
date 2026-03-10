@@ -34,6 +34,7 @@ import {
   isDoubleMise,
   isMiseMove,
 } from "./tactics";
+import { createsFourThree } from "./winningPatterns";
 
 describe("hasMixedForbiddenPoints", () => {
   it("禁手と非禁手の両方がある場合はtrueを返す", () => {
@@ -1447,5 +1448,23 @@ describe("findDoubleMiseMoves", () => {
 
     const moves = findDoubleMiseMoves(board, "black");
     expect(moves).toEqual([]);
+  });
+});
+
+describe("白の制約ライン偽活三 - 棋譜回帰テスト", () => {
+  // 棋譜: H8 I9 G9 F8 F10 I7 J6 G7 E9 E11 D8 C7 L4 J8 G11 H12 H7 H6 K9 I5 J4 G5 F4 I6 I8 G6 G4 F6
+  // 28手目 F6 (row=9, col=5, white) がF列の制約ラインで偽活三を作り「両ミセ」と誤判定されるバグ
+  const RECORD =
+    "H8 I9 G9 F8 F10 I7 J6 G7 E9 E11 D8 C7 L4 J8 G11 H12 H7 H6 K9 I5 J4 G5 F4 I6 I8 G6 G4 F6";
+
+  it("28手目F6は四三ではない（F列の三は制約ラインで活三にならない）", () => {
+    const { board } = createBoardFromRecord(RECORD, 28);
+    // F6 = row=9, col=5
+    expect(createsFourThree(board, 9, 5, "white")).toBe(false);
+  });
+
+  it("28手目F6は両ミセではない", () => {
+    const { board } = createBoardFromRecord(RECORD, 28);
+    expect(isDoubleMise(board, 9, 5, "white")).toBe(false);
   });
 });

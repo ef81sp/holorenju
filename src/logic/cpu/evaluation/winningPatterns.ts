@@ -21,7 +21,11 @@ import {
   type LineTable,
 } from "../lineTable/lineTable";
 import { analyzeDirection } from "./directionAnalysis";
-import { analyzeJumpPatterns } from "./jumpPatterns";
+import {
+  analyzeJumpPatterns,
+  isValidConsecutiveThree,
+  isValidJumpThree,
+} from "./jumpPatterns";
 
 /**
  * 白の三三・四四パターンをチェック
@@ -53,11 +57,12 @@ export function checkWhiteWinningPattern(
     const [dr, dc] = direction;
     const pattern = analyzeDirection(board, row, col, dr, dc, "white");
 
-    // 活三カウント
+    // 活三カウント（制約ライン検証付き）
     if (
       pattern.count === 3 &&
       pattern.end1 === "empty" &&
-      pattern.end2 === "empty"
+      pattern.end2 === "empty" &&
+      isValidConsecutiveThree(board, row, col, dirIndex, "white")
     ) {
       openThreeCount++;
     }
@@ -70,10 +75,11 @@ export function checkWhiteWinningPattern(
       fourCount++;
     }
 
-    // 跳び三をチェック（連続三がない場合のみ）
+    // 跳び三をチェック（連続三がない場合のみ、制約ライン検証付き）
     if (
       pattern.count !== 3 &&
-      checkJumpThree(board, row, col, dirIndex, "white")
+      checkJumpThree(board, row, col, dirIndex, "white") &&
+      isValidJumpThree(board, row, col, dirIndex, "white")
     ) {
       openThreeCount++;
     }
@@ -123,11 +129,12 @@ export function detectWhiteWinningPattern(
     const [dr, dc] = direction;
     const pattern = analyzeDirection(board, row, col, dr, dc, "white");
 
-    // 活三カウント
+    // 活三カウント（制約ライン検証付き）
     if (
       pattern.count === 3 &&
       pattern.end1 === "empty" &&
-      pattern.end2 === "empty"
+      pattern.end2 === "empty" &&
+      isValidConsecutiveThree(board, row, col, dirIndex, "white")
     ) {
       openThreeCount++;
     }
@@ -140,10 +147,11 @@ export function detectWhiteWinningPattern(
       fourCount++;
     }
 
-    // 跳び三をチェック（連続三がない場合のみ）
+    // 跳び三をチェック（連続三がない場合のみ、制約ライン検証付き）
     if (
       pattern.count !== 3 &&
-      checkJumpThree(board, row, col, dirIndex, "white")
+      checkJumpThree(board, row, col, dirIndex, "white") &&
+      isValidJumpThree(board, row, col, dirIndex, "white")
     ) {
       openThreeCount++;
     }
@@ -203,17 +211,19 @@ export function createsDoubleThree(
     const [dr, dc] = direction;
     const pattern = analyzeDirection(board, row, col, dr, dc, color);
 
-    // 活三カウント
+    // 活三カウント（制約ライン検証付き）
     if (
       pattern.count === 3 &&
       pattern.end1 === "empty" &&
-      pattern.end2 === "empty"
+      pattern.end2 === "empty" &&
+      isValidConsecutiveThree(board, row, col, dirIndex, color)
     ) {
       openThreeCount++;
     } else if (
-      // 跳び三をチェック（連続三がない場合のみ）
+      // 跳び三をチェック（連続三がない場合のみ、制約ライン検証付き）
       pattern.count !== 3 &&
-      checkJumpThree(board, row, col, dirIndex, color)
+      checkJumpThree(board, row, col, dirIndex, color) &&
+      isValidJumpThree(board, row, col, dirIndex, color)
     ) {
       openThreeCount++;
     }

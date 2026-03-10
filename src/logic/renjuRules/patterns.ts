@@ -300,6 +300,7 @@ export function checkStraightFour(
   row: number,
   col: number,
   dirIndex: number,
+  color: "black" | "white" = "black",
 ): boolean {
   const dir1 = DIRECTIONS[dirIndex];
   const dir2 = DIRECTIONS[(dirIndex + 4) % 8];
@@ -312,14 +313,14 @@ export function checkStraightFour(
   const boardRow = board[row];
   const originalValue = boardRow?.[col];
   if (boardRow) {
-    boardRow[col] = "black";
+    boardRow[col] = color;
   }
 
   // 両方向の連続数をカウント
   let count1 = 0;
   let r1 = row + dir1.dr;
   let c1 = col + dir1.dc;
-  while (isValidPosition(r1, c1) && board[r1]?.[c1] === "black") {
+  while (isValidPosition(r1, c1) && board[r1]?.[c1] === color) {
     count1++;
     r1 += dir1.dr;
     c1 += dir1.dc;
@@ -328,7 +329,7 @@ export function checkStraightFour(
   let count2 = 0;
   let r2 = row + dir2.dr;
   let c2 = col + dir2.dc;
-  while (isValidPosition(r2, c2) && board[r2]?.[c2] === "black") {
+  while (isValidPosition(r2, c2) && board[r2]?.[c2] === color) {
     count2++;
     r2 += dir2.dr;
     c2 += dir2.dc;
@@ -354,23 +355,26 @@ export function checkStraightFour(
     return false;
   }
 
-  // 両端の先に黒石がないかチェック（あると長連になる）
-  const beyond1r = r1 + dir1.dr;
-  const beyond1c = c1 + dir1.dc;
-  if (
-    isValidPosition(beyond1r, beyond1c) &&
-    board[beyond1r]?.[beyond1c] === "black"
-  ) {
-    return false;
-  }
+  // 黒のみ: 両端の先に黒石がないかチェック（あると長連になる）
+  // 白にはオーバーラインの禁手がない
+  if (color === "black") {
+    const beyond1r = r1 + dir1.dr;
+    const beyond1c = c1 + dir1.dc;
+    if (
+      isValidPosition(beyond1r, beyond1c) &&
+      board[beyond1r]?.[beyond1c] === "black"
+    ) {
+      return false;
+    }
 
-  const beyond2r = r2 + dir2.dr;
-  const beyond2c = c2 + dir2.dc;
-  if (
-    isValidPosition(beyond2r, beyond2c) &&
-    board[beyond2r]?.[beyond2c] === "black"
-  ) {
-    return false;
+    const beyond2r = r2 + dir2.dr;
+    const beyond2c = c2 + dir2.dc;
+    if (
+      isValidPosition(beyond2r, beyond2c) &&
+      board[beyond2r]?.[beyond2c] === "black"
+    ) {
+      return false;
+    }
   }
 
   return true;
