@@ -12,6 +12,7 @@ import type { Position } from "@/types/game";
 import type {
   ForcedLossType,
   ForcedWinBranch,
+  ForcedWinType,
   FullEvalResult,
   LightEvalResult,
   ReviewCandidate,
@@ -46,11 +47,115 @@ import {
   REVIEW_VCT_OPTIONS_WITH_BRANCHES,
 } from "./review/reviewConstants";
 import { findBestMoveIterativeWithTT } from "./search/minimax";
+import { findVCFSequence, type VCFSequenceResult } from "./search/vcf";
 import {
   findVCTSequence,
   VCT_STONE_THRESHOLD,
   type VCTBranch,
 } from "./search/vct";
+
+/** VCF初手を候補リストの先頭に追加/更新する */
+function promoteVcfCandidate(
+  board: import("@/types/game").BoardState,
+  candidates: ReviewCandidate[],
+  reVcf: VCFSequenceResult,
+  color: "black" | "white",
+): void {
+  const vcfIdx = candidates.findIndex(
+    (c) =>
+      c.position.row === reVcf.firstMove.row &&
+      c.position.col === reVcf.firstMove.col,
+  );
+  if (vcfIdx >= 0) {
+    const [entry] = candidates.splice(vcfIdx, 1);
+    if (entry) {
+      entry.searchScore = PATTERN_SCORES.FIVE;
+      entry.principalVariation = reVcf.sequence;
+      candidates.unshift(entry);
+      return;
+    }
+  }
+  const { score, breakdown } = evaluatePositionWithBreakdown(
+    board,
+    reVcf.firstMove.row,
+    reVcf.firstMove.col,
+    color,
+    REVIEW_SEARCH_PARAMS.evaluationOptions,
+  );
+  candidates.unshift({
+    position: reVcf.firstMove,
+    score: Math.round(score),
+    searchScore: PATTERN_SCORES.FIVE,
+    breakdown: breakdown as ScoreBreakdown,
+    principalVariation: reVcf.sequence,
+  });
+}
+
+interface DemotionContext {
+  board: import("@/types/game").BoardState;
+  candidates: ReviewCandidate[];
+  color: "black" | "white";
+  forcedWinType: ForcedWinType | undefined;
+  bestMove: Position;
+  bestScore: number;
+  workerStartTime: number;
+  fwBestLoss?: import("@/types/review").ForcedLossResult;
+}
+
+/** 降格時のVCF再探索とフォールバック処理 */
+function handleDemotion(ctx: DemotionContext): {
+  forcedWinType: ForcedWinType | undefined;
+  finalBestMove: Position;
+  finalBestScore: number;
+  forcedWinBranches: ForcedWinBranch[] | undefined;
+  fwForcedLossType?: ForcedLossType;
+  fwForcedLossSequence?: Position[];
+  clearDoubleMise: boolean;
+} {
+  const safeBest = findSafeBest(ctx.candidates);
+  if (!safeBest) {
+    return {
+      forcedWinType: ctx.forcedWinType,
+      finalBestMove: ctx.bestMove,
+      finalBestScore: ctx.bestScore,
+      forcedWinBranches: undefined,
+      fwForcedLossType: ctx.fwBestLoss?.type,
+      fwForcedLossSequence: ctx.fwBestLoss?.sequence,
+      clearDoubleMise: false,
+    };
+  }
+
+  // 両ミセ降格時: maxDepth制限されていたVCFのフル再探索
+  const reVcf =
+    ctx.forcedWinType === "double-mise"
+      ? findVCFSequence(ctx.board, ctx.color, {
+          ...REVIEW_VCF_OPTIONS,
+          timeLimit: Math.min(
+            REVIEW_VCF_OPTIONS.timeLimit ?? 1500,
+            Math.max(500, 25_000 - (performance.now() - ctx.workerStartTime)),
+          ),
+        })
+      : null;
+
+  if (reVcf) {
+    promoteVcfCandidate(ctx.board, ctx.candidates, reVcf, ctx.color);
+    return {
+      forcedWinType: "vcf",
+      finalBestMove: reVcf.firstMove,
+      finalBestScore: PATTERN_SCORES.FIVE,
+      forcedWinBranches: undefined,
+      clearDoubleMise: true,
+    };
+  }
+
+  return {
+    forcedWinType: undefined,
+    finalBestMove: safeBest.position,
+    finalBestScore: safeBest.searchScore,
+    forcedWinBranches: undefined,
+    clearDoubleMise: true,
+  };
+}
 
 self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
   const {
@@ -442,14 +547,27 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
       let fwForcedLossSequence: Position[] | undefined =
         forcedLossSequence ?? undefined;
       if (fwDemoted) {
-        const safeBest = findSafeBest(candidates);
-        if (safeBest) {
-          finalBestMove = safeBest.position;
-          finalBestScore = safeBest.searchScore;
-        } else if (fwBestLoss) {
-          // 全候補が被必勝 → 局面自体が被必勝
-          fwForcedLossType = fwBestLoss.type;
-          fwForcedLossSequence = fwBestLoss.sequence;
+        const dm = handleDemotion({
+          board,
+          candidates,
+          color,
+          forcedWinType,
+          bestMove,
+          bestScore,
+          workerStartTime,
+          fwBestLoss: fwBestLoss ?? undefined,
+        });
+        ({ forcedWinType } = dm);
+        ({ finalBestMove } = dm);
+        ({ finalBestScore } = dm);
+        ({ forcedWinBranches } = dm);
+        if (dm.fwForcedLossType) {
+          ({ fwForcedLossType } = dm);
+          ({ fwForcedLossSequence } = dm);
+        }
+        if (dm.clearDoubleMise) {
+          missedDoubleMise = undefined;
+          doubleMiseTargets = undefined;
         }
       }
 

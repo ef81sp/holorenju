@@ -27,7 +27,11 @@ import {
   REVIEW_MISE_VCF_OPTIONS,
   REVIEW_VCF_OPTIONS,
 } from "./review/forcedLossCheck";
-import { detectForcedWin } from "./review/forcedWinDetection";
+import {
+  type ForcedWinInfo,
+  detectForcedWin,
+} from "./review/forcedWinDetection";
+import { findVCFSequence } from "./search/vcf";
 
 /** テスト棋譜 */
 const TEST_RECORD = "G8 G10 F8 H11 H9 G9 E9 I8 F10 I9 H10 J9 I10 F7 H8 A1 A2";
@@ -44,6 +48,7 @@ function analyzeForcedWin(
   doubleMiseMoves: Position[];
   doubleMiseBestMove: Position | null;
   forcedWinType: string | undefined;
+  forcedWin: ForcedWinInfo | null;
 } {
   const moves = record.trim().split(/\s+/);
   const { board, nextColor } = createBoardFromRecord(
@@ -64,6 +69,7 @@ function analyzeForcedWin(
     doubleMiseMoves: result.doubleMiseMoves,
     doubleMiseBestMove: result.doubleMiseBestMove,
     forcedWinType: result.forcedWinType,
+    forcedWin: result.forcedWin,
   };
 }
 
@@ -113,10 +119,9 @@ function determineMissedDoubleMise(
   moveIndex: number,
 ): Position[] | undefined {
   const moves = record.trim().split(/\s+/);
-  const { doubleMiseMoves, forcedWinType } = analyzeForcedWin(
-    record,
-    moveIndex,
-  );
+  const { board, color, doubleMiseMoves, forcedWinType, forcedWin } =
+    analyzeForcedWin(record, moveIndex);
+  const opponentColor = color === "black" ? "white" : "black";
 
   const playedMoveStr = moves[moveIndex];
   if (!playedMoveStr) {
@@ -133,6 +138,20 @@ function determineMissedDoubleMise(
       (m) => m.row === playedRow && m.col === playedCol,
     );
     if (!playedIsDoubleMise) {
+      // 両ミセ最善手が被必勝かチェック（worker の verifyCandidates 相当）
+      if (forcedWin) {
+        const stoneCount = countStones(board);
+        const loss = checkCandidateForcedLoss(
+          board,
+          forcedWin.firstMove,
+          color,
+          opponentColor,
+          stoneCount,
+        );
+        if (loss) {
+          return undefined;
+        } // 両ミセ自体が被必勝 → 見逃しではない
+      }
       return doubleMiseMoves;
     }
   }
@@ -172,6 +191,44 @@ describe("review.worker: missedDoubleMise 判定", () => {
   it("Move 17 (A2): 1手四三局面 → missedDoubleMise なし（VCF優先）", () => {
     const missed = determineMissedDoubleMise(TEST_RECORD, 16);
     expect(missed).toBeUndefined();
+  });
+
+  it("被必勝の両ミセは見逃し判定しない", () => {
+    const RECORD =
+      "H8 I9 F8 I8 G9 I7 I6 H10 G8 G7 H7 F9 H5 H6 G11 G10 E8 D8 I10 J11 J7 K8 J5 K4 G5 I5 J6 J4 K3 J8 I4 K7";
+    // Move 32 (idx 31): K7。両ミセK10/L9は被必勝なので見逃しではない
+    const missed = determineMissedDoubleMise(RECORD, 31);
+    expect(missed).toBeUndefined();
+  });
+
+  it("被必勝の両ミセは降格後VCFが再検出される", () => {
+    const RECORD =
+      "H8 I9 F8 I8 G9 I7 I6 H10 G8 G7 H7 F9 H5 H6 G11 G10 E8 D8 I10 J11 J7 K8 J5 K4 G5 I5 J6 J4 K3 J8 I4 K7";
+
+    // analyzeForcedWin: 両ミセ検出（VCF maxDepth 2制限）
+    const { board, color, forcedWinType, forcedWin } = analyzeForcedWin(
+      RECORD,
+      31,
+    );
+    expect(forcedWinType).toBe("double-mise");
+
+    // 両ミセ初手は被必勝
+    const opponentColor = color === "black" ? "white" : "black";
+    const stoneCount = countStones(board);
+    expect(forcedWin).toBeDefined();
+    const loss = checkCandidateForcedLoss(
+      board,
+      forcedWin?.firstMove ?? { row: 0, col: 0 },
+      color,
+      opponentColor,
+      stoneCount,
+    );
+    expect(loss).toBeDefined();
+
+    // フルVCF探索で再検出可能
+    const reVcf = findVCFSequence(board, color, REVIEW_VCF_OPTIONS);
+    expect(reVcf).toBeDefined();
+    expect(reVcf?.sequence.length).toBeGreaterThan(1);
   });
 });
 
