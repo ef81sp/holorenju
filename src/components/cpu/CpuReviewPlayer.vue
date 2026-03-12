@@ -129,6 +129,7 @@ async function startEvaluation(): Promise<void> {
         });
       }
     },
+    reviewStore.gameResult === "win" || reviewStore.gameResult === "lose",
   );
   if (results.length === 0) {
     return;

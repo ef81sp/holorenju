@@ -37,6 +37,7 @@ export interface UseReviewEvaluatorReturn {
     analyzeAll?: boolean,
     onResult?: (result: FullEvalResult | LightEvalResult) => void,
     onVCTResult?: (moveIndex: number, result: VCTCheckResult) => void,
+    skipLastMove?: boolean,
   ) => Promise<(FullEvalResult | LightEvalResult)[]>;
   /** 評価をキャンセル */
   cancel: () => void;
@@ -89,8 +90,10 @@ export function useReviewEvaluator(): UseReviewEvaluatorReturn {
     analyzeAll?: boolean,
     onResult?: (result: FullEvalResult | LightEvalResult) => void,
     onVCTResult?: (moveIndex: number, result: VCTCheckResult) => void,
+    skipLastMove?: boolean,
   ): Promise<(FullEvalResult | LightEvalResult)[]> {
     const moves = moveHistory.trim().split(/\s+/);
+    const lastMoveIndex = moves.length - 1;
 
     // 珠型(3手)以降の全手をキューに入れる
     // プレイヤー手: isLightEval=false（フル評価）
@@ -103,6 +106,9 @@ export function useReviewEvaluator(): UseReviewEvaluatorReturn {
     const allMoveItems: QueueItem[] = [];
     for (let i = 0; i < moves.length; i++) {
       if (isOpeningMove(i)) {
+        continue;
+      }
+      if (skipLastMove && i === lastMoveIndex) {
         continue;
       }
       const isPlayerMove = playerFirst ? i % 2 === 0 : i % 2 === 1;
