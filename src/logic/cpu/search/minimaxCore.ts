@@ -349,13 +349,18 @@ export function minimaxWithTT(
   // Threat Probe: 手番側にVCF/VCTがあれば即勝ちとしてカットオフ
   // =========================================================================
   if (depth >= 3) {
+    // PVノード（フルウィンドウ）かつ depth >= 4 でのみVCTプローブを有効化
+    // null window (alpha+1 === beta) はカットノードなのでVCFのみ
+    const isPV = betaInit - alphaInit > 1;
+    const enableVCT =
+      isPV && depth >= 4 && ctx.evaluationOptions.enableVCT !== false;
     const threatMove = threatProbe(
       board,
       currentColor,
       hash,
       depth,
       ctx.threatCache,
-      false, // VCTはコスト見合いで無効。VCFのみプローブ
+      enableVCT,
     );
     if (threatMove !== null) {
       // 浅い勝ちを優先するため depth に応じたスコア調整

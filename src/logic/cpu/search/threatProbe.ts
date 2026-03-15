@@ -83,7 +83,8 @@ interface ThreatBudget {
  */
 export function getThreatBudget(minimaxDepth: number): ThreatBudget {
   if (minimaxDepth >= 4) {
-    return { vcfDepth: 4, vcfNodes: 80, vctDepth: 0, vctNodes: 0 };
+    // PVノードでのみ vctDepth > 0 が活きる（minimaxCore で制御）
+    return { vcfDepth: 4, vcfNodes: 80, vctDepth: 2, vctNodes: 150 };
   }
   // depth 3（minimaxCore で depth >= 3 のみ呼ばれる）
   return { vcfDepth: 4, vcfNodes: 50, vctDepth: 0, vctNodes: 0 };

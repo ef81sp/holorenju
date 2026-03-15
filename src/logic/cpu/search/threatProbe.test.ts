@@ -15,11 +15,12 @@ import {
 } from "./threatProbe";
 
 describe("getThreatBudget", () => {
-  it("depth >= 4 で最大予算", () => {
+  it("depth >= 4 で最大予算（VCT含む）", () => {
     const budget = getThreatBudget(4);
     expect(budget.vcfDepth).toBe(4);
     expect(budget.vcfNodes).toBe(80);
-    expect(budget.vctDepth).toBe(0);
+    expect(budget.vctDepth).toBe(2);
+    expect(budget.vctNodes).toBe(150);
   });
 
   it("depth 3 で基本予算", () => {
