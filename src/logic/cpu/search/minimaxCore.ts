@@ -60,6 +60,7 @@ import {
   NMP_MIN_DEPTH,
   NMP_REDUCTION,
 } from "./techniques";
+import { threatProbe } from "./threatProbe";
 
 /**
  * 終端条件をチェック
@@ -344,6 +345,27 @@ export function minimaxWithTT(
     ttMove = ttEntry.bestMove;
   }
 
+  // =========================================================================
+  // Threat Probe: 手番側にVCF/VCTがあれば即勝ちとしてカットオフ
+  // =========================================================================
+  if (depth >= 3) {
+    const threatMove = threatProbe(
+      board,
+      currentColor,
+      hash,
+      depth,
+      ctx.threatCache,
+      false, // VCTはコスト見合いで無効。VCFのみプローブ
+    );
+    if (threatMove !== null) {
+      // 浅い勝ちを優先するため depth に応じたスコア調整
+      const winScore = PATTERN_SCORES.FIVE - (10 - depth);
+      const score = isMaximizing ? winScore : -winScore;
+      ctx.tt.store(hash, score, depth, "EXACT", threatMove);
+      return score;
+    }
+  }
+
   // 探索深度が0になった場合は盤面評価
   if (depth === 0) {
     const score = evaluateBoard(
@@ -434,10 +456,7 @@ export function minimaxWithTT(
   let scoreType: ScoreType = isMaximizing ? "UPPER_BOUND" : "LOWER_BOUND";
 
   for (let moveIndex = 0; moveIndex < moves.length; moveIndex++) {
-    const move = moves[moveIndex];
-    if (!move) {
-      continue;
-    }
+    const move = moves[moveIndex]!;
 
     // 遅延禁手判定（黒番の場合）
     // Alpha-Beta枝刈りで探索されない手は禁手チェック不要なため、ここで判定

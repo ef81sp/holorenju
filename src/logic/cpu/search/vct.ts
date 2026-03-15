@@ -9,7 +9,7 @@ import type { BoardState, Position } from "@/types/game";
 
 import { checkFive, checkForbiddenMove } from "@/logic/renjuRules";
 
-import { type TimeLimiter, isTimeExceeded } from "./context";
+import { type TimeLimiter, incrementNodes, isTimeExceeded } from "./context";
 import {
   checkDefenseCounterThreat,
   getFourDefensePosition,
@@ -137,6 +137,8 @@ export interface VCTSearchOptions {
   maxDepth?: number;
   /** 時間制限（ミリ秒、デフォルト: VCT_TIME_LIMIT = 150） */
   timeLimit?: number;
+  /** ノード数上限（0 or undefined = 無制限） */
+  maxNodes?: number;
   /** 内部VCF呼び出しに渡すオプション */
   vcfOptions?: VCFSearchOptions;
   /** 分岐情報を収集するか（レビュー用） */
@@ -193,6 +195,8 @@ export function hasVCT(
   const limiter = timeLimiter ?? {
     startTime: performance.now(),
     timeLimit: timeLimitMs,
+    nodes: 0,
+    maxNodes: options?.maxNodes,
   };
 
   // VCFキャッシュの初期化（ルート呼び出し時）
@@ -225,6 +229,10 @@ export function hasVCT(
   const threatMoves = findThreatMoves(board, color);
 
   for (const move of threatMoves) {
+    incrementNodes(limiter);
+    if (isTimeExceeded(limiter)) {
+      return false;
+    }
     // 脅威を作る（インプレース）
     const moveRow = board[move.row];
     if (moveRow) {
@@ -421,6 +429,8 @@ export function findVCTMove(
   const limiter: TimeLimiter = {
     startTime: performance.now(),
     timeLimit: timeLimitMs,
+    nodes: 0,
+    maxNodes: options?.maxNodes,
   };
   const vcfCache = createVCFCache();
 
@@ -500,6 +510,10 @@ function findVCTMoveRecursive(
   const opponentColor = color === "black" ? "white" : "black";
 
   for (const move of threatMoves) {
+    incrementNodes(limiter);
+    if (isTimeExceeded(limiter)) {
+      return null;
+    }
     // 脅威を作る（インプレース）
     const moveRow = board[move.row];
     if (moveRow) {
@@ -609,6 +623,8 @@ export function findVCTSequence(
   const limiter: TimeLimiter = {
     startTime: performance.now(),
     timeLimit: timeLimitMs,
+    nodes: 0,
+    maxNodes: options?.maxNodes,
   };
   const vcfCache = createVCFCache();
 
@@ -1652,6 +1668,8 @@ export function isVCTFirstMove(
   const limiter: TimeLimiter = {
     startTime: performance.now(),
     timeLimit: timeLimitMs,
+    nodes: 0,
+    maxNodes: options?.maxNodes,
   };
   const vcfCache = createVCFCache();
 
