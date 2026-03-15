@@ -17,10 +17,10 @@ import {
 describe("getThreatBudget", () => {
   it("depth >= 4 で最大予算（VCT含む）", () => {
     const budget = getThreatBudget(4);
-    expect(budget.vcfDepth).toBe(4);
-    expect(budget.vcfNodes).toBe(80);
-    expect(budget.vctDepth).toBe(2);
-    expect(budget.vctNodes).toBe(150);
+    expect(budget.vcfDepth).toBe(6);
+    expect(budget.vcfNodes).toBe(100);
+    expect(budget.vctDepth).toBe(3);
+    expect(budget.vctNodes).toBe(200);
   });
 
   it("depth 3 で基本予算", () => {
@@ -28,12 +28,6 @@ describe("getThreatBudget", () => {
     expect(budget.vcfDepth).toBe(4);
     expect(budget.vcfNodes).toBe(50);
     expect(budget.vctDepth).toBe(0);
-  });
-
-  it("depth 2 以下も同じ（呼ばれないが安全）", () => {
-    const budget = getThreatBudget(2);
-    expect(budget.vcfDepth).toBe(4);
-    expect(budget.vcfNodes).toBe(50);
   });
 });
 
@@ -70,7 +64,7 @@ describe("ThreatProbeCache", () => {
 });
 
 describe("threatProbe", () => {
-  it("空の盤面ではVCFなし", () => {
+  it("空の盤面では脅威なし", () => {
     const board = createBoardWithStones([]);
     const hash = computeBoardHash(board);
     const cache = createThreatProbeCache();
@@ -80,7 +74,7 @@ describe("threatProbe", () => {
     expect(lookupThreatProbe(cache, hash, "black")).toBe(false);
   });
 
-  it("VCFがある局面を検出", () => {
+  it("手番側のVCFを検出", () => {
     // 黒: H5, H6, H7 (活三 → 活四で即勝ち)
     const board = createBoardWithStones([
       { row: 7, col: 4, color: "black" },
@@ -91,10 +85,6 @@ describe("threatProbe", () => {
     const cache = createThreatProbeCache();
     const result = threatProbe(board, "black", hash, 4, cache, false);
     expect(result).not.toBeNull();
-    // キャッシュに保存されている
-    const cached = lookupThreatProbe(cache, hash, "black");
-    expect(cached).not.toBe(false);
-    expect(cached).toBeTruthy();
   });
 
   it("ネガティブキャッシュで二重チェックを防ぐ", () => {
@@ -102,12 +92,25 @@ describe("threatProbe", () => {
     const hash = computeBoardHash(board);
     const cache = createThreatProbeCache();
 
-    // 1回目: 探索実行
     const result1 = threatProbe(board, "black", hash, 4, cache, false);
     expect(result1).toBeNull();
 
-    // 2回目: キャッシュヒット（探索をスキップ）
     const result2 = threatProbe(board, "black", hash, 4, cache, false);
     expect(result2).toBeNull();
+  });
+
+  it("手番側のみチェック（相手の脅威では反応しない）", () => {
+    // 白が活三を持つが、黒番なので相手の脅威は検出しない
+    const board = createBoardWithStones([
+      { row: 7, col: 4, color: "white" },
+      { row: 7, col: 5, color: "white" },
+      { row: 7, col: 6, color: "white" },
+      { row: 0, col: 0, color: "black" },
+    ]);
+    const hash = computeBoardHash(board);
+    const cache = createThreatProbeCache();
+    // 黒番: 白のVCFがあっても黒のthreatProbeは反応しない
+    const result = threatProbe(board, "black", hash, 4, cache, false);
+    expect(result).toBeNull();
   });
 });

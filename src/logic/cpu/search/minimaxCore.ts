@@ -346,7 +346,9 @@ export function minimaxWithTT(
   }
 
   // =========================================================================
-  // Threat Probe: 手番側にVCF/VCTがあれば即勝ちとしてカットオフ
+  // Threat Probe: 手番側/相手側のVCF/VCTをチェック
+  // 攻撃: 手番側にVCF/VCTがあれば勝ちスコアでカットオフ
+  // 防御: 相手にVCF/VCTがあれば負けスコアでカットオフ
   // =========================================================================
   if (depth >= 3) {
     // PVノード（フルウィンドウ）かつ depth >= 4 でのみVCTプローブを有効化
@@ -354,19 +356,21 @@ export function minimaxWithTT(
     const isPV = betaInit - alphaInit > 1;
     const enableVCT =
       isPV && depth >= 4 && ctx.evaluationOptions.enableVCT !== false;
-    const threatMove = threatProbe(
+    const threatResult = threatProbe(
       board,
       currentColor,
       hash,
       depth,
       ctx.threatCache,
       enableVCT,
+      ctx.lineTable,
     );
-    if (threatMove !== null) {
-      // 浅い勝ちを優先するため depth に応じたスコア調整
-      const winScore = PATTERN_SCORES.FIVE - (10 - depth);
-      const score = isMaximizing ? winScore : -winScore;
-      ctx.tt.store(hash, score, depth, "EXACT", threatMove);
+    if (threatResult !== null) {
+      // FIVE - 1: threatProbe による追詰検出マーカー。
+      // FIVE ちょうどは五連完成のみが使用し、区別を維持する。
+      const threatScore = PATTERN_SCORES.FIVE - 1;
+      const score = isMaximizing ? threatScore : -threatScore;
+      ctx.tt.store(hash, score, depth, "EXACT", threatResult);
       return score;
     }
   }

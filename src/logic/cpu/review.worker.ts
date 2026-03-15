@@ -295,7 +295,7 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
     if (
       !forcedWin &&
       !doubleMiseBestMove &&
-      result.score >= PATTERN_SCORES.FIVE &&
+      result.score >= PATTERN_SCORES.FIVE - 1 &&
       !opponentHasFour
     ) {
       const vctRetry = findVCTSequence(
