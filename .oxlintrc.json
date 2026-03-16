@@ -43,7 +43,10 @@
     "sort-imports": "off",
     "no-undefined": "off",
     "capitalized-comments": "off",
-    "no-warning-comments": "off"
+    "no-warning-comments": "off",
+    "typescript/no-non-null-assertion": "off",
+    "operator-assignment": "off",
+    "max-depth": "off"
   },
   "overrides": [
     {

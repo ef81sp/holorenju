@@ -22,6 +22,7 @@ import {
   type KillerMoves,
 } from "../moveGenerator";
 import { globalTT, TranspositionTable } from "../transpositionTable";
+import { createThreatProbeCache, type ThreatProbeCache } from "./threatProbe";
 
 // =============================================================================
 // Counter-move Table
@@ -51,13 +52,34 @@ export function createCounterMoveTable(): CounterMoveTable {
 export interface TimeLimiter {
   startTime: number;
   timeLimit: number;
+  /** 探索ノード数カウンタ（maxNodes と併用） */
+  nodes?: number;
+  /** ノード数上限（0 = 無制限） */
+  maxNodes?: number;
 }
 
 /**
- * 時間制限を超過しているかチェック
+ * 時間制限またはノード数上限を超過しているかチェック
  */
 export function isTimeExceeded(limiter: TimeLimiter): boolean {
+  if (
+    limiter.maxNodes !== undefined &&
+    limiter.maxNodes > 0 &&
+    limiter.nodes !== undefined &&
+    limiter.nodes >= limiter.maxNodes
+  ) {
+    return true;
+  }
   return performance.now() - limiter.startTime >= limiter.timeLimit;
+}
+
+/**
+ * ノードカウンタをインクリメント
+ */
+export function incrementNodes(limiter: TimeLimiter): void {
+  if (limiter.nodes !== undefined) {
+    limiter.nodes++;
+  }
 }
 
 /**
@@ -120,6 +142,8 @@ export interface SearchContext {
   absoluteDeadline?: number;
   /** 絶対時間制限超過フラグ */
   absoluteDeadlineExceeded?: boolean;
+  /** 脅威プローブキャッシュ（minimax内VCF/VCTチェック用） */
+  threatCache: ThreatProbeCache;
 }
 
 /**
@@ -148,5 +172,6 @@ export function createSearchContext(
       threatExtensions: 0,
     },
     evaluationOptions,
+    threatCache: createThreatProbeCache(),
   };
 }

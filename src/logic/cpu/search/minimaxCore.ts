@@ -60,6 +60,7 @@ import {
   NMP_MIN_DEPTH,
   NMP_REDUCTION,
 } from "./techniques";
+import { threatProbe } from "./threatProbe";
 
 /**
  * 終端条件をチェック
@@ -344,6 +345,31 @@ export function minimaxWithTT(
     ttMove = ttEntry.bestMove;
   }
 
+  // =========================================================================
+  // Threat Probe: 手番側のVCFをチェック
+  // VCFがあれば勝ちスコアでカットオフ
+  // =========================================================================
+  if (depth >= 3) {
+    const enableVCT = false;
+    const threatResult = threatProbe(
+      board,
+      currentColor,
+      hash,
+      depth,
+      ctx.threatCache,
+      enableVCT,
+      ctx.lineTable,
+    );
+    if (threatResult !== null) {
+      // FIVE - 1: threatProbe による追詰検出マーカー。
+      // FIVE ちょうどは五連完成のみが使用し、区別を維持する。
+      const threatScore = PATTERN_SCORES.FIVE - 1;
+      const score = isMaximizing ? threatScore : -threatScore;
+      ctx.tt.store(hash, score, depth, "EXACT", threatResult);
+      return score;
+    }
+  }
+
   // 探索深度が0になった場合は盤面評価
   if (depth === 0) {
     const score = evaluateBoard(
@@ -434,10 +460,7 @@ export function minimaxWithTT(
   let scoreType: ScoreType = isMaximizing ? "UPPER_BOUND" : "LOWER_BOUND";
 
   for (let moveIndex = 0; moveIndex < moves.length; moveIndex++) {
-    const move = moves[moveIndex];
-    if (!move) {
-      continue;
-    }
+    const move = moves[moveIndex]!;
 
     // 遅延禁手判定（黒番の場合）
     // Alpha-Beta枝刈りで探索されない手は禁手チェック不要なため、ここで判定

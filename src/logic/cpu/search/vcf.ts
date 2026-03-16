@@ -9,7 +9,7 @@ import type { BoardState, Position } from "@/types/game";
 
 import { checkFive, checkForbiddenMove } from "@/logic/renjuRules";
 
-import { type TimeLimiter, isTimeExceeded } from "./context";
+import { type TimeLimiter, incrementNodes, isTimeExceeded } from "./context";
 import { createsFour } from "./threatMoves";
 import { findFourMoves, getFourDefensePosition } from "./threatPatterns";
 
@@ -27,6 +27,8 @@ export interface VCFSearchOptions {
   maxDepth?: number;
   /** 時間制限（ミリ秒、デフォルト: VCF_TIME_LIMIT = 150） */
   timeLimit?: number;
+  /** ノード数上限（0 or undefined = 無制限） */
+  maxNodes?: number;
 }
 
 /**
@@ -72,6 +74,8 @@ export function hasVCF(
   const limiter = timeLimiter ?? {
     startTime: performance.now(),
     timeLimit: timeLimitMs,
+    nodes: 0,
+    maxNodes: options?.maxNodes,
   };
 
   // 時間制限チェック
@@ -89,6 +93,7 @@ export function hasVCF(
   const opponentColor = color === "black" ? "white" : "black";
 
   for (const move of fourMoves) {
+    incrementNodes(limiter);
     // 四を作る（インプレース）
     const moveRow = board[move.row];
     if (moveRow) {
@@ -189,6 +194,8 @@ export function findVCFMove(
   const limiter: TimeLimiter = {
     startTime: performance.now(),
     timeLimit: timeLimitMs,
+    nodes: 0,
+    maxNodes: options?.maxNodes,
   };
 
   // 反復深化: 浅い深度から探索し、最短VCFを優先
@@ -237,6 +244,11 @@ function findVCFMoveRecursive(
   const recursiveMoves: { move: Position; defensePos: Position }[] = [];
 
   for (const move of fourMoves) {
+    incrementNodes(limiter);
+    if (isTimeExceeded(limiter)) {
+      return null;
+    }
+
     const moveRow = board[move.row];
     if (moveRow) {
       moveRow[move.col] = color;
@@ -338,6 +350,8 @@ export function findVCFSequence(
   const limiter: TimeLimiter = {
     startTime: performance.now(),
     timeLimit: timeLimitMs,
+    nodes: 0,
+    maxNodes: options?.maxNodes,
   };
 
   // 反復深化: 浅い深度から探索し、最短VCF手順を優先
@@ -540,6 +554,11 @@ function findVCFSequenceRecursive(
   const recursiveMoves: { move: Position; defensePos: Position }[] = [];
 
   for (const move of fourMoves) {
+    incrementNodes(limiter);
+    if (isTimeExceeded(limiter)) {
+      return false;
+    }
+
     const moveRow = board[move.row];
     if (moveRow) {
       moveRow[move.col] = color;

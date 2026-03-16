@@ -232,13 +232,15 @@ export function sortMoves(
     lineTable,
   } = options;
 
-  // スコア計算用の配列
-  interface MoveWithScore {
-    move: Position;
-    score: number;
-    staticEvalDone: boolean;
+  // 並列配列（オブジェクト生成を削減）
+  const n = moves.length;
+  const scores = new Float64Array(n);
+  const staticEvalDone = new Uint8Array(n); // 0 = false, 1 = true
+  // ソート用インデックス配列
+  const indices = new Int32Array(n);
+  for (let i = 0; i < n; i++) {
+    indices[i] = i;
   }
-  const scoredMoves: MoveWithScore[] = [];
 
   // Killer Movesを取得
   const killerMoves =
@@ -263,7 +265,8 @@ export function sortMoves(
   }
 
   // === 第1パス: TT最善手 + Killer Moves + History でスコア付け ===
-  for (const move of moves) {
+  for (let idx = 0; idx < n; idx++) {
+    const move = moves[idx]!;
     let score = 0;
 
     // 1. TT最善手 - 最高優先度
@@ -295,43 +298,47 @@ export function sortMoves(
       score += getHistoryScore(history, move);
     }
 
-    scoredMoves.push({ move, score, staticEvalDone: false });
+    scores[idx] = score;
   }
 
   // === Lazy Evaluation: 上位N手のみ静的評価 ===
   if (useStaticEval && color !== null) {
-    const evalCount = maxStaticEvalCount ?? scoredMoves.length;
+    const evalCount = maxStaticEvalCount ?? n;
 
-    if (evalCount < scoredMoves.length) {
+    if (evalCount < n) {
       // Lazy Evaluation: 事前ソートして上位N手のみ評価
-      scoredMoves.sort((a, b) => b.score - a.score);
+      indices.sort((a, b) => scores[b]! - scores[a]!);
 
-      for (let i = 0; i < Math.min(evalCount, scoredMoves.length); i++) {
-        const sm = scoredMoves[i];
-        if (sm) {
-          sm.score += evaluatePosition(
+      for (let i = 0; i < Math.min(evalCount, n); i++) {
+        const idx = indices[i]!;
+        const move = moves[idx]!;
+        scores[idx] =
+          scores[idx]! +
+          evaluatePosition(
             board,
-            sm.move.row,
-            sm.move.col,
+            move.row,
+            move.col,
             color,
             effectiveEvalOptions,
             lineTable,
           );
-          sm.staticEvalDone = true;
-        }
+        staticEvalDone[idx] = 1;
       }
     } else {
       // 全候補手を評価（従来の動作）
-      for (const sm of scoredMoves) {
-        sm.score += evaluatePosition(
-          board,
-          sm.move.row,
-          sm.move.col,
-          color,
-          evaluationOptions,
-          lineTable,
-        );
-        sm.staticEvalDone = true;
+      for (let idx = 0; idx < n; idx++) {
+        const move = moves[idx]!;
+        scores[idx] =
+          scores[idx]! +
+          evaluatePosition(
+            board,
+            move.row,
+            move.col,
+            color,
+            evaluationOptions,
+            lineTable,
+          );
+        staticEvalDone[idx] = 1;
       }
     }
   }
@@ -343,7 +350,7 @@ export function sortMoves(
     color !== null &&
     effectiveEvalOptions.enableMandatoryDefense &&
     maxStaticEvalCount !== undefined &&
-    maxStaticEvalCount < scoredMoves.length
+    maxStaticEvalCount < n
   ) {
     // 事前計算済みのthreatsを再利用（なければ計算）
     const threats =
@@ -356,39 +363,50 @@ export function sortMoves(
       threats.openThrees.length > 0;
 
     if (hasThreats) {
-      // 防御位置のセットを構築
-      // 四がある場合は四の防御のみ（活三防御は四を止めないため無意味）
+      // 防御位置ビットマップ（Uint8Array(225) で文字列生成を回避）
       const hasFours = threats.openFours.length > 0 || threats.fours.length > 0;
       const allDefensePositions = hasFours
         ? [...threats.openFours, ...threats.fours]
         : threats.openThrees;
-      const defenseSet = new Set(
-        allDefensePositions.map((p) => `${p.row},${p.col}`),
-      );
+      const defenseBitmap = new Uint8Array(225);
+      for (const p of allDefensePositions) {
+        defenseBitmap[p.row * 15 + p.col] = 1;
+      }
 
-      for (const sm of scoredMoves) {
-        if (defenseSet.has(`${sm.move.row},${sm.move.col}`)) {
+      for (let idx = 0; idx < n; idx++) {
+        const move = moves[idx]!;
+        if (defenseBitmap[move.row * 15 + move.col]) {
           continue;
         }
-        // 四がある場合: 四を止めない手は評価済みでも除外（必ず負ける）
-        // 活三のみの場合: 未評価の手のみ除外（評価済みは静的評価に委ねる）
-        if (hasFours || !sm.staticEvalDone) {
-          sm.score = -Infinity;
+        if (hasFours || !staticEvalDone[idx]) {
+          scores[idx] = -Infinity;
         }
       }
     }
   }
 
   // スコア降順でソート（再ソート）
-  scoredMoves.sort((a, b) => b.score - a.score);
+  indices.sort((a, b) => scores[b]! - scores[a]!);
 
-  // -Infinityの手を除外（必須防御ルールで除外された手）
-  const validMoves = scoredMoves.filter((sm) => sm.score > -Infinity);
-
-  // 有効な手がなければ全ての手を返す（やむを得ない場合）
-  if (validMoves.length === 0) {
-    return scoredMoves.map((sm) => sm.move);
+  // -Infinityの手を除外し、ソート済み配列を構築
+  const result: Position[] = [];
+  let hasValid = false;
+  for (let i = 0; i < n; i++) {
+    const idx = indices[i]!;
+    if (scores[idx]! > -Infinity) {
+      result.push(moves[idx]!);
+      hasValid = true;
+    }
   }
 
-  return validMoves.map((sm) => sm.move);
+  // 有効な手がなければ全ての手を返す（やむを得ない場合）
+  if (!hasValid) {
+    const all: Position[] = [];
+    for (let i = 0; i < n; i++) {
+      all.push(moves[indices[i]!]!);
+    }
+    return all;
+  }
+
+  return result;
 }

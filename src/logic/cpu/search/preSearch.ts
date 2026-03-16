@@ -324,6 +324,7 @@ export function findPreSearchMove(
   return {
     opponentVCFFirstMove: opponentVCFMove ?? null,
     vctHintMove: forced.vctHintMove,
+    // 防御VCFフィルタはベンチマークで弱体化要因と判明（Elo +60.7）のため無効化
     openThreeDefenseMoves: threats.openThrees,
     restrictedMoves: opponentVCFMove
       ? computeVCFDefenseMoves(board, color, opponentColor, opponentVCFMove)

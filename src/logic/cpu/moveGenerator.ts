@@ -92,23 +92,24 @@ export function generateMoves(
   const moves: Position[] = [];
   const isBlack = color === "black";
 
-  // 盤面に石があるかチェック
-  let hasStones = false;
-  for (let row = 0; row < BOARD_SIZE; row++) {
-    for (let col = 0; col < BOARD_SIZE; col++) {
-      if (board[row]?.[col] !== null) {
-        hasStones = true;
+  // 盤面に石があるかチェック（高速パス: 中央が空なら全走査）
+  if (board[7]?.[7] === null) {
+    let hasStones = false;
+    for (let row = 0; row < BOARD_SIZE; row++) {
+      for (let col = 0; col < BOARD_SIZE; col++) {
+        if (board[row]?.[col] !== null) {
+          hasStones = true;
+          break;
+        }
+      }
+      if (hasStones) {
         break;
       }
     }
-    if (hasStones) {
-      break;
+    // 石がない場合は中央のみ
+    if (!hasStones) {
+      return [{ row: 7, col: 7 }];
     }
-  }
-
-  // 石がない場合は中央のみ
-  if (!hasStones) {
-    return [{ row: 7, col: 7 }];
   }
 
   // 既存石の周囲2マスを候補として収集
