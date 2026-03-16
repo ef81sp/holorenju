@@ -274,7 +274,7 @@ function computeVCFDefenseMoves(
  *
  * 「現時点ではVCFがないが、特定の止め方をすると相手VCFが生まれる」ケースを検出。
  */
-function filterDefenseByOpponentVCF(
+function _filterDefenseByOpponentVCF(
   board: BoardState,
   color: "black" | "white",
   defenseCandidates: Position[],
@@ -367,12 +367,8 @@ export function findPreSearchMove(
   return {
     opponentVCFFirstMove: opponentVCFMove ?? null,
     vctHintMove: forced.vctHintMove,
-    openThreeDefenseMoves: filterDefenseByOpponentVCF(
-      board,
-      color,
-      threats.openThrees,
-      forced.opponentVCFResult !== null,
-    ),
+    // 防御VCFフィルタはベンチマークで弱体化要因と判明（Elo +60.7）のため無効化
+    openThreeDefenseMoves: threats.openThrees,
     restrictedMoves: opponentVCFMove
       ? computeVCFDefenseMoves(board, color, opponentColor, opponentVCFMove)
       : undefined,

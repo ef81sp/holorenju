@@ -353,9 +353,8 @@ export function minimaxWithTT(
   if (depth >= 3) {
     // PVノード（フルウィンドウ）かつ depth >= 4 でのみVCTプローブを有効化
     // null window (alpha+1 === beta) はカットノードなのでVCFのみ
-    const isPV = betaInit - alphaInit > 1;
-    const enableVCT =
-      isPV && depth >= 4 && ctx.evaluationOptions.enableVCT !== false;
+    // VCTプローブはベンチマークで弱体化要因と判明（Elo +33.5）のため無効化
+    const enableVCT = false;
     const threatResult = threatProbe(
       board,
       currentColor,
