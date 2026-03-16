@@ -346,14 +346,10 @@ export function minimaxWithTT(
   }
 
   // =========================================================================
-  // Threat Probe: 手番側/相手側のVCF/VCTをチェック
-  // 攻撃: 手番側にVCF/VCTがあれば勝ちスコアでカットオフ
-  // 防御: 相手にVCF/VCTがあれば負けスコアでカットオフ
+  // Threat Probe: 手番側のVCFをチェック
+  // VCFがあれば勝ちスコアでカットオフ
   // =========================================================================
   if (depth >= 3) {
-    // PVノード（フルウィンドウ）かつ depth >= 4 でのみVCTプローブを有効化
-    // null window (alpha+1 === beta) はカットノードなのでVCFのみ
-    // VCTプローブはベンチマークで弱体化要因と判明（Elo +33.5）のため無効化
     const enableVCT = false;
     const threatResult = threatProbe(
       board,
