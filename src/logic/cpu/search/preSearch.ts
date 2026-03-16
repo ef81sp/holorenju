@@ -24,7 +24,7 @@ import {
   findWinningMove,
   getFourDefensePosition,
 } from "./threatPatterns";
-import { findVCFSequence, type VCFSequenceResult } from "./vcf";
+import { findVCFSequence, hasVCF, type VCFSequenceResult } from "./vcf";
 import { findVCTMove, VCT_STONE_THRESHOLD } from "./vct";
 import { hasFourThreeAvailable } from "./vctHelpers";
 
@@ -269,6 +269,49 @@ function computeVCFDefenseMoves(
   });
 }
 
+/**
+ * 活三防御候補から、防御後に相手VCFが成立するものを除外する。
+ *
+ * 「現時点ではVCFがないが、特定の止め方をすると相手VCFが生まれる」ケースを検出。
+ */
+function filterDefenseByOpponentVCF(
+  board: BoardState,
+  color: "black" | "white",
+  defenseCandidates: Position[],
+  opponentAlreadyHasVCF: boolean,
+): Position[] {
+  if (defenseCandidates.length <= 1) {
+    return defenseCandidates;
+  }
+  if (opponentAlreadyHasVCF) {
+    return defenseCandidates;
+  }
+
+  const opponentColor = getOppositeColor(color);
+  const safe: Position[] = [];
+
+  for (const defense of defenseCandidates) {
+    const row = board[defense.row];
+    if (!row) {
+      continue;
+    }
+    row[defense.col] = color;
+
+    const opponentHasVCF = hasVCF(board, opponentColor, 0, undefined, {
+      maxDepth: 8,
+      timeLimit: 50,
+    });
+
+    row[defense.col] = null;
+
+    if (!opponentHasVCF) {
+      safe.push(defense);
+    }
+  }
+
+  return safe.length > 0 ? safe : defenseCandidates;
+}
+
 // =========================================================================
 // findPreSearchMove パイプライン
 // =========================================================================
@@ -324,7 +367,12 @@ export function findPreSearchMove(
   return {
     opponentVCFFirstMove: opponentVCFMove ?? null,
     vctHintMove: forced.vctHintMove,
-    openThreeDefenseMoves: threats.openThrees,
+    openThreeDefenseMoves: filterDefenseByOpponentVCF(
+      board,
+      color,
+      threats.openThrees,
+      forced.opponentVCFResult !== null,
+    ),
     restrictedMoves: opponentVCFMove
       ? computeVCFDefenseMoves(board, color, opponentColor, opponentVCFMove)
       : undefined,
