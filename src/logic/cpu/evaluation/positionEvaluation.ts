@@ -34,6 +34,7 @@ import {
   type ThreatInfo,
 } from "./patternScores";
 import {
+  computeAttackScore,
   evaluateStonePatterns,
   evaluateStonePatternsWithBreakdown,
 } from "./stonePatterns";
@@ -123,11 +124,16 @@ function evaluatePositionCore(
 ): number {
   const opponentColor = color === "black" ? "white" : "black";
 
-  // 攻撃スコア: 自分のパターン
-  const attackScore = evaluateStonePatterns(board, row, col, color);
+  // 攻撃スコア: 自分のパターン（lineTable渡し + jumpResult再利用で重複排除）
+  const { score: attackScore, jumpResult } = computeAttackScore(
+    board,
+    row,
+    col,
+    color,
+    lineTable,
+  );
 
   // 四三ボーナス: 四と有効な活三を同時に作る手
-  const jumpResult = analyzeJumpPatterns(board, row, col, color);
   let fourThreeBonus = 0;
   if (jumpResult.hasFour && jumpResult.hasValidOpenThree) {
     fourThreeBonus = PATTERN_SCORES.FOUR_THREE_BONUS;
@@ -275,7 +281,13 @@ function evaluatePositionCore(
   // 複数方向脅威ボーナス: 2方向以上で脅威を作る手（オプションで有効時のみ）
   let multiThreatBonus = 0;
   if (options.enableMultiThreat) {
-    const threatCount = countThreatDirections(board, row, col, color);
+    const threatCount = countThreatDirections(
+      board,
+      row,
+      col,
+      color,
+      lineTable,
+    );
     multiThreatBonus = evaluateMultiThreat(threatCount);
   }
 
@@ -304,11 +316,22 @@ function evaluatePositionCore(
 
   // この位置に相手が置いた場合のスコアを計算（ブロック価値）
   // boardを再利用: 自分の石を消して相手の石を置く
+  // lineTable も同期（removeStone + placeStone はビット演算のみで低コスト）
   if (boardRow) {
     boardRow[col] = opponentColor;
   }
+  if (lineTable) {
+    removeStone(lineTable, row, col, color);
+    placeStone(lineTable, row, col, opponentColor);
+  }
   const { score: opponentPatternScore, breakdown: opponentBreakdown } =
-    evaluateStonePatternsWithBreakdown(board, row, col, opponentColor);
+    evaluateStonePatternsWithBreakdown(
+      board,
+      row,
+      col,
+      opponentColor,
+      lineTable,
+    );
 
   // 防御交差点ボーナス: 相手が置くと2方向以上の脅威になる位置の防御価値
   if (options.enableMultiThreat) {
@@ -317,6 +340,7 @@ function evaluatePositionCore(
       row,
       col,
       opponentColor,
+      lineTable,
     );
     if (defThreatCount >= 2) {
       defenseMultiThreatBonus =
@@ -325,6 +349,10 @@ function evaluatePositionCore(
   }
 
   // 元に戻す（自分の石を戻す）
+  if (lineTable) {
+    removeStone(lineTable, row, col, opponentColor);
+    placeStone(lineTable, row, col, color);
+  }
   if (boardRow) {
     boardRow[col] = color;
   }
