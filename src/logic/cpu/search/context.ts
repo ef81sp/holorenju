@@ -10,6 +10,7 @@ import type { Position } from "@/types/game";
 import { BOARD_SIZE } from "@/constants";
 
 import type { LineTable } from "../lineTable/lineTable";
+import type { ProfilingCounters } from "../profiling/counters";
 
 import {
   DEFAULT_EVAL_OPTIONS,
@@ -108,6 +109,8 @@ export interface SearchStats {
   futilityPrunes: number;
   /** Threat Extension 発動回数 */
   threatExtensions: number;
+  /** 関数別タイミング（プロファイリング有効時のみ） */
+  timings?: ProfilingCounters["timings"];
 }
 
 /**

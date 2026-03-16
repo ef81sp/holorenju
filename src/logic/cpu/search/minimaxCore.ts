@@ -35,6 +35,7 @@ import {
   recordKillerMove,
   updateHistory,
 } from "../moveGenerator";
+import { recordTiming, startTiming } from "../profiling/counters";
 import { computeBoardHash, updateHash } from "../zobrist";
 import { createSearchContext, type SearchContext } from "./context";
 import { isMeasuringFutility, recordFutilityGain } from "./futilityMeasurement";
@@ -350,6 +351,7 @@ export function minimaxWithTT(
   // VCFがあれば勝ちスコアでカットオフ
   // =========================================================================
   if (depth >= 3) {
+    const tThreat = startTiming();
     const enableVCT = false;
     const threatResult = threatProbe(
       board,
@@ -360,6 +362,7 @@ export function minimaxWithTT(
       enableVCT,
       ctx.lineTable,
     );
+    recordTiming("threatProbe", tThreat);
     if (threatResult !== null) {
       // FIVE - 1: threatProbe による追詰検出マーカー。
       // FIVE ちょうどは五連完成のみが使用し、区別を維持する。
@@ -372,6 +375,7 @@ export function minimaxWithTT(
 
   // 探索深度が0になった場合は盤面評価
   if (depth === 0) {
+    const tEvalBoard = startTiming();
     const score = evaluateBoard(
       board,
       perspective,
@@ -382,6 +386,7 @@ export function minimaxWithTT(
       },
       ctx.lineTable,
     );
+    recordTiming("evaluateBoard", tEvalBoard);
     ctx.tt.store(hash, score, depth, "EXACT", null);
     return score;
   }
@@ -394,7 +399,12 @@ export function minimaxWithTT(
     ctx.evaluationOptions.enableNullMovePruning &&
     allowNullMove &&
     depth >= NMP_MIN_DEPTH &&
-    !hasImmediateThreat(board, getOppositeColor(currentColor))
+    (() => {
+      const t = startTiming();
+      const r = hasImmediateThreat(board, getOppositeColor(currentColor));
+      recordTiming("hasImmediateThreat", t);
+      return !r;
+    })()
   ) {
     const nmpScore = minimaxWithTT(
       board,
@@ -437,7 +447,8 @@ export function minimaxWithTT(
   const counterMove = lastMove
     ? (ctx.counterMoves[lastMove.row]?.[lastMove.col] ?? null)
     : null;
-  const moves = generateSortedMoves(board, currentColor, {
+  const tGenMoves = startTiming();
+  const sortResult = generateSortedMoves(board, currentColor, {
     ttMove,
     killers: ctx.killers,
     depth,
@@ -450,6 +461,17 @@ export function minimaxWithTT(
     // 黒番の禁手判定を遅延（Alpha-Beta枝刈りで探索されない手はチェック不要）
     skipForbiddenCheck: isBlackTurn,
   });
+  const { moves } = sortResult;
+  recordTiming("generateSortedMoves", tGenMoves);
+
+  // sortMoves で計算済みの脅威情報を Futility Pruning 用に準備
+  // （同一盤面に対する同一結果の共有）
+  const futilityEvalOptions = sortResult.precomputedThreats
+    ? {
+        ...ctx.evaluationOptions,
+        precomputedThreats: sortResult.precomputedThreats,
+      }
+    : ctx.evaluationOptions;
 
   if (moves.length === 0) {
     return 0;
@@ -494,7 +516,7 @@ export function minimaxWithTT(
         move.row,
         move.col,
         currentColor,
-        ctx.evaluationOptions,
+        futilityEvalOptions,
         ctx.lineTable,
       );
     }
@@ -513,14 +535,16 @@ export function minimaxWithTT(
         ? FUTILITY_MARGINS_SELF
         : FUTILITY_MARGINS_OPPONENT;
       const futilityMargin = futilityMargins[depth] ?? 0;
+      const tFutEval = startTiming();
       const staticEval = evaluatePosition(
         board,
         move.row,
         move.col,
         currentColor,
-        ctx.evaluationOptions,
+        futilityEvalOptions,
         ctx.lineTable,
       );
+      recordTiming("evaluatePosition", tFutEval);
       if (
         isMaximizing
           ? staticEval + futilityMargin <= alpha
@@ -785,7 +809,7 @@ export function findBestMoveWithTT(
       useStaticEval: true,
       evaluationOptions: ctx.evaluationOptions,
       lineTable: ctx.lineTable,
-    });
+    }).moves;
 
   if (moves.length === 0) {
     return {

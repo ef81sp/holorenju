@@ -16,7 +16,10 @@ import {
   detectOpponentThreats,
   evaluatePosition,
   type EvaluationOptions,
+  type ThreatInfo,
 } from "./evaluation";
+import { detectOpponentThreatsFast } from "./evaluation/threatDetectionFast";
+import { recordTiming, startTiming } from "./profiling/counters";
 
 // =============================================================================
 // Killer Moves
@@ -172,6 +175,17 @@ export function clearHistoryTable(history: HistoryTable): void {
 // =============================================================================
 
 /**
+ * sortMoves の戻り値
+ *
+ * ソート済み候補手と、sortMoves 内で計算した脅威情報を返す。
+ * 脅威情報は Futility Pruning の evaluatePosition で再利用可能。
+ */
+export interface SortMovesResult {
+  moves: Position[];
+  precomputedThreats?: ThreatInfo;
+}
+
+/**
  * ソートオプション
  */
 export interface MoveOrderingOptions {
@@ -219,7 +233,7 @@ export function sortMoves(
   board: BoardState,
   color: StoneColor,
   options: MoveOrderingOptions = {},
-): Position[] {
+): SortMovesResult {
   const {
     ttMove,
     killers,
@@ -256,8 +270,12 @@ export function sortMoves(
     evaluationOptions.enableMandatoryDefense &&
     !evaluationOptions.precomputedThreats
   ) {
+    const tDetect = startTiming();
     const opponentColor = color === "black" ? "white" : "black";
-    precomputedThreats = detectOpponentThreats(board, opponentColor);
+    precomputedThreats = lineTable
+      ? detectOpponentThreatsFast(board, opponentColor, lineTable)
+      : detectOpponentThreats(board, opponentColor);
+    recordTiming("detectOpponentThreats", tDetect);
     effectiveEvalOptions = {
       ...evaluationOptions,
       precomputedThreats,
@@ -305,6 +323,7 @@ export function sortMoves(
   if (useStaticEval && color !== null) {
     const evalCount = maxStaticEvalCount ?? n;
 
+    const tEvalPos = startTiming();
     if (evalCount < n) {
       // Lazy Evaluation: 事前ソートして上位N手のみ評価
       indices.sort((a, b) => scores[b]! - scores[a]!);
@@ -335,12 +354,13 @@ export function sortMoves(
             move.row,
             move.col,
             color,
-            evaluationOptions,
+            effectiveEvalOptions,
             lineTable,
           );
         staticEvalDone[idx] = 1;
       }
     }
+    recordTiming("evaluatePosition", tEvalPos);
   }
 
   // Lazy Evaluation時、未評価の手に対しても必須防御チェックを適用
@@ -405,8 +425,8 @@ export function sortMoves(
     for (let i = 0; i < n; i++) {
       all.push(moves[indices[i]!]!);
     }
-    return all;
+    return { moves: all, precomputedThreats };
   }
 
-  return result;
+  return { moves: result, precomputedThreats };
 }

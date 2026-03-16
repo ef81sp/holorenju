@@ -17,7 +17,11 @@ import {
 } from "../evaluation/patternScores";
 import { buildLineTable } from "../lineTable/lineTable";
 import { generateSortedMoves } from "../moveGenerator";
-import { getCounters, resetCounters } from "../profiling/counters";
+import {
+  getCounters,
+  isProfilingEnabled,
+  resetCounters,
+} from "../profiling/counters";
 import { globalTT } from "../transpositionTable";
 import { computeBoardHash } from "../zobrist";
 import { createSearchContext, type SearchStats } from "./context";
@@ -49,6 +53,7 @@ function mergeProfilingCounters(stats: SearchStats): SearchStats {
     boardCopies: counters.boardCopies,
     threatDetectionCalls: counters.threatDetectionCalls,
     evaluationCalls: counters.evaluationCalls,
+    timings: isProfilingEnabled() ? counters.timings : undefined,
   };
 }
 
@@ -129,7 +134,7 @@ export function findBestMoveIterativeWithTT(
   // =========================================================================
 
   // 候補手を生成
-  let moves = generateSortedMoves(board, color, {
+  let { moves } = generateSortedMoves(board, color, {
     ttMove: null,
     killers: ctx.killers,
     depth: 1,

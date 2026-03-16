@@ -135,7 +135,7 @@ describe("sortMoves", () => {
     ];
     const ttMove = { row: 7, col: 6 };
 
-    const sorted = sortMoves(moves, board, "black", { ttMove });
+    const sorted = sortMoves(moves, board, "black", { ttMove }).moves;
     expect(sorted[0]).toEqual(ttMove);
   });
 
@@ -156,7 +156,7 @@ describe("sortMoves", () => {
       killers,
       depth: 2,
       useStaticEval: false,
-    });
+    }).moves;
 
     // Killer Moveが上位に来る
     const killerIndex = sorted.findIndex((m) => m.row === 6 && m.col === 7);
@@ -179,7 +179,7 @@ describe("sortMoves", () => {
     const sorted = sortMoves(moves, board, "black", {
       history,
       useStaticEval: false,
-    });
+    }).moves;
 
     // Historyスコアが高い手が上位
     const highHistoryIndex = sorted.findIndex(
@@ -203,7 +203,9 @@ describe("sortMoves", () => {
       { row: 7, col: 4 }, // 高評価（活四形成）
     ];
 
-    const sorted = sortMoves(moves, board, "black", { useStaticEval: true });
+    const sorted = sortMoves(moves, board, "black", {
+      useStaticEval: true,
+    }).moves;
 
     // 活四を作る位置が上位
     expect(sorted[0].row).toBe(7);
@@ -248,7 +250,7 @@ describe("sortMoves", () => {
         enableMandatoryDefense: true,
       },
       maxStaticEvalCount: 1,
-    });
+    }).moves;
 
     // 止め四の防御位置(C8)のみ残り、活三防御と無関係位置は除外
     const hasOpenThreeDefense = sorted.some(

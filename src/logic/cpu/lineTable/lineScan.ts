@@ -7,6 +7,12 @@
  * 非リエントラント制約: モジュールスコープの事前確保配列を使用。
  * evaluateBoard の探索ループ内で再帰呼び出しされる場合はデータが上書きされる。
  * 現行の evaluateBoard は末端評価で再帰しないため問題ないが、将来変更時に注意。
+ *
+ * 呼び出し元:
+ * - evaluateBoard（リーフ評価）
+ * - detectOpponentThreatsFast（sortMoves 内、内部ノード）
+ * いずれも呼び出し直後にバッファを読み切り、他の precomputeLineFeatures
+ * 呼び出しと同一スタック上で競合しない。
  */
 
 /* eslint-disable no-bitwise -- ビットマスク操作に必要 */

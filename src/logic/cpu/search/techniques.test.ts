@@ -228,7 +228,7 @@ describe("活三防御", () => {
     const vcfMove = findVCFMove(board, "white");
     console.log("白のVCF:", vcfMove);
 
-    const moves = generateSortedMoves(board, "white", {
+    const { moves } = generateSortedMoves(board, "white", {
       ttMove: null,
       useStaticEval: true,
       evaluationOptions: DEFAULT_EVAL_OPTIONS,
