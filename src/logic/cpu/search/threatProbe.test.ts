@@ -17,16 +17,16 @@ import {
 describe("getThreatBudget", () => {
   it("depth >= 4 で最大予算（VCT含む）", () => {
     const budget = getThreatBudget(4);
-    expect(budget.vcfDepth).toBe(6);
-    expect(budget.vcfNodes).toBe(100);
-    expect(budget.vctDepth).toBe(3);
-    expect(budget.vctNodes).toBe(200);
+    expect(budget.vcfDepth).toBe(8);
+    expect(budget.vcfNodes).toBe(200);
+    expect(budget.vctDepth).toBe(5);
+    expect(budget.vctNodes).toBe(400);
   });
 
   it("depth 3 で基本予算", () => {
     const budget = getThreatBudget(3);
-    expect(budget.vcfDepth).toBe(4);
-    expect(budget.vcfNodes).toBe(50);
+    expect(budget.vcfDepth).toBe(6);
+    expect(budget.vcfNodes).toBe(100);
     expect(budget.vctDepth).toBe(0);
   });
 });
