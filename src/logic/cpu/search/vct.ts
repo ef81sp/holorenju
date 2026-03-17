@@ -9,6 +9,11 @@ import type { BoardState, Position } from "@/types/game";
 
 import { checkFive, checkForbiddenMove } from "@/logic/renjuRules";
 
+import {
+  type LineTable,
+  placeStone,
+  removeStone,
+} from "../lineTable/lineTable";
 import { type TimeLimiter, incrementNodes, isTimeExceeded } from "./context";
 import {
   checkDefenseCounterThreat,
@@ -186,6 +191,7 @@ export function hasVCT(
   timeLimiter?: TimeLimiter,
   options?: VCTSearchOptions,
   vcfCache?: VCFResultCache,
+  lineTable?: LineTable,
 ): boolean {
   const maxDepth = options?.maxDepth ?? VCT_MAX_DEPTH;
   const timeLimitMs = options?.timeLimit ?? VCT_TIME_LIMIT;
@@ -226,7 +232,7 @@ export function hasVCT(
   }
 
   // 脅威（四・活三）を作れる位置を列挙
-  const threatMoves = findThreatMoves(board, color);
+  const threatMoves = findThreatMoves(board, color, lineTable);
 
   for (const move of threatMoves) {
     incrementNodes(limiter);
@@ -238,12 +244,18 @@ export function hasVCT(
     if (moveRow) {
       moveRow[move.col] = color;
     }
+    if (lineTable) {
+      placeStone(lineTable, move.row, move.col, color);
+    }
 
     // 五連チェック
     if (checkFive(board, move.row, move.col, color)) {
       // 元に戻す（Undo）
       if (moveRow) {
         moveRow[move.col] = null;
+      }
+      if (lineTable) {
+        removeStone(lineTable, move.row, move.col, color);
       }
       return true;
     }
@@ -264,11 +276,17 @@ export function hasVCT(
         if (moveRow) {
           moveRow[move.col] = null;
         }
+        if (lineTable) {
+          removeStone(lineTable, move.row, move.col, color);
+        }
         return true;
       }
       // 元に戻す（Undo）
       if (moveRow) {
         moveRow[move.col] = null;
+      }
+      if (lineTable) {
+        removeStone(lineTable, move.row, move.col, color);
       }
       continue;
     }
@@ -293,6 +311,9 @@ export function hasVCT(
       if (defenseRow) {
         defenseRow[defensePos.col] = opponentColor;
       }
+      if (lineTable) {
+        placeStone(lineTable, defensePos.row, defensePos.col, opponentColor);
+      }
 
       // 防御手で五連完成 → VCT不成立
       const defenseWins = checkFive(
@@ -303,12 +324,23 @@ export function hasVCT(
       );
       let vctResult = false;
       if (!defenseWins) {
-        vctResult = hasVCT(board, color, depth + 1, limiter, options, cache);
+        vctResult = hasVCT(
+          board,
+          color,
+          depth + 1,
+          limiter,
+          options,
+          cache,
+          lineTable,
+        );
       }
 
       // 元に戻す（Undo）- 防御手
       if (defenseRow) {
         defenseRow[defensePos.col] = null;
+      }
+      if (lineTable) {
+        removeStone(lineTable, defensePos.row, defensePos.col, opponentColor);
       }
 
       if (!vctResult) {
@@ -320,6 +352,9 @@ export function hasVCT(
     // 元に戻す（Undo）- 攻撃手
     if (moveRow) {
       moveRow[move.col] = null;
+    }
+    if (lineTable) {
+      removeStone(lineTable, move.row, move.col, color);
     }
 
     if (allDefenseLeadsToVCT && defensePositions.length > 0) {
@@ -423,6 +458,7 @@ export function findVCTMove(
   board: BoardState,
   color: "black" | "white",
   options?: VCTSearchOptions,
+  lineTable?: LineTable,
 ): Position | null {
   const maxDepth = options?.maxDepth ?? VCT_MAX_DEPTH;
   const timeLimitMs = options?.timeLimit ?? VCT_TIME_LIMIT;
@@ -471,6 +507,7 @@ export function findVCTMove(
     limiter,
     options,
     vcfCache,
+    lineTable,
   );
 }
 
@@ -485,6 +522,7 @@ function findVCTMoveRecursive(
   limiter: TimeLimiter,
   options?: VCTSearchOptions,
   vcfCache?: VCFResultCache,
+  lineTable?: LineTable,
 ): Position | null {
   if (depth >= maxDepth) {
     return null;
@@ -506,7 +544,7 @@ function findVCTMoveRecursive(
     return vcfMove;
   }
 
-  const threatMoves = findThreatMoves(board, color);
+  const threatMoves = findThreatMoves(board, color, lineTable);
   const opponentColor = color === "black" ? "white" : "black";
 
   for (const move of threatMoves) {
@@ -519,11 +557,17 @@ function findVCTMoveRecursive(
     if (moveRow) {
       moveRow[move.col] = color;
     }
+    if (lineTable) {
+      placeStone(lineTable, move.row, move.col, color);
+    }
 
     if (checkFive(board, move.row, move.col, color)) {
       // 元に戻す（Undo）
       if (moveRow) {
         moveRow[move.col] = null;
+      }
+      if (lineTable) {
+        removeStone(lineTable, move.row, move.col, color);
       }
       return move;
     }
@@ -541,11 +585,17 @@ function findVCTMoveRecursive(
         if (moveRow) {
           moveRow[move.col] = null;
         }
+        if (lineTable) {
+          removeStone(lineTable, move.row, move.col, color);
+        }
         return move;
       }
       // 元に戻す（Undo）
       if (moveRow) {
         moveRow[move.col] = null;
+      }
+      if (lineTable) {
+        removeStone(lineTable, move.row, move.col, color);
       }
       continue;
     }
@@ -568,6 +618,9 @@ function findVCTMoveRecursive(
       if (defenseRow) {
         defenseRow[defensePos.col] = opponentColor;
       }
+      if (lineTable) {
+        placeStone(lineTable, defensePos.row, defensePos.col, opponentColor);
+      }
 
       // 防御で五連完成 → VCT不成立
       const defenseWins = checkFive(
@@ -578,12 +631,23 @@ function findVCTMoveRecursive(
       );
       let vctResult = false;
       if (!defenseWins) {
-        vctResult = hasVCT(board, color, depth + 1, limiter, options, vcfCache);
+        vctResult = hasVCT(
+          board,
+          color,
+          depth + 1,
+          limiter,
+          options,
+          vcfCache,
+          lineTable,
+        );
       }
 
       // 元に戻す（Undo）- 防御手
       if (defenseRow) {
         defenseRow[defensePos.col] = null;
+      }
+      if (lineTable) {
+        removeStone(lineTable, defensePos.row, defensePos.col, opponentColor);
       }
 
       if (!vctResult) {
@@ -595,6 +659,9 @@ function findVCTMoveRecursive(
     // 元に戻す（Undo）- 攻撃手
     if (moveRow) {
       moveRow[move.col] = null;
+    }
+    if (lineTable) {
+      removeStone(lineTable, move.row, move.col, color);
     }
 
     if (allDefenseLeadsToVCT && defensePositions.length > 0) {

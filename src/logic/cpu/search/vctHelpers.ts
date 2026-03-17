@@ -17,6 +17,7 @@ import {
 } from "@/logic/renjuRules";
 
 import type { DirectionPattern } from "../evaluation/patternScores";
+import type { LineTable } from "../lineTable/lineTable";
 
 import { DIRECTION_INDICES, DIRECTIONS } from "../core/constants";
 import { checkEnds, countLine, getLineEnds } from "../core/lineAnalysis";
@@ -27,6 +28,7 @@ import {
 } from "../evaluation/jumpPatterns";
 import { getOpenThreeDefensePositions } from "../evaluation/threatDetection";
 import { createsFourThree } from "../evaluation/winningPatterns";
+import { LINE_BIT_TO_CELL, LINE_LENGTHS } from "../lineTable/lineMapping";
 import { isNearExistingStone } from "../moveGenerator";
 import {
   findJumpGapPosition,
@@ -142,11 +144,17 @@ export function hasOpenThree(
 /**
  * 脅威（四・活三）を作れる位置を列挙
  * 四を優先的に列挙（枝刈り効率のため）
+ *
+ * lineTable が渡された場合、5セルウィンドウスキャンで候補をフィルタして高速化。
  */
 export function findThreatMoves(
   board: BoardState,
   color: "black" | "white",
+  lineTable?: LineTable,
 ): Position[] {
+  if (lineTable) {
+    return findThreatMovesFast(board, color, lineTable);
+  }
   const fourMoves: Position[] = [];
   const openThreeMoves: Position[] = [];
 
@@ -207,6 +215,123 @@ export function findThreatMoves(
   // 四を優先して返す
   return [...fourMoves, ...openThreeMoves];
 }
+
+/* eslint-disable no-bitwise -- ビットマスク操作に必要 */
+
+/** 候補セルフラグバッファ（非リエントラント、モジュールスコープで再利用） */
+const _candidates = new Uint8Array(225);
+
+/**
+ * LineTable の5セルウィンドウスキャンで候補セルを特定し、classifyThreat を適用する高速版
+ *
+ * 72ラインの5セルウィンドウを走査し、相手石がなく自石2個以上のウィンドウ内の
+ * 空セルを候補としてフラグ。連続パターン（○○○_）と跳びパターン（○_○○）の両方を検出。
+ * 候補セルのみに classifyThreat を適用することで走査数を ~40 → ~10-20 に削減。
+ *
+ * 非リエントラント安全性: 返却時にローカル Position[] を構築済みのため、
+ * VCT再帰で再呼び出しされてもバッファ競合なし。
+ */
+function findThreatMovesFast(
+  board: BoardState,
+  color: "black" | "white",
+  lt: LineTable,
+): Position[] {
+  const ownArr = color === "black" ? lt.blacks : lt.whites;
+  const oppArr = color === "black" ? lt.whites : lt.blacks;
+
+  // 5セルウィンドウスキャンで候補セルをフラグ
+  _candidates.fill(0);
+  for (let lineId = 0; lineId < 72; lineId++) {
+    const own = ownArr[lineId] ?? 0;
+    if (!own) {
+      continue;
+    }
+    // 2石未満のラインはスキップ（四: 3石+仮置き, 活三: 2石+仮置き）
+    if (!(own & (own - 1))) {
+      continue;
+    }
+
+    const opp = oppArr[lineId] ?? 0;
+    const len = LINE_LENGTHS[lineId] ?? 0;
+
+    for (let start = 0; start <= len - 5; start++) {
+      const windowMask = 0x1f << start;
+      // 相手石があるウィンドウはスキップ
+      if (opp & windowMask) {
+        continue;
+      }
+      // 自石2個未満のウィンドウはスキップ
+      const windowOwn = own & windowMask;
+      if (!(windowOwn & (windowOwn - 1))) {
+        continue;
+      }
+
+      // ウィンドウ内の空セルを候補に追加
+      const emptyInWindow = ~(own | opp) & windowMask;
+      let eBits = emptyInWindow;
+      while (eBits) {
+        const bp = 31 - Math.clz32(eBits & -eBits);
+        eBits &= eBits - 1;
+        const ci = LINE_BIT_TO_CELL[lineId * 16 + bp];
+        if (ci !== undefined && ci !== 0xffff) {
+          _candidates[ci] = 1;
+        }
+      }
+    }
+  }
+
+  // 候補セルのみに classifyThreat を適用
+  const fourMoves: Position[] = [];
+  const openThreeMoves: Position[] = [];
+  for (let i = 0; i < 225; i++) {
+    if (!_candidates[i]) {
+      continue;
+    }
+    const row = Math.floor(i / 15);
+    const col = i % 15;
+    if (board[row]?.[col] !== null) {
+      continue;
+    }
+
+    const rowArray = board[row];
+    if (rowArray) {
+      rowArray[col] = color;
+    }
+
+    // 五連が作れる場合は最優先（禁手でもOK）
+    if (checkFive(board, row, col, color)) {
+      if (rowArray) {
+        rowArray[col] = null;
+      }
+      fourMoves.push({ row, col });
+      continue;
+    }
+
+    const threat = classifyThreat(board, row, col, color);
+    if (rowArray) {
+      rowArray[col] = null;
+    }
+
+    if (!threat.createsFour && !threat.createsOpenThree) {
+      continue;
+    }
+
+    // 禁手チェックは脅威を作る手だけに限定
+    if (color === "black" && checkForbiddenMove(board, row, col).isForbidden) {
+      continue;
+    }
+
+    if (threat.createsFour) {
+      fourMoves.push({ row, col });
+    } else {
+      openThreeMoves.push({ row, col });
+    }
+  }
+  fourMoves.push(...openThreeMoves);
+  return fourMoves;
+}
+
+/* eslint-enable no-bitwise */
 
 /**
  * 脅威が成立しているかチェック（四または活三）

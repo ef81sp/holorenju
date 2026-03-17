@@ -157,14 +157,14 @@ export function threatProbe(
     const vctOptions: VCTSearchOptions = {
       maxDepth: budget.vctDepth,
       maxNodes: budget.vctNodes,
-      timeLimit: 50,
+      timeLimit: 150,
       vcfOptions: {
         maxDepth: budget.vcfDepth,
         maxNodes: budget.vcfNodes,
-        timeLimit: 50,
+        timeLimit: 150,
       },
     };
-    const vctMove = findVCTMove(board, color, vctOptions);
+    const vctMove = findVCTMove(board, color, vctOptions, lineTable);
     if (vctMove) {
       storeThreatProbe(threatCache, hash, color, { move: vctMove });
       return vctMove;
