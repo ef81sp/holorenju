@@ -17,6 +17,7 @@ import {
 } from "@/logic/renjuRules";
 
 import type { DirectionPattern } from "../evaluation/patternScores";
+import type { LineTable } from "../lineTable/lineTable";
 
 import { DIRECTION_INDICES, DIRECTIONS } from "../core/constants";
 import { checkEnds, countLine, getLineEnds } from "../core/lineAnalysis";
@@ -27,6 +28,7 @@ import {
 } from "../evaluation/jumpPatterns";
 import { getOpenThreeDefensePositions } from "../evaluation/threatDetection";
 import { createsFourThree } from "../evaluation/winningPatterns";
+import { LINE_LENGTHS } from "../lineTable/lineMapping";
 import { isNearExistingStone } from "../moveGenerator";
 import {
   findJumpGapPosition,
@@ -105,7 +107,13 @@ export function hasFourThreeAvailable(
 export function hasOpenThree(
   board: BoardState,
   color: "black" | "white",
+  lineTable?: LineTable,
 ): boolean {
+  // lineTable 高速パス: 72ラインをビットマスクで走査
+  if (lineTable) {
+    return hasOpenThreeFast(lineTable, board, color);
+  }
+
   for (let row = 0; row < BOARD_SIZE; row++) {
     for (let col = 0; col < BOARD_SIZE; col++) {
       if (board[row]?.[col] !== color) {
@@ -138,6 +146,119 @@ export function hasOpenThree(
   }
   return false;
 }
+
+/* eslint-disable no-bitwise -- ビットマスク操作に必要 */
+
+/**
+ * LineTable ベースの高速活三判定
+ *
+ * 72本のラインをビットマスクで走査し、連続三（両端空き）または
+ * 跳び三（○○_○, ○_○○ で両端空き）を検出する。
+ */
+function hasOpenThreeFast(
+  lt: LineTable,
+  board: BoardState,
+  color: "black" | "white",
+): boolean {
+  const ownArr = color === "black" ? lt.blacks : lt.whites;
+  const oppArr = color === "black" ? lt.whites : lt.blacks;
+
+  for (let lineId = 0; lineId < 72; lineId++) {
+    const ownMask = ownArr[lineId] ?? 0;
+    if (ownMask === 0) {
+      continue;
+    }
+    const oppMask = oppArr[lineId] ?? 0;
+    const len = LINE_LENGTHS[lineId] ?? 0;
+    const occupied = ownMask | oppMask;
+
+    let b = 0;
+    while (b < len) {
+      if (!(ownMask & (1 << b))) {
+        b++;
+        continue;
+      }
+      const start = b;
+      while (b < len && ownMask & (1 << b)) {
+        b++;
+      }
+      const runLen = b - start;
+
+      // 連続三: run=3, 両端が空き
+      if (runLen === 3) {
+        const posEnd = start + 3;
+        const negEnd = start - 1;
+        if (
+          posEnd < len &&
+          !(occupied & (1 << posEnd)) &&
+          negEnd >= 0 &&
+          !(occupied & (1 << negEnd))
+        ) {
+          // 跳び四の一部でないか確認（board ベースの checkJumpFour が必要）
+          // 跳び四パターン: _●●●_ の両端のさらに先に自石があると跳び四
+          // 簡易チェック: beyond が自石でなければ活三
+          const beyondPos = posEnd + 1;
+          const beyondNeg = negEnd - 1;
+          const beyondPosOwn = beyondPos < len && ownMask & (1 << beyondPos);
+          const beyondNegOwn = beyondNeg >= 0 && ownMask & (1 << beyondNeg);
+          if (!beyondPosOwn && !beyondNegOwn) {
+            return true;
+          }
+        }
+      }
+
+      // 跳び三: run=2 + gap + run=1 (○○_○)
+      if (runLen === 2) {
+        const gapPos = start + 2;
+        if (
+          gapPos < len &&
+          !(occupied & (1 << gapPos)) &&
+          gapPos + 1 < len &&
+          ownMask & (1 << (gapPos + 1))
+        ) {
+          // ○○_○ パターン: 両端が空きか確認
+          const negEnd = start - 1;
+          const posEnd = gapPos + 2;
+          if (
+            negEnd >= 0 &&
+            !(occupied & (1 << negEnd)) &&
+            posEnd < len &&
+            !(occupied & (1 << posEnd))
+          ) {
+            return true;
+          }
+        }
+      }
+
+      // 跳び三: run=1 + gap + run=2 (○_○○)
+      if (runLen === 1) {
+        const gapPos = start + 1;
+        if (
+          gapPos < len &&
+          !(occupied & (1 << gapPos)) &&
+          gapPos + 1 < len &&
+          ownMask & (1 << (gapPos + 1)) &&
+          gapPos + 2 < len &&
+          ownMask & (1 << (gapPos + 2))
+        ) {
+          const negEnd = start - 1;
+          const posEnd = gapPos + 3;
+          if (
+            negEnd >= 0 &&
+            !(occupied & (1 << negEnd)) &&
+            posEnd < len &&
+            !(occupied & (1 << posEnd))
+          ) {
+            return true;
+          }
+        }
+      }
+    }
+  }
+  return false;
+}
+
+/* eslint-enable no-bitwise */
 
 /**
  * 脅威（四・活三）を作れる位置を列挙

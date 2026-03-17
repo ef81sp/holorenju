@@ -9,6 +9,8 @@ import type { BoardState, Position } from "@/types/game";
 
 import { checkFive, checkForbiddenMove } from "@/logic/renjuRules";
 
+import type { LineTable } from "../lineTable/lineTable";
+
 import { type TimeLimiter, incrementNodes, isTimeExceeded } from "./context";
 import {
   checkDefenseCounterThreat,
@@ -143,6 +145,8 @@ export interface VCTSearchOptions {
   vcfOptions?: VCFSearchOptions;
   /** 分岐情報を収集するか（レビュー用） */
   collectBranches?: boolean;
+  /** LineTable（hasOpenThree高速化用） */
+  lineTable?: LineTable;
 }
 
 /** VCT手順内の分岐情報 */
@@ -221,7 +225,7 @@ export function hasVCT(
   // VCFは上で既にチェック済みなので、ここではfalseを返す
   // 注: ミセ手(hasFourThreeAvailable)のチェックはper-nodeでは性能上見送り。
   // エントリポイントのガード + validateVCTSequenceの事後検証で対応する。
-  if (hasOpenThree(board, opponentColor)) {
+  if (hasOpenThree(board, opponentColor, options?.lineTable)) {
     return false;
   }
 
@@ -437,7 +441,7 @@ export function findVCTMove(
   // 相手に活三・ミセ手・VCFがあればVCT不成立（四追いでしか勝てない）
   const opponentColor = color === "black" ? "white" : "black";
   if (
-    hasOpenThree(board, opponentColor) ||
+    hasOpenThree(board, opponentColor, options?.lineTable) ||
     hasFourThreeAvailable(board, opponentColor) ||
     cachedHasVCF(board, opponentColor, limiter, options?.vcfOptions, vcfCache)
   ) {
@@ -631,7 +635,7 @@ export function findVCTSequence(
   // 相手に活三・ミセ手・VCFがあればVCT不成立（四追いでしか勝てない）
   const opponentColor = color === "black" ? "white" : "black";
   if (
-    hasOpenThree(board, opponentColor) ||
+    hasOpenThree(board, opponentColor, options?.lineTable) ||
     hasFourThreeAvailable(board, opponentColor) ||
     cachedHasVCF(board, opponentColor, limiter, options?.vcfOptions, vcfCache)
   ) {
@@ -1135,7 +1139,7 @@ function findVCTSequenceRecursive(
   // VCFは上で既にチェック済みなので、ここではfalseを返す
   // 注: ミセ手(hasFourThreeAvailable)のチェックはper-nodeでは性能上見送り。
   // エントリポイントのガード + validateVCTSequenceの事後検証で対応する。
-  if (hasOpenThree(board, opponentColor)) {
+  if (hasOpenThree(board, opponentColor, options?.lineTable)) {
     return false;
   }
 
@@ -1445,7 +1449,7 @@ export function findVCTSequenceFromFirstMove(
   // 相手に活三・ミセ手・VCFがあればVCT開始手として無効（四追いでしか勝てない）
   const opponentColor = color === "black" ? "white" : "black";
   if (
-    hasOpenThree(board, opponentColor) ||
+    hasOpenThree(board, opponentColor, options?.lineTable) ||
     hasFourThreeAvailable(board, opponentColor) ||
     cachedHasVCF(
       board,
@@ -1676,7 +1680,7 @@ export function isVCTFirstMove(
   // 相手に活三・ミセ手・VCFがあればVCT開始手として無効（四追いでしか勝てない）
   const opponentColor = color === "black" ? "white" : "black";
   if (
-    hasOpenThree(board, opponentColor) ||
+    hasOpenThree(board, opponentColor, options?.lineTable) ||
     hasFourThreeAvailable(board, opponentColor) ||
     cachedHasVCF(board, opponentColor, limiter, options?.vcfOptions, vcfCache)
   ) {
