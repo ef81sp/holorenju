@@ -241,10 +241,9 @@ function analyzeFourAndThree(
 export const MAX_EXTENSIONS = 1;
 
 /**
- * Threat Extension の候補かどうか判定（自分の四）
+ * Threat Extension の候補かどうか判定（自分の四三）
  *
- * 自分の手が四を作った場合に延長対象。
- * 四は防御1点を強制（分岐1）→ 延長しても探索木が爆発しない。
+ * 自分の手が四三を作った場合に延長対象。
  *
  * @param board 盤面（move 配置済み）
  * @param move 現在の手
@@ -256,7 +255,7 @@ export function isThreatExtensionCandidate(
   currentColor: "black" | "white",
 ): boolean {
   const r = analyzeFourAndThree(board, move.row, move.col, currentColor);
-  return !r.hasFive && r.hasFour;
+  return !r.hasFive && r.hasFour && r.hasOpenThree;
 }
 
 /**
