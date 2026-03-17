@@ -16,6 +16,7 @@ import {
   detectPlainFour,
   hasImmediateThreat,
   isTacticalMove,
+  isThreatExtensionCandidate,
 } from "./techniques";
 
 describe("LMR と四を作る手", () => {
@@ -332,6 +333,64 @@ describe("detectPlainFour", () => {
       { row: 7, col: 8, color: "white" },
     ]);
     expect(detectPlainFour(board, 7, 8, "white")).toBe(false);
+  });
+});
+
+describe("isThreatExtensionCandidate", () => {
+  it("四のみ（活三なし）→ true（四延長対象）", () => {
+    const board = createEmptyBoard();
+    // 横方向に黒4つ → 四を形成、他方向に活三なし
+    placeStonesOnBoard(board, [
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+      { row: 7, col: 8, color: "black" },
+    ]);
+    expect(isThreatExtensionCandidate(board, { row: 7, col: 8 }, "black")).toBe(
+      true,
+    );
+  });
+
+  it("四三 → true（四延長対象）", () => {
+    const board = createEmptyBoard();
+    // 横方向に四、縦方向に活三（交差点で四三）
+    placeStonesOnBoard(board, [
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+      { row: 7, col: 8, color: "black" },
+      { row: 6, col: 8, color: "black" },
+      { row: 5, col: 8, color: "black" },
+    ]);
+    expect(isThreatExtensionCandidate(board, { row: 7, col: 8 }, "black")).toBe(
+      true,
+    );
+  });
+
+  it("五連 → false（延長不要）", () => {
+    const board = createEmptyBoard();
+    placeStonesOnBoard(board, [
+      { row: 7, col: 4, color: "white" },
+      { row: 7, col: 5, color: "white" },
+      { row: 7, col: 6, color: "white" },
+      { row: 7, col: 7, color: "white" },
+      { row: 7, col: 8, color: "white" },
+    ]);
+    expect(isThreatExtensionCandidate(board, { row: 7, col: 8 }, "white")).toBe(
+      false,
+    );
+  });
+
+  it("四なし → false", () => {
+    const board = createEmptyBoard();
+    placeStonesOnBoard(board, [
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+    ]);
+    expect(isThreatExtensionCandidate(board, { row: 7, col: 7 }, "black")).toBe(
+      false,
+    );
   });
 });
 
