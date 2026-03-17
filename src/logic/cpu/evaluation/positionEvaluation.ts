@@ -8,7 +8,11 @@
 
 import type { BoardState, StoneColor } from "@/types/game";
 
-import { incrementEvaluationCalls } from "@/logic/cpu/profiling/counters";
+import {
+  incrementEvaluationCalls,
+  recordTiming,
+  startTiming,
+} from "@/logic/cpu/profiling/counters";
 import { checkFive, copyBoard } from "@/logic/renjuRules";
 
 import { includesPosition } from "../core/boardUtils";
@@ -34,6 +38,7 @@ import {
   type ThreatInfo,
 } from "./patternScores";
 import {
+  computeAttackScore,
   evaluateStonePatterns,
   evaluateStonePatternsWithBreakdown,
 } from "./stonePatterns";
@@ -123,11 +128,18 @@ function evaluatePositionCore(
 ): number {
   const opponentColor = color === "black" ? "white" : "black";
 
-  // 攻撃スコア: 自分のパターン
-  const attackScore = evaluateStonePatterns(board, row, col, color);
+  // 攻撃スコア: 自分のパターン（lineTable渡し + jumpResult再利用で重複排除）
+  const tAttack = startTiming();
+  const { score: attackScore, jumpResult } = computeAttackScore(
+    board,
+    row,
+    col,
+    color,
+    lineTable,
+  );
+  recordTiming("ep.computeAttackScore", tAttack);
 
   // 四三ボーナス: 四と有効な活三を同時に作る手
-  const jumpResult = analyzeJumpPatterns(board, row, col, color);
   let fourThreeBonus = 0;
   if (jumpResult.hasFour && jumpResult.hasValidOpenThree) {
     fourThreeBonus = PATTERN_SCORES.FOUR_THREE_BONUS;
@@ -135,6 +147,7 @@ function evaluatePositionCore(
 
   // 必須防御ルール: 相手の活四・活三を止めない手は除外
   // 白の三三・四四チェックよりも先に評価（相手の脅威を放置すると先に負ける）
+  const tMandatory = startTiming();
   if (options.enableMandatoryDefense) {
     // 事前計算された脅威情報があればそれを使用（最適化）
     let threats: ThreatInfo = options.precomputedThreats ?? {
@@ -238,6 +251,8 @@ function evaluatePositionCore(
     }
   }
 
+  recordTiming("ep.mandatoryDefense", tMandatory);
+
   // 白の三三・四四チェック（白には禁手がないため即勝利）
   // mandatory defense を通過した手のみが到達する（防御義務を果たした上での勝利パターン）
   if (color === "white" && checkWhiteWinningPattern(board, row, col)) {
@@ -245,12 +260,15 @@ function evaluatePositionCore(
   }
 
   // 禁手追い込みボーナス（白番のみ、オプションで有効時のみ）
+  const tForbiddenTrap = startTiming();
   let forbiddenTrapBonus = 0;
   if (options.enableForbiddenTrap && color === "white") {
     forbiddenTrapBonus = evaluateForbiddenTrap(board, row, col);
   }
+  recordTiming("ep.forbiddenTrap", tForbiddenTrap);
 
   // 禁手脆弱性ペナルティ（黒番のみ）
+  const tForbiddenVuln = startTiming();
   let forbiddenVulnerabilityPenalty = 0;
   if (options.enableForbiddenVulnerability && color === "black") {
     forbiddenVulnerabilityPenalty = evaluateForbiddenVulnerability(
@@ -259,10 +277,12 @@ function evaluatePositionCore(
       col,
     );
   }
+  recordTiming("ep.forbiddenVuln", tForbiddenVuln);
 
   // ミセ手ボーナス: 次に四三を作れる手（オプションで有効時のみ）
   // fourThreeBonus > 0 なら四三が既にあるためミセ計算をスキップ（二重加算防止）
   // attackScore >= OPEN_FOUR なら活四以上で既に勝ちなのでスキップ
+  const tMise = startTiming();
   let miseBonus = 0;
   if (
     options.enableMise &&
@@ -271,15 +291,25 @@ function evaluatePositionCore(
   ) {
     miseBonus = computeMiseBonus(board, row, col, color, lineTable);
   }
+  recordTiming("ep.miseBonus", tMise);
 
   // 複数方向脅威ボーナス: 2方向以上で脅威を作る手（オプションで有効時のみ）
+  const tMultiThreat = startTiming();
   let multiThreatBonus = 0;
   if (options.enableMultiThreat) {
-    const threatCount = countThreatDirections(board, row, col, color);
+    const threatCount = countThreatDirections(
+      board,
+      row,
+      col,
+      color,
+      lineTable,
+    );
     multiThreatBonus = evaluateMultiThreat(threatCount);
   }
+  recordTiming("ep.multiThreat", tMultiThreat);
 
   // 単発四ペナルティ: 四を作るが四三ではなく、後続脅威もない場合
+  const tSingleFour = startTiming();
   let singleFourPenalty = 0;
   if (options.enableSingleFourPenalty) {
     // 四を作るが四三ではない場合
@@ -297,18 +327,31 @@ function evaluatePositionCore(
       }
     }
   }
+  recordTiming("ep.singleFourPenalty", tSingleFour);
 
   // 防御スコア: 相手の脅威をブロック
+  const tDefense = startTiming();
   let defenseScore = 0;
   let defenseMultiThreatBonus = 0;
 
   // この位置に相手が置いた場合のスコアを計算（ブロック価値）
   // boardを再利用: 自分の石を消して相手の石を置く
+  // lineTable も同期（removeStone + placeStone はビット演算のみで低コスト）
   if (boardRow) {
     boardRow[col] = opponentColor;
   }
+  if (lineTable) {
+    removeStone(lineTable, row, col, color);
+    placeStone(lineTable, row, col, opponentColor);
+  }
   const { score: opponentPatternScore, breakdown: opponentBreakdown } =
-    evaluateStonePatternsWithBreakdown(board, row, col, opponentColor);
+    evaluateStonePatternsWithBreakdown(
+      board,
+      row,
+      col,
+      opponentColor,
+      lineTable,
+    );
 
   // 防御交差点ボーナス: 相手が置くと2方向以上の脅威になる位置の防御価値
   if (options.enableMultiThreat) {
@@ -317,6 +360,7 @@ function evaluatePositionCore(
       row,
       col,
       opponentColor,
+      lineTable,
     );
     if (defThreatCount >= 2) {
       defenseMultiThreatBonus =
@@ -325,9 +369,14 @@ function evaluatePositionCore(
   }
 
   // 元に戻す（自分の石を戻す）
+  if (lineTable) {
+    removeStone(lineTable, row, col, opponentColor);
+    placeStone(lineTable, row, col, color);
+  }
   if (boardRow) {
     boardRow[col] = color;
   }
+  recordTiming("ep.defenseScore", tDefense);
 
   // 脅威レベル別の防御倍率を適用
   defenseScore =

@@ -59,7 +59,7 @@ function checkEmergencyTimeout(
   if (performance.now() < absoluteDeadline) {
     return null;
   }
-  const moves = generateSortedMoves(board, color, {
+  const { moves } = generateSortedMoves(board, color, {
     ttMove: null,
     killers: ctx.killers,
     depth: 1,

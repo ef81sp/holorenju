@@ -24,10 +24,47 @@ import {
   type DirectionPattern,
   type EndState,
   emptyPatternBreakdown,
+  type JumpPatternResult,
   type PatternBreakdown,
   type PatternType,
   PATTERN_SCORES,
 } from "./patternScores";
+
+/**
+ * 攻撃スコアと跳びパターン結果を同時に計算する内部共有関数
+ *
+ * evaluateStonePatterns と evaluatePositionCore の両方で使用。
+ * lineTable 渡し + analyzeJumpPatterns の重複排除を実現。
+ */
+export function computeAttackScore(
+  board: BoardState,
+  row: number,
+  col: number,
+  color: "black" | "white",
+  lineTable?: LineTable,
+): { score: number; jumpResult: JumpPatternResult } {
+  const precomputed: DirectionPattern[] = [];
+  let score = 0;
+
+  for (let i = 0; i < DIRECTIONS.length; i++) {
+    const pattern = getDirectionPattern(board, row, col, i, color, lineTable);
+    precomputed.push(pattern);
+    let dirScore = getPatternScore(pattern);
+
+    if ((i === 2 || i === 3) && dirScore > 0) {
+      dirScore = Math.round(
+        dirScore * PATTERN_SCORES.DIAGONAL_BONUS_MULTIPLIER,
+      );
+    }
+
+    score += dirScore;
+  }
+
+  const jumpResult = analyzeJumpPatterns(board, row, col, color, precomputed);
+  score += getJumpPatternScore(jumpResult);
+
+  return { score, jumpResult };
+}
 
 /**
  * 指定位置の石について全方向のパターンスコアを計算
@@ -46,31 +83,7 @@ export function evaluateStonePatterns(
   color: "black" | "white",
   lineTable?: LineTable,
 ): number {
-  let score = 0;
-  const precomputed: DirectionPattern[] = [];
-
-  // 連続パターンのスコア
-  // DIRECTIONSのインデックス: 0=横, 1=縦, 2=右下斜め, 3=右上斜め
-  for (let i = 0; i < DIRECTIONS.length; i++) {
-    const pattern = getDirectionPattern(board, row, col, i, color, lineTable);
-    precomputed.push(pattern);
-    let dirScore = getPatternScore(pattern);
-
-    // 斜め方向（インデックス2,3）にボーナスを適用
-    if ((i === 2 || i === 3) && dirScore > 0) {
-      dirScore = Math.round(
-        dirScore * PATTERN_SCORES.DIAGONAL_BONUS_MULTIPLIER,
-      );
-    }
-
-    score += dirScore;
-  }
-
-  // 跳びパターンのスコア（precomputed で重複 analyzeDirection を排除）
-  const jumpResult = analyzeJumpPatterns(board, row, col, color, precomputed);
-  score += getJumpPatternScore(jumpResult);
-
-  return score;
+  return computeAttackScore(board, row, col, color, lineTable).score;
 }
 
 /**

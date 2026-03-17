@@ -10,6 +10,7 @@ import { BOARD_SIZE } from "@/constants";
 import { checkForbiddenMove, isValidPosition } from "@/logic/renjuRules";
 
 import { DIRECTIONS } from "../core/constants";
+import { getDirectionPattern } from "../lineTable/adapter";
 import {
   buildLineTable,
   placeStone,
@@ -133,6 +134,7 @@ export function findMiseTargets(
   row: number,
   col: number,
   color: "black" | "white",
+  lineTable?: LineTable,
 ): Position[] {
   const targets: Position[] = [];
   const seen = new Set<string>();
@@ -154,16 +156,20 @@ export function findMiseTargets(
       }
     }
 
-    if (createsFourThree(board, r, c, color)) {
+    const isFourThree = lineTable
+      ? createsFourThreeBit(board, lineTable, r, c, color)
+      : createsFourThree(board, r, c, color);
+    if (isFourThree) {
       targets.push({ row: r, col: c });
       seen.add(key);
     }
   };
 
   // 1. 各方向のライン延長点（距離制限なし）
-  for (const direction of DIRECTIONS) {
+  for (let i = 0; i < DIRECTIONS.length; i++) {
+    const direction = DIRECTIONS[i]!;
     const [dr, dc] = direction;
-    const pattern = analyzeDirection(board, row, col, dr, dc, color);
+    const pattern = getDirectionPattern(board, row, col, i, color, lineTable);
 
     // 2石以上の連続がなければスキップ
     if (pattern.count < 2) {
@@ -336,7 +342,7 @@ export function computeMiseBonus(
   color: "black" | "white",
   lineTable?: LineTable,
 ): number {
-  const targets = findMiseTargets(board, row, col, color);
+  const targets = findMiseTargets(board, row, col, color, lineTable);
   if (
     targets.length >= 2 &&
     isDoubleMise(board, row, col, color, targets, lineTable)

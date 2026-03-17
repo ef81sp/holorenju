@@ -13,9 +13,12 @@ import {
   isValidPosition,
 } from "@/logic/renjuRules";
 
+import type { LineTable } from "../lineTable/lineTable";
+
 import { includesPosition } from "../core/boardUtils";
 import { DIRECTION_INDICES, DIRECTIONS } from "../core/constants";
 import { getLineEnds } from "../core/lineAnalysis";
+import { getDirectionPattern } from "../lineTable/adapter";
 import { isNearExistingStone } from "../moveGenerator";
 import { findJumpGapPosition } from "../patterns/threatAnalysis";
 import { analyzeDirection } from "./directionAnalysis";
@@ -68,6 +71,7 @@ export function countThreatDirections(
   row: number,
   col: number,
   color: "black" | "white",
+  lineTable?: LineTable,
 ): number {
   let threatCount = 0;
 
@@ -77,12 +81,7 @@ export function countThreatDirections(
       continue;
     }
 
-    const direction = DIRECTIONS[i];
-    if (!direction) {
-      continue;
-    }
-    const [dr, dc] = direction;
-    const pattern = analyzeDirection(board, row, col, dr, dc, color);
+    const pattern = getDirectionPattern(board, row, col, i, color, lineTable);
 
     // 活四 or 止め四
     if (

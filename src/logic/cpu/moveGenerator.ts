@@ -10,7 +10,11 @@ import { BOARD_SIZE } from "@/constants";
 import { checkFive, isValidPosition } from "@/logic/renjuRules";
 
 import { checkForbiddenMoveWithCache } from "./cache/forbiddenCache";
-import { sortMoves, type MoveOrderingOptions } from "./moveOrdering";
+import {
+  sortMoves,
+  type MoveOrderingOptions,
+  type SortMovesResult,
+} from "./moveOrdering";
 
 // Re-export from moveOrdering for backward compatibility
 export {
@@ -24,6 +28,7 @@ export {
   type MoveOrderingOptions,
   recordKillerMove,
   sortMoves,
+  type SortMovesResult,
   updateHistory,
 } from "./moveOrdering";
 
@@ -161,20 +166,20 @@ export interface SortedMovesOptions extends MoveOrderingOptions {
  * @param board 盤面
  * @param color 手番
  * @param options ソートオプション
- * @returns ソート済み候補手配列
+ * @returns ソート済み候補手と事前計算済み脅威情報
  */
 export function generateSortedMoves(
   board: BoardState,
   color: StoneColor,
   options: SortedMovesOptions = {},
-): Position[] {
+): SortMovesResult {
   const moves = generateMoves(board, color, {
     skipForbiddenCheck: options.skipForbiddenCheck,
   });
 
   // 候補が0〜1個の場合はソート不要
   if (moves.length <= 1) {
-    return moves;
+    return { moves };
   }
 
   return sortMoves(moves, board, color, options);
