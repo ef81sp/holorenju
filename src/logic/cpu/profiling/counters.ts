@@ -35,6 +35,15 @@ export interface ProfilingCounters {
     evaluateBoard: TimingEntry;
     evaluatePosition: TimingEntry;
     threatProbe: TimingEntry;
+    // evaluatePosition 内部の詳細計測
+    "ep.computeAttackScore": TimingEntry;
+    "ep.mandatoryDefense": TimingEntry;
+    "ep.forbiddenTrap": TimingEntry;
+    "ep.forbiddenVuln": TimingEntry;
+    "ep.miseBonus": TimingEntry;
+    "ep.multiThreat": TimingEntry;
+    "ep.singleFourPenalty": TimingEntry;
+    "ep.defenseScore": TimingEntry;
   };
 }
 
@@ -46,6 +55,14 @@ function emptyTimings(): ProfilingCounters["timings"] {
     evaluateBoard: { calls: 0, totalMs: 0 },
     evaluatePosition: { calls: 0, totalMs: 0 },
     threatProbe: { calls: 0, totalMs: 0 },
+    "ep.computeAttackScore": { calls: 0, totalMs: 0 },
+    "ep.mandatoryDefense": { calls: 0, totalMs: 0 },
+    "ep.forbiddenTrap": { calls: 0, totalMs: 0 },
+    "ep.forbiddenVuln": { calls: 0, totalMs: 0 },
+    "ep.miseBonus": { calls: 0, totalMs: 0 },
+    "ep.multiThreat": { calls: 0, totalMs: 0 },
+    "ep.singleFourPenalty": { calls: 0, totalMs: 0 },
+    "ep.defenseScore": { calls: 0, totalMs: 0 },
   };
 }
 
