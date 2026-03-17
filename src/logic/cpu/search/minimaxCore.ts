@@ -347,12 +347,12 @@ export function minimaxWithTT(
   }
 
   // =========================================================================
-  // Threat Probe: 手番側のVCF/VCTをチェック
-  // 追詰があれば勝ちスコアでカットオフ
+  // Threat Probe: 手番側のVCFをチェック
+  // VCFがあれば勝ちスコアでカットオフ
   // =========================================================================
   if (depth >= 3) {
     const tThreat = startTiming();
-    const enableVCT = depth >= 4 && ctx.evaluationOptions.enableVCT;
+    const enableVCT = false;
     const threatResult = threatProbe(
       board,
       currentColor,

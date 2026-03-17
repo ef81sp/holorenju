@@ -163,7 +163,6 @@ export function threatProbe(
         maxNodes: budget.vcfNodes,
         timeLimit: 50,
       },
-      lineTable,
     };
     const vctMove = findVCTMove(board, color, vctOptions);
     if (vctMove) {
