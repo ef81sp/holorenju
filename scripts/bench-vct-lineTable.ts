@@ -5,7 +5,10 @@
  */
 import { buildLineTable } from "@/logic/cpu/lineTable/lineTable.ts";
 import { findVCTMove, hasVCT } from "@/logic/cpu/search/vct.ts";
-import { findThreatMoves } from "@/logic/cpu/search/vctHelpers.ts";
+import {
+  findThreatMoves,
+  hasOpenThree,
+} from "@/logic/cpu/search/vctHelpers.ts";
 import { createBoardFromRecord } from "@/logic/gameRecordParser.ts";
 
 function loadBoard(record: string): ReturnType<typeof createBoardFromRecord> {
@@ -33,6 +36,11 @@ function bench(label: string, fn: () => void, runs = 20): number {
 
 const records = [
   {
+    label: "VCT重い局面(23手)",
+    record:
+      "H8 H7 H6 I7 G7 I5 G8 F8 G6 G5 E6 F6 F7 H9 E7 E5 C4 D5 F5 D7 K3 J6 H10",
+  },
+  {
     label: "ct=three局面(20手)",
     record: "H8 H9 I8 G8 I9 I10 F7 G7 G9 H10 F9 J11 G10 H7 F10 E10 H6 I5 G6 F5",
   },
@@ -51,6 +59,18 @@ for (const { label, record } of records) {
       : ("white" as const);
 
   console.log(`\n=== ${label} (${color}番, ${record.split(" ").length}手) ===`);
+
+  const opp = color === "black" ? ("white" as const) : ("black" as const);
+
+  // hasOpenThree 比較
+  console.log("hasOpenThree:");
+  const hotSlow = bench("slow (no lineTable)", () => {
+    hasOpenThree(board, opp);
+  }, 200);
+  const hotFast = bench("fast (lineTable)   ", () => {
+    hasOpenThree(board, opp, lt);
+  }, 200);
+  console.log(`  → speedup: ${(hotSlow / hotFast).toFixed(1)}x`);
 
   // findThreatMoves 比較
   console.log("findThreatMoves:");

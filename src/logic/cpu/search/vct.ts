@@ -225,8 +225,8 @@ export function hasVCT(
 
   // 相手に活三があればVCT（三脅威）は不成立（VCFのみ有効）
   // VCFは上で既にチェック済みなので、ここではfalseを返す
-  // 注: ミセ手(hasFourThreeAvailable)のチェックはper-nodeでは性能上見送り。
-  // エントリポイントのガード + validateVCTSequenceの事後検証で対応する。
+  // 注: ミセ手(hasFourThreeAvailable)はエントリポイントのガードで対応。
+  // カウンター脅威（四・活三）は evaluateCounterThreat で per-node チェック。
   if (hasOpenThree(board, opponentColor, lineTable)) {
     return false;
   }
@@ -315,24 +315,38 @@ export function hasVCT(
         placeStone(lineTable, defensePos.row, defensePos.col, opponentColor);
       }
 
-      // 防御手で五連完成 → VCT不成立
-      const defenseWins = checkFive(
-        board,
-        defensePos.row,
-        defensePos.col,
-        opponentColor,
-      );
+      // 防御手のカウンター脅威チェック
+      // lineTable がある場合（CPU パス）: evaluateCounterThreat で精密判定
+      // lineTable がない場合（分析パス）: checkFive のみ（従来動作）
       let vctResult = false;
-      if (!defenseWins) {
-        vctResult = hasVCT(
+      if (lineTable) {
+        const ct = checkDefenseCounterThreat(
+          board,
+          defensePos.row,
+          defensePos.col,
+          opponentColor,
+        );
+        vctResult = evaluateCounterThreat(
+          ct,
           board,
           color,
-          depth + 1,
+          defensePos,
+          depth,
           limiter,
           options,
           cache,
           lineTable,
         );
+      } else {
+        const defenseWins = checkFive(
+          board,
+          defensePos.row,
+          defensePos.col,
+          opponentColor,
+        );
+        if (!defenseWins) {
+          vctResult = hasVCT(board, color, depth + 1, limiter, options, cache);
+        }
       }
 
       // 元に戻す（Undo）- 防御手
@@ -368,8 +382,7 @@ export function hasVCT(
 /**
  * カウンター脅威に応じたVCT継続判定
  *
- * isVCTFirstMoveで使用。探索関数（hasVCT/findVCTMove/findVCTSequence）では
- * per-nodeチェックが性能上不可能なため、findVCTSequenceのみ事後検証で対応。
+ * hasVCT/findVCTMoveRecursive/isVCTFirstMove で使用。
  *
  * ct=win: 防御手で五連 → VCT不成立
  * ct=four: 攻撃側は四のブロック位置に限定。ブロック後にVCTが継続するか再帰的に検証
@@ -385,6 +398,7 @@ function evaluateCounterThreat(
   limiter: TimeLimiter,
   options?: VCTSearchOptions,
   vcfCache?: VCFResultCache,
+  lineTable?: LineTable,
 ): boolean {
   if (ct === "win") {
     return false;
@@ -404,6 +418,9 @@ function evaluateCounterThreat(
     if (blockRow) {
       blockRow[blockPos.col] = color;
     }
+    if (lineTable) {
+      placeStone(lineTable, blockPos.row, blockPos.col, color);
+    }
     // ブロック石が攻撃側の脅威（三か四）を作るか検証
     const blockThreat = checkDefenseCounterThreat(
       board,
@@ -416,11 +433,25 @@ function evaluateCounterThreat(
       if (blockRow) {
         blockRow[blockPos.col] = null;
       }
+      if (lineTable) {
+        removeStone(lineTable, blockPos.row, blockPos.col, color);
+      }
       return false;
     }
-    const result = hasVCT(board, color, depth + 1, limiter, options, vcfCache);
+    const result = hasVCT(
+      board,
+      color,
+      depth + 1,
+      limiter,
+      options,
+      vcfCache,
+      lineTable,
+    );
     if (blockRow) {
       blockRow[blockPos.col] = null;
+    }
+    if (lineTable) {
+      removeStone(lineTable, blockPos.row, blockPos.col, color);
     }
     return result;
   }
@@ -443,7 +474,7 @@ function evaluateCounterThreat(
   }
 
   // ct === "none": 通常の再帰
-  return hasVCT(board, color, depth + 1, limiter, options, vcfCache);
+  return hasVCT(board, color, depth + 1, limiter, options, vcfCache, lineTable);
 }
 
 /**
@@ -622,24 +653,43 @@ function findVCTMoveRecursive(
         placeStone(lineTable, defensePos.row, defensePos.col, opponentColor);
       }
 
-      // 防御で五連完成 → VCT不成立
-      const defenseWins = checkFive(
-        board,
-        defensePos.row,
-        defensePos.col,
-        opponentColor,
-      );
+      // 防御手のカウンター脅威チェック（lineTable有無で分岐）
       let vctResult = false;
-      if (!defenseWins) {
-        vctResult = hasVCT(
+      if (lineTable) {
+        const ct = checkDefenseCounterThreat(
+          board,
+          defensePos.row,
+          defensePos.col,
+          opponentColor,
+        );
+        vctResult = evaluateCounterThreat(
+          ct,
           board,
           color,
-          depth + 1,
+          defensePos,
+          depth,
           limiter,
           options,
           vcfCache,
           lineTable,
         );
+      } else {
+        const defenseWins = checkFive(
+          board,
+          defensePos.row,
+          defensePos.col,
+          opponentColor,
+        );
+        if (!defenseWins) {
+          vctResult = hasVCT(
+            board,
+            color,
+            depth + 1,
+            limiter,
+            options,
+            vcfCache,
+          );
+        }
       }
 
       // 元に戻す（Undo）- 防御手
