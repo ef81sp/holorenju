@@ -6,7 +6,7 @@ import type { CpuBattleRecord, LeafEvaluation, ScoreBreakdown } from "./cpu";
 import type { Position } from "./game";
 
 /**
- * 強制負けの種類（VCF/VCT/禁手トラップ/ミセ四追い/両ミセ/三三/四四）
+ * 強制負けの種類（VCF/VCT/禁手トラップ/追い詰め/両ミセ/三三/四四）
  */
 export type ForcedLossType =
   | "vcf"
