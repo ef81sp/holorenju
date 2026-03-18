@@ -88,7 +88,7 @@ export function getThreatBudget(minimaxDepth: number): ThreatBudget {
   // VCF探索に到達する局面は「四が作れる見込みがある」場合のみ。
   if (minimaxDepth >= 4) {
     // PVノードでのみ vctDepth > 0 が活きる（minimaxCore で制御）
-    return { vcfDepth: 8, vcfNodes: 200, vctDepth: 5, vctNodes: 400 };
+    return { vcfDepth: 8, vcfNodes: 200, vctDepth: 6, vctNodes: 1000 };
   }
   // depth 3（minimaxCore で depth >= 3 のみ呼ばれる）
   return { vcfDepth: 6, vcfNodes: 100, vctDepth: 0, vctNodes: 0 };
@@ -157,14 +157,14 @@ export function threatProbe(
     const vctOptions: VCTSearchOptions = {
       maxDepth: budget.vctDepth,
       maxNodes: budget.vctNodes,
-      timeLimit: 50,
+      timeLimit: 150,
       vcfOptions: {
         maxDepth: budget.vcfDepth,
         maxNodes: budget.vcfNodes,
-        timeLimit: 50,
+        timeLimit: 150,
       },
     };
-    const vctMove = findVCTMove(board, color, vctOptions);
+    const vctMove = findVCTMove(board, color, vctOptions, lineTable);
     if (vctMove) {
       storeThreatProbe(threatCache, hash, color, { move: vctMove });
       return vctMove;

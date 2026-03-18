@@ -10,6 +10,7 @@ import { createBoardFromRecord } from "@/logic/gameRecordParser";
 import { copyBoard, createEmptyBoard } from "@/logic/renjuRules";
 
 import { countStones } from "../core/boardUtils";
+import { buildLineTable } from "../lineTable/lineTable";
 import { createBoardWithStones } from "../testUtils";
 import { findMiseVCFSequence } from "./miseVcf";
 import {
@@ -1130,5 +1131,62 @@ describe("防御側VCFによるVCT不成立", () => {
     expect(
       findVCTSequenceFromFirstMove(board, move, "white", VCT_OPTIONS),
     ).toBeNull();
+  });
+});
+
+describe("hasVCT/findVCTMove - lineTable等価性", () => {
+  const VCT_OPTS = { maxDepth: 4, timeLimit: 500 };
+
+  it("lineTableなしと同じ結果を返す（VCFケース）", () => {
+    const board = createBoardWithStones([
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+    ]);
+    const lt = buildLineTable(board);
+    expect(hasVCT(board, "black", 0, undefined, VCT_OPTS)).toBe(true);
+    expect(hasVCT(board, "black", 0, undefined, VCT_OPTS, undefined, lt)).toBe(
+      true,
+    );
+  });
+
+  it("lineTableなしと同じ結果を返す（VCTなしケース）", () => {
+    const board = createEmptyBoard();
+    const lt = buildLineTable(board);
+    expect(hasVCT(board, "black", 0, undefined, VCT_OPTS)).toBe(false);
+    expect(hasVCT(board, "black", 0, undefined, VCT_OPTS, undefined, lt)).toBe(
+      false,
+    );
+  });
+
+  it("findVCTMove - lineTableありで同じ手を返す", () => {
+    // 四の形: 四追い勝ち
+    const board = createBoardWithStones([
+      { row: 7, col: 4, color: "black" },
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+    ]);
+    const lt = buildLineTable(board);
+    const moveWithout = findVCTMove(board, "black", VCT_OPTS);
+    const moveWith = findVCTMove(board, "black", VCT_OPTS, lt);
+    expect(moveWith).toEqual(moveWithout);
+  });
+
+  it("findVCTMove - lineTable使用後もlineTableが正しい状態を保つ", () => {
+    const board = createBoardWithStones([
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+    ]);
+    const lt = buildLineTable(board);
+    const ltBefore = {
+      blacks: new Uint16Array(lt.blacks),
+      whites: new Uint16Array(lt.whites),
+    };
+    findVCTMove(board, "black", VCT_OPTS, lt);
+    // VCT探索後もlineTableが元の状態に戻っている
+    expect(lt.blacks).toEqual(ltBefore.blacks);
+    expect(lt.whites).toEqual(ltBefore.whites);
   });
 });
