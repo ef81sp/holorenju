@@ -226,7 +226,7 @@ export function hasVCT(
   // 相手に活三があればVCT（三脅威）は不成立（VCFのみ有効）
   // VCFは上で既にチェック済みなので、ここではfalseを返す
   // 注: ミセ手(hasFourThreeAvailable)はエントリポイントのガードで対応。
-  // カウンター脅威（四・活三）は evaluateCounterThreat で per-node チェック。
+  // カウンター脅威（四・活三）は防御ループ内で軽量CT チェック。
   if (hasOpenThree(board, opponentColor, lineTable)) {
     return false;
   }
@@ -316,27 +316,19 @@ export function hasVCT(
       }
 
       // 防御手のカウンター脅威チェック
-      // lineTable がある場合（CPU パス）: evaluateCounterThreat で精密判定
+      // lineTable がある場合（CPU パス）: 軽量CT（再帰なし）
       // lineTable がない場合（分析パス）: checkFive のみ（従来動作）
       let vctResult = false;
       if (lineTable) {
-        const ct = checkDefenseCounterThreat(
-          board,
-          defensePos.row,
-          defensePos.col,
-          opponentColor,
-        );
-        vctResult = evaluateCounterThreat(
-          ct,
+        const ctResult = evaluateLightweightCT(
           board,
           color,
           defensePos,
-          depth,
-          limiter,
-          options,
-          cache,
           lineTable,
         );
+        vctResult =
+          ctResult ??
+          hasVCT(board, color, depth + 1, limiter, options, cache, lineTable);
       } else {
         const defenseWins = checkFive(
           board,
@@ -380,9 +372,57 @@ export function hasVCT(
 }
 
 /**
+ * 軽量カウンター脅威チェック（CPU パス用）
+ *
+ * 防御手が五連やカウンターフォーを作るかを安価に判定する。
+ * ct=four の場合はブロック石が脅威を作るかだけで楽観的に判定（hasVCT 再帰なし）。
+ *
+ * @returns true/false: 確定結果、null: 通常の hasVCT 再帰が必要（ct=none/three）
+ */
+function evaluateLightweightCT(
+  board: BoardState,
+  color: "black" | "white",
+  defensePos: Position,
+  lineTable: LineTable,
+): boolean | null {
+  const opponentColor = color === "black" ? "white" : "black";
+  if (checkFive(board, defensePos.row, defensePos.col, opponentColor)) {
+    return false;
+  }
+  const ct = checkDefenseCounterThreat(
+    board,
+    defensePos.row,
+    defensePos.col,
+    opponentColor,
+  );
+  if (ct !== "four") {
+    return null; // ct=none/three: 呼び出し元で hasVCT 再帰
+  }
+  // ct=four: ブロックが脅威を作るなら楽観的にVCT成立、作らなければ偽陽性排除
+  const blockPos = getFourDefensePosition(board, defensePos, opponentColor);
+  if (!blockPos) {
+    return false; // 活四ブロック不可
+  }
+  const blockRow = board[blockPos.row];
+  if (blockRow) {
+    blockRow[blockPos.col] = color;
+  }
+  placeStone(lineTable, blockPos.row, blockPos.col, color);
+  const hasThreat = blockHasThreat(
+    checkDefenseCounterThreat(board, blockPos.row, blockPos.col, color),
+  );
+  if (blockRow) {
+    blockRow[blockPos.col] = null;
+  }
+  removeStone(lineTable, blockPos.row, blockPos.col, color);
+  return hasThreat; // 脅威あり→楽観true、なし→false
+}
+
+/**
  * カウンター脅威に応じたVCT継続判定
  *
- * hasVCT/findVCTMoveRecursive/isVCTFirstMove で使用。
+ * isVCTFirstMove（分析パス）で使用。
+ * hasVCT/findVCTMoveRecursive は軽量CT をインラインで実装。
  *
  * ct=win: 防御手で五連 → VCT不成立
  * ct=four: 攻撃側は四のブロック位置に限定。ブロック後にVCTが継続するか再帰的に検証
@@ -653,26 +693,28 @@ function findVCTMoveRecursive(
         placeStone(lineTable, defensePos.row, defensePos.col, opponentColor);
       }
 
-      // 防御手のカウンター脅威チェック（lineTable有無で分岐）
+      // 防御手のカウンター脅威チェック
+      // lineTable がある場合（CPU パス）: 軽量CT（再帰なし）
+      // lineTable がない場合（分析パス）: checkFive のみ（従来動作）
       let vctResult = false;
       if (lineTable) {
-        const ct = checkDefenseCounterThreat(
-          board,
-          defensePos.row,
-          defensePos.col,
-          opponentColor,
-        );
-        vctResult = evaluateCounterThreat(
-          ct,
+        const ctResult = evaluateLightweightCT(
           board,
           color,
           defensePos,
-          depth,
-          limiter,
-          options,
-          vcfCache,
           lineTable,
         );
+        vctResult =
+          ctResult ??
+          hasVCT(
+            board,
+            color,
+            depth + 1,
+            limiter,
+            options,
+            vcfCache,
+            lineTable,
+          );
       } else {
         const defenseWins = checkFive(
           board,
