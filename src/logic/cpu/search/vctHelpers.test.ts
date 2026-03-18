@@ -246,3 +246,100 @@ describe("findThreatMoves - lineTable等価性", () => {
     expect(posSetKey(fast)).toBe(posSetKey(slow));
   });
 });
+
+describe("hasOpenThree - lineTable等価性", () => {
+  it("連続活三を検出する", () => {
+    const board = createEmptyBoard();
+    placeStonesOnBoard(board, [
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+    ]);
+    const lt = buildLineTable(board);
+    expect(hasOpenThree(board, "black")).toBe(true);
+    expect(hasOpenThree(board, "black", lt)).toBe(true);
+  });
+
+  it("活三なしを正しく判定する", () => {
+    const board = createEmptyBoard();
+    placeStonesOnBoard(board, [
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+    ]);
+    const lt = buildLineTable(board);
+    expect(hasOpenThree(board, "black")).toBe(false);
+    expect(hasOpenThree(board, "black", lt)).toBe(false);
+  });
+
+  it("跳び三を検出する（○○_○）", () => {
+    const board = createEmptyBoard();
+    placeStonesOnBoard(board, [
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      // gap at col 7
+      { row: 7, col: 8, color: "black" },
+    ]);
+    const lt = buildLineTable(board);
+    expect(hasOpenThree(board, "black")).toBe(true);
+    expect(hasOpenThree(board, "black", lt)).toBe(true);
+  });
+
+  it("跳び三を検出する（○_○○）", () => {
+    const board = createEmptyBoard();
+    placeStonesOnBoard(board, [
+      { row: 7, col: 5, color: "black" },
+      // gap at col 6
+      { row: 7, col: 7, color: "black" },
+      { row: 7, col: 8, color: "black" },
+    ]);
+    const lt = buildLineTable(board);
+    expect(hasOpenThree(board, "black")).toBe(true);
+    expect(hasOpenThree(board, "black", lt)).toBe(true);
+  });
+
+  it("跳び四の一部である連続三を活三として検出しない", () => {
+    // ●●●_● 横方向: E8-F8-G8-[gap H8]-I8
+    const board = createEmptyBoard();
+    placeStonesOnBoard(board, [
+      { row: 7, col: 4, color: "black" },
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      // gap at col 7
+      { row: 7, col: 8, color: "black" },
+    ]);
+    const lt = buildLineTable(board);
+    expect(hasOpenThree(board, "black")).toBe(false);
+    expect(hasOpenThree(board, "black", lt)).toBe(false);
+  });
+
+  it("端に片方が塞がれた三は活三ではない", () => {
+    const board = createEmptyBoard();
+    placeStonesOnBoard(board, [
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+      { row: 7, col: 4, color: "white" }, // 片端ブロック
+    ]);
+    const lt = buildLineTable(board);
+    expect(hasOpenThree(board, "black")).toBe(false);
+    expect(hasOpenThree(board, "black", lt)).toBe(false);
+  });
+
+  it("斜め方向の活三を検出する", () => {
+    const board = createEmptyBoard();
+    placeStonesOnBoard(board, [
+      { row: 5, col: 5, color: "white" },
+      { row: 6, col: 6, color: "white" },
+      { row: 7, col: 7, color: "white" },
+    ]);
+    const lt = buildLineTable(board);
+    expect(hasOpenThree(board, "white")).toBe(true);
+    expect(hasOpenThree(board, "white", lt)).toBe(true);
+  });
+
+  it("空盤面では活三なし", () => {
+    const board = createEmptyBoard();
+    const lt = buildLineTable(board);
+    expect(hasOpenThree(board, "black", lt)).toBe(false);
+  });
+});

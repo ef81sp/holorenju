@@ -100,14 +100,21 @@ export function hasFourThreeAvailable(
  * 活三を持つ相手がいる場合、相手は三を無視して四を打てるため、
  * VCT（三を含む脅威連続）は成立しない。VCF（四追い）のみが有効。
  *
+ * lineTable が渡された場合、ビットマスク走査で高速化。
+ *
  * @param board 盤面
  * @param color チェック対象の色
+ * @param lineTable LineTable（高速版使用時）
  * @returns 活三があればtrue
  */
 export function hasOpenThree(
   board: BoardState,
   color: "black" | "white",
+  lineTable?: LineTable,
 ): boolean {
+  if (lineTable) {
+    return hasOpenThreeFast(lineTable, color);
+  }
   for (let row = 0; row < BOARD_SIZE; row++) {
     for (let col = 0; col < BOARD_SIZE; col++) {
       if (board[row]?.[col] !== color) {
@@ -135,6 +142,74 @@ export function hasOpenThree(
         ) {
           return true;
         }
+      }
+    }
+  }
+  return false;
+}
+
+/* eslint-disable no-bitwise -- ビットマスク操作に必要 */
+
+/**
+ * LineTable ビットマスクで活三を検出する高速版
+ *
+ * 72ラインを走査し、連続活三（_○○○_）と跳び三（_○○_○_, _○_○○_）を検出。
+ * 連続活三は跳び四（○○○_○, ○_○○○）の一部を除外する。
+ *
+ * 225セル × 4方向の走査を 72ライン × ウィンドウスキャンに置換。
+ */
+function hasOpenThreeFast(lt: LineTable, color: "black" | "white"): boolean {
+  const ownArr = color === "black" ? lt.blacks : lt.whites;
+  const oppArr = color === "black" ? lt.whites : lt.blacks;
+
+  for (let lineId = 0; lineId < 72; lineId++) {
+    const own = ownArr[lineId] ?? 0;
+    if (!own) {
+      continue;
+    }
+    if (!(own & (own - 1))) {
+      continue;
+    } // popcount < 2 → スキップ
+
+    const opp = oppArr[lineId] ?? 0;
+    const len = LINE_LENGTHS[lineId] ?? 0;
+
+    // 連続活三: _○○○_ (5セルウィンドウ)
+    for (let s = 0; s <= len - 5; s++) {
+      const wm = 0x1f << s;
+      if (opp & wm) {
+        continue;
+      }
+      // own が start+1, start+2, start+3 にちょうど3石
+      const expected = 0x0e << s; // 01110
+      if ((own & wm) !== expected) {
+        continue;
+      }
+      // 跳び四除外: start-1 or start+5 に自石があれば ○_○○○ or ○○○_○
+      if (s >= 1 && own & (1 << (s - 1))) {
+        continue;
+      }
+      if (s + 5 < len && own & (1 << (s + 5))) {
+        continue;
+      }
+      return true;
+    }
+
+    // 跳び三: _○○_○_ / _○_○○_ (6セルウィンドウ)
+    for (let s = 0; s <= len - 6; s++) {
+      const wm6 = 0x3f << s;
+      if (opp & wm6) {
+        continue;
+      }
+      // _○○_○_: bits at s+1, s+2, s+4
+      const p1 = (1 << (s + 1)) | (1 << (s + 2)) | (1 << (s + 4));
+      if ((own & wm6) === p1) {
+        return true;
+      }
+      // _○_○○_: bits at s+1, s+3, s+4
+      const p2 = (1 << (s + 1)) | (1 << (s + 3)) | (1 << (s + 4));
+      if ((own & wm6) === p2) {
+        return true;
       }
     }
   }
@@ -215,8 +290,6 @@ export function findThreatMoves(
   // 四を優先して返す
   return [...fourMoves, ...openThreeMoves];
 }
-
-/* eslint-disable no-bitwise -- ビットマスク操作に必要 */
 
 /** 候補セルフラグバッファ（非リエントラント、モジュールスコープで再利用） */
 const _candidates = new Uint8Array(225);
