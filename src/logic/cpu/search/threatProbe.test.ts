@@ -19,8 +19,8 @@ describe("getThreatBudget", () => {
     const budget = getThreatBudget(4);
     expect(budget.vcfDepth).toBe(8);
     expect(budget.vcfNodes).toBe(200);
-    expect(budget.vctDepth).toBe(7);
-    expect(budget.vctNodes).toBe(2000);
+    expect(budget.vctDepth).toBe(6);
+    expect(budget.vctNodes).toBe(1000);
   });
 
   it("depth 3 で基本予算", () => {
