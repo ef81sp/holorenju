@@ -91,6 +91,18 @@ describe("detectForcedWin: 活三がある場合の両ミセ無効化", () => {
   });
 });
 
+describe("detectForcedWin: VCTフォールバック", () => {
+  it("三引き+VCFのVCTをフォールバックで検出", { timeout: 30_000 }, () => {
+    // 50手目: findVCTSequence は脅威手リスト後方の J3 に到達前にタイムアウトするが、
+    // findVCTByFirstMoveIteration フォールバックで J3 の VCT を検出する
+    const record =
+      "H8 H9 J10 I9 G9 I8 G10 I11 I10 F10 J9 H11 G11 G8 J11 J12 I12 K10 I7 L14 K13 J8 L7 K7 L6 K5 I6 L8 K8 M6 H5 J7 K6 M9 J6 H6 I4 M8 M7 O10 N10 L10 I13 L12 L11 N8 K11 G12 M12 M13";
+    const result = detect(record);
+    expect(result.forcedWinType).toBe("vct");
+    expect(result.forcedWin?.firstMove).toEqual({ row: 12, col: 9 }); // J3
+  });
+});
+
 describe("detectForcedWin: 返り値の型安全性", () => {
   it("forcedWin=nullの場合、forcedWinTypeもundefined", () => {
     // 序盤は強制勝ちなし

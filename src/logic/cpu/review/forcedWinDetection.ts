@@ -12,7 +12,15 @@ import { findDoubleMiseMoves } from "../evaluation/tactics";
 import { createsFourThree } from "../evaluation/winningPatterns";
 import { findMiseVCFSequence } from "../search/miseVcf";
 import { findVCFSequence } from "../search/vcf";
-import { findVCTSequence, VCT_STONE_THRESHOLD } from "../search/vct";
+import {
+  findVCTSequence,
+  findVCTSequenceFromFirstMove,
+  VCT_STONE_THRESHOLD,
+  type VCTSearchOptions,
+  type VCTSequenceResult,
+} from "../search/vct";
+import { findThreatMoves } from "../search/vctHelpers";
+import { validateVCTSequence } from "../search/vctValidation";
 import {
   filterByCounterThreats,
   REVIEW_MISE_VCF_OPTIONS,
@@ -32,6 +40,58 @@ export interface ForcedWinDetectionResult {
   forcedWinType: ForcedWinType | undefined;
   doubleMiseMoves: Position[];
   doubleMiseBestMove: Position | null;
+}
+
+/** フォールバック全体の時間制限（ms） */
+const VCT_FALLBACK_TIME_LIMIT = 10_000;
+
+/** フォールバック時の1手あたりVCT探索タイムリミット（ms） */
+const VCT_FALLBACK_PER_MOVE_TIME_LIMIT = 200;
+
+/**
+ * 脅威手を1手ずつ findVCTSequenceFromFirstMove で検証する
+ *
+ * findVCTSequence のタイムアウト対策。findVCTSequence は全脅威手を
+ * 再帰的に探索するため、リスト後方にある VCT を時間内に見つけられない
+ * ことがある。本関数は各脅威手に独自の TimeLimiter を割り当てるため、
+ * 前の手のタイムアウトに影響されない。
+ *
+ * findVCTSequence との違い:
+ * - 1手あたりのタイムリミットが短い（500ms vs 3000ms）
+ * - ブランチ収集は行わない（findVCTSequenceFromFirstMove の制約）
+ * - 最初に見つかった有効な VCT で即座に返す（最短探索はしない）
+ */
+function findVCTByFirstMoveIteration(
+  board: BoardState,
+  color: "black" | "white",
+  options: VCTSearchOptions,
+): VCTSequenceResult | null {
+  const threats = findThreatMoves(board, color);
+  const startTime = performance.now();
+  const perMoveOptions: VCTSearchOptions = {
+    ...options,
+    timeLimit: VCT_FALLBACK_PER_MOVE_TIME_LIMIT,
+    vcfOptions: {
+      ...options.vcfOptions,
+      timeLimit: VCT_FALLBACK_PER_MOVE_TIME_LIMIT,
+    },
+    collectBranches: false,
+  };
+  for (const threat of threats) {
+    if (performance.now() - startTime > VCT_FALLBACK_TIME_LIMIT) {
+      break;
+    }
+    const result = findVCTSequenceFromFirstMove(
+      board,
+      threat,
+      color,
+      perMoveOptions,
+    );
+    if (result && validateVCTSequence(board, color, result.sequence)) {
+      return result;
+    }
+  }
+  return null;
 }
 
 /**
@@ -103,7 +163,12 @@ export function detectForcedWin(
       vcfResult ??
       miseVcfResult ??
       (countStones(board) >= VCT_STONE_THRESHOLD && !opponentHasFour
-        ? findVCTSequence(board, color, REVIEW_VCT_OPTIONS_WITH_BRANCHES)
+        ? (findVCTSequence(board, color, REVIEW_VCT_OPTIONS_WITH_BRANCHES) ??
+          findVCTByFirstMoveIteration(
+            board,
+            color,
+            REVIEW_VCT_OPTIONS_WITH_BRANCHES,
+          ))
         : null);
   }
 
