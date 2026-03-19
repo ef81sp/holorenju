@@ -345,7 +345,7 @@ export function extractPV(
   // TTエントリを辿ってPVを復元
   for (let i = 1; i < maxLength; i++) {
     const entry = tt.probe(currentHash);
-    if (!entry?.bestMove) {
+    if (!entry?.bestMove || entry.type !== "EXACT") {
       break;
     }
 
