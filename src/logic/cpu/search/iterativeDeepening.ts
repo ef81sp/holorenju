@@ -67,6 +67,8 @@ export interface IterativeDeepeningParams {
   maxNodes?: number;
   absoluteTimeLimit?: number;
   scoreThreshold?: number;
+  /** Triangular PV Tableによる正確なPV収集（振り返り用） */
+  collectPV?: boolean;
 }
 
 /**
@@ -85,6 +87,7 @@ export function findBestMoveIterativeWithTT(
     maxNodes,
     absoluteTimeLimit = DEFAULT_ABSOLUTE_TIME_LIMIT,
     scoreThreshold = 200,
+    collectPV = false,
   } = params;
   const startTime = performance.now();
   const ctx = createSearchContext(globalTT, evaluationOptions);
@@ -263,6 +266,7 @@ export function findBestMoveIterativeWithTT(
     undefined,
     moves,
     scoreThreshold,
+    collectPV,
   );
   let completedDepth = 1;
   let interrupted = false;
@@ -319,6 +323,7 @@ export function findBestMoveIterativeWithTT(
       },
       moves,
       scoreThreshold,
+      collectPV,
     );
 
     // 探索中にタイムアウト、ノード数上限、または絶対時間制限に達した場合は前の結果を使用
@@ -345,6 +350,7 @@ export function findBestMoveIterativeWithTT(
         undefined,
         moves,
         scoreThreshold,
+        collectPV,
       );
 
       // 再探索中にタイムアウト、ノード数上限、または絶対時間制限に達した場合
