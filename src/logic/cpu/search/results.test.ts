@@ -115,6 +115,66 @@ describe("extractPV", () => {
     expect(result.pv.length).toBeLessThanOrEqual(5);
   });
 
+  it("LOWER_BOUNDエントリはスキップされる", () => {
+    const board = createEmptyBoard();
+    const tt = new TranspositionTable(1000);
+
+    // 最初の手: (7,7)に黒
+    const firstMove = { row: 7, col: 7 };
+
+    // 2手目: EXACT → 辿る
+    const board1 = createEmptyBoard();
+    placeStonesOnBoard(board1, [{ row: 7, col: 7, color: "black" }]);
+    const hash2 = computeBoardHash(board1);
+    tt.store(hash2, 5, 100, "EXACT", { row: 7, col: 8 });
+
+    // 3手目: LOWER_BOUND → スキップ
+    const board2 = createEmptyBoard();
+    placeStonesOnBoard(board2, [
+      { row: 7, col: 7, color: "black" },
+      { row: 7, col: 8, color: "white" },
+    ]);
+    const hash3 = computeBoardHash(board2);
+    tt.store(hash3, 4, 50, "LOWER_BOUND", { row: 7, col: 6 });
+
+    const result = extractPV(
+      board,
+      computeBoardHash(board),
+      firstMove,
+      "black",
+      tt,
+    );
+
+    // LOWER_BOUNDの3手目で停止 → PVは2手
+    expect(result.pv).toHaveLength(2);
+    expect(result.pv[0]).toEqual({ row: 7, col: 7 });
+    expect(result.pv[1]).toEqual({ row: 7, col: 8 });
+  });
+
+  it("UPPER_BOUNDエントリはスキップされる", () => {
+    const board = createEmptyBoard();
+    const tt = new TranspositionTable(1000);
+
+    const firstMove = { row: 7, col: 7 };
+
+    // 2手目: UPPER_BOUND → スキップ
+    const board1 = createEmptyBoard();
+    placeStonesOnBoard(board1, [{ row: 7, col: 7, color: "black" }]);
+    const hash2 = computeBoardHash(board1);
+    tt.store(hash2, 5, 100, "UPPER_BOUND", { row: 7, col: 8 });
+
+    const result = extractPV(
+      board,
+      computeBoardHash(board),
+      firstMove,
+      "black",
+      tt,
+    );
+
+    // UPPER_BOUNDでスキップ → PVは1手のみ
+    expect(result.pv).toHaveLength(1);
+  });
+
   it("色が交互に切り替わる", () => {
     const board = createEmptyBoard();
     const tt = new TranspositionTable(1000);
