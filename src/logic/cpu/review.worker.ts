@@ -287,6 +287,7 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
       evaluationOptions: REVIEW_SEARCH_PARAMS.evaluationOptions,
       maxNodes: REVIEW_SEARCH_PARAMS.maxNodes,
       absoluteTimeLimit: REVIEW_SEARCH_PARAMS.absoluteTimeLimit,
+      collectPV: true,
     });
 
     // minimax が FIVE を返したが VCF/VCT 未検出

@@ -43,6 +43,7 @@ import {
   extractPV,
   type MinimaxResult,
   type MoveScoreEntry,
+  type PVExtractionResult,
   truncateUnproductiveFours,
 } from "./results";
 import {
@@ -111,6 +112,21 @@ interface AspirationOptions {
  * @returns 評価スコア
  */
 
+/** PV配列からPVExtractionResultを構築する */
+function buildPVResult(
+  board: BoardState,
+  pv: Position[],
+  startColor: "black" | "white",
+): PVExtractionResult {
+  let currentBoard = board;
+  let currentColor = startColor;
+  for (const move of pv) {
+    currentBoard = applyMove(currentBoard, move, currentColor);
+    currentColor = getOppositeColor(currentColor);
+  }
+  return { pv, leafBoard: currentBoard, leafColor: currentColor };
+}
+
 /**
  * LMR + PVS の3段階再探索 (maximizing)
  *
@@ -127,6 +143,7 @@ function lmrPvsMaximizing(
   move: Position,
   ctx: SearchContext,
   newExtensions: number,
+  pvLine?: Position[],
 ): number {
   // LMR + Null Window
   let score = minimaxWithTT(
@@ -158,7 +175,7 @@ function lmrPvsMaximizing(
       newExtensions,
     );
     if (score > alpha && score < beta) {
-      // フル再探索
+      // フル再探索（PVノード）
       score = minimaxWithTT(
         board,
         newHash,
@@ -171,6 +188,7 @@ function lmrPvsMaximizing(
         ctx,
         true,
         newExtensions,
+        pvLine,
       );
     }
   }
@@ -191,6 +209,7 @@ function lmrPvsMinimizing(
   move: Position,
   ctx: SearchContext,
   newExtensions: number,
+  pvLine?: Position[],
 ): number {
   // LMR + Null Window
   let score = minimaxWithTT(
@@ -222,7 +241,7 @@ function lmrPvsMinimizing(
       newExtensions,
     );
     if (score < beta && score > alpha) {
-      // フル再探索
+      // フル再探索（PVノード）
       score = minimaxWithTT(
         board,
         newHash,
@@ -235,6 +254,7 @@ function lmrPvsMinimizing(
         ctx,
         true,
         newExtensions,
+        pvLine,
       );
     }
   }
@@ -253,6 +273,7 @@ export function minimaxWithTT(
   ctx: SearchContext,
   allowNullMove = true,
   extensions = 0,
+  pvLine?: Position[],
 ): number {
   ctx.stats.nodes++;
 
@@ -325,8 +346,15 @@ export function minimaxWithTT(
 
     switch (ttEntry.type) {
       case "EXACT":
-        ctx.stats.ttCutoffs++;
-        return ttEntry.score;
+        if (pvLine) {
+          // PVノード: スコアは返さず、bestMoveをmove orderingに使う
+          // PVを実際に探索して記録するため
+          ttMove = ttEntry.bestMove;
+        } else {
+          ctx.stats.ttCutoffs++;
+          return ttEntry.score;
+        }
+        break;
       case "LOWER_BOUND":
         alpha = Math.max(alpha, ttEntry.score);
         break;
@@ -338,12 +366,14 @@ export function minimaxWithTT(
         break;
     }
 
-    if (alpha >= beta) {
-      ctx.stats.ttCutoffs++;
-      return ttEntry.score;
-    }
+    if (!ttMove) {
+      if (alpha >= beta) {
+        ctx.stats.ttCutoffs++;
+        return ttEntry.score;
+      }
 
-    ttMove = ttEntry.bestMove;
+      ttMove = ttEntry.bestMove;
+    }
   }
 
   // =========================================================================
@@ -596,8 +626,12 @@ export function minimaxWithTT(
     // moveIndex === 0: PV手はフルウィンドウで探索
     // moveIndex >= 1: Null Window で探索し、有望なら再探索
     // LMR適用手は「LMR浅い探索 → Null Window再探索 → フル再探索」の3段階
+    // PVノード用の子PV配列
+    let childPV: Position[] | undefined = undefined;
+
     if (moveIndex === 0) {
       // PV手: フルウィンドウ
+      childPV = pvLine ? [] : undefined;
       score = minimaxWithTT(
         board,
         newHash,
@@ -610,12 +644,14 @@ export function minimaxWithTT(
         ctx,
         true,
         newExtensions,
+        childPV,
       );
     } else if (canApplyLMR || isPlainFour) {
       const reduction = isPlainFour
         ? LMR_REDUCTION + LMR_PLAIN_FOUR_EXTRA_REDUCTION
         : LMR_REDUCTION;
 
+      childPV = pvLine ? [] : undefined;
       score = isMaximizing
         ? lmrPvsMaximizing(
             board,
@@ -628,6 +664,7 @@ export function minimaxWithTT(
             move,
             ctx,
             newExtensions,
+            childPV,
           )
         : lmrPvsMinimizing(
             board,
@@ -640,6 +677,7 @@ export function minimaxWithTT(
             move,
             ctx,
             newExtensions,
+            childPV,
           );
     } else {
       // 非LMR手: Null Window で探索
@@ -658,7 +696,8 @@ export function minimaxWithTT(
           newExtensions,
         );
         if (score > alpha && score < beta) {
-          // フル再探索
+          // フル再探索（PVノード）
+          childPV = pvLine ? [] : undefined;
           score = minimaxWithTT(
             board,
             newHash,
@@ -671,6 +710,7 @@ export function minimaxWithTT(
             ctx,
             true,
             newExtensions,
+            childPV,
           );
         }
       } else {
@@ -688,7 +728,8 @@ export function minimaxWithTT(
           newExtensions,
         );
         if (score < beta && score > alpha) {
-          // フル再探索
+          // フル再探索（PVノード）
+          childPV = pvLine ? [] : undefined;
           score = minimaxWithTT(
             board,
             newHash,
@@ -701,6 +742,7 @@ export function minimaxWithTT(
             ctx,
             true,
             newExtensions,
+            childPV,
           );
         }
       }
@@ -727,12 +769,20 @@ export function minimaxWithTT(
       if (score > bestScore) {
         bestScore = score;
         bestMove = move;
+        if (pvLine && childPV) {
+          pvLine.length = 0;
+          pvLine.push(move, ...childPV);
+        }
       }
       alpha = Math.max(alpha, score);
     } else {
       if (score < bestScore) {
         bestScore = score;
         bestMove = move;
+        if (pvLine && childPV) {
+          pvLine.length = 0;
+          pvLine.push(move, ...childPV);
+        }
       }
       beta = Math.min(beta, score);
     }
@@ -791,6 +841,7 @@ export function findBestMoveWithTT(
   aspiration?: AspirationOptions,
   restrictedMoves?: Position[],
   scoreThreshold = 200,
+  collectPV = false,
 ): MinimaxResult & { ctx: SearchContext } {
   const hash = computeBoardHash(board);
 
@@ -870,6 +921,7 @@ export function findBestMoveWithTT(
       placeStone(ctx.lineTable, move.row, move.col, color);
     }
 
+    const childPV = collectPV ? ([] as Position[]) : undefined;
     const score = minimaxWithTT(
       newBoard,
       newHash,
@@ -880,15 +932,28 @@ export function findBestMoveWithTT(
       beta,
       move,
       ctx,
+      true,
+      0,
+      childPV,
     );
 
     if (ctx.lineTable) {
       removeStone(ctx.lineTable, move.row, move.col, color);
     }
 
-    // PVを抽出し、末尾の非生産的四伸びを切り詰め
-    const rawPV = extractPV(board, hash, move, color, ctx.tt, depth);
-    const pvResult = truncateUnproductiveFours(rawPV, board, color);
+    // PV構築: collectPV時は探索中に収集したPVを使用、それ以外はTTから抽出
+    const pvResult =
+      collectPV && childPV
+        ? truncateUnproductiveFours(
+            buildPVResult(board, [move, ...childPV], color),
+            board,
+            color,
+          )
+        : truncateUnproductiveFours(
+            extractPV(board, hash, move, color, ctx.tt, depth),
+            board,
+            color,
+          );
 
     moveScores.push({
       move,

@@ -93,6 +93,38 @@ describe("TranspositionTable", () => {
       expect(entry?.score).toBe(100);
     });
 
+    it("同世代のEXACTは同深度のLOWER_BOUNDで上書きされない", () => {
+      const hash = 350n;
+      tt.store(hash, 100, 3, "EXACT", { row: 7, col: 7 });
+      tt.store(hash, 80, 3, "LOWER_BOUND", { row: 8, col: 8 });
+
+      const entry = tt.probe(hash);
+      expect(entry?.type).toBe("EXACT");
+      expect(entry?.score).toBe(100);
+      expect(entry?.bestMove).toEqual({ row: 7, col: 7 });
+    });
+
+    it("同世代のEXACTは同深度のEXACTで上書きされる", () => {
+      const hash = 360n;
+      tt.store(hash, 100, 3, "EXACT", { row: 7, col: 7 });
+      tt.store(hash, 120, 3, "EXACT", { row: 8, col: 8 });
+
+      const entry = tt.probe(hash);
+      expect(entry?.type).toBe("EXACT");
+      expect(entry?.score).toBe(120);
+    });
+
+    it("旧世代のEXACTは同深度のLOWER_BOUNDで上書きされる", () => {
+      const hash = 370n;
+      tt.store(hash, 100, 3, "EXACT", { row: 7, col: 7 });
+      tt.newGeneration();
+      tt.store(hash, 80, 3, "LOWER_BOUND", { row: 8, col: 8 });
+
+      const entry = tt.probe(hash);
+      expect(entry?.type).toBe("LOWER_BOUND");
+      expect(entry?.score).toBe(80);
+    });
+
     it("古い世代のエントリは置換される（2世代以上前）", () => {
       const hash = 400n;
       tt.store(hash, 50, 5, "EXACT", null);

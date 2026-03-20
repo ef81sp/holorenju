@@ -116,7 +116,12 @@ export class TranspositionTable {
       const shouldReplace =
         type === "EXACT" ||
         depth > existing.depth ||
-        (depth === existing.depth && type !== "UPPER_BOUND") ||
+        (depth === existing.depth &&
+          type !== "UPPER_BOUND" &&
+          !(
+            existing.type === "EXACT" &&
+            existing.generation === this.currentGeneration
+          )) ||
         existing.generation < this.currentGeneration - 1;
 
       if (!shouldReplace) {
