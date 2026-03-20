@@ -47,8 +47,8 @@ import {
   truncateUnproductiveFours,
 } from "./results";
 import {
+  analyzeFourAndThree,
   ASPIRATION_WINDOW,
-  detectPlainFour,
   FUTILITY_MARGINS_OPPONENT,
   FUTILITY_MARGINS_SELF,
   hasImmediateThreat,
@@ -611,16 +611,27 @@ export function minimaxWithTT(
       extension = 1;
       ctx.stats.threatExtensions++;
     }
+
     const newExtensions = extensions + extension;
     const effectiveDepth = depth - 1 + extension;
 
-    // 非生産的四伸び判定（LMR追加リダクション用）
-    // 四を作るが活三を伴わない手は depth を浪費するため追加削減
-    // moveIndex === 0 はLMR対象外なのでスキップ
+    // 戦術パターン判定（LMR調整用）
+    // analyzeFourAndThree を1回呼び、2つの判定に使用:
+    // - isPlainFour: 四を作るが活三なし → LMR追加削減
+    // - isOpenThreeMove: 活三を作る → LMR免除（tactical move exemption）
+    const fourThreeResult =
+      moveIndex >= 1 && depth >= LMR_MIN_DEPTH
+        ? analyzeFourAndThree(board, move.row, move.col, currentColor)
+        : null;
     const isPlainFour =
-      moveIndex >= 1 &&
-      depth >= LMR_MIN_DEPTH &&
-      detectPlainFour(board, move.row, move.col, currentColor);
+      fourThreeResult !== null &&
+      !fourThreeResult.hasFive &&
+      fourThreeResult.hasFour &&
+      !fourThreeResult.hasOpenThree;
+    const isOpenThreeMove =
+      fourThreeResult !== null &&
+      !fourThreeResult.hasFive &&
+      fourThreeResult.hasOpenThree;
 
     // PVS (Principal Variation Search) + LMR (Late Move Reductions)
     // moveIndex === 0: PV手はフルウィンドウで探索
@@ -646,7 +657,7 @@ export function minimaxWithTT(
         newExtensions,
         childPV,
       );
-    } else if (canApplyLMR || isPlainFour) {
+    } else if ((canApplyLMR && !isOpenThreeMove) || isPlainFour) {
       const reduction = isPlainFour
         ? LMR_REDUCTION + LMR_PLAIN_FOUR_EXTRA_REDUCTION
         : LMR_REDUCTION;

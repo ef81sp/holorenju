@@ -76,6 +76,15 @@ export const LMR_REDUCTION = 1;
 export const LMR_PLAIN_FOUR_EXTRA_REDUCTION = 1;
 
 /**
+ * ルート非生産的四引き下げマージン
+ *
+ * 最善手が非生産的四で、非四手との差がこのマージン以内の場合、
+ * 非四手を優先する。水平線効果で膨らんだ四のスコアを補正する。
+ * VCF四はthreatProbeで事前検出されるため対象外。
+ */
+export const PLAIN_FOUR_PREFERENCE_MARGIN = 200;
+
+/**
  * 戦術的パターン判定の内部関数（石配置済み前提）
  *
  * 五連以上、連続四（片端以上開き）、跳び四のいずれかがあれば true。
@@ -179,7 +188,7 @@ export function isTacticalMoveOnBoard(
  * hasFourAndOpenThree / detectPlainFour の共通ロジック。
  * 五連がある場合は hasFive: true を返す。
  */
-function analyzeFourAndThree(
+export function analyzeFourAndThree(
   board: BoardState,
   row: number,
   col: number,
