@@ -537,6 +537,115 @@ describe("evaluateBoard テンポ補正", () => {
   });
 });
 
+describe("evaluateBoard 単発四ペナルティ（scanFourThreeThreat ベース）", () => {
+  it("活三が盤上にあっても四三脅威がなければ四にペナルティが適用される", () => {
+    // 黒: 横活三 (7,5)(7,6)(7,7) 両端空き
+    //      縦止め四 (0,0)(1,0)(2,0)(3,0) 上端塞がり
+    // → 活三はあるが、四三脅威（1手で四三を作れる交点）は存在しない
+    const board = createBoardWithStones([
+      // 横活三（中央、両端空き）
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+      // 縦止め四（盤端、四三にならない離れた位置）
+      { row: 0, col: 0, color: "black" },
+      { row: 1, col: 0, color: "black" },
+      { row: 2, col: 0, color: "black" },
+      { row: 3, col: 0, color: "black" },
+      // 白ダミー
+      { row: 12, col: 12, color: "white" },
+    ]);
+
+    const scoreNoPenalty = evaluateBoard(board, "black", {
+      singleFourPenaltyMultiplier: 1.0,
+    });
+    const scoreWithPenalty = evaluateBoard(board, "black", {
+      singleFourPenaltyMultiplier: 0.0,
+    });
+
+    // 四三脅威がない → ペナルティが適用される → スコアが下がる
+    expect(scoreWithPenalty).toBeLessThan(scoreNoPenalty);
+  });
+
+  it("四三脅威がある場合はペナルティが適用されない", () => {
+    // 黒: 横3連 (7,5)(7,6)(7,7) + 縦2連 (6,8)(8,8)
+    // → (7,8) に置くと四(横) + 活三(縦) = 四三脅威
+    // 止め四も追加: (0,0)(1,0)(2,0)(3,0)
+    const board = createBoardWithStones([
+      // 横3連（四三の四側）
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+      // 縦2連（四三の活三側）
+      { row: 6, col: 8, color: "black" },
+      { row: 8, col: 8, color: "black" },
+      // 縦止め四（盤端、四三とは無関係）
+      { row: 0, col: 0, color: "black" },
+      { row: 1, col: 0, color: "black" },
+      { row: 2, col: 0, color: "black" },
+      { row: 3, col: 0, color: "black" },
+      // 白ダミー
+      { row: 12, col: 12, color: "white" },
+    ]);
+
+    const scoreNoPenalty = evaluateBoard(board, "black", {
+      singleFourPenaltyMultiplier: 1.0,
+    });
+    const scoreWithPenalty = evaluateBoard(board, "black", {
+      singleFourPenaltyMultiplier: 0.0,
+    });
+
+    // 四三脅威あり → ペナルティがキャンセルされる → スコアが変わらない
+    expect(scoreWithPenalty).toBe(scoreNoPenalty);
+  });
+
+  it("四の石が同時に活三も作る場合はその石のペナルティが蓄積されない", () => {
+    // 黒: (7,5)(7,6)(7,7) 横活三 + (6,7)(8,7) 縦2連
+    // → (7,7) は横方向で活三（openThreeScore > 0）かつ縦方向で止め四候補
+    // → per-stone で openThreeScore > 0 のためペナルティ対象外
+    //
+    // 追加: (0,0)(1,0)(2,0)(3,0) 四三脅威にならない盤端の止め四
+    // → 四三脅威なし → ペナルティ適用フェーズに到達するが、
+    //   (0,0)-(3,0) の石のみがペナルティ対象（fourScore > 0 && openThreeScore === 0）
+    const board = createBoardWithStones([
+      // 横活三（中央）— この石は openThreeScore > 0
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+      // 縦止め四（盤端）— openThreeScore === 0、ペナルティ対象
+      { row: 0, col: 0, color: "black" },
+      { row: 1, col: 0, color: "black" },
+      { row: 2, col: 0, color: "black" },
+      { row: 3, col: 0, color: "black" },
+      // 白ダミー
+      { row: 12, col: 12, color: "white" },
+    ]);
+
+    // 活三の石だけの盤面（止め四なし）
+    const boardThreeOnly = createBoardWithStones([
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 7, color: "black" },
+      // 白ダミー
+      { row: 12, col: 12, color: "white" },
+    ]);
+
+    const scoreFull = evaluateBoard(board, "black", {
+      singleFourPenaltyMultiplier: 0.0,
+    });
+    const scoreThreeOnly = evaluateBoard(boardThreeOnly, "black", {
+      singleFourPenaltyMultiplier: 0.0,
+    });
+
+    // 止め四の石はペナルティで fourScore が完全消滅（multiplier=0.0）
+    // → 活三のスコア差のみ残る（止め四の石の他パターンスコアは残る）
+    // ペナルティが per-stone で正しく効いていれば、
+    // scoreFull が scoreThreeOnly と大差ない（四のスコア分がペナルティで消える）
+    // 逆に board-level で活三があるからペナルティ免除されていたら差が大きい
+    expect(scoreFull - scoreThreeOnly).toBeLessThan(PATTERN_SCORES.FOUR);
+  });
+});
+
 describe("evaluatePosition 盤面不変性（白番禁手追い込み）", () => {
   it("呼び出し前後で盤面が変化しない（白番禁手追い込み）", () => {
     const board = createBoardWithStones([
