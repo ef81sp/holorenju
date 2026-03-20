@@ -39,6 +39,7 @@ import { recordTiming, startTiming } from "../profiling/counters";
 import { computeBoardHash, updateHash } from "../zobrist";
 import { createSearchContext, type SearchContext } from "./context";
 import { isMeasuringFutility, recordFutilityGain } from "./futilityMeasurement";
+import { MAX_QUIESCENCE_DEPTH, quiescenceSearch } from "./quiescence";
 import {
   extractPV,
   type MinimaxResult,
@@ -405,19 +406,19 @@ export function minimaxWithTT(
 
   // 探索深度が0になった場合は盤面評価
   if (depth === 0) {
-    const tEvalBoard = startTiming();
-    const score = evaluateBoard(
+    const tQSearch = startTiming();
+    const score = quiescenceSearch(
       board,
+      hash,
+      isMaximizing,
       perspective,
-      {
-        singleFourPenaltyMultiplier:
-          ctx.evaluationOptions.singleFourPenaltyMultiplier,
-        lastMoverIsPerspective: !isMaximizing,
-      },
-      ctx.lineTable,
+      alpha,
+      beta,
+      lastMove,
+      ctx,
+      MAX_QUIESCENCE_DEPTH,
     );
-    recordTiming("evaluateBoard", tEvalBoard);
-    ctx.tt.store(hash, score, depth, "EXACT", null);
+    recordTiming("evaluateBoard", tQSearch);
     return score;
   }
 
