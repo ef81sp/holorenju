@@ -39,6 +39,7 @@ import { recordTiming, startTiming } from "../profiling/counters";
 import { computeBoardHash, updateHash } from "../zobrist";
 import { createSearchContext, type SearchContext } from "./context";
 import { isMeasuringFutility, recordFutilityGain } from "./futilityMeasurement";
+import { MAX_QUIESCENCE_DEPTH, quiescenceSearch } from "./quiescence";
 import {
   extractPV,
   type MinimaxResult,
@@ -47,8 +48,8 @@ import {
   truncateUnproductiveFours,
 } from "./results";
 import {
+  analyzeFourAndThree,
   ASPIRATION_WINDOW,
-  detectPlainFour,
   FUTILITY_MARGINS_OPPONENT,
   FUTILITY_MARGINS_SELF,
   hasImmediateThreat,
@@ -405,19 +406,19 @@ export function minimaxWithTT(
 
   // 探索深度が0になった場合は盤面評価
   if (depth === 0) {
-    const tEvalBoard = startTiming();
-    const score = evaluateBoard(
+    const tQSearch = startTiming();
+    const score = quiescenceSearch(
       board,
+      hash,
+      isMaximizing,
       perspective,
-      {
-        singleFourPenaltyMultiplier:
-          ctx.evaluationOptions.singleFourPenaltyMultiplier,
-        lastMoverIsPerspective: !isMaximizing,
-      },
-      ctx.lineTable,
+      alpha,
+      beta,
+      lastMove,
+      ctx,
+      MAX_QUIESCENCE_DEPTH,
     );
-    recordTiming("evaluateBoard", tEvalBoard);
-    ctx.tt.store(hash, score, depth, "EXACT", null);
+    recordTiming("evaluateBoard", tQSearch);
     return score;
   }
 
@@ -611,16 +612,27 @@ export function minimaxWithTT(
       extension = 1;
       ctx.stats.threatExtensions++;
     }
+
     const newExtensions = extensions + extension;
     const effectiveDepth = depth - 1 + extension;
 
-    // 非生産的四伸び判定（LMR追加リダクション用）
-    // 四を作るが活三を伴わない手は depth を浪費するため追加削減
-    // moveIndex === 0 はLMR対象外なのでスキップ
+    // 戦術パターン判定（LMR調整用）
+    // analyzeFourAndThree を1回呼び、2つの判定に使用:
+    // - isPlainFour: 四を作るが活三なし → LMR追加削減
+    // - isOpenThreeMove: 活三を作る → LMR免除（tactical move exemption）
+    const fourThreeResult =
+      moveIndex >= 1 && depth >= LMR_MIN_DEPTH
+        ? analyzeFourAndThree(board, move.row, move.col, currentColor)
+        : null;
     const isPlainFour =
-      moveIndex >= 1 &&
-      depth >= LMR_MIN_DEPTH &&
-      detectPlainFour(board, move.row, move.col, currentColor);
+      fourThreeResult !== null &&
+      !fourThreeResult.hasFive &&
+      fourThreeResult.hasFour &&
+      !fourThreeResult.hasOpenThree;
+    const isOpenThreeMove =
+      fourThreeResult !== null &&
+      !fourThreeResult.hasFive &&
+      fourThreeResult.hasOpenThree;
 
     // PVS (Principal Variation Search) + LMR (Late Move Reductions)
     // moveIndex === 0: PV手はフルウィンドウで探索
@@ -646,7 +658,7 @@ export function minimaxWithTT(
         newExtensions,
         childPV,
       );
-    } else if (canApplyLMR || isPlainFour) {
+    } else if ((canApplyLMR && !isOpenThreeMove) || isPlainFour) {
       const reduction = isPlainFour
         ? LMR_REDUCTION + LMR_PLAIN_FOUR_EXTRA_REDUCTION
         : LMR_REDUCTION;

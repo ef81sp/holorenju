@@ -281,3 +281,24 @@ describe("VCFレース判定", () => {
     expect(result.completedDepth).toBe(0);
   }, 15000);
 });
+
+describe("非生産的四伸びの水平線効果対策", () => {
+  it("棋譜37手目でG12（非生産的四）が最善手にならない", () => {
+    // 36手目まで再現: G12は非生産的四（四を作るが活三を伴わない）
+    // G12が水平線効果で過大評価されていた問題の回帰テスト
+    const record =
+      "H8 H9 J10 I9 G9 I8 G10 I11 I10 F10 J9 H11 G11 G8 J11 J12 I12 K10 I7 L14 K13 J8 L7 K7 L6 K5 I6 L8 K8 M6 H5 J7 K6 M9 J6 H6";
+    const { board } = createBoardFromRecord(record, 36);
+    const result = findBestMoveIterativeWithTT({
+      board,
+      color: "black",
+      maxDepth: 4,
+      timeLimit: 5000,
+      randomFactor: 0,
+      evaluationOptions: FULL_EVAL_OPTIONS,
+    });
+    // G12 = (row=3, col=6) が最善手でないことを検証
+    const isG12 = result.position.row === 3 && result.position.col === 6;
+    expect(isG12).toBe(false);
+  }, 30000);
+});

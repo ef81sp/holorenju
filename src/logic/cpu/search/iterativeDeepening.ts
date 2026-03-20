@@ -10,7 +10,7 @@ import {
   clearForbiddenCache,
   setCurrentBoardHash,
 } from "../cache/forbiddenCache";
-import { countStones } from "../core/boardUtils";
+import { applyMove, countStones } from "../core/boardUtils";
 import {
   DEFAULT_EVAL_OPTIONS,
   type EvaluationOptions,
@@ -31,13 +31,16 @@ import {
   applyTimePressureFallback,
   type DepthHistoryEntry,
   type IterativeDeepingResult,
+  type MinimaxResult,
 } from "./results";
 import {
   ASPIRATION_WINDOW,
   calculateDynamicTimeLimit,
   DEFAULT_ABSOLUTE_TIME_LIMIT,
+  detectPlainFour,
+  PLAIN_FOUR_PREFERENCE_MARGIN,
 } from "./techniques";
-import { hasVCF } from "./vcf";
+import { findVCFMove, hasVCF } from "./vcf";
 
 /**
  * プロファイリングカウンターの値をSearchStatsにマージ
@@ -55,6 +58,62 @@ function mergeProfilingCounters(stats: SearchStats): SearchStats {
     evaluationCalls: counters.evaluationCalls,
     timings: isProfilingEnabled() ? counters.timings : undefined,
   };
+}
+
+/** VCF安全チェックの時間制限（ms） */
+const PLAIN_FOUR_VCF_CHECK_TIME_LIMIT = 50;
+
+/**
+ * 非生産的四の優先度引き下げ
+ *
+ * 最善手が非生産的四（四を作るが活三を伴わない）で、非四手との
+ * スコア差がマージン内なら非四手を優先する。
+ * 四+ブロックの水平線効果でスコアが膨らんでいる疑いを補正する。
+ *
+ * VCFがある場合はdemoteしない。VCF四は通常threatProbeで探索中に
+ * 検出されるため、ここに到達するVCF四はレアケース。
+ * findVCFMove がタイムアウトした場合はVCFなしとみなす
+ * （50msは通常のVCF探索に十分な時間）。
+ */
+function demotePlainFourIfNeeded<T extends MinimaxResult>(
+  result: T,
+  board: BoardState,
+  color: "black" | "white",
+): T {
+  if (!result.candidates || result.candidates.length < 2) {
+    return result;
+  }
+
+  const bestMove = result.position;
+  const tempBoard = applyMove(board, bestMove, color);
+  if (!detectPlainFour(tempBoard, bestMove.row, bestMove.col, color)) {
+    return result;
+  }
+
+  // VCF安全チェック: VCFがあればdemoteしない
+  const vcfMove = findVCFMove(board, color, {
+    timeLimit: PLAIN_FOUR_VCF_CHECK_TIME_LIMIT,
+  });
+  if (vcfMove) {
+    return result;
+  }
+
+  const bestNonFour = result.candidates.find((entry) => {
+    const b = applyMove(board, entry.move, color);
+    return !detectPlainFour(b, entry.move.row, entry.move.col, color);
+  });
+  if (
+    bestNonFour &&
+    result.score - bestNonFour.score < PLAIN_FOUR_PREFERENCE_MARGIN
+  ) {
+    return {
+      ...result,
+      position: bestNonFour.move,
+      score: bestNonFour.score,
+    } as T;
+  }
+
+  return result;
 }
 
 export interface IterativeDeepeningParams {
@@ -429,6 +488,8 @@ export function findBestMoveIterativeWithTT(
       }
     }
   }
+
+  bestResult = demotePlainFourIfNeeded(bestResult, board, color);
 
   const finalResult: IterativeDeepingResult & { stats: SearchStats } = {
     position: bestResult.position,

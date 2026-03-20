@@ -166,15 +166,16 @@ export function evaluateBoard(
   const opponentColor = perspective === "black" ? "white" : "black";
   let myScore = 0;
   let opponentScore = 0;
-  let myFourScore = 0;
   let myOpenThreeScore = 0;
-  let opponentFourScore = 0;
   let opponentOpenThreeScore = 0;
+  let myPendingFourPenalty = 0;
+  let opponentPendingFourPenalty = 0;
   let myStoneCount = 0;
   let opponentStoneCount = 0;
 
   const connectivityBonus =
     options?.connectivityBonusValue ?? PATTERN_SCORES.CONNECTIVITY_BONUS;
+  const multiplier = options?.singleFourPenaltyMultiplier ?? 1.0;
 
   // ── 事前計算 ──
   if (lineTable) {
@@ -212,29 +213,26 @@ export function evaluateBoard(
       if (stone === perspective) {
         myStoneCount++;
         myScore += adjustedScore;
-        myFourScore += result.fourScore;
         myOpenThreeScore += result.openThreeScore;
+        if (
+          multiplier < 1.0 &&
+          result.fourScore > 0 &&
+          result.openThreeScore === 0
+        ) {
+          myPendingFourPenalty += result.fourScore * (1 - multiplier);
+        }
       } else if (stone === opponentColor) {
         opponentStoneCount++;
         opponentScore += adjustedScore;
-        opponentFourScore += result.fourScore;
         opponentOpenThreeScore += result.openThreeScore;
+        if (
+          multiplier < 1.0 &&
+          result.fourScore > 0 &&
+          result.openThreeScore === 0
+        ) {
+          opponentPendingFourPenalty += result.fourScore * (1 - multiplier);
+        }
       }
-    }
-  }
-
-  // 単発四ペナルティの適用
-  const multiplier = options?.singleFourPenaltyMultiplier ?? 1.0;
-  if (multiplier < 1.0) {
-    // 四があるのに活三がない場合、四のスコアにペナルティを適用
-    // 四三（四と活三の両方がある）場合はペナルティなし
-    if (myFourScore > 0 && myOpenThreeScore === 0) {
-      const penalty = myFourScore * (1 - multiplier);
-      myScore -= penalty;
-    }
-    if (opponentFourScore > 0 && opponentOpenThreeScore === 0) {
-      const penalty = opponentFourScore * (1 - multiplier);
-      opponentScore -= penalty;
     }
   }
 
@@ -248,43 +246,53 @@ export function evaluateBoard(
     }
   }
 
-  // 四三脅威スキャン
+  // 四三脅威スキャン + 単発四ペナルティの適用
   const threatBonus = PATTERN_SCORES.LEAF_FOUR_THREE_THREAT;
-  if (threatBonus > 0 && lineTable) {
+  let myHasFourThree = false;
+  let oppHasFourThree = false;
+  if (lineTable) {
     const myFlags =
       perspective === "black" ? precomputedBlackFlags : precomputedWhiteFlags;
     const oppFlags =
       perspective === "black" ? precomputedWhiteFlags : precomputedBlackFlags;
-    if (
-      scanFourThreeThreatFromFlags(
-        board,
-        lineTable,
-        myFlags,
-        perspective,
-        myStoneCount,
-      )
-    ) {
+    myHasFourThree = scanFourThreeThreatFromFlags(
+      board,
+      lineTable,
+      myFlags,
+      perspective,
+      myStoneCount,
+    );
+    oppHasFourThree = scanFourThreeThreatFromFlags(
+      board,
+      lineTable,
+      oppFlags,
+      opponentColor,
+      opponentStoneCount,
+    );
+  } else {
+    myHasFourThree = scanFourThreeThreat(board, perspective, myStoneCount);
+    oppHasFourThree = scanFourThreeThreat(
+      board,
+      opponentColor,
+      opponentStoneCount,
+    );
+  }
+
+  if (threatBonus > 0) {
+    if (myHasFourThree) {
       myScore += threatBonus;
     }
-    if (
-      scanFourThreeThreatFromFlags(
-        board,
-        lineTable,
-        oppFlags,
-        opponentColor,
-        opponentStoneCount,
-      )
-    ) {
+    if (oppHasFourThree) {
       opponentScore += threatBonus;
     }
-  } else if (threatBonus > 0) {
-    // Board走査フォールバック（lineTable なし時）
-    if (scanFourThreeThreat(board, perspective, myStoneCount)) {
-      myScore += threatBonus;
-    }
-    if (scanFourThreeThreat(board, opponentColor, opponentStoneCount)) {
-      opponentScore += threatBonus;
-    }
+  }
+
+  // 四三脅威がなければ per-stone 単発四ペナルティを適用
+  if (!myHasFourThree) {
+    myScore -= myPendingFourPenalty;
+  }
+  if (!oppHasFourThree) {
+    opponentScore -= opponentPendingFourPenalty;
   }
 
   return myScore - opponentScore;
@@ -301,11 +309,17 @@ export function evaluateBoardWithBreakdown(
   board: BoardState,
   perspective: "black" | "white",
   lineTable?: LineTable,
+  singleFourPenaltyMultiplier?: number,
 ): BoardEvaluationBreakdown {
   const opponentColor = perspective === "black" ? "white" : "black";
+  const multiplier = singleFourPenaltyMultiplier ?? 1.0;
 
   const myBreakdown = emptyLeafPatternScores();
   const opponentBreakdown = emptyLeafPatternScores();
+  let myPendingFourPenalty = 0;
+  let opponentPendingFourPenalty = 0;
+  let myStoneCount = 0;
+  let opponentStoneCount = 0;
 
   // 全ての石について評価
   for (let row = 0; row < 15; row++) {
@@ -325,6 +339,7 @@ export function evaluateBoardWithBreakdown(
       }
 
       if (stone === perspective) {
+        myStoneCount++;
         myBreakdown.five += breakdown.five.final;
         myBreakdown.openFour += breakdown.openFour.final;
         myBreakdown.four += breakdown.four.final;
@@ -333,7 +348,15 @@ export function evaluateBoardWithBreakdown(
         myBreakdown.openTwo += breakdown.openTwo.final;
         myBreakdown.two += breakdown.two.final;
         myBreakdown.total += adjustedScore;
+        if (
+          multiplier < 1.0 &&
+          breakdown.four.final > 0 &&
+          breakdown.openThree.final === 0
+        ) {
+          myPendingFourPenalty += breakdown.four.final * (1 - multiplier);
+        }
       } else if (stone === opponentColor) {
+        opponentStoneCount++;
         opponentBreakdown.five += breakdown.five.final;
         opponentBreakdown.openFour += breakdown.openFour.final;
         opponentBreakdown.four += breakdown.four.final;
@@ -342,8 +365,63 @@ export function evaluateBoardWithBreakdown(
         opponentBreakdown.openTwo += breakdown.openTwo.final;
         opponentBreakdown.two += breakdown.two.final;
         opponentBreakdown.total += adjustedScore;
+        if (
+          multiplier < 1.0 &&
+          breakdown.four.final > 0 &&
+          breakdown.openThree.final === 0
+        ) {
+          opponentPendingFourPenalty += breakdown.four.final * (1 - multiplier);
+        }
       }
     }
+  }
+
+  // 四三脅威スキャン + 単発四ペナルティの適用
+  const threatBonus = PATTERN_SCORES.LEAF_FOUR_THREE_THREAT;
+  let myHasFourThree = false;
+  let oppHasFourThree = false;
+  if (lineTable) {
+    const myFlags =
+      perspective === "black" ? precomputedBlackFlags : precomputedWhiteFlags;
+    const oppFlags =
+      perspective === "black" ? precomputedWhiteFlags : precomputedBlackFlags;
+    myHasFourThree = scanFourThreeThreatFromFlags(
+      board,
+      lineTable,
+      myFlags,
+      perspective,
+      myStoneCount,
+    );
+    oppHasFourThree = scanFourThreeThreatFromFlags(
+      board,
+      lineTable,
+      oppFlags,
+      opponentColor,
+      opponentStoneCount,
+    );
+  } else {
+    myHasFourThree = scanFourThreeThreat(board, perspective, myStoneCount);
+    oppHasFourThree = scanFourThreeThreat(
+      board,
+      opponentColor,
+      opponentStoneCount,
+    );
+  }
+
+  if (threatBonus > 0) {
+    if (myHasFourThree) {
+      myBreakdown.total += threatBonus;
+    }
+    if (oppHasFourThree) {
+      opponentBreakdown.total += threatBonus;
+    }
+  }
+
+  if (!myHasFourThree) {
+    myBreakdown.total -= myPendingFourPenalty;
+  }
+  if (!oppHasFourThree) {
+    opponentBreakdown.total -= opponentPendingFourPenalty;
   }
 
   return {
