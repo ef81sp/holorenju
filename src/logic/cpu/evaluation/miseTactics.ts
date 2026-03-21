@@ -342,6 +342,11 @@ export function computeMiseBonus(
   color: "black" | "white",
   lineTable?: LineTable,
 ): number {
+  // プレフィルタ: ミセの可能性がなければスキップ（~150 ops vs ~4000 ops）
+  if (!hasPotentialMiseTarget(board, row, col, color)) {
+    return 0;
+  }
+
   const targets = findMiseTargets(board, row, col, color, lineTable);
   if (
     targets.length >= 2 &&
