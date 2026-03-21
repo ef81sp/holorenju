@@ -156,7 +156,7 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
     scoreThreshold: 150, // ランダム選択幅
   },
   hard: {
-    depth: 5,
+    depth: 6,
     timeLimit: 10000, // TPE対策（強さ維持/微強化）
     randomFactor: 0,
     maxNodes: 600000,
