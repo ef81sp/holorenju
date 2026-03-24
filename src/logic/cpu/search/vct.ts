@@ -16,11 +16,6 @@ import {
 } from "../lineTable/lineTable";
 import { type TimeLimiter, incrementNodes, isTimeExceeded } from "./context";
 import {
-  findMiseVCFMove,
-  findMiseVCFSequence,
-  type MiseVCFSearchOptions,
-} from "./miseVcf";
-import {
   checkDefenseCounterThreat,
   getFourDefensePosition,
 } from "./threatPatterns";
@@ -60,12 +55,6 @@ const VCT_TIME_LIMIT = 150;
 
 /** ct=three 時の hasVCF フォールバック用深さ制限 */
 const CT_THREE_VCF_MAX_DEPTH = 8;
-
-/** VCT再帰ノードでのMise-VCFデフォルトオプション（短時間制限） */
-const VCT_MISE_VCF_OPTIONS: MiseVCFSearchOptions = {
-  timeLimit: 50,
-  vcfOptions: { maxDepth: 8, timeLimit: 50 },
-};
 
 /**
  * キャッシュ付き hasVCF
@@ -157,8 +146,6 @@ export interface VCTSearchOptions {
   maxNodes?: number;
   /** 内部VCF呼び出しに渡すオプション */
   vcfOptions?: VCFSearchOptions;
-  /** 内部Mise-VCF呼び出しに渡すオプション */
-  miseVcfOptions?: MiseVCFSearchOptions;
   /** 分岐情報を収集するか（レビュー用） */
   collectBranches?: boolean;
 }
@@ -227,17 +214,6 @@ export function hasVCT(
   }
 
   if (depth >= maxDepth) {
-    // 最大深度到達: Mise-VCFで即勝ちできるか最終チェック
-    // VCFは再帰の各ノードで既にチェック済みなのでスキップ
-    if (!isTimeExceeded(limiter)) {
-      return (
-        findMiseVCFMove(
-          board,
-          color,
-          options?.miseVcfOptions ?? VCT_MISE_VCF_OPTIONS,
-        ) !== null
-      );
-    }
     return false;
   }
 
@@ -482,7 +458,7 @@ function evaluateCounterThreat(
 
   if (ct === "three") {
     // 防御側が活三を作った → 攻撃側の三脅威は無効（防御側が無視可能）
-    // 四脅威（VCF）またはMise-VCFで勝てるかチェック
+    // 四脅威（VCF）のみで勝てるかチェック
     // 深さ制限で探索コストを制御（環境非依存・決定的）
     if (isTimeExceeded(limiter)) {
       return false;
@@ -494,17 +470,7 @@ function evaluateCounterThreat(
         CT_THREE_VCF_MAX_DEPTH,
       ),
     };
-    if (cachedHasVCF(board, color, limiter, ctThreeVcfOptions, vcfCache)) {
-      return true;
-    }
-    // VCF不成立でもMise-VCFで勝てる可能性がある
-    return (
-      findMiseVCFMove(
-        board,
-        color,
-        options?.miseVcfOptions ?? VCT_MISE_VCF_OPTIONS,
-      ) !== null
-    );
+    return cachedHasVCF(board, color, limiter, ctThreeVcfOptions, vcfCache);
   }
 
   // ct === "none": 通常の再帰
@@ -950,7 +916,7 @@ function buildBranches(
 /**
  * ct=three の防御処理ヘルパー
  *
- * 防御側が活三を作った場合、VCFまたはMise-VCFで勝てるかチェックする。
+ * 防御側が活三を作った場合、VCFのみで勝てるかチェックする。
  * 成功時は { seq } を返し、失敗時は null を返す。
  * 盤面の undo は呼び出し側で行う。
  */
@@ -984,51 +950,31 @@ function handleCtThreeDefense(
       ctThreeVcfOptions,
       vcfCache,
     );
-    if (vcfSeq) {
-      if (context.collectBranches) {
-        defenseSequences.push({
-          defense: defensePos,
-          seq: vcfSeq.sequence,
-          childBranches: [],
-          isForbiddenTrap: false,
-        });
-      }
-      return { seq: vcfSeq.sequence };
+    if (!vcfSeq) {
+      return null;
     }
-    // VCF不成立 → Mise-VCFを試す
-    const miseSeq = findMiseVCFSequence(
-      board,
-      color,
-      options?.miseVcfOptions ?? VCT_MISE_VCF_OPTIONS,
-    );
-    if (miseSeq) {
-      if (context.collectBranches) {
-        defenseSequences.push({
-          defense: defensePos,
-          seq: miseSeq.sequence,
-          childBranches: [],
-          isForbiddenTrap: false,
-        });
-      }
-      return { seq: miseSeq.sequence };
+    if (context.collectBranches) {
+      defenseSequences.push({
+        defense: defensePos,
+        seq: vcfSeq.sequence,
+        childBranches: [],
+        isForbiddenTrap: false,
+      });
     }
-    return null;
+    return { seq: vcfSeq.sequence };
   }
 
-  if (cachedHasVCF(board, color, limiter, ctThreeVcfOptions, vcfCache)) {
-    return { seq: null };
+  const vcfResult = cachedHasVCF(
+    board,
+    color,
+    limiter,
+    ctThreeVcfOptions,
+    vcfCache,
+  );
+  if (!vcfResult) {
+    return null;
   }
-  // VCF不成立 → Mise-VCFを試す
-  if (
-    findMiseVCFMove(
-      board,
-      color,
-      options?.miseVcfOptions ?? VCT_MISE_VCF_OPTIONS,
-    )
-  ) {
-    return { seq: null };
-  }
-  return null;
+  return { seq: null };
 }
 
 /**
