@@ -22,6 +22,7 @@ import {
   undoMove,
 } from "../core/boardUtils";
 import { evaluateBoard } from "../evaluation/boardEvaluation";
+import { hasPotentialMiseTarget } from "../evaluation/miseTactics";
 import { PATTERN_SCORES } from "../evaluation/patternScores";
 import { evaluatePosition } from "../evaluation/positionEvaluation";
 import { isFive } from "../lineTable/adapter";
@@ -497,12 +498,13 @@ export function minimaxWithTT(
 
   // sortMoves で計算済みの脅威情報を Futility Pruning 用に準備
   // （同一盤面に対する同一結果の共有）
-  const futilityEvalOptions = sortResult.precomputedThreats
-    ? {
-        ...ctx.evaluationOptions,
-        precomputedThreats: sortResult.precomputedThreats,
-      }
-    : ctx.evaluationOptions;
+  const futilityEvalOptions = {
+    ...ctx.evaluationOptions,
+    ...(sortResult.precomputedThreats && {
+      precomputedThreats: sortResult.precomputedThreats,
+    }),
+    enableMise: false, // Futility判定ではミセ不要（move orderingで評価済み）
+  };
 
   if (moves.length === 0) {
     return 0;
@@ -552,15 +554,17 @@ export function minimaxWithTT(
       );
     }
 
-    // Futility Pruning（depth 1-2 の非戦術手をスキップ）
+    // Futility Pruning（depth 1-3 の非戦術手をスキップ）
     // 静的評価＋マージンが alpha/beta を超えない手は探索不要
+    // ミセ形成の可能性がある手は Futility 対象外（ミセ計算省略による誤枝刈り防止）
     if (
       ctx.evaluationOptions.enableFutilityPruning &&
       depth >= 1 &&
       depth <= 3 &&
       moveIndex > 0 && // 最初の手はスキップしない
       bestScore > -PATTERN_SCORES.FIVE + 5000 && // 勝ち/負け確定でない
-      bestScore < PATTERN_SCORES.FIVE - 5000
+      bestScore < PATTERN_SCORES.FIVE - 5000 &&
+      !hasPotentialMiseTarget(board, move.row, move.col, currentColor)
     ) {
       const futilityMargins = isMaximizing
         ? FUTILITY_MARGINS_SELF

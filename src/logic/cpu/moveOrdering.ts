@@ -372,11 +372,15 @@ export function sortMoves(
     maxStaticEvalCount !== undefined &&
     maxStaticEvalCount < n
   ) {
-    // 事前計算済みのthreatsを再利用（なければ計算）
+    // 事前計算済みのthreatsを再利用
+    // precomputedThreats は上記 L265-282 で必ず設定される（enableMandatoryDefense 時）
     const threats =
-      precomputedThreats ??
-      effectiveEvalOptions.precomputedThreats ??
-      detectOpponentThreats(board, color === "black" ? "white" : "black");
+      precomputedThreats ?? effectiveEvalOptions.precomputedThreats;
+    if (!threats) {
+      throw new Error(
+        "unreachable: precomputedThreats must be set when enableMandatoryDefense is true",
+      );
+    }
     const hasThreats =
       threats.openFours.length > 0 ||
       threats.fours.length > 0 ||
