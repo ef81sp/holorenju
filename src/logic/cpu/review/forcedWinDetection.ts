@@ -42,24 +42,24 @@ export interface ForcedWinDetectionResult {
   doubleMiseBestMove: Position | null;
 }
 
-/** フォールバック全体の時間制限（ms） */
-const VCT_FALLBACK_TIME_LIMIT = 10_000;
+/** フォールバック時の最大初手検証数 */
+const VCT_FALLBACK_MAX_FIRST_MOVES = 40;
 
-/** フォールバック時の1手あたりVCT探索タイムリミット（ms） */
-const VCT_FALLBACK_PER_MOVE_TIME_LIMIT = 200;
+/** フォールバック時の1手あたりVCT探索ノード数上限 */
+const VCT_FALLBACK_MAX_NODES = 100_000;
 
 /**
  * 脅威手を1手ずつ findVCTSequenceFromFirstMove で検証する
  *
- * findVCTSequence のタイムアウト対策。findVCTSequence は全脅威手を
- * 再帰的に探索するため、リスト後方にある VCT を時間内に見つけられない
- * ことがある。本関数は各脅威手に独自の TimeLimiter を割り当てるため、
- * 前の手のタイムアウトに影響されない。
+ * findVCTSequence の補完。findVCTSequence は全脅威手を再帰的に探索
+ * するため、リスト後方にある VCT を見つけられないことがある。
+ * 本関数は各脅威手に独自の TimeLimiter を割り当てるため、
+ * 前の手の探索に影響されない。
  *
  * findVCTSequence との違い:
- * - 1手あたりのタイムリミットが短い（500ms vs 3000ms）
  * - ブランチ収集は行わない（findVCTSequenceFromFirstMove の制約）
  * - 最初に見つかった有効な VCT で即座に返す（最短探索はしない）
+ * - 最大 VCT_FALLBACK_MAX_FIRST_MOVES 手まで検証
  */
 function findVCTByFirstMoveIteration(
   board: BoardState,
@@ -67,20 +67,17 @@ function findVCTByFirstMoveIteration(
   options: VCTSearchOptions,
 ): VCTSequenceResult | null {
   const threats = findThreatMoves(board, color);
-  const startTime = performance.now();
   const perMoveOptions: VCTSearchOptions = {
     ...options,
-    timeLimit: VCT_FALLBACK_PER_MOVE_TIME_LIMIT,
+    timeLimit: Infinity,
+    maxNodes: VCT_FALLBACK_MAX_NODES,
     vcfOptions: {
       ...options.vcfOptions,
-      timeLimit: VCT_FALLBACK_PER_MOVE_TIME_LIMIT,
     },
     collectBranches: false,
   };
-  for (const threat of threats) {
-    if (performance.now() - startTime > VCT_FALLBACK_TIME_LIMIT) {
-      break;
-    }
+  for (let i = 0; i < threats.length && i < VCT_FALLBACK_MAX_FIRST_MOVES; i++) {
+    const threat = threats[i]!;
     const result = findVCTSequenceFromFirstMove(
       board,
       threat,

@@ -1574,6 +1574,8 @@ export function findVCTSequenceFromFirstMove(
   const localLimiter: TimeLimiter = {
     startTime: performance.now(),
     timeLimit: timeLimitMs,
+    nodes: 0,
+    maxNodes: options?.maxNodes,
   };
   const localCache = createVCFCache();
 

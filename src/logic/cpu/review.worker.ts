@@ -44,7 +44,6 @@ import {
 import { detectForcedWin } from "./review/forcedWinDetection";
 import { verifyCandidatePVs } from "./review/pvVerification";
 import {
-  REVIEW_PV_VERIFY_TIME_BUDGET,
   REVIEW_SEARCH_PARAMS,
   REVIEW_VCT_OPTIONS_WITH_BRANCHES,
 } from "./review/reviewConstants";
@@ -55,6 +54,7 @@ import {
   VCT_STONE_THRESHOLD,
   type VCTBranch,
 } from "./search/vct";
+import { globalTT } from "./transpositionTable";
 
 /** VCF初手を候補リストの先頭に追加/更新する */
 function promoteVcfCandidate(
@@ -100,7 +100,6 @@ interface DemotionContext {
   forcedWinType: ForcedWinType | undefined;
   bestMove: Position;
   bestScore: number;
-  workerStartTime: number;
   fwBestLoss?: import("@/types/review").ForcedLossResult;
 }
 
@@ -130,13 +129,7 @@ function handleDemotion(ctx: DemotionContext): {
   // 両ミセ降格時: maxDepth制限されていたVCFのフル再探索
   const reVcf =
     ctx.forcedWinType === "double-mise"
-      ? findVCFSequence(ctx.board, ctx.color, {
-          ...REVIEW_VCF_OPTIONS,
-          timeLimit: Math.min(
-            REVIEW_VCF_OPTIONS.timeLimit ?? 1500,
-            Math.max(500, 25_000 - (performance.now() - ctx.workerStartTime)),
-          ),
-        })
+      ? findVCFSequence(ctx.board, ctx.color, REVIEW_VCF_OPTIONS)
       : null;
 
   if (reVcf) {
@@ -159,16 +152,10 @@ function handleDemotion(ctx: DemotionContext): {
   };
 }
 
-/** PV検証用の残りバジェットを算出する */
-function calcPVBudget(workerStartTime: number): number {
-  const elapsed = performance.now() - workerStartTime;
-  return Math.max(
-    1000,
-    Math.min(REVIEW_PV_VERIFY_TIME_BUDGET, 25_000 - elapsed),
-  );
-}
-
 self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
+  // 前の手の評価によるTT残留を排除し、決定論的な結果を保証
+  globalTT.clear();
+
   const {
     moveHistory,
     moveIndex,
@@ -178,8 +165,6 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
     skipStoneThreshold,
     candidatePosition,
   } = event.data;
-
-  const workerStartTime = performance.now();
 
   try {
     const moves = moveHistory.trim().split(/\s+/);
@@ -308,11 +293,9 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
       board,
       color,
       maxDepth: REVIEW_SEARCH_PARAMS.depth,
-      timeLimit: REVIEW_SEARCH_PARAMS.timeLimit,
       randomFactor: 0, // 決定論的
       evaluationOptions: REVIEW_SEARCH_PARAMS.evaluationOptions,
       maxNodes: REVIEW_SEARCH_PARAMS.maxNodes,
-      absoluteTimeLimit: REVIEW_SEARCH_PARAMS.absoluteTimeLimit,
       collectPV: true,
     });
 
@@ -545,15 +528,13 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
       // forcedWin初手の事後検証: 相手に強制勝ちを許さないか確認
       // VCF系は初手が四なので checkCandidateForcedLoss 内で即スキップ（コスト≒0）
       const stoneCountFW = countStones(board);
-      const elapsedFW = performance.now() - workerStartTime;
-      const timeBudgetFW = Math.max(1000, Math.min(5000, 25_000 - elapsedFW));
       const { demotedBest: fwDemoted, bestLoss: fwBestLoss } = verifyCandidates(
         board,
         candidates,
         color,
         opponentColor,
         stoneCountFW,
-        timeBudgetFW,
+        Infinity,
       );
 
       // PV事後検証: 安全な候補のPV内の後続手に追詰がないかチェック
@@ -563,7 +544,7 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
         color,
         opponentColor,
         stoneCountFW,
-        calcPVBudget(workerStartTime),
+        Infinity,
       );
 
       // 打たれた手の候補エントリにforcedLossTypeを反映
@@ -592,7 +573,6 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
           forcedWinType,
           bestMove,
           bestScore,
-          workerStartTime,
           fwBestLoss: fwBestLoss ?? undefined,
         });
         ({ forcedWinType } = dm);
@@ -663,15 +643,13 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
 
       // 候補手の事後検証: 相手に強制勝ちを許す手を検出
       const stoneCount = countStones(board);
-      const elapsed = performance.now() - workerStartTime;
-      const timeBudget = Math.max(1000, Math.min(5000, 25_000 - elapsed));
       const { demotedBest, bestLoss } = verifyCandidates(
         board,
         candidates,
         color,
         opponentColor,
         stoneCount,
-        timeBudget,
+        Infinity,
       );
 
       // PV事後検証: 安全な候補のPV内の後続手に追詰がないかチェック
@@ -681,7 +659,7 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
         color,
         opponentColor,
         stoneCount,
-        calcPVBudget(workerStartTime),
+        Infinity,
       );
 
       // 打たれた手の候補エントリにforcedLossTypeを反映

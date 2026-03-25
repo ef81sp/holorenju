@@ -123,6 +123,7 @@ export function verifyPV(
  *
  * 追詰が見つかった候補に opponentForcedWin を設定し、PV を打ち切る。
  * スコア引き下げは下流の adjustCandidatesForForcedLoss が担当する。
+ * @param totalBudgetMs 時間制限（ms）。`Infinity` で無制限。
  */
 export function verifyCandidatePVs(
   board: BoardState,

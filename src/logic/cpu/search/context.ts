@@ -147,6 +147,8 @@ export interface SearchContext {
   absoluteDeadlineExceeded?: boolean;
   /** 脅威プローブキャッシュ（minimax内VCF/VCTチェック用） */
   threatCache: ThreatProbeCache;
+  /** 振り返りパス: performance.now() 依存を排除し決定論的に動作 */
+  noTimeLimit?: boolean;
 }
 
 /**

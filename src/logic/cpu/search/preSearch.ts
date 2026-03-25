@@ -166,10 +166,20 @@ function checkForcedWinSequences(
   color: "black" | "white",
   opponentColor: "black" | "white",
   evaluationOptions: EvaluationOptions,
+  noTimeLimit: boolean,
 ): ForcedWinCheckResult {
+  // noTimeLimit: 振り返りパスでは performance.now() 依存を排除し決定論的に動作
+  // maxNodes で探索量を制御（timeLimit の代替安全弁）
+  const vcfOpts = noTimeLimit
+    ? { timeLimit: Infinity, maxNodes: 50_000 }
+    : undefined;
+  const oppVcfOpts = noTimeLimit
+    ? { timeLimit: Infinity, maxNodes: 50_000 }
+    : { timeLimit: 100 };
+
   // 自VCF（四追い勝ち）
   // 相手の四がある場合は checkMustDefend で即return済みなのでここには到達しない
-  const vcfResult = findVCFSequence(board, color);
+  const vcfResult = findVCFSequence(board, color, vcfOpts);
   if (vcfResult) {
     return {
       immediateMove: {
@@ -182,7 +192,7 @@ function checkForcedWinSequences(
 
   // 相手VCF（Mise-VCFスキップ判定 + 防御候補制限で共有）
   const opponentVCFResult =
-    findVCFSequence(board, opponentColor, { timeLimit: 100 }) ?? null;
+    findVCFSequence(board, opponentColor, oppVcfOpts) ?? null;
 
   // VCTヒント
   let vctHintMove: Position | undefined = undefined;
@@ -191,10 +201,16 @@ function checkForcedWinSequences(
   // 相手VCFがある場合は間に合わないのでスキップ
   // 相手に四三が作れる場合も、ミセの強制応手の前提が崩れるためスキップ
   if (!opponentVCFResult && !hasFourThreeAvailable(board, opponentColor)) {
-    const miseVcfMove = findMiseVCFMove(board, color, {
-      vcfOptions: { maxDepth: 12, timeLimit: 300 },
-      timeLimit: 500,
-    });
+    const miseVcfMove = findMiseVCFMove(
+      board,
+      color,
+      noTimeLimit
+        ? {
+            vcfOptions: { maxDepth: 12, timeLimit: Infinity, maxNodes: 50_000 },
+            timeLimit: Infinity,
+          }
+        : { vcfOptions: { maxDepth: 12, timeLimit: 300 }, timeLimit: 500 },
+    );
     if (miseVcfMove) {
       const isForbidden =
         color === "black" &&
@@ -216,7 +232,8 @@ function checkForcedWinSequences(
     if (stoneCount >= VCT_STONE_THRESHOLD) {
       const vctMove = findVCTMove(board, color, {
         maxDepth: 4,
-        timeLimit: 150,
+        timeLimit: noTimeLimit ? Infinity : 150,
+        maxNodes: noTimeLimit ? 50_000 : undefined,
       });
       if (vctMove) {
         const isForbidden =
@@ -285,6 +302,7 @@ export function findPreSearchMove(
   ctx: SearchContext,
   evaluationOptions: EvaluationOptions,
   absoluteDeadline: number,
+  noTimeLimit = false,
 ): PreSearchResult {
   const timeout = checkEmergencyTimeout(
     board,
@@ -315,6 +333,7 @@ export function findPreSearchMove(
     color,
     opponentColor,
     evaluationOptions,
+    noTimeLimit,
   );
   if (forced.immediateMove) {
     return { immediateMove: forced.immediateMove };

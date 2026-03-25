@@ -184,6 +184,8 @@ watch(
     const evaluation = reviewStore.currentEvaluation;
     if (evaluation?.isPlayerMove) {
       const losingIdx = reviewStore.losingMove?.moveIndex;
+      const isLosingMove =
+        losingIdx !== undefined && evaluation.moveIndex === losingIdx;
       const isAfterLosingMove =
         losingIdx !== undefined && evaluation.moveIndex > losingIdx;
       dialogue.showQualityDialogue(
@@ -193,6 +195,7 @@ watch(
         evaluation.forcedLossType,
         evaluation.missedDoubleMise,
         isAfterLosingMove,
+        isLosingMove,
       );
     } else if (evaluation) {
       dialogue.showCpuMoveDialogue(evaluation.forcedWinType);

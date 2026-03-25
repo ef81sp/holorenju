@@ -79,6 +79,7 @@ function demotePlainFourIfNeeded<T extends MinimaxResult>(
   result: T,
   board: BoardState,
   color: "black" | "white",
+  noTimeLimit = false,
 ): T {
   if (!result.candidates || result.candidates.length < 2) {
     return result;
@@ -92,7 +93,8 @@ function demotePlainFourIfNeeded<T extends MinimaxResult>(
 
   // VCF安全チェック: VCFがあればdemoteしない
   const vcfMove = findVCFMove(board, color, {
-    timeLimit: PLAIN_FOUR_VCF_CHECK_TIME_LIMIT,
+    timeLimit: noTimeLimit ? Infinity : PLAIN_FOUR_VCF_CHECK_TIME_LIMIT,
+    maxNodes: noTimeLimit ? 50_000 : undefined,
   });
   if (vcfMove) {
     return result;
@@ -120,7 +122,7 @@ export interface IterativeDeepeningParams {
   board: BoardState;
   color: "black" | "white";
   maxDepth: number;
-  timeLimit: number;
+  timeLimit?: number;
   randomFactor?: number;
   evaluationOptions?: EvaluationOptions;
   maxNodes?: number;
@@ -144,7 +146,9 @@ export function findBestMoveIterativeWithTT(
     randomFactor = 0,
     evaluationOptions = DEFAULT_EVAL_OPTIONS,
     maxNodes,
-    absoluteTimeLimit = DEFAULT_ABSOLUTE_TIME_LIMIT,
+    absoluteTimeLimit = timeLimit === undefined
+      ? Infinity
+      : DEFAULT_ABSOLUTE_TIME_LIMIT,
     scoreThreshold = 200,
     collectPV = false,
   } = params;
@@ -177,6 +181,7 @@ export function findBestMoveIterativeWithTT(
     ctx,
     evaluationOptions,
     absoluteDeadline,
+    timeLimit === undefined,
   );
 
   // 即座に返すべき手がある場合
@@ -255,7 +260,8 @@ export function findBestMoveIterativeWithTT(
         }
         boardRow[move.col] = color;
         const hasFukumi = hasVCF(board, color, 0, undefined, {
-          timeLimit: 30,
+          timeLimit: timeLimit === undefined ? Infinity : 30,
+          maxNodes: timeLimit === undefined ? 10_000 : undefined,
         });
         boardRow[move.col] = null;
         if (hasFukumi) {
@@ -274,19 +280,20 @@ export function findBestMoveIterativeWithTT(
   }
 
   // deadline ベースの時間設定
-  // VCF時間の特別扱いは撤廃: deadline = startTime + dynamicTimeLimit で
-  // VCF時間は自然に予算に含まれる
-  const dynamicTimeLimit = calculateDynamicTimeLimit(
-    timeLimit,
-    board,
-    moves.length,
-  );
+  // timeLimit 未指定時は時間制限なし（maxDepth/maxNodes のみで制御）
+  const dynamicTimeLimit =
+    timeLimit === undefined
+      ? Infinity
+      : calculateDynamicTimeLimit(timeLimit, board, moves.length);
   const searchDeadline = startTime + dynamicTimeLimit;
   ctx.deadline = searchDeadline;
   ctx.timeoutFlag = false;
 
   // ノード数上限を設定
   ctx.maxNodes = maxNodes;
+
+  // 振り返りパス: performance.now() 依存を排除
+  ctx.noTimeLimit = timeLimit === undefined;
   ctx.nodeCountExceeded = false;
 
   // 絶対停止タイムスタンプを設定
@@ -489,7 +496,12 @@ export function findBestMoveIterativeWithTT(
     }
   }
 
-  bestResult = demotePlainFourIfNeeded(bestResult, board, color);
+  bestResult = demotePlainFourIfNeeded(
+    bestResult,
+    board,
+    color,
+    timeLimit === undefined,
+  );
 
   const finalResult: IterativeDeepingResult & { stats: SearchStats } = {
     position: bestResult.position,

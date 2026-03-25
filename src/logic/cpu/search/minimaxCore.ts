@@ -393,6 +393,7 @@ export function minimaxWithTT(
       ctx.threatCache,
       enableVCT,
       ctx.lineTable,
+      ctx.noTimeLimit,
     );
     recordTiming("threatProbe", tThreat);
     if (threatResult !== null) {
@@ -1029,7 +1030,7 @@ export function findBestMoveWithTT(
   // 同スコア手のタイブレーク
   const bestScore = best.score;
   const tiedMoves = moveScores.filter((m) => m.score === bestScore);
-  if (tiedMoves.length > 1) {
+  if (tiedMoves.length > 1 && randomFactor > 0) {
     const tieIndex = Math.floor(Math.random() * tiedMoves.length);
     const selected = tiedMoves[tieIndex] ?? best;
     const originalRank =
