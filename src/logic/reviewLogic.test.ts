@@ -13,6 +13,7 @@ import {
   buildEvaluatedMove,
   buildGameReview,
   classifyMoveQuality,
+  findLosingMove,
   isOpeningMove,
 } from "./reviewLogic";
 
@@ -197,5 +198,97 @@ describe("applyVCTResult", () => {
     };
     const merged = applyVCTResult(base, vct);
     expect(merged).toBe(base); // 同一参照
+  });
+});
+
+describe("findLosingMove", () => {
+  function makeMove(
+    moveIndex: number,
+    isPlayerMove: boolean,
+    opts?: {
+      forcedLossType?: string;
+      candidates?: { opponentForcedWin?: string }[];
+    },
+  ): EvaluatedMove {
+    return {
+      moveIndex,
+      position: { row: 0, col: 0 },
+      isPlayerMove,
+      quality: "excellent",
+      playedScore: 0,
+      bestScore: 0,
+      scoreDiff: 0,
+      bestMove: { row: 0, col: 0 },
+      candidates: (opts?.candidates ?? []).map((c) => ({
+        position: { row: 0, col: 0 },
+        score: 0,
+        searchScore: 0,
+        opponentForcedWin: c.opponentForcedWin as
+          | EvaluatedMove["forcedLossType"]
+          | undefined,
+      })),
+      forcedLossType: opts?.forcedLossType as EvaluatedMove["forcedLossType"],
+    };
+  }
+
+  it("forcedLossType がないとき undefined を返す", () => {
+    const moves = [makeMove(3, true), makeMove(4, false), makeMove(5, true)];
+    expect(findLosingMove(moves)).toBeUndefined();
+  });
+
+  it("forcedLossType が付いた手で生存候補がある → その手が敗着", () => {
+    const moves = [
+      makeMove(3, true),
+      makeMove(4, false),
+      makeMove(5, true, {
+        forcedLossType: "vct",
+        candidates: [
+          { opponentForcedWin: "vcf" },
+          {}, // opponentForcedWin なし = 生存
+        ],
+      }),
+    ];
+    expect(findLosingMove(moves)).toEqual({ moveIndex: 5 });
+  });
+
+  it("全候補が負け → 前の手に遡及して敗着", () => {
+    const moves = [
+      makeMove(3, true, {
+        candidates: [{ opponentForcedWin: undefined }],
+      }),
+      makeMove(4, false),
+      makeMove(5, true, {
+        forcedLossType: "vct",
+        candidates: [
+          { opponentForcedWin: "vcf" },
+          { opponentForcedWin: "vct" },
+        ],
+      }),
+    ];
+    // 5手目は全候補負け → 3手目に遡及。3手目は候補に生存あり → 3手目が敗着
+    expect(findLosingMove(moves)).toEqual({ moveIndex: 3 });
+  });
+
+  it("コンピュータ手の forcedLossType は無視する", () => {
+    const moves = [
+      makeMove(3, true),
+      makeMove(4, false, { forcedLossType: "vcf" }),
+      makeMove(5, true),
+      makeMove(6, false),
+      makeMove(7, true, { forcedLossType: "vct" }),
+    ];
+    expect(findLosingMove(moves)).toEqual({ moveIndex: 7 });
+  });
+
+  it("候補が空なら遡及しない（判定不能 → その手が敗着）", () => {
+    const moves = [
+      makeMove(3, true),
+      makeMove(5, true, { forcedLossType: "vct", candidates: [] }),
+    ];
+    expect(findLosingMove(moves)).toEqual({ moveIndex: 5 });
+  });
+
+  it("空の evaluatedMoves で undefined を返す", () => {
+    expect(findLosingMove([])).toBeUndefined();
   });
 });

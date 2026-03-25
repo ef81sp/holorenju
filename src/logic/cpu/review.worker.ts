@@ -164,6 +164,8 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
     playerFirst: _playerFirst,
     isLightEval,
     vctCheckOnly,
+    skipStoneThreshold,
+    candidatePosition,
   } = event.data;
 
   const workerStartTime = performance.now();
@@ -171,12 +173,20 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
   try {
     const moves = moveHistory.trim().split(/\s+/);
 
-    // Phase 2: VCTチェックのみ実行
+    // Phase 2/3: VCTチェックのみ実行
     if (vctCheckOnly) {
-      const { board: boardAfter } = createBoardFromRecord(
-        moves.slice(0, moveIndex + 1).join(" "),
-      );
+      // candidatePosition 指定時: 実際の着手の代わりに候補手を置いた盤面を構築
+      const boardRecord = candidatePosition
+        ? moves.slice(0, moveIndex).join(" ")
+        : moves.slice(0, moveIndex + 1).join(" ");
+      const { board: boardAfter } = createBoardFromRecord(boardRecord);
       const color = moveIndex % 2 === 0 ? "black" : "white";
+      if (candidatePosition) {
+        const row = boardAfter[candidatePosition.row];
+        if (row) {
+          row[candidatePosition.col] = color;
+        }
+      }
       const opponentColor = color === "black" ? "white" : "black";
       const stoneCountAfter = countStones(boardAfter);
 
@@ -187,7 +197,10 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
 
       let forcedLossType: ForcedLossType | undefined = undefined;
       let forcedLossSequence: Position[] | undefined = undefined;
-      if (!selfHasFour && stoneCountAfter >= VCT_STONE_THRESHOLD) {
+      if (
+        !selfHasFour &&
+        (skipStoneThreshold || stoneCountAfter >= VCT_STONE_THRESHOLD)
+      ) {
         const oppVCT = findVCTSequence(
           boardAfter,
           opponentColor,

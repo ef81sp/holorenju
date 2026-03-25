@@ -20,6 +20,7 @@ interface Props {
   totalCount: number;
   accuracy: number | null;
   criticalErrors: number;
+  losingMoveNumber?: number;
   difficulty?: CpuDifficulty;
   moveCount: number;
   playerFirst: boolean;
@@ -100,6 +101,12 @@ async function copyMoveHistory(): Promise<void> {
         class="errors"
       >
         ミス {{ props.criticalErrors }}回
+      </div>
+      <div
+        v-if="props.losingMoveNumber !== undefined"
+        class="losing-move"
+      >
+        敗着 {{ props.losingMoveNumber }}手目付近
       </div>
     </div>
   </div>
@@ -208,6 +215,14 @@ async function copyMoveHistory(): Promise<void> {
 .errors {
   font-size: var(--size-12);
   color: var(--color-miko-primary);
+  padding: var(--size-2) var(--size-6);
+  background: var(--color-background-secondary);
+  border-radius: var(--size-4);
+}
+
+.losing-move {
+  font-size: var(--size-12);
+  color: hsl(0, 65%, 50%);
   padding: var(--size-2) var(--size-6);
   background: var(--color-background-secondary);
   border-radius: var(--size-4);

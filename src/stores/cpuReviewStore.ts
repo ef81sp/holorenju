@@ -19,6 +19,7 @@ import type {
 
 import { parseGameRecord } from "@/logic/gameRecordParser";
 import { checkWin, createEmptyBoard } from "@/logic/renjuRules";
+import { findLosingMove } from "@/logic/reviewLogic";
 
 /** localStorageキャッシュキー */
 const REVIEW_CACHE_KEY = "holorenju-review-cache";
@@ -227,6 +228,9 @@ export const useCpuReviewStore = defineStore("cpuReview", () => {
       ).length,
   );
 
+  /** 敗着の推定結果 */
+  const losingMove = computed(() => findLosingMove(evaluatedMoves.value));
+
   // ========== Actions ==========
 
   /**
@@ -318,7 +322,10 @@ export const useCpuReviewStore = defineStore("cpuReview", () => {
   function updateEvaluatedMove(
     moveIndex: number,
     updates: Partial<
-      Pick<EvaluatedMove, "forcedLossType" | "forcedLossSequence">
+      Pick<
+        EvaluatedMove,
+        "forcedLossType" | "forcedLossSequence" | "candidates"
+      >
     >,
   ): void {
     const idx = evaluatedMoves.value.findIndex(
@@ -348,6 +355,7 @@ export const useCpuReviewStore = defineStore("cpuReview", () => {
         evaluatedMoves: results,
         accuracy: playerAccuracy.value ?? 100,
         criticalErrors: criticalErrors.value,
+        losingMove: losingMove.value,
       };
       reviewCache.value.set(currentRecord.value.id, review);
       saveCache(reviewCache.value);
@@ -401,6 +409,7 @@ export const useCpuReviewStore = defineStore("cpuReview", () => {
     currentEvaluation,
     playerAccuracy,
     criticalErrors,
+    losingMove,
     // Actions
     openReview,
     openReviewFromImport,

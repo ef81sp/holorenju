@@ -10,6 +10,7 @@ import type {
   FullEvalResult,
   GameReview,
   LightEvalResult,
+  LosingMoveInfo,
   MoveQuality,
   VCTCheckResult,
 } from "@/types/review";
@@ -86,11 +87,39 @@ export function buildEvaluatedMove(
     };
   }
 
-  const scoreDiff = result.bestScore - result.playedScore;
+  // opponentForcedWin が付いた候補を引き下げ、安全な候補で bestScore/bestMove を再計算
+  let { bestScore, bestMove } = result;
+  const { candidates } = result;
+  if (candidates.length > 0 && candidates.some((c) => c.opponentForcedWin)) {
+    // opponentForcedWin 付き候補のスコアを引き下げて順位を下げる
+    for (const c of candidates) {
+      if (c.opponentForcedWin) {
+        c.searchScore = Math.min(c.searchScore, -100_000);
+      }
+    }
+    // スコア順にソートし直す
+    candidates.sort((a, b) => b.searchScore - a.searchScore);
+    // 先頭の安全な候補を bestMove/bestScore にする（PV表示と一致させる）
+    const [topCand] = candidates;
+    if (topCand && !topCand.opponentForcedWin) {
+      bestScore = topCand.searchScore;
+      bestMove = topCand.position;
+    }
+  }
+
+  const scoreDiff = bestScore - result.playedScore;
 
   let quality = classifyMoveQuality(scoreDiff);
   if (quality === "excellent" && result.missedDoubleMise?.length) {
     quality = "good";
+  }
+  // forcedLossType が付いている場合、品質を blunder に下げる
+  // （追詰を許した手は評価値の差に関係なく悪手）
+  if (
+    result.forcedLossType &&
+    (quality === "excellent" || quality === "good")
+  ) {
+    quality = "blunder";
   }
 
   return {
@@ -99,15 +128,16 @@ export function buildEvaluatedMove(
     isPlayerMove,
     quality,
     playedScore: result.playedScore,
-    bestScore: result.bestScore,
+    bestScore,
     scoreDiff,
-    bestMove: result.bestMove,
-    candidates: result.candidates,
+    bestMove,
+    candidates,
     completedDepth: result.completedDepth,
     forcedWinType: result.forcedWinType,
     forcedWinBranches: result.forcedWinBranches,
     forcedLossType: result.forcedLossType,
     forcedLossSequence: result.forcedLossSequence,
+    forcedLossBranches: result.forcedLossBranches,
     missedDoubleMise: result.missedDoubleMise,
     doubleMiseTargets: result.doubleMiseTargets,
   };
@@ -154,7 +184,59 @@ export function buildGameReview(evaluatedMoves: EvaluatedMove[]): GameReview {
     evaluatedMoves,
     accuracy,
     criticalErrors,
+    losingMove: findLosingMove(evaluatedMoves),
   };
+}
+
+/**
+ * 敗着を推定する
+ *
+ * forcedLossType が付いたプレイヤーの手を古い順に探し、
+ * その手の全候補が opponentForcedWin を持つ（＝どの良い手も負け）場合は
+ * さらに前のプレイヤーの手が敗着と判定する。
+ *
+ * 「この手で追詰を許した。別の手に打てば助かったのに」が敗着の定義。
+ */
+export function findLosingMove(
+  evaluatedMoves: EvaluatedMove[],
+): LosingMoveInfo | undefined {
+  // プレイヤーの手を moveIndex 昇順で抽出
+  const playerMoves = evaluatedMoves
+    .filter((m) => m.isPlayerMove)
+    .sort((a, b) => a.moveIndex - b.moveIndex);
+
+  // forcedLossType が付いた最も古いプレイヤーの手を見つける
+  const firstLossIdx = playerMoves.findIndex((m) => m.forcedLossType);
+  if (firstLossIdx === -1) {
+    return undefined;
+  }
+
+  // そこから遡及: 全候補が負け → 前の手が敗着
+  for (let i = firstLossIdx; i >= 0; i--) {
+    const move = playerMoves[i]!;
+    if (!allCandidatesLose(move)) {
+      // 生存する候補がある → この手が敗着（別の手に打てば助かった）
+      return { moveIndex: move.moveIndex };
+    }
+    // 全候補負け → さらに前の手を確認
+  }
+
+  // 全手で全候補が負け → 最も古い手が敗着
+  return { moveIndex: playerMoves[0]!.moveIndex };
+}
+
+/**
+ * 全候補手が opponentForcedWin を持つか（＝どの良い手も負け）
+ *
+ * verifyCandidates は安全な手を見つけたら即 break するため、
+ * 全候補に opponentForcedWin が付いている = 全候補チェック済み = 全部負け。
+ * 候補が空の場合は判定不能として false を返す。
+ */
+function allCandidatesLose(move: EvaluatedMove): boolean {
+  if (move.candidates.length === 0) {
+    return false;
+  }
+  return move.candidates.every((c) => c.opponentForcedWin !== undefined);
 }
 
 /**
