@@ -295,7 +295,9 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
         if (loss) {
           forcedLossType = loss.type;
           forcedLossSequence = loss.sequence;
-        } else if (stoneCountAfter >= VCT_STONE_THRESHOLD) {
+        } else {
+          // Phase 2 で VCT を深くチェック（石数閾値なし）
+          // 振り返りでは正確性優先、Phase 2 は単一ワーカー逐次実行
           needsVCTCheck = true;
         }
       }

@@ -283,6 +283,8 @@ export function useReviewEvaluator(): UseReviewEvaluatorReturn {
                 if (branches.length > 0) {
                   prevPlayer.forcedLossBranches = branches;
                 }
+                // 遡及先を次の処理対象にして再帰的にチェック
+                forcedLossMoves.splice(currentIdx + 1, 0, prevPlayer);
               }
               currentIdx++;
               processNextForcedLossMove();
@@ -328,13 +330,14 @@ export function useReviewEvaluator(): UseReviewEvaluatorReturn {
     }
 
     /**
-     * 評価完了処理
-     *
      * Phase 2/3 で forcedLossType が付いた手の played candidate に
-     * opponentForcedWin を伝播する。最終リビルドの buildEvaluatedMove →
-     * adjustCandidatesForForcedLoss が正しい状態で動作するために必要。
+     * opponentForcedWin を伝播する。
+     *
+     * buildEvaluatedMove は Phase 1 コールバックと最終リビルドで2回呼ばれ、
+     * candidates を直接 mutate するため、伝播は buildEvaluatedMove 内ではなく
+     * 全 Phase 完了後に1回だけ行う。
      */
-    function finishEvaluation(): void {
+    function propagateForcedLossToCandidates(): void {
       for (const r of results) {
         if (r.mode !== "fullEval" || !r.forcedLossType) {
           continue;
@@ -353,7 +356,11 @@ export function useReviewEvaluator(): UseReviewEvaluatorReturn {
           cand.opponentForcedWinSequence = fr.forcedLossSequence;
         }
       }
+    }
 
+    /** 評価完了処理 */
+    function finishEvaluation(): void {
+      propagateForcedLossToCandidates();
       isEvaluating.value = false;
       resolveAll?.(results.sort((a, b) => a.moveIndex - b.moveIndex));
     }

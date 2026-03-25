@@ -24,42 +24,46 @@ import {
 } from "../search/vct";
 import { hasFourThreeAvailable, hasOpenThree } from "../search/vctHelpers";
 
-/** 振り返り用VCF探索パラメータ */
+/**
+ * 振り返り用探索パラメータ
+ *
+ * 各探索関数は timeLimit 省略時にデフォルト値（150〜500ms）を使うため、
+ * 振り返りでは Infinity を明示的に指定して時間制限を無効化する。
+ * maxDepth のみで探索範囲を制御する。
+ */
+const NO_TIME_LIMIT = Infinity;
+
+/** Phase 1 打たれた手のチェック用 */
 export const REVIEW_VCF_OPTIONS: VCFSearchOptions = {
   maxDepth: 16,
-  timeLimit: 1500,
+  timeLimit: NO_TIME_LIMIT,
 };
-
-/** 振り返り用Mise-VCF探索パラメータ */
 export const REVIEW_MISE_VCF_OPTIONS: MiseVCFSearchOptions = {
-  vcfOptions: { maxDepth: 12, timeLimit: 300 },
-  timeLimit: 500,
+  vcfOptions: { maxDepth: 12, timeLimit: NO_TIME_LIMIT },
+  timeLimit: NO_TIME_LIMIT,
 };
 
-/** checkForcedLoss用VCT探索パラメータ（存在検出のみ、分岐収集なし、Phase 2で単一ワーカー実行） */
+/** Phase 2/3 VCT 深掘りチェック用 */
 export const FORCED_LOSS_VCT_OPTIONS: VCTSearchOptions = {
-  maxDepth: 6,
-  timeLimit: 10000,
-  vcfOptions: {
-    maxDepth: 16,
-    timeLimit: 10000,
-  },
+  maxDepth: 8,
+  timeLimit: NO_TIME_LIMIT,
+  vcfOptions: { maxDepth: 16, timeLimit: NO_TIME_LIMIT },
   collectBranches: false,
 };
 
-/** 候補手検証用の短縮パラメータ */
+/** 候補手検証用（verifyCandidates / verifyCandidatePVs） */
 export const CANDIDATE_VERIFY_VCF_OPTIONS: VCFSearchOptions = {
   maxDepth: 12,
-  timeLimit: 500,
+  timeLimit: NO_TIME_LIMIT,
 };
 export const CANDIDATE_VERIFY_MISE_VCF_OPTIONS: MiseVCFSearchOptions = {
-  vcfOptions: { maxDepth: 10, timeLimit: 150 },
-  timeLimit: 250,
+  vcfOptions: { maxDepth: 12, timeLimit: NO_TIME_LIMIT },
+  timeLimit: NO_TIME_LIMIT,
 };
 export const CANDIDATE_VERIFY_VCT_OPTIONS: VCTSearchOptions = {
   maxDepth: 4,
-  timeLimit: 750,
-  vcfOptions: { maxDepth: 12, timeLimit: 250 },
+  timeLimit: NO_TIME_LIMIT,
+  vcfOptions: { maxDepth: 12, timeLimit: NO_TIME_LIMIT },
   collectBranches: false,
 };
 

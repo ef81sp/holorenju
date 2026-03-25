@@ -183,9 +183,9 @@ export function buildGameReview(evaluatedMoves: EvaluatedMove[]): GameReview {
 /**
  * 敗着を推定する
  *
- * forcedLossType が付いたプレイヤーの手を古い順に探し、
- * その手の全候補が opponentForcedWin を持つ（＝どの良い手も負け）場合は
- * さらに前のプレイヤーの手が敗着と判定する。
+ * 被追詰の手を古い順に探し、そこから遡及する。
+ * 被追詰の判定: forcedLossType が設定されている、または全候補が opponentForcedWin。
+ * 全候補が負けなら前の手を確認し、生存候補がある手を敗着と判定する。
  *
  * 「この手で追詰を許した。別の手に打てば助かったのに」が敗着の定義。
  */
@@ -197,8 +197,11 @@ export function findLosingMove(
     .filter((m) => m.isPlayerMove)
     .sort((a, b) => a.moveIndex - b.moveIndex);
 
-  // forcedLossType が付いた最も古いプレイヤーの手を見つける
-  const firstLossIdx = playerMoves.findIndex((m) => m.forcedLossType);
+  // 被追詰の最も古いプレイヤーの手を見つける
+  // forcedLossType 設定済み、または全候補が opponentForcedWin
+  const firstLossIdx = playerMoves.findIndex(
+    (m) => m.forcedLossType || allCandidatesLose(m),
+  );
   if (firstLossIdx === -1) {
     return undefined;
   }

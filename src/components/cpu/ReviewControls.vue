@@ -332,7 +332,7 @@ const moveDots = computed(() =>
 /* 敗着マーカー（二重リング） */
 .is-losing-move {
   box-shadow:
-    0 0 0 2px hsl(0, 65%, 50%),
+    0 0 0 2px hsl(0, 80%, 40%),
     0 0 0 4px var(--color-bg-white);
 }
 </style>
