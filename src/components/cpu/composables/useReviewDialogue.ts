@@ -68,6 +68,12 @@ const FORCED_LOSS_EMOTIONS: Record<MoveQuality, EmotionId> = {
   blunder: 11, // 心配
 };
 
+/** 敗着以降（既に負けが決まっている局面）のセリフ */
+const ALREADY_LOST_DIALOGUES: string[] = [
+  "もう相手の{forcedLoss}が決まっているよ...",
+  "この局面は相手の{forcedLoss}を防げないね...",
+];
+
 /** CPU手のセリフ */
 const CPU_MOVE_DIALOGUES = ["相手の一手だよ", "相手の手だね"];
 
@@ -129,6 +135,7 @@ export interface UseReviewDialogueReturn {
     forcedWinType?: EvaluatedMove["forcedWinType"],
     forcedLossType?: EvaluatedMove["forcedLossType"],
     missedDoubleMise?: Position[],
+    isAlreadyLost?: boolean,
   ) => void;
   /** CPU手のセリフを表示 */
   showCpuMoveDialogue: (forcedWinType?: EvaluatedMove["forcedWinType"]) => void;
@@ -170,11 +177,18 @@ export function useReviewDialogue(): UseReviewDialogueReturn {
     quality: MoveQuality,
     forcedWinType?: EvaluatedMove["forcedWinType"],
     forcedLossType?: EvaluatedMove["forcedLossType"],
+    isAlreadyLost?: boolean,
   ): { templates: string[]; emotion: EmotionId } {
     if (forcedWinType) {
       return {
         templates: FORCED_WIN_DIALOGUES[quality],
         emotion: QUALITY_EMOTIONS[quality],
+      };
+    }
+    if (isAlreadyLost && forcedLossType) {
+      return {
+        templates: ALREADY_LOST_DIALOGUES,
+        emotion: 1, // 考え中（仕方ない）
       };
     }
     if (forcedLossType) {
@@ -195,6 +209,7 @@ export function useReviewDialogue(): UseReviewDialogueReturn {
     forcedWinType?: EvaluatedMove["forcedWinType"],
     forcedLossType?: EvaluatedMove["forcedLossType"],
     missedDoubleMise?: Position[],
+    isAlreadyLost?: boolean,
   ): void {
     // 両ミセ局面だが打った手は両ミセではない場合の専用セリフ
     // quality が good 以上（excellent→good ダウングレード含む）の場合のみ
@@ -221,6 +236,7 @@ export function useReviewDialogue(): UseReviewDialogueReturn {
       quality,
       effectiveForcedWinType,
       forcedLossType,
+      isAlreadyLost,
     );
     const template = randomChoice(templates);
     const forcedWinLabel = forcedWinType ? FULL_LABELS[forcedWinType] : "";

@@ -183,12 +183,16 @@ watch(
 
     const evaluation = reviewStore.currentEvaluation;
     if (evaluation?.isPlayerMove) {
+      const losingIdx = reviewStore.losingMove?.moveIndex;
+      const isAfterLosingMove =
+        losingIdx !== undefined && evaluation.moveIndex > losingIdx;
       dialogue.showQualityDialogue(
         evaluation.quality,
         evaluation.bestMove,
         evaluation.forcedWinType,
         evaluation.forcedLossType,
         evaluation.missedDoubleMise,
+        isAfterLosingMove,
       );
     } else if (evaluation) {
       dialogue.showCpuMoveDialogue(evaluation.forcedWinType);
