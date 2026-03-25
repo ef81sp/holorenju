@@ -77,12 +77,13 @@ const moveDots = computed(() =>
     const forcedWinLabel = getForcedWinLabel(evaluated?.forcedWinType);
     const forcedLossLabel = getForcedLossLabel(evaluated?.forcedLossType);
     const isLosingMove = props.losingMoveIndex === i;
+    const qualityColor =
+      evaluated && !evaluated.isLightEval
+        ? getQualityColor(evaluated.quality)
+        : undefined;
     return {
       index: i + 1,
-      color:
-        evaluated && !evaluated.isLightEval
-          ? getQualityColor(evaluated.quality)
-          : undefined,
+      color: isLosingMove ? "hsl(0, 80%, 40%)" : qualityColor,
       isCurrent: i + 1 === props.currentMoveIndex,
       underlines: evaluated?.isLightEval
         ? 0

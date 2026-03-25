@@ -42,7 +42,9 @@ import {
   REVIEW_VCF_OPTIONS,
 } from "./review/forcedLossCheck";
 import { detectForcedWin } from "./review/forcedWinDetection";
+import { verifyCandidatePVs } from "./review/pvVerification";
 import {
+  REVIEW_PV_VERIFY_TIME_BUDGET,
   REVIEW_SEARCH_PARAMS,
   REVIEW_VCT_OPTIONS_WITH_BRANCHES,
 } from "./review/reviewConstants";
@@ -155,6 +157,15 @@ function handleDemotion(ctx: DemotionContext): {
     forcedWinBranches: undefined,
     clearDoubleMise: true,
   };
+}
+
+/** PV検証用の残りバジェットを算出する */
+function calcPVBudget(workerStartTime: number): number {
+  const elapsed = performance.now() - workerStartTime;
+  return Math.max(
+    1000,
+    Math.min(REVIEW_PV_VERIFY_TIME_BUDGET, 25_000 - elapsed),
+  );
 }
 
 self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
@@ -543,6 +554,16 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
         timeBudgetFW,
       );
 
+      // PV事後検証: 安全な候補のPV内の後続手に追詰がないかチェック
+      verifyCandidatePVs(
+        board,
+        candidates,
+        color,
+        opponentColor,
+        stoneCountFW,
+        calcPVBudget(workerStartTime),
+      );
+
       // 打たれた手の候補エントリにforcedLossTypeを反映
       // forcedWinパスでも、実際の手が被必勝を許す場合にフラグを付ける
       if (forcedLossType && playedRow >= 0) {
@@ -560,7 +581,8 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
         forcedLossType ?? undefined;
       let fwForcedLossSequence: Position[] | undefined =
         forcedLossSequence ?? undefined;
-      if (fwDemoted) {
+      // verifyCandidates または PV検証で最善手が降格された場合
+      if (fwDemoted || candidates[0]?.opponentForcedWin) {
         const dm = handleDemotion({
           board,
           candidates,
@@ -650,6 +672,16 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
         timeBudget,
       );
 
+      // PV事後検証: 安全な候補のPV内の後続手に追詰がないかチェック
+      verifyCandidatePVs(
+        board,
+        candidates,
+        color,
+        opponentColor,
+        stoneCount,
+        calcPVBudget(workerStartTime),
+      );
+
       // 打たれた手の候補エントリにforcedLossTypeを反映
       if (forcedLossType && playedRow >= 0) {
         const playedCand = candidates.find(
@@ -664,7 +696,10 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
       let finalBestScore = result.score;
       let finalForcedLossType = forcedLossType;
       let finalForcedLossSequence = forcedLossSequence;
-      if (demotedBest) {
+      // verifyCandidates または PV検証で最善手が降格された場合
+      const bestDemoted =
+        demotedBest || Boolean(candidates[0]?.opponentForcedWin);
+      if (bestDemoted) {
         const safeBest = findSafeBest(candidates);
         if (safeBest) {
           finalBestMove = safeBest.position;

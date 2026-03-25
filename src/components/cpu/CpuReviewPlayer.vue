@@ -332,11 +332,6 @@ function handleLayoutClick(event: MouseEvent): void {
             :total-count="evaluator.totalCount.value"
             :accuracy="reviewStore.playerAccuracy"
             :critical-errors="reviewStore.criticalErrors"
-            :losing-move-number="
-              reviewStore.losingMove
-                ? reviewStore.losingMove.moveIndex + 1
-                : undefined
-            "
             :difficulty="reviewStore.currentRecord?.difficulty"
             :move-count="reviewStore.moves.length"
             :player-first="reviewStore.playerFirst"

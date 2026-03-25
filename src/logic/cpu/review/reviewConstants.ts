@@ -17,6 +17,9 @@ export const REVIEW_SEARCH_PARAMS = {
   evaluationOptions: DIFFICULTY_PARAMS.hard.evaluationOptions,
 } as const;
 
+/** PV事後検証のタイムバジェット（ms） */
+export const REVIEW_PV_VERIFY_TIME_BUDGET = 10_000;
+
 /** 振り返り用VCT探索パラメータ（forcedWin表示用、分岐収集あり） */
 export const REVIEW_VCT_OPTIONS_WITH_BRANCHES: VCTSearchOptions = {
   maxDepth: 6,

@@ -17,6 +17,7 @@ import type {
 } from "@/types/review";
 
 import ReviewWorker from "@/logic/cpu/review.worker?worker";
+import { parseMove } from "@/logic/gameRecordParser";
 import {
   buildBacktrackBranches,
   buildBacktrackSequence,
@@ -328,8 +329,31 @@ export function useReviewEvaluator(): UseReviewEvaluatorReturn {
 
     /**
      * 評価完了処理
+     *
+     * Phase 2/3 で forcedLossType が付いた手の played candidate に
+     * opponentForcedWin を伝播する。最終リビルドの buildEvaluatedMove →
+     * adjustCandidatesForForcedLoss が正しい状態で動作するために必要。
      */
     function finishEvaluation(): void {
+      for (const r of results) {
+        if (r.mode !== "fullEval" || !r.forcedLossType) {
+          continue;
+        }
+        const fr = r as FullEvalResult;
+        const moveStr = moves[fr.moveIndex];
+        if (!moveStr || !fr.candidates) {
+          continue;
+        }
+        const pos = parseMove(moveStr);
+        const cand = fr.candidates.find(
+          (c) => c.position.row === pos.row && c.position.col === pos.col,
+        );
+        if (cand && !cand.opponentForcedWin) {
+          cand.opponentForcedWin = fr.forcedLossType;
+          cand.opponentForcedWinSequence = fr.forcedLossSequence;
+        }
+      }
+
       isEvaluating.value = false;
       resolveAll?.(results.sort((a, b) => a.moveIndex - b.moveIndex));
     }
