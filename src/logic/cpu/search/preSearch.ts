@@ -169,12 +169,12 @@ function checkForcedWinSequences(
   noTimeLimit: boolean,
 ): ForcedWinCheckResult {
   // noTimeLimit: 振り返りパスでは performance.now() 依存を排除し決定論的に動作
-  // maxNodes で探索量を制御（timeLimit の代替安全弁）
+  // maxNodes は元の timeLimit で探索される典型的なノード数に合わせる
   const vcfOpts = noTimeLimit
-    ? { timeLimit: Infinity, maxNodes: 50_000 }
+    ? { timeLimit: Infinity, maxNodes: 5_000 } // ~150ms equiv
     : undefined;
   const oppVcfOpts = noTimeLimit
-    ? { timeLimit: Infinity, maxNodes: 50_000 }
+    ? { timeLimit: Infinity, maxNodes: 3_000 } // ~100ms equiv
     : { timeLimit: 100 };
 
   // 自VCF（四追い勝ち）
@@ -206,7 +206,7 @@ function checkForcedWinSequences(
       color,
       noTimeLimit
         ? {
-            vcfOptions: { maxDepth: 12, timeLimit: Infinity, maxNodes: 50_000 },
+            vcfOptions: { maxDepth: 12, timeLimit: Infinity, maxNodes: 5_000 }, // ~300ms equiv
             timeLimit: Infinity,
           }
         : { vcfOptions: { maxDepth: 12, timeLimit: 300 }, timeLimit: 500 },
@@ -233,7 +233,7 @@ function checkForcedWinSequences(
       const vctMove = findVCTMove(board, color, {
         maxDepth: 4,
         timeLimit: noTimeLimit ? Infinity : 150,
-        maxNodes: noTimeLimit ? 50_000 : undefined,
+        maxNodes: noTimeLimit ? 10_000 : undefined, // ~150ms equiv（VCTはVCFより探索空間が広い）
       });
       if (vctMove) {
         const isForbidden =

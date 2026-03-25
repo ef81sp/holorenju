@@ -94,7 +94,7 @@ function demotePlainFourIfNeeded<T extends MinimaxResult>(
   // VCF安全チェック: VCFがあればdemoteしない
   const vcfMove = findVCFMove(board, color, {
     timeLimit: noTimeLimit ? Infinity : PLAIN_FOUR_VCF_CHECK_TIME_LIMIT,
-    maxNodes: noTimeLimit ? 50_000 : undefined,
+    maxNodes: noTimeLimit ? 2_000 : undefined, // ~50ms equiv
   });
   if (vcfMove) {
     return result;
@@ -261,7 +261,7 @@ export function findBestMoveIterativeWithTT(
         boardRow[move.col] = color;
         const hasFukumi = hasVCF(board, color, 0, undefined, {
           timeLimit: timeLimit === undefined ? Infinity : 30,
-          maxNodes: timeLimit === undefined ? 10_000 : undefined,
+          maxNodes: timeLimit === undefined ? 1_000 : undefined, // ~30ms equiv
         });
         boardRow[move.col] = null;
         if (hasFukumi) {
