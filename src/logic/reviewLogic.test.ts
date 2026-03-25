@@ -9,7 +9,11 @@ import type {
 
 import {
   OPENING_MOVES,
+  adjustCandidatesForForcedLoss,
+  allCandidatesLose,
   applyVCTResult,
+  buildBacktrackBranches,
+  buildBacktrackSequence,
   buildEvaluatedMove,
   buildGameReview,
   classifyMoveQuality,
@@ -290,5 +294,182 @@ describe("findLosingMove", () => {
 
   it("空の evaluatedMoves で undefined を返す", () => {
     expect(findLosingMove([])).toBeUndefined();
+  });
+
+  it("3段階遡及: 全候補負け → 全候補負け → 生存あり → 敗着", () => {
+    const allLose = [
+      { opponentForcedWin: "vct" },
+      { opponentForcedWin: "vcf" },
+    ];
+    const moves = [
+      makeMove(3, true, { candidates: [{}] }), // 生存あり
+      makeMove(4, false),
+      makeMove(5, true, {
+        forcedLossType: "vct",
+        candidates: allLose,
+      }),
+      makeMove(6, false),
+      makeMove(7, true, {
+        forcedLossType: "vct",
+        candidates: allLose,
+      }),
+      makeMove(8, false),
+      makeMove(9, true, {
+        forcedLossType: "vct",
+        candidates: allLose,
+      }),
+    ];
+    // 9→7→5: 全候補負け → 3手目に生存あり → 3手目が敗着
+    expect(findLosingMove(moves)).toEqual({ moveIndex: 3 });
+  });
+});
+
+describe("allCandidatesLose", () => {
+  function makeEval(
+    candidates: { opponentForcedWin?: string }[],
+  ): EvaluatedMove {
+    return {
+      moveIndex: 0,
+      position: { row: 0, col: 0 },
+      isPlayerMove: true,
+      quality: "excellent",
+      playedScore: 0,
+      bestScore: 0,
+      scoreDiff: 0,
+      bestMove: { row: 0, col: 0 },
+      candidates: candidates.map((c) => ({
+        position: { row: 0, col: 0 },
+        score: 0,
+        searchScore: 0,
+        opponentForcedWin: c.opponentForcedWin as
+          | EvaluatedMove["forcedLossType"]
+          | undefined,
+      })),
+    };
+  }
+
+  it("空候補 → false", () => {
+    expect(allCandidatesLose(makeEval([]))).toBe(false);
+  });
+
+  it("全候補 opponentForcedWin → true", () => {
+    expect(
+      allCandidatesLose(
+        makeEval([{ opponentForcedWin: "vct" }, { opponentForcedWin: "vcf" }]),
+      ),
+    ).toBe(true);
+  });
+
+  it("一部のみ → false", () => {
+    expect(
+      allCandidatesLose(makeEval([{ opponentForcedWin: "vct" }, {}])),
+    ).toBe(false);
+  });
+});
+
+describe("adjustCandidatesForForcedLoss", () => {
+  it("opponentForcedWin なし → 元のまま", () => {
+    const candidates = [
+      { position: { row: 1, col: 1 }, score: 0, searchScore: 500 },
+    ];
+    const result = adjustCandidatesForForcedLoss(candidates, 500, {
+      row: 1,
+      col: 1,
+    });
+    expect(result.bestScore).toBe(500);
+  });
+
+  it("一部に opponentForcedWin → 安全な候補が bestMove に", () => {
+    const candidates = [
+      {
+        position: { row: 1, col: 1 },
+        score: 0,
+        searchScore: 500,
+        opponentForcedWin: "vct" as const,
+      },
+      { position: { row: 2, col: 2 }, score: 0, searchScore: 400 },
+    ];
+    const result = adjustCandidatesForForcedLoss(candidates, 500, {
+      row: 1,
+      col: 1,
+    });
+    expect(result.bestMove).toEqual({ row: 2, col: 2 });
+    expect(result.bestScore).toBe(400);
+  });
+
+  it("全候補 opponentForcedWin → 元の bestScore/bestMove を維持", () => {
+    const candidates = [
+      {
+        position: { row: 1, col: 1 },
+        score: 0,
+        searchScore: 500,
+        opponentForcedWin: "vct" as const,
+      },
+      {
+        position: { row: 2, col: 2 },
+        score: 0,
+        searchScore: 400,
+        opponentForcedWin: "vcf" as const,
+      },
+    ];
+    const result = adjustCandidatesForForcedLoss(candidates, 500, {
+      row: 1,
+      col: 1,
+    });
+    expect(result.bestScore).toBe(500);
+    expect(result.bestMove).toEqual({ row: 1, col: 1 });
+  });
+});
+
+describe("buildBacktrackSequence", () => {
+  it("中間手 + 元のシーケンスを結合", () => {
+    const moves = ["H8", "I9", "F7", "G8", "I7"];
+    const seq = buildBacktrackSequence(
+      moves,
+      1, // prevMoveIndex
+      3, // currentMoveIndex
+      [{ row: 6, col: 8 }], // currentSequence
+    );
+    // moves[2]=F7, moves[3]=G8 + currentSequence
+    expect(seq).toHaveLength(3);
+  });
+
+  it("元のシーケンスが undefined → 中間手のみ", () => {
+    const moves = ["H8", "I9", "F7"];
+    const seq = buildBacktrackSequence(moves, 0, 2, undefined);
+    expect(seq).toHaveLength(2); // moves[1]=I9, moves[2]=F7
+  });
+});
+
+describe("buildBacktrackBranches", () => {
+  it("実戦手と同じ候補はスキップ", () => {
+    const moves = ["H8", "I9", "F7", "G8"];
+    // G8 = parseMove("G8") = { row: 7, col: 6 }
+    const candidates = [
+      {
+        position: { row: 7, col: 6 }, // G8 = 実戦手
+        score: 0,
+        searchScore: 0,
+        opponentForcedWinSequence: [{ row: 0, col: 0 }],
+      },
+      {
+        position: { row: 5, col: 5 },
+        score: 0,
+        searchScore: 0,
+        opponentForcedWinSequence: [{ row: 1, col: 1 }],
+      },
+    ];
+    const branches = buildBacktrackBranches(moves, 1, 3, candidates);
+    expect(branches).toHaveLength(1);
+    expect(branches[0]!.defenseMove).toEqual({ row: 5, col: 5 });
+  });
+
+  it("opponentForcedWinSequence がない候補はスキップ", () => {
+    const moves = ["H8", "I9", "F7", "G8"];
+    const candidates = [
+      { position: { row: 5, col: 5 }, score: 0, searchScore: 0 },
+    ];
+    const branches = buildBacktrackBranches(moves, 1, 3, candidates);
+    expect(branches).toHaveLength(0);
   });
 });

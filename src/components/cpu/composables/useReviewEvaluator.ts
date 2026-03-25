@@ -10,7 +10,6 @@
 import { ref, onUnmounted, type Ref } from "vue";
 
 import type {
-  ForcedWinBranch,
   FullEvalResult,
   LightEvalResult,
   ReviewEvalRequest,
@@ -18,8 +17,11 @@ import type {
 } from "@/types/review";
 
 import ReviewWorker from "@/logic/cpu/review.worker?worker";
-import { parseMove } from "@/logic/gameRecordParser";
-import { isOpeningMove } from "@/logic/reviewLogic";
+import {
+  buildBacktrackBranches,
+  buildBacktrackSequence,
+  isOpeningMove,
+} from "@/logic/reviewLogic";
 
 /** Workerプールサイズ（最大8、最低2） */
 const POOL_SIZE = Math.max(2, Math.min(8, navigator.hardwareConcurrency ?? 4));
@@ -265,39 +267,18 @@ export function useReviewEvaluator(): UseReviewEvaluatorReturn {
                 .pop();
               if (prevPlayer && !prevPlayer.forcedLossType) {
                 prevPlayer.forcedLossType = move.forcedLossType;
-
-                // 手順を構築: 中間の実戦手（相手の脅威手）+ 各候補の分岐
-                // prevPlayer.moveIndex+1 = 相手の脅威手（例: G6）
-                const threatMoves = moves
-                  .slice(prevPlayer.moveIndex + 1, move.moveIndex)
-                  .map(parseMove);
-
-                // メイン手順: 実戦手 + 元の forcedLossSequence
-                const actualDefense = parseMove(moves[move.moveIndex]!);
-                prevPlayer.forcedLossSequence = [
-                  ...threatMoves,
-                  actualDefense,
-                  ...(move.forcedLossSequence ?? []),
-                ];
-
-                // 分岐: 各候補の防御手 + その VCT 手順
-                const allCands = move.candidates ?? [];
-                const branches: ForcedWinBranch[] = [];
-                for (const c of allCands) {
-                  if (
-                    !c.opponentForcedWinSequence ||
-                    (c.position.row === actualDefense.row &&
-                      c.position.col === actualDefense.col)
-                  ) {
-                    continue;
-                  }
-                  branches.push({
-                    // 分岐点は threatMoves の直後（防御手の位置）
-                    defenseIndex: threatMoves.length,
-                    defenseMove: c.position,
-                    continuation: c.opponentForcedWinSequence,
-                  });
-                }
+                prevPlayer.forcedLossSequence = buildBacktrackSequence(
+                  moves,
+                  prevPlayer.moveIndex,
+                  move.moveIndex,
+                  move.forcedLossSequence,
+                );
+                const branches = buildBacktrackBranches(
+                  moves,
+                  prevPlayer.moveIndex,
+                  move.moveIndex,
+                  move.candidates ?? [],
+                );
                 if (branches.length > 0) {
                   prevPlayer.forcedLossBranches = branches;
                 }

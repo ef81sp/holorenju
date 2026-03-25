@@ -7,15 +7,20 @@
 import type { Position, StoneColor } from "@/types/game";
 import type {
   EvaluatedMove,
+  ForcedWinBranch,
   FullEvalResult,
   GameReview,
   LightEvalResult,
   LosingMoveInfo,
   MoveQuality,
+  ReviewCandidate,
   VCTCheckResult,
 } from "@/types/review";
 
-import { parseGameRecord } from "@/logic/gameRecordParser";
+import { parseGameRecord, parseMove } from "@/logic/gameRecordParser";
+
+/** 追詰を許す候補手に付与するペナルティスコア */
+const FORCED_LOSS_PENALTY_SCORE = -100_000;
 
 /** 珠型（開局）の手数。評価対象外 */
 export const OPENING_MOVES = 3;
@@ -87,25 +92,12 @@ export function buildEvaluatedMove(
     };
   }
 
-  // opponentForcedWin が付いた候補を引き下げ、安全な候補で bestScore/bestMove を再計算
-  let { bestScore, bestMove } = result;
   const { candidates } = result;
-  if (candidates.length > 0 && candidates.some((c) => c.opponentForcedWin)) {
-    // opponentForcedWin 付き候補のスコアを引き下げて順位を下げる
-    for (const c of candidates) {
-      if (c.opponentForcedWin) {
-        c.searchScore = Math.min(c.searchScore, -100_000);
-      }
-    }
-    // スコア順にソートし直す
-    candidates.sort((a, b) => b.searchScore - a.searchScore);
-    // 先頭の安全な候補を bestMove/bestScore にする（PV表示と一致させる）
-    const [topCand] = candidates;
-    if (topCand && !topCand.opponentForcedWin) {
-      bestScore = topCand.searchScore;
-      bestMove = topCand.position;
-    }
-  }
+  const { bestScore, bestMove } = adjustCandidatesForForcedLoss(
+    candidates,
+    result.bestScore,
+    result.bestMove,
+  );
 
   const scoreDiff = bestScore - result.playedScore;
 
@@ -232,11 +224,92 @@ export function findLosingMove(
  * 全候補に opponentForcedWin が付いている = 全候補チェック済み = 全部負け。
  * 候補が空の場合は判定不能として false を返す。
  */
-function allCandidatesLose(move: EvaluatedMove): boolean {
+export function allCandidatesLose(move: EvaluatedMove): boolean {
   if (move.candidates.length === 0) {
     return false;
   }
   return move.candidates.every((c) => c.opponentForcedWin !== undefined);
+}
+
+/**
+ * 追詰を許す候補手のスコアを引き下げ、安全な候補で bestScore/bestMove を再計算
+ *
+ * opponentForcedWin が付いた候補は FORCED_LOSS_PENALTY_SCORE に引き下げ、
+ * スコア順にソートし直す。先頭の安全な候補を bestMove/bestScore にする。
+ */
+export function adjustCandidatesForForcedLoss(
+  candidates: ReviewCandidate[],
+  originalBestScore: number,
+  originalBestMove: Position,
+): { bestScore: number; bestMove: Position } {
+  if (candidates.length === 0 || !candidates.some((c) => c.opponentForcedWin)) {
+    return { bestScore: originalBestScore, bestMove: originalBestMove };
+  }
+
+  for (const c of candidates) {
+    if (c.opponentForcedWin) {
+      c.searchScore = Math.min(c.searchScore, FORCED_LOSS_PENALTY_SCORE);
+    }
+  }
+  candidates.sort((a, b) => b.searchScore - a.searchScore);
+
+  const [topCand] = candidates;
+  if (topCand && !topCand.opponentForcedWin) {
+    return { bestScore: topCand.searchScore, bestMove: topCand.position };
+  }
+  return { bestScore: originalBestScore, bestMove: originalBestMove };
+}
+
+/**
+ * 遡及チェック用: 前の手への forcedLossSequence を構築
+ *
+ * 中間の実戦手（脅威手 + 防御手）+ 元の forcedLossSequence を結合。
+ */
+export function buildBacktrackSequence(
+  moves: string[],
+  prevMoveIndex: number,
+  currentMoveIndex: number,
+  currentSequence: Position[] | undefined,
+): Position[] {
+  const intermediate = moves
+    .slice(prevMoveIndex + 1, currentMoveIndex + 1)
+    .map(parseMove);
+  return [...intermediate, ...(currentSequence ?? [])];
+}
+
+/**
+ * 遡及チェック用: 前の手への分岐情報を構築
+ *
+ * 各候補の防御手 + VCT 手順を分岐として収集。
+ * 実戦手と同じ位置の候補はメインラインに含まれるためスキップ。
+ */
+export function buildBacktrackBranches(
+  moves: string[],
+  prevMoveIndex: number,
+  currentMoveIndex: number,
+  candidates: ReviewCandidate[],
+): ForcedWinBranch[] {
+  const threatMoves = moves
+    .slice(prevMoveIndex + 1, currentMoveIndex)
+    .map(parseMove);
+  const actualDefense = parseMove(moves[currentMoveIndex]!);
+
+  const branches: ForcedWinBranch[] = [];
+  for (const c of candidates) {
+    if (
+      !c.opponentForcedWinSequence ||
+      (c.position.row === actualDefense.row &&
+        c.position.col === actualDefense.col)
+    ) {
+      continue;
+    }
+    branches.push({
+      defenseIndex: threatMoves.length,
+      defenseMove: c.position,
+      continuation: c.opponentForcedWinSequence,
+    });
+  }
+  return branches;
 }
 
 /**
