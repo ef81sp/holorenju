@@ -3,7 +3,7 @@
  *
  * Workerプールによる並列評価を管理
  * Phase 1: 全ワーカーで並列評価（VCTスキップ）
- * Phase 2: 単一ワーカーでVCTチェックを逐次実行
+ * Phase 2: 全ワーカーでVCTチェックを並列実行
  * Phase 3: 遡及チェック（forcedLoss検出手から前の手を再チェック）
  */
 
@@ -143,52 +143,71 @@ export function useReviewEvaluator(): UseReviewEvaluatorReturn {
     );
 
     /**
-     * Phase 2: VCTチェックを逐次ディスパッチ
+     * Phase 2: VCTチェックを全ワーカーで並列ディスパッチ
+     *
+     * Phase 1 の dispatch と同じ共有キュー + 完了時に次をディスパッチするパターン。
+     * 結果は moveIndex で results 配列に格納されるため、完了順序は影響しない。
      */
-    function dispatchVCT(
-      worker: Worker,
+    function dispatchVCTParallel(
+      vctWorkers: Worker[],
       items: FullEvalResult[],
-      index: number,
     ): void {
-      if (cancelled || index >= items.length) {
-        // Phase 2 完了 → Phase 3（遡及チェック）開始
-        dispatchBacktrack(worker);
-        return;
-      }
+      const vctQueue = [...items];
+      let vctCompleted = 0;
 
-      const item = items[index];
-      if (!item) {
-        dispatchVCT(worker, items, index + 1);
-        return;
-      }
-      worker.onmessage = (event: MessageEvent<VCTCheckResult>) => {
+      function dispatchNextVCT(worker: Worker): void {
         if (cancelled) {
           return;
         }
-        if (event.data.forcedLossType) {
-          // results 配列も更新（Phase 3 の再構築で必要）
-          item.forcedLossType = event.data.forcedLossType;
-          item.forcedLossSequence = event.data.forcedLossSequence;
-          onVCTResult?.(item.moveIndex, event.data);
+
+        const item = vctQueue.shift();
+        if (item === undefined) {
+          // キューが空 → 全完了チェック
+          // JS シングルスレッドのため vctCompleted === items.length を満たすのは
+          // 最後の onmessage/onerror ハンドラから呼ばれた1回だけ
+          if (vctCompleted === items.length) {
+            // Phase 2 完了 → Phase 3（遡及チェック）開始
+            // Phase 3 はどのワーカーでも同じ結果になる
+            dispatchBacktrack(pool[0]!);
+          }
+          return;
         }
-        completedCount.value++;
-        progress.value = completedCount.value / totalCount.value;
-        dispatchVCT(worker, items, index + 1);
-      };
 
-      worker.onerror = () => {
-        completedCount.value++;
-        progress.value = completedCount.value / totalCount.value;
-        dispatchVCT(worker, items, index + 1);
-      };
+        worker.onmessage = (event: MessageEvent<VCTCheckResult>) => {
+          if (cancelled) {
+            return;
+          }
+          if (event.data.forcedLossType) {
+            item.forcedLossType = event.data.forcedLossType;
+            item.forcedLossSequence = event.data.forcedLossSequence;
+            onVCTResult?.(item.moveIndex, event.data);
+          }
+          vctCompleted++;
+          completedCount.value++;
+          progress.value = completedCount.value / totalCount.value;
+          dispatchNextVCT(worker);
+        };
 
-      const request: ReviewEvalRequest = {
-        moveHistory,
-        moveIndex: item.moveIndex,
-        playerFirst,
-        vctCheckOnly: true,
-      };
-      worker.postMessage(request);
+        worker.onerror = () => {
+          vctCompleted++;
+          completedCount.value++;
+          progress.value = completedCount.value / totalCount.value;
+          dispatchNextVCT(worker);
+        };
+
+        const request: ReviewEvalRequest = {
+          moveHistory,
+          moveIndex: item.moveIndex,
+          playerFirst,
+          vctCheckOnly: true,
+        };
+        worker.postMessage(request);
+      }
+
+      // 全ワーカーに初期ディスパッチ
+      for (const w of vctWorkers) {
+        dispatchNextVCT(w);
+      }
     }
 
     /**
@@ -391,15 +410,17 @@ export function useReviewEvaluator(): UseReviewEvaluatorReturn {
             (r): r is FullEvalResult =>
               r.mode === "fullEval" && Boolean(r.needsVCTCheck),
           );
-          const [vctWorker] = pool;
-          if (vctItems.length > 0 && vctWorker) {
+          if (vctItems.length > 0) {
             totalCount.value += vctItems.length;
-            dispatchVCT(vctWorker, vctItems, 0);
-          } else if (vctWorker) {
-            // Phase 2 スキップ → Phase 3 へ直接
-            dispatchBacktrack(vctWorker);
+            dispatchVCTParallel(pool, vctItems);
           } else {
-            finishEvaluation();
+            const [firstWorker] = pool;
+            if (firstWorker) {
+              // Phase 2 スキップ → Phase 3 へ直接
+              dispatchBacktrack(firstWorker);
+            } else {
+              finishEvaluation();
+            }
           }
         }
         return;
