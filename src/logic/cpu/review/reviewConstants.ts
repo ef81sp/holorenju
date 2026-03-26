@@ -11,7 +11,7 @@ import type { VCTSearchOptions } from "../search/vct";
 /** 振り返り専用の探索パラメータ（hardから分離し深度を引き上げ） */
 export const REVIEW_SEARCH_PARAMS = {
   depth: 8,
-  maxNodes: 2_000_000,
+  maxNodes: 1_000_000, // 2M → 1M: 探索時間半減
   evaluationOptions: DIFFICULTY_PARAMS.hard.evaluationOptions,
 } as const;
 
