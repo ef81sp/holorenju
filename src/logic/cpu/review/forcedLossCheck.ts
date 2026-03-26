@@ -37,9 +37,10 @@ const NO_TIME_LIMIT = Infinity;
 export const REVIEW_VCF_OPTIONS: VCFSearchOptions = {
   maxDepth: 16,
   timeLimit: NO_TIME_LIMIT,
+  maxNodes: 500_000, // 爆発防止
 };
 export const REVIEW_MISE_VCF_OPTIONS: MiseVCFSearchOptions = {
-  vcfOptions: { maxDepth: 12, timeLimit: NO_TIME_LIMIT },
+  vcfOptions: { maxDepth: 12, timeLimit: NO_TIME_LIMIT, maxNodes: 500_000 },
   timeLimit: NO_TIME_LIMIT,
 };
 
@@ -56,16 +57,17 @@ export const FORCED_LOSS_VCT_OPTIONS: VCTSearchOptions = {
 export const CANDIDATE_VERIFY_VCF_OPTIONS: VCFSearchOptions = {
   maxDepth: 12,
   timeLimit: NO_TIME_LIMIT,
+  maxNodes: 500_000, // 爆発防止
 };
 export const CANDIDATE_VERIFY_MISE_VCF_OPTIONS: MiseVCFSearchOptions = {
-  vcfOptions: { maxDepth: 12, timeLimit: NO_TIME_LIMIT },
+  vcfOptions: { maxDepth: 12, timeLimit: NO_TIME_LIMIT, maxNodes: 500_000 },
   timeLimit: NO_TIME_LIMIT,
 };
 export const CANDIDATE_VERIFY_VCT_OPTIONS: VCTSearchOptions = {
   maxDepth: 4,
   timeLimit: NO_TIME_LIMIT,
-  maxNodes: 100_000, // globalTT.clear() で TT キャッシュなしでも完了を保証
-  vcfOptions: { maxDepth: 12, timeLimit: NO_TIME_LIMIT },
+  maxNodes: 50_000, // 100K → 50K: 候補検証は高速化優先
+  vcfOptions: { maxDepth: 12, timeLimit: NO_TIME_LIMIT, maxNodes: 500_000 },
   collectBranches: false,
 };
 
