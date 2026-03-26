@@ -57,6 +57,7 @@ export function verifyCandidates(
 
     if (loss) {
       cand.opponentForcedWin = loss.type;
+      cand.opponentForcedWinSequence = loss.sequence;
       if (i === 0) {
         demotedBest = true;
         bestLoss = loss;
