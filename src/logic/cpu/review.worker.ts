@@ -55,7 +55,6 @@ import {
   VCT_STONE_THRESHOLD,
   type VCTBranch,
 } from "./search/vct";
-import { globalTT } from "./transpositionTable";
 
 /** VCF初手を候補リストの先頭に追加/更新する */
 function promoteVcfCandidate(
@@ -154,8 +153,8 @@ function handleDemotion(ctx: DemotionContext): {
 }
 
 self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
-  // 前の手の評価によるTT残留を排除し、決定論的な結果を保証
-  globalTT.clear();
+  // TTは手間で保持し再利用（世代管理で古いエントリは自然に置換される）
+  // newGeneration() は findBestMoveIterativeWithTT 内で呼ばれるため追加不要
 
   const {
     moveHistory,
