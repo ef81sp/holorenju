@@ -25,8 +25,8 @@ describe("振り返りプロファイル不変条件", () => {
     expect(REVIEW_PROFILE_FAST.timeLimit).toBeDefined();
   });
 
-  test("PRECISE は timeLimit を持たない", () => {
-    expect(REVIEW_PROFILE_PRECISE.timeLimit).toBeUndefined();
+  test("PRECISE は timeLimit を持つ（2パス方式の時間制限）", () => {
+    expect(REVIEW_PROFILE_PRECISE.timeLimit).toBeDefined();
   });
 
   test("FAST は PV 検証無効", () => {

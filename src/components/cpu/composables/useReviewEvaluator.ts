@@ -183,8 +183,8 @@ export function useReviewEvaluator(): UseReviewEvaluatorReturn {
           // 最後の onmessage/onerror ハンドラから呼ばれた1回だけ
           if (vctCompleted === items.length) {
             if (enablePV) {
-              // Phase 2 完了 → Phase 3（遡及チェック）開始
-              dispatchBacktrack(pool);
+              // Phase 2 完了 → Phase 1b（精密再評価）→ Phase 3
+              dispatchPrecisePass(pool);
             } else {
               // 高速モード: Phase 3 スキップ
               finishEvaluation();
@@ -241,167 +241,200 @@ export function useReviewEvaluator(): UseReviewEvaluatorReturn {
      * 生存候補以降の候補への書き込みをスキップすることで
      * 逐次実行と同一の結果を保証する。
      */
-    function dispatchBacktrack(backtrackWorkers: Worker[]): void {
-      // forcedLossType が付いたプレイヤーの手を古い順に収集
+    /**
+     * Phase 1b: 敗着近辺の精密再評価
+     *
+     * Pass 1 の高速結果から敗着を暫定特定し、
+     * 敗着とその前のプレイヤー手のみ PRECISE プロファイルで再評価する。
+     */
+    function dispatchPrecisePass(preciseWorkers: Worker[]): void {
+      // 敗着を暫定特定: forcedLossType を持つ最も早いプレイヤー手
       const sortedResults = [...results].sort(
         (a, b) => a.moveIndex - b.moveIndex,
       );
-      const forcedLossMoves: FullEvalResult[] = [];
+      let losingMoveIdx: number | null = null;
       for (const r of sortedResults) {
         const isPlayerMove = playerFirst
           ? r.moveIndex % 2 === 0
           : r.moveIndex % 2 === 1;
         if (isPlayerMove && r.mode === "fullEval" && r.forcedLossType) {
-          forcedLossMoves.push(r as FullEvalResult);
+          losingMoveIdx = r.moveIndex;
+          break;
         }
       }
 
-      if (forcedLossMoves.length === 0) {
+      if (losingMoveIdx === null) {
+        // 敗着なし → Phase 3 スキップ
         finishEvaluation();
         return;
       }
 
-      // 最も古い forcedLoss の手から開始
-      let currentIdx = 0;
-      processNextForcedLossMove();
+      // 敗着 + その前 1 手（プレイヤー手のみ）を精密化対象に
+      const preciseTargetIndices: number[] = [];
+      const playerMoveIndices = sortedResults
+        .filter((r) => {
+          const isPlayer = playerFirst
+            ? r.moveIndex % 2 === 0
+            : r.moveIndex % 2 === 1;
+          return isPlayer && r.mode === "fullEval";
+        })
+        .map((r) => r.moveIndex)
+        .filter((idx) => idx <= losingMoveIdx!);
 
-      /** 全候補負けの手から前のプレイヤー手に forcedLossType を伝播 */
-      function propagateToParent(move: FullEvalResult): void {
+      // 敗着から逆順に 2 手まで
+      const reversed = [...playerMoveIndices].reverse();
+      for (let i = 0; i < Math.min(2, reversed.length); i++) {
+        preciseTargetIndices.push(reversed[i]!);
+      }
+
+      if (preciseTargetIndices.length === 0) {
+        finishEvaluation();
+        return;
+      }
+
+      // 精密再評価のディスパッチ
+      const preciseQueue = [...preciseTargetIndices];
+      let preciseCompleted = 0;
+      totalCount.value += preciseTargetIndices.length;
+
+      function dispatchNextPrecise(worker: Worker): void {
+        if (cancelled) {
+          return;
+        }
+
+        const moveIndex = preciseQueue.shift();
+        if (moveIndex === undefined) {
+          if (preciseCompleted === preciseTargetIndices.length) {
+            // Phase 1b 完了 → forcedLoss 伝播 → 完了
+            propagateForcedLossBackward();
+            finishEvaluation();
+          }
+          return;
+        }
+
+        const request: ReviewEvalRequest = {
+          moveHistory,
+          moveIndex,
+          playerFirst,
+          preciseAnalysis: true,
+        };
+
+        worker.onmessage = (
+          event: MessageEvent<FullEvalResult | LightEvalResult>,
+        ) => {
+          if (cancelled) {
+            return;
+          }
+          // 高速結果を精密結果で上書き（Phase 2 VCT結果は保持）
+          const idx = results.findIndex(
+            (r) => r.moveIndex === event.data.moveIndex,
+          );
+          if (idx >= 0) {
+            const oldResult = results[idx]!;
+            const newResult = event.data;
+            // Phase 2 で検出した forcedLoss を保持
+            if (
+              oldResult.mode === "fullEval" &&
+              newResult.mode === "fullEval" &&
+              oldResult.forcedLossType &&
+              !newResult.forcedLossType
+            ) {
+              newResult.forcedLossType = oldResult.forcedLossType;
+              newResult.forcedLossSequence = oldResult.forcedLossSequence;
+            }
+            results[idx] = newResult;
+          }
+          onResult?.(event.data);
+          preciseCompleted++;
+          completedCount.value++;
+          progress.value = completedCount.value / totalCount.value;
+          dispatchNextPrecise(worker);
+        };
+
+        worker.onerror = () => {
+          preciseCompleted++;
+          completedCount.value++;
+          progress.value = completedCount.value / totalCount.value;
+          dispatchNextPrecise(worker);
+        };
+
+        worker.postMessage(request);
+      }
+
+      for (const w of preciseWorkers) {
+        dispatchNextPrecise(w);
+      }
+    }
+
+    /**
+     * forcedLoss の後方伝播（軽量版）
+     *
+     * Phase 1b の verifyCandidates(Infinity) で全候補がチェック済みのため、
+     * ワーカーリクエスト不要。全候補が opponentForcedWin の手から
+     * 前のプレイヤー手に forcedLossType を伝播する。
+     */
+    function propagateForcedLossBackward(): void {
+      const sortedResults = [...results].sort(
+        (a, b) => a.moveIndex - b.moveIndex,
+      );
+
+      // forcedLossType を持つプレイヤー手を古い順に処理
+      for (const r of sortedResults) {
+        if (r.mode !== "fullEval" || !r.forcedLossType) {
+          continue;
+        }
+        const isPlayerMove = playerFirst
+          ? r.moveIndex % 2 === 0
+          : r.moveIndex % 2 === 1;
+        if (!isPlayerMove) {
+          continue;
+        }
+
+        const fr = r as FullEvalResult;
+        const candidates = fr.candidates ?? [];
+        if (
+          candidates.length === 0 ||
+          !candidates.every((c) => c.opponentForcedWin)
+        ) {
+          continue;
+        }
+
+        // 全候補が被追詰 → 前のプレイヤー手に伝播
         const prevPlayer = sortedResults
-          .filter((r): r is FullEvalResult => {
-            if (r.mode !== "fullEval") {
+          .filter((pr): pr is FullEvalResult => {
+            if (pr.mode !== "fullEval") {
               return false;
             }
             const isPM = playerFirst
-              ? r.moveIndex % 2 === 0
-              : r.moveIndex % 2 === 1;
-            return isPM && r.moveIndex < move.moveIndex;
+              ? pr.moveIndex % 2 === 0
+              : pr.moveIndex % 2 === 1;
+            return isPM && pr.moveIndex < fr.moveIndex;
           })
           .pop();
+
         if (prevPlayer && !prevPlayer.forcedLossType) {
-          prevPlayer.forcedLossType = move.forcedLossType;
+          prevPlayer.forcedLossType = fr.forcedLossType;
           prevPlayer.forcedLossSequence = buildBacktrackSequence(
             moves,
             prevPlayer.moveIndex,
-            move.moveIndex,
-            move.forcedLossSequence,
+            fr.moveIndex,
+            fr.forcedLossSequence,
           );
           const branches = buildBacktrackBranches(
             moves,
             prevPlayer.moveIndex,
-            move.moveIndex,
-            move.candidates ?? [],
+            fr.moveIndex,
+            candidates,
           );
           if (branches.length > 0) {
             prevPlayer.forcedLossBranches = branches;
           }
-          // 遡及先を次の処理対象にして再帰的にチェック
-          forcedLossMoves.splice(currentIdx + 1, 0, prevPlayer);
-        }
-      }
-
-      function processNextForcedLossMove(): void {
-        if (cancelled || currentIdx >= forcedLossMoves.length) {
-          finishEvaluation();
-          return;
-        }
-
-        const move = forcedLossMoves[currentIdx]!;
-        const candidates = move.candidates ?? [];
-
-        // 候補がない → 次の手へ
-        if (candidates.length === 0) {
-          currentIdx++;
-          processNextForcedLossMove();
-          return;
-        }
-
-        // 既に全候補に opponentForcedWin が付いている → 深掘り不要、遡及のみ
-        if (candidates.every((c) => c.opponentForcedWin)) {
-          propagateToParent(move);
-          currentIdx++;
-          processNextForcedLossMove();
-          return;
-        }
-
-        // opponentForcedWin が未設定の候補を深い VCT で並列チェック
-        const unchecked = candidates.filter((c) => !c.opponentForcedWin);
-        const candQueue = [...unchecked];
-        let candCompleted = 0;
-        let foundSurvivor = false;
-
-        function dispatchNextCandidate(worker: Worker): void {
-          if (cancelled || foundSurvivor) {
-            return;
-          }
-
-          const cand = candQueue.shift();
-          if (!cand) {
-            // キューが空 → 全完了チェック（in-flight ワーカー完了を待つ）
-            if (candCompleted === unchecked.length) {
-              const hasSurvivor = candidates.some((c) => !c.opponentForcedWin);
-              if (hasSurvivor) {
-                finishEvaluation();
-              } else {
-                propagateToParent(move);
-                currentIdx++;
-                processNextForcedLossMove();
-              }
-            }
-            return;
-          }
-
-          worker.onmessage = (event: MessageEvent<VCTCheckResult>) => {
-            if (cancelled) {
-              return;
-            }
-            if (foundSurvivor) {
-              // 生存候補発見済み → 書き込みスキップ
-              candCompleted++;
-              return;
-            }
-            if (event.data.forcedLossType) {
-              cand.opponentForcedWin = event.data.forcedLossType;
-              cand.opponentForcedWinSequence = event.data.forcedLossSequence;
-            } else {
-              // 生存候補発見 → 早期打ち切り
-              foundSurvivor = true;
-              finishEvaluation();
-              return;
-            }
-            candCompleted++;
-            dispatchNextCandidate(worker);
-          };
-
-          worker.onerror = () => {
-            if (foundSurvivor) {
-              candCompleted++;
-              return;
-            }
-            candCompleted++;
-            dispatchNextCandidate(worker);
-          };
-
-          const request: ReviewEvalRequest = {
-            moveHistory,
-            moveIndex: move.moveIndex,
-            playerFirst,
-            vctCheckOnly: true,
-            skipStoneThreshold: true,
-            candidatePosition: cand.position,
-          };
-          worker.postMessage(request);
-        }
-
-        // 全ワーカーに初期ディスパッチ
-        for (const w of backtrackWorkers) {
-          dispatchNextCandidate(w);
         }
       }
     }
 
     /**
-     * Phase 2/3 で forcedLossType が付いた手の played candidate に
+     * Phase 2 で forcedLossType が付いた手の played candidate に
      * opponentForcedWin を伝播する。
      *
      * buildEvaluatedMove は Phase 1 コールバックと最終リビルドで2回呼ばれ、
@@ -457,8 +490,8 @@ export function useReviewEvaluator(): UseReviewEvaluatorReturn {
             totalCount.value += vctItems.length;
             dispatchVCTParallel(pool, vctItems);
           } else if (enablePV) {
-            // Phase 2 スキップ → Phase 3 へ直接
-            dispatchBacktrack(pool);
+            // Phase 2 スキップ → Phase 1b（精密再評価）→ Phase 3
+            dispatchPrecisePass(pool);
           } else {
             // 高速モード: Phase 2/3 両方スキップ
             finishEvaluation();
@@ -467,12 +500,12 @@ export function useReviewEvaluator(): UseReviewEvaluatorReturn {
         return;
       }
 
+      // Phase 1 は常に FAST で評価（精密モード時は Phase 1b で敗着近辺のみ再評価）
       const request: ReviewEvalRequest = {
         moveHistory,
         moveIndex: item.moveIndex,
         playerFirst,
         isLightEval: item.isLightEval || undefined,
-        preciseAnalysis: enablePV,
       };
 
       worker.onmessage = (

@@ -36,8 +36,8 @@ export const REVIEW_PROFILE_FAST = {
 
 export const REVIEW_PROFILE_PRECISE = {
   maxNodes: 1_000_000,
-  timeLimit: undefined as number | undefined,
-  absoluteTimeLimit: undefined as number | undefined,
+  timeLimit: 15_000 as number | undefined,
+  absoluteTimeLimit: 20_000 as number | undefined,
   aspirationWidths: [75, 200, 500] as number[] | undefined,
   verifyCandidatesBudget: Infinity as "dynamic" | number,
   enablePVVerification: true,
