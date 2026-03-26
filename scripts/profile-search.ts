@@ -28,7 +28,7 @@ import {
 import { createSearchContext } from "../src/logic/cpu/search/context.ts";
 import { findBestMoveWithTT } from "../src/logic/cpu/search/minimaxCore.ts";
 import { findPreSearchMove } from "../src/logic/cpu/search/preSearch.ts";
-import { ASPIRATION_WINDOW } from "../src/logic/cpu/search/techniques.ts";
+import { ASPIRATION_WIDTHS } from "../src/logic/cpu/search/techniques.ts";
 import { globalTT } from "../src/logic/cpu/transpositionTable.ts";
 import { computeBoardHash } from "../src/logic/cpu/zobrist.ts";
 import { DIFFICULTY_PARAMS } from "../src/types/cpu.ts";
@@ -118,7 +118,7 @@ function profileDepth(
     const aspiration =
       prevScore === undefined
         ? undefined
-        : { previousScore: prevScore, windowSize: ASPIRATION_WINDOW };
+        : { previousScore: prevScore, windowSize: ASPIRATION_WIDTHS[0]! };
 
     const result = findBestMoveWithTT(
       board,

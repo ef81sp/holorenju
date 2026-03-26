@@ -15,6 +15,7 @@ interface Props {
   currentMoveIndex: number;
   totalMoves: number;
   evaluatedMoves: EvaluatedMove[];
+  losingMoveIndex?: number;
 }
 
 const props = defineProps<Props>();
@@ -75,19 +76,28 @@ const moveDots = computed(() =>
         : undefined;
     const forcedWinLabel = getForcedWinLabel(evaluated?.forcedWinType);
     const forcedLossLabel = getForcedLossLabel(evaluated?.forcedLossType);
+    const isLosingMove = props.losingMoveIndex === i;
+    const qualityColor =
+      evaluated && !evaluated.isLightEval
+        ? getQualityColor(evaluated.quality)
+        : undefined;
     return {
       index: i + 1,
-      color:
-        evaluated && !evaluated.isLightEval
-          ? getQualityColor(evaluated.quality)
-          : undefined,
+      color: isLosingMove ? "hsl(0, 80%, 40%)" : qualityColor,
       isCurrent: i + 1 === props.currentMoveIndex,
       underlines: evaluated?.isLightEval
         ? 0
         : getUnderlineCount(evaluated?.quality),
       hasForcedWin: forcedWinLabel !== undefined,
       hasForcedLoss: forcedLossLabel !== undefined,
-      ariaLabel: [moveNum, qualityLabel, forcedWinLabel, forcedLossLabel]
+      isLosingMove,
+      ariaLabel: [
+        moveNum,
+        qualityLabel,
+        forcedWinLabel,
+        forcedLossLabel,
+        isLosingMove ? "敗着" : undefined,
+      ]
         .filter(Boolean)
         .join(" "),
     };
@@ -157,6 +167,7 @@ const moveDots = computed(() =>
           [`underlines-${dot.underlines}`]: dot.underlines > 0,
           'has-forced-win': dot.hasForcedWin,
           'has-forced-loss': dot.hasForcedLoss,
+          'is-losing-move': dot.isLosingMove,
         }"
         :style="dot.color ? { backgroundColor: dot.color } : {}"
         :aria-label="dot.ariaLabel"
@@ -316,5 +327,12 @@ const moveDots = computed(() =>
   background: hsl(0, 65%, 50%);
   box-shadow: 0 0 0 1px var(--color-bg-white);
   pointer-events: none;
+}
+
+/* 敗着マーカー（二重リング） */
+.is-losing-move {
+  box-shadow:
+    0 0 0 2px hsl(0, 80%, 40%),
+    0 0 0 4px var(--color-bg-white);
 }
 </style>

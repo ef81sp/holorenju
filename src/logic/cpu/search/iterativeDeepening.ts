@@ -24,7 +24,11 @@ import {
 } from "../profiling/counters";
 import { globalTT } from "../transpositionTable";
 import { computeBoardHash } from "../zobrist";
-import { createSearchContext, type SearchStats } from "./context";
+import {
+  createSearchContext,
+  type SearchContext,
+  type SearchStats,
+} from "./context";
 import { findBestMoveWithTT } from "./minimaxCore";
 import { findPreSearchMove } from "./preSearch";
 import {
@@ -34,7 +38,7 @@ import {
   type MinimaxResult,
 } from "./results";
 import {
-  ASPIRATION_WINDOW,
+  ASPIRATION_WIDTHS,
   calculateDynamicTimeLimit,
   DEFAULT_ABSOLUTE_TIME_LIMIT,
   detectPlainFour,
@@ -79,6 +83,7 @@ function demotePlainFourIfNeeded<T extends MinimaxResult>(
   result: T,
   board: BoardState,
   color: "black" | "white",
+  noTimeLimit = false,
 ): T {
   if (!result.candidates || result.candidates.length < 2) {
     return result;
@@ -92,7 +97,8 @@ function demotePlainFourIfNeeded<T extends MinimaxResult>(
 
   // VCF安全チェック: VCFがあればdemoteしない
   const vcfMove = findVCFMove(board, color, {
-    timeLimit: PLAIN_FOUR_VCF_CHECK_TIME_LIMIT,
+    timeLimit: noTimeLimit ? Infinity : PLAIN_FOUR_VCF_CHECK_TIME_LIMIT,
+    maxNodes: noTimeLimit ? 2_000 : undefined, // ~50ms equiv
   });
   if (vcfMove) {
     return result;
@@ -120,12 +126,14 @@ export interface IterativeDeepeningParams {
   board: BoardState;
   color: "black" | "white";
   maxDepth: number;
-  timeLimit: number;
+  timeLimit?: number;
   randomFactor?: number;
   evaluationOptions?: EvaluationOptions;
   maxNodes?: number;
   absoluteTimeLimit?: number;
   scoreThreshold?: number;
+  /** Aspiration Windowの段階的拡大幅（振り返り用、省略時は固定幅±75） */
+  aspirationWidths?: number[];
   /** Triangular PV Tableによる正確なPV収集（振り返り用） */
   collectPV?: boolean;
 }
@@ -144,10 +152,15 @@ export function findBestMoveIterativeWithTT(
     randomFactor = 0,
     evaluationOptions = DEFAULT_EVAL_OPTIONS,
     maxNodes,
-    absoluteTimeLimit = DEFAULT_ABSOLUTE_TIME_LIMIT,
+    absoluteTimeLimit = timeLimit === undefined
+      ? Infinity
+      : DEFAULT_ABSOLUTE_TIME_LIMIT,
+    aspirationWidths,
     scoreThreshold = 200,
     collectPV = false,
   } = params;
+  // 未指定時は従来の固定幅（対局CPU互換）
+  const effectiveAspirationWidths = aspirationWidths ?? [ASPIRATION_WIDTHS[0]!];
   const startTime = performance.now();
   const ctx = createSearchContext(globalTT, evaluationOptions);
   ctx.lineTable = buildLineTable(board);
@@ -177,6 +190,7 @@ export function findBestMoveIterativeWithTT(
     ctx,
     evaluationOptions,
     absoluteDeadline,
+    timeLimit === undefined,
   );
 
   // 即座に返すべき手がある場合
@@ -255,7 +269,8 @@ export function findBestMoveIterativeWithTT(
         }
         boardRow[move.col] = color;
         const hasFukumi = hasVCF(board, color, 0, undefined, {
-          timeLimit: 30,
+          timeLimit: timeLimit === undefined ? Infinity : 30,
+          maxNodes: timeLimit === undefined ? 1_000 : undefined, // ~30ms equiv
         });
         boardRow[move.col] = null;
         if (hasFukumi) {
@@ -274,19 +289,20 @@ export function findBestMoveIterativeWithTT(
   }
 
   // deadline ベースの時間設定
-  // VCF時間の特別扱いは撤廃: deadline = startTime + dynamicTimeLimit で
-  // VCF時間は自然に予算に含まれる
-  const dynamicTimeLimit = calculateDynamicTimeLimit(
-    timeLimit,
-    board,
-    moves.length,
-  );
+  // timeLimit 未指定時は時間制限なし（maxDepth/maxNodes のみで制御）
+  const dynamicTimeLimit =
+    timeLimit === undefined
+      ? Infinity
+      : calculateDynamicTimeLimit(timeLimit, board, moves.length);
   const searchDeadline = startTime + dynamicTimeLimit;
   ctx.deadline = searchDeadline;
   ctx.timeoutFlag = false;
 
   // ノード数上限を設定
   ctx.maxNodes = maxNodes;
+
+  // 振り返りパス: performance.now() 依存を排除
+  ctx.noTimeLimit = timeLimit === undefined;
   ctx.nodeCountExceeded = false;
 
   // 絶対停止タイムスタンプを設定
@@ -369,37 +385,50 @@ export function findBestMoveIterativeWithTT(
       break;
     }
 
-    // Aspiration Windowsで探索
-    let result = findBestMoveWithTT(
-      board,
-      color,
-      depth,
-      randomFactor,
-      ctx,
-      {
-        previousScore: bestResult.score,
-        windowSize: ASPIRATION_WINDOW,
-      },
-      moves,
-      scoreThreshold,
-      collectPV,
-    );
+    // Aspiration Windowsで探索（段階的拡大）
+    let result: MinimaxResult & { ctx: SearchContext } = bestResult;
+    let searchComplete = false;
+    for (const width of effectiveAspirationWidths) {
+      result = findBestMoveWithTT(
+        board,
+        color,
+        depth,
+        randomFactor,
+        ctx,
+        {
+          previousScore: bestResult.score,
+          windowSize: width,
+        },
+        moves,
+        scoreThreshold,
+        collectPV,
+      );
 
-    // 探索中にタイムアウト、ノード数上限、または絶対時間制限に達した場合は前の結果を使用
-    if (
-      ctx.timeoutFlag ||
-      ctx.nodeCountExceeded ||
-      ctx.absoluteDeadlineExceeded
-    ) {
-      interrupted = true;
-      break;
+      // タイムアウト・ノード数上限チェック
+      if (
+        ctx.timeoutFlag ||
+        ctx.nodeCountExceeded ||
+        ctx.absoluteDeadlineExceeded
+      ) {
+        break;
+      }
+
+      // ウィンドウ内に収まれば探索完了
+      const lowerBound = bestResult.score - width;
+      const upperBound = bestResult.score + width;
+      if (result.score > lowerBound && result.score < upperBound) {
+        searchComplete = true;
+        break;
+      }
     }
 
-    // ウィンドウ外の結果が出たら再探索（フルウィンドウ）
-    const lowerBound = bestResult.score - ASPIRATION_WINDOW;
-    const upperBound = bestResult.score + ASPIRATION_WINDOW;
-    if (result.score <= lowerBound || result.score >= upperBound) {
-      // 再探索（フルウィンドウ）
+    // 全段階でウィンドウ外 → フルウィンドウで再探索
+    if (
+      !searchComplete &&
+      !ctx.timeoutFlag &&
+      !ctx.nodeCountExceeded &&
+      !ctx.absoluteDeadlineExceeded
+    ) {
       result = findBestMoveWithTT(
         board,
         color,
@@ -411,16 +440,16 @@ export function findBestMoveIterativeWithTT(
         scoreThreshold,
         collectPV,
       );
+    }
 
-      // 再探索中にタイムアウト、ノード数上限、または絶対時間制限に達した場合
-      if (
-        ctx.timeoutFlag ||
-        ctx.nodeCountExceeded ||
-        ctx.absoluteDeadlineExceeded
-      ) {
-        interrupted = true;
-        break;
-      }
+    // 探索中にタイムアウト等に達した場合は前の結果を使用
+    if (
+      ctx.timeoutFlag ||
+      ctx.nodeCountExceeded ||
+      ctx.absoluteDeadlineExceeded
+    ) {
+      interrupted = true;
+      break;
     }
 
     // 深度履歴に記録
@@ -469,7 +498,7 @@ export function findBestMoveIterativeWithTT(
         completedDepth + 1,
         randomFactor,
         ctx,
-        { previousScore: last.score, windowSize: ASPIRATION_WINDOW },
+        { previousScore: last.score, windowSize: ASPIRATION_WIDTHS[0]! },
         moves,
         scoreThreshold,
       );
@@ -489,7 +518,12 @@ export function findBestMoveIterativeWithTT(
     }
   }
 
-  bestResult = demotePlainFourIfNeeded(bestResult, board, color);
+  bestResult = demotePlainFourIfNeeded(
+    bestResult,
+    board,
+    color,
+    timeLimit === undefined,
+  );
 
   const finalResult: IterativeDeepingResult & { stats: SearchStats } = {
     position: bestResult.position,

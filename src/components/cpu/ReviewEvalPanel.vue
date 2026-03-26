@@ -33,6 +33,8 @@ const props = defineProps<{
   currentPosition: Position | null;
   /** 評価中かどうか */
   isEvaluating?: boolean;
+  /** この手が敗着かどうか */
+  isLosingMove?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -456,6 +458,60 @@ const forcedLossPVLine = computed<PVLine | null>(() => {
   return { label, searchScore: 0, items };
 });
 
+/** 被追詰の分岐手順（Phase 3 遡及で構築） */
+const forcedLossBranchLines = computed<BranchLine[]>(() => {
+  const eval_ = props.evaluation;
+  if (!eval_?.forcedLossBranches || eval_.forcedLossBranches.length === 0) {
+    return [];
+  }
+  const mainItems = forcedLossPVLine.value?.items;
+  if (!mainItems) {
+    return [];
+  }
+
+  return eval_.forcedLossBranches.map(
+    (branch: ForcedWinBranch, branchIdx: number) => {
+      const moveNum = props.moveIndex + branch.defenseIndex + 1;
+      const label = "の場合:";
+      const prefix =
+        branchIdx === (eval_.forcedLossBranches?.length ?? 0) - 1 ? "└" : "├";
+
+      // メイン手順の分岐点前（ホバー時に盤面プレビュー用）
+      const prefixItems: PVDisplayItem[] = mainItems.slice(
+        0,
+        branch.defenseIndex + 1, // +1: 着手自体を含む
+      );
+
+      // 防御手 + 継続手順
+      const defenseItem: PVDisplayItem = {
+        text: `${moveNum}.${formatMove(branch.defenseMove)}`,
+        isSelf: true, // 防御側 = プレイヤー
+        position: branch.defenseMove,
+      };
+      const items: PVDisplayItem[] = [defenseItem];
+      for (let i = 0; i < branch.continuation.length; i++) {
+        const pos = branch.continuation[i];
+        if (!pos) {
+          break;
+        }
+        items.push({
+          text: `${moveNum + 1 + i}.${formatMove(pos)}`,
+          isSelf: i % 2 !== 0, // 偶数=相手の攻撃、奇数=自分の防御
+          position: pos,
+        });
+      }
+
+      return {
+        key: `loss-branch-${branchIdx}`,
+        label,
+        prefix,
+        prefixItems,
+        items,
+      };
+    },
+  );
+});
+
 /** 内訳比較表示が必要か */
 const showBreakdown = computed(
   () =>
@@ -624,6 +680,13 @@ function isPlayed(candidate: { position: Position }): boolean {
           {{ moveCoord }}
         </span>
         <span
+          v-if="props.isLosingMove"
+          class="losing-move-badge"
+        >
+          敗着
+        </span>
+        <span
+          v-else
           class="quality-badge"
           :style="{ backgroundColor: qualityColor }"
         >
@@ -636,7 +699,7 @@ function isPlayed(candidate: { position: Position }): boolean {
           {{ forcedWinLabel }}
         </span>
         <span
-          v-if="forcedLossLabel"
+          v-if="forcedLossLabel && !props.isLosingMove"
           class="forced-loss-badge"
         >
           {{ forcedLossLabel }}
@@ -876,6 +939,45 @@ function isPlayed(candidate: { position: Position }): boolean {
           </div>
         </template>
 
+        <!-- 被追詰の分岐手順 -->
+        <div
+          v-for="branch in forcedLossBranchLines"
+          :key="branch.key"
+          class="pv-branch"
+        >
+          <span class="pv-branch-prefix">{{ branch.prefix }}</span>
+          <div class="pv-sequence pv-branch-sequence">
+            <button
+              v-if="branch.items[0]"
+              type="button"
+              class="pv-move pv-self"
+              @mouseenter="handleBranchMoveEnter(branch, 0)"
+              @mouseleave="handlePVMoveLeave"
+              @focus="handleBranchMoveEnter(branch, 0)"
+              @blur="handlePVMoveLeave"
+            >
+              {{ branch.items[0].text }}
+            </button>
+            <span class="pv-branch-label">{{ branch.label }}</span>
+            <button
+              v-for="(item, idx) in branch.items.slice(1)"
+              :key="`${branch.key}-${idx + 1}`"
+              type="button"
+              class="pv-move"
+              :class="{
+                'pv-self': item.isSelf,
+                'pv-loss-opponent': !item.isSelf,
+              }"
+              @mouseenter="handleBranchMoveEnter(branch, idx + 1)"
+              @mouseleave="handlePVMoveLeave"
+              @focus="handleBranchMoveEnter(branch, idx + 1)"
+              @blur="handlePVMoveLeave"
+            >
+              {{ item.text }}
+            </button>
+          </div>
+        </div>
+
         <!-- 末端評価の比較テーブル -->
         <template v-if="leafEvalDiffGroups.length > 0">
           <div class="breakdown-title-row">
@@ -1057,6 +1159,16 @@ function isPlayed(candidate: { position: Position }): boolean {
   font-weight: 500;
   white-space: nowrap;
   background-color: hsl(0, 65%, 50%);
+}
+
+.losing-move-badge {
+  padding: var(--size-1) var(--size-6);
+  border-radius: var(--size-4);
+  color: white;
+  font-size: var(--font-size-10);
+  font-weight: 500;
+  white-space: nowrap;
+  background-color: hsl(0, 80%, 40%);
 }
 
 .missed-double-mise-badge {

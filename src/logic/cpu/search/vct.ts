@@ -57,6 +57,24 @@ const VCT_TIME_LIMIT = 150;
 const CT_THREE_VCF_MAX_DEPTH = 8;
 
 /**
+ * options.maxDepth を iteration の maxDepth にクランプする。
+ *
+ * findVCTSequenceRecursive のイテレーティブディープニングで、
+ * hasVCT に渡す maxDepth が iteration 深度を超えないようにする。
+ * クランプしないと浅い iteration 内で hasVCT が不必要に深く探索し、
+ * 計算量が指数的に増大する。
+ */
+function clampVCTOptions(
+  options: VCTSearchOptions | undefined,
+  maxDepth: number,
+): VCTSearchOptions | undefined {
+  if (options?.maxDepth !== undefined && options.maxDepth > maxDepth) {
+    return { ...options, maxDepth };
+  }
+  return options;
+}
+
+/**
  * キャッシュ付き hasVCF
  *
  * VCT探索の反復深化で同一盤面の VCF 判定を再利用する。
@@ -1078,7 +1096,7 @@ function processBlockDefenses(
       bdPos,
       depth,
       limiter,
-      options,
+      clampVCTOptions(options, maxDepth),
       vcfCache,
     );
     if (bdRow) {
@@ -1491,7 +1509,7 @@ function findVCTSequenceRecursive(
           color,
           depth + 1,
           limiter,
-          options,
+          clampVCTOptions(options, maxDepth),
           vcfCache,
         );
 
@@ -1556,6 +1574,8 @@ export function findVCTSequenceFromFirstMove(
   const localLimiter: TimeLimiter = {
     startTime: performance.now(),
     timeLimit: timeLimitMs,
+    nodes: 0,
+    maxNodes: options?.maxNodes,
   };
   const localCache = createVCFCache();
 

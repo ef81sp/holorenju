@@ -6,6 +6,7 @@
  */
 
 import { ref } from "vue";
+import { usePreferencesStore } from "@/stores/preferencesStore";
 import ContentCopyIcon from "@/assets/icons/content_copy.svg?component";
 import CheckIcon from "@/assets/icons/check.svg?component";
 import {
@@ -27,6 +28,7 @@ interface Props {
 }
 
 const props = defineProps<Props>();
+const preferencesStore = usePreferencesStore();
 
 /** コピー済みフィードバック */
 const copied = ref(false);
@@ -76,13 +78,20 @@ async function copyMoveHistory(): Promise<void> {
       <div class="progress-bar">
         <div
           class="progress-fill"
+          :class="{ 'no-animation': !preferencesStore.animationEnabled }"
           :style="{
             width: `${props.totalCount > 0 ? (props.completedCount / props.totalCount) * 100 : 0}%`,
           }"
         />
       </div>
       <span class="progress-text">
-        解析中... ({{ props.completedCount }}/{{ props.totalCount }})
+        <span
+          class="analyzing-dots"
+          :class="{ 'no-animation': !preferencesStore.animationEnabled }"
+        >
+          解析中
+        </span>
+        ({{ props.completedCount }}/{{ props.totalCount }})
       </span>
     </div>
 
@@ -171,15 +180,67 @@ async function copyMoveHistory(): Promise<void> {
 
 .progress-fill {
   height: 100%;
-  background: var(--color-fubuki-primary);
+  background: linear-gradient(
+    90deg,
+    var(--color-fubuki-primary) 0%,
+    color-mix(in srgb, var(--color-fubuki-primary) 60%, white) 50%,
+    var(--color-fubuki-primary) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 5s ease-in-out infinite;
   transition: width 0.3s ease;
   border-radius: var(--size-4);
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 .progress-text {
   font-size: var(--size-12);
   color: var(--color-text-secondary);
   text-align: center;
+}
+
+.analyzing-dots::after {
+  content: "";
+  display: inline-block;
+  width: 1.5em;
+  text-align: left;
+  animation: dots 1.5s step-end infinite;
+}
+
+@keyframes dots {
+  0% {
+    content: "";
+  }
+  25% {
+    content: ".";
+  }
+  50% {
+    content: "..";
+  }
+  75% {
+    content: "...";
+  }
+}
+
+.no-animation {
+  animation: none !important;
+}
+
+.analyzing-dots.no-animation::after {
+  content: "...";
+  animation: none;
+}
+
+.progress-fill.no-animation {
+  background: var(--color-fubuki-primary);
 }
 
 .completed {

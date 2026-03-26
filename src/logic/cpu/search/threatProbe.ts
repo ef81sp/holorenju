@@ -118,6 +118,7 @@ export function threatProbe(
   threatCache: ThreatProbeCache,
   enableVCT: boolean,
   lineTable?: LineTable,
+  noTimeLimit = false,
 ): Position | null {
   // 1. キャッシュチェック
   const cached = lookupThreatProbe(threatCache, hash, color);
@@ -144,7 +145,7 @@ export function threatProbe(
   const vcfOptions: VCFSearchOptions = {
     maxDepth: budget.vcfDepth,
     maxNodes: budget.vcfNodes,
-    timeLimit: 20,
+    timeLimit: noTimeLimit ? Infinity : 20,
   };
   const vcfMove = findVCFMove(board, color, vcfOptions);
   if (vcfMove) {
@@ -154,14 +155,15 @@ export function threatProbe(
 
   // 5. VCT探索（VCF失敗時、予算が許す場合のみ）
   if (budget.vctDepth > 0 && enableVCT) {
+    const vctTime = noTimeLimit ? Infinity : 150;
     const vctOptions: VCTSearchOptions = {
       maxDepth: budget.vctDepth,
       maxNodes: budget.vctNodes,
-      timeLimit: 150,
+      timeLimit: vctTime,
       vcfOptions: {
         maxDepth: budget.vcfDepth,
         maxNodes: budget.vcfNodes,
-        timeLimit: 150,
+        timeLimit: vctTime,
       },
     };
     const vctMove = findVCTMove(board, color, vctOptions, lineTable);

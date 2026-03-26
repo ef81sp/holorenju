@@ -72,6 +72,8 @@ export interface ReviewCandidate {
   leafEvaluation?: LeafEvaluation;
   /** この手を打つと相手に強制勝ちを許す場合のタイプ */
   opponentForcedWin?: ForcedLossType;
+  /** 相手の強制勝ち手順（Phase 3 深掘りチェックで取得） */
+  opponentForcedWinSequence?: Position[];
 }
 
 /**
@@ -116,6 +118,8 @@ export interface EvaluatedMove {
   forcedLossType?: ForcedLossType;
   /** 相手の必勝手順のシーケンス */
   forcedLossSequence?: Position[];
+  /** 相手の必勝手順の分岐（Phase 3 遡及で構築） */
+  forcedLossBranches?: ForcedWinBranch[];
   /** 軽量評価（minimax省略、強制勝ち検出のみ） */
   isLightEval?: boolean;
   /** 両ミセ手の見逃し（打つ前の盤面で両ミセ手が存在した） */
@@ -134,6 +138,19 @@ export interface GameReview {
   accuracy: number;
   /** クリティカルエラー数（mistake + blunder） */
   criticalErrors: number;
+  /** 敗着の推定結果 */
+  losingMove?: LosingMoveInfo;
+}
+
+/**
+ * 敗着推定結果
+ *
+ * 追詰（VCF/VCT等）ベースで特定した敗着の近似位置。
+ * VCT検出の深度限界により完全な正確性は保証されない。
+ */
+export interface LosingMoveInfo {
+  /** 敗着と推定される手の moveIndex */
+  moveIndex: number;
 }
 
 /**
@@ -150,6 +167,12 @@ export interface ReviewEvalRequest {
   isLightEval?: boolean;
   /** Phase 2: VCTチェックのみ実行 */
   vctCheckOnly?: boolean;
+  /** Phase 3: VCT石数閾値を無視する（遡及チェック用） */
+  skipStoneThreshold?: boolean;
+  /** Phase 3: 候補手の位置（指定時、実際の着手の代わりにこの位置で盤面を構築） */
+  candidatePosition?: Position;
+  /** PV事後検証を実行するか */
+  preciseAnalysis?: boolean;
 }
 
 /**
@@ -205,6 +228,8 @@ export interface FullEvalResult extends ReviewWorkerResultBase {
   forcedLossType?: ForcedLossType;
   /** 相手の必勝手順のシーケンス */
   forcedLossSequence?: Position[];
+  /** 相手の必勝手順の分岐（Phase 3 遡及で構築） */
+  forcedLossBranches?: ForcedWinBranch[];
   /** 両ミセ手の見逃し（打つ前の盤面で両ミセ手が存在した） */
   missedDoubleMise?: Position[];
   /** 両ミセのターゲット位置（四三を作る位置） */

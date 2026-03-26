@@ -42,7 +42,11 @@ import {
   REVIEW_VCF_OPTIONS,
 } from "./review/forcedLossCheck";
 import { detectForcedWin } from "./review/forcedWinDetection";
+import { verifyCandidatePVs } from "./review/pvVerification";
 import {
+  REVIEW_PROFILE_FAST,
+  REVIEW_PROFILE_PRECISE,
+  REVIEW_REDUCED_NODES,
   REVIEW_SEARCH_PARAMS,
   REVIEW_VCT_OPTIONS_WITH_BRANCHES,
 } from "./review/reviewConstants";
@@ -53,6 +57,7 @@ import {
   VCT_STONE_THRESHOLD,
   type VCTBranch,
 } from "./search/vct";
+import { globalTT } from "./transpositionTable";
 
 /** VCF初手を候補リストの先頭に追加/更新する */
 function promoteVcfCandidate(
@@ -98,7 +103,6 @@ interface DemotionContext {
   forcedWinType: ForcedWinType | undefined;
   bestMove: Position;
   bestScore: number;
-  workerStartTime: number;
   fwBestLoss?: import("@/types/review").ForcedLossResult;
 }
 
@@ -128,13 +132,7 @@ function handleDemotion(ctx: DemotionContext): {
   // 両ミセ降格時: maxDepth制限されていたVCFのフル再探索
   const reVcf =
     ctx.forcedWinType === "double-mise"
-      ? findVCFSequence(ctx.board, ctx.color, {
-          ...REVIEW_VCF_OPTIONS,
-          timeLimit: Math.min(
-            REVIEW_VCF_OPTIONS.timeLimit ?? 1500,
-            Math.max(500, 25_000 - (performance.now() - ctx.workerStartTime)),
-          ),
-        })
+      ? findVCFSequence(ctx.board, ctx.color, REVIEW_VCF_OPTIONS)
       : null;
 
   if (reVcf) {
@@ -164,19 +162,37 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
     playerFirst: _playerFirst,
     isLightEval,
     vctCheckOnly,
+    skipStoneThreshold,
+    candidatePosition,
+    preciseAnalysis,
   } = event.data;
 
-  const workerStartTime = performance.now();
+  const profile = preciseAnalysis
+    ? REVIEW_PROFILE_PRECISE
+    : REVIEW_PROFILE_FAST;
+
+  // 高速モード時は TT をクリア（main 相当の決定論性）
+  if (profile.clearTT) {
+    globalTT.clear();
+  }
 
   try {
     const moves = moveHistory.trim().split(/\s+/);
 
-    // Phase 2: VCTチェックのみ実行
+    // Phase 2/3: VCTチェックのみ実行
     if (vctCheckOnly) {
-      const { board: boardAfter } = createBoardFromRecord(
-        moves.slice(0, moveIndex + 1).join(" "),
-      );
+      // candidatePosition 指定時: 実際の着手の代わりに候補手を置いた盤面を構築
+      const boardRecord = candidatePosition
+        ? moves.slice(0, moveIndex).join(" ")
+        : moves.slice(0, moveIndex + 1).join(" ");
+      const { board: boardAfter } = createBoardFromRecord(boardRecord);
       const color = moveIndex % 2 === 0 ? "black" : "white";
+      if (candidatePosition) {
+        const row = boardAfter[candidatePosition.row];
+        if (row) {
+          row[candidatePosition.col] = color;
+        }
+      }
       const opponentColor = color === "black" ? "white" : "black";
       const stoneCountAfter = countStones(boardAfter);
 
@@ -187,7 +203,10 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
 
       let forcedLossType: ForcedLossType | undefined = undefined;
       let forcedLossSequence: Position[] | undefined = undefined;
-      if (!selfHasFour && stoneCountAfter >= VCT_STONE_THRESHOLD) {
+      if (
+        !selfHasFour &&
+        (skipStoneThreshold || stoneCountAfter >= VCT_STONE_THRESHOLD)
+      ) {
         const oppVCT = findVCTSequence(
           boardAfter,
           opponentColor,
@@ -271,22 +290,32 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
         if (loss) {
           forcedLossType = loss.type;
           forcedLossSequence = loss.sequence;
-        } else if (stoneCountAfter >= VCT_STONE_THRESHOLD) {
+        } else {
+          // Phase 2 で VCT を深くチェック（石数閾値なし）
+          // 振り返りでは正確性優先、Phase 2 は単一ワーカー逐次実行
           needsVCTCheck = true;
         }
       }
     }
 
     // 通常探索（候補手比較データ用）
+    // 確定局面（被追詰/必勝）ではノード数を削減（候補表示のみに使用、精密モードのみ）
+    const hasForcedWin = Boolean(forcedWin || doubleMiseBestMove);
+    const effectiveMaxNodes =
+      profile.enablePVVerification && (forcedLossType || hasForcedWin)
+        ? REVIEW_REDUCED_NODES
+        : profile.maxNodes;
+
     const result = findBestMoveIterativeWithTT({
       board,
       color,
       maxDepth: REVIEW_SEARCH_PARAMS.depth,
-      timeLimit: REVIEW_SEARCH_PARAMS.timeLimit,
       randomFactor: 0, // 決定論的
       evaluationOptions: REVIEW_SEARCH_PARAMS.evaluationOptions,
-      maxNodes: REVIEW_SEARCH_PARAMS.maxNodes,
-      absoluteTimeLimit: REVIEW_SEARCH_PARAMS.absoluteTimeLimit,
+      maxNodes: effectiveMaxNodes,
+      timeLimit: profile.timeLimit,
+      absoluteTimeLimit: profile.absoluteTimeLimit,
+      aspirationWidths: profile.aspirationWidths,
       collectPV: true,
     });
 
@@ -519,16 +548,30 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
       // forcedWin初手の事後検証: 相手に強制勝ちを許さないか確認
       // VCF系は初手が四なので checkCandidateForcedLoss 内で即スキップ（コスト≒0）
       const stoneCountFW = countStones(board);
-      const elapsedFW = performance.now() - workerStartTime;
-      const timeBudgetFW = Math.max(1000, Math.min(5000, 25_000 - elapsedFW));
+      const fwBudget =
+        profile.verifyCandidatesBudget === "dynamic"
+          ? Math.max(1000, Math.min(5000, 25_000))
+          : profile.verifyCandidatesBudget;
       const { demotedBest: fwDemoted, bestLoss: fwBestLoss } = verifyCandidates(
         board,
         candidates,
         color,
         opponentColor,
         stoneCountFW,
-        timeBudgetFW,
+        fwBudget,
       );
+
+      // PV事後検証: 安全な候補のPV内の後続手に追詰がないかチェック
+      if (profile.enablePVVerification) {
+        verifyCandidatePVs(
+          board,
+          candidates,
+          color,
+          opponentColor,
+          stoneCountFW,
+          Infinity,
+        );
+      }
 
       // 打たれた手の候補エントリにforcedLossTypeを反映
       // forcedWinパスでも、実際の手が被必勝を許す場合にフラグを付ける
@@ -547,7 +590,8 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
         forcedLossType ?? undefined;
       let fwForcedLossSequence: Position[] | undefined =
         forcedLossSequence ?? undefined;
-      if (fwDemoted) {
+      // verifyCandidates または PV検証で最善手が降格された場合
+      if (fwDemoted || candidates[0]?.opponentForcedWin) {
         const dm = handleDemotion({
           board,
           candidates,
@@ -555,7 +599,6 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
           forcedWinType,
           bestMove,
           bestScore,
-          workerStartTime,
           fwBestLoss: fwBestLoss ?? undefined,
         });
         ({ forcedWinType } = dm);
@@ -626,16 +669,30 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
 
       // 候補手の事後検証: 相手に強制勝ちを許す手を検出
       const stoneCount = countStones(board);
-      const elapsed = performance.now() - workerStartTime;
-      const timeBudget = Math.max(1000, Math.min(5000, 25_000 - elapsed));
+      const normalBudget =
+        profile.verifyCandidatesBudget === "dynamic"
+          ? Math.max(1000, Math.min(5000, 25_000 - (result.elapsedTime ?? 0)))
+          : profile.verifyCandidatesBudget;
       const { demotedBest, bestLoss } = verifyCandidates(
         board,
         candidates,
         color,
         opponentColor,
         stoneCount,
-        timeBudget,
+        normalBudget,
       );
+
+      // PV事後検証: 安全な候補のPV内の後続手に追詰がないかチェック
+      if (profile.enablePVVerification) {
+        verifyCandidatePVs(
+          board,
+          candidates,
+          color,
+          opponentColor,
+          stoneCount,
+          Infinity,
+        );
+      }
 
       // 打たれた手の候補エントリにforcedLossTypeを反映
       if (forcedLossType && playedRow >= 0) {
@@ -651,7 +708,10 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
       let finalBestScore = result.score;
       let finalForcedLossType = forcedLossType;
       let finalForcedLossSequence = forcedLossSequence;
-      if (demotedBest) {
+      // verifyCandidates または PV検証で最善手が降格された場合
+      const bestDemoted =
+        demotedBest || Boolean(candidates[0]?.opponentForcedWin);
+      if (bestDemoted) {
         const safeBest = findSafeBest(candidates);
         if (safeBest) {
           finalBestMove = safeBest.position;

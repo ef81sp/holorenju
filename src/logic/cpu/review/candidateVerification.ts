@@ -18,6 +18,7 @@ import {
  * 候補手リストを事後検証し、相手に強制勝ちを許す手にフラグを付ける
  *
  * 最善手（index 0）から順に検証し、安全な手が見つかった時点で打ち切る。
+ * @param timeBudgetMs 時間制限（ms）。`Infinity` で無制限。
  * @returns demotedBest - 最善手が降格されたか
  */
 export function verifyCandidates(
@@ -56,6 +57,7 @@ export function verifyCandidates(
 
     if (loss) {
       cand.opponentForcedWin = loss.type;
+      cand.opponentForcedWinSequence = loss.sequence;
       if (i === 0) {
         demotedBest = true;
         bestLoss = loss;

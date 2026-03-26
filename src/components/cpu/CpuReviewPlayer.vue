@@ -135,9 +135,19 @@ async function startEvaluation(): Promise<void> {
     return;
   } // キャンセルされた場合
 
-  // ソート済み配列でキャッシュ保存
+  // Phase 3 の候補更新を反映してキャッシュ保存
+  // results には Phase 3 で更新された opponentForcedWin が含まれるため、
+  // evaluatedMoves を再構築する
+  const finalMoves = results.map((r) =>
+    buildEvaluatedMove(
+      r,
+      parsedMoves,
+      reviewStore.playerFirst,
+      reviewStore.isAnalyzeAll,
+    ),
+  );
   reviewStore.setEvaluationResults(
-    [...reviewStore.evaluatedMoves].sort((a, b) => a.moveIndex - b.moveIndex),
+    finalMoves.sort((a, b) => a.moveIndex - b.moveIndex),
   );
   reviewStore.isEvaluating = false;
 
@@ -173,12 +183,19 @@ watch(
 
     const evaluation = reviewStore.currentEvaluation;
     if (evaluation?.isPlayerMove) {
+      const losingIdx = reviewStore.losingMove?.moveIndex;
+      const isLosingMove =
+        losingIdx !== undefined && evaluation.moveIndex === losingIdx;
+      const isAfterLosingMove =
+        losingIdx !== undefined && evaluation.moveIndex > losingIdx;
       dialogue.showQualityDialogue(
         evaluation.quality,
         evaluation.bestMove,
         evaluation.forcedWinType,
         evaluation.forcedLossType,
         evaluation.missedDoubleMise,
+        isAfterLosingMove,
+        isLosingMove,
       );
     } else if (evaluation) {
       dialogue.showCpuMoveDialogue(evaluation.forcedWinType);
@@ -331,6 +348,7 @@ function handleLayoutClick(event: MouseEvent): void {
             :current-move-index="reviewStore.currentMoveIndex"
             :total-moves="reviewStore.moves.length"
             :evaluated-moves="reviewStore.evaluatedMoves"
+            :losing-move-index="reviewStore.losingMove?.moveIndex"
             @go-to-move="advanceToMove"
             @go-to-start="reviewStore.goToStart"
             @go-to-end="advanceToEnd"
@@ -356,6 +374,10 @@ function handleLayoutClick(event: MouseEvent): void {
           :move-index="reviewStore.currentMoveIndex"
           :current-position="currentMovePosition"
           :is-evaluating="evaluator.isEvaluating.value"
+          :is-losing-move="
+            reviewStore.losingMove?.moveIndex ===
+            reviewStore.currentMoveIndex - 1
+          "
           @hover-candidate="overlay.handleHoverCandidate"
           @leave-candidate="overlay.handleLeaveCandidate"
           @hover-pv-move="overlay.handleHoverPVMove"

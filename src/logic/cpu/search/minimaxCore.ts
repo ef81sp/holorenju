@@ -50,7 +50,7 @@ import {
 } from "./results";
 import {
   analyzeFourAndThree,
-  ASPIRATION_WINDOW,
+  ASPIRATION_WIDTHS,
   FUTILITY_MARGINS_OPPONENT,
   FUTILITY_MARGINS_SELF,
   hasImmediateThreat,
@@ -393,6 +393,7 @@ export function minimaxWithTT(
       ctx.threatCache,
       enableVCT,
       ctx.lineTable,
+      ctx.noTimeLimit,
     );
     recordTiming("threatProbe", tThreat);
     if (threatResult !== null) {
@@ -914,7 +915,7 @@ export function findBestMoveWithTT(
   const moveScores: MoveScoreEntry[] = [];
 
   // Aspiration Windows: 前回のスコアをもとにウィンドウを設定
-  const windowSize = aspiration?.windowSize ?? ASPIRATION_WINDOW;
+  const windowSize = aspiration?.windowSize ?? ASPIRATION_WIDTHS[0]!;
   const prevScore = aspiration?.previousScore;
   let alpha = prevScore === undefined ? -INFINITY : prevScore - windowSize;
   let beta = prevScore === undefined ? INFINITY : prevScore + windowSize;
@@ -1029,7 +1030,7 @@ export function findBestMoveWithTT(
   // 同スコア手のタイブレーク
   const bestScore = best.score;
   const tiedMoves = moveScores.filter((m) => m.score === bestScore);
-  if (tiedMoves.length > 1) {
+  if (tiedMoves.length > 1 && randomFactor > 0) {
     const tieIndex = Math.floor(Math.random() * tiedMoves.length);
     const selected = tiedMoves[tieIndex] ?? best;
     const originalRank =

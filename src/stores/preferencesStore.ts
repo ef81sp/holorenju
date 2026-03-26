@@ -43,6 +43,7 @@ interface Preferences {
     lastPlayerFirst: boolean;
     lastJushu: string | null;
     lastFixedDirection: boolean;
+    preciseAnalysis: boolean;
   };
   debug: {
     showCpuInfo: boolean;
@@ -79,6 +80,7 @@ const defaultPreferences: Preferences = {
     lastPlayerFirst: true,
     lastJushu: null,
     lastFixedDirection: true,
+    preciseAnalysis: false,
   },
   debug: {
     showCpuInfo: false,
@@ -244,6 +246,11 @@ export const usePreferencesStore = defineStore("preferences", () => {
     set: (v) => (preferences.value.cpu.lastFixedDirection = v),
   });
 
+  const preciseAnalysis = computed({
+    get: () => preferences.value.cpu.preciseAnalysis,
+    set: (v) => (preferences.value.cpu.preciseAnalysis = v),
+  });
+
   const showCpuInfo = computed({
     get: () => preferences.value.debug.showCpuInfo,
     set: (v) => (preferences.value.debug.showCpuInfo = v),
@@ -372,6 +379,7 @@ export const usePreferencesStore = defineStore("preferences", () => {
     lastCpuPlayerFirst,
     lastCpuJushu,
     lastCpuFixedDirection,
+    preciseAnalysis,
     showCpuInfo,
     // Audio
     audioEnabled,
