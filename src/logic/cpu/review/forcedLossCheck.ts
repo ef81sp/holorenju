@@ -47,6 +47,7 @@ export const REVIEW_MISE_VCF_OPTIONS: MiseVCFSearchOptions = {
 export const FORCED_LOSS_VCT_OPTIONS: VCTSearchOptions = {
   maxDepth: 8,
   timeLimit: NO_TIME_LIMIT,
+  maxNodes: 500_000, // globalTT.clear() で TT キャッシュなしでも完了を保証
   vcfOptions: { maxDepth: 16, timeLimit: NO_TIME_LIMIT },
   collectBranches: false,
 };
@@ -63,6 +64,7 @@ export const CANDIDATE_VERIFY_MISE_VCF_OPTIONS: MiseVCFSearchOptions = {
 export const CANDIDATE_VERIFY_VCT_OPTIONS: VCTSearchOptions = {
   maxDepth: 4,
   timeLimit: NO_TIME_LIMIT,
+  maxNodes: 100_000, // globalTT.clear() で TT キャッシュなしでも完了を保証
   vcfOptions: { maxDepth: 12, timeLimit: NO_TIME_LIMIT },
   collectBranches: false,
 };

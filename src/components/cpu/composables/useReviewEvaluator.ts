@@ -222,6 +222,41 @@ export function useReviewEvaluator(): UseReviewEvaluatorReturn {
       let currentIdx = 0;
       processNextForcedLossMove();
 
+      /** 全候補負けの手から前のプレイヤー手に forcedLossType を伝播 */
+      function propagateToParent(move: FullEvalResult): void {
+        const prevPlayer = sortedResults
+          .filter((r): r is FullEvalResult => {
+            if (r.mode !== "fullEval") {
+              return false;
+            }
+            const isPM = playerFirst
+              ? r.moveIndex % 2 === 0
+              : r.moveIndex % 2 === 1;
+            return isPM && r.moveIndex < move.moveIndex;
+          })
+          .pop();
+        if (prevPlayer && !prevPlayer.forcedLossType) {
+          prevPlayer.forcedLossType = move.forcedLossType;
+          prevPlayer.forcedLossSequence = buildBacktrackSequence(
+            moves,
+            prevPlayer.moveIndex,
+            move.moveIndex,
+            move.forcedLossSequence,
+          );
+          const branches = buildBacktrackBranches(
+            moves,
+            prevPlayer.moveIndex,
+            move.moveIndex,
+            move.candidates ?? [],
+          );
+          if (branches.length > 0) {
+            prevPlayer.forcedLossBranches = branches;
+          }
+          // 遡及先を次の処理対象にして再帰的にチェック
+          forcedLossMoves.splice(currentIdx + 1, 0, prevPlayer);
+        }
+      }
+
       function processNextForcedLossMove(): void {
         if (cancelled || currentIdx >= forcedLossMoves.length) {
           finishEvaluation();
@@ -231,11 +266,16 @@ export function useReviewEvaluator(): UseReviewEvaluatorReturn {
         const move = forcedLossMoves[currentIdx]!;
         const candidates = move.candidates ?? [];
 
-        // 候補がない or 既に全候補に opponentForcedWin が付いている → 次の手へ
-        if (
-          candidates.length === 0 ||
-          candidates.every((c) => c.opponentForcedWin)
-        ) {
+        // 候補がない → 次の手へ
+        if (candidates.length === 0) {
+          currentIdx++;
+          processNextForcedLossMove();
+          return;
+        }
+
+        // 既に全候補に opponentForcedWin が付いている → 深掘り不要、遡及のみ
+        if (candidates.every((c) => c.opponentForcedWin)) {
+          propagateToParent(move);
           currentIdx++;
           processNextForcedLossMove();
           return;
@@ -254,38 +294,7 @@ export function useReviewEvaluator(): UseReviewEvaluatorReturn {
             if (hasSurvivor) {
               finishEvaluation();
             } else {
-              // 全候補が負け → 前のプレイヤーの手に forcedLossType を伝播
-              const prevPlayer = sortedResults
-                .filter((r): r is FullEvalResult => {
-                  if (r.mode !== "fullEval") {
-                    return false;
-                  }
-                  const isPM = playerFirst
-                    ? r.moveIndex % 2 === 0
-                    : r.moveIndex % 2 === 1;
-                  return isPM && r.moveIndex < move.moveIndex;
-                })
-                .pop();
-              if (prevPlayer && !prevPlayer.forcedLossType) {
-                prevPlayer.forcedLossType = move.forcedLossType;
-                prevPlayer.forcedLossSequence = buildBacktrackSequence(
-                  moves,
-                  prevPlayer.moveIndex,
-                  move.moveIndex,
-                  move.forcedLossSequence,
-                );
-                const branches = buildBacktrackBranches(
-                  moves,
-                  prevPlayer.moveIndex,
-                  move.moveIndex,
-                  move.candidates ?? [],
-                );
-                if (branches.length > 0) {
-                  prevPlayer.forcedLossBranches = branches;
-                }
-                // 遡及先を次の処理対象にして再帰的にチェック
-                forcedLossMoves.splice(currentIdx + 1, 0, prevPlayer);
-              }
+              propagateToParent(move);
               currentIdx++;
               processNextForcedLossMove();
             }
