@@ -406,3 +406,47 @@ describe("VCTメインフロー統合 - enableVCT=false", () => {
     expect(result.completedDepth).toBeGreaterThanOrEqual(1);
   });
 });
+
+describe("aspirationWidths パラメータ", () => {
+  it("未指定時は従来の固定幅動作（対局CPU互換）", () => {
+    const board = createEmptyBoard();
+    placeStonesOnBoard(board, [
+      { row: 7, col: 7, color: "black" },
+      { row: 7, col: 8, color: "white" },
+    ]);
+
+    const result = findBestMoveIterativeWithTT({
+      board,
+      color: "black",
+      maxDepth: 3,
+      maxNodes: 100_000,
+      randomFactor: 0,
+      evaluationOptions: DEFAULT_EVAL_OPTIONS,
+      // aspirationWidths 未指定 → 固定幅±75
+    });
+
+    expect(result.position.row).toBeGreaterThanOrEqual(0);
+    expect(result.completedDepth).toBeGreaterThanOrEqual(1);
+  });
+
+  it("段階的拡大を指定しても正常な結果が返る", () => {
+    const board = createEmptyBoard();
+    placeStonesOnBoard(board, [
+      { row: 7, col: 7, color: "black" },
+      { row: 7, col: 8, color: "white" },
+    ]);
+
+    const result = findBestMoveIterativeWithTT({
+      board,
+      color: "black",
+      maxDepth: 3,
+      maxNodes: 100_000,
+      randomFactor: 0,
+      evaluationOptions: DEFAULT_EVAL_OPTIONS,
+      aspirationWidths: [75, 200, 500], // 振り返り用段階的拡大
+    });
+
+    expect(result.position.row).toBeGreaterThanOrEqual(0);
+    expect(result.completedDepth).toBeGreaterThanOrEqual(1);
+  });
+});

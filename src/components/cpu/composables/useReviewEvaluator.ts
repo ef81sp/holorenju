@@ -25,6 +25,16 @@ import {
 } from "@/logic/reviewLogic";
 import { usePreferencesStore } from "@/stores/preferencesStore";
 
+/** ディスパッチキューのソート: フル評価を先、軽量評価を後 */
+export function sortReviewQueue(items: { isLightEval: boolean }[]): void {
+  items.sort((a, b) => {
+    if (a.isLightEval !== b.isLightEval) {
+      return a.isLightEval ? 1 : -1;
+    }
+    return 0;
+  });
+}
+
 /** Workerプールサイズ（最大8、最低2） */
 const POOL_SIZE = Math.max(2, Math.min(8, navigator.hardwareConcurrency ?? 4));
 
@@ -125,12 +135,7 @@ export function useReviewEvaluator(): UseReviewEvaluatorReturn {
 
     // フル評価（重い手）を先にディスパッチし、軽量評価は後に回す
     // → 全ワーカーが同時に重い処理を行い、遊休時間を削減
-    allMoveItems.sort((a, b) => {
-      if (a.isLightEval !== b.isLightEval) {
-        return a.isLightEval ? 1 : -1;
-      }
-      return 0;
-    });
+    sortReviewQueue(allMoveItems);
 
     if (allMoveItems.length === 0) {
       return Promise.resolve([]);
