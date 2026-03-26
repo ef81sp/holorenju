@@ -171,6 +171,8 @@ export interface ReviewEvalRequest {
   skipStoneThreshold?: boolean;
   /** Phase 3: 候補手の位置（指定時、実際の着手の代わりにこの位置で盤面を構築） */
   candidatePosition?: Position;
+  /** PV事後検証を実行するか */
+  preciseAnalysis?: boolean;
 }
 
 /**

@@ -543,6 +543,7 @@ describe("preferencesStore", () => {
           lastPlayerFirst: true,
           lastJushu: null,
           lastFixedDirection: true,
+          preciseAnalysis: false,
         },
         debug: {
           showCpuInfo: false,

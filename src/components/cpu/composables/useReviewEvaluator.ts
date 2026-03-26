@@ -23,6 +23,7 @@ import {
   buildBacktrackSequence,
   isOpeningMove,
 } from "@/logic/reviewLogic";
+import { usePreferencesStore } from "@/stores/preferencesStore";
 
 /** Workerプールサイズ（最大8、最低2） */
 const POOL_SIZE = Math.max(2, Math.min(8, navigator.hardwareConcurrency ?? 4));
@@ -135,6 +136,7 @@ export function useReviewEvaluator(): UseReviewEvaluatorReturn {
       return Promise.resolve([]);
     }
 
+    const enablePV = usePreferencesStore().preciseAnalysis;
     cancelled = false;
     isEvaluating.value = true;
     completedCount.value = 0;
@@ -175,9 +177,13 @@ export function useReviewEvaluator(): UseReviewEvaluatorReturn {
           // JS シングルスレッドのため vctCompleted === items.length を満たすのは
           // 最後の onmessage/onerror ハンドラから呼ばれた1回だけ
           if (vctCompleted === items.length) {
-            // Phase 2 完了 → Phase 3（遡及チェック）開始
-            // Phase 3 はどのワーカーでも同じ結果になる
-            dispatchBacktrack(pool);
+            if (enablePV) {
+              // Phase 2 完了 → Phase 3（遡及チェック）開始
+              dispatchBacktrack(pool);
+            } else {
+              // 高速モード: Phase 3 スキップ
+              finishEvaluation();
+            }
           }
           return;
         }
@@ -445,9 +451,12 @@ export function useReviewEvaluator(): UseReviewEvaluatorReturn {
           if (vctItems.length > 0) {
             totalCount.value += vctItems.length;
             dispatchVCTParallel(pool, vctItems);
-          } else {
+          } else if (enablePV) {
             // Phase 2 スキップ → Phase 3 へ直接
             dispatchBacktrack(pool);
+          } else {
+            // 高速モード: Phase 2/3 両方スキップ
+            finishEvaluation();
           }
         }
         return;
@@ -458,6 +467,7 @@ export function useReviewEvaluator(): UseReviewEvaluatorReturn {
         moveIndex: item.moveIndex,
         playerFirst,
         isLightEval: item.isLightEval || undefined,
+        preciseAnalysis: enablePV,
       };
 
       worker.onmessage = (

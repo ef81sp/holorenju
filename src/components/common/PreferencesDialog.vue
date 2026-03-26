@@ -334,6 +334,26 @@ defineExpose({
           </div>
         </section>
 
+        <!-- 振り返り設定 -->
+        <section class="settings-section">
+          <h3 class="section-title">振り返り</h3>
+          <div class="settings-group">
+            <label class="setting-row">
+              <span class="setting-text">
+                <span class="setting-label">敗着の精密検証</span>
+                <span class="setting-description">
+                  どこで負けが決まったかをより正確に特定します（数分かかります）
+                </span>
+              </span>
+              <input
+                v-model="preferencesStore.preciseAnalysis"
+                type="checkbox"
+                class="checkbox"
+              />
+            </label>
+          </div>
+        </section>
+
         <!-- データ管理 -->
         <section class="settings-section">
           <h3 class="section-title">データ管理</h3>
