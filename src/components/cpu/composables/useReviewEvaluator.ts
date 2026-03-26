@@ -168,7 +168,7 @@ export function useReviewEvaluator(): UseReviewEvaluatorReturn {
           if (vctCompleted === items.length) {
             // Phase 2 完了 → Phase 3（遡及チェック）開始
             // Phase 3 はどのワーカーでも同じ結果になる
-            dispatchBacktrack(pool[0]!);
+            dispatchBacktrack(pool);
           }
           return;
         }
@@ -211,13 +211,17 @@ export function useReviewEvaluator(): UseReviewEvaluatorReturn {
     }
 
     /**
-     * Phase 3: 候補深掘りチェック
+     * Phase 3: 候補深掘りチェック（全ワーカー並列）
      *
      * forcedLossType が付いたプレイヤーの手の候補に対し、
      * 深い VCT 設定で opponentForcedWin を再検証する。
      * 全候補が負けなら前の手に遡り、生存する候補がある手が敗着。
+     *
+     * 決定論性: 生存候補発見時に早期打ち切りを維持し、
+     * 生存候補以降の候補への書き込みをスキップすることで
+     * 逐次実行と同一の結果を保証する。
      */
-    function dispatchBacktrack(worker: Worker): void {
+    function dispatchBacktrack(backtrackWorkers: Worker[]): void {
       // forcedLossType が付いたプレイヤーの手を古い順に収集
       const sortedResults = [...results].sort(
         (a, b) => a.moveIndex - b.moveIndex,
@@ -300,46 +304,62 @@ export function useReviewEvaluator(): UseReviewEvaluatorReturn {
           return;
         }
 
-        // opponentForcedWin が未設定の候補を深い VCT で再チェック
+        // opponentForcedWin が未設定の候補を深い VCT で並列チェック
         const unchecked = candidates.filter((c) => !c.opponentForcedWin);
-        let candIdx = 0;
+        const candQueue = [...unchecked];
+        let candCompleted = 0;
+        let foundSurvivor = false;
 
-        function checkNextCandidate(): void {
-          if (cancelled || candIdx >= unchecked.length) {
-            // 全候補チェック完了
-            // 生存する候補があった → この手が敗着（遡及不要）→ 完了
-            // 全候補負け → 次の手（前の手）をチェック
-            const hasSurvivor = candidates.some((c) => !c.opponentForcedWin);
-            if (hasSurvivor) {
-              finishEvaluation();
-            } else {
-              propagateToParent(move);
-              currentIdx++;
-              processNextForcedLossMove();
+        function dispatchNextCandidate(worker: Worker): void {
+          if (cancelled || foundSurvivor) {
+            return;
+          }
+
+          const cand = candQueue.shift();
+          if (!cand) {
+            // キューが空 → 全完了チェック（in-flight ワーカー完了を待つ）
+            if (candCompleted === unchecked.length) {
+              const hasSurvivor = candidates.some((c) => !c.opponentForcedWin);
+              if (hasSurvivor) {
+                finishEvaluation();
+              } else {
+                propagateToParent(move);
+                currentIdx++;
+                processNextForcedLossMove();
+              }
             }
             return;
           }
 
-          const cand = unchecked[candIdx]!;
           worker.onmessage = (event: MessageEvent<VCTCheckResult>) => {
             if (cancelled) {
+              return;
+            }
+            if (foundSurvivor) {
+              // 生存候補発見済み → 書き込みスキップ
+              candCompleted++;
               return;
             }
             if (event.data.forcedLossType) {
               cand.opponentForcedWin = event.data.forcedLossType;
               cand.opponentForcedWinSequence = event.data.forcedLossSequence;
             } else {
-              // この候補は生存 → この手が敗着、残りの候補チェック不要
+              // 生存候補発見 → 早期打ち切り
+              foundSurvivor = true;
               finishEvaluation();
               return;
             }
-            candIdx++;
-            checkNextCandidate();
+            candCompleted++;
+            dispatchNextCandidate(worker);
           };
 
           worker.onerror = () => {
-            candIdx++;
-            checkNextCandidate();
+            if (foundSurvivor) {
+              candCompleted++;
+              return;
+            }
+            candCompleted++;
+            dispatchNextCandidate(worker);
           };
 
           const request: ReviewEvalRequest = {
@@ -353,7 +373,10 @@ export function useReviewEvaluator(): UseReviewEvaluatorReturn {
           worker.postMessage(request);
         }
 
-        checkNextCandidate();
+        // 全ワーカーに初期ディスパッチ
+        for (const w of backtrackWorkers) {
+          dispatchNextCandidate(w);
+        }
       }
     }
 
@@ -414,13 +437,8 @@ export function useReviewEvaluator(): UseReviewEvaluatorReturn {
             totalCount.value += vctItems.length;
             dispatchVCTParallel(pool, vctItems);
           } else {
-            const [firstWorker] = pool;
-            if (firstWorker) {
-              // Phase 2 スキップ → Phase 3 へ直接
-              dispatchBacktrack(firstWorker);
-            } else {
-              finishEvaluation();
-            }
+            // Phase 2 スキップ → Phase 3 へ直接
+            dispatchBacktrack(pool);
           }
         }
         return;

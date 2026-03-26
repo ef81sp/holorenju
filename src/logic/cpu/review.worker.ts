@@ -44,6 +44,7 @@ import {
 import { detectForcedWin } from "./review/forcedWinDetection";
 import { verifyCandidatePVs } from "./review/pvVerification";
 import {
+  REVIEW_REDUCED_NODES,
   REVIEW_SEARCH_PARAMS,
   REVIEW_VCT_OPTIONS_WITH_BRANCHES,
 } from "./review/reviewConstants";
@@ -289,13 +290,20 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
     }
 
     // 通常探索（候補手比較データ用）
+    // 確定局面（被追詰/必勝）ではノード数を削減（候補表示のみに使用）
+    const hasForcedWin = Boolean(forcedWin || doubleMiseBestMove);
+    const effectiveMaxNodes =
+      forcedLossType || hasForcedWin
+        ? REVIEW_REDUCED_NODES
+        : REVIEW_SEARCH_PARAMS.maxNodes;
+
     const result = findBestMoveIterativeWithTT({
       board,
       color,
       maxDepth: REVIEW_SEARCH_PARAMS.depth,
       randomFactor: 0, // 決定論的
       evaluationOptions: REVIEW_SEARCH_PARAMS.evaluationOptions,
-      maxNodes: REVIEW_SEARCH_PARAMS.maxNodes,
+      maxNodes: effectiveMaxNodes,
       collectPV: true,
     });
 

@@ -15,6 +15,9 @@ export const REVIEW_SEARCH_PARAMS = {
   evaluationOptions: DIFFICULTY_PARAMS.hard.evaluationOptions,
 } as const;
 
+/** 確定局面（被追詰/必勝）の minimax ノード上限（候補表示用） */
+export const REVIEW_REDUCED_NODES = 500_000;
+
 /** 振り返り用VCT探索パラメータ（forcedWin表示用、分岐収集あり） */
 export const REVIEW_VCT_OPTIONS_WITH_BRANCHES: VCTSearchOptions = {
   maxDepth: 6,
