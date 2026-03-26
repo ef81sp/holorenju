@@ -103,9 +103,12 @@ export function verifyPV(
         row[move.col] = color;
 
         if (loss) {
+          // PV 深部で検出された VCF は中間手（三等）を経由するため VCT に相当
+          const effectiveType =
+            i > 0 && loss.type === "vcf" ? "vct" : loss.type;
           return {
             failIndex: i,
-            forcedLossType: loss.type,
+            forcedLossType: effectiveType,
             forcedLossSequence: loss.sequence,
           };
         }
