@@ -66,7 +66,7 @@ export const CANDIDATE_VERIFY_MISE_VCF_OPTIONS: MiseVCFSearchOptions = {
 export const CANDIDATE_VERIFY_VCT_OPTIONS: VCTSearchOptions = {
   maxDepth: 4,
   timeLimit: NO_TIME_LIMIT,
-  maxNodes: 50_000, // 100K → 50K: 候補検証は高速化優先
+  maxNodes: 100_000, // 50Kでは検出漏れ発生のため100Kに据え置き
   vcfOptions: { maxDepth: 12, timeLimit: NO_TIME_LIMIT, maxNodes: 500_000 },
   collectBranches: false,
 };
