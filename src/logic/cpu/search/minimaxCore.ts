@@ -50,7 +50,7 @@ import {
 } from "./results";
 import {
   analyzeFourAndThree,
-  ASPIRATION_WINDOW,
+  ASPIRATION_WIDTHS,
   FUTILITY_MARGINS_OPPONENT,
   FUTILITY_MARGINS_SELF,
   hasImmediateThreat,
@@ -915,7 +915,7 @@ export function findBestMoveWithTT(
   const moveScores: MoveScoreEntry[] = [];
 
   // Aspiration Windows: 前回のスコアをもとにウィンドウを設定
-  const windowSize = aspiration?.windowSize ?? ASPIRATION_WINDOW;
+  const windowSize = aspiration?.windowSize ?? ASPIRATION_WIDTHS[0]!;
   const prevScore = aspiration?.previousScore;
   let alpha = prevScore === undefined ? -INFINITY : prevScore - windowSize;
   let beta = prevScore === undefined ? INFINITY : prevScore + windowSize;

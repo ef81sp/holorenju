@@ -297,8 +297,8 @@ export function detectPlainFour(
 // Aspiration Windows パラメータ
 // =============================================================================
 
-/** Aspiration Windowの初期幅（FOUR=1500 に対する比率 75/1500=5% は旧比率 50/1000=5% と同等） */
-export const ASPIRATION_WINDOW = 75;
+/** Aspiration Windowの段階的拡大幅（失敗時に次の幅で再探索） */
+export const ASPIRATION_WIDTHS = [75, 200, 500];
 
 /** デフォルトの絶対時間制限（10秒） */
 export const DEFAULT_ABSOLUTE_TIME_LIMIT = 10000;
