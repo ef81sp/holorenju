@@ -132,6 +132,8 @@ export interface IterativeDeepeningParams {
   maxNodes?: number;
   absoluteTimeLimit?: number;
   scoreThreshold?: number;
+  /** Aspiration Windowの段階的拡大幅（振り返り用、省略時は固定幅±75） */
+  aspirationWidths?: number[];
   /** Triangular PV Tableによる正確なPV収集（振り返り用） */
   collectPV?: boolean;
 }
@@ -153,9 +155,12 @@ export function findBestMoveIterativeWithTT(
     absoluteTimeLimit = timeLimit === undefined
       ? Infinity
       : DEFAULT_ABSOLUTE_TIME_LIMIT,
+    aspirationWidths,
     scoreThreshold = 200,
     collectPV = false,
   } = params;
+  // 未指定時は従来の固定幅（対局CPU互換）
+  const effectiveAspirationWidths = aspirationWidths ?? [ASPIRATION_WIDTHS[0]!];
   const startTime = performance.now();
   const ctx = createSearchContext(globalTT, evaluationOptions);
   ctx.lineTable = buildLineTable(board);
@@ -383,7 +388,7 @@ export function findBestMoveIterativeWithTT(
     // Aspiration Windowsで探索（段階的拡大）
     let result: MinimaxResult & { ctx: SearchContext } = bestResult;
     let searchComplete = false;
-    for (const width of ASPIRATION_WIDTHS) {
+    for (const width of effectiveAspirationWidths) {
       result = findBestMoveWithTT(
         board,
         color,

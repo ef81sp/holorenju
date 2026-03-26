@@ -49,6 +49,7 @@ import {
   REVIEW_VCT_OPTIONS_WITH_BRANCHES,
 } from "./review/reviewConstants";
 import { findBestMoveIterativeWithTT } from "./search/minimax";
+import { ASPIRATION_WIDTHS } from "./search/techniques";
 import { findVCFSequence, type VCFSequenceResult } from "./search/vcf";
 import {
   findVCTSequence,
@@ -303,6 +304,7 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
       randomFactor: 0, // 決定論的
       evaluationOptions: REVIEW_SEARCH_PARAMS.evaluationOptions,
       maxNodes: effectiveMaxNodes,
+      aspirationWidths: ASPIRATION_WIDTHS,
       collectPV: true,
     });
 
