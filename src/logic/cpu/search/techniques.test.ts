@@ -154,10 +154,32 @@ describe("hasImmediateThreat", () => {
     expect(hasImmediateThreat(board, "white")).toBe(true);
   });
 
-  it("相手に四がない場合 false を返す", () => {
+  it("相手に活三がある場合 true を返す", () => {
     const board = createEmptyBoard();
-    // 白が3つだけ（活三だが四ではない）
+    // 白が3つ並び両端が空き（活三）
     placeStonesOnBoard(board, [
+      { row: 7, col: 5, color: "white" },
+      { row: 7, col: 6, color: "white" },
+      { row: 7, col: 7, color: "white" },
+    ]);
+    expect(hasImmediateThreat(board, "white")).toBe(true);
+  });
+
+  it("相手に活三も四もない場合 false を返す", () => {
+    const board = createEmptyBoard();
+    // 白が2つだけ（二）
+    placeStonesOnBoard(board, [
+      { row: 7, col: 6, color: "white" },
+      { row: 7, col: 7, color: "white" },
+    ]);
+    expect(hasImmediateThreat(board, "white")).toBe(false);
+  });
+
+  it("片端が塞がれた3連は活三ではない（脅威なし）", () => {
+    const board = createEmptyBoard();
+    // 白3連だが片端が黒で塞がれている → 活三ではない
+    placeStonesOnBoard(board, [
+      { row: 7, col: 4, color: "black" },
       { row: 7, col: 5, color: "white" },
       { row: 7, col: 6, color: "white" },
       { row: 7, col: 7, color: "white" },
@@ -200,6 +222,26 @@ describe("hasImmediateThreat", () => {
     const board = createEmptyBoard();
     placeStonesOnBoard(board, [
       { row: 4, col: 4, color: "white" },
+      { row: 5, col: 5, color: "white" },
+      { row: 6, col: 6, color: "white" },
+      { row: 7, col: 7, color: "white" },
+    ]);
+    expect(hasImmediateThreat(board, "white")).toBe(true);
+  });
+
+  it("縦方向の活三も検出する", () => {
+    const board = createEmptyBoard();
+    placeStonesOnBoard(board, [
+      { row: 5, col: 7, color: "black" },
+      { row: 6, col: 7, color: "black" },
+      { row: 7, col: 7, color: "black" },
+    ]);
+    expect(hasImmediateThreat(board, "black")).toBe(true);
+  });
+
+  it("斜め方向の活三も検出する", () => {
+    const board = createEmptyBoard();
+    placeStonesOnBoard(board, [
       { row: 5, col: 5, color: "white" },
       { row: 6, col: 6, color: "white" },
       { row: 7, col: 7, color: "white" },

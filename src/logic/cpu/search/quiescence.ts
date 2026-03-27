@@ -93,6 +93,7 @@ export function quiescenceSearch(
     singleFourPenaltyMultiplier:
       ctx.evaluationOptions.singleFourPenaltyMultiplier,
     lastMoverIsPerspective: !isMaximizing,
+    enableLeafMise: ctx.evaluationOptions.enableMise,
   };
 
   // 時間/ノード制限チェック

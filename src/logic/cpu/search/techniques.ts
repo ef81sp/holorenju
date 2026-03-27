@@ -388,14 +388,55 @@ function hasFourInDirection(
 }
 
 /**
- * 相手に即座の脅威（四: 連続4個で片端以上開き）があるかを軽量にチェック
+ * 指定位置から指定方向に活三（連続3個で両端が空き）があるかチェック
  *
- * detectOpponentThreats より大幅に軽量（活三・ミセ手の検出なし）。
+ * @returns 連続3個で両端が空いている場合 true
+ */
+function hasOpenThreeInDirection(
+  board: BoardState,
+  row: number,
+  col: number,
+  dr: number,
+  dc: number,
+  color: "black" | "white",
+): boolean {
+  // 重複カウント防止: 正方向の起点のみチェック
+  const prevR = row - dr;
+  const prevC = col - dc;
+  if (isValidPosition(prevR, prevC) && board[prevR]?.[prevC] === color) {
+    return false;
+  }
+
+  // 正方向に連続する石の数をカウント
+  let count = 1;
+  let r = row + dr;
+  let c = col + dc;
+  while (isValidPosition(r, c) && board[r]?.[c] === color) {
+    count++;
+    r += dr;
+    c += dc;
+  }
+
+  if (count !== 3) {
+    return false;
+  }
+
+  // 3個の連続: 両端が空いていれば活三
+  const end1Open = isValidPosition(r, c) && board[r]?.[c] === null;
+  const end2Open =
+    isValidPosition(prevR, prevC) && board[prevR]?.[prevC] === null;
+  return end1Open && end2Open;
+}
+
+/**
+ * 相手に即座の脅威（四または活三）があるかを軽量にチェック
+ *
+ * detectOpponentThreats より大幅に軽量。
  * NMP の適用条件判定に使用。
  *
  * @param board 盤面
  * @param opponentColor 相手の色
- * @returns 相手に四がある場合 true
+ * @returns 相手に四または活三がある場合 true
  */
 // =============================================================================
 // Time-Pressure Fallback パラメータ
@@ -422,7 +463,10 @@ export function hasImmediateThreat(
       }
 
       for (const [dr, dc] of NMP_DIRECTIONS) {
-        if (hasFourInDirection(board, row, col, dr, dc, opponentColor)) {
+        if (
+          hasFourInDirection(board, row, col, dr, dc, opponentColor) ||
+          hasOpenThreeInDirection(board, row, col, dr, dc, opponentColor)
+        ) {
           return true;
         }
       }

@@ -20,6 +20,7 @@ import {
 import { isNearExistingStone } from "../moveGenerator";
 import { incrementEvaluationCalls } from "../profiling/counters";
 import { countInDirection } from "./directionAnalysis";
+import { estimateMiseOpportunity } from "./leafMiseThreat";
 import {
   type BoardEvaluationBreakdown,
   emptyLeafPatternScores,
@@ -168,6 +169,8 @@ export function evaluateBoard(
   let opponentScore = 0;
   let myOpenThreeScore = 0;
   let opponentOpenThreeScore = 0;
+  let myFourScore = 0;
+  let opponentFourScore = 0;
   let myPendingFourPenalty = 0;
   let opponentPendingFourPenalty = 0;
   let myStoneCount = 0;
@@ -214,6 +217,7 @@ export function evaluateBoard(
         myStoneCount++;
         myScore += adjustedScore;
         myOpenThreeScore += result.openThreeScore;
+        myFourScore += result.fourScore;
         if (
           multiplier < 1.0 &&
           result.fourScore > 0 &&
@@ -225,6 +229,7 @@ export function evaluateBoard(
         opponentStoneCount++;
         opponentScore += adjustedScore;
         opponentOpenThreeScore += result.openThreeScore;
+        opponentFourScore += result.fourScore;
         if (
           multiplier < 1.0 &&
           result.fourScore > 0 &&
@@ -284,6 +289,25 @@ export function evaluateBoard(
     }
     if (oppHasFourThree) {
       opponentScore += threatBonus;
+    }
+  }
+
+  // ミセ手脅威推定（四三脅威がない場合のみ、追加コストゼロ）
+  if (options?.enableLeafMise) {
+    const miseBonus = PATTERN_SCORES.LEAF_MISE_THREAT;
+    if (miseBonus > 0) {
+      if (
+        !myHasFourThree &&
+        estimateMiseOpportunity(myFourScore, myOpenThreeScore)
+      ) {
+        myScore += miseBonus;
+      }
+      if (
+        !oppHasFourThree &&
+        estimateMiseOpportunity(opponentFourScore, opponentOpenThreeScore)
+      ) {
+        opponentScore += miseBonus;
+      }
     }
   }
 

@@ -210,13 +210,18 @@ export function findBestMoveIterativeWithTT(
   // =========================================================================
 
   // 候補手を生成
+  // preSearch で計算済みの脅威情報を再利用（detectOpponentThreats の重複回避）
+  const rootEvalOptions = preSearchResult.threats
+    ? { ...evaluationOptions, precomputedThreats: preSearchResult.threats }
+    : evaluationOptions;
   let { moves } = generateSortedMoves(board, color, {
     ttMove: null,
     killers: ctx.killers,
     depth: 1,
     history: ctx.history,
     useStaticEval: true,
-    evaluationOptions,
+    evaluationOptions: rootEvalOptions,
+    lineTable: ctx.lineTable,
   });
 
   // 候補手制限の適用（優先順: VCF防御 > 活三防御）

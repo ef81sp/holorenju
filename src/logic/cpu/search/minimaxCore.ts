@@ -317,6 +317,7 @@ export function minimaxWithTT(
         singleFourPenaltyMultiplier:
           ctx.evaluationOptions.singleFourPenaltyMultiplier,
         lastMoverIsPerspective: !isMaximizing,
+        enableLeafMise: ctx.evaluationOptions.enableMise,
       },
       ctx.lineTable,
     );
