@@ -79,10 +79,30 @@ export interface SearchStatsRecord {
   threatDetectionCalls: number;
   /** 評価関数呼び出し回数 */
   evaluationCalls: number;
+  /** Null Move Pruning 試行回数 */
+  nullMoveTrials?: number;
   /** Null Move Pruning によるカットオフ数 */
   nullMoveCutoffs?: number;
   /** Futility Pruning によるスキップ数 */
   futilityPrunes?: number;
+  /** LMR 発動回数 */
+  lmrTrials?: number;
+  /** LMR re-search 発動回数 */
+  lmrResearches?: number;
+  /** LMR moveIndex 分布 [3, 4, 5+] */
+  lmrMoveIndexDist?: [number, number, number];
+  /** QSearch ノード数 */
+  qSearchNodes?: number;
+  /** QSearch 分岐数の合計 */
+  qSearchBranchSum?: number;
+  /** QSearch エントリ数 */
+  qSearchEntries?: number;
+  /** QSearch 深度の合計 */
+  qSearchDepthSum?: number;
+  /** QSearch 終端数 */
+  qSearchLeaves?: number;
+  /** Threat Extension 発動回数 */
+  threatExtensions?: number;
 }
 
 /**
@@ -355,8 +375,18 @@ export function runHeadlessGame(
         boardCopies: result.stats.boardCopies,
         threatDetectionCalls: result.stats.threatDetectionCalls,
         evaluationCalls: result.stats.evaluationCalls,
+        nullMoveTrials: result.stats.nullMoveTrials,
         nullMoveCutoffs: result.stats.nullMoveCutoffs,
         futilityPrunes: result.stats.futilityPrunes,
+        lmrTrials: result.stats.lmrTrials,
+        lmrResearches: result.stats.lmrResearches,
+        lmrMoveIndexDist: result.stats.lmrMoveIndexDist,
+        qSearchNodes: result.stats.qSearchNodes,
+        qSearchBranchSum: result.stats.qSearchBranchSum,
+        qSearchEntries: result.stats.qSearchEntries,
+        qSearchDepthSum: result.stats.qSearchDepthSum,
+        qSearchLeaves: result.stats.qSearchLeaves,
+        threatExtensions: result.stats.threatExtensions,
       };
 
       // パターンスコアオーバーライドの復元

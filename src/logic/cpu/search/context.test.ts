@@ -24,9 +24,18 @@ describe("createSearchContext", () => {
       boardCopies: 0,
       threatDetectionCalls: 0,
       evaluationCalls: 0,
+      nullMoveTrials: 0,
       nullMoveCutoffs: 0,
       futilityPrunes: 0,
       threatExtensions: 0,
+      lmrTrials: 0,
+      lmrResearches: 0,
+      lmrMoveIndexDist: [0, 0, 0],
+      qSearchNodes: 0,
+      qSearchBranchSum: 0,
+      qSearchEntries: 0,
+      qSearchDepthSum: 0,
+      qSearchLeaves: 0,
     });
     expect(ctx.evaluationOptions).toEqual(DEFAULT_EVAL_OPTIONS);
   });

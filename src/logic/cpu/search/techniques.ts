@@ -69,8 +69,50 @@ export const LMR_MOVE_THRESHOLD = 3;
 /** LMRを適用する最小探索深度 */
 export const LMR_MIN_DEPTH = 3;
 
-/** LMRによる探索深度の削減量 */
+/** LMRによる探索深度の削減量（フォールバック用） */
 export const LMR_REDUCTION = 1;
+
+/**
+ * LMR 対数テーブル
+ *
+ * depth と moveIndex に応じた削減量を返す。
+ * 深い深度・後方の手ほど大きく削減する（業界標準パターン）。
+ * 保守的な係数: re-search率が30%以下を維持するよう設計。
+ *
+ * プロファイリング結果（2026-03-28）:
+ * - re-search率 4.7%（余地大）
+ * - moveIndex 5+ が 96.3%
+ */
+const LMR_TABLE: number[][] = (() => {
+  const maxDepth = 16;
+  const maxMoves = 32;
+  const table: number[][] = [];
+  for (let d = 0; d < maxDepth; d++) {
+    table[d] = [];
+    for (let m = 0; m < maxMoves; m++) {
+      if (d < 3 || m < 3) {
+        table[d]![m] = 0;
+      } else {
+        // 保守的な係数 0.4: re-search増加を抑制
+        table[d]![m] = Math.max(1, Math.floor(0.4 * Math.log(d) * Math.log(m)));
+      }
+    }
+  }
+  return table;
+})();
+
+/**
+ * LMR の削減量を取得する
+ *
+ * @param depth 現在の探索深度
+ * @param moveIndex 候補手のインデックス（0始まり）
+ * @returns 削減量（最小1）
+ */
+export function getLMRReduction(depth: number, moveIndex: number): number {
+  const d = Math.min(depth, 15);
+  const m = Math.min(moveIndex, 31);
+  return LMR_TABLE[d]?.[m] ?? LMR_REDUCTION;
+}
 
 /** 非生産的四伸びに対するLMR追加リダクション量 */
 export const LMR_PLAIN_FOUR_EXTRA_REDUCTION = 1;

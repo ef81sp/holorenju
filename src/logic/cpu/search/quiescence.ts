@@ -85,6 +85,7 @@ export function quiescenceSearch(
   qDepth: number,
 ): number {
   ctx.stats.nodes++;
+  ctx.stats.qSearchNodes++;
 
   const currentColor = isMaximizing
     ? perspective
@@ -131,14 +132,20 @@ export function quiescenceSearch(
 
   // 深度制限
   if (qDepth <= 0) {
+    ctx.stats.qSearchLeaves++;
+    ctx.stats.qSearchDepthSum += MAX_QUIESCENCE_DEPTH;
     return standPat;
   }
 
   // 脅威手生成
   const moves = generateTacticalMoves(board, currentColor, lastMove);
   if (moves.length === 0) {
+    ctx.stats.qSearchLeaves++;
+    ctx.stats.qSearchDepthSum += MAX_QUIESCENCE_DEPTH - qDepth;
     return standPat;
   }
+  ctx.stats.qSearchEntries++;
+  ctx.stats.qSearchBranchSum += moves.length;
 
   let bestScore = standPat;
 

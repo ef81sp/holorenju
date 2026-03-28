@@ -58,8 +58,8 @@ import {
   isThreatExtensionCandidate,
   LMR_MIN_DEPTH,
   LMR_MOVE_THRESHOLD,
+  getLMRReduction,
   LMR_PLAIN_FOUR_EXTRA_REDUCTION,
-  LMR_REDUCTION,
   MAX_EXTENSIONS,
   NMP_MIN_DEPTH,
   NMP_REDUCTION,
@@ -162,6 +162,7 @@ function lmrPvsMaximizing(
     newExtensions,
   );
   if (score > alpha) {
+    ctx.stats.lmrResearches++;
     // Null Window 再探索（フル深度）
     score = minimaxWithTT(
       board,
@@ -228,6 +229,7 @@ function lmrPvsMinimizing(
     newExtensions,
   );
   if (score < beta) {
+    ctx.stats.lmrResearches++;
     // Null Window 再探索（フル深度）
     score = minimaxWithTT(
       board,
@@ -434,6 +436,7 @@ export function minimaxWithTT(
     allowNullMove &&
     depth >= NMP_MIN_DEPTH &&
     (() => {
+      ctx.stats.nullMoveTrials++;
       const t = startTiming();
       const r = hasImmediateThreat(board, getOppositeColor(currentColor));
       recordTiming("hasImmediateThreat", t);
@@ -665,9 +668,20 @@ export function minimaxWithTT(
         childPV,
       );
     } else if ((canApplyLMR && !isOpenThreeMove) || isPlainFour) {
+      const baseReduction = getLMRReduction(effectiveDepth, moveIndex);
       const reduction = isPlainFour
-        ? LMR_REDUCTION + LMR_PLAIN_FOUR_EXTRA_REDUCTION
-        : LMR_REDUCTION;
+        ? baseReduction + LMR_PLAIN_FOUR_EXTRA_REDUCTION
+        : baseReduction;
+
+      // LMR プロファイリング
+      ctx.stats.lmrTrials++;
+      if (moveIndex === 3) {
+        ctx.stats.lmrMoveIndexDist[0]++;
+      } else if (moveIndex === 4) {
+        ctx.stats.lmrMoveIndexDist[1]++;
+      } else {
+        ctx.stats.lmrMoveIndexDist[2]++;
+      }
 
       childPV = pvLine ? [] : undefined;
       score = isMaximizing

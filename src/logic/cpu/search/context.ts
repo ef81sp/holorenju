@@ -103,12 +103,30 @@ export interface SearchStats {
   threatDetectionCalls: number;
   /** 評価関数呼び出し回数 */
   evaluationCalls: number;
+  /** Null Move Pruning 試行回数（hasImmediateThreat呼び出し回数） */
+  nullMoveTrials: number;
   /** Null Move Pruning によるカットオフ数 */
   nullMoveCutoffs: number;
   /** Futility Pruning によるスキップ数 */
   futilityPrunes: number;
   /** Threat Extension 発動回数 */
   threatExtensions: number;
+  /** LMR 発動回数 */
+  lmrTrials: number;
+  /** LMR re-search 発動回数 */
+  lmrResearches: number;
+  /** LMR moveIndex 分布 [3, 4, 5+] */
+  lmrMoveIndexDist: [number, number, number];
+  /** QSearch ノード数 */
+  qSearchNodes: number;
+  /** QSearch 分岐数の合計（平均計算用） */
+  qSearchBranchSum: number;
+  /** QSearch エントリ数（平均分岐計算用） */
+  qSearchEntries: number;
+  /** QSearch 深度の合計（平均深度計算用） */
+  qSearchDepthSum: number;
+  /** QSearch 終端数（平均深度計算用） */
+  qSearchLeaves: number;
   /** 関数別タイミング（プロファイリング有効時のみ） */
   timings?: ProfilingCounters["timings"];
 }
@@ -172,9 +190,18 @@ export function createSearchContext(
       boardCopies: 0,
       threatDetectionCalls: 0,
       evaluationCalls: 0,
+      nullMoveTrials: 0,
       nullMoveCutoffs: 0,
       futilityPrunes: 0,
       threatExtensions: 0,
+      lmrTrials: 0,
+      lmrResearches: 0,
+      lmrMoveIndexDist: [0, 0, 0],
+      qSearchNodes: 0,
+      qSearchBranchSum: 0,
+      qSearchEntries: 0,
+      qSearchDepthSum: 0,
+      qSearchLeaves: 0,
     },
     evaluationOptions,
     threatCache: createThreatProbeCache(),

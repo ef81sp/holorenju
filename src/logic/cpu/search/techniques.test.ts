@@ -14,9 +14,42 @@ import { findBestMoveIterativeWithTT } from "./minimax";
 import {
   calculateDynamicTimeLimit,
   detectPlainFour,
+  getLMRReduction,
   hasImmediateThreat,
   isTacticalMove,
 } from "./techniques";
+
+describe("getLMRReduction 対数テーブル", () => {
+  it("depth<3 またはmoveIndex<3 では0を返す", () => {
+    expect(getLMRReduction(2, 5)).toBe(0);
+    expect(getLMRReduction(5, 2)).toBe(0);
+    expect(getLMRReduction(1, 10)).toBe(0);
+  });
+
+  it("depth=3, moveIndex=3 で最小値1を返す", () => {
+    expect(getLMRReduction(3, 3)).toBe(1);
+  });
+
+  it("深い深度・後方の手ほど大きい削減量を返す", () => {
+    const shallow = getLMRReduction(3, 5);
+    const deep = getLMRReduction(6, 5);
+    expect(deep).toBeGreaterThanOrEqual(shallow);
+
+    const early = getLMRReduction(5, 4);
+    const late = getLMRReduction(5, 15);
+    expect(late).toBeGreaterThanOrEqual(early);
+  });
+
+  it("最小値は1（depth>=3, moveIndex>=3の場合）", () => {
+    expect(getLMRReduction(3, 3)).toBeGreaterThanOrEqual(1);
+    expect(getLMRReduction(4, 4)).toBeGreaterThanOrEqual(1);
+  });
+
+  it("範囲外の値でもエラーにならない", () => {
+    expect(getLMRReduction(0, 0)).toBe(0);
+    expect(getLMRReduction(20, 50)).toBeGreaterThanOrEqual(1);
+  });
+});
 
 describe("LMR と四を作る手", () => {
   it("四を作る手もLMR対象だが、最善手として正しく選ばれる", () => {
