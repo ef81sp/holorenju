@@ -17,8 +17,8 @@ import { createBoardWithStones, placeStonesOnBoard } from "../testUtils";
 import { loadWasmModule } from "./loader";
 import { WasmSearchEngine } from "./searchEngine";
 
-/** WASM版の勝ちスコア（i16 max = 32767）。TS版の PATTERN_SCORES.FIVE (100000) に相当 */
-const WASM_WIN_SCORE = 32767;
+/** 勝ちスコア（FIVE = 100000） */
+const WIN_SCORE_THRESHOLD = 90000;
 
 describe("脅威検出パリティ: 止め四への防御", async () => {
   const wasm = await loadWasmModule();
@@ -143,7 +143,7 @@ describe("脅威検出パリティ: ミセ手（四三）", async () => {
       5000,
       600000,
     );
-    expect(resultBlack.score).toBe(WASM_WIN_SCORE);
+    expect(resultBlack.score).toBeGreaterThanOrEqual(WIN_SCORE_THRESHOLD);
 
     // 白番: 脅威を認識してスコアが負
     const resultWhite = engine.findBestMoveWithParams(

@@ -16,8 +16,8 @@ import { createBoardWithStones, placeStonesOnBoard } from "../testUtils";
 import { loadWasmModule } from "./loader";
 import { WasmSearchEngine } from "./searchEngine";
 
-/** WASM版の勝ちスコア（i16 max = 32767）。TS版の PATTERN_SCORES.FIVE (100000) に相当 */
-const WASM_WIN_SCORE = 32767;
+/** 勝ちスコア（FIVE = 100000） */
+const WIN_SCORE_THRESHOLD = 90000;
 
 describe("VCF パリティ: hasVCF相当（findBestMove経由）", async () => {
   const wasm = await loadWasmModule();
@@ -39,7 +39,7 @@ describe("VCF パリティ: hasVCF相当（findBestMove経由）", async () => {
     );
 
     // 活三から四→五連のVCFが成立するのでFIVEスコア
-    expect(result.score).toBe(WASM_WIN_SCORE);
+    expect(result.score).toBeGreaterThanOrEqual(WIN_SCORE_THRESHOLD);
     // 勝ち手を返す（探索順序によりTS版と異なるVCF初手を選ぶ場合がある）
     expect(result.position.row).toBeGreaterThanOrEqual(0);
     expect(result.position.row).toBeLessThan(15);
@@ -61,7 +61,7 @@ describe("VCF パリティ: hasVCF相当（findBestMove経由）", async () => {
       600000,
     );
 
-    expect(result.score).toBe(WASM_WIN_SCORE);
+    expect(result.score).toBeGreaterThanOrEqual(WIN_SCORE_THRESHOLD);
   });
 
   it("白の活三からVCFが成立する", () => {
@@ -80,7 +80,7 @@ describe("VCF パリティ: hasVCF相当（findBestMove経由）", async () => {
     );
 
     // VCF成立で勝ちスコア
-    expect(result.score).toBe(WASM_WIN_SCORE);
+    expect(result.score).toBeGreaterThanOrEqual(WIN_SCORE_THRESHOLD);
   });
 
   it("2方向に三がある形でVCFが成立する", () => {
@@ -103,7 +103,7 @@ describe("VCF パリティ: hasVCF相当（findBestMove経由）", async () => {
       600000,
     );
 
-    expect(result.score).toBe(WASM_WIN_SCORE);
+    expect(result.score).toBeGreaterThanOrEqual(WIN_SCORE_THRESHOLD);
   });
 
   it("跳び四でのVCF成立", () => {
@@ -124,7 +124,7 @@ describe("VCF パリティ: hasVCF相当（findBestMove経由）", async () => {
     );
 
     // 跳び四 (7,5) で即勝ち
-    expect(result.score).toBe(WASM_WIN_SCORE);
+    expect(result.score).toBeGreaterThanOrEqual(WIN_SCORE_THRESHOLD);
     expect(result.position).toEqual({ row: 7, col: 5 });
   });
 });
@@ -152,7 +152,7 @@ describe("VCF パリティ: findVCFMove相当", async () => {
 
     // (7,5) で五連完成
     expect(result.position).toEqual({ row: 7, col: 5 });
-    expect(result.score).toBe(WASM_WIN_SCORE);
+    expect(result.score).toBeGreaterThanOrEqual(WIN_SCORE_THRESHOLD);
   });
 
   it("白番でもVCFの手を返す", () => {
@@ -171,7 +171,7 @@ describe("VCF パリティ: findVCFMove相当", async () => {
     );
 
     // VCF成立で勝ちスコア。手は (7,4) or (7,8) が典型だが探索順序差を許容
-    expect(result.score).toBe(WASM_WIN_SCORE);
+    expect(result.score).toBeGreaterThanOrEqual(WIN_SCORE_THRESHOLD);
   });
 
   it("五連を作れる手は他のVCF手より優先される", () => {
@@ -195,7 +195,7 @@ describe("VCF パリティ: findVCFMove相当", async () => {
 
     // E11 (row=4, col=4) で五連完成
     expect(result.position).toEqual({ row: 4, col: 4 });
-    expect(result.score).toBe(WASM_WIN_SCORE);
+    expect(result.score).toBeGreaterThanOrEqual(WIN_SCORE_THRESHOLD);
   });
 });
 
@@ -230,6 +230,6 @@ describe("VCF パリティ: VCFが成立しない局面", async () => {
     );
 
     // 白のVCFが成立するのでFIVEスコア
-    expect(result.score).toBe(WASM_WIN_SCORE);
+    expect(result.score).toBeGreaterThanOrEqual(WIN_SCORE_THRESHOLD);
   });
 });

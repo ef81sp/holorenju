@@ -44,26 +44,32 @@ export fn evaluateBoard(perspective: u8, options_flags: u32) i32 {
 }
 
 // Search exports
-/// 最善手を探索して返す
-/// 戻り値: (row << 8) | col | (score << 16) をパック
-/// score が FIVE 付近なら VCF/VCT による即勝ち手
+/// 探索結果バッファ（WASM メモリ上）
+/// [0]: row, [1]: col, [2..6]: score (i32 LE), [6]: completedDepth
+var result_buffer: [8]u8 = .{0} ** 8;
+
+/// 結果バッファのポインタを返す（JS側からメモリ読み取り用）
+export fn getResultBuffer() [*]u8 {
+    return &result_buffer;
+}
+
+/// 最善手を探索し、結果を result_buffer に書き込む
 ///
 /// パラメータ:
 ///   color: 1=black, 2=white
 ///   max_depth: 探索深度
 ///   time_limit_ms: 時間制限（ミリ秒）、0=無制限
 ///   max_nodes: ノード数上限、0=無制限
-///
-/// 戻り値: 上位16bit=score(i16にキャスト), 下位16bit=(row*15+col)
-///   row=15, col=15 の場合はパス（有効な手なし）
-export fn findBestMove(color: u8, max_depth: u8, time_limit_ms: u32, max_nodes: u32) u32 {
+export fn findBestMove(color: u8, max_depth: u8, time_limit_ms: u32, max_nodes: u32) void {
     const cell_color: board.Cell = switch (color) {
         1 => .black,
         2 => .white,
-        else => return packResult(15, 15, 0),
+        else => {
+            writeResult(15, 15, 0, 0);
+            return;
+        },
     };
 
-    // グローバル盤面を使用
     const cells = &board.board_cells;
 
     const result = search.findBestMoveIterative(cells, cell_color, .{
@@ -72,7 +78,7 @@ export fn findBestMove(color: u8, max_depth: u8, time_limit_ms: u32, max_nodes: 
         .max_nodes = max_nodes,
     });
 
-    return packResult(result.position.row, result.position.col, result.score);
+    writeResult(result.position.row, result.position.col, result.score, result.completed_depth);
 }
 
 /// TT をクリア
@@ -80,10 +86,14 @@ export fn ttClear() void {
     tt_mod.global_tt.clear();
 }
 
-fn packResult(row: u8, col: u8, score: i32) u32 {
-    const pos: u16 = @as(u16, row) * 15 + col;
-    // score を i16 範囲にクランプ
-    const clamped: i16 = if (score > 32767) 32767 else if (score < -32768) -32768 else @intCast(score);
-    const score_bits: u16 = @bitCast(clamped);
-    return (@as(u32, score_bits) << 16) | pos;
+fn writeResult(row: u8, col: u8, score: i32, completed_depth: u8) void {
+    result_buffer[0] = row;
+    result_buffer[1] = col;
+    const score_bytes: [4]u8 = @bitCast(score);
+    result_buffer[2] = score_bytes[0];
+    result_buffer[3] = score_bytes[1];
+    result_buffer[4] = score_bytes[2];
+    result_buffer[5] = score_bytes[3];
+    result_buffer[6] = completed_depth;
+    result_buffer[7] = 0;
 }

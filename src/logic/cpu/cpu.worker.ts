@@ -87,27 +87,32 @@ self.onmessage = async (event: MessageEvent<CpuRequest>) => {
     // WASMモジュールをロード（初回のみ、以降はキャッシュ）
     const wasm = await getWasmModule();
 
-    // WASM探索エンジンが利用可能ならWASM版で探索
+    // WASM探索エンジンが利用可能ならWASM版で探索（エラー時はTS版にフォールバック）
     if (wasm) {
-      const engine = new WasmSearchEngine(wasm);
-      const wasmResult = engine.findBestMove(
-        request.board,
-        currentTurn,
-        request.difficulty,
-      );
+      try {
+        const engine = new WasmSearchEngine(wasm);
+        const wasmResult = engine.findBestMove(
+          request.board,
+          currentTurn,
+          request.difficulty,
+        );
 
-      const endTime = performance.now();
-      const thinkingTime = Math.round(endTime - startTime);
+        const endTime = performance.now();
+        const thinkingTime = Math.round(endTime - startTime);
 
-      const response: CpuResponse = {
-        position: wasmResult.position,
-        score: wasmResult.score,
-        thinkingTime,
-        depth: params.depth,
-      };
+        const response: CpuResponse = {
+          position: wasmResult.position,
+          score: wasmResult.score,
+          thinkingTime,
+          depth: wasmResult.completedDepth || params.depth,
+        };
 
-      self.postMessage(response);
-      return;
+        self.postMessage(response);
+        return;
+      } catch (wasmError) {
+        console.warn("WASM探索でエラー発生、TS版にフォールバック:", wasmError);
+        // フォールバック: 下のTS版処理に進む
+      }
     }
 
     // WASM非対応の場合はTS版でフォールバック

@@ -19,8 +19,8 @@ import { createBoardWithStones, placeStonesOnBoard } from "../testUtils";
 import { loadWasmModule } from "./loader";
 import { WasmSearchEngine } from "./searchEngine";
 
-/** WASM版の勝ちスコア（i16 max = 32767）。TS版の PATTERN_SCORES.FIVE (100000) に相当 */
-const WASM_WIN_SCORE = 32767;
+/** 勝ちスコア（FIVE = 100000） */
+const WIN_SCORE_THRESHOLD = 90000;
 
 /** TS版探索のヘルパー */
 function tsSearch(
@@ -103,7 +103,7 @@ describe("パフォーマンス パリティ: 即勝ち・防御の優先順位"
     );
 
     // 白は五連を完成させるべき
-    expect(wasmResult.score).toBe(WASM_WIN_SCORE);
+    expect(wasmResult.score).toBeGreaterThanOrEqual(WIN_SCORE_THRESHOLD);
   }, 15000);
 });
 
@@ -165,7 +165,7 @@ describe("パフォーマンス パリティ: VCFレース判定", async () => {
     );
 
     // VCFが有効なのでFIVEスコアを返すべき
-    expect(wasmResult.score).toBe(WASM_WIN_SCORE);
+    expect(wasmResult.score).toBeGreaterThanOrEqual(WIN_SCORE_THRESHOLD);
   }, 15000);
 });
 

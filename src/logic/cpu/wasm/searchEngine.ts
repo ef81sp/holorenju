@@ -13,32 +13,13 @@ import type { WasmModuleContext } from "./types";
 
 import { boardStateToWasm, colorToWasm } from "./boardAdapter";
 
-/* eslint-disable no-bitwise -- WASM packed return value decoding */
-
-/**
- * WASM findBestMove の戻り値をデコード
- *
- * 上位16bit: score (i16), 下位16bit: row*15+col
- */
-function decodeSearchResult(packed: number): {
-  position: Position;
-  score: number;
-} {
-  const posIndex = packed & 0xffff;
-  const scoreBits = (packed >>> 16) & 0xffff;
-  // u16 → i16 の符号付き変換
-  const score = scoreBits >= 0x8000 ? scoreBits - 0x10000 : scoreBits;
-  const row = Math.floor(posIndex / 15);
-  const col = posIndex % 15;
-  return { position: { row, col }, score };
-}
-
 /**
  * 探索結果
  */
 export interface WasmSearchResult {
   position: Position;
   score: number;
+  completedDepth: number;
 }
 
 export class WasmSearchEngine {
@@ -72,12 +53,18 @@ export class WasmSearchEngine {
   ): WasmSearchResult {
     boardStateToWasm(this.wasm, board);
     this.wasm.ttClear();
-    const packed = this.wasm.findBestMove(
-      colorToWasm(color),
-      maxDepth,
-      timeLimitMs,
-      maxNodes,
-    );
-    return decodeSearchResult(packed);
+    this.wasm.findBestMove(colorToWasm(color), maxDepth, timeLimitMs, maxNodes);
+    return this.readResult();
+  }
+
+  private readResult(): WasmSearchResult {
+    const ptr = this.wasm.getResultBuffer();
+    const { memory } = this.wasm;
+    const view = new DataView(memory.buffer);
+    const row = view.getUint8(ptr);
+    const col = view.getUint8(ptr + 1);
+    const score = view.getInt32(ptr + 2, true); // little-endian i32
+    const completedDepth = view.getUint8(ptr + 6);
+    return { position: { row, col }, score, completedDepth };
   }
 }

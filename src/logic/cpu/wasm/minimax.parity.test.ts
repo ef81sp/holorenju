@@ -19,8 +19,8 @@ import { createBoardWithStones, placeStonesOnBoard } from "../testUtils";
 import { loadWasmModule } from "./loader";
 import { WasmSearchEngine } from "./searchEngine";
 
-/** WASM版の勝ちスコア（i16 max = 32767）。TS版の PATTERN_SCORES.FIVE (100000) に相当 */
-const WASM_WIN_SCORE = 32767;
+/** 勝ちスコア（FIVE = 100000） */
+const WASM_WIN_SCORE = 100000;
 
 /** TS版探索のヘルパー（randomFactor=0, FULL_EVAL_OPTIONS） */
 function tsSearch(
@@ -82,7 +82,7 @@ describe("minimax パリティテスト", async () => {
       (wasmResult.position.row === 7 && wasmResult.position.col === 7) ||
         (wasmResult.position.row === 7 && wasmResult.position.col === 2),
     ).toBe(true);
-    // スコアが五連相当（WASM版は i16 なので 32767）
+    // スコアが五連相当（FIVE = 100000）
     expect(wasmResult.score).toBe(WASM_WIN_SCORE);
     // TS版と同じ手
     expect(wasmResult.position).toEqual(tsResult.position);

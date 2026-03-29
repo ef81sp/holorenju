@@ -46,6 +46,7 @@ export async function loadWasmModule(): Promise<WasmModuleContext> {
     wasmGetPatternType: exports.wasmGetPatternType,
     evaluateBoard: exports.evaluateBoard,
     findBestMove: exports.findBestMove,
+    getResultBuffer: exports.getResultBuffer,
     ttClear: exports.ttClear,
   };
 }
