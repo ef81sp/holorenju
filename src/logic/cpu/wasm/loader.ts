@@ -24,7 +24,13 @@ export async function loadWasmModule(): Promise<WasmModuleContext> {
     import.meta.url,
   );
   const buffer = await loadWasmBuffer(wasmUrl);
-  const { instance } = await WebAssembly.instantiate(buffer);
+
+  const imports = {
+    env: {
+      getTimestampMsExternal: () => Math.round(performance.now()),
+    },
+  };
+  const { instance } = await WebAssembly.instantiate(buffer, imports);
   const exports = instance.exports as unknown as WasmModuleContext;
 
   return {
@@ -39,5 +45,7 @@ export async function loadWasmModule(): Promise<WasmModuleContext> {
     wasmGetPatternScore: exports.wasmGetPatternScore,
     wasmGetPatternType: exports.wasmGetPatternType,
     evaluateBoard: exports.evaluateBoard,
+    findBestMove: exports.findBestMove,
+    ttClear: exports.ttClear,
   };
 }

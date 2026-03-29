@@ -30,6 +30,15 @@ export interface WasmModuleContext {
 
   // Board evaluation
   evaluateBoard: (perspective: number, optionsFlags: number) => number;
+
+  // Search
+  findBestMove: (
+    color: number,
+    maxDepth: number,
+    timeLimitMs: number,
+    maxNodes: number,
+  ) => number;
+  ttClear: () => void;
 }
 
 /** Cell values matching Zig Cell enum */

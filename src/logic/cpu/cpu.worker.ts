@@ -14,6 +14,8 @@ import {
   type ScoreBreakdown,
 } from "@/types/cpu";
 
+import type { WasmModuleContext } from "./wasm/types";
+
 import { countStones } from "./core/boardUtils";
 import {
   evaluateBoardWithBreakdown,
@@ -23,22 +25,27 @@ import { getOpeningMove, isOpeningPhase } from "./opening";
 import { findBestMoveIterativeWithTT } from "./search/minimax";
 import { type BoardEvaluator, WasmBoardEvaluator } from "./wasm/bridge";
 import { loadWasmModule } from "./wasm/loader";
+import { WasmSearchEngine } from "./wasm/searchEngine";
 
-/** WASM BoardEvaluator（初回ロード後にキャッシュ） */
-let cachedWasmEvaluator: BoardEvaluator | null = null;
+/** WASM モジュール（初回ロード後にキャッシュ） */
+let cachedWasm: WasmModuleContext | null = null;
 
-async function getWasmEvaluator(): Promise<BoardEvaluator | null> {
-  if (cachedWasmEvaluator) {
-    return cachedWasmEvaluator;
+async function getWasmModule(): Promise<WasmModuleContext | null> {
+  if (cachedWasm) {
+    return cachedWasm;
   }
   try {
-    const wasm = await loadWasmModule();
-    cachedWasmEvaluator = new WasmBoardEvaluator(wasm);
-    return cachedWasmEvaluator;
+    cachedWasm = await loadWasmModule();
+    return cachedWasm;
   } catch {
-    console.warn("WASM evaluator unavailable, falling back to TS");
+    console.warn("WASM module unavailable, falling back to TS");
     return null;
   }
+}
+
+async function getWasmEvaluator(): Promise<BoardEvaluator | null> {
+  const wasm = await getWasmModule();
+  return wasm ? new WasmBoardEvaluator(wasm) : null;
 }
 
 /**
@@ -77,7 +84,33 @@ self.onmessage = async (event: MessageEvent<CpuRequest>) => {
     // 4手目以降、または開局パターン外の場合は通常のCPU探索
     const params = DIFFICULTY_PARAMS[request.difficulty];
 
-    // WASM評価関数をロード（初回のみ、以降はキャッシュ）
+    // WASMモジュールをロード（初回のみ、以降はキャッシュ）
+    const wasm = await getWasmModule();
+
+    // WASM探索エンジンが利用可能ならWASM版で探索
+    if (wasm) {
+      const engine = new WasmSearchEngine(wasm);
+      const wasmResult = engine.findBestMove(
+        request.board,
+        currentTurn,
+        request.difficulty,
+      );
+
+      const endTime = performance.now();
+      const thinkingTime = Math.round(endTime - startTime);
+
+      const response: CpuResponse = {
+        position: wasmResult.position,
+        score: wasmResult.score,
+        thinkingTime,
+        depth: params.depth,
+      };
+
+      self.postMessage(response);
+      return;
+    }
+
+    // WASM非対応の場合はTS版でフォールバック
     const boardEvaluator = (await getWasmEvaluator()) ?? undefined;
 
     // Iterative Deepeningで探索（TT/Move Ordering統合版）

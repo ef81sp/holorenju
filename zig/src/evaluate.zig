@@ -81,7 +81,7 @@ fn hasFourThreePotential(cells: []const Cell, row: u8, col: u8, color: Cell) boo
 
 /// createsFourThree: 仮置きして四と活三が同時にできるかチェック（跳びパターン含む）
 /// TS版 analyzeJumpPatterns の hasFour && hasValidOpenThree に対応
-fn createsFourThree(cells: []Cell, row: u8, col: u8, color: Cell) bool {
+pub fn createsFourThree(cells: []Cell, row: u8, col: u8, color: Cell) bool {
     const idx = @as(u16, row) * BOARD_SIZE + col;
     // 仮置き
     cells[idx] = color;

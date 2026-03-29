@@ -1,8 +1,7 @@
 /**
- * WASM/TS 評価関数ブリッジ
+ * WASM/TS 評価関数・探索ブリッジ
  *
- * BoardEvaluator インターフェースで TS版とWASM版を切り替え可能にする。
- * 探索コアは BoardEvaluator 経由で evaluateBoard を呼び出す。
+ * BoardEvaluator / SearchEngine インターフェースで TS版とWASM版を切り替え可能にする。
  */
 
 import type { BoardState } from "@/types/game";
