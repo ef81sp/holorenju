@@ -574,3 +574,80 @@ test "countStones" {
     cells[2] = .black;
     try testing.expectEqual(countStones(&cells), 3);
 }
+
+test "findPreSearchMove: white open four at J9" {
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    // H8 G9 G8 F8 H10 F9 H9 H11 G10 I10 I8 F11 J8 K8 F12
+    cells[7 * BOARD_SIZE + 7] = .black; // H8
+    cells[6 * BOARD_SIZE + 6] = .white; // G9
+    cells[7 * BOARD_SIZE + 6] = .black; // G8
+    cells[7 * BOARD_SIZE + 5] = .white; // F8
+    cells[5 * BOARD_SIZE + 7] = .black; // H10
+    cells[6 * BOARD_SIZE + 5] = .white; // F9
+    cells[6 * BOARD_SIZE + 7] = .black; // H9
+    cells[4 * BOARD_SIZE + 7] = .white; // H11
+    cells[5 * BOARD_SIZE + 6] = .black; // G10
+    cells[5 * BOARD_SIZE + 8] = .white; // I10
+    cells[7 * BOARD_SIZE + 8] = .black; // I8
+    cells[4 * BOARD_SIZE + 5] = .white; // F11
+    cells[7 * BOARD_SIZE + 9] = .black; // J8
+    cells[7 * BOARD_SIZE + 10] = .white; // K8
+    cells[3 * BOARD_SIZE + 5] = .black; // F12
+
+    // Step 1: findWinningMove should NOT find a five
+    const win_move = findWinningMove(&cells, .white);
+    try testing.expect(win_move == null);
+
+    // Step 2: Opponent threats
+    const opponent_color = Cell.white.opposite();
+    const threat_info = threats_mod.detectOpponentThreats(&cells, opponent_color);
+    // Black's row 7 four (cols 6-9) is dead (white on both ends)
+    try testing.expectEqual(threat_info.open_fours.len, 0);
+    try testing.expectEqual(threat_info.fours.len, 0);
+
+    // Step 3: VCF should find J9
+    // First test that J9 (6,9) with white creates a four
+    const idx_j9 = @as(u16, 6) * BOARD_SIZE + 9;
+    cells[idx_j9] = .white;
+    const j9_creates_four = @import("quiescence.zig").createsFour(&cells, 6, 9, .white);
+    const j9_defense = @import("quiescence.zig").getFourDefensePosition(&cells, 6, 9, .white);
+    cells[idx_j9] = .empty;
+    try testing.expect(j9_creates_four); // J9 creates a four
+    try testing.expect(j9_defense == null); // open four = unblockable
+
+    // VCF should find J9 (open four on diagonal)
+    const vcf_move = vcf.findVCFMove(&cells, .white, vcf.VCF_MAX_DEPTH, 0);
+    try testing.expect(vcf_move != null);
+    const vm = vcf_move.?;
+    try testing.expectEqual(@as(u8, 6), vm.row);
+    try testing.expectEqual(@as(u8, 9), vm.col);
+}
+
+test "findBestMoveIterative: white selects J9 at move 16" {
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[7 * BOARD_SIZE + 7] = .black;
+    cells[6 * BOARD_SIZE + 6] = .white;
+    cells[7 * BOARD_SIZE + 6] = .black;
+    cells[7 * BOARD_SIZE + 5] = .white;
+    cells[5 * BOARD_SIZE + 7] = .black;
+    cells[6 * BOARD_SIZE + 5] = .white;
+    cells[6 * BOARD_SIZE + 7] = .black;
+    cells[4 * BOARD_SIZE + 7] = .white;
+    cells[5 * BOARD_SIZE + 6] = .black;
+    cells[5 * BOARD_SIZE + 8] = .white;
+    cells[7 * BOARD_SIZE + 8] = .black;
+    cells[4 * BOARD_SIZE + 5] = .white;
+    cells[7 * BOARD_SIZE + 9] = .black;
+    cells[7 * BOARD_SIZE + 10] = .white;
+    cells[3 * BOARD_SIZE + 5] = .black;
+
+    tt_mod.global_tt.clear();
+
+    const result = findBestMoveIterative(&cells, .white, .{
+        .max_depth = 4,
+        .max_nodes = 600000,
+    });
+
+    try testing.expectEqual(result.position.row, 6);
+    try testing.expectEqual(result.position.col, 9);
+}

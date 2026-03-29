@@ -239,7 +239,7 @@ pub fn findJumpGapPosition(cells: []const Cell, row: u8, col: u8, dr: i8, dc: i8
     const c: i16 = col;
 
     // ラインを走査（-5 ~ +5）して跳び四パターンの空きを探す
-    var line_stones: [11]?Cell = undefined;
+    var line_stones: [11]Cell = undefined;
     var line_rows: [11]i16 = undefined;
     var line_cols: [11]i16 = undefined;
     var line_len: u8 = 0;
@@ -280,24 +280,27 @@ pub fn findJumpGapPosition(cells: []const Cell, row: u8, col: u8, dr: i8, dc: i8
     if (line_len < 5) return null;
     var start: u8 = 0;
     while (start + 4 < line_len) : (start += 1) {
-        const s0 = line_stones[start] orelse continue;
+        const s0 = line_stones[start];
         const s1 = line_stones[start + 1];
         const s2 = line_stones[start + 2];
         const s3 = line_stones[start + 3];
-        const s4 = line_stones[start + 4] orelse continue;
+        const s4 = line_stones[start + 4];
+
+        // 両端が同色でなければスキップ
+        if (s0 != color or s4 != color) continue;
 
         // パターン1: ●●●・●
-        if (s0 == color and (s1 orelse .empty) == color and (s2 orelse .empty) == color and s3 == null and s4 == color) {
+        if (s1 == color and s2 == color and s3 == .empty) {
             return .{ .row = @intCast(line_rows[start + 3]), .col = @intCast(line_cols[start + 3]) };
         }
 
         // パターン2: ●●・●●
-        if (s0 == color and (s1 orelse .empty) == color and s2 == null and (s3 orelse .empty) == color and s4 == color) {
+        if (s1 == color and s2 == .empty and s3 == color) {
             return .{ .row = @intCast(line_rows[start + 2]), .col = @intCast(line_cols[start + 2]) };
         }
 
         // パターン3: ●・●●●
-        if (s0 == color and s1 == null and (s2 orelse .empty) == color and (s3 orelse .empty) == color and s4 == color) {
+        if (s1 == .empty and s2 == color and s3 == color) {
             return .{ .row = @intCast(line_rows[start + 1]), .col = @intCast(line_cols[start + 1]) };
         }
     }
@@ -550,6 +553,52 @@ test "isNearExistingStone" {
     try std.testing.expect(isNearExistingStone(&cells, 7, 9));
     try std.testing.expect(isNearExistingStone(&cells, 5, 5));
     try std.testing.expect(!isNearExistingStone(&cells, 4, 4));
+}
+
+test "findJumpGapPosition: ●●●・●" {
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    // 白の跳び四: (7,4),(7,5),(7,6),空,(7,8)
+    cells[7 * BOARD_SIZE + 4] = .white;
+    cells[7 * BOARD_SIZE + 5] = .white;
+    cells[7 * BOARD_SIZE + 6] = .white;
+    cells[7 * BOARD_SIZE + 8] = .white;
+
+    // (7,4)から見て横方向(0,1)の跳び四ギャップ = (7,7)
+    const gap = findJumpGapPosition(&cells, 7, 4, 0, 1, .white);
+    try std.testing.expect(gap != null);
+    const g = gap.?;
+    try std.testing.expectEqual(@as(u8, 7), g.row);
+    try std.testing.expectEqual(@as(u8, 7), g.col);
+}
+
+test "findJumpGapPosition: ●・●●●" {
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    // 白の跳び四: (7,4),空,(7,6),(7,7),(7,8)
+    cells[7 * BOARD_SIZE + 4] = .white;
+    cells[7 * BOARD_SIZE + 6] = .white;
+    cells[7 * BOARD_SIZE + 7] = .white;
+    cells[7 * BOARD_SIZE + 8] = .white;
+
+    const gap = findJumpGapPosition(&cells, 7, 4, 0, 1, .white);
+    try std.testing.expect(gap != null);
+    const g = gap.?;
+    try std.testing.expectEqual(@as(u8, 7), g.row);
+    try std.testing.expectEqual(@as(u8, 5), g.col);
+}
+
+test "findJumpGapPosition: ●●・●●" {
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    // 白の跳び四: (7,4),(7,5),空,(7,7),(7,8)
+    cells[7 * BOARD_SIZE + 4] = .white;
+    cells[7 * BOARD_SIZE + 5] = .white;
+    cells[7 * BOARD_SIZE + 7] = .white;
+    cells[7 * BOARD_SIZE + 8] = .white;
+
+    const gap = findJumpGapPosition(&cells, 7, 4, 0, 1, .white);
+    try std.testing.expect(gap != null);
+    const g = gap.?;
+    try std.testing.expectEqual(@as(u8, 7), g.row);
+    try std.testing.expectEqual(@as(u8, 6), g.col);
 }
 
 test "countThreatDirections basic" {

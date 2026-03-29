@@ -80,6 +80,39 @@ describe("findBestMove WASM tests", async () => {
     expect(result.score).toBeGreaterThan(10000);
   });
 
+  it("16手目白番でJ9（活四による即勝ち）を選ぶ", () => {
+    // H8 G9 G8 F8 H10 F9 H9 H11 G10 I10 I8 F11 J8 K8 F12
+    const board = createBoardWithStones([
+      { row: 7, col: 7, color: "black" },
+      { row: 6, col: 6, color: "white" },
+      { row: 7, col: 6, color: "black" },
+      { row: 7, col: 5, color: "white" },
+      { row: 5, col: 7, color: "black" },
+      { row: 6, col: 5, color: "white" },
+      { row: 6, col: 7, color: "black" },
+      { row: 4, col: 7, color: "white" },
+      { row: 5, col: 6, color: "black" },
+      { row: 5, col: 8, color: "white" },
+      { row: 7, col: 8, color: "black" },
+      { row: 4, col: 5, color: "white" },
+      { row: 7, col: 9, color: "black" },
+      { row: 7, col: 10, color: "white" },
+      { row: 3, col: 5, color: "black" },
+    ]);
+
+    // J9 (row=6, col=9) creates an open four on diagonal (4,7)-(5,8)-(6,9)-(7,10)
+    const result = engine.findBestMoveWithParams(
+      board,
+      "white",
+      4,
+      5000,
+      600000,
+    );
+    expect(result.position.row).toBe(6);
+    expect(result.position.col).toBe(9);
+    expect(result.score).toBeGreaterThan(10000);
+  });
+
   it("difficulty パラメータで探索できる", () => {
     const board = createBoardWithStones([
       { row: 7, col: 7, color: "black" },
