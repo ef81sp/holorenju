@@ -6,6 +6,7 @@
 const board_mod = @import("board.zig");
 const evaluate = @import("evaluate.zig");
 const forbidden = @import("forbidden.zig");
+const mise_vcf = @import("mise_vcf.zig");
 const minimax = @import("minimax.zig");
 const move_gen = @import("move_gen.zig");
 const move_order = @import("move_order.zig");
@@ -141,6 +142,40 @@ pub fn findPreSearchMove(
             .immediate_move = vm,
             .immediate_score = scores.FIVE - 10,
         };
+    }
+
+    // 相手VCFチェック（Mise-VCFスキップ判定用）
+    const opponent_has_vcf = blk: {
+        var opp_limiter = vcf.TimeLimiter{
+            .start_time = getTimestampMs(),
+            .time_limit = vcf.VCF_TIME_LIMIT,
+            .nodes = 0,
+            .max_nodes = 3000,
+        };
+        break :blk vcf.hasVCF(cells, opponent_color, 0, &opp_limiter, vcf.VCF_MAX_DEPTH);
+    };
+
+    // Mise-VCF（ミセ→強制応手→VCF勝ち）
+    // 相手VCFがある場合は間に合わないのでスキップ
+    if (!opponent_has_vcf) {
+        const mise_move = mise_vcf.findMiseVCFMove(cells, color);
+        if (mise_move) |mm| {
+            // 黒番の禁手チェック
+            if (color == .black) {
+                const fr = forbidden.checkForbiddenMove(cells, mm.row, mm.col);
+                if (fr == .none) {
+                    return .{
+                        .immediate_move = mm,
+                        .immediate_score = scores.FIVE - 15,
+                    };
+                }
+            } else {
+                return .{
+                    .immediate_move = mm,
+                    .immediate_score = scores.FIVE - 15,
+                };
+            }
+        }
     }
 
     // VCT勝ち手を探す
