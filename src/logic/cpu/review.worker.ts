@@ -23,6 +23,7 @@ import type {
 import { createBoardFromRecord } from "@/logic/gameRecordParser";
 
 import type { MoveScoreEntry } from "./search/results";
+import type { WasmModuleContext } from "./wasm/types";
 
 import { countStones } from "./core/boardUtils";
 import {
@@ -58,6 +59,23 @@ import {
   type VCTBranch,
 } from "./search/vct";
 import { globalTT } from "./transpositionTable";
+import { type BoardEvaluator, WasmBoardEvaluator } from "./wasm/bridge";
+import { loadWasmModule } from "./wasm/loader";
+
+/** WASM モジュール（初回ロード後にキャッシュ） */
+let cachedWasm: WasmModuleContext | null = null;
+
+async function getWasmEvaluator(): Promise<BoardEvaluator | null> {
+  if (!cachedWasm) {
+    try {
+      cachedWasm = await loadWasmModule();
+    } catch {
+      console.warn("WASM module unavailable, falling back to TS");
+      return null;
+    }
+  }
+  return new WasmBoardEvaluator(cachedWasm);
+}
 
 /** VCF初手を候補リストの先頭に追加/更新する */
 function promoteVcfCandidate(
@@ -155,7 +173,7 @@ function handleDemotion(ctx: DemotionContext): {
   };
 }
 
-self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
+self.onmessage = async (event: MessageEvent<ReviewEvalRequest>) => {
   const {
     moveHistory,
     moveIndex,
@@ -306,6 +324,9 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
         ? REVIEW_REDUCED_NODES
         : profile.maxNodes;
 
+    // WASMモジュールをロード（初回のみ、以降はキャッシュ。失敗時はTS版にフォールバック）
+    const boardEvaluator = (await getWasmEvaluator()) ?? undefined;
+
     const result = findBestMoveIterativeWithTT({
       board,
       color,
@@ -317,6 +338,7 @@ self.onmessage = (event: MessageEvent<ReviewEvalRequest>) => {
       absoluteTimeLimit: profile.absoluteTimeLimit,
       aspirationWidths: profile.aspirationWidths,
       collectPV: true,
+      boardEvaluator,
     });
 
     // minimax が FIVE を返したが VCF/VCT 未検出
