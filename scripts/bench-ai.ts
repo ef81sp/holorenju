@@ -35,6 +35,11 @@ import {
   getAllJushuNames,
   getJushuPositions,
 } from "../src/logic/cpu/opening.ts";
+import {
+  type BoardEvaluator,
+  WasmBoardEvaluator,
+} from "../src/logic/cpu/wasm/bridge.ts";
+import { loadWasmModule } from "../src/logic/cpu/wasm/loader.ts";
 import { CPU_DIFFICULTIES, type CpuDifficulty } from "../src/types/cpu.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -49,6 +54,7 @@ interface CliOptions {
   workers: number;
   self: boolean; // 同じ難易度同士の対戦モード
   scoreOverrides: Partial<PatternScoreValues>;
+  wasm: boolean; // WASM版evaluateBoardを使用
 }
 
 interface MatchupResult {
@@ -104,6 +110,7 @@ function parseArgs(): CliOptions {
     workers: Math.min(3, Math.max(1, cpuCount - 1)),
     self: false,
     scoreOverrides: {},
+    wasm: false,
   };
 
   for (const arg of args) {
@@ -141,6 +148,8 @@ function parseArgs(): CliOptions {
       }
     } else if (arg === "--self" || arg === "-s") {
       options.self = true;
+    } else if (arg === "--wasm") {
+      options.wasm = true;
     } else if (arg.startsWith("--score-override=")) {
       const value = arg.slice("--score-override=".length);
       for (const pair of value.split(",")) {
@@ -181,6 +190,7 @@ Options:
                      (implies --parallel)
   --self, -s         Self-play only mode: each difficulty plays only against
                      itself (excludes cross-difficulty matchups)
+  --wasm             Use WASM evaluateBoard instead of TypeScript version
   --score-override=<k:v,...>
                      Override PATTERN_SCORES values (comma-separated KEY:VALUE).
                      Applied before benchmark starts. Use for A/B testing.
@@ -322,7 +332,10 @@ function clearStatus(): void {
   process.stdout.write(`\r${" ".repeat(80)}\r`);
 }
 
-function runBenchmarkSequential(options: CliOptions): BenchmarkResult {
+function runBenchmarkSequential(
+  options: CliOptions,
+  boardEvaluator?: BoardEvaluator,
+): BenchmarkResult {
   const { players, sets, verbose, self: selfPlay } = options;
   const gamesPerSet = getAllJushuNames().length * 2; // 26珠型 × 2色
 
@@ -392,6 +405,7 @@ function runBenchmarkSequential(options: CliOptions): BenchmarkResult {
       const result = runHeadlessGame(black, white, {
         verbose,
         openingMoves: positions,
+        boardEvaluator,
       });
 
       const winner = normalizeWinner(result.winner, isABlack);
@@ -541,6 +555,7 @@ async function runBenchmarkParallel(
     verbose,
     totalGames,
     hasOverrides ? options.scoreOverrides : undefined,
+    options.wasm || undefined,
   );
 
   // 結果を集計
@@ -653,6 +668,7 @@ function runTasksWithWorkers(
   verbose: boolean,
   totalGames: number,
   scoreOverrides?: Partial<PatternScoreValues>,
+  useWasmEval?: boolean,
 ): Promise<WorkerResult[]> {
   const results: WorkerResult[] = [];
   const taskQueue = [...tasks];
@@ -690,6 +706,7 @@ function runTasksWithWorkers(
           verbose,
           scoreOverrides,
           openingMoves: task.openingMoves,
+          useWasmEval,
         },
         execArgv: [
           "--experimental-strip-types",
@@ -815,9 +832,19 @@ async function main(): Promise<void> {
     }
   }
 
+  let boardEvaluator: BoardEvaluator | undefined = undefined;
+  if (options.wasm && !options.parallel) {
+    console.log("\nLoading WASM module...");
+    const wasm = await loadWasmModule();
+    boardEvaluator = new WasmBoardEvaluator(wasm);
+    console.log("WASM evaluateBoard enabled.");
+  } else if (options.wasm) {
+    console.log("\nWASM evaluateBoard enabled (loaded per worker).");
+  }
+
   const result = options.parallel
     ? await runBenchmarkParallel(options)
-    : runBenchmarkSequential(options);
+    : runBenchmarkSequential(options, boardEvaluator);
 
   printResults(result);
   saveResults(result, options);

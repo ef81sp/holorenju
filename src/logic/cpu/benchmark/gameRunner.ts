@@ -5,6 +5,7 @@
  */
 
 import type { BoardState, Position } from "../../../types/game.ts";
+import type { BoardEvaluator } from "../wasm/bridge.ts";
 
 import {
   DIFFICULTY_PARAMS,
@@ -171,6 +172,8 @@ export interface GameOptions {
   verbose?: boolean;
   /** 開局手（指定時は珠型固定、開局フェーズをスキップ） */
   openingMoves?: [Position, Position, Position];
+  /** WASM/TS切り替え用の盤面評価関数（省略時はTS版） */
+  boardEvaluator?: BoardEvaluator;
 }
 
 /**
@@ -301,6 +304,7 @@ export function runHeadlessGame(
         randomFactor: params.randomFactor,
         evaluationOptions: params.evaluationOptions,
         maxNodes: params.maxNodes,
+        boardEvaluator: options.boardEvaluator,
       });
       move = result.position;
       depth = result.completedDepth;
