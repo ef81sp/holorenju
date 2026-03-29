@@ -6,6 +6,8 @@
 
 import type { BoardState, Position } from "@/types/game";
 
+import type { BoardEvaluator } from "../wasm/bridge";
+
 import {
   clearForbiddenCache,
   setCurrentBoardHash,
@@ -136,6 +138,8 @@ export interface IterativeDeepeningParams {
   aspirationWidths?: number[];
   /** Triangular PV Tableによる正確なPV収集（振り返り用） */
   collectPV?: boolean;
+  /** WASM/TS切り替え用の盤面評価関数（省略時はTS版） */
+  boardEvaluator?: BoardEvaluator;
 }
 
 /**
@@ -158,12 +162,14 @@ export function findBestMoveIterativeWithTT(
     aspirationWidths,
     scoreThreshold = 200,
     collectPV = false,
+    boardEvaluator,
   } = params;
   // 未指定時は従来の固定幅（対局CPU互換）
   const effectiveAspirationWidths = aspirationWidths ?? [ASPIRATION_WIDTHS[0]!];
   const startTime = performance.now();
   const ctx = createSearchContext(globalTT, evaluationOptions);
   ctx.lineTable = buildLineTable(board);
+  ctx.boardEvaluator = boardEvaluator;
 
   // プロファイリングカウンターをリセット
   resetCounters();

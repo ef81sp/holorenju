@@ -312,17 +312,21 @@ export function minimaxWithTT(
     ctx.nodeCountExceeded ||
     ctx.absoluteDeadlineExceeded
   ) {
-    return evaluateBoard(
-      board,
-      perspective,
-      {
-        singleFourPenaltyMultiplier:
-          ctx.evaluationOptions.singleFourPenaltyMultiplier,
-        lastMoverIsPerspective: !isMaximizing,
-        enableLeafMise: ctx.evaluationOptions.enableMise,
-      },
-      ctx.lineTable,
-    );
+    const evalOptions = {
+      singleFourPenaltyMultiplier:
+        ctx.evaluationOptions.singleFourPenaltyMultiplier,
+      lastMoverIsPerspective: !isMaximizing,
+      enableLeafMise: ctx.evaluationOptions.enableMise,
+    };
+    if (ctx.boardEvaluator) {
+      return ctx.boardEvaluator.evaluateBoard(
+        board,
+        perspective,
+        evalOptions,
+        ctx.lineTable,
+      );
+    }
+    return evaluateBoard(board, perspective, evalOptions, ctx.lineTable);
   }
 
   // 現在の手番を決定

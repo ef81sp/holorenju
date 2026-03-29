@@ -21,6 +21,25 @@ import {
 } from "./evaluation";
 import { getOpeningMove, isOpeningPhase } from "./opening";
 import { findBestMoveIterativeWithTT } from "./search/minimax";
+import { type BoardEvaluator, WasmBoardEvaluator } from "./wasm/bridge";
+import { loadWasmModule } from "./wasm/loader";
+
+/** WASM BoardEvaluator（初回ロード後にキャッシュ） */
+let cachedWasmEvaluator: BoardEvaluator | null = null;
+
+async function getWasmEvaluator(): Promise<BoardEvaluator | null> {
+  if (cachedWasmEvaluator) {
+    return cachedWasmEvaluator;
+  }
+  try {
+    const wasm = await loadWasmModule();
+    cachedWasmEvaluator = new WasmBoardEvaluator(wasm);
+    return cachedWasmEvaluator;
+  } catch {
+    console.warn("WASM evaluator unavailable, falling back to TS");
+    return null;
+  }
+}
 
 /**
  * Worker内でのメッセージハンドラ
@@ -28,7 +47,7 @@ import { findBestMoveIterativeWithTT } from "./search/minimax";
  * 開局フェーズ（1〜3手目）では珠型パターンを使用し、
  * 4手目以降はIterative Deepeningで探索する
  */
-self.onmessage = (event: MessageEvent<CpuRequest>) => {
+self.onmessage = async (event: MessageEvent<CpuRequest>) => {
   const request = event.data;
   const startTime = performance.now();
 
@@ -58,6 +77,9 @@ self.onmessage = (event: MessageEvent<CpuRequest>) => {
     // 4手目以降、または開局パターン外の場合は通常のCPU探索
     const params = DIFFICULTY_PARAMS[request.difficulty];
 
+    // WASM評価関数をロード（初回のみ、以降はキャッシュ）
+    const boardEvaluator = (await getWasmEvaluator()) ?? undefined;
+
     // Iterative Deepeningで探索（TT/Move Ordering統合版）
     const result = findBestMoveIterativeWithTT({
       board: request.board,
@@ -68,6 +90,7 @@ self.onmessage = (event: MessageEvent<CpuRequest>) => {
       evaluationOptions: params.evaluationOptions,
       maxNodes: params.maxNodes,
       scoreThreshold: params.scoreThreshold,
+      boardEvaluator,
     });
 
     const endTime = performance.now();

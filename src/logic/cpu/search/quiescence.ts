@@ -97,18 +97,23 @@ export function quiescenceSearch(
     enableLeafMise: ctx.evaluationOptions.enableMise,
   };
 
+  const doEval = (b: BoardState): number =>
+    ctx.boardEvaluator
+      ? ctx.boardEvaluator.evaluateBoard(
+          b,
+          perspective,
+          evalOptions,
+          ctx.lineTable,
+        )
+      : evaluateBoard(b, perspective, evalOptions, ctx.lineTable);
+
   // 時間/ノード制限チェック
   if (ctx.timeoutFlag || ctx.nodeCountExceeded) {
-    return evaluateBoard(board, perspective, evalOptions, ctx.lineTable);
+    return doEval(board);
   }
 
   // Stand-pat: 何もしない場合の評価
-  const standPat = evaluateBoard(
-    board,
-    perspective,
-    evalOptions,
-    ctx.lineTable,
-  );
+  const standPat = doEval(board);
 
   let alpha = alphaInit;
   let beta = betaInit;

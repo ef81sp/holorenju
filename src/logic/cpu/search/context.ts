@@ -11,6 +11,7 @@ import { BOARD_SIZE } from "@/constants";
 
 import type { LineTable } from "../lineTable/lineTable";
 import type { ProfilingCounters } from "../profiling/counters";
+import type { BoardEvaluator } from "../wasm/bridge";
 
 import {
   DEFAULT_EVAL_OPTIONS,
@@ -167,6 +168,8 @@ export interface SearchContext {
   threatCache: ThreatProbeCache;
   /** 振り返りパス: performance.now() 依存を排除し決定論的に動作 */
   noTimeLimit?: boolean;
+  /** 盤面評価関数（WASM/TS切り替え） */
+  boardEvaluator?: BoardEvaluator;
 }
 
 /**
