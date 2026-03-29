@@ -266,6 +266,21 @@ pub fn findBestMoveIterative(
     );
     var moves = sort_result.moves;
 
+    // 活三防御の候補手制限（TS版 iterativeDeepening.ts L233-252 に対応）
+    if (pre_search.threats) |t| {
+        if (t.open_threes.len > 0) {
+            var filtered = move_gen.MoveList.init();
+            for (0..moves.len) |i| {
+                if (t.open_threes.contains(moves.items[i].row, moves.items[i].col)) {
+                    filtered.push(moves.items[i]);
+                }
+            }
+            if (filtered.len > 0) {
+                moves = filtered;
+            }
+        }
+    }
+
     // 唯一の候補手なら即座に返す
     if (moves.len <= 1) {
         const pos = if (moves.len == 1) moves.items[0] else Position{ .row = 7, .col = 7 };

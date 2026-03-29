@@ -113,6 +113,42 @@ describe("findBestMove WASM tests", async () => {
     expect(result.score).toBeGreaterThan(10000);
   });
 
+  it("18手目白番で黒の斜め活三を止める", () => {
+    // 17手目まで: 黒が H11-I10-J9 の斜め活三を形成
+    const board = createBoardWithStones([
+      { row: 7, col: 7, color: "black" },
+      { row: 6, col: 8, color: "white" },
+      { row: 7, col: 8, color: "black" },
+      { row: 7, col: 9, color: "white" },
+      { row: 5, col: 7, color: "black" },
+      { row: 6, col: 7, color: "white" },
+      { row: 6, col: 6, color: "black" },
+      { row: 7, col: 6, color: "white" },
+      { row: 5, col: 5, color: "black" },
+      { row: 4, col: 4, color: "white" },
+      { row: 5, col: 8, color: "black" },
+      { row: 5, col: 6, color: "white" },
+      { row: 6, col: 9, color: "black" },
+      { row: 8, col: 8, color: "white" },
+      { row: 4, col: 8, color: "black" },
+      { row: 3, col: 9, color: "white" },
+      { row: 4, col: 7, color: "black" },
+    ]);
+
+    const result = engine.findBestMoveWithParams(
+      board,
+      "white",
+      4,
+      8000,
+      600000,
+    );
+    // G12(3,6) or K8(7,10) のどちらかで三を止める
+    const isDefense =
+      (result.position.row === 3 && result.position.col === 6) ||
+      (result.position.row === 7 && result.position.col === 10);
+    expect(isDefense).toBe(true);
+  });
+
   it("difficulty パラメータで探索できる", () => {
     const board = createBoardWithStones([
       { row: 7, col: 7, color: "black" },
