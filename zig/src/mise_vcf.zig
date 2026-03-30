@@ -331,6 +331,135 @@ pub fn findMiseVCFMove(cells: []Cell, color: Cell) ?Position {
     return null;
 }
 
+// =============================================================================
+// findMiseVCFSequence（TS版 miseVcf.ts の findMiseVCFSequence に対応）
+// =============================================================================
+
+/// Mise-VCF手順の結果
+pub const MiseVCFSequenceResult = struct {
+    /// [ミセ手, 防御手, VCF手順...]
+    sequence: [64]Position,
+    len: u8,
+    is_forbidden_trap: bool,
+    found: bool,
+};
+
+/// Mise-VCF手順を探索
+///
+/// findMiseVCFMoveと同じロジックだが、VCF成立時にfindVCFSequenceで手順を取得して返す。
+/// sequence = [ミセ手, 防御手(相手がミセを受ける手), VCF手順...] の形で返す。
+pub fn findMiseVCFSequence(
+    cells: []Cell,
+    color: Cell,
+    time_limit_ms: u32,
+    max_nodes: u32,
+) MiseVCFSequenceResult {
+    var result = MiseVCFSequenceResult{
+        .sequence = undefined,
+        .len = 0,
+        .is_forbidden_trap = false,
+        .found = false,
+    };
+
+    const opponent = color.opposite();
+
+    // 相手に活三がある場合、ミセ手の強制応手の前提が崩れるためスキップ
+    if (vct.hasOpenThree(cells, opponent)) {
+        return result;
+    }
+
+    // 相手にミセ手（四三が作れる手）がある場合、ミセの強制応手の前提が崩れるためスキップ
+    if (vct.hasFourThreeAvailable(cells, opponent)) {
+        return result;
+    }
+
+    for (0..BOARD_SIZE) |r_usize| {
+        const r: u8 = @intCast(r_usize);
+        for (0..BOARD_SIZE) |c_usize| {
+            const c: u8 = @intCast(c_usize);
+            const idx = @as(u16, r) * BOARD_SIZE + c;
+            if (cells[idx] != .empty) continue;
+            if (!threats.isNearExistingStone(cells, r, c)) continue;
+
+            // 黒番の禁手チェック
+            if (color == .black) {
+                const fr = forbidden.checkForbiddenMove(cells, r, c);
+                if (fr != .none) continue;
+            }
+
+            // 候補手Mを配置（in-place）
+            cells[idx] = color;
+
+            // プリフィルタ: ミセターゲットが存在しうるか安価にチェック
+            if (!hasPotentialMiseTarget(cells, r, c, color)) {
+                cells[idx] = .empty;
+                continue;
+            }
+
+            // 四を作るミセ手はスキップ（通常VCFで検出済み）
+            if (quiescence.createsFour(cells, r, c, color)) {
+                cells[idx] = .empty;
+                continue;
+            }
+
+            // ミセターゲットを検出
+            const mise_targets = findMiseTargetsLite(cells, r, c, color);
+            if (mise_targets.len == 0) {
+                cells[idx] = .empty;
+                continue;
+            }
+
+            // 強制性チェック: ミセ手が三を作らない場合は非強制 → 却下
+            const three_defenses = getCreatedOpenThreeDefenses(cells, r, c, color);
+            if (three_defenses.len == 0) {
+                cells[idx] = .empty;
+                continue;
+            }
+
+            // ノリ手チェック
+            const nori_result = isInvalidatedByNoriTe(cells, color, &three_defenses);
+            if (nori_result == .invalidated) {
+                cells[idx] = .empty;
+                continue;
+            }
+
+            // 各ミセターゲットについてVCF Sequence探索
+            for (0..mise_targets.len) |t_idx| {
+                const target = mise_targets.items[t_idx];
+                const target_idx = @as(u16, target.row) * BOARD_SIZE + target.col;
+
+                // 相手の強制応手（四三点を防御）
+                cells[target_idx] = opponent;
+
+                // VCF Sequence探索
+                const vcf_result = vcf.findVCFSequence(cells, color, MISE_VCF_DEPTH, time_limit_ms, max_nodes);
+
+                cells[target_idx] = .empty;
+
+                if (vcf_result.found) {
+                    // 手順を組み立て: [ミセ手, 防御手, VCF手順...]
+                    result.sequence[0] = .{ .row = r, .col = c };
+                    result.sequence[1] = target;
+                    var i: u8 = 0;
+                    while (i < vcf_result.len) : (i += 1) {
+                        result.sequence[2 + i] = vcf_result.sequence[i];
+                    }
+                    result.len = 2 + vcf_result.len;
+                    result.is_forbidden_trap = vcf_result.is_forbidden_trap;
+                    result.found = true;
+
+                    cells[idx] = .empty;
+                    return result;
+                }
+            }
+
+            cells[idx] = .empty;
+        }
+    }
+
+    return result;
+}
+
 /// hasPotentialMiseTarget: ミセの可能性をチェック（position_eval.zig と同一ロジック）
 fn hasPotentialMiseTarget(cells: []const Cell, row: u8, col: u8, color: Cell) bool {
     for (DIRECTIONS) |dir| {
@@ -428,6 +557,46 @@ test "hasPotentialMiseTarget: basic" {
 
     // 隣に石があれば可能性あり
     try testing.expect(hasPotentialMiseTarget(&cells, 7, 5, .black));
+}
+
+test "findMiseVCFSequence: 12手目局面でG7がMise-VCF手順として検出される" {
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    // H8 I9 I7 G9 J8 H10 H6 K9 H7 H9 J9 I10
+    cells[7 * BOARD_SIZE + 7] = .black; // H8
+    cells[6 * BOARD_SIZE + 8] = .white; // I9
+    cells[8 * BOARD_SIZE + 8] = .black; // I7
+    cells[6 * BOARD_SIZE + 6] = .white; // G9
+    cells[7 * BOARD_SIZE + 9] = .black; // J8
+    cells[5 * BOARD_SIZE + 7] = .white; // H10
+    cells[9 * BOARD_SIZE + 7] = .black; // H6
+    cells[6 * BOARD_SIZE + 10] = .white; // K9
+    cells[8 * BOARD_SIZE + 7] = .black; // H7
+    cells[6 * BOARD_SIZE + 7] = .white; // H9
+    cells[6 * BOARD_SIZE + 9] = .black; // J9
+    cells[5 * BOARD_SIZE + 8] = .white; // I10
+
+    const result = findMiseVCFSequence(&cells, .black, 0, 5000);
+    try testing.expect(result.found);
+    // 最初の手はG7: row=8, col=6
+    try testing.expectEqual(result.sequence[0].row, 8);
+    try testing.expectEqual(result.sequence[0].col, 6);
+    // 手順長は最低3手（ミセ手 + 防御手 + VCF手順1手以上）
+    try testing.expect(result.len >= 3);
+}
+
+test "findMiseVCFSequence: 初期局面では不成立" {
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[7 * BOARD_SIZE + 7] = .black;
+    cells[6 * BOARD_SIZE + 8] = .white;
+
+    const result = findMiseVCFSequence(&cells, .black, 0, 5000);
+    try testing.expect(!result.found);
+}
+
+test "findMiseVCFSequence: 空盤面では不成立" {
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    const result = findMiseVCFSequence(&cells, .black, 0, 5000);
+    try testing.expect(!result.found);
 }
 
 test "findMiseVCFMove: ノリ手で無効なH7をMise-VCF手として返さない" {

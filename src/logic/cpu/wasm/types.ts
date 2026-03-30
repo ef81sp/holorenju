@@ -68,6 +68,14 @@ export interface WasmModuleContext {
     maxNodes: number,
   ) => void;
   getVCFSequenceBuffer: () => number;
+
+  // Mise-VCF sequence
+  findMiseVCFSequenceWasm: (
+    color: number,
+    timeLimitMs: number,
+    maxNodes: number,
+  ) => void;
+  getMiseVCFSequenceBuffer: () => number;
 }
 
 /** Cell values matching Zig Cell enum */

@@ -278,6 +278,47 @@ export fn findVCFSequenceFromFirstMoveWasm(row: u8, col: u8, color: u8, max_dept
     }
 }
 
+// ─── Mise-VCF Sequence ──────────────────────────────────
+
+const mise_vcf = @import("mise_vcf.zig");
+
+/// Mise-VCF手順バッファ
+/// [0]: found (0 or 1)
+/// [1]: sequence length
+/// [2]: isForbiddenTrap (0 or 1)
+/// [3..N*2+2]: row, col pairs
+var mise_vcf_seq_buffer: [256]u8 = .{0} ** 256;
+
+export fn getMiseVCFSequenceBuffer() [*]u8 {
+    return &mise_vcf_seq_buffer;
+}
+
+/// Mise-VCF手順を探索し結果を mise_vcf_seq_buffer に書き込む
+export fn findMiseVCFSequenceWasm(color: u8, time_limit_ms: u32, max_nodes: u32) void {
+    const cell_color: board.Cell = switch (color) {
+        1 => .black,
+        2 => .white,
+        else => {
+            mise_vcf_seq_buffer[0] = 0;
+            return;
+        },
+    };
+
+    const cells = &board.board_cells;
+    const result = mise_vcf.findMiseVCFSequence(cells, cell_color, time_limit_ms, max_nodes);
+
+    mise_vcf_seq_buffer[0] = if (result.found) 1 else 0;
+    mise_vcf_seq_buffer[1] = result.len;
+    mise_vcf_seq_buffer[2] = if (result.is_forbidden_trap) 1 else 0;
+
+    if (result.found) {
+        for (0..result.len) |i| {
+            mise_vcf_seq_buffer[3 + i * 2] = result.sequence[i].row;
+            mise_vcf_seq_buffer[3 + i * 2 + 1] = result.sequence[i].col;
+        }
+    }
+}
+
 fn writeResult(row: u8, col: u8, score: i32, completed_depth: u8, top_candidates: ?*const [5]minimax.MoveScoreEntry, top_candidate_count: u8) void {
     result_buffer[0] = row;
     result_buffer[1] = col;
