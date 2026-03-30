@@ -116,15 +116,15 @@ export function detectForcedWin(
   // 相手の四がある場合はVCF/VCTをスキップ（四を止めなければ即負け）
   // 両ミセがある場合: maxDepth 2 で1手四三を検出（四三はVCF的に3手=depth 2）
   // 両ミセがない場合: 通常のVCF全探索
+  // lightEval時: timeLimit を制限（Mise-VCFスキップのため VCF のみで判定）
+  const vcfOptions = isLightEval
+    ? { ...REVIEW_VCF_OPTIONS, timeLimit: 2000 }
+    : doubleMiseBestMove
+      ? { ...REVIEW_VCF_OPTIONS, maxDepth: 2 }
+      : REVIEW_VCF_OPTIONS;
   const vcfResult = opponentHasFour
     ? null
-    : findVCFSequence(
-        board,
-        color,
-        doubleMiseBestMove
-          ? { ...REVIEW_VCF_OPTIONS, maxDepth: 2 }
-          : REVIEW_VCF_OPTIONS,
-      );
+    : findVCFSequence(board, color, vcfOptions);
 
   // 1手四三: VCFの初手が四三を作る場合、両ミセより優先
   // （VCF sequence ≤ 1 は即五/活四、≤ 3 かつ初手が四三なら1手四三）
@@ -139,9 +139,9 @@ export function detectForcedWin(
           color,
         )));
 
-  // Mise-VCF検出（VCFも両ミセもない場合のみ）
+  // Mise-VCF検出（VCFも両ミセもない場合のみ、lightEvalではスキップ）
   const miseVcfResult =
-    !vcfResult && !doubleMiseBestMove && !opponentHasFour
+    !isLightEval && !vcfResult && !doubleMiseBestMove && !opponentHasFour
       ? findMiseVCFSequence(board, color, REVIEW_MISE_VCF_OPTIONS)
       : null;
 
