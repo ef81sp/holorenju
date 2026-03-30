@@ -1190,3 +1190,23 @@ describe("hasVCT/findVCTMove - lineTable等価性", () => {
     expect(lt.whites).toEqual(ltBefore.whites);
   });
 });
+
+describe("VCT maxNodes limiter", () => {
+  it("maxNodes=10000 でVCT探索が数秒以内に完了する", () => {
+    // この局面は VCT なしだが、ノード制限なしだと 164秒かかる
+    const kifu = "H8 H9 J10 I9 G9 I7 I10 H10 J8 I8 J7 J6 J9 J11 K8 L7";
+    const { board } = createBoardFromRecord(kifu);
+
+    const start = performance.now();
+    const result = hasVCT(board, "black", 0, undefined, {
+      maxNodes: 10000,
+      timeLimit: 30000, // 時間制限は緩く設定（ノード制限で止まることを検証）
+    });
+    const elapsed = performance.now() - start;
+
+    // ノード制限が効いていれば数秒以内に完了するはず
+    expect(elapsed).toBeLessThan(10000);
+    // この局面では VCT は見つからない
+    expect(result).toBe(false);
+  });
+});

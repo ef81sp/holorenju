@@ -188,6 +188,7 @@ export function findVCFMove(
   board: BoardState,
   color: "black" | "white",
   options?: VCFSearchOptions,
+  parentLimiter?: TimeLimiter,
 ): Position | null {
   const maxDepth = options?.maxDepth ?? VCF_MAX_DEPTH;
   const timeLimitMs = options?.timeLimit ?? VCF_TIME_LIMIT;
@@ -196,6 +197,7 @@ export function findVCFMove(
     timeLimit: timeLimitMs,
     nodes: 0,
     maxNodes: options?.maxNodes,
+    parentLimiter,
   };
 
   // 反復深化: 浅い深度から探索し、最短VCFを優先
@@ -344,6 +346,7 @@ export function findVCFSequence(
   board: BoardState,
   color: "black" | "white",
   options?: VCFSearchOptions,
+  parentLimiter?: TimeLimiter,
 ): VCFSequenceResult | null {
   const maxDepth = options?.maxDepth ?? VCF_MAX_DEPTH;
   const timeLimitMs = options?.timeLimit ?? VCF_TIME_LIMIT;
@@ -352,6 +355,7 @@ export function findVCFSequence(
     timeLimit: timeLimitMs,
     nodes: 0,
     maxNodes: options?.maxNodes,
+    parentLimiter,
   };
 
   // 反復深化: 浅い深度から探索し、最短VCF手順を優先

@@ -117,11 +117,12 @@ export function detectForcedWin(
   // 両ミセがある場合: maxDepth 2 で1手四三を検出（四三はVCF的に3手=depth 2）
   // 両ミセがない場合: 通常のVCF全探索
   // lightEval時: timeLimit を制限（Mise-VCFスキップのため VCF のみで判定）
-  const vcfOptions = isLightEval
-    ? { ...REVIEW_VCF_OPTIONS, timeLimit: 2000, maxNodes: 50_000 }
-    : doubleMiseBestMove
-      ? { ...REVIEW_VCF_OPTIONS, maxDepth: 2 }
-      : REVIEW_VCF_OPTIONS;
+  let vcfOptions = REVIEW_VCF_OPTIONS;
+  if (isLightEval) {
+    vcfOptions = { ...REVIEW_VCF_OPTIONS, timeLimit: 2000, maxNodes: 50_000 };
+  } else if (doubleMiseBestMove) {
+    vcfOptions = { ...REVIEW_VCF_OPTIONS, maxDepth: 2 };
+  }
   const vcfResult = opponentHasFour
     ? null
     : findVCFSequence(board, color, vcfOptions);

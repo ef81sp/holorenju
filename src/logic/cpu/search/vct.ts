@@ -119,7 +119,7 @@ function cachedFindVCFSequence(
       return null;
     }
   }
-  const result = findVCFSequence(board, color, vcfOptions);
+  const result = findVCFSequence(board, color, vcfOptions, limiter);
   if (vcfCache && !isTimeExceeded(limiter)) {
     storeVCF(vcfCache, board, color, result !== null);
   }
@@ -145,7 +145,7 @@ function cachedFindVCFMove(
       return null;
     }
   }
-  const result = findVCFMove(board, color, vcfOptions);
+  const result = findVCFMove(board, color, vcfOptions, limiter);
   if (vcfCache && !isTimeExceeded(limiter)) {
     storeVCF(vcfCache, board, color, result !== null);
   }
@@ -1731,7 +1731,12 @@ export function findVCTSequenceFromFirstMove(
           CT_THREE_VCF_MAX_DEPTH,
         ),
       };
-      const vcfSeq = findVCFSequence(board, color, ctThreeVcfOptions);
+      const vcfSeq = findVCFSequence(
+        board,
+        color,
+        ctThreeVcfOptions,
+        localLimiter,
+      );
       if (vcfSeq) {
         continuation = {
           firstMove: vcfSeq.firstMove,

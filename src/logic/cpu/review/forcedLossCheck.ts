@@ -31,7 +31,7 @@ import { hasFourThreeAvailable, hasOpenThree } from "../search/vctHelpers";
  * 振り返りでは Infinity を明示的に指定して時間制限を無効化する。
  * maxDepth のみで探索範囲を制御する。
  */
-const NO_TIME_LIMIT = Infinity;
+const _NO_TIME_LIMIT = Infinity;
 
 /** Phase 1 打たれた手のチェック用 */
 export const REVIEW_VCF_OPTIONS: VCFSearchOptions = {
