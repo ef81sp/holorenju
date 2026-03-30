@@ -21,6 +21,7 @@ import {
   WasmBoardEvaluator,
 } from "@/logic/cpu/wasm/bridge";
 import { loadWasmModule } from "@/logic/cpu/wasm/loader";
+import { WasmSearchEngine } from "@/logic/cpu/wasm/searchEngine";
 import { formatMove } from "@/logic/gameRecordParser";
 
 // ─── CLI 引数パース ─────────────────────────────────────
@@ -89,6 +90,20 @@ async function getWasmEvaluator(): Promise<BoardEvaluator | undefined> {
   return new WasmBoardEvaluator(cachedWasm);
 }
 
+async function getWasmSearchEngine(): Promise<WasmSearchEngine | undefined> {
+  if (!useWasm) {
+    return undefined;
+  }
+  if (!cachedWasm) {
+    try {
+      cachedWasm = await loadWasmModule();
+    } catch {
+      return undefined;
+    }
+  }
+  return new WasmSearchEngine(cachedWasm);
+}
+
 // ─── タイミング型定義（プロファイル出力用） ──────────────────
 
 interface SubPhaseDetail {
@@ -130,6 +145,7 @@ function profileMove(
   moves: string[],
   moveIndex: number,
   boardEvaluator: BoardEvaluator | undefined,
+  wasmEngine: WasmSearchEngine | undefined,
 ): MoveProfile {
   const moveHistory = moves.join(" ");
 
@@ -138,6 +154,7 @@ function profileMove(
     moveIndex,
     preciseAnalysis: precise,
     boardEvaluator,
+    wasmSearchEngine: wasmEngine,
   });
 
   const { timings } = result;
@@ -223,8 +240,11 @@ async function main(): Promise<void> {
 
   // WASM初期化
   const boardEvaluator = await getWasmEvaluator();
-  if (useWasm && boardEvaluator) {
-    console.log("WASM evaluator loaded");
+  const wasmEngine = await getWasmSearchEngine();
+  if (useWasm && wasmEngine) {
+    console.log("WASM search engine loaded");
+  } else if (useWasm && boardEvaluator) {
+    console.log("WASM evaluator only (search engine unavailable)");
   } else if (useWasm) {
     console.log("WASM unavailable, using TS fallback");
   }
@@ -255,7 +275,7 @@ async function main(): Promise<void> {
       `\n=== 手${moveNum} (${perspective === "white" ? "白" : "黒"} ${moveStr}) ===\n`,
     );
 
-    const p = profileMove(moves, idx, boardEvaluator);
+    const p = profileMove(moves, idx, boardEvaluator, wasmEngine);
     profiles.push(p);
 
     // 詳細フェーズ出力

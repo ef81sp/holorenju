@@ -35,6 +35,7 @@ export interface WasmCandidateEntry {
 
 export interface WasmSearchResultWithCandidates extends WasmSearchResult {
   candidates: WasmCandidateEntry[];
+  bestPV?: Position[];
 }
 
 export class WasmSearchEngine {
@@ -117,6 +118,14 @@ export class WasmSearchEngine {
       );
     }
 
+    // 最善手の PV を個別に抽出（候補手にない場合や preSearch 即リターン時に備える）
+    result.bestPV = this.extractPVFromTT(
+      board,
+      result.position,
+      color,
+      wasmColor,
+    );
+
     return result;
   }
 
@@ -127,7 +136,7 @@ export class WasmSearchEngine {
    * 呼び出し前に boardStateToWasm で盤面がセットされている必要がある。
    * 候補手ごとに盤面をリセットして呼び出す。
    */
-  private extractPVFromTT(
+  extractPVFromTT(
     board: BoardState,
     move: Position,
     color: "black" | "white",

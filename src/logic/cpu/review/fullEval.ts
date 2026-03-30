@@ -37,6 +37,7 @@ import {
   type VCTBranch,
 } from "../search/vct";
 import { globalTT } from "../transpositionTable";
+import { colorToWasm } from "../wasm/boardAdapter";
 import { verifyCandidates, findSafeBest } from "./candidateVerification";
 import { buildDoubleMiseBranches } from "./doubleMiseBranches";
 import { evaluatePlayedForcedWin } from "./evaluatePlayedMove";
@@ -87,6 +88,28 @@ function executeWasmSearch(
     score: c.score,
     pv: c.pv,
   }));
+
+  // bestPV を候補手の最善手エントリに反映
+  if (wasmResult.bestPV && wasmResult.bestPV.length > 0) {
+    const bestCandidate = candidates.find(
+      (c) =>
+        c.move.row === wasmResult.position.row &&
+        c.move.col === wasmResult.position.col,
+    );
+    if (bestCandidate) {
+      // 候補手に既にあれば PV を上書き（より信頼性が高い）
+      if (!bestCandidate.pv || bestCandidate.pv.length === 0) {
+        bestCandidate.pv = wasmResult.bestPV;
+      }
+    } else {
+      // 候補手に最善手がない場合（preSearch 即リターン等）、先頭に追加
+      candidates.unshift({
+        move: wasmResult.position,
+        score: wasmResult.score,
+        pv: wasmResult.bestPV,
+      });
+    }
+  }
 
   return {
     position: wasmResult.position,
@@ -246,6 +269,38 @@ function handleDemotion(ctx: DemotionContext): {
     forcedWinBranches: undefined,
     clearDoubleMise: true,
   };
+}
+
+/**
+ * WASM TT から指定手の PV を抽出し、候補手に付与する
+ *
+ * 候補手リストに該当手が存在し、まだ PV がない場合のみ抽出する。
+ */
+function attachPVFromWasm(
+  candidates: ReviewCandidate[],
+  row: number,
+  col: number,
+  board: BoardState,
+  color: "black" | "white",
+  engine: WasmSearchEngine,
+): void {
+  const candidate = candidates.find(
+    (c) => c.position.row === row && c.position.col === col,
+  );
+  if (
+    candidate &&
+    (!candidate.principalVariation || candidate.principalVariation.length <= 1)
+  ) {
+    const pv = engine.extractPVFromTT(
+      board,
+      { row, col },
+      color,
+      colorToWasm(color),
+    );
+    if (pv.length > 1) {
+      candidate.principalVariation = pv;
+    }
+  }
 }
 
 // ─── メイン処理 ───────────────────────────────────────
@@ -467,6 +522,7 @@ export function executeFullEval(
       profile,
       timings,
       totalStart,
+      wasmSearchEngine,
     });
   }
 
@@ -486,6 +542,7 @@ export function executeFullEval(
     profile,
     timings,
     totalStart,
+    wasmSearchEngine,
   });
 }
 
@@ -511,6 +568,7 @@ interface ForcedWinResultContext {
   profile: ReviewProfile;
   timings: FullEvalTimings;
   totalStart: number;
+  wasmSearchEngine?: WasmSearchEngine;
 }
 
 function buildForcedWinResult(
@@ -528,6 +586,7 @@ function buildForcedWinResult(
     profile,
     timings,
     totalStart,
+    wasmSearchEngine,
   } = ctx;
   let {
     forcedWin,
@@ -653,7 +712,42 @@ function buildForcedWinResult(
     );
     if (playedEntry) {
       candidates.push(buildCandidate(playedEntry));
+    } else if (wasmSearchEngine) {
+      // WASM 候補手にない場合でも TT から PV を抽出して候補に追加
+      const pv = wasmSearchEngine.extractPVFromTT(
+        board,
+        { row: playedRow, col: playedCol },
+        color,
+        colorToWasm(color),
+      );
+      const { score: pScore, breakdown: pBreakdown } =
+        evaluatePositionWithBreakdown(
+          board,
+          playedRow,
+          playedCol,
+          color,
+          REVIEW_SEARCH_PARAMS.evaluationOptions,
+        );
+      candidates.push({
+        position: { row: playedRow, col: playedCol },
+        score: Math.round(pScore),
+        searchScore: playedScore,
+        breakdown: pBreakdown as ScoreBreakdown,
+        principalVariation: pv.length > 1 ? pv : undefined,
+      });
     }
+  }
+
+  // WASM TT から実際の手の PV を補完（forcedWin パスでは最善手は VCF/VCT の sequence を使用）
+  if (wasmSearchEngine && playedRow >= 0) {
+    attachPVFromWasm(
+      candidates,
+      playedRow,
+      playedCol,
+      board,
+      color,
+      wasmSearchEngine,
+    );
   }
 
   // 分岐情報の構築
@@ -795,6 +889,7 @@ interface NormalResultContext {
   profile: ReviewProfile;
   timings: FullEvalTimings;
   totalStart: number;
+  wasmSearchEngine?: WasmSearchEngine;
 }
 
 function buildNormalResult(
@@ -814,6 +909,7 @@ function buildNormalResult(
     totalStart,
     missedDoubleMise,
     needsVCTCheck,
+    wasmSearchEngine,
   } = ctx;
   let { forcedLossType, forcedLossSequence } = ctx;
 
@@ -845,6 +941,53 @@ function buildNormalResult(
     );
     if (playedEntry) {
       candidates.push(buildCandidate(playedEntry));
+    } else if (wasmSearchEngine) {
+      // WASM 候補手にない場合でも TT から PV を抽出して候補に追加
+      const pv = wasmSearchEngine.extractPVFromTT(
+        board,
+        { row: playedRow, col: playedCol },
+        color,
+        colorToWasm(color),
+      );
+      const { score: pScore, breakdown: pBreakdown } =
+        evaluatePositionWithBreakdown(
+          board,
+          playedRow,
+          playedCol,
+          color,
+          REVIEW_SEARCH_PARAMS.evaluationOptions,
+        );
+      candidates.push({
+        position: { row: playedRow, col: playedCol },
+        score: Math.round(pScore),
+        searchScore: playedScore,
+        breakdown: pBreakdown as ScoreBreakdown,
+        principalVariation: pv.length > 1 ? pv : undefined,
+      });
+    }
+  }
+
+  // WASM TT から最善手・実際の手の PV を補完
+  if (wasmSearchEngine) {
+    // 最善手
+    attachPVFromWasm(
+      candidates,
+      result.position.row,
+      result.position.col,
+      board,
+      color,
+      wasmSearchEngine,
+    );
+    // 実際の手
+    if (playedRow >= 0) {
+      attachPVFromWasm(
+        candidates,
+        playedRow,
+        playedCol,
+        board,
+        color,
+        wasmSearchEngine,
+      );
     }
   }
 
