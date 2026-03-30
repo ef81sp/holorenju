@@ -278,18 +278,21 @@ pub fn findBestMoveIterative(
     // =========================================================================
 
     const pre_search = findPreSearchMove(cells, color);
+    // レビューモード(aspiration_mode != 0)ではPV蓄積のためpreSearch即決をスキップ
     if (pre_search.immediate_move) |im| {
-        var candidates: [5]minimax.MoveScoreEntry = undefined;
-        candidates[0] = .{ .move = im, .score = pre_search.immediate_score };
-        return .{
-            .position = im,
-            .score = pre_search.immediate_score,
-            .completed_depth = 0,
-            .interrupted = false,
-            .stats = ctx.stats,
-            .top_candidates = candidates,
-            .top_candidate_count = 1,
-        };
+        if (params.aspiration_mode == 0) {
+            var candidates: [5]minimax.MoveScoreEntry = undefined;
+            candidates[0] = .{ .move = im, .score = pre_search.immediate_score };
+            return .{
+                .position = im,
+                .score = pre_search.immediate_score,
+                .completed_depth = 0,
+                .interrupted = false,
+                .stats = ctx.stats,
+                .top_candidates = candidates,
+                .top_candidate_count = 1,
+            };
+        }
     }
 
     // =========================================================================
@@ -332,8 +335,8 @@ pub fn findBestMoveIterative(
         }
     }
 
-    // 唯一の候補手なら即座に返す
-    if (moves.len <= 1) {
+    // 唯一の候補手なら即座に返す（レビューモードではPV蓄積のため続行）
+    if (moves.len <= 1 and params.aspiration_mode == 0) {
         const pos = if (moves.len == 1) moves.items[0] else Position{ .row = 7, .col = 7 };
         var candidates: [5]minimax.MoveScoreEntry = undefined;
         candidates[0] = .{ .move = pos, .score = 0 };
