@@ -76,6 +76,33 @@ export interface WasmModuleContext {
     maxNodes: number,
   ) => void;
   getMiseVCFSequenceBuffer: () => number;
+
+  // VCT sequence
+  findVCTSequenceWasm: (
+    color: number,
+    maxDepth: number,
+    timeLimitMs: number,
+    maxNodes: number,
+    collectBranches: number,
+  ) => void;
+  findVCTSequenceFromFirstMoveWasm: (
+    row: number,
+    col: number,
+    color: number,
+    maxDepth: number,
+    timeLimitMs: number,
+    maxNodes: number,
+    collectBranches: number,
+  ) => void;
+  isVCTFirstMoveWasm: (
+    row: number,
+    col: number,
+    color: number,
+    maxDepth: number,
+    timeLimitMs: number,
+    maxNodes: number,
+  ) => number;
+  getVCTSequenceBuffer: () => number;
 }
 
 /** Cell values matching Zig Cell enum */

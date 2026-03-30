@@ -319,6 +319,107 @@ export fn findMiseVCFSequenceWasm(color: u8, time_limit_ms: u32, max_nodes: u32)
     }
 }
 
+// ─── VCT Sequence ──────────────────────────────────────
+
+const vct = @import("vct.zig");
+
+/// VCT手順バッファ（分岐情報を含むため大きめ）
+/// [0]: found (0 or 1)
+/// [1]: seq_len
+/// [2]: isForbiddenTrap (0 or 1)
+/// [3..3+seq_len*2]: row,col pairs (メインPV)
+/// offset = 3 + seq_len * 2
+/// [offset]: branch_count
+/// [offset+1..]: 各branch:
+///   [0]: defenseIndex (u8)
+///   [1]: defRow
+///   [2]: defCol
+///   [3]: continuation_len
+///   [4..4+cont_len*2]: continuation row,col pairs
+var vct_seq_buffer: [2048]u8 = .{0} ** 2048;
+
+export fn getVCTSequenceBuffer() [*]u8 {
+    return &vct_seq_buffer;
+}
+
+/// VCTSequenceResult をバッファにシリアライズ
+fn writeVCTResult(result: vct.VCTSequenceResult) void {
+    vct_seq_buffer[0] = if (result.found) 1 else 0;
+    vct_seq_buffer[1] = result.len;
+    vct_seq_buffer[2] = if (result.is_forbidden_trap) 1 else 0;
+
+    if (result.found) {
+        for (0..result.len) |i| {
+            vct_seq_buffer[3 + i * 2] = result.sequence[i].row;
+            vct_seq_buffer[3 + i * 2 + 1] = result.sequence[i].col;
+        }
+
+        const offset = 3 + @as(usize, result.len) * 2;
+        vct_seq_buffer[offset] = result.branch_count;
+
+        var pos: usize = offset + 1;
+        for (0..result.branch_count) |bi| {
+            const branch = result.branches[bi];
+            vct_seq_buffer[pos] = branch.defense_index;
+            vct_seq_buffer[pos + 1] = branch.defense_move.row;
+            vct_seq_buffer[pos + 2] = branch.defense_move.col;
+            vct_seq_buffer[pos + 3] = branch.continuation_len;
+            pos += 4;
+            for (0..branch.continuation_len) |ci| {
+                vct_seq_buffer[pos] = branch.continuation[ci].row;
+                vct_seq_buffer[pos + 1] = branch.continuation[ci].col;
+                pos += 2;
+            }
+        }
+    }
+}
+
+/// VCT手順を探索し結果を vct_seq_buffer に書き込む
+export fn findVCTSequenceWasm(color: u8, max_depth: u8, time_limit_ms: u32, max_nodes: u32, collect_branches: u8) void {
+    const cell_color: board.Cell = switch (color) {
+        1 => .black,
+        2 => .white,
+        else => {
+            vct_seq_buffer[0] = 0;
+            return;
+        },
+    };
+
+    const cells = &board.board_cells;
+    const result = vct.findVCTSequence(cells, cell_color, max_depth, time_limit_ms, max_nodes, collect_branches != 0);
+    writeVCTResult(result);
+}
+
+/// 指定初手からのVCT手順を探索
+export fn findVCTSequenceFromFirstMoveWasm(row: u8, col: u8, color: u8, max_depth: u8, time_limit_ms: u32, max_nodes: u32, collect_branches: u8) void {
+    const cell_color: board.Cell = switch (color) {
+        1 => .black,
+        2 => .white,
+        else => {
+            vct_seq_buffer[0] = 0;
+            return;
+        },
+    };
+
+    const cells = &board.board_cells;
+    const first_move = threats_mod.Position{ .row = row, .col = col };
+    const result = vct.findVCTSequenceFromFirstMove(cells, first_move, cell_color, max_depth, time_limit_ms, max_nodes, collect_branches != 0);
+    writeVCTResult(result);
+}
+
+/// 指定手がVCT開始手として有効かチェック
+export fn isVCTFirstMoveWasm(row: u8, col: u8, color: u8, max_depth: u8, time_limit_ms: u32, max_nodes: u32) u8 {
+    const cell_color: board.Cell = switch (color) {
+        1 => .black,
+        2 => .white,
+        else => return 0,
+    };
+
+    const cells = &board.board_cells;
+    const move = threats_mod.Position{ .row = row, .col = col };
+    return if (vct.isVCTFirstMove(cells, move, cell_color, max_depth, time_limit_ms, max_nodes)) 1 else 0;
+}
+
 fn writeResult(row: u8, col: u8, score: i32, completed_depth: u8, top_candidates: ?*const [5]minimax.MoveScoreEntry, top_candidate_count: u8) void {
     result_buffer[0] = row;
     result_buffer[1] = col;
