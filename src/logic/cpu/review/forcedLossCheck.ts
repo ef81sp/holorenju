@@ -36,20 +36,20 @@ const NO_TIME_LIMIT = Infinity;
 /** Phase 1 打たれた手のチェック用 */
 export const REVIEW_VCF_OPTIONS: VCFSearchOptions = {
   maxDepth: 16,
-  timeLimit: NO_TIME_LIMIT,
-  maxNodes: 500_000, // 爆発防止
+  timeLimit: 5_000, // 5秒上限
+  maxNodes: 500_000,
 };
 export const REVIEW_MISE_VCF_OPTIONS: MiseVCFSearchOptions = {
-  vcfOptions: { maxDepth: 12, timeLimit: NO_TIME_LIMIT, maxNodes: 500_000 },
-  timeLimit: NO_TIME_LIMIT,
+  vcfOptions: { maxDepth: 12, timeLimit: 3_000, maxNodes: 500_000 },
+  timeLimit: 5_000,
 };
 
 /** Phase 2/3 VCT 深掘りチェック用 */
 export const FORCED_LOSS_VCT_OPTIONS: VCTSearchOptions = {
   maxDepth: 8,
-  timeLimit: NO_TIME_LIMIT,
-  maxNodes: 500_000, // globalTT.clear() で TT キャッシュなしでも完了を保証
-  vcfOptions: { maxDepth: 16, timeLimit: NO_TIME_LIMIT },
+  timeLimit: 10_000, // 10秒上限（VCT内部のVCFがノードカウントを共有しないため maxNodes だけでは不十分）
+  maxNodes: 500_000,
+  vcfOptions: { maxDepth: 16, timeLimit: 3_000, maxNodes: 100_000 },
   collectBranches: false,
 };
 
