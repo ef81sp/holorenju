@@ -118,7 +118,7 @@ export function detectForcedWin(
   // 両ミセがない場合: 通常のVCF全探索
   // lightEval時: timeLimit を制限（Mise-VCFスキップのため VCF のみで判定）
   const vcfOptions = isLightEval
-    ? { ...REVIEW_VCF_OPTIONS, timeLimit: 2000 }
+    ? { ...REVIEW_VCF_OPTIONS, timeLimit: 2000, maxNodes: 50_000 }
     : doubleMiseBestMove
       ? { ...REVIEW_VCF_OPTIONS, maxDepth: 2 }
       : REVIEW_VCF_OPTIONS;
