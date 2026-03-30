@@ -2,8 +2,7 @@
 /**
  * 振り返り分析の詳細プロファイリングツール
  *
- * 棋譜を引数で受け取り、review.worker.ts の handleFullEval 相当の処理を
- * メインスレッドで実行し、各フェーズの所要時間を計測する。
+ * 棋譜を引数で受け取り、executeFullEval を使って各フェーズの所要時間を計測する。
  *
  * 使用例:
  *   pnpm profile:review "H8 H9 J10 I9 ..." --perspective=white
@@ -11,49 +10,18 @@
  *   pnpm profile:review "H8 H9 ..." --precise --verbose --wasm
  */
 
-import type { MoveScoreEntry } from "@/logic/cpu/search/results";
 import type { WasmModuleContext } from "@/logic/cpu/wasm/types";
-import type { ScoreBreakdown } from "@/types/cpu";
-import type { Position } from "@/types/game";
-import type { ReviewCandidate, ForcedLossType } from "@/types/review";
 
-import { countStones } from "@/logic/cpu/core/boardUtils";
 import {
-  detectOpponentThreats,
-  evaluatePositionWithBreakdown,
-  evaluateBoardWithBreakdown,
-  PATTERN_SCORES,
-} from "@/logic/cpu/evaluation";
-import { findMiseTargets } from "@/logic/cpu/evaluation/miseTactics";
-import {
-  verifyCandidates,
-  findSafeBest,
-} from "@/logic/cpu/review/candidateVerification";
-import { evaluatePlayedForcedWin } from "@/logic/cpu/review/evaluatePlayedMove";
-import {
-  checkForcedLoss,
-  REVIEW_VCF_OPTIONS,
-  REVIEW_MISE_VCF_OPTIONS,
-  FORCED_LOSS_VCT_OPTIONS,
-} from "@/logic/cpu/review/forcedLossCheck";
-import { detectForcedWin } from "@/logic/cpu/review/forcedWinDetection";
-import { verifyCandidatePVs } from "@/logic/cpu/review/pvVerification";
-import {
-  REVIEW_PROFILE_FAST,
-  REVIEW_PROFILE_PRECISE,
-  REVIEW_REDUCED_NODES,
-  REVIEW_SEARCH_PARAMS,
-  REVIEW_VCT_OPTIONS_WITH_BRANCHES,
-} from "@/logic/cpu/review/reviewConstants";
-import { findBestMoveIterativeWithTT } from "@/logic/cpu/search/minimax";
-import { findVCTSequence, VCT_STONE_THRESHOLD } from "@/logic/cpu/search/vct";
-import { globalTT } from "@/logic/cpu/transpositionTable";
+  executeFullEval,
+  type FullEvalTimings,
+} from "@/logic/cpu/review/fullEval";
 import {
   type BoardEvaluator,
   WasmBoardEvaluator,
 } from "@/logic/cpu/wasm/bridge";
 import { loadWasmModule } from "@/logic/cpu/wasm/loader";
-import { createBoardFromRecord, formatMove } from "@/logic/gameRecordParser";
+import { formatMove } from "@/logic/gameRecordParser";
 
 // ─── CLI 引数パース ─────────────────────────────────────
 
@@ -101,7 +69,6 @@ function parseArgs(): {
 }
 
 const { kifu, perspective, precise, verbose, useWasm } = parseArgs();
-const profile = precise ? REVIEW_PROFILE_PRECISE : REVIEW_PROFILE_FAST;
 
 // ─── WASM 初期化 ─────────────────────────────────────
 
@@ -122,22 +89,12 @@ async function getWasmEvaluator(): Promise<BoardEvaluator | undefined> {
   return new WasmBoardEvaluator(cachedWasm);
 }
 
-// ─── タイミング型定義 ──────────────────────────────────
+// ─── タイミング型定義（プロファイル出力用） ──────────────────
 
 interface SubPhaseDetail {
   name: string;
   time: number;
   extra?: string;
-}
-
-interface PhaseTimings {
-  forcedWinDetection: number;
-  forcedLossCheck: number;
-  minimaxSearch: number;
-  vctRetry: number;
-  candidateVerification: number;
-  pvVerification: number;
-  total: number;
 }
 
 interface MoveProfile {
@@ -150,7 +107,7 @@ interface MoveProfile {
   forcedWinType: string | undefined;
   forcedLossType: string | undefined;
   candidateCount: number;
-  timings: PhaseTimings;
+  timings: FullEvalTimings;
   subPhases: SubPhaseDetail[];
 }
 
@@ -174,313 +131,47 @@ function profileMove(
   moveIndex: number,
   boardEvaluator: BoardEvaluator | undefined,
 ): MoveProfile {
-  const totalStart = performance.now();
-  const timings: PhaseTimings = {
-    forcedWinDetection: 0,
-    forcedLossCheck: 0,
-    minimaxSearch: 0,
-    vctRetry: 0,
-    candidateVerification: 0,
-    pvVerification: 0,
-    total: 0,
-  };
+  const moveHistory = moves.join(" ");
+
+  const result = executeFullEval({
+    moveHistory,
+    moveIndex,
+    preciseAnalysis: precise,
+    boardEvaluator,
+  });
+
+  const { timings } = result;
+  const color = moveIndex % 2 === 0 ? ("black" as const) : ("white" as const);
+
+  // サブフェーズ詳細を構築
   const subPhases: SubPhaseDetail[] = [];
-
-  // TT クリア（高速モード時）
-  if (profile.clearTT) {
-    globalTT.clear();
-  }
-
-  // 盤面構築
-  const { board, nextColor } = createBoardFromRecord(
-    moves.slice(0, moveIndex).join(" "),
-  );
-  const color = nextColor as "black" | "white";
-  const opponentColor = color === "black" ? "white" : "black";
-
-  // 相手脅威チェック
-  const opponentThreats = detectOpponentThreats(board, opponentColor);
-  const opponentHasFour =
-    opponentThreats.fours.length > 0 || opponentThreats.openFours.length > 0;
-
-  // ─── Phase 1: 強制勝ち検出 ───
-  let t0 = performance.now();
-  const { forcedWin, forcedWinType, doubleMiseMoves, doubleMiseBestMove } =
-    detectForcedWin(board, color, opponentHasFour, false);
-  timings.forcedWinDetection = performance.now() - t0;
   subPhases.push({
     name: "強制勝ち検出",
     time: timings.forcedWinDetection,
-    extra: forcedWinType ?? "なし",
+    extra: result.forcedWinType ?? "なし",
   });
-
-  let currentForcedWinType = forcedWinType;
-
-  // ─── Phase 2: 強制負け検出 ───
-  let forcedLossType: ForcedLossType | undefined = undefined;
-  let needsVCTCheck = false;
-  t0 = performance.now();
-  if (moves[moveIndex]) {
-    const { board: boardAfter } = createBoardFromRecord(
-      moves.slice(0, moveIndex + 1).join(" "),
-    );
-    const stoneCountAfter = countStones(boardAfter);
-    const selfThreatsAfter = detectOpponentThreats(boardAfter, color);
-    const selfHasFourAfter =
-      selfThreatsAfter.fours.length > 0 ||
-      selfThreatsAfter.openFours.length > 0;
-
-    if (!selfHasFourAfter) {
-      const loss = checkForcedLoss(boardAfter, opponentColor, stoneCountAfter, {
-        vcfOptions: REVIEW_VCF_OPTIONS,
-        miseVcfOptions: REVIEW_MISE_VCF_OPTIONS,
-        vctOptions: FORCED_LOSS_VCT_OPTIONS,
-        skipVCT: true,
-      });
-      if (loss) {
-        forcedLossType = loss.type;
-      } else {
-        needsVCTCheck = true;
-      }
-    }
-  }
-  timings.forcedLossCheck = performance.now() - t0;
   subPhases.push({
     name: "強制負け検出",
     time: timings.forcedLossCheck,
-    extra: forcedLossType ?? (needsVCTCheck ? "VCT要確認" : "なし"),
+    extra:
+      result.forcedLossType ?? (result.needsVCTCheck ? "VCT要確認" : "なし"),
   });
-
-  // ─── Phase 3: Minimax探索 ───
-  const hasForcedWin = Boolean(forcedWin || doubleMiseBestMove);
-  const effectiveMaxNodes =
-    profile.enablePVVerification && (forcedLossType || hasForcedWin)
-      ? REVIEW_REDUCED_NODES
-      : profile.maxNodes;
-
-  t0 = performance.now();
-  const result = findBestMoveIterativeWithTT({
-    board,
-    color,
-    maxDepth: REVIEW_SEARCH_PARAMS.depth,
-    randomFactor: 0,
-    evaluationOptions: REVIEW_SEARCH_PARAMS.evaluationOptions,
-    maxNodes: effectiveMaxNodes,
-    timeLimit: profile.timeLimit,
-    absoluteTimeLimit: profile.absoluteTimeLimit,
-    aspirationWidths: profile.aspirationWidths,
-    collectPV: true,
-    boardEvaluator,
-  });
-  timings.minimaxSearch = performance.now() - t0;
   subPhases.push({
     name: "Minimax探索",
     time: timings.minimaxSearch,
-    extra: `depth:${result.completedDepth} nodes:${effectiveMaxNodes} score:${result.score}`,
+    extra: `depth:${result.completedDepth} score:${result.bestScore}`,
   });
-
-  // ─── Phase 4: VCTリトライ ───
-  let currentForcedWin = forcedWin;
-  t0 = performance.now();
-  if (
-    !currentForcedWin &&
-    !doubleMiseBestMove &&
-    result.score >= PATTERN_SCORES.FIVE - 1 &&
-    !opponentHasFour
-  ) {
-    const vctRetry = findVCTSequence(
-      board,
-      color,
-      REVIEW_VCT_OPTIONS_WITH_BRANCHES,
-    );
-    if (vctRetry) {
-      currentForcedWin = vctRetry;
-      currentForcedWinType = vctRetry.isForbiddenTrap
-        ? "forbidden-trap"
-        : "vct";
-    }
-  }
-  timings.vctRetry = performance.now() - t0;
   if (timings.vctRetry > 1) {
     subPhases.push({
       name: "VCTリトライ",
       time: timings.vctRetry,
-      extra: currentForcedWin && !forcedWin ? "検出" : "スキップ/なし",
+      extra: result.forcedWinType ? "検出" : "スキップ/なし",
     });
   }
-
-  // ─── 候補手リスト構築 ───
-  const buildCandidate = (entry: MoveScoreEntry): ReviewCandidate => {
-    const { score: breakdownScore, breakdown } = evaluatePositionWithBreakdown(
-      board,
-      entry.move.row,
-      entry.move.col,
-      color,
-      REVIEW_SEARCH_PARAMS.evaluationOptions,
-    );
-    const leafEvaluation =
-      entry.pvLeafBoard && entry.pvLeafColor
-        ? evaluateBoardWithBreakdown(entry.pvLeafBoard, color)
-        : undefined;
-    return {
-      position: entry.move,
-      score: Math.round(breakdownScore),
-      searchScore: entry.score,
-      breakdown: breakdown as ScoreBreakdown,
-      principalVariation: entry.pv,
-      leafEvaluation,
-    };
-  };
-
-  // 実際の手の座標を解析
-  const playedMoveStr = moves[moveIndex];
-  let playedRow = -1;
-  let playedCol = -1;
-  if (playedMoveStr) {
-    playedCol = playedMoveStr.charCodeAt(0) - "A".charCodeAt(0);
-    const playedRowNum = parseInt(playedMoveStr.slice(1), 10);
-    playedRow = 15 - playedRowNum;
-  }
-
-  let candidates: ReviewCandidate[] = [];
-
-  if (currentForcedWin) {
-    // === forcedWin パス ===
-    const bestScore = PATTERN_SCORES.FIVE;
-    const bestMove = currentForcedWin.firstMove;
-
-    const { score: fwBreakdownScore, breakdown: fwBreakdown } =
-      evaluatePositionWithBreakdown(
-        board,
-        bestMove.row,
-        bestMove.col,
-        color,
-        REVIEW_SEARCH_PARAMS.evaluationOptions,
-      );
-
-    let bestPV: Position[] = currentForcedWin.sequence;
-    let doubleMiseTargets: Position[] | undefined = undefined;
-    if (doubleMiseBestMove) {
-      const dmRow = board[doubleMiseBestMove.row];
-      if (dmRow) {
-        dmRow[doubleMiseBestMove.col] = color;
-        doubleMiseTargets = findMiseTargets(
-          board,
-          doubleMiseBestMove.row,
-          doubleMiseBestMove.col,
-          color,
-        );
-        dmRow[doubleMiseBestMove.col] = null;
-      }
-      if (
-        currentForcedWinType === "double-mise" &&
-        doubleMiseTargets &&
-        doubleMiseTargets.length >= 2 &&
-        doubleMiseTargets[0] &&
-        doubleMiseTargets[1]
-      ) {
-        bestPV = [bestMove, doubleMiseTargets[0], doubleMiseTargets[1]];
-      }
-    }
-
-    candidates = [];
-    candidates.push({
-      position: bestMove,
-      score: Math.round(fwBreakdownScore),
-      searchScore: PATTERN_SCORES.FIVE,
-      breakdown: fwBreakdown as ScoreBreakdown,
-      principalVariation: bestPV,
-    });
-
-    const minimaxCandidates = (result.candidates ?? [])
-      .slice(0, 5)
-      .filter(
-        (e) => !(e.move.row === bestMove.row && e.move.col === bestMove.col),
-      )
-      .map(buildCandidate);
-    candidates.push(...minimaxCandidates);
-
-    // 実際の手の追い詰めシーケンスを反映
-    if (playedRow >= 0) {
-      const { playedForcedWinSequence } = evaluatePlayedForcedWin(
-        board,
-        color,
-        playedRow,
-        playedCol,
-        bestMove,
-        bestScore,
-        result,
-        countStones(board) < VCT_STONE_THRESHOLD,
-        doubleMiseMoves,
-      );
-      if (playedForcedWinSequence) {
-        const existingIdx = candidates.findIndex(
-          (c) => c.position.row === playedRow && c.position.col === playedCol,
-        );
-        if (existingIdx >= 0 && candidates[existingIdx]) {
-          candidates[existingIdx] = {
-            ...candidates[existingIdx],
-            principalVariation: playedForcedWinSequence,
-            searchScore: PATTERN_SCORES.FIVE,
-          };
-        } else {
-          const { score: pScore, breakdown: pBreakdown } =
-            evaluatePositionWithBreakdown(
-              board,
-              playedRow,
-              playedCol,
-              color,
-              REVIEW_SEARCH_PARAMS.evaluationOptions,
-            );
-          candidates.push({
-            position: { row: playedRow, col: playedCol },
-            score: Math.round(pScore),
-            searchScore: PATTERN_SCORES.FIVE,
-            breakdown: pBreakdown as ScoreBreakdown,
-            principalVariation: playedForcedWinSequence,
-          });
-        }
-      }
-    }
-  } else {
-    // === 通常パス ===
-    candidates = (result.candidates ?? []).slice(0, 5).map(buildCandidate);
-
-    if (
-      playedRow >= 0 &&
-      !candidates.some(
-        (c) => c.position.row === playedRow && c.position.col === playedCol,
-      )
-    ) {
-      const playedEntry = (result.candidates ?? []).find(
-        (c) => c.move.row === playedRow && c.move.col === playedCol,
-      );
-      if (playedEntry) {
-        candidates.push(buildCandidate(playedEntry));
-      }
-    }
-  }
-
-  // ─── Phase 5: 候補手検証 ───
-  const stoneCount = countStones(board);
-  t0 = performance.now();
-  const normalBudget =
-    profile.verifyCandidatesBudget === "dynamic"
-      ? Math.max(1000, Math.min(5000, 25_000 - (result.elapsedTime ?? 0)))
-      : profile.verifyCandidatesBudget;
-  const { demotedBest } = verifyCandidates(
-    board,
-    candidates,
-    color,
-    opponentColor,
-    stoneCount,
-    normalBudget,
-  );
-  timings.candidateVerification = performance.now() - t0;
 
   // 候補ごとの検証結果を記録
   const candDetails: string[] = [];
-  for (const c of candidates) {
+  for (const c of result.candidates) {
     const pos = formatMove(c.position);
     const status = c.opponentForcedWin
       ? `forced_loss:${c.opponentForcedWin}`
@@ -493,65 +184,24 @@ function profileMove(
     extra: candDetails.join(" "),
   });
 
-  // ─── Phase 6: PV検証 ───
-  t0 = performance.now();
-  if (profile.enablePVVerification) {
-    verifyCandidatePVs(
-      board,
-      candidates,
-      color,
-      opponentColor,
-      stoneCount,
-      Infinity,
-    );
-  }
-  timings.pvVerification = performance.now() - t0;
-  if (timings.pvVerification > 1 || profile.enablePVVerification) {
+  if (timings.pvVerification > 1 || precise) {
     subPhases.push({
       name: "PV事後検証",
       time: timings.pvVerification,
-      extra: profile.enablePVVerification ? "有効" : "無効",
+      extra: precise ? "有効" : "無効",
     });
   }
-
-  // 降格ハンドリング
-  if (currentForcedWin) {
-    if (demotedBest || candidates[0]?.opponentForcedWin) {
-      const safeBest = findSafeBest(candidates);
-      if (safeBest) {
-        currentForcedWinType = undefined;
-      }
-    }
-  } else {
-    const bestDemoted =
-      demotedBest || Boolean(candidates[0]?.opponentForcedWin);
-    if (bestDemoted) {
-      findSafeBest(candidates);
-    }
-  }
-
-  // 打たれた手にforcedLossType反映
-  if (forcedLossType && playedRow >= 0) {
-    const playedCand = candidates.find(
-      (c) => c.position.row === playedRow && c.position.col === playedCol,
-    );
-    if (playedCand && !playedCand.opponentForcedWin) {
-      playedCand.opponentForcedWin = forcedLossType;
-    }
-  }
-
-  timings.total = performance.now() - totalStart;
 
   return {
     moveIndex,
     moveStr: moves[moveIndex] ?? "?",
     color,
-    bestMoveStr: formatMove(result.position),
-    bestScore: result.score,
+    bestMoveStr: formatMove(result.bestMove),
+    bestScore: result.bestScore,
     completedDepth: result.completedDepth,
-    forcedWinType: currentForcedWinType,
-    forcedLossType,
-    candidateCount: candidates.length,
+    forcedWinType: result.forcedWinType,
+    forcedLossType: result.forcedLossType,
+    candidateCount: result.candidates.length,
     timings,
     subPhases,
   };
@@ -588,7 +238,7 @@ async function main(): Promise<void> {
   }
 
   const profiles: MoveProfile[] = [];
-  const totals: PhaseTimings = {
+  const totals: FullEvalTimings = {
     forcedWinDetection: 0,
     forcedLossCheck: 0,
     minimaxSearch: 0,
