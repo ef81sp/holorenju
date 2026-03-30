@@ -82,6 +82,26 @@ export class WasmSearchEngine {
     return this.readResult();
   }
 
+  /** TTをクリアせずに探索（PV補完用） */
+  findBestMoveWithParamsNoTTClear(
+    board: BoardState,
+    color: "black" | "white",
+    maxDepth: number,
+    timeLimitMs: number,
+    maxNodes: number,
+  ): WasmSearchResult {
+    boardStateToWasm(this.wasm, board);
+    this.wasm.findBestMove(
+      colorToWasm(color),
+      maxDepth,
+      timeLimitMs,
+      maxNodes,
+      0,
+      0,
+    );
+    return this.readResult();
+  }
+
   /**
    * レビュー用の探索（候補手リスト付き・PV抽出あり）
    *

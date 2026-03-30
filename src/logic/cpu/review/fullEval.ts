@@ -280,6 +280,7 @@ function handleDemotion(ctx: DemotionContext): {
  * WASM TT から指定手の PV を抽出し、候補手に付与する
  *
  * 候補手リストに該当手が存在し、まだ PV がない場合のみ抽出する。
+ * TT抽出で不十分な場合、追加の短い探索を実行してPVを補完する。
  */
 function attachPVFromWasm(
   candidates: ReviewCandidate[],
@@ -296,12 +297,40 @@ function attachPVFromWasm(
     candidate &&
     (!candidate.principalVariation || candidate.principalVariation.length <= 1)
   ) {
-    const pv = engine.extractPVFromTT(
+    // まずTTから抽出を試みる
+    let pv = engine.extractPVFromTT(
       board,
       { row, col },
       color,
       colorToWasm(color),
     );
+
+    // PVが不十分な場合、その手を打った後の局面で追加探索してTTを充填
+    if (pv.length <= 1) {
+      const boardCopy = board.map((r) => (r ? [...r] : r));
+      const boardRow = boardCopy[row];
+      if (boardRow) {
+        boardRow[col] = color;
+        const opponentColor = color === "black" ? "white" : "black";
+        // TTをクリアせずに短い探索（深度3、時間2秒）でTTにPVを蓄積
+        engine.findBestMoveWithParamsNoTTClear(
+          boardCopy,
+          opponentColor,
+          3,
+          2000,
+          200000,
+        );
+        boardRow[col] = null;
+      }
+      // 再度TTからPVを抽出
+      pv = engine.extractPVFromTT(
+        board,
+        { row, col },
+        color,
+        colorToWasm(color),
+      );
+    }
+
     if (pv.length > 1) {
       candidate.principalVariation = pv;
     }
