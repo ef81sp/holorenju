@@ -159,7 +159,10 @@ export function detectForcedWin(
     forcedWin =
       vcfResult ??
       miseVcfResult ??
-      (countStones(board) >= VCT_STONE_THRESHOLD && !opponentHasFour
+      // VCT探索はlightEvalではスキップ（重いため、fullEvalで検出する）
+      (!isLightEval &&
+      countStones(board) >= VCT_STONE_THRESHOLD &&
+      !opponentHasFour
         ? (findVCTSequence(board, color, REVIEW_VCT_OPTIONS_WITH_BRANCHES) ??
           findVCTByFirstMoveIteration(
             board,
