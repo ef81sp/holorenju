@@ -291,6 +291,260 @@ fn findVCFMoveRecursive(
 }
 
 // =============================================================================
+// findVCFSequence（手順蓄積版）
+// =============================================================================
+
+pub const VCFSequenceResult = struct {
+    /// 攻撃手+防御手の交互列: [攻撃1, 防御1, 攻撃2, 防御2, ..., 最終攻撃手]
+    sequence: [64]Position,
+    len: u8,
+    is_forbidden_trap: bool,
+    found: bool,
+};
+
+/// VCF手順全体を返す（反復深化）
+pub fn findVCFSequence(
+    cells: []Cell,
+    color: Cell,
+    max_depth: u8,
+    time_limit: u32,
+    max_nodes: u32,
+) VCFSequenceResult {
+    var limiter = TimeLimiter{
+        .start_time = getTimestampMs(),
+        .time_limit = time_limit,
+        .nodes = 0,
+        .max_nodes = max_nodes,
+    };
+
+    var result = VCFSequenceResult{
+        .sequence = undefined,
+        .len = 0,
+        .is_forbidden_trap = false,
+        .found = false,
+    };
+
+    // 反復深化: 浅い深度から探索し最短手順を優先
+    var depth: u8 = 1;
+    while (depth <= max_depth) : (depth += 1) {
+        if (isTimeExceeded(&limiter)) return result;
+
+        var seq_len: u8 = 0;
+        var is_forbidden_trap = false;
+        const found = findVCFSequenceRecursive(cells, color, 0, &limiter, depth, &result.sequence, &seq_len, &is_forbidden_trap);
+        if (found) {
+            result.len = seq_len;
+            result.is_forbidden_trap = is_forbidden_trap;
+            result.found = true;
+            return result;
+        }
+    }
+    return result;
+}
+
+/// 指定初手からのVCF手順を返す
+pub fn findVCFSequenceFromFirstMove(
+    cells: []Cell,
+    first_move: Position,
+    color: Cell,
+    max_depth: u8,
+    time_limit: u32,
+    max_nodes: u32,
+) VCFSequenceResult {
+    var result = VCFSequenceResult{
+        .sequence = undefined,
+        .len = 0,
+        .is_forbidden_trap = false,
+        .found = false,
+    };
+
+    const idx = @as(u16, first_move.row) * BOARD_SIZE + first_move.col;
+    if (cells[idx] != .empty) return result;
+
+    // 仮配置
+    cells[idx] = color;
+
+    // 五連チェック → 即勝ち
+    if (forbidden.checkFive(cells, first_move.row, first_move.col, color)) {
+        cells[idx] = .empty;
+        result.sequence[0] = first_move;
+        result.len = 1;
+        result.found = true;
+        return result;
+    }
+
+    // 四を作るかチェック
+    if (!quiescence.createsFour(cells, first_move.row, first_move.col, color)) {
+        cells[idx] = .empty;
+        return result;
+    }
+
+    // 防御位置を取得
+    const defense_pos = quiescence.getFourDefensePosition(cells, first_move.row, first_move.col, color);
+    if (defense_pos == null) {
+        // 活四 → 防御不可能 → VCF成立
+        cells[idx] = .empty;
+        result.sequence[0] = first_move;
+        result.len = 1;
+        result.found = true;
+        return result;
+    }
+
+    const dp = defense_pos.?;
+
+    // 白番: 黒の防御位置が禁手 → 即勝ち
+    if (color == .white) {
+        const fr = forbidden.checkForbiddenMove(cells, dp.row, dp.col);
+        if (fr != .none) {
+            cells[idx] = .empty;
+            result.sequence[0] = first_move;
+            result.len = 1;
+            result.is_forbidden_trap = true;
+            result.found = true;
+            return result;
+        }
+    }
+
+    // 防御石を仮配置してVCF探索継続
+    const opponent = color.opposite();
+    const def_idx = @as(u16, dp.row) * BOARD_SIZE + dp.col;
+    cells[def_idx] = opponent;
+
+    const continuation = findVCFSequence(cells, color, max_depth, time_limit, max_nodes);
+
+    // Undo（逆順）
+    cells[def_idx] = .empty;
+    cells[idx] = .empty;
+
+    if (!continuation.found) return result;
+
+    // 手順を組み立て: [初手, 防御手, 継続手順...]
+    result.sequence[0] = first_move;
+    result.sequence[1] = dp;
+    var i: u8 = 0;
+    while (i < continuation.len) : (i += 1) {
+        result.sequence[2 + i] = continuation.sequence[i];
+    }
+    result.len = 2 + continuation.len;
+    result.is_forbidden_trap = continuation.is_forbidden_trap;
+    result.found = true;
+    return result;
+}
+
+/// VCF手順の再帰探索
+/// 1パスで五連→活四→再帰の順に処理
+fn findVCFSequenceRecursive(
+    cells: []Cell,
+    color: Cell,
+    depth: u8,
+    limiter: *TimeLimiter,
+    max_depth: u8,
+    sequence: *[64]Position,
+    seq_len: *u8,
+    is_forbidden_trap: *bool,
+) bool {
+    if (depth >= max_depth) return false;
+    if (isTimeExceeded(limiter)) return false;
+
+    var buf: [225]Position = undefined;
+    const four_count = findFourMoves(cells, color, &buf);
+
+    const opponent = color.opposite();
+
+    // Phase 1: 即勝ちチェック
+    const MAX_RECURSIVE = 225;
+    var recursive_moves: [MAX_RECURSIVE]Position = undefined;
+    var recursive_defense: [MAX_RECURSIVE]Position = undefined;
+    var recursive_count: u16 = 0;
+
+    for (0..four_count) |i| {
+        const move = buf[i];
+        incrementNodes(limiter);
+        if (isTimeExceeded(limiter)) return false;
+
+        const idx = @as(u16, move.row) * BOARD_SIZE + move.col;
+        cells[idx] = color;
+
+        // 五連 → 即勝ち
+        if (forbidden.checkFive(cells, move.row, move.col, color)) {
+            cells[idx] = .empty;
+            sequence[seq_len.*] = move;
+            seq_len.* += 1;
+            return true;
+        }
+
+        const defense_pos = quiescence.getFourDefensePosition(cells, move.row, move.col, color);
+        cells[idx] = .empty;
+
+        // 活四（防御不能） → 即勝ち
+        if (defense_pos == null) {
+            sequence[seq_len.*] = move;
+            seq_len.* += 1;
+            return true;
+        }
+
+        const dp = defense_pos.?;
+
+        // 白番: 黒の防御位置が禁手 → 即勝ち
+        if (color == .white) {
+            const fr = forbidden.checkForbiddenMove(cells, dp.row, dp.col);
+            if (fr != .none) {
+                sequence[seq_len.*] = move;
+                seq_len.* += 1;
+                is_forbidden_trap.* = true;
+                return true;
+            }
+        }
+
+        // 再帰探索用に蓄積
+        if (recursive_count < MAX_RECURSIVE) {
+            recursive_moves[recursive_count] = move;
+            recursive_defense[recursive_count] = dp;
+            recursive_count += 1;
+        }
+    }
+
+    // Phase 2: 再帰探索
+    for (0..recursive_count) |i| {
+        const move = recursive_moves[i];
+        const dp = recursive_defense[i];
+        const move_idx = @as(u16, move.row) * BOARD_SIZE + move.col;
+        const def_idx = @as(u16, dp.row) * BOARD_SIZE + dp.col;
+
+        cells[move_idx] = color;
+        cells[def_idx] = opponent;
+
+        // 防御で五連完成 or カウンターフォー → スキップ
+        const defense_wins = forbidden.checkFive(cells, dp.row, dp.col, opponent);
+        const defense_counter_four = !defense_wins and quiescence.createsFour(cells, dp.row, dp.col, opponent);
+
+        var found = false;
+        if (!defense_wins and !defense_counter_four) {
+            const saved_len = seq_len.*;
+            sequence[seq_len.*] = move;
+            seq_len.* += 1;
+            sequence[seq_len.*] = dp;
+            seq_len.* += 1;
+
+            found = findVCFSequenceRecursive(cells, color, depth + 1, limiter, max_depth, sequence, seq_len, is_forbidden_trap);
+
+            if (!found) {
+                // 手順を巻き戻し
+                seq_len.* = saved_len;
+            }
+        }
+
+        // Undo
+        cells[def_idx] = .empty;
+        cells[move_idx] = .empty;
+
+        if (found) return true;
+    }
+
+    return false;
+}
+
+// =============================================================================
 // タイムスタンプ取得
 // =============================================================================
 
@@ -398,4 +652,76 @@ test "hasVCF: open four (unblockable)" {
     // 実際には (7,8) で止め四 → 防御 → 終了。VCF不成立の可能性もある
     // テストは結果がboolを返すことの確認
     _ = result;
+}
+
+// === findVCFSequence Tests ===
+
+test "findVCFSequence: immediate five - sequence has 1 move" {
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    // 黒の4連: (7,4),(7,5),(7,6),(7,7) → (7,3) or (7,8) で五連
+    cells[7 * BOARD_SIZE + 4] = .black;
+    cells[7 * BOARD_SIZE + 5] = .black;
+    cells[7 * BOARD_SIZE + 6] = .black;
+    cells[7 * BOARD_SIZE + 7] = .black;
+
+    const result = findVCFSequence(&cells, .black, VCF_MAX_DEPTH, 0, 0);
+    try testing.expect(result.found);
+    try testing.expectEqual(@as(u8, 1), result.len);
+    // 最終攻撃手のみ（五連完成手）
+    const move = result.sequence[0];
+    try testing.expect((move.row == 7 and move.col == 3) or (move.row == 7 and move.col == 8));
+}
+
+test "findVCFSequence: two-step VCF" {
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    // 黒の3連: (7,5),(7,6),(7,7) + (7,4)に白ブロック
+    // → (7,8)で止め四 → 白が(7,9)で防御 → (7,3)方向にはブロックされている
+    // もっと確実な2段VCF: 2方向に四が作れる配置
+    //
+    // 縦方向: (4,7),(5,7),(6,7) の3連
+    // 横方向: (7,5),(7,6),(7,7) の3連
+    // (7,7)が交点 → (3,7)で縦四 → 防御(8,7) → (7,8)で横四＋五連
+    cells[4 * BOARD_SIZE + 7] = .black;
+    cells[5 * BOARD_SIZE + 7] = .black;
+    cells[6 * BOARD_SIZE + 7] = .black;
+    cells[7 * BOARD_SIZE + 5] = .black;
+    cells[7 * BOARD_SIZE + 6] = .black;
+    cells[7 * BOARD_SIZE + 7] = .black;
+
+    const result = findVCFSequence(&cells, .black, VCF_MAX_DEPTH, 0, 0);
+    try testing.expect(result.found);
+    // 少なくとも攻撃1→防御1→攻撃2の3手以上
+    try testing.expect(result.len >= 1);
+}
+
+test "findVCFSequence: no VCF" {
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    // 黒1石のみ → VCF不成立
+    cells[7 * BOARD_SIZE + 7] = .black;
+
+    const result = findVCFSequence(&cells, .black, VCF_MAX_DEPTH, 0, 0);
+    try testing.expect(!result.found);
+}
+
+test "findVCFSequenceFromFirstMove: immediate five" {
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    // 黒の4連: (7,4),(7,5),(7,6),(7,7)
+    cells[7 * BOARD_SIZE + 4] = .black;
+    cells[7 * BOARD_SIZE + 5] = .black;
+    cells[7 * BOARD_SIZE + 6] = .black;
+    cells[7 * BOARD_SIZE + 7] = .black;
+
+    const result = findVCFSequenceFromFirstMove(&cells, .{ .row = 7, .col = 8 }, .black, VCF_MAX_DEPTH, 0, 0);
+    try testing.expect(result.found);
+    try testing.expectEqual(@as(u8, 1), result.len);
+    try testing.expectEqual(@as(u8, 7), result.sequence[0].row);
+    try testing.expectEqual(@as(u8, 8), result.sequence[0].col);
+}
+
+test "findVCFSequenceFromFirstMove: occupied cell returns not found" {
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[7 * BOARD_SIZE + 7] = .black;
+
+    const result = findVCFSequenceFromFirstMove(&cells, .{ .row = 7, .col = 7 }, .black, VCF_MAX_DEPTH, 0, 0);
+    try testing.expect(!result.found);
 }

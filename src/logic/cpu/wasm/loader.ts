@@ -31,24 +31,5 @@ export async function loadWasmModule(): Promise<WasmModuleContext> {
     },
   };
   const { instance } = await WebAssembly.instantiate(buffer, imports);
-  const exports = instance.exports as unknown as WasmModuleContext;
-
-  return {
-    memory: exports.memory,
-    add: exports.add,
-    boardInit: exports.boardInit,
-    boardGet: exports.boardGet,
-    boardSet: exports.boardSet,
-    countInDirection: exports.countInDirection,
-    analyzeDirection: exports.analyzeDirection,
-    evaluateDirectionScores: exports.evaluateDirectionScores,
-    wasmGetPatternScore: exports.wasmGetPatternScore,
-    wasmGetPatternType: exports.wasmGetPatternType,
-    evaluateBoard: exports.evaluateBoard,
-    findBestMove: exports.findBestMove,
-    getResultBuffer: exports.getResultBuffer,
-    ttClear: exports.ttClear,
-    extractPV: exports.extractPV,
-    getResultPVBuffer: exports.getResultPVBuffer,
-  };
+  return instance.exports as unknown as WasmModuleContext;
 }

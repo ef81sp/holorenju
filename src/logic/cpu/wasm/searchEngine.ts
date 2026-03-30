@@ -9,6 +9,7 @@ import type { BoardState, Position } from "@/types/game";
 
 import { DIFFICULTY_PARAMS, type CpuDifficulty } from "@/types/cpu";
 
+import type { VCFSequenceResult } from "../search/vcf";
 import type { WasmModuleContext } from "./types";
 
 import { boardStateToWasm, colorToWasm } from "./boardAdapter";
@@ -170,6 +171,74 @@ export class WasmSearchEngine {
     const score = view.getInt32(ptr + 2, true); // little-endian i32
     const completedDepth = view.getUint8(ptr + 6);
     return { position: { row, col }, score, completedDepth };
+  }
+
+  /**
+   * VCF手順全体を探索
+   */
+  findVCFSequence(
+    board: BoardState,
+    color: "black" | "white",
+    maxDepth: number,
+    timeLimitMs: number,
+    maxNodes: number,
+  ): VCFSequenceResult | null {
+    boardStateToWasm(this.wasm, board);
+    this.wasm.findVCFSequenceWasm(
+      colorToWasm(color),
+      maxDepth,
+      timeLimitMs,
+      maxNodes,
+    );
+    return this.readVCFSequenceResult();
+  }
+
+  /**
+   * 指定初手からのVCF手順を探索
+   */
+  findVCFSequenceFromFirstMove(
+    board: BoardState,
+    firstMove: Position,
+    color: "black" | "white",
+    maxDepth: number,
+    timeLimitMs: number,
+    maxNodes: number,
+  ): VCFSequenceResult | null {
+    boardStateToWasm(this.wasm, board);
+    this.wasm.findVCFSequenceFromFirstMoveWasm(
+      firstMove.row,
+      firstMove.col,
+      colorToWasm(color),
+      maxDepth,
+      timeLimitMs,
+      maxNodes,
+    );
+    return this.readVCFSequenceResult();
+  }
+
+  private readVCFSequenceResult(): VCFSequenceResult | null {
+    const ptr = this.wasm.getVCFSequenceBuffer();
+    const { memory } = this.wasm;
+    const view = new DataView(memory.buffer);
+
+    const found = view.getUint8(ptr) === 1;
+    if (!found) {
+      return null;
+    }
+
+    const len = view.getUint8(ptr + 1);
+    const isForbiddenTrap = view.getUint8(ptr + 2) === 1;
+
+    const sequence: Position[] = [];
+    for (let i = 0; i < len; i++) {
+      sequence.push({
+        row: view.getUint8(ptr + 3 + i * 2),
+        col: view.getUint8(ptr + 3 + i * 2 + 1),
+      });
+    }
+
+    const firstMove = sequence[0] ?? { row: 0, col: 0 };
+    return { firstMove, sequence, isForbiddenTrap };
   }
 
   private readResultWithCandidates(): WasmSearchResultWithCandidates {

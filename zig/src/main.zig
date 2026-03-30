@@ -7,6 +7,7 @@ const position_eval = @import("position_eval.zig");
 const scores_mod = @import("scores.zig");
 const threats_mod = @import("threats.zig");
 const tt_mod = @import("tt.zig");
+const vcf = @import("vcf.zig");
 const zobrist = @import("zobrist.zig");
 
 export fn add(a: i32, b: i32) i32 {
@@ -209,6 +210,72 @@ fn isValidPVMoveZig(cells: []board.Cell, row: u8, col: u8, color: board.Cell) bo
     }
 
     return true;
+}
+
+// ─── VCF Sequence ──────────────────────────────────────
+
+/// VCF手順バッファ
+/// [0]: found (0 or 1)
+/// [1]: sequence length
+/// [2]: isForbiddenTrap (0 or 1)
+/// [3..N*2+2]: row, col pairs
+var vcf_seq_buffer: [256]u8 = .{0} ** 256;
+
+export fn getVCFSequenceBuffer() [*]u8 {
+    return &vcf_seq_buffer;
+}
+
+/// VCF手順全体を探索し結果を vcf_seq_buffer に書き込む
+export fn findVCFSequenceWasm(color: u8, max_depth: u8, time_limit_ms: u32, max_nodes: u32) void {
+    const cell_color: board.Cell = switch (color) {
+        1 => .black,
+        2 => .white,
+        else => {
+            vcf_seq_buffer[0] = 0;
+            return;
+        },
+    };
+
+    const cells = &board.board_cells;
+    const result = vcf.findVCFSequence(cells, cell_color, max_depth, time_limit_ms, max_nodes);
+
+    vcf_seq_buffer[0] = if (result.found) 1 else 0;
+    vcf_seq_buffer[1] = result.len;
+    vcf_seq_buffer[2] = if (result.is_forbidden_trap) 1 else 0;
+
+    if (result.found) {
+        for (0..result.len) |i| {
+            vcf_seq_buffer[3 + i * 2] = result.sequence[i].row;
+            vcf_seq_buffer[3 + i * 2 + 1] = result.sequence[i].col;
+        }
+    }
+}
+
+/// 指定初手からのVCF手順を探索し結果を vcf_seq_buffer に書き込む
+export fn findVCFSequenceFromFirstMoveWasm(row: u8, col: u8, color: u8, max_depth: u8, time_limit_ms: u32, max_nodes: u32) void {
+    const cell_color: board.Cell = switch (color) {
+        1 => .black,
+        2 => .white,
+        else => {
+            vcf_seq_buffer[0] = 0;
+            return;
+        },
+    };
+
+    const cells = &board.board_cells;
+    const first_move = threats_mod.Position{ .row = row, .col = col };
+    const result = vcf.findVCFSequenceFromFirstMove(cells, first_move, cell_color, max_depth, time_limit_ms, max_nodes);
+
+    vcf_seq_buffer[0] = if (result.found) 1 else 0;
+    vcf_seq_buffer[1] = result.len;
+    vcf_seq_buffer[2] = if (result.is_forbidden_trap) 1 else 0;
+
+    if (result.found) {
+        for (0..result.len) |i| {
+            vcf_seq_buffer[3 + i * 2] = result.sequence[i].row;
+            vcf_seq_buffer[3 + i * 2 + 1] = result.sequence[i].col;
+        }
+    }
 }
 
 fn writeResult(row: u8, col: u8, score: i32, completed_depth: u8, top_candidates: ?*const [5]minimax.MoveScoreEntry, top_candidate_count: u8) void {

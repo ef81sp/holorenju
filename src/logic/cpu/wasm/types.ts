@@ -51,6 +51,23 @@ export interface WasmModuleContext {
     maxLen: number,
   ) => void;
   getResultPVBuffer: () => number;
+
+  // VCF sequence
+  findVCFSequenceWasm: (
+    color: number,
+    maxDepth: number,
+    timeLimitMs: number,
+    maxNodes: number,
+  ) => void;
+  findVCFSequenceFromFirstMoveWasm: (
+    row: number,
+    col: number,
+    color: number,
+    maxDepth: number,
+    timeLimitMs: number,
+    maxNodes: number,
+  ) => void;
+  getVCFSequenceBuffer: () => number;
 }
 
 /** Cell values matching Zig Cell enum */
