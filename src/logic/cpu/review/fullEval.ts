@@ -19,6 +19,7 @@ import { createBoardFromRecord } from "@/logic/gameRecordParser";
 
 import type { MoveScoreEntry } from "../search/results";
 import type { BoardEvaluator } from "../wasm/bridge";
+import type { WasmSearchEngine } from "../wasm/searchEngine";
 
 import { countStones } from "../core/boardUtils";
 import {
@@ -55,6 +56,69 @@ import {
   REVIEW_VCT_OPTIONS_WITH_BRANCHES,
 } from "./reviewConstants";
 
+// ─── WASM探索アダプター ──────────────────────────────────
+
+type ReviewProfile = typeof REVIEW_PROFILE_FAST;
+
+/**
+ * WASM 探索エンジンで minimax 探索を実行し、TS 版と同じ結果型に変換する
+ */
+function executeWasmSearch(
+  engine: WasmSearchEngine,
+  board: BoardState,
+  color: "black" | "white",
+  maxNodes: number,
+  profile: ReviewProfile,
+): ReturnType<typeof findBestMoveIterativeWithTT> {
+  const aspirationMode = profile.aspirationWidths ? 1 : 0;
+  const wasmResult = engine.findBestMoveForReview(
+    board,
+    color,
+    REVIEW_SEARCH_PARAMS.depth,
+    profile.timeLimit ?? 0,
+    maxNodes,
+    profile.absoluteTimeLimit ?? 0,
+    aspirationMode,
+  );
+
+  // WASM 候補手を MoveScoreEntry[] に変換（PV なし）
+  const candidates: MoveScoreEntry[] = wasmResult.candidates.map((c) => ({
+    move: c.position,
+    score: c.score,
+  }));
+
+  return {
+    position: wasmResult.position,
+    score: wasmResult.score,
+    completedDepth: wasmResult.completedDepth,
+    interrupted: false,
+    elapsedTime: 0,
+    candidates,
+    stats: {
+      nodes: 0,
+      ttHits: 0,
+      ttCutoffs: 0,
+      betaCutoffs: 0,
+      forbiddenCheckCalls: 0,
+      boardCopies: 0,
+      threatDetectionCalls: 0,
+      evaluationCalls: 0,
+      nullMoveTrials: 0,
+      nullMoveCutoffs: 0,
+      futilityPrunes: 0,
+      threatExtensions: 0,
+      lmrTrials: 0,
+      lmrResearches: 0,
+      lmrMoveIndexDist: [0, 0, 0],
+      qSearchNodes: 0,
+      qSearchBranchSum: 0,
+      qSearchEntries: 0,
+      qSearchDepthSum: 0,
+      qSearchLeaves: 0,
+    },
+  };
+}
+
 // ─── 型定義 ──────────────────────────────────────────
 
 export interface FullEvalParams {
@@ -66,6 +130,8 @@ export interface FullEvalParams {
   preciseAnalysis?: boolean;
   /** WASM 評価器（任意） */
   boardEvaluator?: BoardEvaluator;
+  /** WASM 探索エンジン（任意、指定時は minimax 探索を WASM に委譲） */
+  wasmSearchEngine?: WasmSearchEngine;
 }
 
 /** 各フェーズの所要時間 */
@@ -192,7 +258,13 @@ function handleDemotion(ctx: DemotionContext): {
 export function executeFullEval(
   params: FullEvalParams,
 ): FullEvalResultWithTimings {
-  const { moveHistory, moveIndex, preciseAnalysis, boardEvaluator } = params;
+  const {
+    moveHistory,
+    moveIndex,
+    preciseAnalysis,
+    boardEvaluator,
+    wasmSearchEngine,
+  } = params;
 
   const profile = preciseAnalysis
     ? REVIEW_PROFILE_PRECISE
@@ -278,19 +350,27 @@ export function executeFullEval(
       : profile.maxNodes;
 
   t0 = performance.now();
-  const result = findBestMoveIterativeWithTT({
-    board,
-    color,
-    maxDepth: REVIEW_SEARCH_PARAMS.depth,
-    randomFactor: 0,
-    evaluationOptions: REVIEW_SEARCH_PARAMS.evaluationOptions,
-    maxNodes: effectiveMaxNodes,
-    timeLimit: profile.timeLimit,
-    absoluteTimeLimit: profile.absoluteTimeLimit,
-    aspirationWidths: profile.aspirationWidths,
-    collectPV: true,
-    boardEvaluator,
-  });
+  const result = wasmSearchEngine
+    ? executeWasmSearch(
+        wasmSearchEngine,
+        board,
+        color,
+        effectiveMaxNodes,
+        profile,
+      )
+    : findBestMoveIterativeWithTT({
+        board,
+        color,
+        maxDepth: REVIEW_SEARCH_PARAMS.depth,
+        randomFactor: 0,
+        evaluationOptions: REVIEW_SEARCH_PARAMS.evaluationOptions,
+        maxNodes: effectiveMaxNodes,
+        timeLimit: profile.timeLimit,
+        absoluteTimeLimit: profile.absoluteTimeLimit,
+        aspirationWidths: profile.aspirationWidths,
+        collectPV: true,
+        boardEvaluator,
+      });
   timings.minimaxSearch = performance.now() - t0;
 
   // ─── VCTリトライ ───
@@ -409,8 +489,6 @@ export function executeFullEval(
 }
 
 // ─── forcedWin パス ──────────────────────────────────
-
-type ReviewProfile = typeof REVIEW_PROFILE_FAST;
 
 interface ForcedWinResultContext {
   board: BoardState;

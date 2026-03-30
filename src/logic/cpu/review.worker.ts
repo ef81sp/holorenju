@@ -28,6 +28,7 @@ import { executeFullEval } from "./review/fullEval";
 import { findVCTSequence, VCT_STONE_THRESHOLD } from "./search/vct";
 import { type BoardEvaluator, WasmBoardEvaluator } from "./wasm/bridge";
 import { loadWasmModule } from "./wasm/loader";
+import { WasmSearchEngine } from "./wasm/searchEngine";
 
 /** WASM モジュール（初回ロード後にキャッシュ） */
 let cachedWasm: WasmModuleContext | null = null;
@@ -140,11 +141,15 @@ self.onmessage = async (event: MessageEvent<ReviewEvalRequest>) => {
 
     // fullEval: 共通ロジックに委譲
     const boardEvaluator = (await getWasmEvaluator()) ?? undefined;
+    const wasmSearchEngine = cachedWasm
+      ? new WasmSearchEngine(cachedWasm)
+      : undefined;
     const result = executeFullEval({
       moveHistory,
       moveIndex,
       preciseAnalysis,
       boardEvaluator,
+      wasmSearchEngine,
     });
 
     // timings は Worker の結果には不要なので除外

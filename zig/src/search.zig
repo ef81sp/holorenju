@@ -196,6 +196,8 @@ pub fn findPreSearchMove(
 
 /// Aspiration Windowの段階的拡大幅
 const ASPIRATION_WIDTHS = minimax.ASPIRATION_WIDTHS;
+/// 固定幅モード（mode 0）: 最初の1要素のみ使用
+const ASPIRATION_WIDTHS_FIXED = [1]i32{ASPIRATION_WIDTHS[0]};
 
 /// Score Verification の閾値
 const VERIFICATION_THRESHOLD: i32 = 1500;
@@ -219,6 +221,9 @@ pub const IterativeDeepingResult = struct {
     interrupted: bool,
     stats: minimax.SearchStats,
     forced_move: bool = false,
+    /// 上位候補手（最大5手）
+    top_candidates: [5]minimax.MoveScoreEntry = undefined,
+    top_candidate_count: u8 = 0,
 };
 
 /// 反復深化探索パラメータ
@@ -227,6 +232,7 @@ pub const IterativeDeepeningParams = struct {
     time_limit: u32 = 0, // 0 = 無制限
     max_nodes: u32 = 0, // 0 = 無制限
     absolute_time_limit: u32 = 10000, // ms
+    aspiration_mode: u8 = 0, // 0 = 固定[75], 1 = [75,200,500]
     eval_options: position_eval.EvalOptions = position_eval.DEFAULT_EVAL_OPTIONS,
     board_eval_options: evaluate.EvalOptions = .{
         .enable_leaf_mise = false,
@@ -243,6 +249,12 @@ pub fn findBestMoveIterative(
     params: IterativeDeepeningParams,
 ) IterativeDeepingResult {
     const start_time = getTimestampMs();
+
+    // Aspiration Windowsの幅を選択
+    const effective_widths: []const i32 = if (params.aspiration_mode == 1)
+        &ASPIRATION_WIDTHS
+    else
+        &ASPIRATION_WIDTHS_FIXED;
 
     // TT・ヒストリ等の初期化
     var history = move_order.HistoryTable.init();
@@ -419,7 +431,7 @@ pub fn findBestMoveIterative(
         // Aspiration Windowsで探索
         var result = best_result;
         var search_complete = false;
-        for (ASPIRATION_WIDTHS) |width| {
+        for (effective_widths) |width| {
             result = minimax.findBestMoveWithTT(
                 cells,
                 color,
@@ -527,12 +539,22 @@ pub fn findBestMoveIterative(
         }
     }
 
+    // 上位候補手を収集（最大5手）
+    var top_candidates: [5]minimax.MoveScoreEntry = undefined;
+    const max_top: u16 = 5;
+    const count = if (best_result.candidate_count < max_top) best_result.candidate_count else max_top;
+    for (0..count) |i| {
+        top_candidates[i] = best_result.candidates[i];
+    }
+
     return .{
         .position = best_result.position,
         .score = best_result.score,
         .completed_depth = completed_depth,
         .interrupted = interrupted,
         .stats = ctx.stats,
+        .top_candidates = top_candidates,
+        .top_candidate_count = @intCast(count),
     };
 }
 
