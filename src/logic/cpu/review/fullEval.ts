@@ -81,10 +81,11 @@ function executeWasmSearch(
     aspirationMode,
   );
 
-  // WASM 候補手を MoveScoreEntry[] に変換（PV なし）
+  // WASM 候補手を MoveScoreEntry[] に変換
   const candidates: MoveScoreEntry[] = wasmResult.candidates.map((c) => ({
     move: c.position,
     score: c.score,
+    pv: c.pv,
   }));
 
   return {

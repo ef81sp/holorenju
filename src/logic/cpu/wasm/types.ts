@@ -42,6 +42,15 @@ export interface WasmModuleContext {
   ) => void;
   getResultBuffer: () => number;
   ttClear: () => void;
+
+  // PV extraction
+  extractPV: (
+    bestRow: number,
+    bestCol: number,
+    color: number,
+    maxLen: number,
+  ) => void;
+  getResultPVBuffer: () => number;
 }
 
 /** Cell values matching Zig Cell enum */

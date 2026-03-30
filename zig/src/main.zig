@@ -1,10 +1,13 @@
 const board = @import("board.zig");
 const evaluate = @import("evaluate.zig");
+const forbidden = @import("forbidden.zig");
 const patterns = @import("patterns.zig");
 const search = @import("search.zig");
 const position_eval = @import("position_eval.zig");
 const scores_mod = @import("scores.zig");
+const threats_mod = @import("threats.zig");
 const tt_mod = @import("tt.zig");
+const zobrist = @import("zobrist.zig");
 
 export fn add(a: i32, b: i32) i32 {
     return a + b;
@@ -92,6 +95,120 @@ export fn ttClear() void {
 }
 
 const minimax = @import("minimax.zig");
+
+// ─── PV抽出 ─────────────────────────────────────────
+
+/// PV バッファ
+/// [0]: pv_length
+/// [1..]: (row, col) ペアの配列。最大31手
+var pv_buffer: [64]u8 = .{0} ** 64;
+
+export fn getResultPVBuffer() [*]u8 {
+    return &pv_buffer;
+}
+
+/// 指定位置から TT の bestMove チェインを辿って PV を抽出
+/// 呼び出し前に findBestMove が完了していること（TT にデータがある）
+export fn extractPV(best_row: u8, best_col: u8, color: u8, max_len: u8) void {
+    const cells = &board.board_cells;
+    const cell_color: board.Cell = switch (color) {
+        1 => .black,
+        2 => .white,
+        else => {
+            pv_buffer[0] = 0;
+            return;
+        },
+    };
+
+    const effective_max: u8 = if (max_len > 31) 31 else max_len;
+    var pv_len: u8 = 0;
+
+    // 最初の手を書き込む
+    const first_idx = @as(u16, best_row) * board.BOARD_SIZE + best_col;
+    if (cells[first_idx] != .empty) {
+        pv_buffer[0] = 0;
+        return;
+    }
+    pv_buffer[1] = best_row;
+    pv_buffer[2] = best_col;
+    pv_len = 1;
+
+    // 盤面に石を置いてハッシュを更新しながら TT を辿る
+    cells[first_idx] = cell_color;
+    var current_hash = zobrist.computeBoardHash(cells);
+    var current_color = cell_color.opposite();
+
+    var i: u8 = 1;
+    while (i < effective_max) : (i += 1) {
+        const entry = tt_mod.global_tt.probe(current_hash);
+        if (entry == null) break;
+
+        // EXACT エントリのみ信頼する
+        if (entry.?.score_type != .exact) break;
+
+        const best_move = entry.?.getBestMove();
+        if (best_move == null) break;
+        const move = best_move.?;
+
+        // 盤面の有効性チェック
+        const idx = @as(u16, move.row) * board.BOARD_SIZE + move.col;
+        if (cells[idx] != .empty) break;
+
+        // 脅威検証: 相手の脅威を無視する手でPVを打ち切り
+        if (!isValidPVMoveZig(cells, move.row, move.col, current_color)) break;
+
+        // PVに追加
+        pv_buffer[1 + pv_len * 2] = move.row;
+        pv_buffer[1 + pv_len * 2 + 1] = move.col;
+        pv_len += 1;
+
+        // 盤面更新
+        cells[idx] = current_color;
+        current_hash = zobrist.updateHash(current_hash, move.row, move.col, current_color);
+        current_color = current_color.opposite();
+    }
+
+    pv_buffer[0] = pv_len;
+
+    // 盤面を元に戻す（最初の手 + TT辿り分）
+    cells[first_idx] = .empty;
+    var j: u8 = 1;
+    while (j < pv_len) : (j += 1) {
+        const r = pv_buffer[1 + j * 2];
+        const c = pv_buffer[1 + j * 2 + 1];
+        cells[@as(u16, r) * board.BOARD_SIZE + c] = .empty;
+    }
+}
+
+/// PV手の妥当性チェック（TS版 isValidPVMove の簡易版）
+/// 五連が作れるか、相手の脅威を適切に処理しているかを検証
+fn isValidPVMoveZig(cells: []board.Cell, row: u8, col: u8, color: board.Cell) bool {
+    // 五連が作れるなら常にOK
+    cells[@as(u16, row) * board.BOARD_SIZE + col] = color;
+    const is_five = forbidden.checkFive(cells, row, col, color);
+    cells[@as(u16, row) * board.BOARD_SIZE + col] = .empty;
+    if (is_five) return true;
+
+    const opponent = color.opposite();
+    const threats = threats_mod.detectOpponentThreats(cells, opponent);
+
+    // 相手の活四がある場合: 脅威位置を止めるかチェック
+    if (threats.open_fours.len > 0) {
+        return threats.open_fours.contains(row, col);
+    }
+
+    // 相手の止め四がある場合
+    if (threats.fours.len > 0) {
+        return threats.fours.contains(row, col);
+    }
+
+    // 相手の活三がある場合
+    if (threats.open_threes.len > 0) {
+        return threats.open_threes.contains(row, col);
+    }
+
+    return true;
+}
 
 fn writeResult(row: u8, col: u8, score: i32, completed_depth: u8, top_candidates: ?*const [5]minimax.MoveScoreEntry, top_candidate_count: u8) void {
     result_buffer[0] = row;

@@ -48,5 +48,7 @@ export async function loadWasmModule(): Promise<WasmModuleContext> {
     findBestMove: exports.findBestMove,
     getResultBuffer: exports.getResultBuffer,
     ttClear: exports.ttClear,
+    extractPV: exports.extractPV,
+    getResultPVBuffer: exports.getResultPVBuffer,
   };
 }
