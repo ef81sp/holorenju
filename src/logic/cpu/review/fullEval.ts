@@ -56,6 +56,7 @@ import {
   REVIEW_SEARCH_PARAMS,
   REVIEW_VCT_OPTIONS_WITH_BRANCHES,
 } from "./reviewConstants";
+import { wasmFindVCFSequence, wasmFindVCTSequence } from "./wasmAdapters";
 
 // ─── WASM探索アダプター ──────────────────────────────────
 
@@ -220,6 +221,7 @@ interface DemotionContext {
   bestMove: Position;
   bestScore: number;
   fwBestLoss?: { type: ForcedLossType; sequence: Position[] };
+  wasmSearchEngine?: WasmSearchEngine;
 }
 
 /** 降格時のVCF再探索とフォールバック処理 */
@@ -246,10 +248,17 @@ function handleDemotion(ctx: DemotionContext): {
   }
 
   // 両ミセ降格時: maxDepth制限されていたVCFのフル再探索
-  const reVcf =
-    ctx.forcedWinType === "double-mise"
-      ? findVCFSequence(ctx.board, ctx.color, REVIEW_VCF_OPTIONS)
-      : null;
+  let reVcf: VCFSequenceResult | null = null;
+  if (ctx.forcedWinType === "double-mise") {
+    reVcf = ctx.wasmSearchEngine
+      ? wasmFindVCFSequence(
+          ctx.wasmSearchEngine,
+          ctx.board,
+          ctx.color,
+          REVIEW_VCF_OPTIONS,
+        )
+      : findVCFSequence(ctx.board, ctx.color, REVIEW_VCF_OPTIONS);
+  }
 
   if (reVcf) {
     promoteVcfCandidate(ctx.board, ctx.candidates, reVcf, ctx.color);
@@ -361,7 +370,7 @@ export function executeFullEval(
   // ─── 強制勝ち検出（VCF/VCT/両ミセ/Mise-VCF） ───
   let t0 = performance.now();
   let { forcedWin, forcedWinType, doubleMiseMoves, doubleMiseBestMove } =
-    detectForcedWin(board, color, opponentHasFour, false);
+    detectForcedWin(board, color, opponentHasFour, false, wasmSearchEngine);
   timings.forcedWinDetection = performance.now() - t0;
 
   // ─── 相手の必勝手順検出 ───
@@ -382,12 +391,18 @@ export function executeFullEval(
       selfThreatsAfter.openFours.length > 0;
 
     if (!selfHasFourAfter) {
-      const loss = checkForcedLoss(boardAfter, opponentColor, stoneCountAfter, {
-        vcfOptions: REVIEW_VCF_OPTIONS,
-        miseVcfOptions: REVIEW_MISE_VCF_OPTIONS,
-        vctOptions: FORCED_LOSS_VCT_OPTIONS,
-        skipVCT: true,
-      });
+      const loss = checkForcedLoss(
+        boardAfter,
+        opponentColor,
+        stoneCountAfter,
+        {
+          vcfOptions: REVIEW_VCF_OPTIONS,
+          miseVcfOptions: REVIEW_MISE_VCF_OPTIONS,
+          vctOptions: FORCED_LOSS_VCT_OPTIONS,
+          skipVCT: true,
+        },
+        wasmSearchEngine,
+      );
       if (loss) {
         forcedLossType = loss.type;
         forcedLossSequence = loss.sequence;
@@ -437,11 +452,14 @@ export function executeFullEval(
     result.score >= PATTERN_SCORES.FIVE - 1 &&
     !opponentHasFour
   ) {
-    const vctRetry = findVCTSequence(
-      board,
-      color,
-      REVIEW_VCT_OPTIONS_WITH_BRANCHES,
-    );
+    const vctRetry = wasmSearchEngine
+      ? wasmFindVCTSequence(
+          wasmSearchEngine,
+          board,
+          color,
+          REVIEW_VCT_OPTIONS_WITH_BRANCHES,
+        )
+      : findVCTSequence(board, color, REVIEW_VCT_OPTIONS_WITH_BRANCHES);
     if (vctRetry) {
       forcedWin = vctRetry;
       forcedWinType = vctRetry.isForbiddenTrap ? "forbidden-trap" : "vct";
@@ -613,6 +631,7 @@ function buildForcedWinResult(
     result,
     countStones(board) < VCT_STONE_THRESHOLD,
     doubleMiseMoves,
+    wasmSearchEngine,
   );
 
   // 両ミセターゲット算出（四三を作る位置）
@@ -791,6 +810,7 @@ function buildForcedWinResult(
     opponentColor,
     stoneCountFW,
     fwBudget,
+    wasmSearchEngine,
   );
   timings.candidateVerification = performance.now() - t0;
 
@@ -835,6 +855,7 @@ function buildForcedWinResult(
       bestMove,
       bestScore,
       fwBestLoss: fwBestLoss ?? undefined,
+      wasmSearchEngine,
     });
     ({ forcedWinType } = dm);
     ({ finalBestMove } = dm);
@@ -1005,6 +1026,7 @@ function buildNormalResult(
     opponentColor,
     stoneCount,
     normalBudget,
+    wasmSearchEngine,
   );
   timings.candidateVerification = performance.now() - t0;
 

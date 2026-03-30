@@ -25,6 +25,7 @@ import { detectOpponentThreats } from "./evaluation";
 import { FORCED_LOSS_VCT_OPTIONS } from "./review/forcedLossCheck";
 import { detectForcedWin } from "./review/forcedWinDetection";
 import { executeFullEval } from "./review/fullEval";
+import { wasmFindVCTSequence } from "./review/wasmAdapters";
 import { findVCTSequence, VCT_STONE_THRESHOLD } from "./search/vct";
 import { type BoardEvaluator, WasmBoardEvaluator } from "./wasm/bridge";
 import { loadWasmModule } from "./wasm/loader";
@@ -88,11 +89,17 @@ self.onmessage = async (event: MessageEvent<ReviewEvalRequest>) => {
         !selfHasFour &&
         (skipStoneThreshold || stoneCountAfter >= VCT_STONE_THRESHOLD)
       ) {
-        const oppVCT = findVCTSequence(
-          boardAfter,
-          opponentColor,
-          FORCED_LOSS_VCT_OPTIONS,
-        );
+        const vctSearchEngine = cachedWasm
+          ? new WasmSearchEngine(cachedWasm)
+          : undefined;
+        const oppVCT = vctSearchEngine
+          ? wasmFindVCTSequence(
+              vctSearchEngine,
+              boardAfter,
+              opponentColor,
+              FORCED_LOSS_VCT_OPTIONS,
+            )
+          : findVCTSequence(boardAfter, opponentColor, FORCED_LOSS_VCT_OPTIONS);
         if (oppVCT) {
           forcedLossType = oppVCT.isForbiddenTrap ? "forbidden-trap" : "vct";
           forcedLossSequence = oppVCT.sequence;
@@ -121,11 +128,15 @@ self.onmessage = async (event: MessageEvent<ReviewEvalRequest>) => {
         opponentThreats.fours.length > 0 ||
         opponentThreats.openFours.length > 0;
 
+      const lightSearchEngine = cachedWasm
+        ? new WasmSearchEngine(cachedWasm)
+        : undefined;
       const { forcedWin, forcedWinType, doubleMiseBestMove } = detectForcedWin(
         board,
         color,
         opponentHasFour,
         true,
+        lightSearchEngine,
       );
 
       const response: LightEvalResult = {

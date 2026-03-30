@@ -7,6 +7,8 @@
 import type { BoardState } from "@/types/game";
 import type { ForcedLossResult, ReviewCandidate } from "@/types/review";
 
+import type { WasmSearchEngine } from "../wasm/searchEngine";
+
 import {
   checkCandidateForcedLoss,
   CANDIDATE_VERIFY_VCF_OPTIONS,
@@ -28,6 +30,7 @@ export function verifyCandidates(
   opponentColor: "black" | "white",
   stoneCount: number,
   timeBudgetMs: number,
+  wasmSearchEngine?: WasmSearchEngine,
 ): { demotedBest: boolean; bestLoss?: ForcedLossResult } {
   const deadline = performance.now() + timeBudgetMs;
   let demotedBest = false;
@@ -90,6 +93,7 @@ export function verifyCandidates(
           },
         },
       },
+      wasmSearchEngine,
     );
 
     if (loss) {
