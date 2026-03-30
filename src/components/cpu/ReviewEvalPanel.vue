@@ -796,13 +796,14 @@ function isPlayed(candidate: { position: Position }): boolean {
         </span>
       </div>
 
-      <!-- 内訳比較セクション（excellentでない場合 or 強制勝ち/負け確定） -->
+      <!-- 内訳比較セクション（excellentでない場合 or 強制勝ち/負け/PVあり） -->
       <div
         v-if="
           showBreakdown &&
           (evaluation.quality !== 'excellent' ||
             evaluation.forcedWinType ||
-            evaluation.forcedLossType)
+            evaluation.forcedLossType ||
+            bestPVLine)
         "
         class="breakdown-section"
       >
