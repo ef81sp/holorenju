@@ -178,6 +178,37 @@ describe("findBestMove WASM tests", async () => {
     expect(isDefense).toBe(true);
   });
 
+  it("extractPV がTTから手順を抽出できる", () => {
+    // 序盤の散らばった4手（即勝ち・即防御がなく通常探索が走る）
+    const board = createBoardWithStones([
+      { row: 7, col: 7, color: "black" },
+      { row: 6, col: 7, color: "white" },
+      { row: 6, col: 8, color: "black" },
+      { row: 8, col: 6, color: "white" },
+    ]);
+
+    const result = engine.findBestMoveForReview(
+      board,
+      "black",
+      4,
+      5000,
+      600000,
+      0,
+      0,
+    );
+
+    // completedDepth > 0（通常探索が実行された）
+    expect(result.completedDepth).toBeGreaterThan(0);
+    // 候補手が存在する
+    expect(result.candidates.length).toBeGreaterThan(0);
+    // 最善手のPVが2手以上（候補手自身 + 相手の応手以上）
+    const bestCandidate = result.candidates[0]!;
+    expect(bestCandidate.pv).toBeDefined();
+    expect(bestCandidate.pv!.length).toBeGreaterThanOrEqual(2);
+    // PVの最初の手は候補手自身
+    expect(bestCandidate.pv![0]).toEqual(bestCandidate.position);
+  });
+
   it("difficulty パラメータで探索できる", () => {
     const board = createBoardWithStones([
       { row: 7, col: 7, color: "black" },

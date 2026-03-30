@@ -109,6 +109,10 @@ export fn getResultPVBuffer() [*]u8 {
 
 /// 指定位置から TT の bestMove チェインを辿って PV を抽出
 /// 呼び出し前に findBestMove が完了していること（TT にデータがある）
+///
+/// TT エントリの score_type（exact/lower_bound/upper_bound）によらず
+/// best_move が記録されていればPVとして辿る。PVS+Aspiration Windows では
+/// PV ライン上のノードも lower_bound/upper_bound で保存されることが多いため。
 export fn extractPV(best_row: u8, best_col: u8, color: u8, max_len: u8) void {
     const cells = &board.board_cells;
     const cell_color: board.Cell = switch (color) {
@@ -142,9 +146,6 @@ export fn extractPV(best_row: u8, best_col: u8, color: u8, max_len: u8) void {
     while (i < effective_max) : (i += 1) {
         const entry = tt_mod.global_tt.probe(current_hash);
         if (entry == null) break;
-
-        // EXACT エントリのみ信頼する
-        if (entry.?.score_type != .exact) break;
 
         const best_move = entry.?.getBestMove();
         if (best_move == null) break;
