@@ -323,7 +323,7 @@ pub fn getThreatDefensePositions(cells: []const Cell, row: u8, col: u8, color: C
 
         // 跳び三をチェック
         if (result.count != 3 and jp.checkJumpThree(cells, row, col, dir_index, color)) {
-            const jump_defense = threats.detectJumpThreePattern(cells, row, col, dir.dr, dir.dc, color);
+            const jump_defense = threats.getJumpThreeDefensePositions(cells, row, col, dir.dr, dir.dc, color);
             for (0..jump_defense.len) |j| {
                 defense_positions.addUnique(jump_defense.items[j]);
             }
@@ -1900,4 +1900,32 @@ test "isVCTFirstMove: not a threat" {
 
     const result = isVCTFirstMove(&cells, .{ .row = 0, .col = 0 }, .black, VCT_MAX_DEPTH, 0, 0);
     try testing.expect(!result);
+}
+
+test "findVCTMove: 5-stone opening should not find VCT for white" {
+    // 棋譜: H8 H9 J10 I9 G7
+    // Black: H8(7,7), J10(5,9), G7(8,6)
+    // White: H9(6,7), I9(6,8)
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[7 * BOARD_SIZE + 7] = .black; // H8
+    cells[6 * BOARD_SIZE + 7] = .white; // H9
+    cells[5 * BOARD_SIZE + 9] = .black; // J10
+    cells[6 * BOARD_SIZE + 8] = .white; // I9
+    cells[8 * BOARD_SIZE + 6] = .black; // G7
+
+    // White should NOT have VCT in this early position
+    const move = findVCTMove(&cells, .white, VCT_MAX_DEPTH, 5000);
+    try testing.expect(move == null);
+}
+
+test "findVCTSequence: 5-stone opening should not find VCT for white" {
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[7 * BOARD_SIZE + 7] = .black;
+    cells[6 * BOARD_SIZE + 7] = .white;
+    cells[5 * BOARD_SIZE + 9] = .black;
+    cells[6 * BOARD_SIZE + 8] = .white;
+    cells[8 * BOARD_SIZE + 6] = .black;
+
+    const result = findVCTSequence(&cells, .white, VCT_MAX_DEPTH, 5000, 500000, false);
+    try testing.expect(!result.found);
 }

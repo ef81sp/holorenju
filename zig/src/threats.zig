@@ -178,7 +178,84 @@ pub fn getOpenThreeDefensePositions(cells: []const Cell, row: u8, col: u8, dr: i
     return result;
 }
 
-/// 跳び三パターンを検出して防御位置を返す
+/// 跳び三の防御位置を取得（ライン走査版）
+///
+/// TS版 getJumpThreeDefensePositions に対応。
+/// 起点 (row,col) から前後4マスのラインを構築し、
+/// 6マスのスライディングウィンドウで ・●●・●・ / ・●・●●・ を検出。
+pub fn getJumpThreeDefensePositions(cells: []const Cell, row: u8, col: u8, dr: i8, dc: i8, color: Cell) PositionList {
+    var result = PositionList.init();
+    const r: i16 = row;
+    const c: i16 = col;
+
+    // ライン構築: 最大 4+1+4 = 9 マス
+    var line_stones: [9]Cell = undefined;
+    var line_rows: [9]i16 = undefined;
+    var line_cols: [9]i16 = undefined;
+    var line_len: u8 = 0;
+
+    // 負方向に4マス
+    var i: i16 = 4;
+    while (i >= 1) : (i -= 1) {
+        const pr = r - dr * i;
+        const pc = c - dc * i;
+        if (board_mod.isValid(pr, pc)) {
+            line_rows[line_len] = pr;
+            line_cols[line_len] = pc;
+            line_stones[line_len] = cellAt(cells, pr, pc);
+            line_len += 1;
+        }
+    }
+
+    // 置いた位置
+    line_rows[line_len] = r;
+    line_cols[line_len] = c;
+    line_stones[line_len] = color;
+    line_len += 1;
+
+    // 正方向に4マス
+    i = 1;
+    while (i <= 4) : (i += 1) {
+        const pr = r + dr * i;
+        const pc = c + dc * i;
+        if (board_mod.isValid(pr, pc)) {
+            line_rows[line_len] = pr;
+            line_cols[line_len] = pc;
+            line_stones[line_len] = cellAt(cells, pr, pc);
+            line_len += 1;
+        }
+    }
+
+    // 6マスウィンドウで跳び三パターンを検出
+    if (line_len < 6) return result;
+    var start: u8 = 0;
+    while (start + 5 < line_len) : (start += 1) {
+        const s0 = line_stones[start];
+        const s1 = line_stones[start + 1];
+        const s2 = line_stones[start + 2];
+        const s3 = line_stones[start + 3];
+        const s4 = line_stones[start + 4];
+        const s5 = line_stones[start + 5];
+
+        // パターン1: ・●●・●・
+        if (s0 == .empty and s1 == color and s2 == color and s3 == .empty and s4 == color and s5 == .empty) {
+            result.addUnique(.{ .row = @intCast(line_rows[start]), .col = @intCast(line_cols[start]) });
+            result.addUnique(.{ .row = @intCast(line_rows[start + 3]), .col = @intCast(line_cols[start + 3]) });
+            result.addUnique(.{ .row = @intCast(line_rows[start + 5]), .col = @intCast(line_cols[start + 5]) });
+        }
+
+        // パターン2: ・●・●●・
+        if (s0 == .empty and s1 == color and s2 == .empty and s3 == color and s4 == color and s5 == .empty) {
+            result.addUnique(.{ .row = @intCast(line_rows[start]), .col = @intCast(line_cols[start]) });
+            result.addUnique(.{ .row = @intCast(line_rows[start + 2]), .col = @intCast(line_cols[start + 2]) });
+            result.addUnique(.{ .row = @intCast(line_rows[start + 5]), .col = @intCast(line_cols[start + 5]) });
+        }
+    }
+
+    return result;
+}
+
+/// 跳び三パターンを検出して防御位置を返す（旧版: 起点からの前方パターンのみ）
 pub fn detectJumpThreePattern(cells: []const Cell, row: u8, col: u8, dr: i8, dc: i8, color: Cell) PositionList {
     var result = PositionList.init();
     const r: i16 = row;

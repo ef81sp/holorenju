@@ -151,7 +151,7 @@ fn getCreatedOpenThreeDefenses(cells: []Cell, row: u8, col: u8, color: Cell) thr
         if (analysis.count != 3 and jp.checkJumpThree(cells, row, col, dir_index, color) and
             (color != .black or patterns.isValidJumpThree(cells, row, col, dir_index, color)))
         {
-            const jump_defenses = threats.detectJumpThreePattern(cells, row, col, dir.dr, dir.dc, color);
+            const jump_defenses = threats.getJumpThreeDefensePositions(cells, row, col, dir.dr, dir.dc, color);
             for (0..jump_defenses.len) |j| {
                 const pos = jump_defenses.items[j];
                 if (cells[@as(u16, pos.row) * BOARD_SIZE + pos.col] == .empty) {
