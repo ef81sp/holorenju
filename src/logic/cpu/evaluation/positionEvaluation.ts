@@ -56,6 +56,7 @@ import {
   evaluateMultiThreat,
   hasDefenseThatBlocksBoth,
 } from "./threatDetection";
+import { detectOpponentThreatsFast } from "./threatDetectionFast";
 
 /**
  * 指定位置に石を置いた場合の評価スコアを計算
@@ -162,7 +163,13 @@ function evaluatePositionCore(
       if (boardRow) {
         boardRow[col] = null;
       }
-      threats = detectOpponentThreats(board, opponentColor);
+      if (lineTable) {
+        removeStone(lineTable, row, col, color);
+        threats = detectOpponentThreatsFast(board, opponentColor, lineTable);
+        placeStone(lineTable, row, col, color);
+      } else {
+        threats = detectOpponentThreats(board, opponentColor);
+      }
       if (boardRow) {
         boardRow[col] = color;
       }
