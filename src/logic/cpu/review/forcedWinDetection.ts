@@ -9,7 +9,6 @@ import type { ForcedWinType } from "@/types/review";
 
 import type { WasmSearchEngine } from "../wasm/searchEngine";
 
-import { countStones } from "../core/boardUtils";
 import { findDoubleMiseMoves } from "../evaluation/tactics";
 import { createsFourThree } from "../evaluation/winningPatterns";
 import { findMiseVCFSequence } from "../search/miseVcf";
@@ -17,7 +16,6 @@ import { findVCFSequence } from "../search/vcf";
 import {
   findVCTSequence,
   findVCTSequenceFromFirstMove,
-  VCT_STONE_THRESHOLD,
   type VCTSearchOptions,
   type VCTSequenceResult,
 } from "../search/vct";
@@ -184,9 +182,7 @@ export function detectForcedWin(
       vcfResult ??
       miseVcfResult ??
       // VCT探索はlightEvalではスキップ（重いため、fullEvalで検出する）
-      (!isLightEval &&
-      countStones(board) >= VCT_STONE_THRESHOLD &&
-      !opponentHasFour
+      (!isLightEval && !opponentHasFour
         ? ((wasmSearchEngine
             ? wasmFindVCTSequence(
                 wasmSearchEngine,

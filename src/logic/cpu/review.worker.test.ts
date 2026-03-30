@@ -402,19 +402,23 @@ describe("review.worker: 白の三三・四四検出", () => {
     expect(result?.sequence[0]).toEqual({ row: 4, col: 6 });
   });
 
-  it("黒手番(opponentColor=black)では三三・四四チェックがスキップされる", () => {
-    // 同じ局面でも opponentColor=black では白の三三チェック不要
-    const { board } = createBoardFromRecord(`${DOUBLE_THREE_RECORD} F9`);
-    const stoneCount = countStones(board);
+  it(
+    "黒手番(opponentColor=black)では三三・四四チェックがスキップされる",
+    { timeout: 30_000 },
+    () => {
+      // 同じ局面でも opponentColor=black では白の三三チェック不要
+      const { board } = createBoardFromRecord(`${DOUBLE_THREE_RECORD} F9`);
+      const stoneCount = countStones(board);
 
-    const result = checkForcedLoss(board, "black", stoneCount);
-    // 黒にはVCF/VCT等もないはず（少なくとも三三・四四は検出しない）
-    // 結果がundefinedか、あっても"double-three"/"double-four"ではない
-    if (result) {
-      expect(result.type).not.toBe("double-three");
-      expect(result.type).not.toBe("double-four");
-    }
-  });
+      const result = checkForcedLoss(board, "black", stoneCount);
+      // 黒にはVCF/VCT等もないはず（少なくとも三三・四四は検出しない）
+      // 結果がundefinedか、あっても"double-three"/"double-four"ではない
+      if (result) {
+        expect(result.type).not.toBe("double-three");
+        expect(result.type).not.toBe("double-four");
+      }
+    },
+  );
 
   it("白の四四が検出できる（VCFが見つかればVCF優先）", () => {
     // 白が四四を作れる局面を棋譜で構築

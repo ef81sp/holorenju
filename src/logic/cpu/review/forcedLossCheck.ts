@@ -19,11 +19,7 @@ import {
   type MiseVCFSearchOptions,
 } from "../search/miseVcf";
 import { findVCFSequence, type VCFSearchOptions } from "../search/vcf";
-import {
-  findVCTSequence,
-  VCT_STONE_THRESHOLD,
-  type VCTSearchOptions,
-} from "../search/vct";
+import { findVCTSequence, type VCTSearchOptions } from "../search/vct";
 import { hasFourThreeAvailable, hasOpenThree } from "../search/vctHelpers";
 import {
   wasmFindVCFSequence,
@@ -200,7 +196,7 @@ export function checkForcedLoss(
   }
 
   // 6. VCT
-  if (stoneCountAfter >= VCT_STONE_THRESHOLD && !options?.skipVCT) {
+  if (!options?.skipVCT) {
     const oppVCT = wasmSearchEngine
       ? wasmFindVCTSequence(
           wasmSearchEngine,

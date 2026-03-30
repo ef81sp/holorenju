@@ -9,14 +9,9 @@ import type { BoardState, Position } from "@/types/game";
 import type { MoveScoreEntry } from "../search/results";
 import type { WasmSearchEngine } from "../wasm/searchEngine";
 
-import { countStones } from "../core/boardUtils";
 import { PATTERN_SCORES } from "../evaluation";
 import { findVCFSequenceFromFirstMove } from "../search/vcf";
-import {
-  findVCTSequenceFromFirstMove,
-  isVCTFirstMove,
-  VCT_STONE_THRESHOLD,
-} from "../search/vct";
+import { findVCTSequenceFromFirstMove, isVCTFirstMove } from "../search/vct";
 import { REVIEW_VCF_OPTIONS } from "./forcedLossCheck";
 import { REVIEW_VCT_OPTIONS_WITH_BRANCHES } from "./reviewConstants";
 import {
@@ -41,7 +36,6 @@ export function evaluatePlayedForcedWin(
   bestMove: Position,
   bestScore: number,
   result: { candidates?: MoveScoreEntry[]; score: number },
-  skipVctThresholdCheck?: boolean,
   doubleMiseMoves?: Position[],
   wasmSearchEngine?: WasmSearchEngine,
 ): PlayedForcedWinResult {
@@ -82,7 +76,7 @@ export function evaluatePlayedForcedWin(
   }
 
   // VCT シーケンス取得を試行
-  if (skipVctThresholdCheck || countStones(board) >= VCT_STONE_THRESHOLD) {
+  {
     const vctFromPlayed = wasmSearchEngine
       ? wasmFindVCTSequenceFromFirstMove(
           wasmSearchEngine,

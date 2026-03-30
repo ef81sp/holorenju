@@ -31,11 +31,7 @@ import {
 import { findMiseTargets } from "../evaluation/miseTactics";
 import { findBestMoveIterativeWithTT } from "../search/minimax";
 import { findVCFSequence, type VCFSequenceResult } from "../search/vcf";
-import {
-  findVCTSequence,
-  VCT_STONE_THRESHOLD,
-  type VCTBranch,
-} from "../search/vct";
+import { findVCTSequence, type VCTBranch } from "../search/vct";
 import { globalTT } from "../transpositionTable";
 import { colorToWasm } from "../wasm/boardAdapter";
 import { verifyCandidates, findSafeBest } from "./candidateVerification";
@@ -629,7 +625,6 @@ function buildForcedWinResult(
     bestMove,
     bestScore,
     result,
-    countStones(board) < VCT_STONE_THRESHOLD,
     doubleMiseMoves,
     wasmSearchEngine,
   );
