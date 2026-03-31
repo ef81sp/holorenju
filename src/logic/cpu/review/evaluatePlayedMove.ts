@@ -7,17 +7,18 @@
 import type { BoardState, Position } from "@/types/game";
 
 import type { MoveScoreEntry } from "../search/results";
+import type { WasmSearchEngine } from "../wasm/searchEngine";
 
-import { countStones } from "../core/boardUtils";
 import { PATTERN_SCORES } from "../evaluation";
 import { findVCFSequenceFromFirstMove } from "../search/vcf";
-import {
-  findVCTSequenceFromFirstMove,
-  isVCTFirstMove,
-  VCT_STONE_THRESHOLD,
-} from "../search/vct";
+import { findVCTSequenceFromFirstMove, isVCTFirstMove } from "../search/vct";
 import { REVIEW_VCF_OPTIONS } from "./forcedLossCheck";
 import { REVIEW_VCT_OPTIONS_WITH_BRANCHES } from "./reviewConstants";
+import {
+  wasmFindVCFSequenceFromFirstMove,
+  wasmFindVCTSequenceFromFirstMove,
+  wasmIsVCTFirstMove,
+} from "./wasmAdapters";
 
 export interface PlayedForcedWinResult {
   playedScore: number;
@@ -35,8 +36,8 @@ export function evaluatePlayedForcedWin(
   bestMove: Position,
   bestScore: number,
   result: { candidates?: MoveScoreEntry[]; score: number },
-  skipVctThresholdCheck?: boolean,
   doubleMiseMoves?: Position[],
+  wasmSearchEngine?: WasmSearchEngine,
 ): PlayedForcedWinResult {
   if (
     playedRow < 0 ||
@@ -58,12 +59,15 @@ export function evaluatePlayedForcedWin(
   }
 
   // VCF シーケンス取得を試行
-  const vcfFromPlayed = findVCFSequenceFromFirstMove(
-    board,
-    playedPos,
-    color,
-    REVIEW_VCF_OPTIONS,
-  );
+  const vcfFromPlayed = wasmSearchEngine
+    ? wasmFindVCFSequenceFromFirstMove(
+        wasmSearchEngine,
+        board,
+        playedPos,
+        color,
+        REVIEW_VCF_OPTIONS,
+      )
+    : findVCFSequenceFromFirstMove(board, playedPos, color, REVIEW_VCF_OPTIONS);
   if (vcfFromPlayed) {
     return {
       playedScore: PATTERN_SCORES.FIVE,
@@ -72,13 +76,21 @@ export function evaluatePlayedForcedWin(
   }
 
   // VCT シーケンス取得を試行
-  if (skipVctThresholdCheck || countStones(board) >= VCT_STONE_THRESHOLD) {
-    const vctFromPlayed = findVCTSequenceFromFirstMove(
-      board,
-      playedPos,
-      color,
-      REVIEW_VCT_OPTIONS_WITH_BRANCHES,
-    );
+  {
+    const vctFromPlayed = wasmSearchEngine
+      ? wasmFindVCTSequenceFromFirstMove(
+          wasmSearchEngine,
+          board,
+          playedPos,
+          color,
+          REVIEW_VCT_OPTIONS_WITH_BRANCHES,
+        )
+      : findVCTSequenceFromFirstMove(
+          board,
+          playedPos,
+          color,
+          REVIEW_VCT_OPTIONS_WITH_BRANCHES,
+        );
     if (vctFromPlayed) {
       return {
         playedScore: PATTERN_SCORES.FIVE,
@@ -86,9 +98,21 @@ export function evaluatePlayedForcedWin(
       };
     }
     // VCT開始手だがシーケンス取得失敗（カウンター脅威の実装差）
-    if (
-      isVCTFirstMove(board, playedPos, color, REVIEW_VCT_OPTIONS_WITH_BRANCHES)
-    ) {
+    const isFirstMove = wasmSearchEngine
+      ? wasmIsVCTFirstMove(
+          wasmSearchEngine,
+          board,
+          playedPos,
+          color,
+          REVIEW_VCT_OPTIONS_WITH_BRANCHES,
+        )
+      : isVCTFirstMove(
+          board,
+          playedPos,
+          color,
+          REVIEW_VCT_OPTIONS_WITH_BRANCHES,
+        );
+    if (isFirstMove) {
       return {
         playedScore: PATTERN_SCORES.FIVE,
         playedForcedWinSequence: undefined,

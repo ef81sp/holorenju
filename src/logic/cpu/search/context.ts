@@ -11,6 +11,7 @@ import { BOARD_SIZE } from "@/constants";
 
 import type { LineTable } from "../lineTable/lineTable";
 import type { ProfilingCounters } from "../profiling/counters";
+import type { BoardEvaluator } from "../wasm/bridge";
 
 import {
   DEFAULT_EVAL_OPTIONS,
@@ -57,10 +58,14 @@ export interface TimeLimiter {
   nodes?: number;
   /** ノード数上限（0 = 無制限） */
   maxNodes?: number;
+  /** 親リミッター（VCT→VCF連携用: ノード数を親にも伝播し、親の制限も検査する） */
+  parentLimiter?: TimeLimiter;
 }
 
 /**
  * 時間制限またはノード数上限を超過しているかチェック
+ *
+ * parentLimiter が設定されている場合、親の制限も検査する。
  */
 export function isTimeExceeded(limiter: TimeLimiter): boolean {
   if (
@@ -71,15 +76,26 @@ export function isTimeExceeded(limiter: TimeLimiter): boolean {
   ) {
     return true;
   }
-  return performance.now() - limiter.startTime >= limiter.timeLimit;
+  if (performance.now() - limiter.startTime >= limiter.timeLimit) {
+    return true;
+  }
+  if (limiter.parentLimiter) {
+    return isTimeExceeded(limiter.parentLimiter);
+  }
+  return false;
 }
 
 /**
  * ノードカウンタをインクリメント
+ *
+ * parentLimiter が設定されている場合、親のノード数もインクリメントする。
  */
 export function incrementNodes(limiter: TimeLimiter): void {
   if (limiter.nodes !== undefined) {
     limiter.nodes++;
+  }
+  if (limiter.parentLimiter) {
+    incrementNodes(limiter.parentLimiter);
   }
 }
 
@@ -103,12 +119,30 @@ export interface SearchStats {
   threatDetectionCalls: number;
   /** 評価関数呼び出し回数 */
   evaluationCalls: number;
+  /** Null Move Pruning 試行回数（hasImmediateThreat呼び出し回数） */
+  nullMoveTrials: number;
   /** Null Move Pruning によるカットオフ数 */
   nullMoveCutoffs: number;
   /** Futility Pruning によるスキップ数 */
   futilityPrunes: number;
   /** Threat Extension 発動回数 */
   threatExtensions: number;
+  /** LMR 発動回数 */
+  lmrTrials: number;
+  /** LMR re-search 発動回数 */
+  lmrResearches: number;
+  /** LMR moveIndex 分布 [3, 4, 5+] */
+  lmrMoveIndexDist: [number, number, number];
+  /** QSearch ノード数 */
+  qSearchNodes: number;
+  /** QSearch 分岐数の合計（平均計算用） */
+  qSearchBranchSum: number;
+  /** QSearch エントリ数（平均分岐計算用） */
+  qSearchEntries: number;
+  /** QSearch 深度の合計（平均深度計算用） */
+  qSearchDepthSum: number;
+  /** QSearch 終端数（平均深度計算用） */
+  qSearchLeaves: number;
   /** 関数別タイミング（プロファイリング有効時のみ） */
   timings?: ProfilingCounters["timings"];
 }
@@ -149,6 +183,8 @@ export interface SearchContext {
   threatCache: ThreatProbeCache;
   /** 振り返りパス: performance.now() 依存を排除し決定論的に動作 */
   noTimeLimit?: boolean;
+  /** 盤面評価関数（WASM/TS切り替え） */
+  boardEvaluator?: BoardEvaluator;
 }
 
 /**
@@ -172,9 +208,18 @@ export function createSearchContext(
       boardCopies: 0,
       threatDetectionCalls: 0,
       evaluationCalls: 0,
+      nullMoveTrials: 0,
       nullMoveCutoffs: 0,
       futilityPrunes: 0,
       threatExtensions: 0,
+      lmrTrials: 0,
+      lmrResearches: 0,
+      lmrMoveIndexDist: [0, 0, 0],
+      qSearchNodes: 0,
+      qSearchBranchSum: 0,
+      qSearchEntries: 0,
+      qSearchDepthSum: 0,
+      qSearchLeaves: 0,
     },
     evaluationOptions,
     threatCache: createThreatProbeCache(),

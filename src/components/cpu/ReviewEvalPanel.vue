@@ -16,6 +16,7 @@ import type { Position } from "@/types/game";
 import { CPU_WIN_LABELS, SHORT_LABELS } from "@/logic/forcedTypeLabels";
 import { formatMove } from "@/logic/gameRecordParser";
 import { getQualityLabel, getQualityColor } from "@/logic/reviewLogic";
+import { PATTERN_SCORES } from "@/logic/cpu/evaluation/patternScores";
 import ReviewEvalHelpDialog from "./ReviewEvalHelpDialog.vue";
 import {
   getLeafBreakdownItems,
@@ -512,12 +513,30 @@ const forcedLossBranchLines = computed<BranchLine[]>(() => {
   );
 });
 
+/** 被追詰/被四追いがあり最善手で回避可能か */
+const canAvoidForcedLoss = computed(() => {
+  const eval_ = props.evaluation;
+  if (!eval_?.forcedLossType) {
+    return false;
+  }
+  // 最善手のスコアが被追詰でない（相手のFIVEに近くない）なら回避可能
+  return eval_.bestScore > -(PATTERN_SCORES.FIVE - 10000);
+});
+
+/** 被追詰時は「実際」PVを省略し、被追詰手順を優先表示 */
+const effectivePlayedPVLine = computed<PVLine | null>(() => {
+  if (forcedLossPVLine.value) {
+    return null;
+  } // 被追詰表示があれば「実際」は省略
+  return playedPVLine.value;
+});
+
 /** 内訳比較表示が必要か */
 const showBreakdown = computed(
   () =>
     leafEvalDiffGroups.value.length > 0 ||
     bestPVLine.value !== null ||
-    playedPVLine.value !== null ||
+    effectivePlayedPVLine.value !== null ||
     forcedLossPVLine.value !== null,
 );
 
@@ -796,14 +815,9 @@ function isPlayed(candidate: { position: Position }): boolean {
         </span>
       </div>
 
-      <!-- 内訳比較セクション（excellentでない場合 or 強制勝ち/負け確定） -->
+      <!-- 内訳比較セクション（PV/末端比較/被追詰のいずれかがある場合に表示） -->
       <div
-        v-if="
-          showBreakdown &&
-          (evaluation.quality !== 'excellent' ||
-            evaluation.forcedWinType ||
-            evaluation.forcedLossType)
-        "
+        v-if="showBreakdown"
         class="breakdown-section"
       >
         <div class="breakdown-divider" />
@@ -879,29 +893,47 @@ function isPlayed(candidate: { position: Position }): boolean {
         </template>
 
         <!-- 読み筋（実際の手） -->
-        <template v-if="playedPVLine">
+        <template v-if="effectivePlayedPVLine">
           <div class="pv-header">
-            <span class="pv-label">{{ playedPVLine.label }}</span>
+            <span class="pv-label">{{ effectivePlayedPVLine.label }}</span>
             <span class="pv-search-score">
-              {{ formatScore(playedPVLine.searchScore) }}
+              {{ formatScore(effectivePlayedPVLine.searchScore) }}
             </span>
           </div>
           <div class="pv-sequence">
             <button
-              v-for="(item, idx) in playedPVLine.items"
+              v-for="(item, idx) in effectivePlayedPVLine.items"
               :key="`played-${idx}`"
               type="button"
               class="pv-move"
               :class="{
                 'pv-self': item.isSelf,
                 'pv-opponent': !item.isSelf,
-                'pv-pinned': isPvPinned('played', idx),
+                'pv-pinned': isPvPinned('played', Number(idx)),
               }"
-              @mouseenter="handlePVMoveEnter(playedPVLine.items, idx, 'played')"
+              @mouseenter="
+                handlePVMoveEnter(
+                  effectivePlayedPVLine.items,
+                  Number(idx),
+                  'played',
+                )
+              "
               @mouseleave="handlePVMoveLeave"
-              @focus="handlePVMoveEnter(playedPVLine.items, idx, 'played')"
+              @focus="
+                handlePVMoveEnter(
+                  effectivePlayedPVLine.items,
+                  Number(idx),
+                  'played',
+                )
+              "
               @blur="handlePVMoveLeave"
-              @click="handlePVMoveClick(playedPVLine.items, idx, 'played')"
+              @click="
+                handlePVMoveClick(
+                  effectivePlayedPVLine.items,
+                  Number(idx),
+                  'played',
+                )
+              "
             >
               {{ item.text }}
             </button>

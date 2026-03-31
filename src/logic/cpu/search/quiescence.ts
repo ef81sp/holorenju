@@ -85,6 +85,7 @@ export function quiescenceSearch(
   qDepth: number,
 ): number {
   ctx.stats.nodes++;
+  ctx.stats.qSearchNodes++;
 
   const currentColor = isMaximizing
     ? perspective
@@ -93,20 +94,26 @@ export function quiescenceSearch(
     singleFourPenaltyMultiplier:
       ctx.evaluationOptions.singleFourPenaltyMultiplier,
     lastMoverIsPerspective: !isMaximizing,
+    enableLeafMise: ctx.evaluationOptions.enableMise,
   };
+
+  const doEval = (b: BoardState): number =>
+    ctx.boardEvaluator
+      ? ctx.boardEvaluator.evaluateBoard(
+          b,
+          perspective,
+          evalOptions,
+          ctx.lineTable,
+        )
+      : evaluateBoard(b, perspective, evalOptions, ctx.lineTable);
 
   // 時間/ノード制限チェック
   if (ctx.timeoutFlag || ctx.nodeCountExceeded) {
-    return evaluateBoard(board, perspective, evalOptions, ctx.lineTable);
+    return doEval(board);
   }
 
   // Stand-pat: 何もしない場合の評価
-  const standPat = evaluateBoard(
-    board,
-    perspective,
-    evalOptions,
-    ctx.lineTable,
-  );
+  const standPat = doEval(board);
 
   let alpha = alphaInit;
   let beta = betaInit;
@@ -130,14 +137,20 @@ export function quiescenceSearch(
 
   // 深度制限
   if (qDepth <= 0) {
+    ctx.stats.qSearchLeaves++;
+    ctx.stats.qSearchDepthSum += MAX_QUIESCENCE_DEPTH;
     return standPat;
   }
 
   // 脅威手生成
   const moves = generateTacticalMoves(board, currentColor, lastMove);
   if (moves.length === 0) {
+    ctx.stats.qSearchLeaves++;
+    ctx.stats.qSearchDepthSum += MAX_QUIESCENCE_DEPTH - qDepth;
     return standPat;
   }
+  ctx.stats.qSearchEntries++;
+  ctx.stats.qSearchBranchSum += moves.length;
 
   let bestScore = standPat;
 

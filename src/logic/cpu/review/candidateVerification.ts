@@ -7,6 +7,8 @@
 import type { BoardState } from "@/types/game";
 import type { ForcedLossResult, ReviewCandidate } from "@/types/review";
 
+import type { WasmSearchEngine } from "../wasm/searchEngine";
+
 import {
   checkCandidateForcedLoss,
   CANDIDATE_VERIFY_VCF_OPTIONS,
@@ -28,19 +30,25 @@ export function verifyCandidates(
   opponentColor: "black" | "white",
   stoneCount: number,
   timeBudgetMs: number,
+  wasmSearchEngine?: WasmSearchEngine,
 ): { demotedBest: boolean; bestLoss?: ForcedLossResult } {
   const deadline = performance.now() + timeBudgetMs;
   let demotedBest = false;
   let bestLoss: ForcedLossResult | undefined = undefined;
 
   for (let i = 0; i < candidates.length; i++) {
-    if (performance.now() > deadline) {
+    const remaining = deadline - performance.now();
+    if (remaining <= 0) {
       break;
     }
     const cand = candidates[i];
     if (!cand) {
       continue;
     }
+
+    // 残り時間を残り候補数で均等配分し、per-candidate の上限を設定
+    const remainingCandidates = candidates.length - i;
+    const perCandidateLimit = remaining / remainingCandidates;
 
     const loss = checkCandidateForcedLoss(
       board,
@@ -49,10 +57,43 @@ export function verifyCandidates(
       opponentColor,
       stoneCount,
       {
-        vcfOptions: CANDIDATE_VERIFY_VCF_OPTIONS,
-        miseVcfOptions: CANDIDATE_VERIFY_MISE_VCF_OPTIONS,
-        vctOptions: CANDIDATE_VERIFY_VCT_OPTIONS,
+        vcfOptions: {
+          ...CANDIDATE_VERIFY_VCF_OPTIONS,
+          timeLimit: Math.min(
+            CANDIDATE_VERIFY_VCF_OPTIONS.timeLimit ?? 1000,
+            perCandidateLimit,
+          ),
+        },
+        miseVcfOptions: {
+          ...CANDIDATE_VERIFY_MISE_VCF_OPTIONS,
+          vcfOptions: {
+            ...CANDIDATE_VERIFY_MISE_VCF_OPTIONS.vcfOptions,
+            timeLimit: Math.min(
+              CANDIDATE_VERIFY_MISE_VCF_OPTIONS.vcfOptions?.timeLimit ?? 1000,
+              perCandidateLimit,
+            ),
+          },
+          timeLimit: Math.min(
+            CANDIDATE_VERIFY_MISE_VCF_OPTIONS.timeLimit ?? 1000,
+            perCandidateLimit,
+          ),
+        },
+        vctOptions: {
+          ...CANDIDATE_VERIFY_VCT_OPTIONS,
+          timeLimit: Math.min(
+            CANDIDATE_VERIFY_VCT_OPTIONS.timeLimit ?? 2000,
+            perCandidateLimit,
+          ),
+          vcfOptions: {
+            ...CANDIDATE_VERIFY_VCT_OPTIONS.vcfOptions,
+            timeLimit: Math.min(
+              CANDIDATE_VERIFY_VCT_OPTIONS.vcfOptions?.timeLimit ?? 1000,
+              perCandidateLimit,
+            ),
+          },
+        },
       },
+      wasmSearchEngine,
     );
 
     if (loss) {

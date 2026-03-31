@@ -95,6 +95,13 @@ export const PATTERN_SCORES = {
    */
   LEAF_FOUR_THREE_THREAT: 2000,
   /**
+   * 末端評価 ミセ手脅威ボーナス（evaluateBoard 用）
+   * 「次の1手でミセ手（四三点が生まれる手）になれる空き交点」が存在する場合に加算。
+   * MISE_BONUS(1000) より保守的: 末端で検出するため確実性が低い。
+   * --score-override=LEAF_MISE_THREAT:0 で無効化可能。
+   */
+  LEAF_MISE_THREAT: 500,
+  /**
    * パターン連携ボーナス（evaluateBoard 末端評価用）
    * 2方向以上にパターンを持つ石への加点（方向数-1 × この値）。
    * 多方向にパターンがある石は四三等の複合脅威に発展する可能性が高い。
@@ -369,6 +376,8 @@ export interface LeafEvaluationOptions {
   connectivityBonusValue?: number;
   /** 直前着手者が perspective 側か（undefined で無効、後方互換） */
   lastMoverIsPerspective?: boolean;
+  /** 末端ミセ手脅威検出を有効にするか（デフォルト: false、後方互換） */
+  enableLeafMise?: boolean;
 }
 
 /**

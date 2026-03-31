@@ -9,6 +9,8 @@ import type { ForcedLossResult } from "@/types/review";
 
 import { BOARD_SIZE } from "@/constants/board";
 
+import type { WasmSearchEngine } from "../wasm/searchEngine";
+
 import { detectOpponentThreats } from "../evaluation";
 import { findDoubleMiseMoves } from "../evaluation/tactics";
 import { detectWhiteWinningPattern } from "../evaluation/winningPatterns";
@@ -17,12 +19,13 @@ import {
   type MiseVCFSearchOptions,
 } from "../search/miseVcf";
 import { findVCFSequence, type VCFSearchOptions } from "../search/vcf";
-import {
-  findVCTSequence,
-  VCT_STONE_THRESHOLD,
-  type VCTSearchOptions,
-} from "../search/vct";
+import { findVCTSequence, type VCTSearchOptions } from "../search/vct";
 import { hasFourThreeAvailable, hasOpenThree } from "../search/vctHelpers";
+import {
+  wasmFindVCFSequence,
+  wasmFindMiseVCFSequence,
+  wasmFindVCTSequence,
+} from "./wasmAdapters";
 
 /**
  * 振り返り用探索パラメータ
@@ -31,43 +34,43 @@ import { hasFourThreeAvailable, hasOpenThree } from "../search/vctHelpers";
  * 振り返りでは Infinity を明示的に指定して時間制限を無効化する。
  * maxDepth のみで探索範囲を制御する。
  */
-const NO_TIME_LIMIT = Infinity;
+const _NO_TIME_LIMIT = Infinity;
 
 /** Phase 1 打たれた手のチェック用 */
 export const REVIEW_VCF_OPTIONS: VCFSearchOptions = {
   maxDepth: 16,
-  timeLimit: NO_TIME_LIMIT,
-  maxNodes: 500_000, // 爆発防止
+  timeLimit: 5_000, // 5秒上限
+  maxNodes: 500_000,
 };
 export const REVIEW_MISE_VCF_OPTIONS: MiseVCFSearchOptions = {
-  vcfOptions: { maxDepth: 12, timeLimit: NO_TIME_LIMIT, maxNodes: 500_000 },
-  timeLimit: NO_TIME_LIMIT,
+  vcfOptions: { maxDepth: 12, timeLimit: 3_000, maxNodes: 500_000 },
+  timeLimit: 5_000,
 };
 
 /** Phase 2/3 VCT 深掘りチェック用 */
 export const FORCED_LOSS_VCT_OPTIONS: VCTSearchOptions = {
   maxDepth: 8,
-  timeLimit: NO_TIME_LIMIT,
-  maxNodes: 500_000, // globalTT.clear() で TT キャッシュなしでも完了を保証
-  vcfOptions: { maxDepth: 16, timeLimit: NO_TIME_LIMIT },
+  timeLimit: 10_000, // 10秒上限（VCT内部のVCFがノードカウントを共有しないため maxNodes だけでは不十分）
+  maxNodes: 500_000,
+  vcfOptions: { maxDepth: 16, timeLimit: 3_000, maxNodes: 100_000 },
   collectBranches: false,
 };
 
 /** 候補手検証用（verifyCandidates / verifyCandidatePVs） */
 export const CANDIDATE_VERIFY_VCF_OPTIONS: VCFSearchOptions = {
   maxDepth: 12,
-  timeLimit: NO_TIME_LIMIT,
+  timeLimit: 1000,
   maxNodes: 500_000, // 爆発防止
 };
 export const CANDIDATE_VERIFY_MISE_VCF_OPTIONS: MiseVCFSearchOptions = {
-  vcfOptions: { maxDepth: 12, timeLimit: NO_TIME_LIMIT, maxNodes: 500_000 },
-  timeLimit: NO_TIME_LIMIT,
+  vcfOptions: { maxDepth: 12, timeLimit: 1000, maxNodes: 500_000 },
+  timeLimit: 1000,
 };
 export const CANDIDATE_VERIFY_VCT_OPTIONS: VCTSearchOptions = {
   maxDepth: 4,
-  timeLimit: NO_TIME_LIMIT,
+  timeLimit: 2000,
   maxNodes: 100_000, // 50Kでは検出漏れ発生のため100Kに据え置き
-  vcfOptions: { maxDepth: 12, timeLimit: NO_TIME_LIMIT, maxNodes: 500_000 },
+  vcfOptions: { maxDepth: 12, timeLimit: 1000, maxNodes: 500_000 },
   collectBranches: false,
 };
 
@@ -133,6 +136,7 @@ export function checkForcedLoss(
   opponentColor: "black" | "white",
   stoneCountAfter: number,
   options?: ForcedLossCheckOptions,
+  wasmSearchEngine?: WasmSearchEngine,
 ): ForcedLossResult | undefined {
   const vcfOpts = options?.vcfOptions ?? REVIEW_VCF_OPTIONS;
   const miseOpts = options?.miseVcfOptions ?? REVIEW_MISE_VCF_OPTIONS;
@@ -143,7 +147,9 @@ export function checkForcedLoss(
     opponentColor === "white" ? findWhiteWinningMoves(boardAfter) : undefined;
 
   // 1. VCF（最優先: 四追いで確定した手順）
-  const oppVCF = findVCFSequence(boardAfter, opponentColor, vcfOpts);
+  const oppVCF = wasmSearchEngine
+    ? wasmFindVCFSequence(wasmSearchEngine, boardAfter, opponentColor, vcfOpts)
+    : findVCFSequence(boardAfter, opponentColor, vcfOpts);
   if (oppVCF) {
     return {
       type: oppVCF.isForbiddenTrap ? "forbidden-trap" : "vcf",
@@ -167,7 +173,14 @@ export function checkForcedLoss(
   }
 
   // 4. Mise-VCF
-  const oppMise = findMiseVCFSequence(boardAfter, opponentColor, miseOpts);
+  const oppMise = wasmSearchEngine
+    ? wasmFindMiseVCFSequence(
+        wasmSearchEngine,
+        boardAfter,
+        opponentColor,
+        miseOpts,
+      )
+    : findMiseVCFSequence(boardAfter, opponentColor, miseOpts);
   if (oppMise) {
     return { type: "mise-vcf", sequence: oppMise.sequence };
   }
@@ -183,8 +196,15 @@ export function checkForcedLoss(
   }
 
   // 6. VCT
-  if (stoneCountAfter >= VCT_STONE_THRESHOLD && !options?.skipVCT) {
-    const oppVCT = findVCTSequence(boardAfter, opponentColor, vctOpts);
+  if (!options?.skipVCT) {
+    const oppVCT = wasmSearchEngine
+      ? wasmFindVCTSequence(
+          wasmSearchEngine,
+          boardAfter,
+          opponentColor,
+          vctOpts,
+        )
+      : findVCTSequence(boardAfter, opponentColor, vctOpts);
     if (oppVCT) {
       return {
         type: oppVCT.isForbiddenTrap ? "forbidden-trap" : "vct",
@@ -206,6 +226,7 @@ export function checkCandidateForcedLoss(
   opponentColor: "black" | "white",
   stoneCount: number,
   options?: ForcedLossCheckOptions,
+  wasmSearchEngine?: WasmSearchEngine,
 ): ForcedLossResult | undefined {
   const row = board[pos.row];
   if (!row) {
@@ -221,7 +242,13 @@ export function checkCandidateForcedLoss(
     if (selfThreats.fours.length > 0 || selfThreats.openFours.length > 0) {
       return undefined;
     }
-    return checkForcedLoss(board, opponentColor, stoneCount + 1, options);
+    return checkForcedLoss(
+      board,
+      opponentColor,
+      stoneCount + 1,
+      options,
+      wasmSearchEngine,
+    );
   } finally {
     row[pos.col] = null;
   }

@@ -17,6 +17,7 @@ import {
   type ThreatInfo,
 } from "../evaluation/patternScores";
 import { detectOpponentThreats } from "../evaluation/threatDetection";
+import { detectOpponentThreatsFast } from "../evaluation/threatDetectionFast";
 import { generateSortedMoves } from "../moveGenerator";
 import { findMiseVCFMove } from "./miseVcf";
 import {
@@ -42,6 +43,8 @@ export interface PreSearchResult {
   vctHintMove?: Position;
   /** 活三防御の候補手（相手の活三を止める位置） */
   openThreeDefenseMoves?: Position[];
+  /** 事前計算済み脅威情報（sortMoves での再利用用） */
+  threats?: ThreatInfo;
 }
 
 // =========================================================================
@@ -321,7 +324,9 @@ export function findPreSearchMove(
   }
 
   const opponentColor = getOppositeColor(color);
-  const threats = detectOpponentThreats(board, opponentColor);
+  const threats = ctx.lineTable
+    ? detectOpponentThreatsFast(board, opponentColor, ctx.lineTable)
+    : detectOpponentThreats(board, opponentColor);
 
   const defense = checkMustDefend(board, color, threats);
   if (defense) {
@@ -348,5 +353,6 @@ export function findPreSearchMove(
     restrictedMoves: opponentVCFMove
       ? computeVCFDefenseMoves(board, color, opponentColor, opponentVCFMove)
       : undefined,
+    threats,
   };
 }

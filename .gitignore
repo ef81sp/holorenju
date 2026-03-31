@@ -38,3 +38,7 @@ docs/bench-reports/
 # 分析結果
 analyzed-games/
 weakness-reports/
+
+# Zig build artifacts
+zig/zig-out/
+zig/.zig-cache/
