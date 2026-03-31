@@ -12,8 +12,12 @@
  *
  * worktreeの register-loader.mjs が @/ を worktreeの src/ に解決するため、
  * 動的importされたCPUモジュールは正しいworktreeのコードを使用する。
+ *
+ * WASMバイナリが利用可能な場合はWASM版で探索し、
+ * なければTS版にフォールバックする。
  */
 
+import * as fs from "node:fs";
 import * as path from "node:path";
 import { pathToFileURL } from "node:url";
 import { parentPort, workerData } from "node:worker_threads";
@@ -83,6 +87,36 @@ type FindBestMoveFnOld = (
 
 type FindBestMoveFn = FindBestMoveFnNew | FindBestMoveFnOld;
 
+/** WASMモジュールの最低限のインターフェース（worktreeの型定義に依存しない） */
+interface WasmModuleExports {
+  memory: WebAssembly.Memory;
+  boardInit: () => void;
+  boardSet: (row: number, col: number, value: number) => void;
+  findBestMove: (
+    color: number,
+    maxDepth: number,
+    timeLimitMs: number,
+    maxNodes: number,
+    absoluteTimeLimitMs: number,
+    aspirationMode: number,
+  ) => void;
+  getResultBuffer: () => number;
+  ttClear: () => void;
+}
+
+/** WASM探索のハンドラ */
+interface WasmSearchHandler {
+  search: (
+    board: BoardState,
+    color: "black" | "white",
+    params: DifficultyParams,
+  ) => FindBestMoveResult;
+}
+
+// WASM cell constants (matching Zig Cell enum)
+const CELL_BLACK = 1;
+const CELL_WHITE = 2;
+
 // ============================================================================
 // 実装
 // ============================================================================
@@ -90,43 +124,109 @@ type FindBestMoveFn = FindBestMoveFnNew | FindBestMoveFnOld;
 const data = workerData as BridgeWorkerData;
 
 /**
- * worktreeからCPUモジュールを動的import
- * 絶対URLを使用してworktreeのソースを確実に読む
+ * 盤面をWASMメモリにコピー
  */
-async function loadCpuFromWorktree(worktreePath: string): Promise<{
-  findBestMove: FindBestMoveFn;
-  params: DifficultyParams;
-}> {
-  const iterativeDeepeningUrl = pathToFileURL(
-    path.join(
-      worktreePath,
-      "src",
-      "logic",
-      "cpu",
-      "search",
-      "iterativeDeepening.ts",
-    ),
-  ).href;
+function boardStateToWasm(wasm: WasmModuleExports, board: BoardState): void {
+  wasm.boardInit();
+  for (let row = 0; row < 15; row++) {
+    for (let col = 0; col < 15; col++) {
+      const cell = board[row]?.[col];
+      if (cell === "black") {
+        wasm.boardSet(row, col, CELL_BLACK);
+      } else if (cell === "white") {
+        wasm.boardSet(row, col, CELL_WHITE);
+      }
+    }
+  }
+}
 
+/**
+ * WASMバイナリを読み込んでインスタンス化
+ * @returns WASMエクスポート、またはロード失敗時にnull
+ */
+async function loadWasmFromWorktree(
+  worktreePath: string,
+): Promise<WasmModuleExports | null> {
+  const wasmPath = path.join(
+    worktreePath,
+    "zig",
+    "zig-out",
+    "bin",
+    "cpu-engine.wasm",
+  );
+
+  if (!fs.existsSync(wasmPath)) {
+    return null;
+  }
+
+  try {
+    const buffer = fs.readFileSync(wasmPath);
+    const imports = {
+      env: {
+        getTimestampMsExternal: () => Math.round(performance.now()),
+      },
+    };
+    const { instance } = await WebAssembly.instantiate(buffer, imports);
+    return instance.exports as unknown as WasmModuleExports;
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(`[cpu-bridge-worker] WASM load failed: ${msg}`);
+    return null;
+  }
+}
+
+/**
+ * WASM探索ハンドラを作成
+ */
+function createWasmSearchHandler(wasm: WasmModuleExports): WasmSearchHandler {
+  return {
+    search(
+      board: BoardState,
+      color: "black" | "white",
+      params: DifficultyParams,
+    ): FindBestMoveResult {
+      boardStateToWasm(wasm, board);
+      wasm.ttClear();
+      wasm.findBestMove(
+        color === "black" ? CELL_BLACK : CELL_WHITE,
+        params.depth,
+        params.timeLimit,
+        params.maxNodes,
+        0, // absoluteTimeLimitMs
+        0, // aspirationMode
+      );
+
+      // 結果バッファから読み取り
+      const ptr = wasm.getResultBuffer();
+      const view = new DataView(wasm.memory.buffer);
+      const row = view.getUint8(ptr);
+      const col = view.getUint8(ptr + 1);
+      const score = view.getInt32(ptr + 2, true);
+      const completedDepth = view.getUint8(ptr + 6);
+
+      return {
+        position: { row, col },
+        score,
+        completedDepth,
+        interrupted: false,
+      };
+    },
+  };
+}
+
+/**
+ * 難易度パラメータをworktreeから読み込み
+ */
+async function loadDifficultyParams(
+  worktreePath: string,
+): Promise<DifficultyParams> {
   const cpuTypesUrl = pathToFileURL(
     path.join(worktreePath, "src", "types", "cpu.ts"),
   ).href;
 
-  const [iterativeModule, cpuTypesModule] = (await Promise.all([
-    import(iterativeDeepeningUrl),
-    import(cpuTypesUrl),
-  ])) as [
-    { findBestMoveIterativeWithTT?: FindBestMoveFn },
-    { DIFFICULTY_PARAMS?: Record<string, DifficultyParams> },
-  ];
-
-  const findBestMove = iterativeModule.findBestMoveIterativeWithTT;
-  if (typeof findBestMove !== "function") {
-    throw new Error(
-      `findBestMoveIterativeWithTT not found in ${iterativeDeepeningUrl}. ` +
-        `Available exports: ${Object.keys(iterativeModule).join(", ")}`,
-    );
-  }
+  const cpuTypesModule = (await import(cpuTypesUrl)) as {
+    DIFFICULTY_PARAMS?: Record<string, DifficultyParams>;
+  };
 
   const difficultyParams = cpuTypesModule.DIFFICULTY_PARAMS;
   if (!difficultyParams) {
@@ -143,7 +243,7 @@ async function loadCpuFromWorktree(worktreePath: string): Promise<{
   }
 
   const { customParams } = data;
-  const params: DifficultyParams = customParams
+  return customParams
     ? {
         ...baseParams,
         ...customParams,
@@ -153,14 +253,92 @@ async function loadCpuFromWorktree(worktreePath: string): Promise<{
         },
       }
     : baseParams;
+}
 
-  return { findBestMove, params };
+/**
+ * worktreeからTS版CPUモジュールを動的import
+ */
+async function loadTsCpuFromWorktree(
+  worktreePath: string,
+): Promise<FindBestMoveFn> {
+  const iterativeDeepeningUrl = pathToFileURL(
+    path.join(
+      worktreePath,
+      "src",
+      "logic",
+      "cpu",
+      "search",
+      "iterativeDeepening.ts",
+    ),
+  ).href;
+
+  const iterativeModule = (await import(iterativeDeepeningUrl)) as {
+    findBestMoveIterativeWithTT?: FindBestMoveFn;
+  };
+
+  const findBestMove = iterativeModule.findBestMoveIterativeWithTT;
+  if (typeof findBestMove !== "function") {
+    throw new Error(
+      `findBestMoveIterativeWithTT not found in ${iterativeDeepeningUrl}. ` +
+        `Available exports: ${Object.keys(iterativeModule).join(", ")}`,
+    );
+  }
+
+  return findBestMove;
+}
+
+/**
+ * TS版findBestMoveを新旧シグネチャ判別して呼び出す
+ */
+function callTsFindBestMove(
+  fn: FindBestMoveFn,
+  board: BoardState,
+  color: "black" | "white",
+  params: DifficultyParams,
+): FindBestMoveResult {
+  // fn.length === 1 → パラメータオブジェクト版（新）
+  if (fn.length === 1) {
+    return (fn as FindBestMoveFnNew)({
+      board,
+      color,
+      maxDepth: params.depth,
+      timeLimit: params.timeLimit,
+      randomFactor: params.randomFactor,
+      evaluationOptions: params.evaluationOptions,
+      maxNodes: params.maxNodes,
+    });
+  }
+  return (fn as FindBestMoveFnOld)(
+    board,
+    color,
+    params.depth,
+    params.timeLimit,
+    params.randomFactor,
+    params.evaluationOptions,
+    params.maxNodes,
+  );
 }
 
 async function main(): Promise<void> {
   const { worktreePath } = data;
 
-  const { findBestMove, params } = await loadCpuFromWorktree(worktreePath);
+  // 難易度パラメータを読み込み
+  const params = await loadDifficultyParams(worktreePath);
+
+  // WASM版を試行、失敗時はTS版にフォールバック
+  const wasm = await loadWasmFromWorktree(worktreePath);
+  let wasmHandler: WasmSearchHandler | null = null;
+  let tsFindBestMove: FindBestMoveFn | null = null;
+
+  if (wasm) {
+    wasmHandler = createWasmSearchHandler(wasm);
+    console.log(`[cpu-bridge-worker] WASM engine loaded for ${worktreePath}`);
+  } else {
+    tsFindBestMove = await loadTsCpuFromWorktree(worktreePath);
+    console.log(
+      `[cpu-bridge-worker] TS fallback engine loaded for ${worktreePath}`,
+    );
+  }
 
   // 初期化完了を通知
   parentPort?.postMessage({ ready: true });
@@ -171,27 +349,9 @@ async function main(): Promise<void> {
     const startTime = performance.now();
 
     try {
-      // 新旧シグネチャの判別: fn.length === 1 → パラメータオブジェクト版
-      const result =
-        findBestMove.length === 1
-          ? (findBestMove as FindBestMoveFnNew)({
-              board,
-              color,
-              maxDepth: params.depth,
-              timeLimit: params.timeLimit,
-              randomFactor: params.randomFactor,
-              evaluationOptions: params.evaluationOptions,
-              maxNodes: params.maxNodes,
-            })
-          : (findBestMove as FindBestMoveFnOld)(
-              board,
-              color,
-              params.depth,
-              params.timeLimit,
-              params.randomFactor,
-              params.evaluationOptions,
-              params.maxNodes,
-            );
+      const result: FindBestMoveResult = wasmHandler
+        ? wasmHandler.search(board, color, params)
+        : callTsFindBestMove(tsFindBestMove!, board, color, params);
 
       const thinkingTimeMs = performance.now() - startTime;
 

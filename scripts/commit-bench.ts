@@ -217,6 +217,34 @@ function createWorktree(sha: string, label: string): string {
     });
   }
 
+  // WASMビルド（zigが利用可能かつbuild.zigが存在する場合）
+  const zigBuildFile = path.join(worktreePath, "zig", "build.zig");
+  if (fs.existsSync(zigBuildFile)) {
+    const wasmPath = path.join(
+      worktreePath,
+      "zig",
+      "zig-out",
+      "bin",
+      "cpu-engine.wasm",
+    );
+    if (!fs.existsSync(wasmPath)) {
+      try {
+        console.log(`Building WASM for ${label}...`);
+        execSync("pnpm build:wasm", {
+          cwd: worktreePath,
+          stdio: "pipe",
+          timeout: 120000,
+        });
+        console.log(`WASM build succeeded for ${label}`);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.warn(
+          `WASM build failed for ${label} (will use TS fallback): ${msg}`,
+        );
+      }
+    }
+  }
+
   // register-loader.mjsが存在しない場合はコピー
   const worktreeLoaderMjs = path.join(
     worktreePath,
