@@ -262,7 +262,7 @@ const ThreatBudget = struct {
 
 fn getThreatBudget(minimax_depth: u8) ThreatBudget {
     if (minimax_depth >= 4) {
-        return .{ .vcf_depth = 8, .vcf_nodes = 200, .vct_depth = 6, .vct_nodes = 1000 };
+        return .{ .vcf_depth = 8, .vcf_nodes = 200, .vct_depth = 4, .vct_nodes = 500 };
     }
     // depth 3
     return .{ .vcf_depth = 6, .vcf_nodes = 100, .vct_depth = 0, .vct_nodes = 0 };
@@ -289,9 +289,18 @@ fn threatProbe(
     );
     if (vcf_move) |m| return m;
 
-    // VCT探索（予算が許す場合のみ、現在は無効: TS版と同様 enableVCT=false）
-    _ = budget.vct_depth;
-    _ = budget.vct_nodes;
+    // VCT探索（予算が許す場合のみ）
+    if (budget.vct_depth > 0) {
+        const vct_time: u32 = if (no_time_limit) 0 else 50;
+        const vct_move = vct_mod.findVCTMoveWithBudget(
+            cells,
+            color,
+            budget.vct_depth,
+            vct_time,
+            budget.vct_nodes,
+        );
+        if (vct_move) |m| return m;
+    }
 
     return null;
 }
