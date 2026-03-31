@@ -915,12 +915,23 @@ fn findVCTSequenceRecursive(
     var threat_buf: [225]Position = undefined;
     const threat_count = findThreatMoves(cells, color, &threat_buf);
 
+    // 最短手順の候補を保持（全脅威手を試して最短を選ぶ）
+    var best_seq: [64]Position = undefined;
+    var best_seq_len: u8 = 64; // 最短を見つけるため最大値で初期化
+    var best_context = VCTRecursiveContext{
+        .is_forbidden_trap = false,
+        .collect_branches = context.collect_branches,
+        .branches = undefined,
+        .branch_count = 0,
+    };
+    var has_best = false;
+
     for (0..threat_count) |ti| {
         const move = threat_buf[ti];
         const move_idx = @as(u16, move.row) * BOARD_SIZE + move.col;
         cells[move_idx] = color;
 
-        // 五連チェック
+        // 五連チェック — 1手で終わるので即返却（これ以上短い手順はない）
         if (forbidden.checkFive(cells, move.row, move.col, color)) {
             cells[move_idx] = .empty;
             sequence[seq_len.*] = move;
@@ -933,6 +944,7 @@ fn findVCTSequenceRecursive(
         if (defense_positions.len == 0) {
             if (isThreat(cells, move.row, move.col, color)) {
                 cells[move_idx] = .empty;
+                // 1手で終わるので即返却
                 sequence[seq_len.*] = move;
                 seq_len.* += 1;
                 return true;
@@ -1128,23 +1140,59 @@ fn findVCTSequenceRecursive(
         cells[move_idx] = .empty;
 
         if (all_defense_leads_to_vct and defense_positions.len > 0 and has_first_defense) {
+            // この脅威手での手順長を計算
+            var candidate_seq: [64]Position = undefined;
+            var candidate_len: u8 = 0;
+            var candidate_context = VCTRecursiveContext{
+                .is_forbidden_trap = false,
+                .collect_branches = context.collect_branches,
+                .branches = undefined,
+                .branch_count = 0,
+            };
+
             if (context.collect_branches and defense_entry_count > 0) {
-                // 最長の防御を選択しメインPVとする
-                const longest_idx = selectLongestDefense(&defense_entries, defense_entry_count);
-                buildBranches(&defense_entries, defense_entry_count, longest_idx, sequence, seq_len, move, context);
+                const shortest_idx = selectShortestDefense(&defense_entries, defense_entry_count);
+                buildBranches(&defense_entries, defense_entry_count, shortest_idx, &candidate_seq, &candidate_len, move, &candidate_context);
             } else {
-                sequence[seq_len.*] = move;
-                seq_len.* += 1;
+                candidate_seq[0] = move;
+                candidate_len = 1;
                 var fi: u8 = 0;
                 while (fi < first_defense_seq_len) : (fi += 1) {
-                    if (seq_len.* < 64) {
-                        sequence[seq_len.*] = first_defense_seq[fi];
-                        seq_len.* += 1;
+                    if (candidate_len < 64) {
+                        candidate_seq[candidate_len] = first_defense_seq[fi];
+                        candidate_len += 1;
                     }
                 }
             }
-            return true;
+
+            // 最短の候補を保持
+            if (!has_best or candidate_len < best_seq_len) {
+                var ci: u8 = 0;
+                while (ci < candidate_len) : (ci += 1) {
+                    best_seq[ci] = candidate_seq[ci];
+                }
+                best_seq_len = candidate_len;
+                best_context = candidate_context;
+                has_best = true;
+            }
         }
+    }
+
+    if (has_best) {
+        var ci: u8 = 0;
+        while (ci < best_seq_len) : (ci += 1) {
+            if (seq_len.* < 64) {
+                sequence[seq_len.*] = best_seq[ci];
+                seq_len.* += 1;
+            }
+        }
+        context.is_forbidden_trap = best_context.is_forbidden_trap;
+        context.branch_count = best_context.branch_count;
+        var bi: u8 = 0;
+        while (bi < best_context.branch_count) : (bi += 1) {
+            context.branches[bi] = best_context.branches[bi];
+        }
+        return true;
     }
 
     return false;
@@ -1334,34 +1382,34 @@ fn buildBlockDefSubSequence(
     }
 }
 
-/// 最長の防御を選択
-fn selectLongestDefense(entries: *const [MAX_DEFENSE_ENTRIES]DefenseSeqEntry, count: u8) u8 {
-    var longest_idx: u8 = 0;
-    var longest_len: u8 = if (count > 0) entries[0].seq_len else 0;
+/// 最短の防御継続を選択（攻撃側の最短勝ちラインをメインPVにする）
+fn selectShortestDefense(entries: *const [MAX_DEFENSE_ENTRIES]DefenseSeqEntry, count: u8) u8 {
+    var shortest_idx: u8 = 0;
+    var shortest_len: u8 = if (count > 0) entries[0].seq_len else 0;
     var i: u8 = 1;
     while (i < count) : (i += 1) {
-        if (entries[i].seq_len > longest_len) {
-            longest_len = entries[i].seq_len;
-            longest_idx = i;
+        if (entries[i].seq_len < shortest_len) {
+            shortest_len = entries[i].seq_len;
+            shortest_idx = i;
         }
     }
-    return longest_idx;
+    return shortest_idx;
 }
 
 /// メインPVとサイド分岐を構築
 fn buildBranches(
     entries: *const [MAX_DEFENSE_ENTRIES]DefenseSeqEntry,
     entry_count: u8,
-    longest_idx: u8,
+    main_idx: u8,
     sequence: *[64]Position,
     seq_len: *u8,
     move: Position,
     context: *VCTRecursiveContext,
 ) void {
-    const longest = entries[longest_idx];
+    const main_entry = entries[main_idx];
     const defense_index_in_seq = seq_len.* + 1; // +1 for attack move
 
-    if (longest.is_forbidden_trap) {
+    if (main_entry.is_forbidden_trap) {
         context.is_forbidden_trap = true;
     }
 
@@ -1369,12 +1417,12 @@ fn buildBranches(
     sequence[seq_len.*] = move;
     seq_len.* += 1;
     // push defense + continuation
-    sequence[seq_len.*] = longest.defense;
+    sequence[seq_len.*] = main_entry.defense;
     seq_len.* += 1;
     var si: u8 = 0;
-    while (si < longest.seq_len) : (si += 1) {
+    while (si < main_entry.seq_len) : (si += 1) {
         if (seq_len.* < 64) {
-            sequence[seq_len.*] = longest.seq[si];
+            sequence[seq_len.*] = main_entry.seq[si];
             seq_len.* += 1;
         }
     }
@@ -1382,9 +1430,9 @@ fn buildBranches(
     // メインPVの子分岐を親に統合
     const sub_seq_offset = defense_index_in_seq + 1;
     var ci: u8 = 0;
-    while (ci < longest.child_branch_count) : (ci += 1) {
+    while (ci < main_entry.child_branch_count) : (ci += 1) {
         if (context.branch_count < 20) {
-            var branch = longest.child_branches[ci];
+            var branch = main_entry.child_branches[ci];
             branch.defense_index = @intCast(sub_seq_offset + branch.defense_index);
             context.branches[context.branch_count] = branch;
             context.branch_count += 1;
@@ -1394,7 +1442,7 @@ fn buildBranches(
     // 残りの防御を分岐として記録
     var ei: u8 = 0;
     while (ei < entry_count) : (ei += 1) {
-        if (ei == longest_idx) {
+        if (ei == main_idx) {
             ei += 0; // skip
             continue;
         }
@@ -1484,7 +1532,7 @@ pub fn findVCTSequenceFromFirstMove(
         return result;
     }
 
-    // 全防御に対してVCT継続＆最長継続を記録
+    // 全防御に対してVCT継続＆最短継続を記録（攻撃側の最短勝ちライン）
     var main_defense: ?Position = null;
     var main_continuation_seq: [64]Position = undefined;
     var main_continuation_len: u8 = 0;
@@ -1574,8 +1622,8 @@ pub fn findVCTSequenceFromFirstMove(
             return result;
         }
 
-        // 最長の継続をメインラインとして記録
-        if (main_defense == null or cont_len > main_continuation_len) {
+        // 最短の継続をメインラインとして記録（攻撃側の最短勝ちライン）
+        if (main_defense == null or cont_len < main_continuation_len) {
             main_defense = dp;
             var si: u8 = 0;
             while (si < cont_len) : (si += 1) {
