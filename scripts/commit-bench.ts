@@ -481,6 +481,31 @@ async function main(): Promise<void> {
 
       completedGames++;
 
+      // 初回ゲーム後のサニティチェック
+      if (completedGames === 1) {
+        const avgTime =
+          result.moveHistory.reduce(
+            (s: number, m: { time: number }) => s + m.time,
+            0,
+          ) / result.moveHistory.length;
+        const maxTime = Math.max(
+          ...result.moveHistory.map((m: { time: number }) => m.time),
+        );
+        console.log(`\n[サニティチェック] 初回ゲーム完了`);
+        console.log(
+          `  手数: ${result.moves} | 勝者: ${result.winner} | 理由: ${result.reason}`,
+        );
+        console.log(
+          `  平均思考時間: ${Math.round(avgTime)}ms | 最大: ${Math.round(maxTime)}ms`,
+        );
+        console.log(`  duration: ${Math.round(result.duration)}ms`);
+        if (avgTime < 1) {
+          console.warn(
+            "  ⚠ 平均思考時間が1ms未満 — エンジンが正しくロードされていない可能性",
+          );
+        }
+      }
+
       // ステータス表示
       const elapsed = ((performance.now() - startTime) / 1000).toFixed(0);
       const elo = estimateEloDiff(wdl);
