@@ -598,11 +598,17 @@ pub fn hasVCT(
 
 /// VCT勝ち手を探索
 pub fn findVCTMove(cells: []Cell, color: Cell, max_depth: u8, time_limit: u32) ?Position {
+    return findVCTMoveWithBudget(cells, color, max_depth, time_limit, 0);
+}
+
+/// VCT勝ち手を探索（ノード数制限付き）
+/// max_nodes=0 は無制限
+pub fn findVCTMoveWithBudget(cells: []Cell, color: Cell, max_depth: u8, time_limit: u32, max_nodes: u32) ?Position {
     var limiter = TimeLimiter{
         .start_time = getTimestampMs(),
         .time_limit = time_limit,
         .nodes = 0,
-        .max_nodes = 0,
+        .max_nodes = max_nodes,
     };
 
     const opponent = color.opposite();
@@ -613,7 +619,7 @@ pub fn findVCTMove(cells: []Cell, color: Cell, max_depth: u8, time_limit: u32) ?
     if (vcf_mod.hasVCF(cells, opponent, 0, &limiter, vcf_mod.VCF_MAX_DEPTH)) return null;
 
     // まずVCFの手を試す
-    const vcf_move = vcf_mod.findVCFMove(cells, color, vcf_mod.VCF_MAX_DEPTH, time_limit);
+    const vcf_move = vcf_mod.findVCFMoveWithBudget(cells, color, vcf_mod.VCF_MAX_DEPTH, time_limit, max_nodes);
     if (vcf_move) |vm| return vm;
 
     // 反復深化
