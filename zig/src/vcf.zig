@@ -181,11 +181,17 @@ pub fn hasVCF(
 
 /// VCFの最初の手を返す
 pub fn findVCFMove(cells: []Cell, color: Cell, max_depth: u8, time_limit: u32) ?Position {
+    return findVCFMoveWithBudget(cells, color, max_depth, time_limit, 0);
+}
+
+/// VCFの最初の手を返す（ノード数制限付き）
+/// max_nodes=0 は無制限
+pub fn findVCFMoveWithBudget(cells: []Cell, color: Cell, max_depth: u8, time_limit: u32, max_nodes: u32) ?Position {
     var limiter = TimeLimiter{
         .start_time = getTimestampMs(),
         .time_limit = time_limit,
         .nodes = 0,
-        .max_nodes = 0,
+        .max_nodes = max_nodes,
     };
 
     // 反復深化: 浅い深度から探索し最短VCFを優先

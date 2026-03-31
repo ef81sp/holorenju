@@ -12,6 +12,8 @@ const position_eval = @import("position_eval.zig");
 const quiescence = @import("quiescence.zig");
 const scores = @import("scores.zig");
 const tt_mod = @import("tt.zig");
+const vcf_mod = @import("vcf.zig");
+const vct_mod = @import("vct.zig");
 const zobrist = @import("zobrist.zig");
 const std = @import("std");
 
@@ -102,6 +104,7 @@ pub const SearchStats = struct {
     lmr_trials: u32 = 0,
     lmr_researches: u32 = 0,
     q_search_nodes: u32 = 0,
+    threat_probe_cutoffs: u32 = 0,
 };
 
 /// 探索コンテキスト
@@ -246,6 +249,54 @@ fn isThreatExtensionCandidate(cells: []const Cell, row: u8, col: u8, color: Cell
 }
 
 // =============================================================================
+// Threat Probe（脅威プローブ）
+// =============================================================================
+
+/// 深度適応型バジェット（TS版 threatProbe.ts の getThreatBudget に対応）
+const ThreatBudget = struct {
+    vcf_depth: u8,
+    vcf_nodes: u32,
+    vct_depth: u8,
+    vct_nodes: u32,
+};
+
+fn getThreatBudget(minimax_depth: u8) ThreatBudget {
+    if (minimax_depth >= 4) {
+        return .{ .vcf_depth = 8, .vcf_nodes = 200, .vct_depth = 6, .vct_nodes = 1000 };
+    }
+    // depth 3
+    return .{ .vcf_depth = 6, .vcf_nodes = 100, .vct_depth = 0, .vct_nodes = 0 };
+}
+
+/// 脅威プローブ: 手番側のVCF/VCTをチェック
+/// VCF/VCTが見つかれば初手を返す
+fn threatProbe(
+    cells: []Cell,
+    color: Cell,
+    minimax_depth: u8,
+    no_time_limit: bool,
+) ?Position {
+    const budget = getThreatBudget(minimax_depth);
+
+    // VCF探索（軽量・常にチェック）
+    const vcf_time: u32 = if (no_time_limit) 0 else 20;
+    const vcf_move = vcf_mod.findVCFMoveWithBudget(
+        cells,
+        color,
+        budget.vcf_depth,
+        vcf_time,
+        budget.vcf_nodes,
+    );
+    if (vcf_move) |m| return m;
+
+    // VCT探索（予算が許す場合のみ、現在は無効: TS版と同様 enableVCT=false）
+    _ = budget.vct_depth;
+    _ = budget.vct_nodes;
+
+    return null;
+}
+
+// =============================================================================
 // Minimax探索本体
 // =============================================================================
 
@@ -334,6 +385,27 @@ pub fn minimaxWithTT(
             tt_move = entry.getBestMove();
         } else {
             tt_move = entry.getBestMove();
+        }
+    }
+
+    // =========================================================================
+    // Threat Probe: 手番側のVCFをチェック
+    // VCFがあれば勝ちスコア(FIVE-1)でカットオフ
+    // =========================================================================
+    if (depth >= 3) {
+        const threat_result = threatProbe(
+            cells,
+            current_color,
+            depth,
+            ctx.no_time_limit,
+        );
+        if (threat_result) |threat_move| {
+            ctx.stats.threat_probe_cutoffs += 1;
+            // FIVE - 1: threatProbe による追詰検出マーカー
+            const threat_score = scores.FIVE - 1;
+            const score = if (is_maximizing) threat_score else -threat_score;
+            ctx.tt.store(hash, score, @intCast(depth), .exact, threat_move);
+            return score;
         }
     }
 
