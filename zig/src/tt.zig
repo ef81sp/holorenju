@@ -19,7 +19,7 @@ pub const ScoreType = enum(u8) {
 pub const TTEntry = struct {
     hash: u64, // 衝突検出用
     score: i32,
-    depth: u8,
+    depth: i8,
     score_type: ScoreType,
     best_move_row: u8, // 255 = null
     best_move_col: u8, // 255 = null
@@ -87,7 +87,7 @@ pub const TranspositionTable = struct {
         self: *TranspositionTable,
         hash: u64,
         score_val: i32,
-        depth: u8,
+        depth: i8,
         score_type: ScoreType,
         best_move: ?Position,
     ) void {

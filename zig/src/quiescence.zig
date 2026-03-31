@@ -10,6 +10,7 @@ const evaluate = @import("evaluate.zig");
 const forbidden = @import("forbidden.zig");
 const jp = @import("jump_patterns.zig");
 const scores = @import("scores.zig");
+const tt_mod = @import("tt.zig");
 const zobrist = @import("zobrist.zig");
 const std = @import("std");
 
@@ -248,6 +249,7 @@ pub fn quiescenceSearch(
     q_depth: u8,
     stats: *QSearchStats,
     timeout_flag: *const bool,
+    tt: *tt_mod.TranspositionTable,
 ) i32 {
     stats.nodes += 1;
     stats.q_search_nodes += 1;
@@ -315,6 +317,7 @@ pub fn quiescenceSearch(
             q_depth - 1,
             stats,
             timeout_flag,
+            tt,
         );
 
         // 石を除去
@@ -331,6 +334,11 @@ pub fn quiescenceSearch(
             if (alpha >= beta) break;
         }
     }
+
+    // TT保存: 負の可変depthで本探索と分離
+    const tt_depth: i8 = -(@as(i8, @intCast(MAX_QUIESCENCE_DEPTH)) - @as(i8, @intCast(q_depth)) + 1);
+    const score_type: tt_mod.ScoreType = if (best_score <= alpha_init) .upper_bound else if (best_score >= beta_init) .lower_bound else .exact;
+    tt.store(hash, best_score, tt_depth, score_type, null);
 
     return best_score;
 }
@@ -394,6 +402,11 @@ test "quiescenceSearch stand-pat on empty" {
     var cells = [_]Cell{.empty} ** CELL_COUNT;
     var stats = QSearchStats{};
     var timeout_flag = false;
+    var tt = tt_mod.TranspositionTable{
+        .entries = &tt_mod.global_tt_storage,
+        .current_generation = 0,
+    };
+    tt.clear();
 
     const score = quiescenceSearch(
         &cells,
@@ -412,6 +425,7 @@ test "quiescenceSearch stand-pat on empty" {
         MAX_QUIESCENCE_DEPTH,
         &stats,
         &timeout_flag,
+        &tt,
     );
     try std.testing.expectEqual(score, 0);
 }

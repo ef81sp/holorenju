@@ -14,7 +14,7 @@ const position_eval = @import("position_eval.zig");
 const scores = @import("scores.zig");
 const threats_mod = @import("threats.zig");
 const tt_mod = @import("tt.zig");
-const vcf = @import("vcf.zig");
+const vcf_mod = @import("vcf.zig");
 const vct = @import("vct.zig");
 const zobrist = @import("zobrist.zig");
 const std = @import("std");
@@ -136,7 +136,7 @@ pub fn findPreSearchMove(
     }
 
     // VCF勝ち手を探す
-    const vcf_move = vcf.findVCFMove(cells, color, vcf.VCF_MAX_DEPTH, vcf.VCF_TIME_LIMIT);
+    const vcf_move = vcf_mod.findVCFMove(cells, color, vcf_mod.VCF_MAX_DEPTH, vcf_mod.VCF_TIME_LIMIT);
     if (vcf_move) |vm| {
         return .{
             .immediate_move = vm,
@@ -146,13 +146,13 @@ pub fn findPreSearchMove(
 
     // 相手VCFチェック（Mise-VCFスキップ判定用）
     const opponent_has_vcf = blk: {
-        var opp_limiter = vcf.TimeLimiter{
+        var opp_limiter = vcf_mod.TimeLimiter{
             .start_time = getTimestampMs(),
-            .time_limit = vcf.VCF_TIME_LIMIT,
+            .time_limit = vcf_mod.VCF_TIME_LIMIT,
             .nodes = 0,
             .max_nodes = 3000,
         };
-        break :blk vcf.hasVCF(cells, opponent_color, 0, &opp_limiter, vcf.VCF_MAX_DEPTH);
+        break :blk vcf_mod.hasVCF(cells, opponent_color, 0, &opp_limiter, vcf_mod.VCF_MAX_DEPTH);
     };
 
     // Mise-VCF（ミセ→強制応手→VCF勝ち）
@@ -212,6 +212,61 @@ pub const DepthHistoryEntry = struct {
     position: Position,
     score: i32,
 };
+
+// =============================================================================
+// 非生産的四の引き下げ
+// =============================================================================
+
+const PLAIN_FOUR_PREFERENCE_MARGIN: i32 = 200;
+const PLAIN_FOUR_VCF_CHECK_TIME_LIMIT: u32 = 50;
+
+/// 非生産的四の優先度引き下げ
+///
+/// 最善手が非生産的四（四を作るが活三を伴わない）で、非四手との
+/// スコア差がマージン内なら非四手を優先する。
+/// 四+ブロックの水平線効果でスコアが膨らんでいる疑いを補正する。
+///
+/// VCFがある場合はdemoteしない。
+fn demotePlainFourIfNeeded(
+    result: *IterativeDeepingResult,
+    cells: []Cell,
+    color: Cell,
+) void {
+    // 候補が2つ未満なら何もしない
+    if (result.top_candidate_count < 2) return;
+
+    // 最善手を仮配置して非生産的四か判定
+    const best = result.position;
+    const idx = @as(u16, best.row) * BOARD_SIZE + best.col;
+    cells[idx] = color;
+    const ft = minimax.analyzeFourAndThree(cells, best.row, best.col, color);
+    cells[idx] = .empty;
+
+    const is_plain_four = !ft.has_five and ft.has_four and !ft.has_open_three;
+    if (!is_plain_four) return;
+
+    // VCF安全チェック
+    const vcf_move = vcf_mod.findVCFMove(cells, color, vcf_mod.VCF_MAX_DEPTH, PLAIN_FOUR_VCF_CHECK_TIME_LIMIT);
+    if (vcf_move != null) return;
+
+    // 候補手から最初の非・非生産的四手を探す
+    for (0..result.top_candidate_count) |i| {
+        const entry = result.top_candidates[i];
+        const eidx = @as(u16, entry.move.row) * BOARD_SIZE + entry.move.col;
+        cells[eidx] = color;
+        const eft = minimax.analyzeFourAndThree(cells, entry.move.row, entry.move.col, color);
+        cells[eidx] = .empty;
+
+        const entry_is_plain_four = !eft.has_five and eft.has_four and !eft.has_open_three;
+        if (!entry_is_plain_four) {
+            if (result.score - entry.score < PLAIN_FOUR_PREFERENCE_MARGIN) {
+                result.position = entry.move;
+                result.score = entry.score;
+            }
+            return;
+        }
+    }
+}
 
 /// Iterative Deepening結果
 pub const IterativeDeepingResult = struct {
@@ -558,7 +613,7 @@ pub fn findBestMoveIterative(
         top_candidates[i] = best_result.candidates[i];
     }
 
-    return .{
+    var final_result = IterativeDeepingResult{
         .position = best_result.position,
         .score = best_result.score,
         .completed_depth = completed_depth,
@@ -567,6 +622,11 @@ pub fn findBestMoveIterative(
         .top_candidates = top_candidates,
         .top_candidate_count = @intCast(count),
     };
+
+    // 非生産的四の引き下げ
+    demotePlainFourIfNeeded(&final_result, cells, color);
+
+    return final_result;
 }
 
 // =============================================================================
@@ -699,7 +759,7 @@ test "findPreSearchMove: white open four at J9" {
     try testing.expect(j9_defense == null); // open four = unblockable
 
     // VCF should find J9 (open four on diagonal)
-    const vcf_move = vcf.findVCFMove(&cells, .white, vcf.VCF_MAX_DEPTH, 0);
+    const vcf_move = vcf_mod.findVCFMove(&cells, .white, vcf_mod.VCF_MAX_DEPTH, 0);
     try testing.expect(vcf_move != null);
     const vm = vcf_move.?;
     try testing.expectEqual(@as(u8, 6), vm.row);

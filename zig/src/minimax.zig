@@ -207,7 +207,7 @@ fn hasFourInDirection(cells: []const Cell, row: u8, col: u8, dr: i8, dc: i8, col
 // =============================================================================
 
 /// analyzeFourAndThree: 四と活三の有無を分析（石配置済み前提）
-fn analyzeFourAndThree(cells: []const Cell, row: u8, col: u8, color: Cell) struct { has_five: bool, has_four: bool, has_open_three: bool } {
+pub fn analyzeFourAndThree(cells: []const Cell, row: u8, col: u8, color: Cell) struct { has_five: bool, has_four: bool, has_open_three: bool } {
     const jp = @import("jump_patterns.zig");
     var has_four = false;
     var has_open_three = false;
@@ -310,7 +310,7 @@ pub fn minimaxWithTT(
     var tt_move: ?Position = null;
 
     if (tt_entry) |entry| {
-        if (entry.depth >= depth) {
+        if (entry.depth >= @as(i8, @intCast(depth))) {
             ctx.stats.tt_hits += 1;
 
             switch (entry.score_type) {
@@ -353,6 +353,7 @@ pub fn minimaxWithTT(
             quiescence.MAX_QUIESCENCE_DEPTH,
             &q_stats,
             timeout_ptr,
+            ctx.tt,
         );
         ctx.stats.q_search_nodes += q_stats.q_search_nodes;
         return score;
@@ -569,7 +570,7 @@ pub fn minimaxWithTT(
     }
 
     // TTに保存
-    ctx.tt.store(hash, best_score, depth, score_type, best_move);
+    ctx.tt.store(hash, best_score, @intCast(depth), score_type, best_move);
 
     return best_score;
 }
