@@ -1,21 +1,32 @@
 /**
  * CPU探索モジュール
  *
- * - VCF (Victory by Continuous Fours)
- * - VCT (Victory by Continuous Threats)
- * - Minimax + Alpha-Beta
+ * 探索アルゴリズムはZig/WASMに移行済み。
+ * TS側はボードプリミティブ（脅威検出・検証）と型定義を提供する。
  */
 
-// 共通コンテキスト
-export { type TimeLimiter, isTimeExceeded } from "./context";
+// 型定義
+export type {
+  VCFSearchOptions,
+  VCFSequenceResult,
+  VCTSearchOptions,
+  VCTSequenceResult,
+  VCTBranch,
+  MiseVCFSearchOptions,
+  MoveScoreEntry,
+  IterativeDeepingResult,
+  SearchStats,
+} from "./types";
+export { VCT_STONE_THRESHOLD } from "./types";
 
-// ライン解析（SSoT: core/lineAnalysis）
-export { checkEnds, countLine } from "../core/lineAnalysis";
+// 時間制限
+export type { TimeLimiter } from "./timeLimiter";
+export { isTimeExceeded, incrementNodes } from "./timeLimiter";
 
-// 盤面ユーティリティ（SSoT: core/boardUtils）
-export { countStones } from "../core/boardUtils";
+// VCF存在判定
+export { hasVCF } from "./vcfCheck";
 
-// 脅威パターン（SSoT: threatPatterns）
+// 脅威パターン
 export {
   findDefenseForConsecutiveFour,
   findDefenseForJumpFour,
@@ -25,39 +36,15 @@ export {
   checkDefenseCounterThreat,
 } from "./threatPatterns";
 
-// VCF
-export {
-  hasVCF,
-  findVCFMove,
-  findVCFSequence,
-  vcfAttackMoveCount,
-  type VCFSearchOptions,
-  type VCFSequenceResult,
-} from "./vcf";
+// 脅威手
+export { createsFour } from "./threatMoves";
 
-// VCT
+// VCTヘルパー
 export {
-  hasVCT,
-  findVCTMove,
-  findVCTSequence,
-  isVCTFirstMove,
-  VCT_STONE_THRESHOLD,
-  type VCTSearchOptions,
-  type VCTSequenceResult,
-} from "./vct";
+  findThreatMoves,
+  hasFourThreeAvailable,
+  hasOpenThree,
+} from "./vctHelpers";
 
-// Minimax
-export {
-  findBestMove,
-  findBestMoveIterative,
-  findBestMoveWithTT,
-  findBestMoveIterativeWithTT,
-  type IterativeDeepeningParams,
-  minimax,
-  minimaxWithTT,
-  createSearchContext,
-  type MinimaxResult,
-  type IterativeDeepingResult,
-  type SearchContext,
-  type SearchStats,
-} from "./minimax";
+// VCT検証
+export { validateVCTSequence } from "./vctValidation";

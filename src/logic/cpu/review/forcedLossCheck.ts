@@ -9,17 +9,16 @@ import type { ForcedLossResult } from "@/types/review";
 
 import { BOARD_SIZE } from "@/constants/board";
 
+import type {
+  MiseVCFSearchOptions,
+  VCFSearchOptions,
+  VCTSearchOptions,
+} from "../search/types";
 import type { WasmSearchEngine } from "../wasm/searchEngine";
 
 import { detectOpponentThreats } from "../evaluation";
 import { findDoubleMiseMoves } from "../evaluation/tactics";
 import { detectWhiteWinningPattern } from "../evaluation/winningPatterns";
-import {
-  findMiseVCFSequence,
-  type MiseVCFSearchOptions,
-} from "../search/miseVcf";
-import { findVCFSequence, type VCFSearchOptions } from "../search/vcf";
-import { findVCTSequence, type VCTSearchOptions } from "../search/vct";
 import { hasFourThreeAvailable, hasOpenThree } from "../search/vctHelpers";
 import {
   wasmFindVCFSequence,
@@ -135,8 +134,8 @@ export function checkForcedLoss(
   boardAfter: BoardState,
   opponentColor: "black" | "white",
   stoneCountAfter: number,
+  wasmSearchEngine: WasmSearchEngine,
   options?: ForcedLossCheckOptions,
-  wasmSearchEngine?: WasmSearchEngine,
 ): ForcedLossResult | undefined {
   const vcfOpts = options?.vcfOptions ?? REVIEW_VCF_OPTIONS;
   const miseOpts = options?.miseVcfOptions ?? REVIEW_MISE_VCF_OPTIONS;
@@ -147,9 +146,12 @@ export function checkForcedLoss(
     opponentColor === "white" ? findWhiteWinningMoves(boardAfter) : undefined;
 
   // 1. VCF（最優先: 四追いで確定した手順）
-  const oppVCF = wasmSearchEngine
-    ? wasmFindVCFSequence(wasmSearchEngine, boardAfter, opponentColor, vcfOpts)
-    : findVCFSequence(boardAfter, opponentColor, vcfOpts);
+  const oppVCF = wasmFindVCFSequence(
+    wasmSearchEngine,
+    boardAfter,
+    opponentColor,
+    vcfOpts,
+  );
   if (oppVCF) {
     return {
       type: oppVCF.isForbiddenTrap ? "forbidden-trap" : "vcf",
@@ -173,14 +175,12 @@ export function checkForcedLoss(
   }
 
   // 4. Mise-VCF
-  const oppMise = wasmSearchEngine
-    ? wasmFindMiseVCFSequence(
-        wasmSearchEngine,
-        boardAfter,
-        opponentColor,
-        miseOpts,
-      )
-    : findMiseVCFSequence(boardAfter, opponentColor, miseOpts);
+  const oppMise = wasmFindMiseVCFSequence(
+    wasmSearchEngine,
+    boardAfter,
+    opponentColor,
+    miseOpts,
+  );
   if (oppMise) {
     return { type: "mise-vcf", sequence: oppMise.sequence };
   }
@@ -197,14 +197,12 @@ export function checkForcedLoss(
 
   // 6. VCT
   if (!options?.skipVCT) {
-    const oppVCT = wasmSearchEngine
-      ? wasmFindVCTSequence(
-          wasmSearchEngine,
-          boardAfter,
-          opponentColor,
-          vctOpts,
-        )
-      : findVCTSequence(boardAfter, opponentColor, vctOpts);
+    const oppVCT = wasmFindVCTSequence(
+      wasmSearchEngine,
+      boardAfter,
+      opponentColor,
+      vctOpts,
+    );
     if (oppVCT) {
       return {
         type: oppVCT.isForbiddenTrap ? "forbidden-trap" : "vct",
@@ -225,8 +223,8 @@ export function checkCandidateForcedLoss(
   color: "black" | "white",
   opponentColor: "black" | "white",
   stoneCount: number,
+  wasmSearchEngine: WasmSearchEngine,
   options?: ForcedLossCheckOptions,
-  wasmSearchEngine?: WasmSearchEngine,
 ): ForcedLossResult | undefined {
   const row = board[pos.row];
   if (!row) {
@@ -246,8 +244,8 @@ export function checkCandidateForcedLoss(
       board,
       opponentColor,
       stoneCount + 1,
-      options,
       wasmSearchEngine,
+      options,
     );
   } finally {
     row[pos.col] = null;

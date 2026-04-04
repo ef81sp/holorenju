@@ -17,8 +17,12 @@ import type {
 
 import { createBoardFromRecord } from "@/logic/gameRecordParser";
 
-import type { MoveScoreEntry } from "../search/results";
-import type { BoardEvaluator } from "../wasm/bridge";
+import type {
+  IterativeDeepingResult,
+  MoveScoreEntry,
+  VCFSequenceResult,
+  VCTBranch,
+} from "../search/types";
 import type { WasmSearchEngine } from "../wasm/searchEngine";
 
 import { countStones } from "../core/boardUtils";
@@ -29,10 +33,6 @@ import {
   PATTERN_SCORES,
 } from "../evaluation";
 import { findMiseTargets } from "../evaluation/miseTactics";
-import { findBestMoveIterativeWithTT } from "../search/minimax";
-import { findVCFSequence, type VCFSequenceResult } from "../search/vcf";
-import { findVCTSequence, type VCTBranch } from "../search/vct";
-import { globalTT } from "../transpositionTable";
 import { colorToWasm } from "../wasm/boardAdapter";
 import { verifyCandidates, findSafeBest } from "./candidateVerification";
 import { buildDoubleMiseBranches } from "./doubleMiseBranches";
@@ -67,7 +67,7 @@ function executeWasmSearch(
   color: "black" | "white",
   maxNodes: number,
   profile: ReviewProfile,
-): ReturnType<typeof findBestMoveIterativeWithTT> {
+): IterativeDeepingResult {
   const aspirationMode = profile.aspirationWidths ? 1 : 0;
   const wasmResult = engine.findBestMoveForReview(
     board,
@@ -149,10 +149,8 @@ export interface FullEvalParams {
   moveIndex: number;
   /** 精密モードを使用するか */
   preciseAnalysis?: boolean;
-  /** WASM 評価器（任意） */
-  boardEvaluator?: BoardEvaluator;
-  /** WASM 探索エンジン（任意、指定時は minimax 探索を WASM に委譲） */
-  wasmSearchEngine?: WasmSearchEngine;
+  /** WASM 探索エンジン */
+  wasmSearchEngine: WasmSearchEngine;
 }
 
 /** 各フェーズの所要時間 */
@@ -217,7 +215,7 @@ interface DemotionContext {
   bestMove: Position;
   bestScore: number;
   fwBestLoss?: { type: ForcedLossType; sequence: Position[] };
-  wasmSearchEngine?: WasmSearchEngine;
+  wasmSearchEngine: WasmSearchEngine;
 }
 
 /** 降格時のVCF再探索とフォールバック処理 */
@@ -246,14 +244,12 @@ function handleDemotion(ctx: DemotionContext): {
   // 両ミセ降格時: maxDepth制限されていたVCFのフル再探索
   let reVcf: VCFSequenceResult | null = null;
   if (ctx.forcedWinType === "double-mise") {
-    reVcf = ctx.wasmSearchEngine
-      ? wasmFindVCFSequence(
-          ctx.wasmSearchEngine,
-          ctx.board,
-          ctx.color,
-          REVIEW_VCF_OPTIONS,
-        )
-      : findVCFSequence(ctx.board, ctx.color, REVIEW_VCF_OPTIONS);
+    reVcf = wasmFindVCFSequence(
+      ctx.wasmSearchEngine,
+      ctx.board,
+      ctx.color,
+      REVIEW_VCF_OPTIONS,
+    );
   }
 
   if (reVcf) {
@@ -348,13 +344,7 @@ function attachPVFromWasm(
 export function executeFullEval(
   params: FullEvalParams,
 ): FullEvalResultWithTimings {
-  const {
-    moveHistory,
-    moveIndex,
-    preciseAnalysis,
-    boardEvaluator,
-    wasmSearchEngine,
-  } = params;
+  const { moveHistory, moveIndex, preciseAnalysis, wasmSearchEngine } = params;
 
   const profile = preciseAnalysis
     ? REVIEW_PROFILE_PRECISE
@@ -374,7 +364,7 @@ export function executeFullEval(
 
   // 高速モード時は TT をクリア（決定論性）
   if (profile.clearTT) {
-    globalTT.clear();
+    wasmSearchEngine.clearTT();
   }
 
   const moves = moveHistory.trim().split(/\s+/);
@@ -420,13 +410,13 @@ export function executeFullEval(
         boardAfter,
         opponentColor,
         stoneCountAfter,
+        wasmSearchEngine,
         {
           vcfOptions: REVIEW_VCF_OPTIONS,
           miseVcfOptions: REVIEW_MISE_VCF_OPTIONS,
           vctOptions: FORCED_LOSS_VCT_OPTIONS,
           skipVCT: true,
         },
-        wasmSearchEngine,
       );
       if (loss) {
         forcedLossType = loss.type;
@@ -446,27 +436,13 @@ export function executeFullEval(
       : profile.maxNodes;
 
   t0 = performance.now();
-  const result = wasmSearchEngine
-    ? executeWasmSearch(
-        wasmSearchEngine,
-        board,
-        color,
-        effectiveMaxNodes,
-        profile,
-      )
-    : findBestMoveIterativeWithTT({
-        board,
-        color,
-        maxDepth: REVIEW_SEARCH_PARAMS.depth,
-        randomFactor: 0,
-        evaluationOptions: REVIEW_SEARCH_PARAMS.evaluationOptions,
-        maxNodes: effectiveMaxNodes,
-        timeLimit: profile.timeLimit,
-        absoluteTimeLimit: profile.absoluteTimeLimit,
-        aspirationWidths: profile.aspirationWidths,
-        collectPV: true,
-        boardEvaluator,
-      });
+  const result = executeWasmSearch(
+    wasmSearchEngine,
+    board,
+    color,
+    effectiveMaxNodes,
+    profile,
+  );
   timings.minimaxSearch = performance.now() - t0;
 
   // ─── VCTリトライ ───
@@ -477,14 +453,12 @@ export function executeFullEval(
     result.score >= PATTERN_SCORES.FIVE - 1 &&
     !opponentHasFour
   ) {
-    const vctRetry = wasmSearchEngine
-      ? wasmFindVCTSequence(
-          wasmSearchEngine,
-          board,
-          color,
-          REVIEW_VCT_OPTIONS_WITH_BRANCHES,
-        )
-      : findVCTSequence(board, color, REVIEW_VCT_OPTIONS_WITH_BRANCHES);
+    const vctRetry = wasmFindVCTSequence(
+      wasmSearchEngine,
+      board,
+      color,
+      REVIEW_VCT_OPTIONS_WITH_BRANCHES,
+    );
     if (vctRetry) {
       forcedWin = vctRetry;
       forcedWinType = vctRetry.isForbiddenTrap ? "forbidden-trap" : "vct";
@@ -599,7 +573,7 @@ interface ForcedWinResultContext {
   forcedWinType: ForcedWinType | undefined;
   doubleMiseMoves: Position[];
   doubleMiseBestMove: Position | null;
-  result: ReturnType<typeof findBestMoveIterativeWithTT>;
+  result: IterativeDeepingResult;
   buildCandidate: (entry: MoveScoreEntry) => ReviewCandidate;
   playedRow: number;
   playedCol: number;
@@ -611,7 +585,7 @@ interface ForcedWinResultContext {
   profile: ReviewProfile;
   timings: FullEvalTimings;
   totalStart: number;
-  wasmSearchEngine?: WasmSearchEngine;
+  wasmSearchEngine: WasmSearchEngine;
 }
 
 function buildForcedWinResult(
@@ -654,8 +628,8 @@ function buildForcedWinResult(
     bestMove,
     bestScore,
     result,
-    doubleMiseMoves,
     wasmSearchEngine,
+    doubleMiseMoves,
   );
 
   // 両ミセターゲット算出（四三を作る位置）
@@ -848,6 +822,7 @@ function buildForcedWinResult(
       opponentColor,
       stoneCountFW,
       Infinity,
+      wasmSearchEngine,
     );
   }
   timings.pvVerification = performance.now() - t0;
@@ -948,7 +923,7 @@ interface NormalResultContext {
   board: BoardState;
   color: "black" | "white";
   opponentColor: "black" | "white";
-  result: ReturnType<typeof findBestMoveIterativeWithTT>;
+  result: IterativeDeepingResult;
   buildCandidate: (entry: MoveScoreEntry) => ReviewCandidate;
   playedRow: number;
   playedCol: number;
@@ -960,7 +935,7 @@ interface NormalResultContext {
   profile: ReviewProfile;
   timings: FullEvalTimings;
   totalStart: number;
-  wasmSearchEngine?: WasmSearchEngine;
+  wasmSearchEngine: WasmSearchEngine;
 }
 
 function buildNormalResult(
@@ -1090,6 +1065,7 @@ function buildNormalResult(
       opponentColor,
       stoneCount,
       Infinity,
+      wasmSearchEngine,
     );
   }
   timings.pvVerification = performance.now() - t0;

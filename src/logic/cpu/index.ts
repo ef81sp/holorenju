@@ -1,12 +1,12 @@
 /**
  * CPUロジック
  *
- * Minimax + Alpha-Beta剪定を使用した実装
+ * 探索アルゴリズムはZig/WASMに移行済み。
+ * TS側は評価関数、開局パターン、候補手生成を提供する。
  */
 
 export { evaluateBoard, evaluatePosition, PATTERN_SCORES } from "./evaluation";
 export { generateMoves, isNearExistingStone } from "./moveGenerator";
-export { findBestMove, minimax, type MinimaxResult } from "./search/minimax";
 export {
   getOpeningMove,
   getOpeningPatternInfo,

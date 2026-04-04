@@ -2,11 +2,24 @@
  * ベンチマーク棋譜分析の型定義
  */
 
-import type {
-  GameResult,
-  MoveRecord,
-} from "../../src/logic/cpu/benchmark/headless.ts";
 import type { Position } from "../../src/types/game.ts";
+
+/** 1手の記録（旧 benchmark/headless.ts の MoveRecord） */
+export interface MoveRecord {
+  position: Position;
+  color: "black" | "white";
+  thinkingTime: number;
+}
+
+/** 対局結果（旧 benchmark/headless.ts の GameResult） */
+export interface GameResult {
+  moves: MoveRecord[];
+  winner: "black" | "white" | "draw";
+  reason: string;
+  totalMoves: number;
+  blackPlayer: string;
+  whitePlayer: string;
+}
 
 // ============================================================================
 // タグ定義
@@ -121,10 +134,10 @@ export interface AnalysisResult {
 // ベンチマーク結果の型（bench-results/*.json の構造）
 // ============================================================================
 
-/** ベンチマーク結果の1手（headless.ts の MoveRecord と同一） */
+/** ベンチマーク結果の1手 */
 export type BenchMoveHistory = MoveRecord;
 
-/** ベンチマーク結果の1対局（headless.ts の GameResult と同一） */
+/** ベンチマーク結果の1対局 */
 export type BenchGameResult = GameResult;
 
 /** ベンチマーク結果全体 */

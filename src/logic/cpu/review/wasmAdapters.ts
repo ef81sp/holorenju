@@ -8,25 +8,14 @@
 
 import type { BoardState, Position } from "@/types/game";
 
-import type { MiseVCFSearchOptions } from "../search/miseVcf";
-import type { VCFSequenceResult } from "../search/vcf";
-import type { VCTSequenceResult } from "../search/vct";
+import type {
+  MiseVCFSearchOptions,
+  VCFSearchOptions,
+  VCFSequenceResult,
+  VCTSearchOptions,
+  VCTSequenceResult,
+} from "../search/types";
 import type { WasmSearchEngine } from "../wasm/searchEngine";
-
-/** VCF探索オプション（VCFSearchOptions と同一だが循環 import 回避用） */
-interface VCFOptions {
-  maxDepth?: number;
-  timeLimit?: number;
-  maxNodes?: number;
-}
-
-/** VCT探索オプション（VCTSearchOptions と同一だが循環 import 回避用） */
-interface VCTOptions {
-  maxDepth?: number;
-  timeLimit?: number;
-  maxNodes?: number;
-  collectBranches?: boolean;
-}
 
 /** Infinity や undefined を WASM の 0 (=無制限) に変換 */
 function toWasmLimit(value: number | undefined): number {
@@ -40,7 +29,7 @@ export function wasmFindVCFSequence(
   engine: WasmSearchEngine,
   board: BoardState,
   color: "black" | "white",
-  options: VCFOptions,
+  options: VCFSearchOptions,
 ): VCFSequenceResult | null {
   return engine.findVCFSequence(
     board,
@@ -56,7 +45,7 @@ export function wasmFindVCFSequenceFromFirstMove(
   board: BoardState,
   firstMove: Position,
   color: "black" | "white",
-  options: VCFOptions,
+  options: VCFSearchOptions,
 ): VCFSequenceResult | null {
   return engine.findVCFSequenceFromFirstMove(
     board,
@@ -86,7 +75,7 @@ export function wasmFindVCTSequence(
   engine: WasmSearchEngine,
   board: BoardState,
   color: "black" | "white",
-  options: VCTOptions,
+  options: VCTSearchOptions,
 ): VCTSequenceResult | null {
   return engine.findVCTSequence(
     board,
@@ -103,7 +92,7 @@ export function wasmFindVCTSequenceFromFirstMove(
   board: BoardState,
   firstMove: Position,
   color: "black" | "white",
-  options: VCTOptions,
+  options: VCTSearchOptions,
 ): VCTSequenceResult | null {
   return engine.findVCTSequenceFromFirstMove(
     board,
@@ -121,7 +110,7 @@ export function wasmIsVCTFirstMove(
   board: BoardState,
   move: Position,
   color: "black" | "white",
-  options: VCTOptions,
+  options: VCTSearchOptions,
 ): boolean {
   return engine.isVCTFirstMove(
     board,

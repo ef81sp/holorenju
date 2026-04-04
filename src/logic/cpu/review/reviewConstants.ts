@@ -6,7 +6,7 @@
 
 import { DIFFICULTY_PARAMS } from "@/types/cpu";
 
-import type { VCTSearchOptions } from "../search/vct";
+import type { VCTSearchOptions } from "../search/types";
 
 /** 振り返り専用の探索パラメータ（hardから分離し深度を引き上げ） */
 export const REVIEW_SEARCH_PARAMS = {

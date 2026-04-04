@@ -7,18 +7,11 @@
 import type { BoardState, Position } from "@/types/game";
 import type { ForcedWinType } from "@/types/review";
 
+import type { VCTSearchOptions, VCTSequenceResult } from "../search/types";
 import type { WasmSearchEngine } from "../wasm/searchEngine";
 
 import { findDoubleMiseMoves } from "../evaluation/tactics";
 import { createsFourThree } from "../evaluation/winningPatterns";
-import { findMiseVCFSequence } from "../search/miseVcf";
-import { findVCFSequence } from "../search/vcf";
-import {
-  findVCTSequence,
-  findVCTSequenceFromFirstMove,
-  type VCTSearchOptions,
-  type VCTSequenceResult,
-} from "../search/vct";
 import { findThreatMoves } from "../search/vctHelpers";
 import { validateVCTSequence } from "../search/vctValidation";
 import {
@@ -71,7 +64,7 @@ function findVCTByFirstMoveIteration(
   board: BoardState,
   color: "black" | "white",
   options: VCTSearchOptions,
-  wasmSearchEngine?: WasmSearchEngine,
+  wasmSearchEngine: WasmSearchEngine,
 ): VCTSequenceResult | null {
   const threats = findThreatMoves(board, color);
   const perMoveOptions: VCTSearchOptions = {
@@ -85,15 +78,13 @@ function findVCTByFirstMoveIteration(
   };
   for (let i = 0; i < threats.length && i < VCT_FALLBACK_MAX_FIRST_MOVES; i++) {
     const threat = threats[i]!;
-    const result = wasmSearchEngine
-      ? wasmFindVCTSequenceFromFirstMove(
-          wasmSearchEngine,
-          board,
-          threat,
-          color,
-          perMoveOptions,
-        )
-      : findVCTSequenceFromFirstMove(board, threat, color, perMoveOptions);
+    const result = wasmFindVCTSequenceFromFirstMove(
+      wasmSearchEngine,
+      board,
+      threat,
+      color,
+      perMoveOptions,
+    );
     if (result && validateVCTSequence(board, color, result.sequence)) {
       return result;
     }
@@ -111,7 +102,7 @@ export function detectForcedWin(
   color: "black" | "white",
   opponentHasFour: boolean,
   isLightEval: boolean,
-  wasmSearchEngine?: WasmSearchEngine,
+  wasmSearchEngine: WasmSearchEngine,
 ): ForcedWinDetectionResult {
   // 両ミセ検出（VCF探索より前に1回だけ呼ぶ、~5ms）
   // 相手に活三やミセ手がある場合、両ミセ手で脅威も潰していなければ不成立
@@ -136,9 +127,7 @@ export function detectForcedWin(
   }
   let vcfResult = null;
   if (!opponentHasFour) {
-    vcfResult = wasmSearchEngine
-      ? wasmFindVCFSequence(wasmSearchEngine, board, color, vcfOptions)
-      : findVCFSequence(board, color, vcfOptions);
+    vcfResult = wasmFindVCFSequence(wasmSearchEngine, board, color, vcfOptions);
   }
 
   // 1手四三: VCFの初手が四三を作る場合、両ミセより優先
@@ -157,14 +146,12 @@ export function detectForcedWin(
   // Mise-VCF検出（VCFも両ミセもない場合のみ、lightEvalではスキップ）
   let miseVcfResult = null;
   if (!isLightEval && !vcfResult && !doubleMiseBestMove && !opponentHasFour) {
-    miseVcfResult = wasmSearchEngine
-      ? wasmFindMiseVCFSequence(
-          wasmSearchEngine,
-          board,
-          color,
-          REVIEW_MISE_VCF_OPTIONS,
-        )
-      : findMiseVCFSequence(board, color, REVIEW_MISE_VCF_OPTIONS);
+    miseVcfResult = wasmFindMiseVCFSequence(
+      wasmSearchEngine,
+      board,
+      color,
+      REVIEW_MISE_VCF_OPTIONS,
+    );
   }
 
   // forcedWin 構築（優先順: 1手四三 > 両ミセ ≥ 長VCF > Mise-VCF > VCT）
@@ -183,18 +170,12 @@ export function detectForcedWin(
       miseVcfResult ??
       // VCT探索はlightEvalではスキップ（重いため、fullEvalで検出する）
       (!isLightEval && !opponentHasFour
-        ? ((wasmSearchEngine
-            ? wasmFindVCTSequence(
-                wasmSearchEngine,
-                board,
-                color,
-                REVIEW_VCT_OPTIONS_WITH_BRANCHES,
-              )
-            : findVCTSequence(
-                board,
-                color,
-                REVIEW_VCT_OPTIONS_WITH_BRANCHES,
-              )) ??
+        ? (wasmFindVCTSequence(
+            wasmSearchEngine,
+            board,
+            color,
+            REVIEW_VCT_OPTIONS_WITH_BRANCHES,
+          ) ??
           findVCTByFirstMoveIteration(
             board,
             color,
