@@ -75,16 +75,6 @@ pub const HistoryTable = struct {
         return self.table[move.row][move.col];
     }
 
-    /// 全エントリを半減（History Gravity）
-    /// 反復深化の各深度開始時に呼び出し、古い情報の影響を減衰させる
-    pub fn decay(self: *HistoryTable) void {
-        for (0..BOARD_SIZE) |r| {
-            for (0..BOARD_SIZE) |c| {
-                self.table[r][c] >>= 1;
-            }
-        }
-    }
-
     pub fn clear(self: *HistoryTable) void {
         self.table = [_][BOARD_SIZE]i32{[_]i32{0} ** BOARD_SIZE} ** BOARD_SIZE;
     }
