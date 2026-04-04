@@ -66,7 +66,7 @@ const LMR_TABLE = blk: {
             } else {
                 const log_d = @log(@as(f64, @floatFromInt(d)));
                 const log_m = @log(@as(f64, @floatFromInt(m)));
-                const val: i32 = @intFromFloat(@max(1.0, @floor(0.5 * log_d * log_m)));
+                const val: i32 = @intFromFloat(@max(1.0, @floor(0.55 * log_d * log_m)));
                 table[d][m] = @intCast(@max(1, val));
             }
         }
