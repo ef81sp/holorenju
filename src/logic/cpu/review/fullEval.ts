@@ -895,6 +895,32 @@ function buildForcedWinResult(
     }
   }
 
+  // 打った手が追い詰め継続（playedScore === FIVE）の場合、
+  // 弱い被脅威（三三・両ミセ）をクリアする。
+  // プレイヤーの連続脅威により相手はこれらの手を打つ暇がない。
+  // handleDemotion 後に配置し、demotion による再設定もクリアする。
+  if (
+    playedScore === PATTERN_SCORES.FIVE &&
+    (fwForcedLossType === "double-three" || fwForcedLossType === "double-mise")
+  ) {
+    // 打った手の候補エントリからも弱い被脅威をクリア
+    // （allCandidatesLose による敗着遡及を防ぐ）
+    if (playedRow >= 0) {
+      const playedCand = candidates.find(
+        (c) => c.position.row === playedRow && c.position.col === playedCol,
+      );
+      if (
+        playedCand?.opponentForcedWin === "double-three" ||
+        playedCand?.opponentForcedWin === "double-mise"
+      ) {
+        playedCand.opponentForcedWin = undefined;
+      }
+    }
+    fwForcedLossType = undefined;
+    fwForcedLossSequence = undefined;
+    needsVCTCheck = true;
+  }
+
   timings.total = performance.now() - totalStart;
 
   return {
