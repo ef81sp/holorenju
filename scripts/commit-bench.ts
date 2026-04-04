@@ -516,6 +516,12 @@ async function main(): Promise<void> {
     const games: CommitGameResult[] = [];
     let completedGames = 0;
 
+    // 累積性能統計アキュムレータ
+    const cumAcc = {
+      A: { depthSum: 0, timeSum: 0, count: 0, maxDepth: 0 },
+      B: { depthSum: 0, timeSum: 0, count: 0, maxDepth: 0 },
+    };
+
     // 珠型セット制で逐次実行（同じworkerを使い回すため意図的な順次実行）
     for (const { jushuName, positions, isABlack } of jushuTasks) {
       const result = await runCommitGame(workerA, workerB, isABlack, {
@@ -562,6 +568,33 @@ async function main(): Promise<void> {
         }
       }
 
+      // この局のA/B統計を集計し、累積にも加算
+      const gameAcc = {
+        A: { depthSum: 0, timeSum: 0, count: 0, maxDepth: 0 },
+        B: { depthSum: 0, timeSum: 0, count: 0, maxDepth: 0 },
+      };
+      for (let i = 0; i < result.moveHistory.length; i++) {
+        const move = result.moveHistory[i]!;
+        if (move.isOpening) {
+          continue;
+        }
+        const isBlackMove = i % 2 === 0;
+        const player =
+          (isBlackMove && isABlack) || (!isBlackMove && !isABlack) ? "A" : "B";
+        const ga = gameAcc[player];
+        const ca = cumAcc[player];
+        if (move.depth !== undefined) {
+          ga.depthSum += move.depth;
+          ga.maxDepth = Math.max(ga.maxDepth, move.depth);
+          ca.depthSum += move.depth;
+          ca.maxDepth = Math.max(ca.maxDepth, move.depth);
+        }
+        ga.timeSum += move.time;
+        ga.count++;
+        ca.timeSum += move.time;
+        ca.count++;
+      }
+
       // ステータス表示
       const elapsed = ((performance.now() - startTime) / 1000).toFixed(0);
       const elo = estimateEloDiff(wdl);
@@ -581,6 +614,28 @@ async function main(): Promise<void> {
       }
 
       writeStatus(statusMsg);
+
+      // 1局ごとの性能統計（改行で表示）
+      const fmtDepth = (a: {
+        depthSum: number;
+        timeSum: number;
+        count: number;
+      }): string =>
+        a.count > 0
+          ? `d=${(a.depthSum / a.count).toFixed(1)} t=${Math.round(a.timeSum / a.count)}ms`
+          : "n/a";
+      const fmtCum = (a: {
+        depthSum: number;
+        count: number;
+        maxDepth: number;
+        timeSum: number;
+      }): string =>
+        a.count > 0
+          ? `d=${(a.depthSum / a.count).toFixed(2)} max=${a.maxDepth} t=${Math.round(a.timeSum / a.count)}ms`
+          : "n/a";
+      console.log(
+        `\n  局: A[${fmtDepth(gameAcc.A)}] B[${fmtDepth(gameAcc.B)}] | 累計: A[${fmtCum(cumAcc.A)}] B[${fmtCum(cumAcc.B)}]`,
+      );
     }
 
     clearStatus();
