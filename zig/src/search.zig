@@ -460,6 +460,8 @@ pub fn findBestMoveIterative(
     // 深さ2からmaxDepthまで
     var depth: u8 = 2;
     while (depth <= params.max_depth) : (depth += 1) {
+        // History Gravity: 前の深度の古い情報を減衰させ、直近の探索結果を優先
+        ctx.history.decay();
         // PVムーブを先頭に移動
         const pv_move = best_result.position;
         var pv_index: ?u16 = null;
