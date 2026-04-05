@@ -42,8 +42,11 @@ const LMR_PLAIN_FOUR_EXTRA_REDUCTION: u8 = 1;
 /// NMP を適用する最小探索深度
 const NMP_MIN_DEPTH: u8 = 3;
 
-/// NMP による探索深度の削減量
-const NMP_REDUCTION: u8 = 2;
+/// NMP による探索深度の削減量（動的: 深いほど積極的に刈る、R=3上限）
+fn calcNmpReduction(depth: u8) u8 {
+    // depth 3-5: R=2, depth 6+: R=3
+    return @min(3, 2 + (depth -| 3) / 3);
+}
 
 /// 最大延長回数
 const MAX_EXTENSIONS: u8 = 1;
@@ -447,7 +450,8 @@ pub fn minimaxWithTT(
         !hasImmediateThreat(cells, current_color.opposite()))
     {
         ctx.stats.null_move_trials += 1;
-        const nmp_depth = if (depth > 1 + NMP_REDUCTION) depth - 1 - NMP_REDUCTION else 0;
+        const nmp_r = calcNmpReduction(depth);
+        const nmp_depth = if (depth > 1 + nmp_r) depth - 1 - nmp_r else 0;
         const nmp_score = minimaxWithTT(
             cells,
             hash,
