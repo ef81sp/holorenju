@@ -202,6 +202,80 @@ function computePerformanceStats(games: CommitGameResult[]): {
   return { A: toStats(acc.A), B: toStats(acc.B) };
 }
 
+interface AggregatedSearchStats {
+  nodes: number;
+  ttHits: number;
+  ttCutoffs: number;
+  betaCutoffs: number;
+  nullMoveTrials: number;
+  nullMoveCutoffs: number;
+  futilityPrunes: number;
+  threatExtensions: number;
+  lmrTrials: number;
+  lmrResearches: number;
+  qSearchNodes: number;
+  threatProbeCutoffs: number;
+  totalTime: number;
+}
+
+function aggregateSearchStats(
+  games: CommitGameResult[],
+  isPlayerA: boolean,
+): AggregatedSearchStats | null {
+  const acc: AggregatedSearchStats = {
+    nodes: 0,
+    ttHits: 0,
+    ttCutoffs: 0,
+    betaCutoffs: 0,
+    nullMoveTrials: 0,
+    nullMoveCutoffs: 0,
+    futilityPrunes: 0,
+    threatExtensions: 0,
+    lmrTrials: 0,
+    lmrResearches: 0,
+    qSearchNodes: 0,
+    threatProbeCutoffs: 0,
+    totalTime: 0,
+  };
+  let hasStats = false;
+
+  for (const game of games) {
+    for (let i = 0; i < game.moveHistory.length; i++) {
+      const move = game.moveHistory[i]!;
+      if (move.isOpening) {
+        continue;
+      }
+      const isBlackMove = i % 2 === 0;
+      const isA =
+        (isBlackMove && game.isABlack) || (!isBlackMove && !game.isABlack);
+      if (isA !== isPlayerA) {
+        continue;
+      }
+
+      const s = move.stats as Record<string, number> | undefined;
+      if (!s) {
+        continue;
+      }
+      hasStats = true;
+      acc.nodes += s.nodes ?? 0;
+      acc.ttHits += s.ttHits ?? 0;
+      acc.ttCutoffs += s.ttCutoffs ?? 0;
+      acc.betaCutoffs += s.betaCutoffs ?? 0;
+      acc.nullMoveTrials += s.nullMoveTrials ?? 0;
+      acc.nullMoveCutoffs += s.nullMoveCutoffs ?? 0;
+      acc.futilityPrunes += s.futilityPrunes ?? 0;
+      acc.threatExtensions += s.threatExtensions ?? 0;
+      acc.lmrTrials += s.lmrTrials ?? 0;
+      acc.lmrResearches += s.lmrResearches ?? 0;
+      acc.qSearchNodes += s.qSearchNodes ?? 0;
+      acc.threatProbeCutoffs += s.threatProbeCutoffs ?? 0;
+      acc.totalTime += move.time;
+    }
+  }
+
+  return hasStats ? acc : null;
+}
+
 // ============================================================================
 // ステータス表示
 // ============================================================================
@@ -670,6 +744,26 @@ async function main(): Promise<void> {
       console.log(
         `  ${label}: 平均深度=${stats.avgDepth.toFixed(2)} 最大深度=${stats.maxDepth} 平均思考時間=${Math.round(stats.avgThinkingTime)}ms (${stats.searchedMoves}手)`,
       );
+    }
+
+    // A/Bごとの探索統計を集計・表示
+    const searchStatsA = aggregateSearchStats(games, true);
+    const searchStatsB = aggregateSearchStats(games, false);
+    if (searchStatsA || searchStatsB) {
+      console.log(`\n--- 探索統計 ---`);
+      for (const [label, ss] of [
+        ["A", searchStatsA],
+        ["B", searchStatsB],
+      ] as const) {
+        if (!ss) {
+          continue;
+        }
+        const nps =
+          ss.totalTime > 0 ? Math.round((ss.nodes / ss.totalTime) * 1000) : 0;
+        console.log(
+          `  ${label}: nodes=${ss.nodes} NPS=${nps} ttHit=${ss.ttHits} ttCut=${ss.ttCutoffs} betaCut=${ss.betaCutoffs} qNodes=${ss.qSearchNodes} threatCut=${ss.threatProbeCutoffs} lmr=${ss.lmrTrials}(re:${ss.lmrResearches}) nmp=${ss.nullMoveTrials}(cut:${ss.nullMoveCutoffs}) futility=${ss.futilityPrunes}`,
+        );
+      }
     }
 
     // 結果保存

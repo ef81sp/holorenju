@@ -88,6 +88,39 @@ export fn findBestMove(color: u8, max_depth: u8, time_limit_ms: u32, max_nodes: 
     });
 
     writeResult(result.position.row, result.position.col, result.score, result.completed_depth, &result.top_candidates, result.top_candidate_count);
+    writeStats(result.stats);
+}
+
+/// 探索統計バッファ（12フィールド × u32 = 48バイト）
+var stats_buffer: [48]u8 = .{0} ** 48;
+
+export fn getStatsBuffer() [*]u8 {
+    return &stats_buffer;
+}
+
+fn writeStats(stats: minimax.SearchStats) void {
+    const fields = [_]u32{
+        stats.nodes,
+        stats.tt_hits,
+        stats.tt_cutoffs,
+        stats.beta_cutoffs,
+        stats.null_move_trials,
+        stats.null_move_cutoffs,
+        stats.futility_prunes,
+        stats.threat_extensions,
+        stats.lmr_trials,
+        stats.lmr_researches,
+        stats.q_search_nodes,
+        stats.threat_probe_cutoffs,
+    };
+    for (fields, 0..) |val, i| {
+        const bytes: [4]u8 = @bitCast(val);
+        const base = i * 4;
+        stats_buffer[base] = bytes[0];
+        stats_buffer[base + 1] = bytes[1];
+        stats_buffer[base + 2] = bytes[2];
+        stats_buffer[base + 3] = bytes[3];
+    }
 }
 
 /// TT をクリア

@@ -8,11 +8,30 @@
 
 import type { Worker } from "node:worker_threads";
 
-import type {
-  GameResult,
-  MoveRecord,
-} from "../src/logic/cpu/benchmark/headless.ts";
 import type { BoardState, Position } from "../src/types/game.ts";
+
+/** 着手記録 */
+export interface MoveRecord {
+  row: number;
+  col: number;
+  time: number;
+  isOpening: boolean;
+  depth?: number;
+  score?: number;
+  stats?: Record<string, number>;
+}
+
+/** 対局結果 */
+export interface GameResult {
+  playerA: string;
+  playerB: string;
+  winner: "A" | "B" | "draw";
+  reason: "five" | "forbidden" | "draw" | "move_limit";
+  moves: number;
+  duration: number;
+  moveHistory: MoveRecord[];
+  isABlack: boolean;
+}
 
 import { applyMove } from "../src/logic/cpu/core/boardUtils.ts";
 import { detectOpponentThreats } from "../src/logic/cpu/evaluation/threatDetection.ts";
@@ -35,6 +54,7 @@ interface MoveResponse {
   depth: number;
   thinkingTimeMs: number;
   interrupted: boolean;
+  stats?: Record<string, number>;
 }
 
 interface ErrorResponse {
@@ -221,6 +241,7 @@ export async function runCommitGame(
       isOpening: false,
       score: response.score,
       depth: response.depth,
+      stats: response.stats,
     });
     moveCount++;
 
