@@ -26,24 +26,19 @@ import { FORCED_LOSS_VCT_OPTIONS } from "./review/forcedLossCheck";
 import { detectForcedWin } from "./review/forcedWinDetection";
 import { executeFullEval } from "./review/fullEval";
 import { wasmFindVCTSequence } from "./review/wasmAdapters";
-import { findVCTSequence, VCT_STONE_THRESHOLD } from "./search/vct";
-import { type BoardEvaluator, WasmBoardEvaluator } from "./wasm/bridge";
+import { VCT_STONE_THRESHOLD } from "./search/types";
 import { loadWasmModule } from "./wasm/loader";
 import { WasmSearchEngine } from "./wasm/searchEngine";
 
 /** WASM モジュール（初回ロード後にキャッシュ） */
 let cachedWasm: WasmModuleContext | null = null;
 
-async function getWasmEvaluator(): Promise<BoardEvaluator | null> {
-  if (!cachedWasm) {
-    try {
-      cachedWasm = await loadWasmModule();
-    } catch {
-      console.warn("WASM module unavailable, falling back to TS");
-      return null;
-    }
+async function getWasmModule(): Promise<WasmModuleContext> {
+  if (cachedWasm) {
+    return cachedWasm;
   }
-  return new WasmBoardEvaluator(cachedWasm);
+  cachedWasm = await loadWasmModule();
+  return cachedWasm;
 }
 
 self.onmessage = async (event: MessageEvent<ReviewEvalRequest>) => {
@@ -59,6 +54,8 @@ self.onmessage = async (event: MessageEvent<ReviewEvalRequest>) => {
   } = event.data;
 
   try {
+    const wasm = await getWasmModule();
+    const searchEngine = new WasmSearchEngine(wasm);
     const moves = moveHistory.trim().split(/\s+/);
 
     // Phase 2/3: VCTチェックのみ実行
@@ -89,17 +86,12 @@ self.onmessage = async (event: MessageEvent<ReviewEvalRequest>) => {
         !selfHasFour &&
         (skipStoneThreshold || stoneCountAfter >= VCT_STONE_THRESHOLD)
       ) {
-        const vctSearchEngine = cachedWasm
-          ? new WasmSearchEngine(cachedWasm)
-          : undefined;
-        const oppVCT = vctSearchEngine
-          ? wasmFindVCTSequence(
-              vctSearchEngine,
-              boardAfter,
-              opponentColor,
-              FORCED_LOSS_VCT_OPTIONS,
-            )
-          : findVCTSequence(boardAfter, opponentColor, FORCED_LOSS_VCT_OPTIONS);
+        const oppVCT = wasmFindVCTSequence(
+          searchEngine,
+          boardAfter,
+          opponentColor,
+          FORCED_LOSS_VCT_OPTIONS,
+        );
         if (oppVCT) {
           forcedLossType = oppVCT.isForbiddenTrap ? "forbidden-trap" : "vct";
           forcedLossSequence = oppVCT.sequence;
@@ -128,15 +120,12 @@ self.onmessage = async (event: MessageEvent<ReviewEvalRequest>) => {
         opponentThreats.fours.length > 0 ||
         opponentThreats.openFours.length > 0;
 
-      const lightSearchEngine = cachedWasm
-        ? new WasmSearchEngine(cachedWasm)
-        : undefined;
       const { forcedWin, forcedWinType, doubleMiseBestMove } = detectForcedWin(
         board,
         color,
         opponentHasFour,
         true,
-        lightSearchEngine,
+        searchEngine,
       );
 
       const response: LightEvalResult = {
@@ -151,16 +140,11 @@ self.onmessage = async (event: MessageEvent<ReviewEvalRequest>) => {
     }
 
     // fullEval: 共通ロジックに委譲
-    const boardEvaluator = (await getWasmEvaluator()) ?? undefined;
-    const wasmSearchEngine = cachedWasm
-      ? new WasmSearchEngine(cachedWasm)
-      : undefined;
     const result = executeFullEval({
       moveHistory,
       moveIndex,
       preciseAnalysis,
-      boardEvaluator,
-      wasmSearchEngine,
+      wasmSearchEngine: searchEngine,
     });
 
     // timings は Worker の結果には不要なので除外

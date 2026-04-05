@@ -30,7 +30,7 @@ export function verifyCandidates(
   opponentColor: "black" | "white",
   stoneCount: number,
   timeBudgetMs: number,
-  wasmSearchEngine?: WasmSearchEngine,
+  wasmSearchEngine: WasmSearchEngine,
 ): { demotedBest: boolean; bestLoss?: ForcedLossResult } {
   const deadline = performance.now() + timeBudgetMs;
   let demotedBest = false;
@@ -56,6 +56,7 @@ export function verifyCandidates(
       color,
       opponentColor,
       stoneCount,
+      wasmSearchEngine,
       {
         vcfOptions: {
           ...CANDIDATE_VERIFY_VCF_OPTIONS,
@@ -93,7 +94,6 @@ export function verifyCandidates(
           },
         },
       },
-      wasmSearchEngine,
     );
 
     if (loss) {

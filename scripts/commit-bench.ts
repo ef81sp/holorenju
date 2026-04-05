@@ -23,6 +23,7 @@ import type {
   CommitBenchResult,
   CommitGameResult,
   CommitInfo,
+  PlayerPerformanceStats,
 } from "./types/commit-bench.ts";
 
 import {
@@ -144,6 +145,61 @@ Examples:
   pnpm commit:bench --commitA=HEAD~1 --commitB=HEAD --sets=1
   pnpm commit:bench --commitA=abc1234 --commitB=def5678 --sprt --elo0=0 --elo1=30
 `);
+}
+
+// ============================================================================
+// 性能統計集計
+// ============================================================================
+
+function computePerformanceStats(games: CommitGameResult[]): {
+  A: PlayerPerformanceStats;
+  B: PlayerPerformanceStats;
+} {
+  const acc = {
+    A: { depthSum: 0, timeSum: 0, count: 0, maxDepth: 0 },
+    B: { depthSum: 0, timeSum: 0, count: 0, maxDepth: 0 },
+  };
+
+  for (const game of games) {
+    for (let i = 0; i < game.moveHistory.length; i++) {
+      const move = game.moveHistory[i]!;
+      if (move.isOpening) {
+        continue;
+      }
+
+      // 偶数手(0,2,4...)=黒番、奇数手=白番
+      // isABlackでA/Bを判定
+      const isBlackMove = i % 2 === 0;
+      const player =
+        (isBlackMove && game.isABlack) || (!isBlackMove && !game.isABlack)
+          ? "A"
+          : "B";
+      const a = acc[player];
+
+      if (move.depth !== undefined) {
+        a.depthSum += move.depth;
+        a.maxDepth = Math.max(a.maxDepth, move.depth);
+      }
+      a.timeSum += move.time;
+      a.count++;
+    }
+  }
+
+  function toStats(a: {
+    depthSum: number;
+    timeSum: number;
+    count: number;
+    maxDepth: number;
+  }): PlayerPerformanceStats {
+    return {
+      searchedMoves: a.count,
+      avgDepth: a.count > 0 ? a.depthSum / a.count : 0,
+      maxDepth: a.maxDepth,
+      avgThinkingTime: a.count > 0 ? a.timeSum / a.count : 0,
+    };
+  }
+
+  return { A: toStats(acc.A), B: toStats(acc.B) };
 }
 
 // ============================================================================
@@ -460,6 +516,12 @@ async function main(): Promise<void> {
     const games: CommitGameResult[] = [];
     let completedGames = 0;
 
+    // 累積性能統計アキュムレータ
+    const cumAcc = {
+      A: { depthSum: 0, timeSum: 0, count: 0, maxDepth: 0 },
+      B: { depthSum: 0, timeSum: 0, count: 0, maxDepth: 0 },
+    };
+
     // 珠型セット制で逐次実行（同じworkerを使い回すため意図的な順次実行）
     for (const { jushuName, positions, isABlack } of jushuTasks) {
       const result = await runCommitGame(workerA, workerB, isABlack, {
@@ -506,6 +568,33 @@ async function main(): Promise<void> {
         }
       }
 
+      // この局のA/B統計を集計し、累積にも加算
+      const gameAcc = {
+        A: { depthSum: 0, timeSum: 0, count: 0, maxDepth: 0 },
+        B: { depthSum: 0, timeSum: 0, count: 0, maxDepth: 0 },
+      };
+      for (let i = 0; i < result.moveHistory.length; i++) {
+        const move = result.moveHistory[i]!;
+        if (move.isOpening) {
+          continue;
+        }
+        const isBlackMove = i % 2 === 0;
+        const player =
+          (isBlackMove && isABlack) || (!isBlackMove && !isABlack) ? "A" : "B";
+        const ga = gameAcc[player];
+        const ca = cumAcc[player];
+        if (move.depth !== undefined) {
+          ga.depthSum += move.depth;
+          ga.maxDepth = Math.max(ga.maxDepth, move.depth);
+          ca.depthSum += move.depth;
+          ca.maxDepth = Math.max(ca.maxDepth, move.depth);
+        }
+        ga.timeSum += move.time;
+        ga.count++;
+        ca.timeSum += move.time;
+        ca.count++;
+      }
+
       // ステータス表示
       const elapsed = ((performance.now() - startTime) / 1000).toFixed(0);
       const elo = estimateEloDiff(wdl);
@@ -525,6 +614,28 @@ async function main(): Promise<void> {
       }
 
       writeStatus(statusMsg);
+
+      // 1局ごとの性能統計（改行で表示）
+      const fmtDepth = (a: {
+        depthSum: number;
+        timeSum: number;
+        count: number;
+      }): string =>
+        a.count > 0
+          ? `d=${(a.depthSum / a.count).toFixed(1)} t=${Math.round(a.timeSum / a.count)}ms`
+          : "n/a";
+      const fmtCum = (a: {
+        depthSum: number;
+        count: number;
+        maxDepth: number;
+        timeSum: number;
+      }): string =>
+        a.count > 0
+          ? `d=${(a.depthSum / a.count).toFixed(2)} max=${a.maxDepth} t=${Math.round(a.timeSum / a.count)}ms`
+          : "n/a";
+      console.log(
+        `\n  局: A[${fmtDepth(gameAcc.A)}] B[${fmtDepth(gameAcc.B)}] | 累計: A[${fmtCum(cumAcc.A)}] B[${fmtCum(cumAcc.B)}]`,
+      );
     }
 
     clearStatus();
@@ -549,6 +660,18 @@ async function main(): Promise<void> {
 
     console.log(`所要時間: ${elapsedSeconds.toFixed(1)}秒`);
 
+    // A/Bごとの性能統計を集計
+    const performanceStats = computePerformanceStats(games);
+    console.log(`\n--- 性能統計 ---`);
+    for (const [label, stats] of [
+      ["A", performanceStats.A],
+      ["B", performanceStats.B],
+    ] as const) {
+      console.log(
+        `  ${label}: 平均深度=${stats.avgDepth.toFixed(2)} 最大深度=${stats.maxDepth} 平均思考時間=${Math.round(stats.avgThinkingTime)}ms (${stats.searchedMoves}手)`,
+      );
+    }
+
     // 結果保存
     const benchResult: CommitBenchResult = {
       type: "commit-bench",
@@ -568,6 +691,7 @@ async function main(): Promise<void> {
       sprt: sprtState,
       games,
       elapsedSeconds,
+      performanceStats,
     };
 
     if (!fs.existsSync(OUTPUT_DIR)) {

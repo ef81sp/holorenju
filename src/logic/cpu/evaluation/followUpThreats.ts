@@ -9,7 +9,7 @@ import type { BoardState, Position } from "@/types/game";
 import { isValidPosition } from "@/logic/renjuRules";
 
 import { DIRECTIONS } from "../core/constants";
-import { hasVCF } from "../search/vcf";
+import { hasVCF } from "../search/vcfCheck";
 import { analyzeDirection } from "./directionAnalysis";
 import { getLineEndPoints } from "./forbiddenTactics";
 import { analyzeJumpPatterns } from "./jumpPatterns";

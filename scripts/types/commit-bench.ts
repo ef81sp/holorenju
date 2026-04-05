@@ -23,6 +23,18 @@ export interface CommitInfo {
   date: string;
 }
 
+/** プレイヤーごとの性能統計 */
+export interface PlayerPerformanceStats {
+  /** 探索した手数（開局除く） */
+  searchedMoves: number;
+  /** 平均到達深度 */
+  avgDepth: number;
+  /** 最大到達深度 */
+  maxDepth: number;
+  /** 平均思考時間（ms） */
+  avgThinkingTime: number;
+}
+
 /** コミット間ベンチマーク結果 */
 export interface CommitBenchResult {
   type: "commit-bench";
@@ -52,4 +64,9 @@ export interface CommitBenchResult {
   games: CommitGameResult[];
   /** 所要時間（秒） */
   elapsedSeconds: number;
+  /** A/Bごとの性能統計 */
+  performanceStats?: {
+    A: PlayerPerformanceStats;
+    B: PlayerPerformanceStats;
+  };
 }

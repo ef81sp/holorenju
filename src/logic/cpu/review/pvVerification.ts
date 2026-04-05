@@ -8,6 +8,8 @@
 import type { BoardState, Position } from "@/types/game";
 import type { ForcedLossType, ReviewCandidate } from "@/types/review";
 
+import type { WasmSearchEngine } from "../wasm/searchEngine";
+
 import {
   checkCandidateForcedLoss,
   CANDIDATE_VERIFY_VCF_OPTIONS,
@@ -46,6 +48,7 @@ export function verifyPV(
   opponentColor: "black" | "white",
   stoneCount: number,
   timeBudgetMs: number,
+  wasmSearchEngine: WasmSearchEngine,
 ): PVVerificationResult | null {
   const pv = candidate.principalVariation;
   // PV 長 1 は verifyCandidates と完全重複のためスキップ
@@ -98,6 +101,7 @@ export function verifyPV(
           color,
           opponentColor,
           currentStoneCount - 1,
+          wasmSearchEngine,
           PV_VERIFY_OPTIONS,
         );
         row[move.col] = color;
@@ -135,6 +139,7 @@ export function verifyCandidatePVs(
   opponentColor: "black" | "white",
   stoneCount: number,
   totalBudgetMs: number,
+  wasmSearchEngine: WasmSearchEngine,
 ): void {
   const deadline = performance.now() + totalBudgetMs;
 
@@ -159,6 +164,7 @@ export function verifyCandidatePVs(
       opponentColor,
       stoneCount,
       remaining,
+      wasmSearchEngine,
     );
 
     if (result) {

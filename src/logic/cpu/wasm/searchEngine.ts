@@ -9,8 +9,11 @@ import type { BoardState, Position } from "@/types/game";
 
 import { DIFFICULTY_PARAMS, type CpuDifficulty } from "@/types/cpu";
 
-import type { VCFSequenceResult } from "../search/vcf";
-import type { VCTBranch, VCTSequenceResult } from "../search/vct";
+import type {
+  VCFSequenceResult,
+  VCTBranch,
+  VCTSequenceResult,
+} from "../search/types";
 import type { WasmModuleContext } from "./types";
 
 import { boardStateToWasm, colorToWasm } from "./boardAdapter";
@@ -45,6 +48,11 @@ export class WasmSearchEngine {
 
   constructor(wasm: WasmModuleContext) {
     this.wasm = wasm;
+  }
+
+  /** Transposition Table をクリア */
+  clearTT(): void {
+    this.wasm.ttClear();
   }
 
   findBestMove(
