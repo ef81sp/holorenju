@@ -41,6 +41,21 @@ interface MoveRequest {
   color: "black" | "white";
 }
 
+interface WasmSearchStats {
+  nodes: number;
+  ttHits: number;
+  ttCutoffs: number;
+  betaCutoffs: number;
+  nullMoveTrials: number;
+  nullMoveCutoffs: number;
+  futilityPrunes: number;
+  threatExtensions: number;
+  lmrTrials: number;
+  lmrResearches: number;
+  qSearchNodes: number;
+  threatProbeCutoffs: number;
+}
+
 interface MoveResponse {
   requestId: number;
   position: Position;
@@ -48,6 +63,7 @@ interface MoveResponse {
   depth: number;
   thinkingTimeMs: number;
   interrupted: boolean;
+  stats?: WasmSearchStats;
 }
 
 interface ErrorResponse {
@@ -61,6 +77,7 @@ interface FindBestMoveResult {
   score: number;
   completedDepth: number;
   interrupted: boolean;
+  stats?: WasmSearchStats;
 }
 
 /** 新シグネチャ（パラメータオブジェクト版） */
@@ -99,8 +116,10 @@ interface WasmModuleExports {
     maxNodes: number,
     absoluteTimeLimitMs: number,
     aspirationMode: number,
+    evalOptionsFlags?: number,
   ) => void;
   getResultBuffer: () => number;
+  getStatsBuffer?: () => number;
   ttClear: () => void;
 }
 
@@ -111,6 +130,39 @@ interface WasmSearchHandler {
     color: "black" | "white",
     params: DifficultyParams,
   ) => FindBestMoveResult;
+}
+
+/**
+ * EvaluationOptions → WASM用ビットマスク
+ * Zig position_eval.decodeEvalOptions と一致させる
+ */
+function encodeEvalOptionsForWasm(opts: {
+  enableMise?: boolean;
+  enableForbiddenTrap?: boolean;
+  enableMultiThreat?: boolean;
+  enableCounterFour?: boolean;
+  enableNullMovePruning?: boolean;
+  enableFutilityPruning?: boolean;
+  enableMandatoryDefense?: boolean;
+  enableSingleFourPenalty?: boolean;
+  enableMiseThreat?: boolean;
+  enableDoubleThreeThreat?: boolean;
+  enableForbiddenVulnerability?: boolean;
+}): number {
+  const bits: boolean[] = [
+    opts.enableMise ?? false,
+    opts.enableForbiddenTrap ?? false,
+    opts.enableMultiThreat ?? false,
+    (opts.enableCounterFour ?? false) ||
+      (opts.enableNullMovePruning ?? false) ||
+      (opts.enableFutilityPruning ?? false),
+    opts.enableMandatoryDefense ?? false,
+    opts.enableSingleFourPenalty ?? false,
+    opts.enableMiseThreat ?? false,
+    opts.enableDoubleThreeThreat ?? false,
+    opts.enableForbiddenVulnerability ?? false,
+  ];
+  return bits.reduce((flags, bit, i) => flags + (bit ? 2 ** i : 0), 0);
 }
 
 // WASM cell constants (matching Zig Cell enum)
@@ -187,6 +239,9 @@ function createWasmSearchHandler(wasm: WasmModuleExports): WasmSearchHandler {
     ): FindBestMoveResult {
       boardStateToWasm(wasm, board);
       wasm.ttClear();
+      const evalFlags = params.evaluationOptions
+        ? encodeEvalOptionsForWasm(params.evaluationOptions)
+        : 0;
       wasm.findBestMove(
         color === "black" ? CELL_BLACK : CELL_WHITE,
         params.depth,
@@ -194,6 +249,7 @@ function createWasmSearchHandler(wasm: WasmModuleExports): WasmSearchHandler {
         params.maxNodes,
         0, // absoluteTimeLimitMs
         0, // aspirationMode
+        evalFlags,
       );
 
       // 結果バッファから読み取り
@@ -204,11 +260,32 @@ function createWasmSearchHandler(wasm: WasmModuleExports): WasmSearchHandler {
       const score = view.getInt32(ptr + 2, true);
       const completedDepth = view.getUint8(ptr + 6);
 
+      // 統計バッファから読み取り（getStatsBuffer がないWASMとの互換性）
+      let stats: WasmSearchStats | undefined = undefined;
+      if (wasm.getStatsBuffer) {
+        const statsPtr = wasm.getStatsBuffer();
+        stats = {
+          nodes: view.getUint32(statsPtr, true),
+          ttHits: view.getUint32(statsPtr + 4, true),
+          ttCutoffs: view.getUint32(statsPtr + 8, true),
+          betaCutoffs: view.getUint32(statsPtr + 12, true),
+          nullMoveTrials: view.getUint32(statsPtr + 16, true),
+          nullMoveCutoffs: view.getUint32(statsPtr + 20, true),
+          futilityPrunes: view.getUint32(statsPtr + 24, true),
+          threatExtensions: view.getUint32(statsPtr + 28, true),
+          lmrTrials: view.getUint32(statsPtr + 32, true),
+          lmrResearches: view.getUint32(statsPtr + 36, true),
+          qSearchNodes: view.getUint32(statsPtr + 40, true),
+          threatProbeCutoffs: view.getUint32(statsPtr + 44, true),
+        };
+      }
+
       return {
         position: { row, col },
         score,
         completedDepth,
         interrupted: false,
+        stats,
       };
     },
   };
@@ -362,6 +439,7 @@ async function main(): Promise<void> {
         depth: result.completedDepth,
         thinkingTimeMs,
         interrupted: result.interrupted,
+        stats: result.stats,
       };
 
       parentPort?.postMessage(response);

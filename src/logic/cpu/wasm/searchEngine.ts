@@ -9,6 +9,7 @@ import type { BoardState, Position } from "@/types/game";
 
 import { DIFFICULTY_PARAMS, type CpuDifficulty } from "@/types/cpu";
 
+import type { EvaluationOptions } from "../evaluation/patternScores";
 import type {
   VCFSequenceResult,
   VCTBranch,
@@ -17,6 +18,31 @@ import type {
 import type { WasmModuleContext } from "./types";
 
 import { boardStateToWasm, colorToWasm } from "./boardAdapter";
+
+/**
+ * EvaluationOptions → WASM用ビットマスクにエンコード
+ *
+ * ビットの順序は Zig の position_eval.decodeEvalOptions と一致させる。
+ * enableNullMovePruning / enableFutilityPruning は Zig 側で
+ * enable_counter_four フラグに統合されている。
+ */
+function encodeEvalOptions(opts: EvaluationOptions): number {
+  // ビット位置: Zig position_eval.decodeEvalOptions と一致
+  const bits: boolean[] = [
+    opts.enableMise, // bit 0
+    opts.enableForbiddenTrap, // bit 1
+    opts.enableMultiThreat, // bit 2
+    opts.enableCounterFour ||
+      opts.enableNullMovePruning ||
+      opts.enableFutilityPruning, // bit 3
+    opts.enableMandatoryDefense, // bit 4
+    opts.enableSingleFourPenalty, // bit 5
+    opts.enableMiseThreat, // bit 6
+    opts.enableDoubleThreeThreat, // bit 7
+    opts.enableForbiddenVulnerability, // bit 8
+  ];
+  return bits.reduce((flags, bit, i) => flags + (bit ? 2 ** i : 0), 0);
+}
 
 const PV_MAX_LENGTH = 10;
 
@@ -67,6 +93,7 @@ export class WasmSearchEngine {
       params.depth,
       params.timeLimit,
       params.maxNodes,
+      encodeEvalOptions(params.evaluationOptions),
     );
   }
 
@@ -76,6 +103,7 @@ export class WasmSearchEngine {
     maxDepth: number,
     timeLimitMs: number,
     maxNodes: number,
+    evalOptionsFlags = 0,
   ): WasmSearchResult {
     boardStateToWasm(this.wasm, board);
     this.wasm.ttClear();
@@ -86,6 +114,7 @@ export class WasmSearchEngine {
       maxNodes,
       0,
       0,
+      evalOptionsFlags,
     );
     return this.readResult();
   }
@@ -104,6 +133,7 @@ export class WasmSearchEngine {
       maxDepth,
       timeLimitMs,
       maxNodes,
+      0,
       0,
       0,
     );
@@ -135,6 +165,7 @@ export class WasmSearchEngine {
       maxNodes,
       absoluteTimeLimitMs,
       aspirationMode,
+      0,
     );
     const result = this.readResultWithCandidates();
 

@@ -2,8 +2,8 @@
  * コミット間ベンチマーク比較の型定義
  */
 
-import type { GameResult } from "../../src/logic/cpu/benchmark/headless.ts";
 import type { CpuDifficulty } from "../../src/types/cpu.ts";
+import type { GameResult } from "../commit-game-runner.ts";
 import type { EloDiffResult, SPRTConfig, SPRTState, WDLCount } from "./ab.ts";
 
 /** 珠型名付き対局結果 */
