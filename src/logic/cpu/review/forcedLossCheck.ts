@@ -164,6 +164,19 @@ export function checkForcedLoss(
     return { type: "double-four", sequence: [whiteWins.doubleFour] };
   }
 
+  // フクミ手チェック: プレイヤーにVCFがあるか
+  // VCF（四追い）は三ベースの脅威（両ミセ・Mise-VCF・三三）より優先するため、
+  // プレイヤーがVCFを持っている場合、相手の三ベース脅威が
+  // VCFも同時に阻止していない限り無効化される
+  const playerColor: "black" | "white" =
+    opponentColor === "black" ? "white" : "black";
+  const playerVCF = wasmFindVCFSequence(
+    wasmSearchEngine,
+    boardAfter,
+    playerColor,
+    vcfOpts,
+  );
+
   // 3. 両ミセ（防御側に活三がある場合は不成立）
   const validDM = filterByCounterThreats(
     boardAfter,
@@ -171,7 +184,19 @@ export function checkForcedLoss(
     findDoubleMiseMoves(boardAfter, opponentColor),
   );
   if (validDM.length > 0 && validDM[0]) {
-    return { type: "double-mise", sequence: [validDM[0]] };
+    if (
+      !playerVCF ||
+      !retainsVCFAfterOpponentMove(
+        boardAfter,
+        validDM[0],
+        opponentColor,
+        playerColor,
+        wasmSearchEngine,
+        vcfOpts,
+      )
+    ) {
+      return { type: "double-mise", sequence: [validDM[0]] };
+    }
   }
 
   // 4. Mise-VCF
@@ -182,7 +207,21 @@ export function checkForcedLoss(
     miseOpts,
   );
   if (oppMise) {
-    return { type: "mise-vcf", sequence: oppMise.sequence };
+    const [miseFirstMove] = oppMise.sequence;
+    if (
+      !playerVCF ||
+      !miseFirstMove ||
+      !retainsVCFAfterOpponentMove(
+        boardAfter,
+        miseFirstMove,
+        opponentColor,
+        playerColor,
+        wasmSearchEngine,
+        vcfOpts,
+      )
+    ) {
+      return { type: "mise-vcf", sequence: oppMise.sequence };
+    }
   }
 
   // 5. 三三（VCTと同等レベル、防御側に活三がある場合は不成立）
@@ -191,7 +230,19 @@ export function checkForcedLoss(
       whiteWins.doubleThree,
     ]);
     if (validDT.length > 0 && validDT[0]) {
-      return { type: "double-three", sequence: [validDT[0]] };
+      if (
+        !playerVCF ||
+        !retainsVCFAfterOpponentMove(
+          boardAfter,
+          validDT[0],
+          opponentColor,
+          playerColor,
+          wasmSearchEngine,
+          vcfOpts,
+        )
+      ) {
+        return { type: "double-three", sequence: [validDT[0]] };
+      }
     }
   }
 
@@ -212,6 +263,40 @@ export function checkForcedLoss(
   }
 
   return undefined;
+}
+
+/**
+ * 相手の脅威手を仮配置した後もプレイヤーにVCFが残るかチェック
+ *
+ * フクミ手（プレイヤーにVCF）がある場合、相手の三ベース脅威（三三・両ミセ等）は
+ * その脅威手がVCFも同時に阻止していない限り無効化される。
+ * 四追い（VCF）は三より優先するため、プレイヤーは三を無視してVCFを実行できる。
+ */
+function retainsVCFAfterOpponentMove(
+  board: BoardState,
+  opponentMove: Position,
+  opponentColor: "black" | "white",
+  playerColor: "black" | "white",
+  wasmSearchEngine: WasmSearchEngine,
+  vcfOpts: VCFSearchOptions,
+): boolean {
+  const row = board[opponentMove.row];
+  if (!row) {
+    return false;
+  }
+
+  row[opponentMove.col] = opponentColor;
+  try {
+    const vcf = wasmFindVCFSequence(
+      wasmSearchEngine,
+      board,
+      playerColor,
+      vcfOpts,
+    );
+    return vcf !== null;
+  } finally {
+    row[opponentMove.col] = null;
+  }
 }
 
 /**

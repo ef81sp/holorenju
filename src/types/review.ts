@@ -74,6 +74,10 @@ export interface ReviewCandidate {
   opponentForcedWin?: ForcedLossType;
   /** 相手の強制勝ち手順（Phase 3 深掘りチェックで取得） */
   opponentForcedWinSequence?: Position[];
+  /** フクミ手（この手を放置するとVCFが成立する） */
+  isFukumi?: boolean;
+  /** フクミ手のVCF手数 */
+  fukumiDepth?: number;
 }
 
 /**

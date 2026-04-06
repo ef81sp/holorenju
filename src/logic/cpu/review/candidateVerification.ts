@@ -9,12 +9,15 @@ import type { ForcedLossResult, ReviewCandidate } from "@/types/review";
 
 import type { WasmSearchEngine } from "../wasm/searchEngine";
 
+import { createsFour, createsOpenThree } from "../search/threatMoves";
 import {
   checkCandidateForcedLoss,
   CANDIDATE_VERIFY_VCF_OPTIONS,
   CANDIDATE_VERIFY_MISE_VCF_OPTIONS,
   CANDIDATE_VERIFY_VCT_OPTIONS,
+  REVIEW_VCF_OPTIONS,
 } from "./forcedLossCheck";
+import { wasmFindVCFSequence } from "./wasmAdapters";
 
 /**
  * 候補手リストを事後検証し、相手に強制勝ちを許す手にフラグを付ける
@@ -127,4 +130,63 @@ export function findSafeBest(
     return b.searchScore - a.searchScore;
   });
   return candidates.find((c) => !c.opponentForcedWin);
+}
+
+/**
+ * 候補手にフクミ手（放置したらVCFになる手）のアノテーションを付ける
+ *
+ * フクミ手の定義:
+ * - 置く前にはVCFがない
+ * - 置いた後にVCFが生まれる
+ * - 四や活三を作る手ではない（四追い・追詰として既に分類される）
+ */
+export function annotateFukumiMoves(
+  candidates: ReviewCandidate[],
+  board: BoardState,
+  color: "black" | "white",
+  wasmSearchEngine: WasmSearchEngine,
+): void {
+  // 置く前にVCFがあるならフクミ手は存在しない（既に強制勝ち局面）
+  const existingVcf = wasmFindVCFSequence(
+    wasmSearchEngine,
+    board,
+    color,
+    REVIEW_VCF_OPTIONS,
+  );
+  if (existingVcf) {
+    return;
+  }
+
+  for (const cand of candidates) {
+    const row = board[cand.position.row];
+    if (!row) {
+      continue;
+    }
+
+    row[cand.position.col] = color;
+    try {
+      // 四や活三を作る手は「四追い」「追詰」であり、フクミではない
+      if (createsFour(board, cand.position.row, cand.position.col, color)) {
+        continue;
+      }
+      if (
+        createsOpenThree(board, cand.position.row, cand.position.col, color)
+      ) {
+        continue;
+      }
+
+      const vcfResult = wasmFindVCFSequence(
+        wasmSearchEngine,
+        board,
+        color,
+        REVIEW_VCF_OPTIONS,
+      );
+      if (vcfResult) {
+        cand.isFukumi = true;
+        cand.fukumiDepth = vcfResult.sequence.length;
+      }
+    } finally {
+      row[cand.position.col] = null;
+    }
+  }
 }

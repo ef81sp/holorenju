@@ -812,6 +812,14 @@ function isPlayed(candidate: { position: Position }): boolean {
           >
             危:{{ candidateForcedLossLabel(candidate.opponentForcedWin) }}
           </span>
+          <span
+            v-if="candidate.isFukumi"
+            class="chip-tag chip-fukumi"
+          >
+            フクミ{{
+              candidate.fukumiDepth ? `(${candidate.fukumiDepth}手)` : ""
+            }}
+          </span>
         </span>
       </div>
 
@@ -1305,6 +1313,11 @@ function isPlayed(candidate: { position: Position }): boolean {
 
 .chip-danger {
   color: hsl(0, 65%, 50%);
+  font-weight: 500;
+}
+
+.chip-fukumi {
+  color: hsl(270, 50%, 55%);
   font-weight: 500;
 }
 
