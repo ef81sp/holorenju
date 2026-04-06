@@ -134,11 +134,8 @@ export function findSafeBest(
 /**
  * 候補手にフクミ手（放置したらVCFになる手）のアノテーションを付ける
  *
- * 各候補手Mについて:
- *   1. Mを仮配置（color側の石として）
- *   2. color側にVCFがあるか判定
- *   3. VCFがあれば isFukumi=true, fukumiDepth=VCF手数 を設定
- *   4. 仮配置を戻す
+ * フクミ手の定義: 置く前にはVCFがないが、置いた後にVCFが生まれる手。
+ * 既にVCFがある局面ではフクミ判定をスキップする。
  */
 export function annotateFukumiMoves(
   candidates: ReviewCandidate[],
@@ -146,6 +143,17 @@ export function annotateFukumiMoves(
   color: "black" | "white",
   wasmSearchEngine: WasmSearchEngine,
 ): void {
+  // 置く前にVCFがあるならフクミ手は存在しない（既に強制勝ち局面）
+  const existingVcf = wasmFindVCFSequence(
+    wasmSearchEngine,
+    board,
+    color,
+    REVIEW_VCF_OPTIONS,
+  );
+  if (existingVcf) {
+    return;
+  }
+
   for (const cand of candidates) {
     const row = board[cand.position.row];
     if (!row) {
