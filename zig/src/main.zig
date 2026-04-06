@@ -67,7 +67,7 @@ export fn getResultBuffer() [*]u8 {
 ///   max_nodes: ノード数上限、0=無制限
 ///   absolute_time_limit_ms: 絶対時間制限（0=デフォルト10秒）
 ///   aspiration_mode: 0=固定[75], 1=[75,200,500]
-export fn findBestMove(color: u8, max_depth: u8, time_limit_ms: u32, max_nodes: u32, absolute_time_limit_ms: u32, aspiration_mode: u8) void {
+export fn findBestMove(color: u8, max_depth: u8, time_limit_ms: u32, max_nodes: u32, absolute_time_limit_ms: u32, aspiration_mode: u8, eval_options_flags: u32) void {
     const cell_color: board.Cell = switch (color) {
         1 => .black,
         2 => .white,
@@ -78,6 +78,10 @@ export fn findBestMove(color: u8, max_depth: u8, time_limit_ms: u32, max_nodes: 
     };
 
     const cells = &board.board_cells;
+    const eval_options = if (eval_options_flags == 0)
+        position_eval.DEFAULT_EVAL_OPTIONS
+    else
+        position_eval.decodeEvalOptions(eval_options_flags);
 
     const result = search.findBestMoveIterative(cells, cell_color, .{
         .max_depth = max_depth,
@@ -85,6 +89,7 @@ export fn findBestMove(color: u8, max_depth: u8, time_limit_ms: u32, max_nodes: 
         .max_nodes = max_nodes,
         .absolute_time_limit = if (absolute_time_limit_ms == 0) 10000 else absolute_time_limit_ms,
         .aspiration_mode = aspiration_mode,
+        .eval_options = eval_options,
     });
 
     writeResult(result.position.row, result.position.col, result.score, result.completed_depth, &result.top_candidates, result.top_candidate_count);

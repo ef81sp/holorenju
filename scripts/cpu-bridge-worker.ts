@@ -116,6 +116,7 @@ interface WasmModuleExports {
     maxNodes: number,
     absoluteTimeLimitMs: number,
     aspirationMode: number,
+    evalOptionsFlags?: number,
   ) => void;
   getResultBuffer: () => number;
   getStatsBuffer?: () => number;
@@ -129,6 +130,39 @@ interface WasmSearchHandler {
     color: "black" | "white",
     params: DifficultyParams,
   ) => FindBestMoveResult;
+}
+
+/**
+ * EvaluationOptions → WASM用ビットマスク
+ * Zig position_eval.decodeEvalOptions と一致させる
+ */
+function encodeEvalOptionsForWasm(opts: {
+  enableMise?: boolean;
+  enableForbiddenTrap?: boolean;
+  enableMultiThreat?: boolean;
+  enableCounterFour?: boolean;
+  enableNullMovePruning?: boolean;
+  enableFutilityPruning?: boolean;
+  enableMandatoryDefense?: boolean;
+  enableSingleFourPenalty?: boolean;
+  enableMiseThreat?: boolean;
+  enableDoubleThreeThreat?: boolean;
+  enableForbiddenVulnerability?: boolean;
+}): number {
+  const bits: boolean[] = [
+    opts.enableMise ?? false,
+    opts.enableForbiddenTrap ?? false,
+    opts.enableMultiThreat ?? false,
+    (opts.enableCounterFour ?? false) ||
+      (opts.enableNullMovePruning ?? false) ||
+      (opts.enableFutilityPruning ?? false),
+    opts.enableMandatoryDefense ?? false,
+    opts.enableSingleFourPenalty ?? false,
+    opts.enableMiseThreat ?? false,
+    opts.enableDoubleThreeThreat ?? false,
+    opts.enableForbiddenVulnerability ?? false,
+  ];
+  return bits.reduce((flags, bit, i) => flags + (bit ? 2 ** i : 0), 0);
 }
 
 // WASM cell constants (matching Zig Cell enum)
@@ -205,6 +239,9 @@ function createWasmSearchHandler(wasm: WasmModuleExports): WasmSearchHandler {
     ): FindBestMoveResult {
       boardStateToWasm(wasm, board);
       wasm.ttClear();
+      const evalFlags = params.evaluationOptions
+        ? encodeEvalOptionsForWasm(params.evaluationOptions)
+        : 0;
       wasm.findBestMove(
         color === "black" ? CELL_BLACK : CELL_WHITE,
         params.depth,
@@ -212,6 +249,7 @@ function createWasmSearchHandler(wasm: WasmModuleExports): WasmSearchHandler {
         params.maxNodes,
         0, // absoluteTimeLimitMs
         0, // aspirationMode
+        evalFlags,
       );
 
       // 結果バッファから読み取り

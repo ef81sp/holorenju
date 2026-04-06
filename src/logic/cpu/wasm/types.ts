@@ -39,6 +39,7 @@ export interface WasmModuleContext {
     maxNodes: number,
     absoluteTimeLimitMs: number,
     aspirationMode: number,
+    evalOptionsFlags: number,
   ) => void;
   getResultBuffer: () => number;
   ttClear: () => void;

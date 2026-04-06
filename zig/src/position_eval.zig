@@ -37,6 +37,22 @@ pub const EvalOptions = struct {
 
 pub const DEFAULT_EVAL_OPTIONS = EvalOptions{};
 
+/// ビットマスクからEvalOptionsをデコード
+/// TS側の evaluationOptions とフィールド順序を一致させる
+pub fn decodeEvalOptions(flags: u32) EvalOptions {
+    return .{
+        .enable_mise = (flags & (1 << 0)) != 0,
+        .enable_forbidden_trap = (flags & (1 << 1)) != 0,
+        .enable_multi_threat = (flags & (1 << 2)) != 0,
+        .enable_counter_four = (flags & (1 << 3)) != 0,
+        .enable_mandatory_defense = (flags & (1 << 4)) != 0,
+        .enable_single_four_penalty = (flags & (1 << 5)) != 0,
+        .enable_mise_threat = (flags & (1 << 6)) != 0,
+        .enable_double_three_threat = (flags & (1 << 7)) != 0,
+        .enable_forbidden_vulnerability = (flags & (1 << 8)) != 0,
+    };
+}
+
 pub const FULL_EVAL_OPTIONS = EvalOptions{
     .enable_mise = true,
     .enable_forbidden_trap = true,
