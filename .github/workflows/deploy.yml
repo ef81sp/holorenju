@@ -23,6 +23,10 @@ jobs:
         with:
           version: 10
 
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.15.2
+
       - uses: actions/setup-node@v4
         with:
           node-version: 24
