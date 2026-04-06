@@ -815,7 +815,6 @@ function isPlayed(candidate: { position: Position }): boolean {
           <span
             v-if="candidate.isFukumi"
             class="chip-tag chip-fukumi"
-            :title="`この手を放置すると${candidate.fukumiDepth ?? '?'}手の四追いで負ける`"
           >
             フクミ{{
               candidate.fukumiDepth ? `(${candidate.fukumiDepth}手)` : ""
