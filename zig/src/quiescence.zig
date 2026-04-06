@@ -254,6 +254,23 @@ pub fn quiescenceSearch(
     stats.nodes += 1;
     stats.q_search_nodes += 1;
 
+    // TTプローブ
+    const tt_entry = tt.probe(hash);
+    if (tt_entry) |entry| {
+        const current_tt_depth: i8 = -(@as(i8, @intCast(MAX_QUIESCENCE_DEPTH)) - @as(i8, @intCast(q_depth)) + 1);
+        if (entry.depth >= current_tt_depth) {
+            switch (entry.score_type) {
+                .exact => return entry.score,
+                .lower_bound => {
+                    if (entry.score >= beta_init) return entry.score;
+                },
+                .upper_bound => {
+                    if (entry.score <= alpha_init) return entry.score;
+                },
+            }
+        }
+    }
+
     const eval_opts = evaluate.EvalOptions{
         .enable_leaf_mise = eval_options.enable_leaf_mise,
         .last_mover_is_perspective = if (!is_maximizing) .yes else .no,
