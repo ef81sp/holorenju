@@ -9,6 +9,7 @@ import type { ForcedLossResult, ReviewCandidate } from "@/types/review";
 
 import type { WasmSearchEngine } from "../wasm/searchEngine";
 
+import { createsFour, createsOpenThree } from "../search/threatMoves";
 import {
   checkCandidateForcedLoss,
   CANDIDATE_VERIFY_VCF_OPTIONS,
@@ -134,8 +135,10 @@ export function findSafeBest(
 /**
  * 候補手にフクミ手（放置したらVCFになる手）のアノテーションを付ける
  *
- * フクミ手の定義: 置く前にはVCFがないが、置いた後にVCFが生まれる手。
- * 既にVCFがある局面ではフクミ判定をスキップする。
+ * フクミ手の定義:
+ * - 置く前にはVCFがない
+ * - 置いた後にVCFが生まれる
+ * - 四や活三を作る手ではない（四追い・追詰として既に分類される）
  */
 export function annotateFukumiMoves(
   candidates: ReviewCandidate[],
@@ -162,6 +165,16 @@ export function annotateFukumiMoves(
 
     row[cand.position.col] = color;
     try {
+      // 四や活三を作る手は「四追い」「追詰」であり、フクミではない
+      if (createsFour(board, cand.position.row, cand.position.col, color)) {
+        continue;
+      }
+      if (
+        createsOpenThree(board, cand.position.row, cand.position.col, color)
+      ) {
+        continue;
+      }
+
       const vcfResult = wasmFindVCFSequence(
         wasmSearchEngine,
         board,
