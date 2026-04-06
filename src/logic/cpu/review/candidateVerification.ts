@@ -14,7 +14,9 @@ import {
   CANDIDATE_VERIFY_VCF_OPTIONS,
   CANDIDATE_VERIFY_MISE_VCF_OPTIONS,
   CANDIDATE_VERIFY_VCT_OPTIONS,
+  REVIEW_VCF_OPTIONS,
 } from "./forcedLossCheck";
+import { wasmFindVCFSequence } from "./wasmAdapters";
 
 /**
  * 候補手リストを事後検証し、相手に強制勝ちを許す手にフラグを付ける
@@ -127,4 +129,43 @@ export function findSafeBest(
     return b.searchScore - a.searchScore;
   });
   return candidates.find((c) => !c.opponentForcedWin);
+}
+
+/**
+ * 候補手にフクミ手（放置したらVCFになる手）のアノテーションを付ける
+ *
+ * 各候補手Mについて:
+ *   1. Mを仮配置（color側の石として）
+ *   2. color側にVCFがあるか判定
+ *   3. VCFがあれば isFukumi=true, fukumiDepth=VCF手数 を設定
+ *   4. 仮配置を戻す
+ */
+export function annotateFukumiMoves(
+  candidates: ReviewCandidate[],
+  board: BoardState,
+  color: "black" | "white",
+  wasmSearchEngine: WasmSearchEngine,
+): void {
+  for (const cand of candidates) {
+    const row = board[cand.position.row];
+    if (!row) {
+      continue;
+    }
+
+    row[cand.position.col] = color;
+    try {
+      const vcfResult = wasmFindVCFSequence(
+        wasmSearchEngine,
+        board,
+        color,
+        REVIEW_VCF_OPTIONS,
+      );
+      if (vcfResult) {
+        cand.isFukumi = true;
+        cand.fukumiDepth = vcfResult.sequence.length;
+      }
+    } finally {
+      row[cand.position.col] = null;
+    }
+  }
 }

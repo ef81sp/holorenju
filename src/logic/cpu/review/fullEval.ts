@@ -34,7 +34,11 @@ import {
 } from "../evaluation";
 import { findMiseTargets } from "../evaluation/miseTactics";
 import { colorToWasm } from "../wasm/boardAdapter";
-import { verifyCandidates, findSafeBest } from "./candidateVerification";
+import {
+  verifyCandidates,
+  findSafeBest,
+  annotateFukumiMoves,
+} from "./candidateVerification";
 import { buildDoubleMiseBranches } from "./doubleMiseBranches";
 import { evaluatePlayedForcedWin } from "./evaluatePlayedMove";
 import {
@@ -827,6 +831,9 @@ function buildForcedWinResult(
   }
   timings.pvVerification = performance.now() - t0;
 
+  // フクミ手アノテーション（候補手を打つ側=color にVCFがあるか）
+  annotateFukumiMoves(candidates, board, color, wasmSearchEngine);
+
   // 打たれた手の候補エントリにforcedLossTypeを反映
   if (forcedLossType && playedRow >= 0) {
     const playedCand = candidates.find(
@@ -1069,6 +1076,9 @@ function buildNormalResult(
     );
   }
   timings.pvVerification = performance.now() - t0;
+
+  // フクミ手アノテーション（候補手を打つ側=color にVCFがあるか）
+  annotateFukumiMoves(candidates, board, color, wasmSearchEngine);
 
   // 打たれた手の候補エントリにforcedLossTypeを反映
   if (forcedLossType && playedRow >= 0) {
