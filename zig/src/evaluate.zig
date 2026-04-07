@@ -148,7 +148,7 @@ pub fn createsFourThree(cells: []Cell, row: u8, col: u8, color: Cell) bool {
 }
 
 /// 四三脅威スキャン
-fn scanFourThreeThreat(cells: []Cell, color: Cell, stone_count: u16) bool {
+pub fn scanFourThreeThreat(cells: []Cell, color: Cell, stone_count: u16) bool {
     if (stone_count < 5) return false;
 
     for (0..BOARD_SIZE) |r_usize| {
@@ -165,7 +165,7 @@ fn scanFourThreeThreat(cells: []Cell, color: Cell, stone_count: u16) bool {
 }
 
 /// estimateMiseOpportunity: 四と活三が両方存在するならミセ手の機会あり
-fn estimateMiseOpportunity(four_score: i32, open_three_score: i32) bool {
+pub fn estimateMiseOpportunity(four_score: i32, open_three_score: i32) bool {
     return four_score > 0 and open_three_score > 0;
 }
 

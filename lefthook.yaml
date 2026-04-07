@@ -10,6 +10,9 @@ pre-commit:
     test:
       run: pnpm test
 
+    zig-test:
+      run: cd zig && zig build test
+
 pre-push:
   parallel: true
   commands:
