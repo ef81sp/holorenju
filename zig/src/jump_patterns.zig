@@ -73,60 +73,125 @@ fn getLine(cells: []const Cell, row: u8, col: u8, dir_index: u8, color: Cell) [1
     return line;
 }
 
+/// ストライドベースでセルが color と一致するか確認（範囲外なら false）
+fn isSame(cells: []const Cell, base: i32, stride: i32, offset: i8, max_pos: i8, max_neg: i8, color: Cell) bool {
+    if (offset > 0 and offset > max_pos) return false;
+    if (offset < 0 and -offset > max_neg) return false;
+    return cells[@intCast(base + @as(i32, offset) * stride)] == color;
+}
+
+/// ストライドベースでセルが空きか確認（範囲外なら false）
+fn isEmpty(cells: []const Cell, base: i32, stride: i32, offset: i8, max_pos: i8, max_neg: i8) bool {
+    if (offset > 0 and offset > max_pos) return false;
+    if (offset < 0 and -offset > max_neg) return false;
+    return cells[@intCast(base + @as(i32, offset) * stride)] == .empty;
+}
+
 /// 跳び四パターンをチェック
 /// 仮置きした状態でライン走査し、1つの空きを含む4石パターンを検出
 /// パターン: ●●●・●, ●●・●●, ●・●●●
 pub fn checkJumpFour(cells: []const Cell, row: u8, col: u8, dir_index: u8, color: Cell) bool {
-    const line = getLine(cells, row, col, dir_index, color);
-    const placed: usize = 5;
+    const dir = DIRECTIONS_8[dir_index];
+    const base: i32 = @as(i32, row) * BOARD_SIZE + @as(i32, col);
+    const stride: i32 = @as(i32, dir.dr) * BOARD_SIZE + @as(i32, dir.dc);
 
-    // パターン1: ●●●・● (3石, 空, 1石)
-    const offsets1 = [_]i8{ -4, -2, -1, 0 };
-    for (offsets1) |offset| {
-        const start = @as(i16, placed) + offset;
-        if (start < 0 or start + 4 >= 11) continue;
-        const s: usize = @intCast(start);
-        if (line[s] == .same_color and
-            line[s + 1] == .same_color and
-            line[s + 2] == .same_color and
-            line[s + 3] == .empty and
-            line[s + 4] == .same_color)
-        {
-            if (placed >= s and placed <= s + 4) return true;
-        }
+    // 正方向・負方向の最大有効オフセット（盤端制約、両軸の min）
+    var max_pos: i8 = 5;
+    var max_neg: i8 = 5;
+    if (dir.dr > 0) {
+        max_pos = @min(max_pos, @as(i8, @intCast(14 - row)));
+        max_neg = @min(max_neg, @as(i8, @intCast(row)));
+    }
+    if (dir.dr < 0) {
+        max_pos = @min(max_pos, @as(i8, @intCast(row)));
+        max_neg = @min(max_neg, @as(i8, @intCast(14 - row)));
+    }
+    if (dir.dc > 0) {
+        max_pos = @min(max_pos, @as(i8, @intCast(14 - col)));
+        max_neg = @min(max_neg, @as(i8, @intCast(col)));
+    }
+    if (dir.dc < 0) {
+        max_pos = @min(max_pos, @as(i8, @intCast(col)));
+        max_neg = @min(max_neg, @as(i8, @intCast(14 - col)));
     }
 
-    // パターン2: ●●・●● (2石, 空, 2石)
-    const offsets2 = [_]i8{ -4, -3, -1, 0 };
-    for (offsets2) |offset| {
-        const start = @as(i16, placed) + offset;
-        if (start < 0 or start + 4 >= 11) continue;
-        const s: usize = @intCast(start);
-        if (line[s] == .same_color and
-            line[s + 1] == .same_color and
-            line[s + 2] == .empty and
-            line[s + 3] == .same_color and
-            line[s + 4] == .same_color)
-        {
-            if (placed >= s and placed <= s + 4) return true;
-        }
-    }
+    // パターン1: ●●●・● (s, s+1, s+2 = same; s+3 = empty; s+4 = same)
+    // offset=-4 (s=1): positions [-4,-3,-2,-1,0]
+    if (isSame(cells, base, stride, -4, max_pos, max_neg, color) and
+        isSame(cells, base, stride, -3, max_pos, max_neg, color) and
+        isSame(cells, base, stride, -2, max_pos, max_neg, color) and
+        isEmpty(cells, base, stride, -1, max_pos, max_neg))
+        return true;
+    // offset=-2 (s=3): positions [-2,-1,0,+1,+2]
+    if (isSame(cells, base, stride, -2, max_pos, max_neg, color) and
+        isSame(cells, base, stride, -1, max_pos, max_neg, color) and
+        isEmpty(cells, base, stride, 1, max_pos, max_neg) and
+        isSame(cells, base, stride, 2, max_pos, max_neg, color))
+        return true;
+    // offset=-1 (s=4): positions [-1,0,+1,+2,+3]
+    if (isSame(cells, base, stride, -1, max_pos, max_neg, color) and
+        isSame(cells, base, stride, 1, max_pos, max_neg, color) and
+        isEmpty(cells, base, stride, 2, max_pos, max_neg) and
+        isSame(cells, base, stride, 3, max_pos, max_neg, color))
+        return true;
+    // offset=0 (s=5): positions [0,+1,+2,+3,+4]
+    if (isSame(cells, base, stride, 1, max_pos, max_neg, color) and
+        isSame(cells, base, stride, 2, max_pos, max_neg, color) and
+        isEmpty(cells, base, stride, 3, max_pos, max_neg) and
+        isSame(cells, base, stride, 4, max_pos, max_neg, color))
+        return true;
 
-    // パターン3: ●・●●● (1石, 空, 3石)
-    const offsets3 = [_]i8{ 0, -2, -3, -4 };
-    for (offsets3) |offset| {
-        const start = @as(i16, placed) + offset;
-        if (start < 0 or start + 4 >= 11) continue;
-        const s: usize = @intCast(start);
-        if (line[s] == .same_color and
-            line[s + 1] == .empty and
-            line[s + 2] == .same_color and
-            line[s + 3] == .same_color and
-            line[s + 4] == .same_color)
-        {
-            if (placed >= s and placed <= s + 4) return true;
-        }
-    }
+    // パターン2: ●●・●● (s, s+1 = same; s+2 = empty; s+3, s+4 = same)
+    // offset=-4 (s=1): positions [-4,-3,-2,-1,0]
+    if (isSame(cells, base, stride, -4, max_pos, max_neg, color) and
+        isSame(cells, base, stride, -3, max_pos, max_neg, color) and
+        isEmpty(cells, base, stride, -2, max_pos, max_neg) and
+        isSame(cells, base, stride, -1, max_pos, max_neg, color))
+        return true;
+    // offset=-3 (s=2): positions [-3,-2,-1,0,+1]
+    if (isSame(cells, base, stride, -3, max_pos, max_neg, color) and
+        isSame(cells, base, stride, -2, max_pos, max_neg, color) and
+        isEmpty(cells, base, stride, -1, max_pos, max_neg) and
+        isSame(cells, base, stride, 1, max_pos, max_neg, color))
+        return true;
+    // offset=-1 (s=4): positions [-1,0,+1,+2,+3]
+    if (isSame(cells, base, stride, -1, max_pos, max_neg, color) and
+        isEmpty(cells, base, stride, 1, max_pos, max_neg) and
+        isSame(cells, base, stride, 2, max_pos, max_neg, color) and
+        isSame(cells, base, stride, 3, max_pos, max_neg, color))
+        return true;
+    // offset=0 (s=5): positions [0,+1,+2,+3,+4]
+    if (isSame(cells, base, stride, 1, max_pos, max_neg, color) and
+        isEmpty(cells, base, stride, 2, max_pos, max_neg) and
+        isSame(cells, base, stride, 3, max_pos, max_neg, color) and
+        isSame(cells, base, stride, 4, max_pos, max_neg, color))
+        return true;
+
+    // パターン3: ●・●●● (s = same; s+1 = empty; s+2, s+3, s+4 = same)
+    // offset=-4 (s=1): positions [-4,-3,-2,-1,0]
+    if (isSame(cells, base, stride, -4, max_pos, max_neg, color) and
+        isEmpty(cells, base, stride, -3, max_pos, max_neg) and
+        isSame(cells, base, stride, -2, max_pos, max_neg, color) and
+        isSame(cells, base, stride, -1, max_pos, max_neg, color))
+        return true;
+    // offset=-3 (s=2): positions [-3,-2,-1,0,+1]
+    if (isSame(cells, base, stride, -3, max_pos, max_neg, color) and
+        isEmpty(cells, base, stride, -2, max_pos, max_neg) and
+        isSame(cells, base, stride, -1, max_pos, max_neg, color) and
+        isSame(cells, base, stride, 1, max_pos, max_neg, color))
+        return true;
+    // offset=-2 (s=3): positions [-2,-1,0,+1,+2]
+    if (isSame(cells, base, stride, -2, max_pos, max_neg, color) and
+        isEmpty(cells, base, stride, -1, max_pos, max_neg) and
+        isSame(cells, base, stride, 1, max_pos, max_neg, color) and
+        isSame(cells, base, stride, 2, max_pos, max_neg, color))
+        return true;
+    // offset=0 (s=5): positions [0,+1,+2,+3,+4]
+    if (isEmpty(cells, base, stride, 1, max_pos, max_neg) and
+        isSame(cells, base, stride, 2, max_pos, max_neg, color) and
+        isSame(cells, base, stride, 3, max_pos, max_neg, color) and
+        isSame(cells, base, stride, 4, max_pos, max_neg, color))
+        return true;
 
     return false;
 }
@@ -134,42 +199,74 @@ pub fn checkJumpFour(cells: []const Cell, row: u8, col: u8, dir_index: u8, color
 /// 跳び三パターンをチェック
 /// パターン: ・●●・●・, ・●・●●・
 pub fn checkJumpThree(cells: []const Cell, row: u8, col: u8, dir_index: u8, color: Cell) bool {
-    const line = getLine(cells, row, col, dir_index, color);
-    const placed: usize = 5;
+    const dir = DIRECTIONS_8[dir_index];
+    const base: i32 = @as(i32, row) * BOARD_SIZE + @as(i32, col);
+    const stride: i32 = @as(i32, dir.dr) * BOARD_SIZE + @as(i32, dir.dc);
 
-    // パターン1: ・●●・●・ (空, 2石, 空, 1石, 空)
-    const offsets1 = [_]i8{ -3, -1, 0 };
-    for (offsets1) |offset| {
-        const start = @as(i16, placed) + offset;
-        if (start - 1 < 0 or start + 4 >= 11) continue;
-        const s: usize = @intCast(start);
-        if (line[s - 1] == .empty and
-            line[s] == .same_color and
-            line[s + 1] == .same_color and
-            line[s + 2] == .empty and
-            line[s + 3] == .same_color and
-            line[s + 4] == .empty)
-        {
-            if (placed >= s and placed <= s + 3) return true;
-        }
+    var max_pos: i8 = 5;
+    var max_neg: i8 = 5;
+    if (dir.dr > 0) {
+        max_pos = @min(max_pos, @as(i8, @intCast(14 - row)));
+        max_neg = @min(max_neg, @as(i8, @intCast(row)));
+    }
+    if (dir.dr < 0) {
+        max_pos = @min(max_pos, @as(i8, @intCast(row)));
+        max_neg = @min(max_neg, @as(i8, @intCast(14 - row)));
+    }
+    if (dir.dc > 0) {
+        max_pos = @min(max_pos, @as(i8, @intCast(14 - col)));
+        max_neg = @min(max_neg, @as(i8, @intCast(col)));
+    }
+    if (dir.dc < 0) {
+        max_pos = @min(max_pos, @as(i8, @intCast(col)));
+        max_neg = @min(max_neg, @as(i8, @intCast(14 - col)));
     }
 
-    // パターン2: ・●・●●・ (空, 1石, 空, 2石, 空)
-    const offsets2 = [_]i8{ -3, -2, 0 };
-    for (offsets2) |offset| {
-        const start = @as(i16, placed) + offset;
-        if (start - 1 < 0 or start + 4 >= 11) continue;
-        const s: usize = @intCast(start);
-        if (line[s - 1] == .empty and
-            line[s] == .same_color and
-            line[s + 1] == .empty and
-            line[s + 2] == .same_color and
-            line[s + 3] == .same_color and
-            line[s + 4] == .empty)
-        {
-            if (placed == s or placed == s + 2 or placed == s + 3) return true;
-        }
-    }
+    // パターン1: ・●●・●・ (s-1=empty, s=same, s+1=same, s+2=empty, s+3=same, s+4=empty)
+    // offset=-3 (s=2): positions [-4,-3,-2,-1,0,+1]
+    if (isEmpty(cells, base, stride, -4, max_pos, max_neg) and
+        isSame(cells, base, stride, -3, max_pos, max_neg, color) and
+        isSame(cells, base, stride, -2, max_pos, max_neg, color) and
+        isEmpty(cells, base, stride, -1, max_pos, max_neg) and
+        isEmpty(cells, base, stride, 1, max_pos, max_neg))
+        return true;
+    // offset=-1 (s=4): positions [-2,-1,0,+1,+2,+3]
+    if (isEmpty(cells, base, stride, -2, max_pos, max_neg) and
+        isSame(cells, base, stride, -1, max_pos, max_neg, color) and
+        isEmpty(cells, base, stride, 1, max_pos, max_neg) and
+        isSame(cells, base, stride, 2, max_pos, max_neg, color) and
+        isEmpty(cells, base, stride, 3, max_pos, max_neg))
+        return true;
+    // offset=0 (s=5): positions [-1,0,+1,+2,+3,+4]
+    if (isEmpty(cells, base, stride, -1, max_pos, max_neg) and
+        isSame(cells, base, stride, 1, max_pos, max_neg, color) and
+        isEmpty(cells, base, stride, 2, max_pos, max_neg) and
+        isSame(cells, base, stride, 3, max_pos, max_neg, color) and
+        isEmpty(cells, base, stride, 4, max_pos, max_neg))
+        return true;
+
+    // パターン2: ・●・●●・ (s-1=empty, s=same, s+1=empty, s+2=same, s+3=same, s+4=empty)
+    // offset=-3 (s=2): positions [-4,-3,-2,-1,0,+1]
+    if (isEmpty(cells, base, stride, -4, max_pos, max_neg) and
+        isSame(cells, base, stride, -3, max_pos, max_neg, color) and
+        isEmpty(cells, base, stride, -2, max_pos, max_neg) and
+        isSame(cells, base, stride, -1, max_pos, max_neg, color) and
+        isEmpty(cells, base, stride, 1, max_pos, max_neg))
+        return true;
+    // offset=-2 (s=3): positions [-3,-2,-1,0,+1,+2]
+    if (isEmpty(cells, base, stride, -3, max_pos, max_neg) and
+        isSame(cells, base, stride, -2, max_pos, max_neg, color) and
+        isEmpty(cells, base, stride, -1, max_pos, max_neg) and
+        isSame(cells, base, stride, 1, max_pos, max_neg, color) and
+        isEmpty(cells, base, stride, 2, max_pos, max_neg))
+        return true;
+    // offset=0 (s=5): positions [-1,0,+1,+2,+3,+4]
+    if (isEmpty(cells, base, stride, -1, max_pos, max_neg) and
+        isEmpty(cells, base, stride, 1, max_pos, max_neg) and
+        isSame(cells, base, stride, 2, max_pos, max_neg, color) and
+        isSame(cells, base, stride, 3, max_pos, max_neg, color) and
+        isEmpty(cells, base, stride, 4, max_pos, max_neg))
+        return true;
 
     return false;
 }
@@ -493,6 +590,195 @@ test "checkJumpThree: no pattern without enough stones" {
     cells[7 * BOARD_SIZE + 6] = .black;
     // Only 2 stones, can't form jump three
     try std.testing.expect(!checkJumpThree(&cells, 7, 5, 2, .black));
+}
+
+// === checkJumpFour 追加テスト ===
+
+test "checkJumpFour: ●・●●● pattern" {
+    const CELL_COUNT = board_mod.CELL_COUNT;
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    // 黒: (7,4),_,(7,6),(7,7),(7,8) → 跳び四 ●・●●●
+    cells[7 * BOARD_SIZE + 4] = .black;
+    cells[7 * BOARD_SIZE + 6] = .black;
+    cells[7 * BOARD_SIZE + 7] = .black;
+    cells[7 * BOARD_SIZE + 8] = .black;
+    // 仮置き(7,7)から見て検出
+    try std.testing.expect(checkJumpFour(&cells, 7, 7, 2, .black));
+}
+
+test "checkJumpFour: direction 0 (vertical)" {
+    const CELL_COUNT = board_mod.CELL_COUNT;
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    // 縦方向: (3,7),(4,7),(5,7),_,(7,7) → ●●●・●
+    cells[3 * BOARD_SIZE + 7] = .black;
+    cells[4 * BOARD_SIZE + 7] = .black;
+    cells[5 * BOARD_SIZE + 7] = .black;
+    cells[7 * BOARD_SIZE + 7] = .black;
+    try std.testing.expect(checkJumpFour(&cells, 4, 7, 0, .black));
+}
+
+test "checkJumpFour: direction 1 (diagonal up-right)" {
+    const CELL_COUNT = board_mod.CELL_COUNT;
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    // 右上方向(dr=-1,dc=1): (10,3),(9,4),(8,5),_,(6,7) → ●●●・●
+    cells[10 * BOARD_SIZE + 3] = .black;
+    cells[9 * BOARD_SIZE + 4] = .black;
+    cells[8 * BOARD_SIZE + 5] = .black;
+    cells[6 * BOARD_SIZE + 7] = .black;
+    try std.testing.expect(checkJumpFour(&cells, 9, 4, 1, .black));
+}
+
+test "checkJumpFour: direction 3 (diagonal down-right)" {
+    const CELL_COUNT = board_mod.CELL_COUNT;
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    // 右下方向(dr=1,dc=1): (3,3),(4,4),(5,5),_,(7,7) → ●●●・●
+    cells[3 * BOARD_SIZE + 3] = .black;
+    cells[4 * BOARD_SIZE + 4] = .black;
+    cells[5 * BOARD_SIZE + 5] = .black;
+    cells[7 * BOARD_SIZE + 7] = .black;
+    try std.testing.expect(checkJumpFour(&cells, 4, 4, 3, .black));
+}
+
+test "checkJumpFour: edge of board (row=0)" {
+    const CELL_COUNT = board_mod.CELL_COUNT;
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    // 横方向、row=0: (0,3),(0,4),(0,5),_,(0,7) → ●●●・●
+    cells[0 * BOARD_SIZE + 3] = .black;
+    cells[0 * BOARD_SIZE + 4] = .black;
+    cells[0 * BOARD_SIZE + 5] = .black;
+    cells[0 * BOARD_SIZE + 7] = .black;
+    try std.testing.expect(checkJumpFour(&cells, 0, 4, 2, .black));
+}
+
+test "checkJumpFour: edge of board (col=14)" {
+    const CELL_COUNT = board_mod.CELL_COUNT;
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    // 横方向、col=14端: (7,10),(7,11),_,(7,13),(7,14) → ●●・●●
+    cells[7 * BOARD_SIZE + 10] = .black;
+    cells[7 * BOARD_SIZE + 11] = .black;
+    cells[7 * BOARD_SIZE + 13] = .black;
+    cells[7 * BOARD_SIZE + 14] = .black;
+    try std.testing.expect(checkJumpFour(&cells, 7, 13, 2, .black));
+}
+
+test "checkJumpFour: not detected with opponent stone in gap" {
+    const CELL_COUNT = board_mod.CELL_COUNT;
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    // (7,4),(7,5),(7,6),白,(7,8) → 間に相手石 → 跳び四でない
+    cells[7 * BOARD_SIZE + 4] = .black;
+    cells[7 * BOARD_SIZE + 5] = .black;
+    cells[7 * BOARD_SIZE + 6] = .black;
+    cells[7 * BOARD_SIZE + 7] = .white;
+    cells[7 * BOARD_SIZE + 8] = .black;
+    try std.testing.expect(!checkJumpFour(&cells, 7, 5, 2, .black));
+}
+
+test "checkJumpFour: not detected with only 3 stones" {
+    const CELL_COUNT = board_mod.CELL_COUNT;
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    // (7,4),(7,5),_,(7,7) → 3石しかない → 跳び四でない
+    cells[7 * BOARD_SIZE + 4] = .black;
+    cells[7 * BOARD_SIZE + 5] = .black;
+    cells[7 * BOARD_SIZE + 7] = .black;
+    try std.testing.expect(!checkJumpFour(&cells, 7, 5, 2, .black));
+}
+
+test "checkJumpFour: white stones" {
+    const CELL_COUNT = board_mod.CELL_COUNT;
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    // 白: (7,4),(7,5),(7,6),_,(7,8) → 白の跳び四
+    cells[7 * BOARD_SIZE + 4] = .white;
+    cells[7 * BOARD_SIZE + 5] = .white;
+    cells[7 * BOARD_SIZE + 6] = .white;
+    cells[7 * BOARD_SIZE + 8] = .white;
+    try std.testing.expect(checkJumpFour(&cells, 7, 5, 2, .white));
+}
+
+// === checkJumpThree 追加テスト ===
+
+test "checkJumpThree: ・●・●●・ pattern" {
+    const CELL_COUNT = board_mod.CELL_COUNT;
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    // 黒: (7,5),_,(7,7),(7,8) → 仮置き(7,5): ・●・●●・
+    cells[7 * BOARD_SIZE + 5] = .black;
+    cells[7 * BOARD_SIZE + 7] = .black;
+    cells[7 * BOARD_SIZE + 8] = .black;
+    try std.testing.expect(checkJumpThree(&cells, 7, 5, 2, .black));
+}
+
+test "checkJumpThree: direction 0 (vertical)" {
+    const CELL_COUNT = board_mod.CELL_COUNT;
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    // 縦方向: _,(4,7),(5,7),_,(7,7),_ → ・●●・●・
+    cells[4 * BOARD_SIZE + 7] = .black;
+    cells[5 * BOARD_SIZE + 7] = .black;
+    cells[7 * BOARD_SIZE + 7] = .black;
+    try std.testing.expect(checkJumpThree(&cells, 5, 7, 0, .black));
+}
+
+test "checkJumpThree: direction 1 (diagonal up-right)" {
+    const CELL_COUNT = board_mod.CELL_COUNT;
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    // 右上方向: (9,4),(8,5),_,(6,7) → ・●●・●・ (仮置き(9,4))
+    cells[9 * BOARD_SIZE + 4] = .black;
+    cells[8 * BOARD_SIZE + 5] = .black;
+    cells[6 * BOARD_SIZE + 7] = .black;
+    try std.testing.expect(checkJumpThree(&cells, 9, 4, 1, .black));
+}
+
+test "checkJumpThree: direction 3 (diagonal down-right)" {
+    const CELL_COUNT = board_mod.CELL_COUNT;
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    // 右下方向: (4,4),(5,5),_,(7,7) → ・●●・●・
+    cells[4 * BOARD_SIZE + 4] = .black;
+    cells[5 * BOARD_SIZE + 5] = .black;
+    cells[7 * BOARD_SIZE + 7] = .black;
+    try std.testing.expect(checkJumpThree(&cells, 4, 4, 3, .black));
+}
+
+test "checkJumpThree: edge of board (row=0)" {
+    const CELL_COUNT = board_mod.CELL_COUNT;
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    // 縦方向、row=0付近: 仮置き(0,7)、上に空きがないので・●●・●・は不成立
+    cells[0 * BOARD_SIZE + 7] = .black;
+    cells[1 * BOARD_SIZE + 7] = .black;
+    cells[3 * BOARD_SIZE + 7] = .black;
+    // dir_index=0(上)で仮置き(0,7): 上方向にはoffset=-1が盤外→otherで・が成立しない
+    try std.testing.expect(!checkJumpThree(&cells, 0, 7, 0, .black));
+}
+
+test "checkJumpThree: edge of board detection possible" {
+    const CELL_COUNT = board_mod.CELL_COUNT;
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    // 横方向、row=0: (0,5),(0,6),_,(0,8) → 仮置き(0,5): ・●●・●・
+    cells[0 * BOARD_SIZE + 5] = .black;
+    cells[0 * BOARD_SIZE + 6] = .black;
+    cells[0 * BOARD_SIZE + 8] = .black;
+    try std.testing.expect(checkJumpThree(&cells, 0, 5, 2, .black));
+}
+
+test "checkJumpThree: not detected with opponent stone blocking" {
+    const CELL_COUNT = board_mod.CELL_COUNT;
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    // (7,5),(7,6),白,(7,8) → 間に相手石ではなく端ブロック
+    // ・●●・●・ だが端が白で塞がれている: 白(7,4),(7,5),(7,6),_,(7,8),白(7,9)
+    cells[7 * BOARD_SIZE + 4] = .white;
+    cells[7 * BOARD_SIZE + 5] = .black;
+    cells[7 * BOARD_SIZE + 6] = .black;
+    cells[7 * BOARD_SIZE + 8] = .black;
+    cells[7 * BOARD_SIZE + 9] = .white;
+    // 仮置き(7,5): s-1=(7,4)=白→other, パターン不成立
+    try std.testing.expect(!checkJumpThree(&cells, 7, 5, 2, .black));
+}
+
+test "checkJumpThree: white stones" {
+    const CELL_COUNT = board_mod.CELL_COUNT;
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    // 白: (7,5),(7,6),_,(7,8) → 仮置き(7,5): ・●●・●・
+    cells[7 * BOARD_SIZE + 5] = .white;
+    cells[7 * BOARD_SIZE + 6] = .white;
+    cells[7 * BOARD_SIZE + 8] = .white;
+    try std.testing.expect(checkJumpThree(&cells, 7, 5, 2, .white));
 }
 
 test "checkStraightFour basic" {
