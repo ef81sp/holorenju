@@ -144,8 +144,19 @@ fn getLineEnds(cells: []const Cell, row: u8, col: u8, dr: i8, dc: i8, color: Cel
         c += dc;
     }
     if (board_mod.isValid(r, c) and cells[@intCast(@as(u16, @intCast(r)) * BOARD_SIZE + @as(u16, @intCast(c)))] == .empty) {
-        ends.items[ends.count] = .{ .row = @intCast(r), .col = @intCast(c) };
-        ends.count += 1;
+        // 黒のoverline補正: 空き端の先に黒石があれば打つと長連になるため除外
+        var include = true;
+        if (color == .black) {
+            const br = r + dr;
+            const bc = c + dc;
+            if (board_mod.isValid(br, bc) and cells[@intCast(@as(u16, @intCast(br)) * BOARD_SIZE + @as(u16, @intCast(bc)))] == .black) {
+                include = false;
+            }
+        }
+        if (include) {
+            ends.items[ends.count] = .{ .row = @intCast(r), .col = @intCast(c) };
+            ends.count += 1;
+        }
     }
 
     // 負方向の端
@@ -156,8 +167,19 @@ fn getLineEnds(cells: []const Cell, row: u8, col: u8, dr: i8, dc: i8, color: Cel
         c -= dc;
     }
     if (board_mod.isValid(r, c) and cells[@intCast(@as(u16, @intCast(r)) * BOARD_SIZE + @as(u16, @intCast(c)))] == .empty) {
-        ends.items[ends.count] = .{ .row = @intCast(r), .col = @intCast(c) };
-        ends.count += 1;
+        // 黒のoverline補正: 空き端の先に黒石があれば打つと長連になるため除外
+        var include = true;
+        if (color == .black) {
+            const br = r - dr;
+            const bc = c - dc;
+            if (board_mod.isValid(br, bc) and cells[@intCast(@as(u16, @intCast(br)) * BOARD_SIZE + @as(u16, @intCast(bc)))] == .black) {
+                include = false;
+            }
+        }
+        if (include) {
+            ends.items[ends.count] = .{ .row = @intCast(r), .col = @intCast(c) };
+            ends.count += 1;
+        }
     }
 
     return ends;
@@ -445,4 +467,24 @@ test "quiescenceSearch stand-pat on empty" {
         &tt,
     );
     try std.testing.expectEqual(score, 0);
+}
+
+test "getFourDefensePosition: black four with overline should not be open four" {
+    // C8-D8-E8-F8-(空G8)-H8(黒) の配置
+    // row=7 (0-indexed), C=2, D=3, E=4, F=5, G=6(empty), H=7
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[7 * BOARD_SIZE + 2] = .black; // C8
+    cells[7 * BOARD_SIZE + 3] = .black; // D8
+    cells[7 * BOARD_SIZE + 4] = .black; // E8
+    cells[7 * BOARD_SIZE + 5] = .black; // F8
+    // G8 (7*15+6) = empty
+    cells[7 * BOARD_SIZE + 7] = .black; // H8
+
+    // E8を基準に四判定: C8-D8-E8-F8 は四だが、G8方向はoverlineで塞がり
+    // → 活四ではなく止め四（B8で防御可能）→ null ではなく B8 を返すべき
+    const defense = getFourDefensePosition(&cells, 7, 4, .black);
+    try std.testing.expect(defense != null);
+    const dp = defense.?;
+    try std.testing.expectEqual(dp.row, 7);
+    try std.testing.expectEqual(dp.col, 1); // B8
 }
