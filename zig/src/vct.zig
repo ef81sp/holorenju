@@ -293,28 +293,42 @@ pub fn getThreatDefensePositions(cells: []const Cell, row: u8, col: u8, color: C
         const dir_index = jp.DIRECTION_INDICES[i];
         const result = board_mod.analyzeDirectionOnCells(cells, row, col, dir.dr, dir.dc, color);
 
-        // 連続四をチェック
+        // 連続四をチェック（overline補正済みのend1/end2を使用）
         if (result.count == 4) {
-            const ends = threats.getLineEnds(cells, row, col, dir.dr, dir.dc, color);
-            // 活四（両端開き）= 防御不可
-            if (ends.len == 2) {
+            const end1_open = result.end1 == .empty;
+            const end2_open = result.end2 == .empty;
+
+            if (end1_open and end2_open) {
+                // 活四（両端開き）= 防御不可
                 return PositionList.init();
             }
-            // 止め四 = 1点で防御
-            if (ends.len == 1) {
-                defense_positions.addUnique(ends.items[0]);
+
+            // 止め四: 開いている端の座標を計算して防御位置とする
+            if (end1_open) {
+                const pos_count = board_mod.countInDirectionOnCells(cells, row, col, dir.dr, dir.dc, color);
+                const er: u8 = @intCast(@as(i16, row) + @as(i16, dir.dr) * (@as(i16, pos_count.count) + 1));
+                const ec: u8 = @intCast(@as(i16, col) + @as(i16, dir.dc) * (@as(i16, pos_count.count) + 1));
+                defense_positions.addUnique(.{ .row = er, .col = ec });
+            }
+            if (end2_open) {
+                const neg_count = board_mod.countInDirectionOnCells(cells, row, col, -dir.dr, -dir.dc, color);
+                const er: u8 = @intCast(@as(i16, row) - @as(i16, dir.dr) * (@as(i16, neg_count.count) + 1));
+                const ec: u8 = @intCast(@as(i16, col) - @as(i16, dir.dc) * (@as(i16, neg_count.count) + 1));
+                defense_positions.addUnique(.{ .row = er, .col = ec });
             }
         }
 
         // 跳び四をチェック
+        var has_jump_four = false;
         if (result.count != 4 and jp.checkJumpFour(cells, row, col, dir_index, color)) {
+            has_jump_four = true;
             if (threats.findJumpGapPosition(cells, row, col, dir.dr, dir.dc, color)) |gap| {
                 defense_positions.addUnique(gap);
             }
         }
 
-        // 活三をチェック
-        if (result.count == 3 and result.end1 == .empty and result.end2 == .empty) {
+        // 活三をチェック（同方向に跳び四がある場合は不要：跳び四の防御が優先）
+        if (!has_jump_four and result.count == 3 and result.end1 == .empty and result.end2 == .empty) {
             const ends = threats.getLineEnds(cells, row, col, dir.dr, dir.dc, color);
             for (0..ends.len) |j| {
                 defense_positions.addUnique(ends.items[j]);
@@ -1982,4 +1996,23 @@ test "findVCTSequence: 5-stone opening should not find VCT for white" {
 
     const result = findVCTSequence(&cells, .white, VCT_MAX_DEPTH, 5000, 500000, false);
     try testing.expect(!result.found);
+}
+
+test "getThreatDefensePositions: black four with overline should not be undefendable" {
+    // C8-D8-E8-F8-(空G8)-H8(黒) の配置
+    // row=7 (0-indexed), C=2, D=3, E=4, F=5, G=6(empty), H=7
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[7 * BOARD_SIZE + 2] = .black; // C8
+    cells[7 * BOARD_SIZE + 3] = .black; // D8
+    cells[7 * BOARD_SIZE + 4] = .black; // E8
+    cells[7 * BOARD_SIZE + 5] = .black; // F8
+    // G8 (7*15+6) = empty
+    cells[7 * BOARD_SIZE + 7] = .black; // H8
+
+    // E8を基準に脅威防御判定: G8方向はoverlineで塞がり
+    // → 防御不可（空リスト）ではなく、B8を含む防御位置を返すべき
+    const defense = getThreatDefensePositions(&cells, 7, 4, .black);
+    try testing.expect(defense.len > 0); // 防御可能
+    try testing.expectEqual(defense.items[0].row, 7);
+    try testing.expectEqual(defense.items[0].col, 1); // B8
 }
