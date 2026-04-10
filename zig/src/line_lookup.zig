@@ -241,30 +241,33 @@ fn detectJumpThreeShape(own: u9, block: u9, stone_offsets: []const u3, gap_offse
 /// Out-of-line positions are treated as walls (block=1).
 pub fn extractWindow(line_index: u8, bit_pos: u4, color: Cell) struct { own: u9, block: u9 } {
     const line_len = bitboard.LINE_LENGTHS[line_index];
-    const own_line = if (color == .black) bitboard.global_bb.black[line_index] else bitboard.global_bb.white[line_index];
-    const opp_line = if (color == .black) bitboard.global_bb.white[line_index] else bitboard.global_bb.black[line_index];
+    const own_line: u32 = if (color == .black) bitboard.global_bb.black[line_index] else bitboard.global_bb.white[line_index];
+    const opp_line: u32 = if (color == .black) bitboard.global_bb.white[line_index] else bitboard.global_bb.black[line_index];
 
-    var own_window: u9 = 0;
-    var block_window: u9 = 0;
+    // Padded layout (u32):
+    //   bits 0..3:                walls (left edge of line)
+    //   bits 4..(line_len+3):     actual line content (own_line << 4)
+    //   bits (line_len+4)..31:    walls (right edge of line)
+    //
+    // For position p in the original line (0..line_len-1), padded bit = p + 4.
+    // Window bit w (0..8) corresponds to original position (bit_pos - 4 + w),
+    //                              i.e. padded bit (bit_pos + w).
+    // So window = (padded >> bit_pos) & 0x1FF.
 
-    // Window bits 0..8 correspond to positions (bit_pos - 4) .. (bit_pos + 4)
-    for (0..9) |w| {
-        const pos_signed: i8 = @as(i8, @intCast(bit_pos)) - 4 + @as(i8, @intCast(w));
-        const w_bit: u4 = @intCast(w);
+    const len_u5: u5 = @intCast(line_len);
+    const valid_mask: u32 = (@as(u32, 1) << len_u5) - 1;
+    const opp_in_range: u32 = opp_line & valid_mask;
 
-        if (pos_signed < 0 or pos_signed >= line_len) {
-            // Out of bounds = wall (block)
-            block_window |= @as(u9, 1) << w_bit;
-        } else {
-            const pos: u4 = @intCast(pos_signed);
-            if (own_line & (@as(u16, 1) << pos) != 0) {
-                own_window |= @as(u9, 1) << w_bit;
-            } else if (opp_line & (@as(u16, 1) << pos) != 0) {
-                block_window |= @as(u9, 1) << w_bit;
-            }
-            // else: empty (both 0)
-        }
-    }
+    const left_walls: u32 = 0xF; // bits 0..3
+    const right_walls: u32 = ~((@as(u32, 1) << (len_u5 + 4)) - 1);
+    const wall_mask: u32 = left_walls | right_walls;
+
+    const own_padded: u32 = own_line << 4;
+    const block_padded: u32 = (opp_in_range << 4) | wall_mask;
+
+    const shift: u5 = bit_pos;
+    const own_window: u9 = @intCast((own_padded >> shift) & 0x1FF);
+    const block_window: u9 = @intCast((block_padded >> shift) & 0x1FF);
 
     return .{ .own = own_window, .block = block_window };
 }
