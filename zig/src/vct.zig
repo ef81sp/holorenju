@@ -4,6 +4,7 @@
 /// VCFより広い脅威（活三を含む）を扱う。
 /// TS版 vct.ts + vctHelpers.ts + threatMoves.ts + threatPatterns.ts に対応
 
+const bitboard = @import("bitboard.zig");
 const board_mod = @import("board.zig");
 const evaluate = @import("evaluate.zig");
 const forbidden = @import("forbidden.zig");
@@ -48,7 +49,7 @@ pub fn classifyThreat(cells: []const Cell, row: u8, col: u8, color: Cell) Threat
     var has_open_three = false;
 
     for (0..4) |i| {
-        const result = ll.queryPatternFromCells(cells, row, col, i, color);
+        const result = ll.queryPatternByCell(row, col, i, color);
 
         // 連続四（黒はオーバーライン補正）
         if (result.count == 4) {
@@ -88,8 +89,9 @@ pub fn classifyThreat(cells: []const Cell, row: u8, col: u8, color: Cell) Threat
 
 /// 活三ができるかチェック（石配置済み前提）
 pub fn createsOpenThree(cells: []const Cell, row: u8, col: u8, color: Cell) bool {
+    _ = cells;
     for (0..4) |i| {
-        const result = ll.queryPatternFromCells(cells, row, col, i, color);
+        const result = ll.queryPatternByCell(row, col, i, color);
 
         // 連続活三
         if (result.count == 3 and result.end1 == 0 and result.end2 == 0) {
@@ -198,7 +200,7 @@ pub fn hasOpenThree(cells: []const Cell, color: Cell) bool {
             if (cellAt(cells, @intCast(row), @intCast(col)) != color) continue;
 
             for (0..4) |i| {
-                const result = ll.queryPatternFromCells(cells, row, col, i, color);
+                const result = ll.queryPatternByCell(row, col, i, color);
 
                 // 連続活三（跳び四の一部は除外）
                 if (result.count == 3 and result.end1 == 0 and result.end2 == 0) {
@@ -265,12 +267,14 @@ pub fn findThreatMoves(cells: []Cell, color: Cell, buf: *[225]Position) u16 {
             if (cells[idx] != .empty) continue;
             if (!threats.isNearFromMask(near_mask, r, c)) continue;
 
-            // インプレースで仮配置
+            // インプレースで仮配置（bitboard も同期）
             cells[idx] = color;
+            bitboard.placeStone(r, c, color);
 
             // 五連が作れる場合は最優先
             if (forbidden.checkFive(cells, r, c, color)) {
                 cells[idx] = .empty;
+                bitboard.removeStone(r, c);
                 buf[four_count] = .{ .row = r, .col = c };
                 four_count += 1;
                 continue;
@@ -279,6 +283,7 @@ pub fn findThreatMoves(cells: []Cell, color: Cell, buf: *[225]Position) u16 {
             // 四と活三を1パスで判定
             const threat = classifyThreat(cells, r, c, color);
             cells[idx] = .empty;
+            bitboard.removeStone(r, c);
 
             if (!threat.creates_four and !threat.creates_open_three) continue;
 
@@ -315,7 +320,7 @@ pub fn getThreatDefensePositions(cells: []const Cell, row: u8, col: u8, color: C
     var defense_positions = PositionList.init();
 
     for (DIRECTIONS, 0..) |dir, i| {
-        const result = ll.queryPatternFromCells(cells, row, col, i, color);
+        const result = ll.queryPatternByCell(row, col, i, color);
 
         // 連続四をチェック（黒はオーバーライン補正）
         if (result.count == 4) {
@@ -395,7 +400,7 @@ pub fn checkDefenseCounterThreat(cells: []const Cell, row: u8, col: u8, opponent
 
     var has_three = false;
     for (0..4) |i| {
-        const result = ll.queryPatternFromCells(cells, row, col, i, opponent_color);
+        const result = ll.queryPatternByCell(row, col, i, opponent_color);
 
         // 連続四（黒はオーバーライン補正）
         if (result.count == 4) {
@@ -463,14 +468,16 @@ fn evaluateCounterThreat(
             }
             const bp = block_pos.?;
 
-            // ブロック配置
+            // ブロック配置（bitboard も同期）
             const block_idx = @as(u16, bp.row) * BOARD_SIZE + bp.col;
             cells[block_idx] = color;
+            bitboard.placeStone(bp.row, bp.col, color);
 
             // ブロック石が攻撃側の脅威を作らなければVCT不成立
             const block_ct = checkDefenseCounterThreat(cells, bp.row, bp.col, color);
             if (!blockHasThreat(block_ct)) {
                 cells[block_idx] = .empty;
+                bitboard.removeStone(bp.row, bp.col);
                 return false;
             }
 
@@ -478,6 +485,7 @@ fn evaluateCounterThreat(
             const block_ok = processBlockDefenses(cells, bp, color, depth, max_depth, limiter);
 
             cells[block_idx] = .empty;
+            bitboard.removeStone(bp.row, bp.col);
             return block_ok;
         },
         .three => {
@@ -536,17 +544,20 @@ fn processBlockDefenses(
 
         const bd_idx = @as(u16, bd_pos.row) * BOARD_SIZE + bd_pos.col;
         cells[bd_idx] = opponent;
+        bitboard.placeStone(bd_pos.row, bd_pos.col, opponent);
 
         const bd_ct = checkDefenseCounterThreat(cells, bd_pos.row, bd_pos.col, opponent);
 
         if (bd_ct == .win) {
             cells[bd_idx] = .empty;
+            bitboard.removeStone(bd_pos.row, bd_pos.col);
             return false;
         }
 
         const vct_ok = evaluateCounterThreat(bd_ct, cells, color, bd_pos, depth, limiter, max_depth);
 
         cells[bd_idx] = .empty;
+        bitboard.removeStone(bd_pos.row, bd_pos.col);
 
         if (!vct_ok) return false;
     }
@@ -586,10 +597,12 @@ pub fn hasVCT(
         const move = threat_buf[i];
         const move_idx = @as(u16, move.row) * BOARD_SIZE + move.col;
         cells[move_idx] = color;
+        bitboard.placeStone(move.row, move.col, color);
 
         // 五連チェック
         if (forbidden.checkFive(cells, move.row, move.col, color)) {
             cells[move_idx] = .empty;
+            bitboard.removeStone(move.row, move.col);
             return true;
         }
 
@@ -599,9 +612,11 @@ pub fn hasVCT(
             // 防御不可 → 脅威が成立していれば勝ち
             if (isThreat(cells, move.row, move.col, color)) {
                 cells[move_idx] = .empty;
+                bitboard.removeStone(move.row, move.col);
                 return true;
             }
             cells[move_idx] = .empty;
+            bitboard.removeStone(move.row, move.col);
             continue;
         }
 
@@ -619,11 +634,13 @@ pub fn hasVCT(
 
             const def_idx = @as(u16, dp.row) * BOARD_SIZE + dp.col;
             cells[def_idx] = opponent;
+            bitboard.placeStone(dp.row, dp.col, opponent);
 
             const ct = checkDefenseCounterThreat(cells, dp.row, dp.col, opponent);
             const vct_ok = evaluateCounterThreat(ct, cells, color, dp, depth, limiter, max_depth);
 
             cells[def_idx] = .empty;
+            bitboard.removeStone(dp.row, dp.col);
 
             if (!vct_ok) {
                 all_defense_leads_to_vct = false;
@@ -632,6 +649,7 @@ pub fn hasVCT(
         }
 
         cells[move_idx] = .empty;
+        bitboard.removeStone(move.row, move.col);
 
         if (all_defense_leads_to_vct and defense_positions.len > 0) {
             return true;
@@ -653,6 +671,10 @@ pub fn findVCTMove(cells: []Cell, color: Cell, max_depth: u8, time_limit: u32) ?
 /// VCT勝ち手を探索（ノード数制限付き）
 /// max_nodes=0 は無制限
 pub fn findVCTMoveWithBudget(cells: []Cell, color: Cell, max_depth: u8, time_limit: u32, max_nodes: u32) ?Position {
+    // トップレベルエントリ: bitboard を cells と同期
+    bitboard.initFromCells(cells);
+    ll.init();
+
     var limiter = TimeLimiter{
         .start_time = getTimestampMs(),
         .time_limit = time_limit,
@@ -708,9 +730,11 @@ fn findVCTMoveRecursive(
         const move = threat_buf[i];
         const move_idx = @as(u16, move.row) * BOARD_SIZE + move.col;
         cells[move_idx] = color;
+        bitboard.placeStone(move.row, move.col, color);
 
         if (forbidden.checkFive(cells, move.row, move.col, color)) {
             cells[move_idx] = .empty;
+            bitboard.removeStone(move.row, move.col);
             return move;
         }
 
@@ -719,9 +743,11 @@ fn findVCTMoveRecursive(
         if (defense_positions.len == 0) {
             if (isThreat(cells, move.row, move.col, color)) {
                 cells[move_idx] = .empty;
+                bitboard.removeStone(move.row, move.col);
                 return move;
             }
             cells[move_idx] = .empty;
+            bitboard.removeStone(move.row, move.col);
             continue;
         }
 
@@ -737,6 +763,7 @@ fn findVCTMoveRecursive(
 
             const def_idx = @as(u16, dp.row) * BOARD_SIZE + dp.col;
             cells[def_idx] = opponent;
+            bitboard.placeStone(dp.row, dp.col, opponent);
 
             const ct = checkDefenseCounterThreat(cells, dp.row, dp.col, opponent);
 
@@ -751,6 +778,7 @@ fn findVCTMoveRecursive(
                         const bp = block_pos.?;
                         const block_idx = @as(u16, bp.row) * BOARD_SIZE + bp.col;
                         cells[block_idx] = color;
+                        bitboard.placeStone(bp.row, bp.col, color);
 
                         const block_ct = checkDefenseCounterThreat(cells, bp.row, bp.col, color);
                         if (!blockHasThreat(block_ct)) {
@@ -760,6 +788,7 @@ fn findVCTMoveRecursive(
                         }
 
                         cells[block_idx] = .empty;
+                        bitboard.removeStone(bp.row, bp.col);
                     }
                 },
                 .three => {
@@ -781,6 +810,7 @@ fn findVCTMoveRecursive(
             }
 
             cells[def_idx] = .empty;
+            bitboard.removeStone(dp.row, dp.col);
 
             if (!vct_ok) {
                 all_defense_leads_to_vct = false;
@@ -789,6 +819,7 @@ fn findVCTMoveRecursive(
         }
 
         cells[move_idx] = .empty;
+        bitboard.removeStone(move.row, move.col);
 
         if (all_defense_leads_to_vct and defense_positions.len > 0) {
             return move;
@@ -847,6 +878,10 @@ pub fn findVCTSequence(
     max_nodes: u32,
     collect_branches: bool,
 ) VCTSequenceResult {
+    // トップレベルエントリ: bitboard を cells と同期
+    bitboard.initFromCells(cells);
+    ll.init();
+
     var limiter = TimeLimiter{
         .start_time = getTimestampMs(),
         .time_limit = time_limit,
@@ -979,10 +1014,12 @@ fn findVCTSequenceRecursive(
         const move = threat_buf[ti];
         const move_idx = @as(u16, move.row) * BOARD_SIZE + move.col;
         cells[move_idx] = color;
+        bitboard.placeStone(move.row, move.col, color);
 
         // 五連チェック — 1手で終わるので即返却（これ以上短い手順はない）
         if (forbidden.checkFive(cells, move.row, move.col, color)) {
             cells[move_idx] = .empty;
+            bitboard.removeStone(move.row, move.col);
             sequence[seq_len.*] = move;
             seq_len.* += 1;
             return true;
@@ -993,12 +1030,14 @@ fn findVCTSequenceRecursive(
         if (defense_positions.len == 0) {
             if (isThreat(cells, move.row, move.col, color)) {
                 cells[move_idx] = .empty;
+                bitboard.removeStone(move.row, move.col);
                 // 1手で終わるので即返却
                 sequence[seq_len.*] = move;
                 seq_len.* += 1;
                 return true;
             }
             cells[move_idx] = .empty;
+            bitboard.removeStone(move.row, move.col);
             continue;
         }
 
@@ -1020,11 +1059,13 @@ fn findVCTSequenceRecursive(
 
             const def_idx = @as(u16, dp.row) * BOARD_SIZE + dp.col;
             cells[def_idx] = opponent;
+            bitboard.placeStone(dp.row, dp.col, opponent);
 
             const ct = checkDefenseCounterThreat(cells, dp.row, dp.col, opponent);
 
             if (ct == .win) {
                 cells[def_idx] = .empty;
+                bitboard.removeStone(dp.row, dp.col);
                 all_defense_leads_to_vct = false;
                 break;
             }
@@ -1034,17 +1075,21 @@ fn findVCTSequenceRecursive(
                 const block_pos = quiescence.getFourDefensePosition(cells, dp.row, dp.col, opponent);
                 if (block_pos == null) {
                     cells[def_idx] = .empty;
+                    bitboard.removeStone(dp.row, dp.col);
                     all_defense_leads_to_vct = false;
                     break;
                 }
                 const bp = block_pos.?;
                 const block_idx = @as(u16, bp.row) * BOARD_SIZE + bp.col;
                 cells[block_idx] = color;
+                bitboard.placeStone(bp.row, bp.col, color);
 
                 const block_ct = checkDefenseCounterThreat(cells, bp.row, bp.col, color);
                 if (!blockHasThreat(block_ct)) {
                     cells[block_idx] = .empty;
+                    bitboard.removeStone(bp.row, bp.col);
                     cells[def_idx] = .empty;
+                    bitboard.removeStone(dp.row, dp.col);
                     all_defense_leads_to_vct = false;
                     break;
                 }
@@ -1078,7 +1123,9 @@ fn findVCTSequenceRecursive(
                 }
 
                 cells[block_idx] = .empty;
+                bitboard.removeStone(bp.row, bp.col);
                 cells[def_idx] = .empty;
+                bitboard.removeStone(dp.row, dp.col);
 
                 if (!block_ok.found) {
                     all_defense_leads_to_vct = false;
@@ -1094,6 +1141,7 @@ fn findVCTSequenceRecursive(
                     const vcf_result = vcf_mod.findVCFSequence(cells, color, vcf_depth, 0, 0);
                     if (!vcf_result.found) {
                         cells[def_idx] = .empty;
+                        bitboard.removeStone(dp.row, dp.col);
                         all_defense_leads_to_vct = false;
                         break;
                     }
@@ -1121,11 +1169,13 @@ fn findVCTSequenceRecursive(
                 } else {
                     if (!vcf_mod.hasVCF(cells, color, 0, limiter, vcf_depth)) {
                         cells[def_idx] = .empty;
+                        bitboard.removeStone(dp.row, dp.col);
                         all_defense_leads_to_vct = false;
                         break;
                     }
                 }
                 cells[def_idx] = .empty;
+                bitboard.removeStone(dp.row, dp.col);
                 continue;
             }
 
@@ -1142,6 +1192,7 @@ fn findVCTSequenceRecursive(
                 const found = findVCTSequenceRecursive(cells, color, depth + 1, max_depth, limiter, &sub_seq, &sub_len, &sub_context);
 
                 cells[def_idx] = .empty;
+                bitboard.removeStone(dp.row, dp.col);
 
                 if (!found) {
                     all_defense_leads_to_vct = false;
@@ -1179,6 +1230,7 @@ fn findVCTSequenceRecursive(
                 // hasVCTでチェックのみ
                 const vct_ok = hasVCT(cells, color, depth + 1, limiter, max_depth);
                 cells[def_idx] = .empty;
+                bitboard.removeStone(dp.row, dp.col);
                 if (!vct_ok) {
                     all_defense_leads_to_vct = false;
                     break;
@@ -1187,6 +1239,7 @@ fn findVCTSequenceRecursive(
         }
 
         cells[move_idx] = .empty;
+        bitboard.removeStone(move.row, move.col);
 
         if (all_defense_leads_to_vct and defense_positions.len > 0 and has_first_defense) {
             // この脅威手での手順長を計算
@@ -1298,17 +1351,20 @@ fn processBlockDefensesSeq(
 
         const bd_idx = @as(u16, bd_pos.row) * BOARD_SIZE + bd_pos.col;
         cells[bd_idx] = opponent;
+        bitboard.placeStone(bd_pos.row, bd_pos.col, opponent);
 
         const bd_ct = checkDefenseCounterThreat(cells, bd_pos.row, bd_pos.col, opponent);
 
         if (bd_ct == .win) {
             cells[bd_idx] = .empty;
+            bitboard.removeStone(bd_pos.row, bd_pos.col);
             return result; // found=false
         }
 
         if (need_sequence) {
             const sub = buildBlockDefSubSequence(bd_ct, cells, color, bd_pos, depth, max_depth, limiter);
             cells[bd_idx] = .empty;
+            bitboard.removeStone(bd_pos.row, bd_pos.col);
             if (!sub.found) return result;
             // candidate = [bd_pos, sub.seq...]
             const candidate_len = 1 + sub.seq_len;
@@ -1325,6 +1381,7 @@ fn processBlockDefensesSeq(
         } else {
             const vct_ok = evaluateCounterThreat(bd_ct, cells, color, bd_pos, depth, limiter, max_depth);
             cells[bd_idx] = .empty;
+            bitboard.removeStone(bd_pos.row, bd_pos.col);
             if (!vct_ok) return result;
         }
     }
@@ -1387,15 +1444,18 @@ fn buildBlockDefSubSequence(
             const nb = nested_block.?;
             const nb_idx = @as(u16, nb.row) * BOARD_SIZE + nb.col;
             cells[nb_idx] = color;
+            bitboard.placeStone(nb.row, nb.col, color);
 
             const nb_threat = checkDefenseCounterThreat(cells, nb.row, nb.col, color);
             if (!blockHasThreat(nb_threat)) {
                 cells[nb_idx] = .empty;
+                bitboard.removeStone(nb.row, nb.col);
                 return result;
             }
 
             const nested = processBlockDefensesSeq(cells, nb, color, depth + 1, max_depth, limiter, true);
             cells[nb_idx] = .empty;
+            bitboard.removeStone(nb.row, nb.col);
             if (!nested.found) return result;
 
             result.seq[0] = nb;
@@ -1538,6 +1598,10 @@ pub fn findVCTSequenceFromFirstMove(
     const idx = @as(u16, first_move.row) * BOARD_SIZE + first_move.col;
     if (cells[idx] != .empty) return result;
 
+    // トップレベルエントリ: bitboard を cells と同期
+    bitboard.initFromCells(cells);
+    ll.init();
+
     var limiter = TimeLimiter{
         .start_time = getTimestampMs(),
         .time_limit = time_limit,
@@ -1552,12 +1616,14 @@ pub fn findVCTSequenceFromFirstMove(
     if (hasFourThreeAvailable(cells, opponent)) return result;
     if (vcf_mod.hasVCF(cells, opponent, 0, &limiter, vcf_mod.VCF_MAX_DEPTH)) return result;
 
-    // 仮配置
+    // 仮配置（bitboard も同期）
     cells[idx] = color;
+    bitboard.placeStone(first_move.row, first_move.col, color);
 
     // 五連チェック → 即勝ち
     if (forbidden.checkFive(cells, first_move.row, first_move.col, color)) {
         cells[idx] = .empty;
+        bitboard.removeStone(first_move.row, first_move.col);
         result.sequence[0] = first_move;
         result.len = 1;
         result.found = true;
@@ -1567,6 +1633,7 @@ pub fn findVCTSequenceFromFirstMove(
     // 脅威かチェック
     if (!isThreat(cells, first_move.row, first_move.col, color)) {
         cells[idx] = .empty;
+        bitboard.removeStone(first_move.row, first_move.col);
         return result;
     }
 
@@ -1575,6 +1642,7 @@ pub fn findVCTSequenceFromFirstMove(
 
     if (defense_positions.len == 0) {
         cells[idx] = .empty;
+        bitboard.removeStone(first_move.row, first_move.col);
         result.sequence[0] = first_move;
         result.len = 1;
         result.found = true;
@@ -1597,12 +1665,15 @@ pub fn findVCTSequenceFromFirstMove(
 
         const def_idx = @as(u16, dp.row) * BOARD_SIZE + dp.col;
         cells[def_idx] = opponent;
+        bitboard.placeStone(dp.row, dp.col, opponent);
 
         const ct = checkDefenseCounterThreat(cells, dp.row, dp.col, opponent);
 
         if (ct == .win) {
             cells[def_idx] = .empty;
+            bitboard.removeStone(dp.row, dp.col);
             cells[idx] = .empty;
+            bitboard.removeStone(first_move.row, first_move.col);
             return result;
         }
 
@@ -1615,12 +1686,15 @@ pub fn findVCTSequenceFromFirstMove(
             const block_pos = quiescence.getFourDefensePosition(cells, dp.row, dp.col, opponent);
             if (block_pos == null) {
                 cells[def_idx] = .empty;
+                bitboard.removeStone(dp.row, dp.col);
                 cells[idx] = .empty;
+                bitboard.removeStone(first_move.row, first_move.col);
                 return result;
             }
             const bp = block_pos.?;
             const block_idx = @as(u16, bp.row) * BOARD_SIZE + bp.col;
             cells[block_idx] = color;
+            bitboard.placeStone(bp.row, bp.col, color);
 
             const block_ct = checkDefenseCounterThreat(cells, bp.row, bp.col, color);
             if (blockHasThreat(block_ct)) {
@@ -1637,6 +1711,7 @@ pub fn findVCTSequenceFromFirstMove(
                 }
             }
             cells[block_idx] = .empty;
+            bitboard.removeStone(bp.row, bp.col);
         } else if (ct == .three) {
             const vcf_depth = @min(CT_THREE_VCF_MAX_DEPTH, vcf_mod.VCF_MAX_DEPTH);
             const vcf_result = vcf_mod.findVCFSequence(cells, color, vcf_depth, 0, 0);
@@ -1665,9 +1740,11 @@ pub fn findVCTSequenceFromFirstMove(
         }
 
         cells[def_idx] = .empty;
+        bitboard.removeStone(dp.row, dp.col);
 
         if (!continuation_found) {
             cells[idx] = .empty;
+            bitboard.removeStone(first_move.row, first_move.col);
             return result;
         }
 
@@ -1684,6 +1761,7 @@ pub fn findVCTSequenceFromFirstMove(
     }
 
     cells[idx] = .empty;
+    bitboard.removeStone(first_move.row, first_move.col);
 
     if (main_defense == null) return result;
 
@@ -1718,6 +1796,10 @@ pub fn isVCTFirstMove(
     const idx = @as(u16, move_pos.row) * BOARD_SIZE + move_pos.col;
     if (cells[idx] != .empty) return false;
 
+    // トップレベルエントリ: bitboard を cells と同期
+    bitboard.initFromCells(cells);
+    ll.init();
+
     var limiter = TimeLimiter{
         .start_time = getTimestampMs(),
         .time_limit = time_limit,
@@ -1732,18 +1814,21 @@ pub fn isVCTFirstMove(
     if (hasFourThreeAvailable(cells, opponent)) return false;
     if (vcf_mod.hasVCF(cells, opponent, 0, &limiter, vcf_mod.VCF_MAX_DEPTH)) return false;
 
-    // 仮配置
+    // 仮配置（bitboard も同期）
     cells[idx] = color;
+    bitboard.placeStone(move_pos.row, move_pos.col, color);
 
     // 五連チェック
     if (forbidden.checkFive(cells, move_pos.row, move_pos.col, color)) {
         cells[idx] = .empty;
+        bitboard.removeStone(move_pos.row, move_pos.col);
         return true;
     }
 
     // 脅威かチェック
     if (!isThreat(cells, move_pos.row, move_pos.col, color)) {
         cells[idx] = .empty;
+        bitboard.removeStone(move_pos.row, move_pos.col);
         return false;
     }
 
@@ -1752,6 +1837,7 @@ pub fn isVCTFirstMove(
 
     if (defense_positions.len == 0) {
         cells[idx] = .empty;
+        bitboard.removeStone(move_pos.row, move_pos.col);
         return true;
     }
 
@@ -1766,19 +1852,23 @@ pub fn isVCTFirstMove(
 
         const def_idx = @as(u16, dp.row) * BOARD_SIZE + dp.col;
         cells[def_idx] = opponent;
+        bitboard.placeStone(dp.row, dp.col, opponent);
 
         const ct = checkDefenseCounterThreat(cells, dp.row, dp.col, opponent);
         const vct_ok = evaluateCounterThreat(ct, cells, color, dp, 1, &limiter, max_depth);
 
         cells[def_idx] = .empty;
+        bitboard.removeStone(dp.row, dp.col);
 
         if (!vct_ok) {
             cells[idx] = .empty;
+            bitboard.removeStone(move_pos.row, move_pos.col);
             return false;
         }
     }
 
     cells[idx] = .empty;
+    bitboard.removeStone(move_pos.row, move_pos.col);
     return true;
 }
 
@@ -1808,40 +1898,47 @@ fn getTimestampMs() u32 {
 const testing = std.testing;
 
 test "classifyThreat: four detection" {
+    ll.init();
     var cells = [_]Cell{.empty} ** CELL_COUNT;
     // 黒の3連: (7,5),(7,6),(7,7) + 仮配置 (7,8)
     cells[7 * BOARD_SIZE + 5] = .black;
     cells[7 * BOARD_SIZE + 6] = .black;
     cells[7 * BOARD_SIZE + 7] = .black;
     cells[7 * BOARD_SIZE + 8] = .black; // 仮配置済み
+    bitboard.initFromCells(&cells);
 
     const result = classifyThreat(&cells, 7, 8, .black);
     try testing.expect(result.creates_four);
 }
 
 test "classifyThreat: open three detection" {
+    ll.init();
     var cells = [_]Cell{.empty} ** CELL_COUNT;
     // 黒2連 + 仮配置で3連: (7,6),(7,7),(7,8) 両端空き
     cells[7 * BOARD_SIZE + 6] = .black;
     cells[7 * BOARD_SIZE + 7] = .black;
     cells[7 * BOARD_SIZE + 8] = .black; // 仮配置済み
+    bitboard.initFromCells(&cells);
 
     const result = classifyThreat(&cells, 7, 8, .black);
     try testing.expect(result.creates_open_three);
 }
 
 test "hasOpenThree: basic" {
+    ll.init();
     var cells = [_]Cell{.empty} ** CELL_COUNT;
     // 黒の活三: (7,6),(7,7),(7,8) 両端空き
     cells[7 * BOARD_SIZE + 6] = .black;
     cells[7 * BOARD_SIZE + 7] = .black;
     cells[7 * BOARD_SIZE + 8] = .black;
+    bitboard.initFromCells(&cells);
 
     try testing.expect(hasOpenThree(&cells, .black));
     try testing.expect(!hasOpenThree(&cells, .white));
 }
 
 test "getThreatDefensePositions: four" {
+    ll.init();
     var cells = [_]Cell{.empty} ** CELL_COUNT;
     // 黒の4連: (7,5),(7,6),(7,7),(7,8) 片端ブロック
     cells[7 * BOARD_SIZE + 4] = .white;
@@ -1849,6 +1946,7 @@ test "getThreatDefensePositions: four" {
     cells[7 * BOARD_SIZE + 6] = .black;
     cells[7 * BOARD_SIZE + 7] = .black;
     cells[7 * BOARD_SIZE + 8] = .black;
+    bitboard.initFromCells(&cells);
 
     const defense = getThreatDefensePositions(&cells, 7, 8, .black);
     // 止め四: (7,9) の1点で防御
@@ -1857,12 +1955,14 @@ test "getThreatDefensePositions: four" {
 }
 
 test "getThreatDefensePositions: open four" {
+    ll.init();
     var cells = [_]Cell{.empty} ** CELL_COUNT;
     // 黒の活四: (7,5),(7,6),(7,7),(7,8) 両端空き
     cells[7 * BOARD_SIZE + 5] = .black;
     cells[7 * BOARD_SIZE + 6] = .black;
     cells[7 * BOARD_SIZE + 7] = .black;
     cells[7 * BOARD_SIZE + 8] = .black;
+    bitboard.initFromCells(&cells);
 
     const defense = getThreatDefensePositions(&cells, 7, 8, .black);
     // 活四: 防御不可
@@ -1870,24 +1970,28 @@ test "getThreatDefensePositions: open four" {
 }
 
 test "checkDefenseCounterThreat: basic" {
+    ll.init();
     var cells = [_]Cell{.empty} ** CELL_COUNT;
     // 白が3連 → 防御の仮配置で4連に
     cells[7 * BOARD_SIZE + 5] = .white;
     cells[7 * BOARD_SIZE + 6] = .white;
     cells[7 * BOARD_SIZE + 7] = .white;
     cells[7 * BOARD_SIZE + 8] = .white; // 防御石配置
+    bitboard.initFromCells(&cells);
 
     const ct = checkDefenseCounterThreat(&cells, 7, 8, .white);
     try testing.expect(ct == .four);
 }
 
 test "hasVCT: immediate five via VCF" {
+    ll.init();
     var cells = [_]Cell{.empty} ** CELL_COUNT;
     // 黒の4連: VCFで即勝ち
     cells[7 * BOARD_SIZE + 4] = .black;
     cells[7 * BOARD_SIZE + 5] = .black;
     cells[7 * BOARD_SIZE + 6] = .black;
     cells[7 * BOARD_SIZE + 7] = .black;
+    bitboard.initFromCells(&cells);
 
     var limiter = TimeLimiter{
         .start_time = 0,
@@ -1901,8 +2005,10 @@ test "hasVCT: immediate five via VCF" {
 }
 
 test "hasVCT: no threat" {
+    ll.init();
     var cells = [_]Cell{.empty} ** CELL_COUNT;
     cells[7 * BOARD_SIZE + 7] = .black;
+    bitboard.initFromCells(&cells);
 
     var limiter = TimeLimiter{
         .start_time = 0,
@@ -1928,11 +2034,13 @@ test "findVCTMove: immediate via VCF" {
 }
 
 test "findThreatMoves: four prioritized" {
+    ll.init();
     var cells = [_]Cell{.empty} ** CELL_COUNT;
     // 黒の3連 → 四を作れる
     cells[7 * BOARD_SIZE + 5] = .black;
     cells[7 * BOARD_SIZE + 6] = .black;
     cells[7 * BOARD_SIZE + 7] = .black;
+    bitboard.initFromCells(&cells);
 
     var buf: [225]Position = undefined;
     const count = findThreatMoves(&cells, .black, &buf);
@@ -2034,6 +2142,7 @@ test "findVCTSequence: 5-stone opening should not find VCT for white" {
 }
 
 test "getThreatDefensePositions: black four with overline should not be undefendable" {
+    ll.init();
     // C8-D8-E8-F8-(空G8)-H8(黒) の配置
     // row=7 (0-indexed), C=2, D=3, E=4, F=5, G=6(empty), H=7
     var cells = [_]Cell{.empty} ** CELL_COUNT;
@@ -2043,6 +2152,7 @@ test "getThreatDefensePositions: black four with overline should not be undefend
     cells[7 * BOARD_SIZE + 5] = .black; // F8
     // G8 (7*15+6) = empty
     cells[7 * BOARD_SIZE + 7] = .black; // H8
+    bitboard.initFromCells(&cells);
 
     // E8を基準に脅威防御判定: G8方向はoverlineで塞がり
     // → 防御不可（空リスト）ではなく、B8を含む防御位置を返すべき
