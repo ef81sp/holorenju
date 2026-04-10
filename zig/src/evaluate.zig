@@ -1,6 +1,7 @@
 const board_mod = @import("board.zig");
 const forbidden = @import("forbidden.zig");
 const jp = @import("jump_patterns.zig");
+const ll = @import("line_lookup.zig");
 const patterns = @import("patterns.zig");
 const scores = @import("scores.zig");
 const std = @import("std");
@@ -9,6 +10,11 @@ const Cell = board_mod.Cell;
 const BOARD_SIZE = board_mod.BOARD_SIZE;
 const CELL_COUNT = board_mod.CELL_COUNT;
 const DIRECTIONS = board_mod.DIRECTIONS;
+
+/// LUT の end (0=empty, 1=blocked) を EndState に変換
+fn lutEnd(end: u2) board_mod.EndState {
+    return if (end == 0) .empty else .opponent;
+}
 
 /// evaluateBoard のオプション（ビットフィールドからデコード）
 pub const EvalOptions = struct {
@@ -90,39 +96,34 @@ pub fn createsFourThree(cells: []Cell, row: u8, col: u8, color: Cell) bool {
     var has_four = false;
     var has_valid_open_three = false;
 
-    // 各方向のパターンと跳び四フラグを記録
-    var dir_counts: [4]u8 = undefined;
-    var dir_end1s: [4]board_mod.EndState = undefined;
-    var dir_end2s: [4]board_mod.EndState = undefined;
+    // 各方向のLUT結果をキャッシュ
+    var dir_luts: [4]ll.PatternResult = undefined;
     var jump_four_dirs: [4]bool = [_]bool{false} ** 4;
 
-    // 1st pass: 連続パターン + 跳び四検出
-    for (DIRECTIONS, 0..) |dir, i| {
-        const result = board_mod.analyzeDirectionOnCells(cells, row, col, dir.dr, dir.dc, color);
-        dir_counts[i] = result.count;
-        dir_end1s[i] = result.end1;
-        dir_end2s[i] = result.end2;
+    // 1st pass: 連続パターン + 跳び四検出 (LUT版)
+    for (0..4) |i| {
+        const lut = ll.queryPatternFromCells(cells, row, col, @intCast(i), color);
+        dir_luts[i] = lut;
 
-        const dir_index = jp.DIRECTION_INDICES[i];
-        if (result.count != 4 and jp.checkJumpFour(cells, row, col, dir_index, color)) {
+        if (lut.count != 4 and lut.has_jump_four) {
             jump_four_dirs[i] = true;
         }
     }
 
     // 2nd pass: 四・活三判定
-    for (DIRECTIONS, 0..) |_, i| {
+    for (0..4) |i| {
         const dir_index = jp.DIRECTION_INDICES[i];
-        const count = dir_counts[i];
-        const end1 = dir_end1s[i];
-        const end2 = dir_end2s[i];
+        const lut = dir_luts[i];
+        const end1 = lutEnd(lut.end1);
+        const end2 = lutEnd(lut.end2);
 
         // 連続四（片端以上が空き）
-        if (count == 4 and (end1 == .empty or end2 == .empty)) {
+        if (lut.count == 4 and (end1 == .empty or end2 == .empty)) {
             has_four = true;
         }
 
         // 連続三の有効性チェック（跳び四方向でなければ）
-        if (count == 3 and !jump_four_dirs[i]) {
+        if (lut.count == 3 and !jump_four_dirs[i]) {
             if (end1 == .empty and end2 == .empty) {
                 if (patterns.isValidConsecutiveThree(cells, row, col, dir_index, color)) {
                     has_valid_open_three = true;
@@ -135,8 +136,8 @@ pub fn createsFourThree(cells: []Cell, row: u8, col: u8, color: Cell) bool {
             has_four = true;
         }
 
-        // 跳び三（連続三がない場合のみ）
-        if (count != 3 and jp.checkJumpThree(cells, row, col, dir_index, color)) {
+        // 跳び三 (LUT版: 連続三がない場合のみ)
+        if (lut.count != 3 and lut.has_jump_three) {
             if (patterns.isValidJumpThree(cells, row, col, dir_index, color)) {
                 has_valid_open_three = true;
             }

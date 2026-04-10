@@ -7,6 +7,7 @@ const board_mod = @import("board.zig");
 const evaluate = @import("evaluate.zig");
 const forbidden = @import("forbidden.zig");
 const jp = @import("jump_patterns.zig");
+const ll = @import("line_lookup.zig");
 const patterns = @import("patterns.zig");
 const scores = @import("scores.zig");
 const std = @import("std");
@@ -15,6 +16,11 @@ const Cell = board_mod.Cell;
 const BOARD_SIZE = board_mod.BOARD_SIZE;
 const CELL_COUNT = board_mod.CELL_COUNT;
 const DIRECTIONS = board_mod.DIRECTIONS;
+
+/// LUT の end (0=empty, 1=blocked) を EndState に変換
+fn lutEnd(end: u2) board_mod.EndState {
+    return if (end == 0) .empty else .opponent;
+}
 
 /// Position (row, col)
 pub const Position = struct {
@@ -421,32 +427,34 @@ pub fn hasDefenseThatBlocksBoth(open_threes: *const PositionList, mises: *const 
 pub fn countThreatDirections(cells: []Cell, row: u8, col: u8, color: Cell) u8 {
     var threat_count: u8 = 0;
 
-    for (DIRECTIONS, 0..) |dir, i| {
-        const result = board_mod.analyzeDirectionOnCells(cells, row, col, dir.dr, dir.dc, color);
+    for (0..4) |i| {
+        const lut = ll.queryPatternFromCells(cells, row, col, @intCast(i), color);
+        const end1 = lutEnd(lut.end1);
+        const end2 = lutEnd(lut.end2);
+        const dir_index = jp.DIRECTION_INDICES[i];
 
         // 活四 or 止め四
-        if (result.count == 4 and (result.end1 == .empty or result.end2 == .empty)) {
+        if (lut.count == 4 and (end1 == .empty or end2 == .empty)) {
             threat_count += 1;
             continue;
         }
 
-        // 跳び四をチェック
-        const dir_index = jp.DIRECTION_INDICES[i];
-        if (result.count != 4 and jp.checkJumpFour(cells, row, col, dir_index, color)) {
+        // 跳び四 (LUT版)
+        if (lut.count != 4 and lut.has_jump_four) {
             threat_count += 1;
             continue;
         }
 
         // 活三
-        if (result.count == 3 and result.end1 == .empty and result.end2 == .empty) {
+        if (lut.count == 3 and end1 == .empty and end2 == .empty) {
             if (color == .white or patterns.isValidConsecutiveThree(cells, row, col, dir_index, color)) {
                 threat_count += 1;
                 continue;
             }
         }
 
-        // 跳び三
-        if (result.count != 3 and jp.checkJumpThree(cells, row, col, dir_index, color)) {
+        // 跳び三 (LUT版)
+        if (lut.count != 3 and lut.has_jump_three) {
             if (color == .white or patterns.isValidJumpThree(cells, row, col, dir_index, color)) {
                 threat_count += 1;
             }
@@ -477,27 +485,28 @@ pub fn detectOpponentThreats(cells: []Cell, opponent_color: Cell) ThreatInfo {
 
             // 各方向をチェック
             for (DIRECTIONS, 0..) |dir, dir_idx| {
-                const renju_dir_index = jp.DIRECTION_INDICES[dir_idx];
-                const pattern = board_mod.analyzeDirectionOnCells(cells, row, col, dir.dr, dir.dc, opponent_color);
+                const lut = ll.queryPatternFromCells(cells, row, col, @intCast(dir_idx), opponent_color);
+                const end1 = lutEnd(lut.end1);
+                const end2 = lutEnd(lut.end2);
 
                 // 活四: 両端が空いている4連
-                if (pattern.count == 4 and pattern.end1 == .empty and pattern.end2 == .empty) {
+                if (lut.count == 4 and end1 == .empty and end2 == .empty) {
                     const defense = getOpenFourDefensePositions(cells, row, col, dir.dr, dir.dc, opponent_color);
                     result.open_fours.addUniqueList(&defense);
                 }
 
                 // 止め四: 片側だけ空いている4連
-                if (pattern.count == 4 and
-                    ((pattern.end1 == .empty and pattern.end2 != .empty) or
-                    (pattern.end1 != .empty and pattern.end2 == .empty)))
+                if (lut.count == 4 and
+                    ((end1 == .empty and end2 != .empty) or
+                    (end1 != .empty and end2 == .empty)))
                 {
                     const defense = getOpenFourDefensePositions(cells, row, col, dir.dr, dir.dc, opponent_color);
                     result.fours.addUniqueList(&defense);
                 }
 
-                // 跳び四
+                // 跳び四 (LUT版)
                 var is_jump_four = false;
-                if (pattern.count != 4 and jp.checkJumpFour(cells, row, col, renju_dir_index, opponent_color)) {
+                if (lut.count != 4 and lut.has_jump_four) {
                     is_jump_four = true;
                     if (findJumpGapPosition(cells, row, col, dir.dr, dir.dc, opponent_color)) |gap_pos| {
                         result.fours.addUnique(gap_pos);
@@ -505,13 +514,13 @@ pub fn detectOpponentThreats(cells: []Cell, opponent_color: Cell) ThreatInfo {
                 }
 
                 // 活三: 両端が空いている3連（跳び四の一部でない）
-                if (!is_jump_four and pattern.count == 3 and pattern.end1 == .empty and pattern.end2 == .empty) {
+                if (!is_jump_four and lut.count == 3 and end1 == .empty and end2 == .empty) {
                     const defense = getOpenThreeDefensePositions(cells, row, col, dir.dr, dir.dc, opponent_color);
                     result.open_threes.addUniqueList(&defense);
                 }
 
                 // 跳び三
-                if (pattern.count < 3) {
+                if (lut.count < 3) {
                     const defense = detectJumpThreePattern(cells, row, col, dir.dr, dir.dc, opponent_color);
                     result.open_threes.addUniqueList(&defense);
                 }
@@ -551,16 +560,18 @@ pub fn createsDoubleThree(cells: []Cell, row: u8, col: u8, color: Cell) bool {
 
     var open_three_count: u8 = 0;
 
-    for (DIRECTIONS, 0..) |_, i| {
+    for (0..4) |i| {
         const dir_index = jp.DIRECTION_INDICES[i];
-        const result = board_mod.analyzeDirectionOnCells(cells, row, col, DIRECTIONS[i].dr, DIRECTIONS[i].dc, color);
+        const lut = ll.queryPatternFromCells(cells, row, col, @intCast(i), color);
+        const end1 = lutEnd(lut.end1);
+        const end2 = lutEnd(lut.end2);
 
         // 活三カウント
-        if (result.count == 3 and result.end1 == .empty and result.end2 == .empty and
+        if (lut.count == 3 and end1 == .empty and end2 == .empty and
             patterns.isValidConsecutiveThree(cells, row, col, dir_index, color))
         {
             open_three_count += 1;
-        } else if (result.count != 3 and jp.checkJumpThree(cells, row, col, dir_index, color) and
+        } else if (lut.count != 3 and lut.has_jump_three and
             patterns.isValidJumpThree(cells, row, col, dir_index, color))
         {
             open_three_count += 1;
@@ -577,31 +588,34 @@ pub fn checkWhiteWinningPattern(cells: []Cell, row: u8, col: u8) bool {
     var open_three_count: u8 = 0;
     var four_count: u8 = 0;
 
-    for (DIRECTIONS, 0..) |dir, i| {
+    for (0..4) |i| {
         const dir_index = jp.DIRECTION_INDICES[i];
-        const result = board_mod.analyzeDirectionOnCells(cells, row, col, dir.dr, dir.dc, .white);
+        const lut = ll.queryPatternFromCells(cells, row, col, @intCast(i), .white);
+        // 白なのでオーバーライン補正不要
+        const end1 = lutEnd(lut.end1);
+        const end2 = lutEnd(lut.end2);
 
         // 活三カウント
-        if (result.count == 3 and result.end1 == .empty and result.end2 == .empty and
+        if (lut.count == 3 and end1 == .empty and end2 == .empty and
             patterns.isValidConsecutiveThree(cells, row, col, dir_index, .white))
         {
             open_three_count += 1;
         }
 
         // 四カウント
-        if (result.count == 4 and (result.end1 == .empty or result.end2 == .empty)) {
+        if (lut.count == 4 and (end1 == .empty or end2 == .empty)) {
             four_count += 1;
         }
 
-        // 跳び三
-        if (result.count != 3 and jp.checkJumpThree(cells, row, col, dir_index, .white) and
+        // 跳び三 (LUT版)
+        if (lut.count != 3 and lut.has_jump_three and
             patterns.isValidJumpThree(cells, row, col, dir_index, .white))
         {
             open_three_count += 1;
         }
 
-        // 跳び四
-        if (result.count != 4 and jp.checkJumpFour(cells, row, col, dir_index, .white)) {
+        // 跳び四 (LUT版)
+        if (lut.count != 4 and lut.has_jump_four) {
             four_count += 1;
         }
     }
