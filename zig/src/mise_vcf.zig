@@ -9,6 +9,7 @@ const board_mod = @import("board.zig");
 const evaluate = @import("evaluate.zig");
 const forbidden = @import("forbidden.zig");
 const jp = @import("jump_patterns.zig");
+const ll = @import("line_lookup.zig");
 const patterns = @import("patterns.zig");
 const quiescence = @import("quiescence.zig");
 const threats = @import("threats.zig");
@@ -58,8 +59,8 @@ fn findMiseTargetsLite(cells: []Cell, row: u8, col: u8, color: Cell) MiseTargetL
     var result = MiseTargetList{};
     var seen: [CELL_COUNT]bool = [_]bool{false} ** CELL_COUNT;
 
-    for (DIRECTIONS) |dir| {
-        const analysis = board_mod.analyzeDirectionOnCells(cells, row, col, dir.dr, dir.dc, color);
+    for (DIRECTIONS, 0..) |dir, di| {
+        const analysis = ll.queryPatternFromCells(cells, row, col, di, color);
         if (analysis.count < 2) continue; // 2石未満 → 四三不可能
 
         // 正方向端
@@ -128,11 +129,11 @@ fn getCreatedOpenThreeDefenses(cells: []Cell, row: u8, col: u8, color: Cell) thr
 
     for (DIRECTIONS, 0..) |dir, i| {
         const dir_index = jp.DIRECTION_INDICES[i];
-        const analysis = board_mod.analyzeDirectionOnCells(cells, row, col, dir.dr, dir.dc, color);
+        const analysis = ll.queryPatternFromCells(cells, row, col, i, color);
 
         // 連続活三（跳び四の一部は除外、黒の場合はウソの三を除外）
-        if (analysis.count == 3 and analysis.end1 == .empty and analysis.end2 == .empty and
-            !jp.checkJumpFour(cells, row, col, dir_index, color) and
+        if (analysis.count == 3 and analysis.end1 == 0 and analysis.end2 == 0 and
+            !analysis.has_jump_four and
             (color != .black or patterns.isValidConsecutiveThree(cells, row, col, dir_index, color)))
         {
             const open_three_defenses = threats.getOpenThreeDefensePositions(cells, row, col, dir.dr, dir.dc, color);
@@ -148,7 +149,7 @@ fn getCreatedOpenThreeDefenses(cells: []Cell, row: u8, col: u8, color: Cell) thr
         }
 
         // 飛び三（黒の場合はウソの三を除外）
-        if (analysis.count != 3 and jp.checkJumpThree(cells, row, col, dir_index, color) and
+        if (analysis.count != 3 and analysis.has_jump_three and
             (color != .black or patterns.isValidJumpThree(cells, row, col, dir_index, color)))
         {
             const jump_defenses = threats.getJumpThreeDefensePositions(cells, row, col, dir.dr, dir.dc, color);
@@ -464,9 +465,9 @@ pub fn findMiseVCFSequence(
 
 /// hasPotentialMiseTarget: ミセの可能性をチェック（position_eval.zig と同一ロジック）
 fn hasPotentialMiseTarget(cells: []const Cell, row: u8, col: u8, color: Cell) bool {
-    for (DIRECTIONS) |dir| {
-        const result = board_mod.analyzeDirectionOnCells(cells, row, col, dir.dr, dir.dc, color);
-        if (result.count >= 2 and (result.end1 == .empty or result.end2 == .empty)) {
+    for (0..4) |i| {
+        const result = ll.queryPatternFromCells(cells, row, col, i, color);
+        if (result.count >= 2 and (result.end1 == 0 or result.end2 == 0)) {
             return true;
         }
     }
@@ -554,10 +555,11 @@ test "findMiseVCFMove: 相手に活三がある場合スキップ" {
 
 test "hasPotentialMiseTarget: basic" {
     var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[7 * BOARD_SIZE + 5] = .black; // 実際の使用時と同様、石を配置済み
     cells[7 * BOARD_SIZE + 6] = .black;
     cells[7 * BOARD_SIZE + 7] = .black;
 
-    // 隣に石があれば可能性あり
+    // 石が配置済みの状態で可能性あり
     try testing.expect(hasPotentialMiseTarget(&cells, 7, 5, .black));
 }
 

@@ -9,7 +9,7 @@ const bitboard = @import("bitboard.zig");
 const board_mod = @import("board.zig");
 const evaluate = @import("evaluate.zig");
 const forbidden = @import("forbidden.zig");
-const jp = @import("jump_patterns.zig");
+const ll = @import("line_lookup.zig");
 const scores = @import("scores.zig");
 const threats = @import("threats.zig");
 const tt_mod = @import("tt.zig");
@@ -30,22 +30,53 @@ pub const MAX_QUIESCENCE_DEPTH: u8 = 4;
 /// TS版 threatMoves.ts の createsFour に対応
 pub fn createsFour(cells: []const Cell, row: u8, col: u8, color: Cell) bool {
     for (DIRECTIONS, 0..) |dir, i| {
-        const result = board_mod.analyzeDirectionOnCells(cells, row, col, dir.dr, dir.dc, color);
+        const result = ll.queryPatternFromCells(cells, row, col, i, color);
 
-        // 連続四をチェック
-        if (result.count == 4 and (result.end1 == .empty or result.end2 == .empty)) {
-            // 黒の長連チェック: 五以上になる場合は四ではない
-            if (color == .black and result.count >= 5) continue;
-            return true;
+        // 連続四をチェック（黒はオーバーライン補正）
+        if (result.count == 4) {
+            var end1_open = result.end1 == 0;
+            var end2_open = result.end2 == 0;
+            if (color == .black) {
+                if (end1_open) end1_open = !isOverlineEnd(cells, row, col, i, true);
+                if (end2_open) end2_open = !isOverlineEnd(cells, row, col, i, false);
+            }
+            if (end1_open or end2_open) {
+                return true;
+            }
         }
 
         // 跳び四をチェック
-        const dir_index = jp.DIRECTION_INDICES[i];
-        if (result.count != 4 and jp.checkJumpFour(cells, row, col, dir_index, color)) {
+        if (result.count != 4 and result.has_jump_four) {
             // 黒の長連チェック: 跳び四のギャップを埋めると長連になる場合はスキップ
             if (color == .black) {
                 if (isJumpFourOverline(cells, row, col, dir.dr, dir.dc)) continue;
             }
+            return true;
+        }
+    }
+    return false;
+}
+
+/// 黒のオーバーライン補正: count==4 の空き端の先に黒石があるかチェック
+fn isOverlineEnd(cells: []const Cell, row: u8, col: u8, dir_idx: usize, is_positive: bool) bool {
+    const dir = DIRECTIONS[dir_idx];
+    const dr: i8 = if (is_positive) dir.dr else -dir.dr;
+    const dc: i8 = if (is_positive) dir.dc else -dir.dc;
+
+    var consecutive: i16 = 0;
+    var r: i16 = @as(i16, row) + @as(i16, dr);
+    var c: i16 = @as(i16, col) + @as(i16, dc);
+    while (board_mod.isValid(r, c) and cells[@intCast(@as(u16, @intCast(r)) * BOARD_SIZE + @as(u16, @intCast(c)))] == .black) {
+        consecutive += 1;
+        r += @as(i16, dr);
+        c += @as(i16, dc);
+    }
+
+    const check_r = @as(i16, row) + @as(i16, dr) * (consecutive + 2);
+    const check_c = @as(i16, col) + @as(i16, dc) * (consecutive + 2);
+    if (board_mod.isValid(check_r, check_c)) {
+        const check_idx = @as(u16, @intCast(check_r)) * BOARD_SIZE + @as(u16, @intCast(check_c));
+        if (cells[check_idx] == .black) {
             return true;
         }
     }
@@ -101,7 +132,7 @@ pub fn getFourDefensePosition(cells: []const Cell, last_row: u8, last_col: u8, c
     var first_defense: ?Position = null;
 
     for (DIRECTIONS, 0..) |dir, i| {
-        const result = board_mod.analyzeDirectionOnCells(cells, last_row, last_col, dir.dr, dir.dc, color);
+        const result = ll.queryPatternFromCells(cells, last_row, last_col, i, color);
 
         // 連続四をチェック
         if (result.count == 4) {
@@ -117,8 +148,7 @@ pub fn getFourDefensePosition(cells: []const Cell, last_row: u8, last_col: u8, c
         }
 
         // 跳び四をチェック
-        const dir_index = jp.DIRECTION_INDICES[i];
-        if (jp.checkJumpFour(cells, last_row, last_col, dir_index, color)) {
+        if (result.has_jump_four) {
             const gap = @import("threats.zig").findJumpGapPosition(cells, last_row, last_col, dir.dr, dir.dc, color);
             if (gap != null and first_defense == null) {
                 first_defense = gap;
