@@ -3,6 +3,7 @@
 /// 相手の活四・止め四・活三・ミセ手・三三脅威を検出
 /// TS版 threatDetection.ts + threatDetectionFast.ts に対応
 
+const bitboard = @import("bitboard.zig");
 const board_mod = @import("board.zig");
 const evaluate = @import("evaluate.zig");
 const forbidden = @import("forbidden.zig");
@@ -471,11 +472,12 @@ pub fn hasDefenseThatBlocksBoth(open_threes: *const PositionList, mises: *const 
 }
 
 /// 複数方向に脅威（活三以上）がある数をカウント
+/// 注意: 呼び出し元で bitboard.global_bb が cells と同期している必要あり
 pub fn countThreatDirections(cells: []Cell, row: u8, col: u8, color: Cell) u8 {
     var threat_count: u8 = 0;
 
     for (0..4) |i| {
-        const lut = ll.queryPatternFromCells(cells, row, col, @intCast(i), color);
+        const lut = ll.queryPatternByCell(row, col, i, color);
         const end1 = lutEnd(lut.end1);
         const end2 = lutEnd(lut.end2);
         const dir_index = jp.DIRECTION_INDICES[i];
@@ -532,7 +534,7 @@ pub fn detectOpponentThreats(cells: []Cell, opponent_color: Cell) ThreatInfo {
 
             // 各方向をチェック
             for (DIRECTIONS, 0..) |dir, dir_idx| {
-                const lut = ll.queryPatternFromCells(cells, row, col, @intCast(dir_idx), opponent_color);
+                const lut = ll.queryPatternByCell(row, col, dir_idx, opponent_color);
                 const end1 = lutEnd(lut.end1);
                 const end2 = lutEnd(lut.end2);
 
@@ -604,13 +606,17 @@ pub fn detectOpponentThreats(cells: []Cell, opponent_color: Cell) ThreatInfo {
 pub fn createsDoubleThree(cells: []Cell, row: u8, col: u8, color: Cell) bool {
     const idx = @as(u16, row) * BOARD_SIZE + col;
     cells[idx] = color;
-    defer cells[idx] = .empty;
+    bitboard.placeStone(row, col, color);
+    defer {
+        cells[idx] = .empty;
+        bitboard.removeStone(row, col);
+    }
 
     var open_three_count: u8 = 0;
 
     for (0..4) |i| {
         const dir_index = jp.DIRECTION_INDICES[i];
-        const lut = ll.queryPatternFromCells(cells, row, col, @intCast(i), color);
+        const lut = ll.queryPatternByCell(row, col, i, color);
         const end1 = lutEnd(lut.end1);
         const end2 = lutEnd(lut.end2);
 
@@ -638,7 +644,7 @@ pub fn checkWhiteWinningPattern(cells: []Cell, row: u8, col: u8) bool {
 
     for (0..4) |i| {
         const dir_index = jp.DIRECTION_INDICES[i];
-        const lut = ll.queryPatternFromCells(cells, row, col, @intCast(i), .white);
+        const lut = ll.queryPatternByCell(row, col, i, .white);
         // 白なのでオーバーライン補正不要
         const end1 = lutEnd(lut.end1);
         const end2 = lutEnd(lut.end2);
@@ -680,6 +686,7 @@ test "detectOpponentThreats: 活四検出" {
     cells[7 * BOARD_SIZE + 5] = .white;
     cells[7 * BOARD_SIZE + 6] = .white;
     cells[7 * BOARD_SIZE + 7] = .white;
+    bitboard.initFromCells(&cells);
 
     const result = detectOpponentThreats(&cells, .white);
     try std.testing.expect(result.open_fours.len > 0);
@@ -815,6 +822,7 @@ test "countThreatDirections basic" {
     cells[7 * BOARD_SIZE + 5] = .white;
     cells[7 * BOARD_SIZE + 6] = .white;
     cells[7 * BOARD_SIZE + 7] = .white;
+    bitboard.initFromCells(&cells);
     const count = countThreatDirections(&cells, 7, 7, .white);
     try std.testing.expect(count >= 1);
 }

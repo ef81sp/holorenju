@@ -27,6 +27,7 @@ pub const Position = @import("threats.zig").Position;
 pub const MAX_QUIESCENCE_DEPTH: u8 = 4;
 
 /// 四を作るかチェック（石配置済み前提）
+/// vcf/vct/mise_vcf から bitboard 非同期で呼ばれるため cells ベース実装を維持。
 /// TS版 threatMoves.ts の createsFour に対応
 pub fn createsFour(cells: []const Cell, row: u8, col: u8, color: Cell) bool {
     for (DIRECTIONS, 0..) |dir, i| {
@@ -127,6 +128,7 @@ fn findJumpFourGap(cells: []const Cell, row: u8, col: u8, dr: i8, dc: i8) ?Posit
 
 /// 四に対する防御位置を取得
 /// 四は1点でしか止められないのでその位置を返す
+/// vcf/vct から bitboard 非同期で呼ばれるため cells ベース実装を維持。
 /// TS版 threatPatterns.ts の getFourDefensePosition に対応
 pub fn getFourDefensePosition(cells: []const Cell, last_row: u8, last_col: u8, color: Cell) ?Position {
     var first_defense: ?Position = null;

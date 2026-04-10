@@ -276,6 +276,16 @@ pub fn queryPattern(line_index: u8, bit_pos: u4, color: Cell) PatternResult {
     return PATTERN_TABLE[w.own][w.block];
 }
 
+/// Convenience: query the pattern at (row, col) for `dir_index` using the
+/// global bitboard. The caller must ensure that `bitboard.global_bb` is in
+/// sync with the cell state at the queried position.
+pub fn queryPatternByCell(row: u8, col: u8, dir_index: usize, color: Cell) PatternResult {
+    if (!initialized) init();
+    const cell_idx = @as(usize, row) * BOARD_SIZE + col;
+    const info = bitboard.CELL_LINES[cell_idx][dir_index];
+    return queryPattern(info.line_index, info.bit_pos, color);
+}
+
 /// Query pattern directly from cells array (no bitboard sync needed).
 /// dir_index: 0=横, 1=縦, 2=右下斜め, 3=右上斜め (board.zig DIRECTIONS 順)
 /// Useful for temporary probe positions where bitboard is not updated (VCT/VCF等).

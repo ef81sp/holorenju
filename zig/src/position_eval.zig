@@ -3,6 +3,7 @@
 /// 指定位置に石を置いた場合の評価スコアを計算
 /// TS版 positionEvaluation.ts に対応
 
+const bitboard = @import("bitboard.zig");
 const board_mod = @import("board.zig");
 const evaluate = @import("evaluate.zig");
 const forbidden = @import("forbidden.zig");
@@ -169,7 +170,7 @@ fn computeAttackScore(cells: []Cell, row: u8, col: u8, color: Cell) struct {
 
     // 1st pass: 連続パターン + 跳び四検出 (LUT版)
     for (0..4) |i| {
-        const lut = ll.queryPatternFromCells(cells, row, col, @intCast(i), color);
+        const lut = ll.queryPatternByCell(row, col, i, color);
         dir_luts[i] = lut;
         const ends = if (color == .black and lut.count == 4)
             applyOverlineCorrection(cells, row, col, @intCast(i), lut)
@@ -268,13 +269,15 @@ pub fn evaluatePosition(
         return scores.FIVE;
     }
 
-    // インプレースで石を配置
+    // インプレースで石を配置（cells と bitboard を同期）
     cells[idx] = color;
+    bitboard.placeStone(row, col, color);
 
     const score = evaluatePositionCore(cells, row, col, color, options);
 
     // 確実にUndoする
     cells[idx] = .empty;
+    bitboard.removeStone(row, col);
     return score;
 }
 
@@ -313,8 +316,10 @@ fn evaluatePositionCore(
         if (!used_precomputed) {
             // Undo → detectOpponentThreats → Redo
             cells[idx] = .empty;
+            bitboard.removeStone(row, col);
             threat = threats_mod.detectOpponentThreats(cells, opponent_color);
             cells[idx] = color;
+            bitboard.placeStone(row, col, color);
         }
 
         const has_my_open_four = attack_score >= scores.OPEN_FOUR;
@@ -404,6 +409,8 @@ fn evaluatePositionCore(
 
     // 防御スコア
     cells[idx] = opponent_color;
+    bitboard.removeStone(row, col);
+    bitboard.placeStone(row, col, opponent_color);
     const opponent_attack = computeAttackScore(cells, row, col, opponent_color);
 
     // 防御交差点ボーナス
@@ -417,6 +424,8 @@ fn evaluatePositionCore(
 
     // 元に戻す
     cells[idx] = color;
+    bitboard.removeStone(row, col);
+    bitboard.placeStone(row, col, color);
 
     // 防御スコアをパターン別倍率で計算（概算: 全体に DEFENSE_MULTIPLIERS.four を適用）
     // 正確にはパターン別の breakdown が必要だが、コアの探索では概算で十分
@@ -443,7 +452,7 @@ fn evaluateForbiddenTrap(cells: []Cell, row: u8, col: u8) i32 {
 
     for (DIRECTIONS, 0..) |dir, i| {
         const dir_index = jp.DIRECTION_INDICES[i];
-        const lut = ll.queryPatternFromCells(cells, row, col, @intCast(i), .white);
+        const lut = ll.queryPatternByCell(row, col, i, .white);
         // 白なのでオーバーライン補正不要
         const end1 = lutEnd(lut.end1);
         const end2 = lutEnd(lut.end2);
@@ -507,7 +516,7 @@ fn evaluateForbiddenVulnerability(cells: []Cell, row: u8, col: u8) i32 {
 
     for (DIRECTIONS, 0..) |dir, i| {
         const dir_index = jp.DIRECTION_INDICES[i];
-        const lut = ll.queryPatternFromCells(cells, row, col, @intCast(i), .black);
+        const lut = ll.queryPatternByCell(row, col, i, .black);
         // count==3 なのでオーバーライン補正不要
         const end1 = lutEnd(lut.end1);
         const end2 = lutEnd(lut.end2);
@@ -577,8 +586,9 @@ fn computeMiseBonus(cells: []Cell, row: u8, col: u8, color: Cell) i32 {
 }
 
 fn hasPotentialMiseTarget(cells: []const Cell, row: u8, col: u8, color: Cell) bool {
+    _ = cells;
     for (0..4) |i| {
-        const lut = ll.queryPatternFromCells(cells, row, col, @intCast(i), color);
+        const lut = ll.queryPatternByCell(row, col, i, color);
         if (lut.count >= 2 and (lut.end1 == 0 or lut.end2 == 0)) {
             return true;
         }
@@ -592,7 +602,7 @@ fn countMiseTargets(cells: []Cell, row: u8, col: u8, color: Cell) u8 {
     var seen: [225]bool = [_]bool{false} ** 225;
 
     for (DIRECTIONS, 0..) |dir, i| {
-        const lut = ll.queryPatternFromCells(cells, row, col, @intCast(i), color);
+        const lut = ll.queryPatternByCell(row, col, i, color);
         if (lut.count < 2) continue;
 
         // 正方向端
@@ -648,7 +658,7 @@ fn hasFollowUpThreat(cells: []Cell, row: u8, col: u8, color: Cell) bool {
     const opponent_color = color.opposite();
 
     for (DIRECTIONS, 0..) |dir, i| {
-        const lut = ll.queryPatternFromCells(cells, row, col, @intCast(i), color);
+        const lut = ll.queryPatternByCell(row, col, i, color);
         const ends = if (color == .black and lut.count == 4)
             applyOverlineCorrection(cells, row, col, @intCast(i), lut)
         else
@@ -661,14 +671,16 @@ fn hasFollowUpThreat(cells: []Cell, row: u8, col: u8, color: Cell) bool {
                 const def_pos = defense.items[j];
                 const def_idx = @as(u16, def_pos.row) * BOARD_SIZE + def_pos.col;
 
-                // 相手の防御を仮配置
+                // 相手の防御を仮配置（cells と bitboard を同期）
                 cells[def_idx] = opponent_color;
+                bitboard.placeStone(def_pos.row, def_pos.col, opponent_color);
 
                 // 防御後、自分が四を作れる位置があるかチェック
                 const can_continue = canContinueFourAfterDefense(cells, def_pos, color);
 
                 // 復元
                 cells[def_idx] = .empty;
+                bitboard.removeStone(def_pos.row, def_pos.col);
 
                 if (can_continue) return true;
             }
@@ -693,16 +705,19 @@ fn canContinueFourAfterDefense(cells: []Cell, defense_pos: Position, color: Cell
             const new_idx = @as(u16, @intCast(new_r)) * BOARD_SIZE + @as(u16, @intCast(new_c));
             if (cells[new_idx] != .empty) continue;
 
-            // 仮置き
+            // 仮置き（cells と bitboard を同期）
+            const probe_row: u8 = @intCast(new_r);
+            const probe_col: u8 = @intCast(new_c);
             cells[new_idx] = color;
+            bitboard.placeStone(probe_row, probe_col, color);
 
             // 四判定 (LUT版)
             var has_four = false;
             for (0..4) |i| {
-                const lut_r = ll.queryPatternFromCells(cells, @intCast(new_r), @intCast(new_c), @intCast(i), color);
+                const lut_r = ll.queryPatternByCell(probe_row, probe_col, i, color);
                 if (lut_r.count == 4) {
                     const lut_ends = if (color == .black)
-                        applyOverlineCorrection(cells, @intCast(new_r), @intCast(new_c), @intCast(i), lut_r)
+                        applyOverlineCorrection(cells, probe_row, probe_col, @intCast(i), lut_r)
                     else
                         lutEnds(lut_r);
                     if (lut_ends.end1 == .empty or lut_ends.end2 == .empty) {
@@ -717,6 +732,7 @@ fn canContinueFourAfterDefense(cells: []Cell, defense_pos: Position, color: Cell
 
             // 復元
             cells[new_idx] = .empty;
+            bitboard.removeStone(probe_row, probe_col);
 
             if (has_four) return true;
         }
@@ -733,6 +749,7 @@ test "evaluatePosition: five returns FIVE" {
     cells[7 * BOARD_SIZE + 5] = .black;
     cells[7 * BOARD_SIZE + 6] = .black;
     cells[7 * BOARD_SIZE + 7] = .black;
+    bitboard.initFromCells(&cells);
 
     const score = evaluatePosition(&cells, 7, 8, .black, DEFAULT_EVAL_OPTIONS);
     try std.testing.expectEqual(score, scores.FIVE);
@@ -742,6 +759,7 @@ test "evaluatePosition: basic scoring" {
     var cells = [_]Cell{.empty} ** CELL_COUNT;
     cells[7 * BOARD_SIZE + 6] = .black;
     cells[7 * BOARD_SIZE + 7] = .black;
+    bitboard.initFromCells(&cells);
 
     const score = evaluatePosition(&cells, 7, 8, .black, DEFAULT_EVAL_OPTIONS);
     try std.testing.expect(score > 0);
