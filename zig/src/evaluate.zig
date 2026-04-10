@@ -33,25 +33,13 @@ pub fn decodeOptions(flags: u32) EvalOptions {
     };
 }
 
+const threats = @import("threats.zig");
+
 /// 隣接マス（距離1）に石があるかチェック
 fn isNearExistingStone(cells: []const Cell, row: u8, col: u8) bool {
-    const r: i16 = row;
-    const c: i16 = col;
-    var dr: i16 = -1;
-    while (dr <= 1) : (dr += 1) {
-        var dc: i16 = -1;
-        while (dc <= 1) : (dc += 1) {
-            if (dr == 0 and dc == 0) continue;
-            const nr = r + dr;
-            const nc = c + dc;
-            if (board_mod.isValid(nr, nc)) {
-                if (cells[@intCast(@as(u16, @intCast(nr)) * BOARD_SIZE + @as(u16, @intCast(nc)))] != .empty) {
-                    return true;
-                }
-            }
-        }
-    }
-    return false;
+    const occupied = threats.computeOccupiedRows(cells);
+    const near = threats.computeNearMask(occupied, 1);
+    return threats.isNearFromMask(near, row, col);
 }
 
 /// hasFourThreePotential: 四と活三の候補が異なる方向に存在するか
@@ -151,12 +139,13 @@ pub fn createsFourThree(cells: []Cell, row: u8, col: u8, color: Cell) bool {
 pub fn scanFourThreeThreat(cells: []Cell, color: Cell, stone_count: u16) bool {
     if (stone_count < 5) return false;
 
+    const near_mask = threats.computeNearMask(threats.computeOccupiedRows(cells), 1);
     for (0..BOARD_SIZE) |r_usize| {
         const r: u8 = @intCast(r_usize);
         for (0..BOARD_SIZE) |c_usize| {
             const c: u8 = @intCast(c_usize);
             if (cells[@as(u16, r) * BOARD_SIZE + c] != .empty) continue;
-            if (!isNearExistingStone(cells, r, c)) continue;
+            if (!threats.isNearFromMask(near_mask, r, c)) continue;
             if (!hasFourThreePotential(cells, r, c, color)) continue;
             if (createsFourThree(cells, r, c, color)) return true;
         }

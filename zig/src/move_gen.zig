@@ -74,6 +74,7 @@ pub fn generateMoves(cells: []Cell, color: Cell, options: GenerateMovesOptions) 
     }
 
     // 既存石の周囲2マスを候補として収集
+    const near_mask = threats.computeNearMask(threats.computeOccupiedRows(cells), 2);
     for (0..BOARD_SIZE) |r_usize| {
         const row: u8 = @intCast(r_usize);
         for (0..BOARD_SIZE) |c_usize| {
@@ -84,7 +85,7 @@ pub fn generateMoves(cells: []Cell, color: Cell, options: GenerateMovesOptions) 
             if (cells[idx] != .empty) continue;
 
             // 既存石の周囲でなければスキップ
-            if (!threats.isNearExistingStone(cells, row, col)) continue;
+            if (!threats.isNearFromMask(near_mask, row, col)) continue;
 
             // 黒番の場合は禁手チェック
             if (is_black and !options.skip_forbidden_check) {
