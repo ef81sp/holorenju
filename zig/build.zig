@@ -142,6 +142,20 @@ pub fn build(b: *std.Build) void {
         }),
     });
 
+    const test_bitboard = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/bitboard.zig"),
+            .target = native_target,
+        }),
+    });
+
+    const test_line_lookup = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/line_lookup.zig"),
+            .target = native_target,
+        }),
+    });
+
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&b.addRunArtifact(test_board).step);
     test_step.dependOn(&b.addRunArtifact(test_patterns).step);
@@ -160,4 +174,6 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&b.addRunArtifact(test_vcf).step);
     test_step.dependOn(&b.addRunArtifact(test_vct).step);
     test_step.dependOn(&b.addRunArtifact(test_incremental_eval).step);
+    test_step.dependOn(&b.addRunArtifact(test_bitboard).step);
+    test_step.dependOn(&b.addRunArtifact(test_line_lookup).step);
 }
