@@ -5,6 +5,7 @@
 ///
 /// TS版 miseVcf.ts に対応
 
+const bitboard = @import("bitboard.zig");
 const board_mod = @import("board.zig");
 const evaluate = @import("evaluate.zig");
 const forbidden = @import("forbidden.zig");
@@ -60,7 +61,7 @@ fn findMiseTargetsLite(cells: []Cell, row: u8, col: u8, color: Cell) MiseTargetL
     var seen: [CELL_COUNT]bool = [_]bool{false} ** CELL_COUNT;
 
     for (DIRECTIONS, 0..) |dir, di| {
-        const analysis = ll.queryPatternFromCells(cells, row, col, di, color);
+        const analysis = ll.queryPatternByCell(row, col, di, color);
         if (analysis.count < 2) continue; // 2石未満 → 四三不可能
 
         // 正方向端
@@ -129,7 +130,7 @@ fn getCreatedOpenThreeDefenses(cells: []Cell, row: u8, col: u8, color: Cell) thr
 
     for (DIRECTIONS, 0..) |dir, i| {
         const dir_index = jp.DIRECTION_INDICES[i];
-        const analysis = ll.queryPatternFromCells(cells, row, col, i, color);
+        const analysis = ll.queryPatternByCell(row, col, i, color);
 
         // 連続活三（跳び四の一部は除外、黒の場合はウソの三を除外）
         if (analysis.count == 3 and analysis.end1 == 0 and analysis.end2 == 0 and
@@ -193,6 +194,7 @@ fn isInvalidatedByNoriTe(
         const def_idx = @as(u16, defense.row) * BOARD_SIZE + defense.col;
 
         cells[def_idx] = opponent;
+        bitboard.placeStone(defense.row, defense.col, opponent);
 
         var limiter = vcf.TimeLimiter{
             .start_time = 0,
@@ -203,6 +205,7 @@ fn isInvalidatedByNoriTe(
         const vcf_ok = vcf.hasVCF(cells, color, 0, &limiter, MISE_VCF_DEPTH);
 
         cells[def_idx] = .empty;
+        bitboard.removeStone(defense.row, defense.col);
 
         if (!vcf_ok) {
             return .invalidated; // VCF不成立 → ノリ手で無効化
@@ -233,6 +236,10 @@ fn isInvalidatedByNoriTe(
 ///    i. VCF成立 → MがMise-VCF勝ち手
 ///    j. 全てundo
 pub fn findMiseVCFMove(cells: []Cell, color: Cell) ?Position {
+    // トップレベルエントリ: bitboard を cells と同期
+    bitboard.initFromCells(cells);
+    ll.init();
+
     const opponent = color.opposite();
 
     // 相手に活三がある場合、ミセ手の強制応手の前提が崩れるためスキップ
@@ -260,18 +267,21 @@ pub fn findMiseVCFMove(cells: []Cell, color: Cell) ?Position {
                 if (fr != .none) continue;
             }
 
-            // 候補手Mを配置（in-place）
+            // 候補手Mを配置（in-place、bitboard も同期）
             cells[idx] = color;
+            bitboard.placeStone(r, c, color);
 
             // プリフィルタ: ミセターゲットが存在しうるか安価にチェック
             if (!hasPotentialMiseTarget(cells, r, c, color)) {
                 cells[idx] = .empty;
+                bitboard.removeStone(r, c);
                 continue;
             }
 
             // 四を作るミセ手はスキップ（通常VCFで検出済み）
             if (quiescence.createsFour(cells, r, c, color)) {
                 cells[idx] = .empty;
+                bitboard.removeStone(r, c);
                 continue;
             }
 
@@ -279,6 +289,7 @@ pub fn findMiseVCFMove(cells: []Cell, color: Cell) ?Position {
             const mise_targets = findMiseTargetsLite(cells, r, c, color);
             if (mise_targets.len == 0) {
                 cells[idx] = .empty;
+                bitboard.removeStone(r, c);
                 continue;
             }
 
@@ -286,6 +297,7 @@ pub fn findMiseVCFMove(cells: []Cell, color: Cell) ?Position {
             const three_defenses = getCreatedOpenThreeDefenses(cells, r, c, color);
             if (three_defenses.len == 0) {
                 cells[idx] = .empty;
+                bitboard.removeStone(r, c);
                 continue;
             }
 
@@ -293,6 +305,7 @@ pub fn findMiseVCFMove(cells: []Cell, color: Cell) ?Position {
             const nori_result = isInvalidatedByNoriTe(cells, color, &three_defenses);
             if (nori_result == .invalidated) {
                 cells[idx] = .empty;
+                bitboard.removeStone(r, c);
                 continue;
             }
 
@@ -304,6 +317,7 @@ pub fn findMiseVCFMove(cells: []Cell, color: Cell) ?Position {
 
                 // 相手の強制応手（四三点を防御）
                 cells[target_idx] = opponent;
+                bitboard.placeStone(target.row, target.col, opponent);
 
                 // VCF探索
                 var limiter = vcf.TimeLimiter{
@@ -315,6 +329,7 @@ pub fn findMiseVCFMove(cells: []Cell, color: Cell) ?Position {
                 const vcf_ok = vcf.hasVCF(cells, color, 0, &limiter, MISE_VCF_DEPTH);
 
                 cells[target_idx] = .empty;
+                bitboard.removeStone(target.row, target.col);
 
                 if (vcf_ok) {
                     found = true;
@@ -323,6 +338,7 @@ pub fn findMiseVCFMove(cells: []Cell, color: Cell) ?Position {
             }
 
             cells[idx] = .empty;
+            bitboard.removeStone(r, c);
 
             if (found) {
                 return .{ .row = r, .col = c };
@@ -356,6 +372,10 @@ pub fn findMiseVCFSequence(
     time_limit_ms: u32,
     max_nodes: u32,
 ) MiseVCFSequenceResult {
+    // トップレベルエントリ: bitboard を cells と同期
+    bitboard.initFromCells(cells);
+    ll.init();
+
     var result = MiseVCFSequenceResult{
         .sequence = undefined,
         .len = 0,
@@ -390,18 +410,21 @@ pub fn findMiseVCFSequence(
                 if (fr != .none) continue;
             }
 
-            // 候補手Mを配置（in-place）
+            // 候補手Mを配置（in-place、bitboard も同期）
             cells[idx] = color;
+            bitboard.placeStone(r, c, color);
 
             // プリフィルタ: ミセターゲットが存在しうるか安価にチェック
             if (!hasPotentialMiseTarget(cells, r, c, color)) {
                 cells[idx] = .empty;
+                bitboard.removeStone(r, c);
                 continue;
             }
 
             // 四を作るミセ手はスキップ（通常VCFで検出済み）
             if (quiescence.createsFour(cells, r, c, color)) {
                 cells[idx] = .empty;
+                bitboard.removeStone(r, c);
                 continue;
             }
 
@@ -409,6 +432,7 @@ pub fn findMiseVCFSequence(
             const mise_targets = findMiseTargetsLite(cells, r, c, color);
             if (mise_targets.len == 0) {
                 cells[idx] = .empty;
+                bitboard.removeStone(r, c);
                 continue;
             }
 
@@ -416,6 +440,7 @@ pub fn findMiseVCFSequence(
             const three_defenses = getCreatedOpenThreeDefenses(cells, r, c, color);
             if (three_defenses.len == 0) {
                 cells[idx] = .empty;
+                bitboard.removeStone(r, c);
                 continue;
             }
 
@@ -423,6 +448,7 @@ pub fn findMiseVCFSequence(
             const nori_result = isInvalidatedByNoriTe(cells, color, &three_defenses);
             if (nori_result == .invalidated) {
                 cells[idx] = .empty;
+                bitboard.removeStone(r, c);
                 continue;
             }
 
@@ -433,11 +459,13 @@ pub fn findMiseVCFSequence(
 
                 // 相手の強制応手（四三点を防御）
                 cells[target_idx] = opponent;
+                bitboard.placeStone(target.row, target.col, opponent);
 
                 // VCF Sequence探索
                 const vcf_result = vcf.findVCFSequence(cells, color, MISE_VCF_DEPTH, time_limit_ms, max_nodes);
 
                 cells[target_idx] = .empty;
+                bitboard.removeStone(target.row, target.col);
 
                 if (vcf_result.found) {
                     // 手順を組み立て: [ミセ手, 防御手, VCF手順...]
@@ -452,11 +480,13 @@ pub fn findMiseVCFSequence(
                     result.found = true;
 
                     cells[idx] = .empty;
+                    bitboard.removeStone(r, c);
                     return result;
                 }
             }
 
             cells[idx] = .empty;
+            bitboard.removeStone(r, c);
         }
     }
 
@@ -465,8 +495,9 @@ pub fn findMiseVCFSequence(
 
 /// hasPotentialMiseTarget: ミセの可能性をチェック（position_eval.zig と同一ロジック）
 fn hasPotentialMiseTarget(cells: []const Cell, row: u8, col: u8, color: Cell) bool {
+    _ = cells;
     for (0..4) |i| {
-        const result = ll.queryPatternFromCells(cells, row, col, i, color);
+        const result = ll.queryPatternByCell(row, col, i, color);
         if (result.count >= 2 and (result.end1 == 0 or result.end2 == 0)) {
             return true;
         }
@@ -554,10 +585,12 @@ test "findMiseVCFMove: 相手に活三がある場合スキップ" {
 }
 
 test "hasPotentialMiseTarget: basic" {
+    ll.init();
     var cells = [_]Cell{.empty} ** CELL_COUNT;
     cells[7 * BOARD_SIZE + 5] = .black; // 実際の使用時と同様、石を配置済み
     cells[7 * BOARD_SIZE + 6] = .black;
     cells[7 * BOARD_SIZE + 7] = .black;
+    bitboard.initFromCells(&cells);
 
     // 石が配置済みの状態で可能性あり
     try testing.expect(hasPotentialMiseTarget(&cells, 7, 5, .black));

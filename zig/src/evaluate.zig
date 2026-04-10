@@ -76,12 +76,16 @@ fn hasFourThreePotential(cells: []const Cell, row: u8, col: u8, color: Cell) boo
 
 /// createsFourThree: 仮置きして四と活三が同時にできるかチェック（跳びパターン含む）
 /// TS版 analyzeJumpPatterns の hasFour && hasValidOpenThree に対応
-/// NOTE: cells ベースの実装を維持。vct/mise_vcf から bitboard 非同期で呼ばれるため。
+/// 呼び出し側で bitboard が cells と同期している前提。
 pub fn createsFourThree(cells: []Cell, row: u8, col: u8, color: Cell) bool {
     const idx = @as(u16, row) * BOARD_SIZE + col;
-    // 仮置き
+    // 仮置き（bitboard も同期）
     cells[idx] = color;
-    defer cells[idx] = .empty;
+    bitboard.placeStone(row, col, color);
+    defer {
+        cells[idx] = .empty;
+        bitboard.removeStone(row, col);
+    }
 
     var has_four = false;
     var has_valid_open_three = false;
@@ -92,7 +96,7 @@ pub fn createsFourThree(cells: []Cell, row: u8, col: u8, color: Cell) bool {
 
     // 1st pass: 連続パターン + 跳び四検出 (LUT版)
     for (0..4) |i| {
-        const lut = ll.queryPatternFromCells(cells, row, col, @intCast(i), color);
+        const lut = ll.queryPatternByCell(row, col, i, color);
         dir_luts[i] = lut;
 
         if (lut.count != 4 and lut.has_jump_four) {

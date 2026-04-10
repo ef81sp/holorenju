@@ -74,10 +74,12 @@ fn findWinningMove(cells: []Cell, color: Cell) ?Position {
             const idx = @as(u16, r) * BOARD_SIZE + c;
             if (cells[idx] != .empty) continue;
 
-            // 仮配置してチェック
+            // 仮配置してチェック（bitboard も同期）
             cells[idx] = color;
+            bitboard.placeStone(r, c, color);
             const is_five = forbidden.checkFive(cells, r, c, color);
             cells[idx] = .empty;
+            bitboard.removeStone(r, c);
 
             if (is_five) {
                 return .{ .row = r, .col = c };
@@ -237,12 +239,14 @@ fn demotePlainFourIfNeeded(
     // 候補が2つ未満なら何もしない
     if (result.top_candidate_count < 2) return;
 
-    // 最善手を仮配置して非生産的四か判定
+    // 最善手を仮配置して非生産的四か判定（bitboard も同期）
     const best = result.position;
     const idx = @as(u16, best.row) * BOARD_SIZE + best.col;
     cells[idx] = color;
+    bitboard.placeStone(best.row, best.col, color);
     const ft = minimax.analyzeFourAndThree(cells, best.row, best.col, color);
     cells[idx] = .empty;
+    bitboard.removeStone(best.row, best.col);
 
     const is_plain_four = !ft.has_five and ft.has_four and !ft.has_open_three;
     if (!is_plain_four) return;
@@ -256,8 +260,10 @@ fn demotePlainFourIfNeeded(
         const entry = result.top_candidates[i];
         const eidx = @as(u16, entry.move.row) * BOARD_SIZE + entry.move.col;
         cells[eidx] = color;
+        bitboard.placeStone(entry.move.row, entry.move.col, color);
         const eft = minimax.analyzeFourAndThree(cells, entry.move.row, entry.move.col, color);
         cells[eidx] = .empty;
+        bitboard.removeStone(entry.move.row, entry.move.col);
 
         const entry_is_plain_four = !eft.has_five and eft.has_four and !eft.has_open_three;
         if (!entry_is_plain_four) {
@@ -743,6 +749,9 @@ test "findPreSearchMove: white open four at J9" {
     cells[7 * BOARD_SIZE + 10] = .white; // K8
     cells[3 * BOARD_SIZE + 5] = .black; // F12
 
+    ll.init();
+    bitboard.initFromCells(&cells);
+
     // Step 1: findWinningMove should NOT find a five
     const win_move = findWinningMove(&cells, .white);
     try testing.expect(win_move == null);
@@ -758,9 +767,11 @@ test "findPreSearchMove: white open four at J9" {
     // First test that J9 (6,9) with white creates a four
     const idx_j9 = @as(u16, 6) * BOARD_SIZE + 9;
     cells[idx_j9] = .white;
+    bitboard.initFromCells(&cells);
     const j9_creates_four = @import("quiescence.zig").createsFour(&cells, 6, 9, .white);
     const j9_defense = @import("quiescence.zig").getFourDefensePosition(&cells, 6, 9, .white);
     cells[idx_j9] = .empty;
+    bitboard.initFromCells(&cells);
     try testing.expect(j9_creates_four); // J9 creates a four
     try testing.expect(j9_defense == null); // open four = unblockable
 
