@@ -277,14 +277,14 @@ pub fn queryPattern(line_index: u8, bit_pos: u4, color: Cell) PatternResult {
 }
 
 /// Query pattern directly from cells array (no bitboard sync needed).
-/// Useful for temporary probe positions where bitboard is not updated.
-pub fn queryPatternFromCells(cells: []const Cell, row: u8, col: u8, dir_index: u8, color: Cell) PatternResult {
+/// dir_index: 0=横, 1=縦, 2=右下斜め, 3=右上斜め (board.zig DIRECTIONS 順)
+/// Useful for temporary probe positions where bitboard is not updated (VCT/VCF等).
+pub fn queryPatternFromCells(cells: []const Cell, row: u8, col: u8, dir_index: usize, color: Cell) PatternResult {
     if (!initialized) init();
 
     const dir = board_mod.DIRECTIONS[dir_index];
     const dr: i8 = dir.dr;
     const dc: i8 = dir.dc;
-    const opponent = color.opposite();
 
     var own_window: u9 = 0;
     var block_window: u9 = 0;
@@ -296,13 +296,12 @@ pub fn queryPatternFromCells(cells: []const Cell, row: u8, col: u8, dir_index: u
         const w_bit: u4 = @intCast(w);
 
         if (!board_mod.isValid(r, c)) {
-            // Out of bounds = wall (block)
             block_window |= @as(u9, 1) << w_bit;
         } else {
             const cell = cells[@intCast(@as(u16, @intCast(r)) * BOARD_SIZE + @as(u16, @intCast(c)))];
             if (cell == color) {
                 own_window |= @as(u9, 1) << w_bit;
-            } else if (cell == opponent) {
+            } else if (cell != .empty) {
                 block_window |= @as(u9, 1) << w_bit;
             }
         }
@@ -658,4 +657,40 @@ test "queryPattern matches analyzeDirectionOnCells exhaustively" {
     try std.testing.expectEqual(@as(u32, 0), analyze_mismatches);
     try std.testing.expectEqual(@as(u32, 0), jump_four_mismatches);
     try std.testing.expectEqual(@as(u32, 0), jump_three_mismatches);
+}
+
+test "queryPatternFromCells matches queryPattern via bitboard" {
+    init();
+    const CELL_COUNT = BOARD_SIZE * BOARD_SIZE;
+
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    // Set up a position with some stones
+    cells[7 * BOARD_SIZE + 5] = .black;
+    cells[7 * BOARD_SIZE + 6] = .black;
+    cells[7 * BOARD_SIZE + 7] = .black;
+    cells[6 * BOARD_SIZE + 8] = .white;
+    cells[8 * BOARD_SIZE + 8] = .white;
+
+    bitboard.initFromCells(&cells);
+
+    var mismatches: u32 = 0;
+    for (0..BOARD_SIZE) |r_usize| {
+        const row: u8 = @intCast(r_usize);
+        for (0..BOARD_SIZE) |c_usize| {
+            const col: u8 = @intCast(c_usize);
+            for (0..4) |dir_idx| {
+                for ([_]Cell{ .black, .white }) |color| {
+                    const cell_idx = @as(usize, row) * BOARD_SIZE + col;
+                    const info = bitboard.CELL_LINES[cell_idx][dir_idx];
+                    const bb_result = queryPattern(info.line_index, info.bit_pos, color);
+                    const cells_result = queryPatternFromCells(&cells, row, col, dir_idx, color);
+
+                    if (@as(u16, @bitCast(bb_result)) != @as(u16, @bitCast(cells_result))) {
+                        mismatches += 1;
+                    }
+                }
+            }
+        }
+    }
+    try std.testing.expectEqual(@as(u32, 0), mismatches);
 }

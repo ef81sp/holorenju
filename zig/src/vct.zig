@@ -7,7 +7,7 @@
 const board_mod = @import("board.zig");
 const evaluate = @import("evaluate.zig");
 const forbidden = @import("forbidden.zig");
-const jp = @import("jump_patterns.zig");
+const ll = @import("line_lookup.zig");
 const patterns = @import("patterns.zig");
 const quiescence = @import("quiescence.zig");
 const scores = @import("scores.zig");
@@ -47,40 +47,37 @@ pub fn classifyThreat(cells: []const Cell, row: u8, col: u8, color: Cell) Threat
     var has_four = false;
     var has_open_three = false;
 
-    for (DIRECTIONS, 0..) |dir, i| {
-        const result = board_mod.analyzeDirectionOnCells(cells, row, col, dir.dr, dir.dc, color);
-        const dir_index = jp.DIRECTION_INDICES[i];
+    for (0..4) |i| {
+        const result = ll.queryPatternFromCells(cells, row, col, i, color);
 
-        // 連続四（黒は長連チェック付き）
-        if (result.count == 4 and (result.end1 == .empty or result.end2 == .empty)) {
-            // 黒の長連チェック: analyzeDirectionOnCells の count は center 含む
-            // count==4 は4連。checkEndsForFour相当のチェックは
-            // 端が開いていれば四が成立（黒の場合、TS版ではcheckEndsForFourで
-            // 追加の長連チェックを行うが、count==4 なら5連目で問題ない）
-            has_four = true;
+        // 連続四（黒はオーバーライン補正）
+        if (result.count == 4) {
+            var end1_open = result.end1 == 0;
+            var end2_open = result.end2 == 0;
+            if (color == .black) {
+                if (end1_open) end1_open = !isOverlineEnd(cells, row, col, i, true);
+                if (end2_open) end2_open = !isOverlineEnd(cells, row, col, i, false);
+            }
+            if (end1_open or end2_open) {
+                has_four = true;
+            }
         }
 
         // 跳び四
-        if (!has_four and result.count != 4) {
-            if (jp.checkJumpFour(cells, row, col, dir_index, color)) {
-                if (!isJumpFourOverline(cells, row, col, dir.dr, dir.dc, color)) {
-                    has_four = true;
-                }
+        if (!has_four and result.count != 4 and result.has_jump_four) {
+            if (!isJumpFourOverline(cells, row, col, DIRECTIONS[i].dr, DIRECTIONS[i].dc, color)) {
+                has_four = true;
             }
         }
 
         // 連続活三
-        if (result.count == 3 and result.end1 == .empty and result.end2 == .empty) {
-            // 跳び四の一部である連続三は活三ではないのチェックは省略
-            // （classifyThreat では厳密な判定よりも高速性を重視）
+        if (result.count == 3 and result.end1 == 0 and result.end2 == 0) {
             has_open_three = true;
         }
 
         // 跳び三
-        if (!has_open_three and result.count != 3) {
-            if (jp.checkJumpThree(cells, row, col, dir_index, color)) {
-                has_open_three = true;
-            }
+        if (!has_open_three and result.count != 3 and result.has_jump_three) {
+            has_open_three = true;
         }
 
         if (has_four and has_open_three) break;
@@ -91,17 +88,16 @@ pub fn classifyThreat(cells: []const Cell, row: u8, col: u8, color: Cell) Threat
 
 /// 活三ができるかチェック（石配置済み前提）
 pub fn createsOpenThree(cells: []const Cell, row: u8, col: u8, color: Cell) bool {
-    for (DIRECTIONS, 0..) |dir, i| {
-        const result = board_mod.analyzeDirectionOnCells(cells, row, col, dir.dr, dir.dc, color);
-        const dir_index = jp.DIRECTION_INDICES[i];
+    for (0..4) |i| {
+        const result = ll.queryPatternFromCells(cells, row, col, i, color);
 
         // 連続活三
-        if (result.count == 3 and result.end1 == .empty and result.end2 == .empty) {
+        if (result.count == 3 and result.end1 == 0 and result.end2 == 0) {
             return true;
         }
 
         // 跳び三
-        if (result.count != 3 and jp.checkJumpThree(cells, row, col, dir_index, color)) {
+        if (result.count != 3 and result.has_jump_three) {
             return true;
         }
     }
@@ -117,6 +113,34 @@ pub fn isThreat(cells: []const Cell, row: u8, col: u8, color: Cell) bool {
 // =============================================================================
 // 跳び四長連チェック（TS版 threatMoves.ts の isJumpFourOverline に対応）
 // =============================================================================
+
+/// 黒のオーバーライン補正: count==4 の空き端の先に黒石があるかチェック
+fn isOverlineEnd(cells: []const Cell, row: u8, col: u8, dir_idx: usize, is_positive: bool) bool {
+    const dir = DIRECTIONS[dir_idx];
+    const dr: i8 = if (is_positive) dir.dr else -dir.dr;
+    const dc: i8 = if (is_positive) dir.dc else -dir.dc;
+
+    // Count consecutive own stones from center in this direction
+    var consecutive: i16 = 0;
+    var r: i16 = @as(i16, row) + @as(i16, dr);
+    var c: i16 = @as(i16, col) + @as(i16, dc);
+    while (board_mod.isValid(r, c) and cells[@intCast(@as(u16, @intCast(r)) * BOARD_SIZE + @as(u16, @intCast(c)))] == .black) {
+        consecutive += 1;
+        r += @as(i16, dr);
+        c += @as(i16, dc);
+    }
+
+    // The end is at the empty cell. Check 1 further past it for a black stone.
+    const check_r = @as(i16, row) + @as(i16, dr) * (consecutive + 2);
+    const check_c = @as(i16, col) + @as(i16, dc) * (consecutive + 2);
+    if (board_mod.isValid(check_r, check_c)) {
+        const check_idx = @as(u16, @intCast(check_r)) * BOARD_SIZE + @as(u16, @intCast(check_c));
+        if (cells[check_idx] == .black) {
+            return true;
+        }
+    }
+    return false;
+}
 
 fn isJumpFourOverline(cells: []const Cell, row: u8, col: u8, dr: i8, dc: i8, color: Cell) bool {
     if (color != .black) return false;
@@ -173,19 +197,18 @@ pub fn hasOpenThree(cells: []const Cell, color: Cell) bool {
             const col: u8 = @intCast(c_usize);
             if (cellAt(cells, @intCast(row), @intCast(col)) != color) continue;
 
-            for (DIRECTIONS, 0..) |dir, i| {
-                const dir_index = jp.DIRECTION_INDICES[i];
-                const result = board_mod.analyzeDirectionOnCells(cells, row, col, dir.dr, dir.dc, color);
+            for (0..4) |i| {
+                const result = ll.queryPatternFromCells(cells, row, col, i, color);
 
                 // 連続活三（跳び四の一部は除外）
-                if (result.count == 3 and result.end1 == .empty and result.end2 == .empty) {
-                    if (!jp.checkJumpFour(cells, row, col, dir_index, color)) {
+                if (result.count == 3 and result.end1 == 0 and result.end2 == 0) {
+                    if (!result.has_jump_four) {
                         return true;
                     }
                 }
 
                 // 跳び三
-                if (result.count != 3 and jp.checkJumpThree(cells, row, col, dir_index, color)) {
+                if (result.count != 3 and result.has_jump_three) {
                     return true;
                 }
             }
@@ -292,13 +315,16 @@ pub fn getThreatDefensePositions(cells: []const Cell, row: u8, col: u8, color: C
     var defense_positions = PositionList.init();
 
     for (DIRECTIONS, 0..) |dir, i| {
-        const dir_index = jp.DIRECTION_INDICES[i];
-        const result = board_mod.analyzeDirectionOnCells(cells, row, col, dir.dr, dir.dc, color);
+        const result = ll.queryPatternFromCells(cells, row, col, i, color);
 
-        // 連続四をチェック（overline補正済みのend1/end2を使用）
+        // 連続四をチェック（黒はオーバーライン補正）
         if (result.count == 4) {
-            const end1_open = result.end1 == .empty;
-            const end2_open = result.end2 == .empty;
+            var end1_open = result.end1 == 0;
+            var end2_open = result.end2 == 0;
+            if (color == .black) {
+                if (end1_open) end1_open = !isOverlineEnd(cells, row, col, i, true);
+                if (end2_open) end2_open = !isOverlineEnd(cells, row, col, i, false);
+            }
 
             if (end1_open and end2_open) {
                 // 活四（両端開き）= 防御不可
@@ -322,7 +348,7 @@ pub fn getThreatDefensePositions(cells: []const Cell, row: u8, col: u8, color: C
 
         // 跳び四をチェック
         var has_jump_four = false;
-        if (result.count != 4 and jp.checkJumpFour(cells, row, col, dir_index, color)) {
+        if (result.count != 4 and result.has_jump_four) {
             has_jump_four = true;
             if (threats.findJumpGapPosition(cells, row, col, dir.dr, dir.dc, color)) |gap| {
                 defense_positions.addUnique(gap);
@@ -330,7 +356,7 @@ pub fn getThreatDefensePositions(cells: []const Cell, row: u8, col: u8, color: C
         }
 
         // 活三をチェック（同方向に跳び四がある場合は不要：跳び四の防御が優先）
-        if (!has_jump_four and result.count == 3 and result.end1 == .empty and result.end2 == .empty) {
+        if (!has_jump_four and result.count == 3 and result.end1 == 0 and result.end2 == 0) {
             const ends = threats.getLineEnds(cells, row, col, dir.dr, dir.dc, color);
             for (0..ends.len) |j| {
                 defense_positions.addUnique(ends.items[j]);
@@ -338,7 +364,7 @@ pub fn getThreatDefensePositions(cells: []const Cell, row: u8, col: u8, color: C
         }
 
         // 跳び三をチェック
-        if (result.count != 3 and jp.checkJumpThree(cells, row, col, dir_index, color)) {
+        if (result.count != 3 and result.has_jump_three) {
             const jump_defense = threats.getJumpThreeDefensePositions(cells, row, col, dir.dr, dir.dc, color);
             for (0..jump_defense.len) |j| {
                 defense_positions.addUnique(jump_defense.items[j]);
@@ -368,29 +394,36 @@ pub fn checkDefenseCounterThreat(cells: []const Cell, row: u8, col: u8, opponent
     }
 
     var has_three = false;
-    for (DIRECTIONS, 0..) |dir, i| {
-        const dir_index = jp.DIRECTION_INDICES[i];
-        const result = board_mod.analyzeDirectionOnCells(cells, row, col, dir.dr, dir.dc, opponent_color);
+    for (0..4) |i| {
+        const result = ll.queryPatternFromCells(cells, row, col, i, opponent_color);
 
-        // 連続四
-        if (result.count == 4 and (result.end1 == .empty or result.end2 == .empty)) {
-            return .four;
+        // 連続四（黒はオーバーライン補正）
+        if (result.count == 4) {
+            var end1_open = result.end1 == 0;
+            var end2_open = result.end2 == 0;
+            if (opponent_color == .black) {
+                if (end1_open) end1_open = !isOverlineEnd(cells, row, col, i, true);
+                if (end2_open) end2_open = !isOverlineEnd(cells, row, col, i, false);
+            }
+            if (end1_open or end2_open) {
+                return .four;
+            }
         }
 
         // 跳び四
-        if (result.count != 4 and jp.checkJumpFour(cells, row, col, dir_index, opponent_color)) {
-            if (!isJumpFourOverline(cells, row, col, dir.dr, dir.dc, opponent_color)) {
+        if (result.count != 4 and result.has_jump_four) {
+            if (!isJumpFourOverline(cells, row, col, DIRECTIONS[i].dr, DIRECTIONS[i].dc, opponent_color)) {
                 return .four;
             }
         }
 
         // 連続活三
-        if (result.count == 3 and result.end1 == .empty and result.end2 == .empty) {
+        if (result.count == 3 and result.end1 == 0 and result.end2 == 0) {
             has_three = true;
         }
 
         // 跳び三
-        if (!has_three and result.count != 3 and jp.checkJumpThree(cells, row, col, dir_index, opponent_color)) {
+        if (!has_three and result.count != 3 and result.has_jump_three) {
             has_three = true;
         }
     }
