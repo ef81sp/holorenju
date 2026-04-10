@@ -5,6 +5,7 @@
 /// 水平線効果を軽減する。
 /// TS版 quiescence.ts に対応
 
+const bitboard = @import("bitboard.zig");
 const board_mod = @import("board.zig");
 const evaluate = @import("evaluate.zig");
 const forbidden = @import("forbidden.zig");
@@ -323,6 +324,7 @@ pub fn quiescenceSearch(
 
         // 石を配置
         cells[idx] = current_color;
+        bitboard.placeStone(move.row, move.col, current_color);
         const new_hash = zobrist.updateHash(hash, move.row, move.col, current_color);
 
         const score = quiescenceSearch(
@@ -342,6 +344,7 @@ pub fn quiescenceSearch(
 
         // 石を除去
         cells[idx] = .empty;
+        bitboard.removeStone(move.row, move.col);
 
         // Alpha-beta更新
         if (is_maximizing) {

@@ -3,9 +3,11 @@
 /// Iterative Deepening + Aspiration Windows + 事前チェック（VCF/脅威防御）
 /// TS版 iterativeDeepening.ts + preSearch.ts に対応
 
+const bitboard = @import("bitboard.zig");
 const board_mod = @import("board.zig");
 const evaluate = @import("evaluate.zig");
 const forbidden = @import("forbidden.zig");
+const line_lookup = @import("line_lookup.zig");
 const mise_vcf = @import("mise_vcf.zig");
 const minimax = @import("minimax.zig");
 const move_gen = @import("move_gen.zig");
@@ -327,6 +329,10 @@ pub fn findBestMoveIterative(
 
     // 新しい探索開始
     tt_mod.global_tt.newGeneration();
+
+    // ビットボード・LUT初期化
+    bitboard.initFromCells(cells);
+    line_lookup.init();
 
     // =========================================================================
     // 事前チェック

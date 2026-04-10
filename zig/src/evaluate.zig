@@ -1,6 +1,8 @@
+const bitboard = @import("bitboard.zig");
 const board_mod = @import("board.zig");
 const forbidden = @import("forbidden.zig");
 const jp = @import("jump_patterns.zig");
+const line_lookup = @import("line_lookup.zig");
 const patterns = @import("patterns.zig");
 const scores = @import("scores.zig");
 const std = @import("std");
@@ -69,6 +71,7 @@ fn hasFourThreePotential(cells: []const Cell, row: u8, col: u8, color: Cell) boo
 
 /// createsFourThree: 仮置きして四と活三が同時にできるかチェック（跳びパターン含む）
 /// TS版 analyzeJumpPatterns の hasFour && hasValidOpenThree に対応
+/// NOTE: cells ベースの実装を維持。vct/mise_vcf から bitboard 非同期で呼ばれるため。
 pub fn createsFourThree(cells: []Cell, row: u8, col: u8, color: Cell) bool {
     const idx = @as(u16, row) * BOARD_SIZE + col;
     // 仮置き
@@ -250,6 +253,8 @@ pub fn evaluateBoardOnCells(
 // === WASM export ===
 
 pub fn evaluateBoard(perspective: u8, options_flags: u32) i32 {
+    line_lookup.init();
+    bitboard.initFromCells(&board_mod.board_cells);
     const options = decodeOptions(options_flags);
     return evaluateBoardOnCells(
         &board_mod.board_cells,
@@ -261,7 +266,9 @@ pub fn evaluateBoard(perspective: u8, options_flags: u32) i32 {
 // === Zig unit tests ===
 
 test "empty board evaluates to 0" {
+    line_lookup.init();
     var cells = [_]Cell{.empty} ** CELL_COUNT;
+    bitboard.initFromCells(&cells);
     const result = evaluateBoardOnCells(&cells, .black, .{
         .enable_leaf_mise = false,
         .last_mover_is_perspective = .unset,
@@ -272,8 +279,10 @@ test "empty board evaluates to 0" {
 }
 
 test "single stone evaluates to 0 (no pattern)" {
+    line_lookup.init();
     var cells = [_]Cell{.empty} ** CELL_COUNT;
     cells[7 * BOARD_SIZE + 7] = .black;
+    bitboard.initFromCells(&cells);
     const result = evaluateBoardOnCells(&cells, .black, .{
         .enable_leaf_mise = false,
         .last_mover_is_perspective = .unset,
@@ -284,6 +293,7 @@ test "single stone evaluates to 0 (no pattern)" {
 }
 
 test "symmetric position evaluates to 0" {
+    line_lookup.init();
     var cells = [_]Cell{.empty} ** CELL_COUNT;
     // Black horizontal 3: (7,6),(7,7),(7,8)
     cells[7 * BOARD_SIZE + 6] = .black;
@@ -293,6 +303,7 @@ test "symmetric position evaluates to 0" {
     cells[3 * BOARD_SIZE + 6] = .white;
     cells[3 * BOARD_SIZE + 7] = .white;
     cells[3 * BOARD_SIZE + 8] = .white;
+    bitboard.initFromCells(&cells);
 
     const black_perspective = evaluateBoardOnCells(&cells, .black, .{
         .enable_leaf_mise = false,

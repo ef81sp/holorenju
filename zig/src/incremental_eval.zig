@@ -1,5 +1,7 @@
+const bitboard = @import("bitboard.zig");
 const board_mod = @import("board.zig");
 const evaluate = @import("evaluate.zig");
+const line_lookup = @import("line_lookup.zig");
 const patterns = @import("patterns.zig");
 const scores = @import("scores.zig");
 const std = @import("std");
@@ -109,6 +111,10 @@ pub fn initFromBoard(cells: []Cell, connectivity_bonus: i32, multiplier: i32) vo
         .single_four_penalty_multiplier = multiplier,
     };
 
+    // LUT版 evaluateStonePatternsLightOnCells が bitboard を使うため同期
+    line_lookup.init();
+    bitboard.initFromCells(cells);
+
     for (0..CELL_COUNT) |i| {
         const idx: u16 = @intCast(i);
         if (cells[idx] == .empty) continue;
@@ -174,6 +180,7 @@ pub fn placeStone(cells: []Cell, row: u8, col: u8, color: Cell) void {
 
     // 盤面更新
     cells[self_idx] = color;
+    bitboard.placeStone(row, col, color);
 
     // 新石自身を affected リストに追加
     buf[affected_count] = self_idx;
@@ -201,6 +208,7 @@ pub fn removeStone(cells: []Cell, row: u8, col: u8) void {
     // 盤面更新
     const self_idx = @as(u16, row) * BOARD_SIZE + col;
     cells[self_idx] = .empty;
+    bitboard.removeStone(row, col);
 
     // 除去石のキャッシュをクリア
     eval_state.cache[self_idx] = .{};

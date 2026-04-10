@@ -3,6 +3,7 @@
 /// Alpha-Beta + NMP/LMR/Futility/PVS/Threat Extension
 /// TS版 minimaxCore.ts に対応
 
+const bitboard = @import("bitboard.zig");
 const board_mod = @import("board.zig");
 const evaluate = @import("evaluate.zig");
 const forbidden = @import("forbidden.zig");
@@ -547,6 +548,7 @@ pub fn minimaxWithTT(
         // 石を配置（インプレース変更）
         const idx = @as(u16, move.row) * BOARD_SIZE + move.col;
         cells[idx] = current_color;
+        bitboard.placeStone(move.row, move.col, current_color);
         const new_hash = zobrist.updateHash(hash, move.row, move.col, current_color);
 
         // Threat Extension: 四三成立時に探索を1手延長
@@ -615,6 +617,7 @@ pub fn minimaxWithTT(
 
         // 石を元に戻す
         cells[idx] = .empty;
+        bitboard.removeStone(move.row, move.col);
 
         // スコア更新
         if (is_maximizing) {
@@ -814,6 +817,7 @@ pub fn findBestMoveWithTT(
 
         // 石を配置
         cells[idx] = color;
+        bitboard.placeStone(move.row, move.col, color);
         const new_hash = zobrist.updateHash(hash, move.row, move.col, color);
 
         const score = minimaxWithTT(
@@ -832,6 +836,7 @@ pub fn findBestMoveWithTT(
 
         // 石を除去
         cells[idx] = .empty;
+        bitboard.removeStone(move.row, move.col);
 
         move_scores[move_score_count] = .{ .move = move, .score = score };
         move_score_count += 1;
