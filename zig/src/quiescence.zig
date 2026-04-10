@@ -10,6 +10,7 @@ const evaluate = @import("evaluate.zig");
 const forbidden = @import("forbidden.zig");
 const jp = @import("jump_patterns.zig");
 const scores = @import("scores.zig");
+const threats = @import("threats.zig");
 const tt_mod = @import("tt.zig");
 const zobrist = @import("zobrist.zig");
 const std = @import("std");
@@ -185,27 +186,6 @@ fn getLineEnds(cells: []const Cell, row: u8, col: u8, dr: i8, dc: i8, color: Cel
     return ends;
 }
 
-/// 隣接マス（距離1）に石があるかチェック
-fn isNearExistingStone(cells: []const Cell, row: u8, col: u8) bool {
-    const r: i16 = row;
-    const c: i16 = col;
-    var dr: i16 = -1;
-    while (dr <= 1) : (dr += 1) {
-        var dc: i16 = -1;
-        while (dc <= 1) : (dc += 1) {
-            if (dr == 0 and dc == 0) continue;
-            const nr = r + dr;
-            const nc = c + dc;
-            if (board_mod.isValid(nr, nc)) {
-                if (cells[@intCast(@as(u16, @intCast(nr)) * BOARD_SIZE + @as(u16, @intCast(nc)))] != .empty) {
-                    return true;
-                }
-            }
-        }
-    }
-    return false;
-}
-
 /// 脅威手（四を作る手 + 相手の四へのブロック）を生成
 /// TS版 quiescence.ts の generateTacticalMoves に対応
 pub fn generateTacticalMoves(
@@ -227,13 +207,14 @@ pub fn generateTacticalMoves(
     }
 
     // 2. 自分が四を作れる手を列挙
+    const near_mask = threats.computeNearMask(threats.computeOccupiedRows(cells), 1);
     for (0..BOARD_SIZE) |r_usize| {
         const r: u8 = @intCast(r_usize);
         for (0..BOARD_SIZE) |c_usize| {
             const c: u8 = @intCast(c_usize);
             const idx = @as(u16, r) * BOARD_SIZE + c;
             if (cells[idx] != .empty) continue;
-            if (!isNearExistingStone(cells, r, c)) continue;
+            if (!threats.isNearFromMask(near_mask, r, c)) continue;
 
             // 仮配置してチェック
             cells[idx] = color;

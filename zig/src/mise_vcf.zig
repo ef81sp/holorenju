@@ -244,13 +244,14 @@ pub fn findMiseVCFMove(cells: []Cell, color: Cell) ?Position {
         return null;
     }
 
+    const near_mask = threats.computeNearMask(threats.computeOccupiedRows(cells), 2);
     for (0..BOARD_SIZE) |r_usize| {
         const r: u8 = @intCast(r_usize);
         for (0..BOARD_SIZE) |c_usize| {
             const c: u8 = @intCast(c_usize);
             const idx = @as(u16, r) * BOARD_SIZE + c;
             if (cells[idx] != .empty) continue;
-            if (!threats.isNearExistingStone(cells, r, c)) continue;
+            if (!threats.isNearFromMask(near_mask, r, c)) continue;
 
             // 黒番の禁手チェック
             if (color == .black) {
@@ -373,13 +374,14 @@ pub fn findMiseVCFSequence(
         return result;
     }
 
+    const near_mask = threats.computeNearMask(threats.computeOccupiedRows(cells), 2);
     for (0..BOARD_SIZE) |r_usize| {
         const r: u8 = @intCast(r_usize);
         for (0..BOARD_SIZE) |c_usize| {
             const c: u8 = @intCast(c_usize);
             const idx = @as(u16, r) * BOARD_SIZE + c;
             if (cells[idx] != .empty) continue;
-            if (!threats.isNearExistingStone(cells, r, c)) continue;
+            if (!threats.isNearFromMask(near_mask, r, c)) continue;
 
             // 黒番の禁手チェック
             if (color == .black) {

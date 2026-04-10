@@ -200,13 +200,14 @@ pub fn hasOpenThree(cells: []const Cell, color: Cell) bool {
 
 /// 指定色がミセ手（1手で四三を作れる手）を持っているかチェック
 pub fn hasFourThreeAvailable(cells: []Cell, color: Cell) bool {
+    const near_mask = threats.computeNearMask(threats.computeOccupiedRows(cells), 2);
     for (0..BOARD_SIZE) |r_usize| {
         const row: u8 = @intCast(r_usize);
         for (0..BOARD_SIZE) |c_usize| {
             const col: u8 = @intCast(c_usize);
             const idx = @as(u16, row) * BOARD_SIZE + col;
             if (cells[idx] != .empty) continue;
-            if (!threats.isNearExistingStone(cells, row, col)) continue;
+            if (!threats.isNearFromMask(near_mask, row, col)) continue;
 
             if (color == .black) {
                 const fr = forbidden.checkForbiddenMove(cells, row, col);
@@ -231,6 +232,7 @@ pub fn findThreatMoves(cells: []Cell, color: Cell, buf: *[225]Position) u16 {
     var three_count: u16 = 0;
     // 四は前から、活三は後ろから格納
     var three_buf: [225]Position = undefined;
+    const near_mask = threats.computeNearMask(threats.computeOccupiedRows(cells), 2);
 
     for (0..BOARD_SIZE) |r_usize| {
         const r: u8 = @intCast(r_usize);
@@ -238,7 +240,7 @@ pub fn findThreatMoves(cells: []Cell, color: Cell, buf: *[225]Position) u16 {
             const c: u8 = @intCast(c_usize);
             const idx = @as(u16, r) * BOARD_SIZE + c;
             if (cells[idx] != .empty) continue;
-            if (!threats.isNearExistingStone(cells, r, c)) continue;
+            if (!threats.isNearFromMask(near_mask, r, c)) continue;
 
             // インプレースで仮配置
             cells[idx] = color;

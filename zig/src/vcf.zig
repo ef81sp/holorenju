@@ -57,6 +57,7 @@ fn incrementNodes(limiter: *TimeLimiter) void {
 /// TS版 threatPatterns.ts の findFourMoves に対応
 pub fn findFourMoves(cells: []Cell, color: Cell, buf: *[225]Position) u16 {
     var count: u16 = 0;
+    const near_mask = threats.computeNearMask(threats.computeOccupiedRows(cells), 2);
 
     for (0..BOARD_SIZE) |r_usize| {
         const r: u8 = @intCast(r_usize);
@@ -64,7 +65,7 @@ pub fn findFourMoves(cells: []Cell, color: Cell, buf: *[225]Position) u16 {
             const c: u8 = @intCast(c_usize);
             const idx = @as(u16, r) * BOARD_SIZE + c;
             if (cells[idx] != .empty) continue;
-            if (!threats.isNearExistingStone(cells, r, c)) continue;
+            if (!threats.isNearFromMask(near_mask, r, c)) continue;
 
             // 仮配置
             cells[idx] = color;

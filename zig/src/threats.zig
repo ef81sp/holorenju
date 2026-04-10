@@ -385,25 +385,72 @@ pub fn findJumpGapPosition(cells: []const Cell, row: u8, col: u8, dr: i8, dc: i8
     return null;
 }
 
-/// 石の近くかチェック（距離2以内）
-pub fn isNearExistingStone(cells: []const Cell, row: u8, col: u8) bool {
-    const r: i16 = row;
-    const c_val: i16 = col;
-    var dr: i16 = -2;
-    while (dr <= 2) : (dr += 1) {
-        var dc: i16 = -2;
-        while (dc <= 2) : (dc += 1) {
-            if (dr == 0 and dc == 0) continue;
-            const nr = r + dr;
-            const nc = c_val + dc;
-            if (board_mod.isValid(nr, nc)) {
-                if (cells[@intCast(@as(u16, @intCast(nr)) * BOARD_SIZE + @as(u16, @intCast(nc)))] != .empty) {
-                    return true;
-                }
+// =========================================================================
+// ビットマスクベースの近傍チェック
+// =========================================================================
+
+/// cells から行ごとの occupied ビットマスクを構築
+pub fn computeOccupiedRows(cells: []const Cell) [BOARD_SIZE]u16 {
+    var rows: [BOARD_SIZE]u16 = .{0} ** BOARD_SIZE;
+    for (0..BOARD_SIZE) |r| {
+        const base = r * BOARD_SIZE;
+        for (0..BOARD_SIZE) |c| {
+            if (cells[base + c] != .empty) {
+                rows[r] |= @as(u16, 1) << @intCast(c);
             }
         }
     }
-    return false;
+    return rows;
+}
+
+/// occupied_rows を距離 distance で膨張させた near マスクを返す
+/// distance=1: 8近傍, distance=2: 24近傍
+pub fn computeNearMask(occupied_rows: [BOARD_SIZE]u16, comptime distance: u8) [BOARD_SIZE]u16 {
+    // 各行を横方向に膨張
+    var dilated: [BOARD_SIZE]u16 = undefined;
+    for (0..BOARD_SIZE) |r| {
+        dilated[r] = dilateRow(occupied_rows[r], distance);
+    }
+    // 縦方向に膨張（distance行分のORを取る）
+    var result: [BOARD_SIZE]u16 = .{0} ** BOARD_SIZE;
+    for (0..BOARD_SIZE) |r| {
+        const r_i: i16 = @intCast(r);
+        const dist_i16: i16 = distance;
+        var dr: i16 = -dist_i16;
+        while (dr <= dist_i16) : (dr += 1) {
+            const nr = r_i + dr;
+            if (nr >= 0 and nr < BOARD_SIZE) {
+                result[r] |= dilated[@intCast(nr)];
+            }
+        }
+    }
+    // occupied 自体のビットを除外（空きマスのみ対象のため不要だが、明示的に残さない）
+    // → 呼び出し側で cells[idx] != .empty チェック済みなので不要
+    return result;
+}
+
+/// 1行を横方向に distance ビット膨張
+fn dilateRow(bits: u16, comptime distance: u8) u16 {
+    var result: u16 = bits;
+    inline for (1..distance + 1) |d| {
+        result |= bits << d;
+        result |= bits >> d;
+    }
+    // 15ビット幅にマスク（16ビット目以上をクリア）
+    return result & 0x7FFF;
+}
+
+/// near マスクから特定位置が近傍かチェック（O(1)）
+pub inline fn isNearFromMask(near_mask: [BOARD_SIZE]u16, row: u8, col: u8) bool {
+    return near_mask[row] & (@as(u16, 1) << @intCast(col)) != 0;
+}
+
+/// 石の近くかチェック（距離2以内）
+/// 注意: 全盤面スキャン時は computeOccupiedRows + computeNearMask を使うこと
+pub fn isNearExistingStone(cells: []const Cell, row: u8, col: u8) bool {
+    const occupied = computeOccupiedRows(cells);
+    const near = computeNearMask(occupied, 2);
+    return isNearFromMask(near, row, col);
 }
 
 /// 活三とミセ手の両方を止める手が存在するかチェック
@@ -520,13 +567,14 @@ pub fn detectOpponentThreats(cells: []Cell, opponent_color: Cell) ThreatInfo {
     }
 
     // ミセ手・三三脅威を検出
+    const near_mask_d2 = computeNearMask(computeOccupiedRows(cells), 2);
     for (0..BOARD_SIZE) |r_usize| {
         const row: u8 = @intCast(r_usize);
         for (0..BOARD_SIZE) |c_usize| {
             const col: u8 = @intCast(c_usize);
             const idx = @as(u16, row) * BOARD_SIZE + col;
             if (cells[idx] != .empty) continue;
-            if (!isNearExistingStone(cells, row, col)) continue;
+            if (!isNearFromMask(near_mask_d2, row, col)) continue;
 
             // ミセ手チェック
             if (evaluate.createsFourThree(cells, row, col, opponent_color)) {
@@ -630,6 +678,75 @@ test "isNearExistingStone" {
     try std.testing.expect(isNearExistingStone(&cells, 7, 9));
     try std.testing.expect(isNearExistingStone(&cells, 5, 5));
     try std.testing.expect(!isNearExistingStone(&cells, 4, 4));
+}
+
+test "computeNearMask distance 2: exhaustive check against naive" {
+    // 複数石を配置して、全空きマスについてビットマスク版とナイーブ版の結果が一致することを確認
+    // 注意: 占有マスは near mask に含まれるが、呼び出し側で cells[idx] != .empty チェック済みのため問題ない
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[3 * BOARD_SIZE + 3] = .black;
+    cells[7 * BOARD_SIZE + 7] = .white;
+    cells[0 * BOARD_SIZE + 0] = .black; // 隅
+    cells[14 * BOARD_SIZE + 14] = .white; // 隅
+    cells[0 * BOARD_SIZE + 14] = .black; // 隅
+    cells[10 * BOARD_SIZE + 5] = .white;
+
+    const near_mask = computeNearMask(computeOccupiedRows(&cells), 2);
+
+    for (0..BOARD_SIZE) |r| {
+        for (0..BOARD_SIZE) |c| {
+            const row: u8 = @intCast(r);
+            const col: u8 = @intCast(c);
+            if (cells[r * BOARD_SIZE + c] != .empty) continue; // 占有マスはスキップ
+            const bitmask_result = isNearFromMask(near_mask, row, col);
+            const naive_result = isNearExistingStoneNaive(&cells, row, col, 2);
+            try std.testing.expectEqual(naive_result, bitmask_result);
+        }
+    }
+}
+
+test "computeNearMask distance 1: exhaustive check against naive" {
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[3 * BOARD_SIZE + 3] = .black;
+    cells[7 * BOARD_SIZE + 7] = .white;
+    cells[0 * BOARD_SIZE + 0] = .black;
+    cells[14 * BOARD_SIZE + 14] = .white;
+    cells[0 * BOARD_SIZE + 14] = .black;
+    cells[10 * BOARD_SIZE + 5] = .white;
+
+    const near_mask = computeNearMask(computeOccupiedRows(&cells), 1);
+
+    for (0..BOARD_SIZE) |r| {
+        for (0..BOARD_SIZE) |c| {
+            const row: u8 = @intCast(r);
+            const col: u8 = @intCast(c);
+            if (cells[r * BOARD_SIZE + c] != .empty) continue;
+            const bitmask_result = isNearFromMask(near_mask, row, col);
+            const naive_result = isNearExistingStoneNaive(&cells, row, col, 1);
+            try std.testing.expectEqual(naive_result, bitmask_result);
+        }
+    }
+}
+
+/// テスト用: ナイーブな近傍チェック（旧実装と同等）
+fn isNearExistingStoneNaive(cells: []const Cell, row: u8, col: u8, comptime distance: i16) bool {
+    const r: i16 = row;
+    const c_val: i16 = col;
+    var dr: i16 = -distance;
+    while (dr <= distance) : (dr += 1) {
+        var dc: i16 = -distance;
+        while (dc <= distance) : (dc += 1) {
+            if (dr == 0 and dc == 0) continue;
+            const nr = r + dr;
+            const nc = c_val + dc;
+            if (board_mod.isValid(nr, nc)) {
+                if (cells[@intCast(@as(u16, @intCast(nr)) * BOARD_SIZE + @as(u16, @intCast(nc)))] != .empty) {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
 }
 
 test "findJumpGapPosition: ●●●・●" {
