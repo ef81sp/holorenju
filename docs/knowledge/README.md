@@ -22,7 +22,5 @@ CPU AIアルゴリズムの改善や、学習シナリオの作成に活用で�
 
 ## 関連ドキュメント
 
-- `docs/renju-tactics-and-evaluation.md` — AI評価関数の実装詳細（本知識ベースに統合済み）
-- `docs/cpu-ai-algorithm.md` — CPUアルゴリズム詳細
 - `docs/rules/renju-forbidden-rules.md` — 禁手判定ルールの実装仕様
 - `docs/rules/opening-rules-research.md` — 開局規定の調査レポート
