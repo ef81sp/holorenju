@@ -7,6 +7,7 @@ const board_mod = @import("board.zig");
 const evaluate = @import("evaluate.zig");
 const forbidden = @import("forbidden.zig");
 const jp = @import("jump_patterns.zig");
+const ll = @import("line_lookup.zig");
 const patterns = @import("patterns.zig");
 const scores = @import("scores.zig");
 const threats_mod = @import("threats.zig");
@@ -18,6 +19,69 @@ const CELL_COUNT = board_mod.CELL_COUNT;
 const DIRECTIONS = board_mod.DIRECTIONS;
 
 pub const Position = threats_mod.Position;
+
+const EndPair = struct { end1: board_mod.EndState, end2: board_mod.EndState };
+
+/// LUT の end (0=empty, 1=blocked) を EndState に変換
+fn lutEnd(end: u2) board_mod.EndState {
+    return if (end == 0) .empty else .opponent;
+}
+
+/// LUT結果から EndPair を生成（オーバーライン補正なし）
+fn lutEnds(lut: ll.PatternResult) EndPair {
+    return .{ .end1 = lutEnd(lut.end1), .end2 = lutEnd(lut.end2) };
+}
+
+/// LUT結果に黒オーバーライン補正を適用して EndState のペアを返す。
+/// LUT は overline 補正を含まない。count==4 かつ黒 かつ end==empty のとき、
+/// 空きマスの1つ先に黒石があれば blocked として扱う。
+fn applyOverlineCorrection(
+    cells: []const Cell,
+    row: u8,
+    col: u8,
+    dir_index: u8,
+    lut: ll.PatternResult,
+) EndPair {
+    var end1 = lutEnd(lut.end1);
+    var end2 = lutEnd(lut.end2);
+
+    if (lut.count != 4) return .{ .end1 = end1, .end2 = end2 };
+
+    const dir = DIRECTIONS[dir_index];
+    const dr: i8 = dir.dr;
+    const dc: i8 = dir.dc;
+
+    // Walk positive direction to find consecutive count
+    var count_pos: i16 = 0;
+    var r: i16 = @as(i16, row) + dr;
+    var c: i16 = @as(i16, col) + dc;
+    while (board_mod.isValid(r, c) and cells[@intCast(@as(u16, @intCast(r)) * BOARD_SIZE + @as(u16, @intCast(c)))] == .black) {
+        count_pos += 1;
+        r += dr;
+        c += dc;
+    }
+
+    // Check overline in positive direction
+    if (end1 == .empty) {
+        const br = @as(i16, row) + dr * (count_pos + 2);
+        const bc = @as(i16, col) + dc * (count_pos + 2);
+        if (board_mod.isValid(br, bc) and cells[@intCast(@as(u16, @intCast(br)) * BOARD_SIZE + @as(u16, @intCast(bc)))] == .black) {
+            end1 = .opponent;
+        }
+    }
+
+    // Check overline in negative direction
+    if (end2 == .empty) {
+        const count_neg = @as(i16, lut.count) - 1 - count_pos;
+        const br = @as(i16, row) - dr * (count_neg + 2);
+        const bc = @as(i16, col) - dc * (count_neg + 2);
+        if (board_mod.isValid(br, bc) and cells[@intCast(@as(u16, @intCast(br)) * BOARD_SIZE + @as(u16, @intCast(bc)))] == .black) {
+            end2 = .opponent;
+        }
+    }
+
+    return .{ .end1 = end1, .end2 = end2 };
+}
 
 /// 評価オプション
 pub const EvalOptions = struct {
@@ -100,16 +164,23 @@ fn computeAttackScore(cells: []Cell, row: u8, col: u8, color: Cell) struct {
     var dir_counts: [4]u8 = undefined;
     var dir_end1s: [4]board_mod.EndState = undefined;
     var dir_end2s: [4]board_mod.EndState = undefined;
+    var dir_luts: [4]ll.PatternResult = undefined;
     var jump_four_dirs: [4]bool = [_]bool{false} ** 4;
 
-    // 1st pass: 連続パターン + 跳び四検出
-    for (DIRECTIONS, 0..) |dir, i| {
-        const result = board_mod.analyzeDirectionOnCells(cells, row, col, dir.dr, dir.dc, color);
-        dir_counts[i] = result.count;
-        dir_end1s[i] = result.end1;
-        dir_end2s[i] = result.end2;
+    // 1st pass: 連続パターン + 跳び四検出 (LUT版)
+    for (0..4) |i| {
+        const lut = ll.queryPatternFromCells(cells, row, col, @intCast(i), color);
+        dir_luts[i] = lut;
+        const ends = if (color == .black and lut.count == 4)
+            applyOverlineCorrection(cells, row, col, @intCast(i), lut)
+        else
+            lutEnds(lut);
 
-        var dir_score = patterns.getPatternScore(result.count, result.end1, result.end2);
+        dir_counts[i] = lut.count;
+        dir_end1s[i] = ends.end1;
+        dir_end2s[i] = ends.end2;
+
+        var dir_score = patterns.getPatternScore(lut.count, ends.end1, ends.end2);
 
         // 斜め方向ボーナス
         if ((i == 2 or i == 3) and dir_score > 0) {
@@ -118,9 +189,8 @@ fn computeAttackScore(cells: []Cell, row: u8, col: u8, color: Cell) struct {
 
         total_score += dir_score;
 
-        // 跳び四チェック
-        const dir_index = jp.DIRECTION_INDICES[i];
-        if (result.count != 4 and jp.checkJumpFour(cells, row, col, dir_index, color)) {
+        // 跳び四チェック (LUT版)
+        if (lut.count != 4 and lut.has_jump_four) {
             jump_four_dirs[i] = true;
         }
     }
@@ -131,7 +201,7 @@ fn computeAttackScore(cells: []Cell, row: u8, col: u8, color: Cell) struct {
     var jump_four_count: i32 = 0;
     var has_jump_three = false;
 
-    for (DIRECTIONS, 0..) |_, i| {
+    for (0..4) |i| {
         const dir_index = jp.DIRECTION_INDICES[i];
         const count = dir_counts[i];
         const end1 = dir_end1s[i];
@@ -155,8 +225,8 @@ fn computeAttackScore(cells: []Cell, row: u8, col: u8, color: Cell) struct {
             jump_four_count += 1;
         }
 
-        // 跳び三
-        if (count != 3 and jp.checkJumpThree(cells, row, col, dir_index, color)) {
+        // 跳び三 (LUT版: 1st passのキャッシュを使用)
+        if (count != 3 and dir_luts[i].has_jump_three) {
             has_jump_three = true;
             if (patterns.isValidJumpThree(cells, row, col, dir_index, color)) {
                 has_valid_open_three = true;
@@ -373,10 +443,13 @@ fn evaluateForbiddenTrap(cells: []Cell, row: u8, col: u8) i32 {
 
     for (DIRECTIONS, 0..) |dir, i| {
         const dir_index = jp.DIRECTION_INDICES[i];
-        const result = board_mod.analyzeDirectionOnCells(cells, row, col, dir.dr, dir.dc, .white);
+        const lut = ll.queryPatternFromCells(cells, row, col, @intCast(i), .white);
+        // 白なのでオーバーライン補正不要
+        const end1 = lutEnd(lut.end1);
+        const end2 = lutEnd(lut.end2);
 
         // 四を作った場合
-        if (result.count == 4 and (result.end1 == .empty or result.end2 == .empty)) {
+        if (lut.count == 4 and (end1 == .empty or end2 == .empty)) {
             const defense = threats_mod.getLineEnds(cells, row, col, dir.dr, dir.dc, .white);
             var all_forbidden = defense.len > 0;
             for (0..defense.len) |j| {
@@ -392,7 +465,7 @@ fn evaluateForbiddenTrap(cells: []Cell, row: u8, col: u8) i32 {
         }
 
         // 活三を作った場合
-        if (result.count == 3 and result.end1 == .empty and result.end2 == .empty) {
+        if (lut.count == 3 and end1 == .empty and end2 == .empty) {
             const ext = threats_mod.getLineEnds(cells, row, col, dir.dr, dir.dc, .white);
             for (0..ext.len) |j| {
                 const pos = ext.items[j];
@@ -412,8 +485,8 @@ fn evaluateForbiddenTrap(cells: []Cell, row: u8, col: u8) i32 {
             }
         }
 
-        // 跳び三を作った場合
-        if (jp.checkJumpThree(cells, row, col, dir_index, .white)) {
+        // 跳び三を作った場合 (LUT版)
+        if (lut.has_jump_three) {
             const jsfp = jp.getJumpThreeStraightFourPoints(cells, row, col, dir_index, .white);
             if (jsfp.found) {
                 // 片方が禁手なら追い込み
@@ -434,10 +507,13 @@ fn evaluateForbiddenVulnerability(cells: []Cell, row: u8, col: u8) i32 {
 
     for (DIRECTIONS, 0..) |dir, i| {
         const dir_index = jp.DIRECTION_INDICES[i];
-        const result = board_mod.analyzeDirectionOnCells(cells, row, col, dir.dr, dir.dc, .black);
+        const lut = ll.queryPatternFromCells(cells, row, col, @intCast(i), .black);
+        // count==3 なのでオーバーライン補正不要
+        const end1 = lutEnd(lut.end1);
+        const end2 = lutEnd(lut.end2);
 
         // 連続三を検出した場合
-        if (result.count == 3 and result.end1 == .empty and result.end2 == .empty) {
+        if (lut.count == 3 and end1 == .empty and end2 == .empty) {
             const ext = threats_mod.getLineEnds(cells, row, col, dir.dr, dir.dc, .black);
             for (0..ext.len) |j| {
                 const pos = ext.items[j];
@@ -451,8 +527,8 @@ fn evaluateForbiddenVulnerability(cells: []Cell, row: u8, col: u8) i32 {
             }
         }
 
-        // 跳び三
-        if (result.count != 3 and jp.checkJumpThree(cells, row, col, dir_index, .black)) {
+        // 跳び三 (LUT版)
+        if (lut.count != 3 and lut.has_jump_three) {
             const sfp = jp.getJumpThreeStraightFourPoints(cells, row, col, dir_index, .black);
             if (sfp.found) {
                 const pos = sfp.point;
@@ -501,9 +577,9 @@ fn computeMiseBonus(cells: []Cell, row: u8, col: u8, color: Cell) i32 {
 }
 
 fn hasPotentialMiseTarget(cells: []const Cell, row: u8, col: u8, color: Cell) bool {
-    for (DIRECTIONS) |dir| {
-        const result = board_mod.analyzeDirectionOnCells(cells, row, col, dir.dr, dir.dc, color);
-        if (result.count >= 2 and (result.end1 == .empty or result.end2 == .empty)) {
+    for (0..4) |i| {
+        const lut = ll.queryPatternFromCells(cells, row, col, @intCast(i), color);
+        if (lut.count >= 2 and (lut.end1 == 0 or lut.end2 == 0)) {
             return true;
         }
     }
@@ -515,9 +591,9 @@ fn countMiseTargets(cells: []Cell, row: u8, col: u8, color: Cell) u8 {
     var count: u8 = 0;
     var seen: [225]bool = [_]bool{false} ** 225;
 
-    for (DIRECTIONS) |dir| {
-        const result = board_mod.analyzeDirectionOnCells(cells, row, col, dir.dr, dir.dc, color);
-        if (result.count < 2) continue;
+    for (DIRECTIONS, 0..) |dir, i| {
+        const lut = ll.queryPatternFromCells(cells, row, col, @intCast(i), color);
+        if (lut.count < 2) continue;
 
         // 正方向端
         var r: i16 = @as(i16, row) + dir.dr;
@@ -571,14 +647,18 @@ fn countMiseTargets(cells: []Cell, row: u8, col: u8, color: Cell) u8 {
 fn hasFollowUpThreat(cells: []Cell, row: u8, col: u8, color: Cell) bool {
     const opponent_color = color.opposite();
 
-    for (DIRECTIONS) |dir| {
-        const result = board_mod.analyzeDirectionOnCells(cells, row, col, dir.dr, dir.dc, color);
+    for (DIRECTIONS, 0..) |dir, i| {
+        const lut = ll.queryPatternFromCells(cells, row, col, @intCast(i), color);
+        const ends = if (color == .black and lut.count == 4)
+            applyOverlineCorrection(cells, row, col, @intCast(i), lut)
+        else
+            lutEnds(lut);
 
-        if (result.count == 4 and (result.end1 == .empty or result.end2 == .empty)) {
+        if (lut.count == 4 and (ends.end1 == .empty or ends.end2 == .empty)) {
             const defense = threats_mod.getLineEnds(cells, row, col, dir.dr, dir.dc, color);
 
-            for (0..defense.len) |i| {
-                const def_pos = defense.items[i];
+            for (0..defense.len) |j| {
+                const def_pos = defense.items[j];
                 const def_idx = @as(u16, def_pos.row) * BOARD_SIZE + def_pos.col;
 
                 // 相手の防御を仮配置
@@ -616,16 +696,20 @@ fn canContinueFourAfterDefense(cells: []Cell, defense_pos: Position, color: Cell
             // 仮置き
             cells[new_idx] = color;
 
-            // 四判定（analyzeJumpPatterns の hasFour 相当）
+            // 四判定 (LUT版)
             var has_four = false;
-            for (DIRECTIONS, 0..) |d, i| {
-                const res = board_mod.analyzeDirectionOnCells(cells, @intCast(new_r), @intCast(new_c), d.dr, d.dc, color);
-                if (res.count == 4 and (res.end1 == .empty or res.end2 == .empty)) {
-                    has_four = true;
-                    break;
-                }
-                const di = jp.DIRECTION_INDICES[i];
-                if (res.count != 4 and jp.checkJumpFour(cells, @intCast(new_r), @intCast(new_c), di, color)) {
+            for (0..4) |i| {
+                const lut_r = ll.queryPatternFromCells(cells, @intCast(new_r), @intCast(new_c), @intCast(i), color);
+                if (lut_r.count == 4) {
+                    const lut_ends = if (color == .black)
+                        applyOverlineCorrection(cells, @intCast(new_r), @intCast(new_c), @intCast(i), lut_r)
+                    else
+                        lutEnds(lut_r);
+                    if (lut_ends.end1 == .empty or lut_ends.end2 == .empty) {
+                        has_four = true;
+                        break;
+                    }
+                } else if (lut_r.has_jump_four) {
                     has_four = true;
                     break;
                 }

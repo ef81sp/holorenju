@@ -276,6 +276,41 @@ pub fn queryPattern(line_index: u8, bit_pos: u4, color: Cell) PatternResult {
     return PATTERN_TABLE[w.own][w.block];
 }
 
+/// Query pattern directly from cells array (no bitboard sync needed).
+/// Useful for temporary probe positions where bitboard is not updated.
+pub fn queryPatternFromCells(cells: []const Cell, row: u8, col: u8, dir_index: u8, color: Cell) PatternResult {
+    if (!initialized) init();
+
+    const dir = board_mod.DIRECTIONS[dir_index];
+    const dr: i8 = dir.dr;
+    const dc: i8 = dir.dc;
+    const opponent = color.opposite();
+
+    var own_window: u9 = 0;
+    var block_window: u9 = 0;
+
+    for (0..9) |w| {
+        const offset: i8 = @as(i8, @intCast(w)) - 4;
+        const r: i16 = @as(i16, row) + @as(i16, dr) * offset;
+        const c: i16 = @as(i16, col) + @as(i16, dc) * offset;
+        const w_bit: u4 = @intCast(w);
+
+        if (!board_mod.isValid(r, c)) {
+            // Out of bounds = wall (block)
+            block_window |= @as(u9, 1) << w_bit;
+        } else {
+            const cell = cells[@intCast(@as(u16, @intCast(r)) * BOARD_SIZE + @as(u16, @intCast(c)))];
+            if (cell == color) {
+                own_window |= @as(u9, 1) << w_bit;
+            } else if (cell == opponent) {
+                block_window |= @as(u9, 1) << w_bit;
+            }
+        }
+    }
+
+    return PATTERN_TABLE[own_window][block_window];
+}
+
 // ============================================================
 // Tests
 // ============================================================

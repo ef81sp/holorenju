@@ -1,7 +1,7 @@
 const bitboard = @import("bitboard.zig");
 const board_mod = @import("board.zig");
 const evaluate = @import("evaluate.zig");
-const line_lookup = @import("line_lookup.zig");
+const ll = @import("line_lookup.zig");
 const patterns = @import("patterns.zig");
 const scores = @import("scores.zig");
 const std = @import("std");
@@ -112,7 +112,7 @@ pub fn initFromBoard(cells: []Cell, connectivity_bonus: i32, multiplier: i32) vo
     };
 
     // LUT版 evaluateStonePatternsLightOnCells が bitboard を使うため同期
-    line_lookup.init();
+    ll.init();
     bitboard.initFromCells(cells);
 
     for (0..CELL_COUNT) |i| {

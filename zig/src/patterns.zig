@@ -2,7 +2,7 @@ const bitboard = @import("bitboard.zig");
 const board_mod = @import("board.zig");
 const forbidden = @import("forbidden.zig");
 const jp = @import("jump_patterns.zig");
-const line_lookup = @import("line_lookup.zig");
+const ll = @import("line_lookup.zig");
 const scores = @import("scores.zig");
 const std = @import("std");
 
@@ -79,7 +79,7 @@ pub const StonePatternsResult = struct {
 };
 
 /// evaluateStonePatternsLight 相当（跳びパターン込み）— LUT版
-/// ビットボード + line_lookup.queryPattern で4方向のパターンを高速取得し、
+/// ビットボード + ll.queryPattern で4方向のパターンを高速取得し、
 /// fourScore, openThreeScore, activeDirectionCount を追跡
 pub fn evaluateStonePatternsLightOnCells(cells: []Cell, row: u8, col: u8, color: Cell) StonePatternsResult {
     var score: i32 = 0;
@@ -90,7 +90,7 @@ pub fn evaluateStonePatternsLightOnCells(cells: []Cell, row: u8, col: u8, color:
     const cell_idx = @as(usize, row) * board_mod.BOARD_SIZE + col;
 
     // 各方向のLUT結果を記録
-    var lut_results: [4]line_lookup.PatternResult = undefined;
+    var lut_results: [4]ll.PatternResult = undefined;
     var dir_end1s: [4]EndState = undefined;
     var dir_end2s: [4]EndState = undefined;
 
@@ -103,7 +103,7 @@ pub fn evaluateStonePatternsLightOnCells(cells: []Cell, row: u8, col: u8, color:
     // 1st pass: LUT queryPattern + 跳び四検出
     for (0..4) |i| {
         const info = bitboard.CELL_LINES[cell_idx][i];
-        const result = line_lookup.queryPattern(info.line_index, info.bit_pos, color);
+        const result = ll.queryPattern(info.line_index, info.bit_pos, color);
         lut_results[i] = result;
 
         // LUT の end 値を EndState に変換

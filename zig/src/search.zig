@@ -7,7 +7,7 @@ const bitboard = @import("bitboard.zig");
 const board_mod = @import("board.zig");
 const evaluate = @import("evaluate.zig");
 const forbidden = @import("forbidden.zig");
-const line_lookup = @import("line_lookup.zig");
+const ll = @import("line_lookup.zig");
 const mise_vcf = @import("mise_vcf.zig");
 const minimax = @import("minimax.zig");
 const move_gen = @import("move_gen.zig");
@@ -332,7 +332,7 @@ pub fn findBestMoveIterative(
 
     // ビットボード・LUT初期化
     bitboard.initFromCells(cells);
-    line_lookup.init();
+    ll.init();
 
     // =========================================================================
     // 事前チェック

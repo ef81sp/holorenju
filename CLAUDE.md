@@ -21,6 +21,11 @@ pnpm build         # 本番ビルド
 ### Git
 
 - `git -C` は使わないこと。必要なら `pwd` で確認する。
+
+### ワークツリー（サブエージェント）
+
+- ワークツリーでコミットするには、先に **WASM ビルド** (`cd zig && zig build`) と **`pnpm install --frozen-lockfile --ignore-scripts`** が必要。lefthook の pre-commit フックがテストを走らせるため。
+- `--ignore-scripts` は必須（lefthook の prepare が worktree で失敗するため）。
 - コミットメッセージを作るのにはシンプルに `-m` を使用。パイプや `$()` は禁止。
 
 ## 計画
