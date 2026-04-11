@@ -7,6 +7,7 @@ const bitboard = @import("bitboard.zig");
 const board_mod = @import("board.zig");
 const evaluate = @import("evaluate.zig");
 const forbidden = @import("forbidden.zig");
+const incremental_eval = @import("incremental_eval.zig");
 const move_gen = @import("move_gen.zig");
 const move_order = @import("move_order.zig");
 const position_eval = @import("position_eval.zig");
@@ -347,9 +348,9 @@ pub fn minimaxWithTT(
         }
     }
 
-    // タイムアウト/ノード上限時は静的評価を返す
+    // タイムアウト/ノード上限時は静的評価を返す（インクリメンタル評価を使用）
     if (ctx.timeout_flag or ctx.node_count_exceeded or ctx.absolute_deadline_exceeded) {
-        return evaluate.evaluateBoardOnCells(cells, perspective, ctx.board_eval_options);
+        return incremental_eval.getEvaluation(cells, perspective, ctx.board_eval_options, false);
     }
 
     // 現在の手番を決定
@@ -545,10 +546,8 @@ pub fn minimaxWithTT(
             depth >= LMR_MIN_DEPTH and
             best_score > -scores.FIVE + 1000;
 
-        // 石を配置（インプレース変更）
-        const idx = @as(u16, move.row) * BOARD_SIZE + move.col;
-        cells[idx] = current_color;
-        bitboard.placeStone(move.row, move.col, current_color);
+        // 石を配置（cells, bitboard, incremental eval_state を同期更新）
+        incremental_eval.placeStone(cells, move.row, move.col, current_color);
         const new_hash = zobrist.updateHash(hash, move.row, move.col, current_color);
 
         // Threat Extension: 四三成立時に探索を1手延長
@@ -616,8 +615,7 @@ pub fn minimaxWithTT(
         }
 
         // 石を元に戻す
-        cells[idx] = .empty;
-        bitboard.removeStone(move.row, move.col);
+        incremental_eval.removeStone(cells, move.row, move.col);
 
         // スコア更新
         if (is_maximizing) {
@@ -813,11 +811,9 @@ pub fn findBestMoveWithTT(
         }
 
         const move = moves.items[mi];
-        const idx = @as(u16, move.row) * BOARD_SIZE + move.col;
 
-        // 石を配置
-        cells[idx] = color;
-        bitboard.placeStone(move.row, move.col, color);
+        // 石を配置（cells, bitboard, incremental eval_state を同期更新）
+        incremental_eval.placeStone(cells, move.row, move.col, color);
         const new_hash = zobrist.updateHash(hash, move.row, move.col, color);
 
         const score = minimaxWithTT(
@@ -835,8 +831,7 @@ pub fn findBestMoveWithTT(
         );
 
         // 石を除去
-        cells[idx] = .empty;
-        bitboard.removeStone(move.row, move.col);
+        incremental_eval.removeStone(cells, move.row, move.col);
 
         move_scores[move_score_count] = .{ .move = move, .score = score };
         move_score_count += 1;
@@ -904,6 +899,8 @@ test "minimaxWithTT basic: empty board" {
     var cells = [_]Cell{.empty} ** CELL_COUNT;
     // 天元に黒石
     cells[7 * BOARD_SIZE + 7] = .black;
+
+    incremental_eval.initFromBoard(&cells, scores.CONNECTIVITY_BONUS, 100);
 
     var tt = tt_mod.TranspositionTable{
         .entries = &tt_mod.global_tt_storage,

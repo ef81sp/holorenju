@@ -9,6 +9,7 @@ const bitboard = @import("bitboard.zig");
 const board_mod = @import("board.zig");
 const evaluate = @import("evaluate.zig");
 const forbidden = @import("forbidden.zig");
+const incremental_eval = @import("incremental_eval.zig");
 const ll = @import("line_lookup.zig");
 const scores = @import("scores.zig");
 const threats = @import("threats.zig");
@@ -317,11 +318,11 @@ pub fn quiescenceSearch(
 
     // 時間/ノード制限チェック
     if (timeout_flag.*) {
-        return evaluate.evaluateBoardOnCells(cells, perspective, eval_opts);
+        return incremental_eval.getEvaluation(cells, perspective, eval_opts, false);
     }
 
-    // Stand-pat: 何もしない場合の評価
-    const stand_pat = evaluate.evaluateBoardOnCells(cells, perspective, eval_opts);
+    // Stand-pat: 何もしない場合の評価（インクリメンタル評価を使用）
+    const stand_pat = incremental_eval.getEvaluation(cells, perspective, eval_opts, false);
 
     var alpha = alpha_init;
     var beta = beta_init;
@@ -353,11 +354,9 @@ pub fn quiescenceSearch(
 
     for (0..move_count) |mi| {
         const move = move_buf[mi];
-        const idx = @as(u16, move.row) * BOARD_SIZE + move.col;
 
-        // 石を配置
-        cells[idx] = current_color;
-        bitboard.placeStone(move.row, move.col, current_color);
+        // 石を配置（cells, bitboard, incremental eval_state を同期更新）
+        incremental_eval.placeStone(cells, move.row, move.col, current_color);
         const new_hash = zobrist.updateHash(hash, move.row, move.col, current_color);
 
         const score = quiescenceSearch(
@@ -376,8 +375,7 @@ pub fn quiescenceSearch(
         );
 
         // 石を除去
-        cells[idx] = .empty;
-        bitboard.removeStone(move.row, move.col);
+        incremental_eval.removeStone(cells, move.row, move.col);
 
         // Alpha-beta更新
         if (is_maximizing) {
@@ -465,7 +463,7 @@ test "generateTacticalMoves finds four moves" {
 test "quiescenceSearch stand-pat on empty" {
     ll.init();
     var cells = [_]Cell{.empty} ** CELL_COUNT;
-    bitboard.initFromCells(&cells);
+    incremental_eval.initFromBoard(&cells, scores.CONNECTIVITY_BONUS, 100);
     var stats = QSearchStats{};
     var timeout_flag = false;
     var tt = tt_mod.TranspositionTable{

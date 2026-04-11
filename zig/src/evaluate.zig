@@ -251,6 +251,14 @@ pub fn evaluateBoardOnCells(
     if (!my_has_four_three) my_score -= my_pending_four_penalty;
     if (!opp_has_four_three) opp_score -= opp_pending_four_penalty;
 
+    // Phase B: ラインポテンシャル（bitboard 同期済みの前提）
+    // 非 incremental パスなので全ライン集計を毎回実行。Release ではこのパスは通らない。
+    const line_potential = @import("line_potential.zig");
+    const my_potential = line_potential.computeTotalGlobal(perspective);
+    const opp_potential = line_potential.computeTotalGlobal(opponent);
+    my_score += my_potential;
+    opp_score += opp_potential;
+
     return my_score - opp_score;
 }
 
@@ -282,7 +290,7 @@ test "empty board evaluates to 0" {
     try std.testing.expectEqual(result, 0);
 }
 
-test "single stone evaluates to 0 (no pattern)" {
+test "single stone has only line potential (no pattern score)" {
     ll.init();
     var cells = [_]Cell{.empty} ** CELL_COUNT;
     cells[7 * BOARD_SIZE + 7] = .black;
@@ -293,7 +301,10 @@ test "single stone evaluates to 0 (no pattern)" {
         .single_four_penalty_multiplier = 100,
         .connectivity_bonus = scores.CONNECTIVITY_BONUS,
     });
-    try std.testing.expectEqual(result, 0);
+    // Phase B: 1石でもラインポテンシャルが入る
+    // 中央 (7,7) は 4 方向それぞれで 5 ウィンドウに含まれる
+    // 各ウィンドウ: popcount=1, [1]=3 → 合計 4 * 5 * 3 = 60
+    try std.testing.expectEqual(@as(i32, 60), result);
 }
 
 test "symmetric position evaluates to 0" {

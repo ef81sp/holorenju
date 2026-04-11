@@ -7,6 +7,7 @@ const bitboard = @import("bitboard.zig");
 const board_mod = @import("board.zig");
 const evaluate = @import("evaluate.zig");
 const forbidden = @import("forbidden.zig");
+const incremental_eval = @import("incremental_eval.zig");
 const ll = @import("line_lookup.zig");
 const mise_vcf = @import("mise_vcf.zig");
 const minimax = @import("minimax.zig");
@@ -336,9 +337,10 @@ pub fn findBestMoveIterative(
     // 新しい探索開始
     tt_mod.global_tt.newGeneration();
 
-    // ビットボード・LUT初期化
-    bitboard.initFromCells(cells);
+    // ビットボード・LUT・インクリメンタル評価状態の初期化
+    // initFromBoard は内部で ll.init() / bitboard.initFromCells を呼ぶ
     ll.init();
+    incremental_eval.initFromBoard(cells, params.board_eval_options.connectivity_bonus, params.board_eval_options.single_four_penalty_multiplier);
 
     // =========================================================================
     // 事前チェック
