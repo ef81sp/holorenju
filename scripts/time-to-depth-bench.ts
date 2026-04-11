@@ -182,9 +182,13 @@ async function main(): Promise<void> {
   const allMoveDepths: number[] = [];
 
   for (const name of names) {
-    if (gameCount >= maxGames) {break;}
+    if (gameCount >= maxGames) {
+      break;
+    }
     const positions = getJushuPositions(name, true);
-    if (!positions) {continue;}
+    if (!positions) {
+      continue;
+    }
 
     engine.clearTT();
     const result = playGame(

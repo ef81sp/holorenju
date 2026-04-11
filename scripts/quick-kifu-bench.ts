@@ -139,9 +139,13 @@ async function main(): Promise<void> {
   let gameCount = 0;
 
   for (const name of names) {
-    if (gameCount >= maxGames) {break;}
+    if (gameCount >= maxGames) {
+      break;
+    }
     const positions = getJushuPositions(name, true);
-    if (!positions) {continue;}
+    if (!positions) {
+      continue;
+    }
 
     engine.clearTT();
     const game = playGame(engine, name, positions, gameCount);
@@ -161,7 +165,9 @@ async function main(): Promise<void> {
   // JSON 保存
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
   const outPath = `bench-results/quick-kifu-${timestamp}.json`;
-  if (!fs.existsSync("bench-results")) {fs.mkdirSync("bench-results");}
+  if (!fs.existsSync("bench-results")) {
+    fs.mkdirSync("bench-results");
+  }
   fs.writeFileSync(outPath, JSON.stringify({ games }, null, 2));
   console.log(`\n保存先: ${outPath}`);
 

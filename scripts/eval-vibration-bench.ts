@@ -98,7 +98,7 @@ function analyzeGame(
     }
     // mn 手目を打つ「直前」の盤面を構築
     const board = buildBoardAt(game.moves, mn);
-    const {color} = move;
+    const { color } = move;
 
     // 静的評価
     const staticScore = evaluator.evaluateBoard(board, color);
@@ -158,13 +158,17 @@ function summarize(name: string, evals: PositionEval[]): void {
       blackStatic.push(e.staticScore);
       for (const d of [5, 6, 7]) {
         const sc = e.searchScores.find((x) => x.depth === d);
-        if (sc) {blackSearch[d]!.push(sc.score);}
+        if (sc) {
+          blackSearch[d]!.push(sc.score);
+        }
       }
     } else {
       whiteStatic.push(e.staticScore);
       for (const d of [5, 6, 7]) {
         const sc = e.searchScores.find((x) => x.depth === d);
-        if (sc) {whiteSearch[d]!.push(sc.score);}
+        if (sc) {
+          whiteSearch[d]!.push(sc.score);
+        }
       }
     }
   }
@@ -254,13 +258,17 @@ async function main(): Promise<void> {
         blackStatic.push(e.staticScore);
         for (const d of [5, 6, 7]) {
           const sc = e.searchScores.find((x) => x.depth === d);
-          if (sc) {blackSearch[d]!.push(sc.score);}
+          if (sc) {
+            blackSearch[d]!.push(sc.score);
+          }
         }
       } else {
         whiteStatic.push(e.staticScore);
         for (const d of [5, 6, 7]) {
           const sc = e.searchScores.find((x) => x.depth === d);
-          if (sc) {whiteSearch[d]!.push(sc.score);}
+          if (sc) {
+            whiteSearch[d]!.push(sc.score);
+          }
         }
       }
     }
