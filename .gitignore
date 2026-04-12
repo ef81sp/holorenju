@@ -42,3 +42,9 @@ weakness-reports/
 # Zig build artifacts
 zig/zig-out/
 zig/.zig-cache/
+zig/bench-results/
+
+# Claude Code ローカル状態（skills/ は tracked、それ以外の個人・一時ファイル）
+.claude/scheduled_tasks.lock
+.claude/settings.local.json
+.claude/worktrees/
