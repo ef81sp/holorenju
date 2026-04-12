@@ -202,5 +202,4 @@
 
 - [連珠の上達方法について - elenia](https://note.com/elenia_renju/n/n58b6a1cd6a51)
 - [A way to improvement - RenjuNet](https://renju.se/rif/improve.htm)
-- [連珠の戦術とAI評価](../renju-tactics-and-evaluation.md)
-- [CPU AIアルゴリズム](../cpu-ai-algorithm.md)
+- [CPUアルゴリズム概説](../cpu-algorithm.md)

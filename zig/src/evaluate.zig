@@ -1,6 +1,8 @@
+const bitboard = @import("bitboard.zig");
 const board_mod = @import("board.zig");
 const forbidden = @import("forbidden.zig");
 const jp = @import("jump_patterns.zig");
+const ll = @import("line_lookup.zig");
 const patterns = @import("patterns.zig");
 const scores = @import("scores.zig");
 const std = @import("std");
@@ -9,6 +11,11 @@ const Cell = board_mod.Cell;
 const BOARD_SIZE = board_mod.BOARD_SIZE;
 const CELL_COUNT = board_mod.CELL_COUNT;
 const DIRECTIONS = board_mod.DIRECTIONS;
+
+/// LUT の end (0=empty, 1=blocked) を EndState に変換
+fn lutEnd(end: u2) board_mod.EndState {
+    return if (end == 0) .empty else .opponent;
+}
 
 /// evaluateBoard のオプション（ビットフィールドからデコード）
 pub const EvalOptions = struct {
@@ -33,25 +40,13 @@ pub fn decodeOptions(flags: u32) EvalOptions {
     };
 }
 
+const threats = @import("threats.zig");
+
 /// 隣接マス（距離1）に石があるかチェック
 fn isNearExistingStone(cells: []const Cell, row: u8, col: u8) bool {
-    const r: i16 = row;
-    const c: i16 = col;
-    var dr: i16 = -1;
-    while (dr <= 1) : (dr += 1) {
-        var dc: i16 = -1;
-        while (dc <= 1) : (dc += 1) {
-            if (dr == 0 and dc == 0) continue;
-            const nr = r + dr;
-            const nc = c + dc;
-            if (board_mod.isValid(nr, nc)) {
-                if (cells[@intCast(@as(u16, @intCast(nr)) * BOARD_SIZE + @as(u16, @intCast(nc)))] != .empty) {
-                    return true;
-                }
-            }
-        }
-    }
-    return false;
+    const occupied = threats.computeOccupiedRows(cells);
+    const near = threats.computeNearMask(occupied, 1);
+    return threats.isNearFromMask(near, row, col);
 }
 
 /// hasFourThreePotential: 四と活三の候補が異なる方向に存在するか
@@ -81,48 +76,48 @@ fn hasFourThreePotential(cells: []const Cell, row: u8, col: u8, color: Cell) boo
 
 /// createsFourThree: 仮置きして四と活三が同時にできるかチェック（跳びパターン含む）
 /// TS版 analyzeJumpPatterns の hasFour && hasValidOpenThree に対応
+/// 呼び出し側で bitboard が cells と同期している前提。
 pub fn createsFourThree(cells: []Cell, row: u8, col: u8, color: Cell) bool {
     const idx = @as(u16, row) * BOARD_SIZE + col;
-    // 仮置き
+    // 仮置き（bitboard も同期）
     cells[idx] = color;
-    defer cells[idx] = .empty;
+    bitboard.placeStone(row, col, color);
+    defer {
+        cells[idx] = .empty;
+        bitboard.removeStone(row, col);
+    }
 
     var has_four = false;
     var has_valid_open_three = false;
 
-    // 各方向のパターンと跳び四フラグを記録
-    var dir_counts: [4]u8 = undefined;
-    var dir_end1s: [4]board_mod.EndState = undefined;
-    var dir_end2s: [4]board_mod.EndState = undefined;
+    // 各方向のLUT結果をキャッシュ
+    var dir_luts: [4]ll.PatternResult = undefined;
     var jump_four_dirs: [4]bool = [_]bool{false} ** 4;
 
-    // 1st pass: 連続パターン + 跳び四検出
-    for (DIRECTIONS, 0..) |dir, i| {
-        const result = board_mod.analyzeDirectionOnCells(cells, row, col, dir.dr, dir.dc, color);
-        dir_counts[i] = result.count;
-        dir_end1s[i] = result.end1;
-        dir_end2s[i] = result.end2;
+    // 1st pass: 連続パターン + 跳び四検出 (LUT版)
+    for (0..4) |i| {
+        const lut = ll.queryPatternByCell(row, col, i, color);
+        dir_luts[i] = lut;
 
-        const dir_index = jp.DIRECTION_INDICES[i];
-        if (result.count != 4 and jp.checkJumpFour(cells, row, col, dir_index, color)) {
+        if (lut.count != 4 and lut.has_jump_four) {
             jump_four_dirs[i] = true;
         }
     }
 
     // 2nd pass: 四・活三判定
-    for (DIRECTIONS, 0..) |_, i| {
+    for (0..4) |i| {
         const dir_index = jp.DIRECTION_INDICES[i];
-        const count = dir_counts[i];
-        const end1 = dir_end1s[i];
-        const end2 = dir_end2s[i];
+        const lut = dir_luts[i];
+        const end1 = lutEnd(lut.end1);
+        const end2 = lutEnd(lut.end2);
 
         // 連続四（片端以上が空き）
-        if (count == 4 and (end1 == .empty or end2 == .empty)) {
+        if (lut.count == 4 and (end1 == .empty or end2 == .empty)) {
             has_four = true;
         }
 
         // 連続三の有効性チェック（跳び四方向でなければ）
-        if (count == 3 and !jump_four_dirs[i]) {
+        if (lut.count == 3 and !jump_four_dirs[i]) {
             if (end1 == .empty and end2 == .empty) {
                 if (patterns.isValidConsecutiveThree(cells, row, col, dir_index, color)) {
                     has_valid_open_three = true;
@@ -135,8 +130,8 @@ pub fn createsFourThree(cells: []Cell, row: u8, col: u8, color: Cell) bool {
             has_four = true;
         }
 
-        // 跳び三（連続三がない場合のみ）
-        if (count != 3 and jp.checkJumpThree(cells, row, col, dir_index, color)) {
+        // 跳び三 (LUT版: 連続三がない場合のみ)
+        if (lut.count != 3 and lut.has_jump_three) {
             if (patterns.isValidJumpThree(cells, row, col, dir_index, color)) {
                 has_valid_open_three = true;
             }
@@ -151,12 +146,13 @@ pub fn createsFourThree(cells: []Cell, row: u8, col: u8, color: Cell) bool {
 pub fn scanFourThreeThreat(cells: []Cell, color: Cell, stone_count: u16) bool {
     if (stone_count < 5) return false;
 
+    const near_mask = threats.computeNearMask(threats.computeOccupiedRows(cells), 1);
     for (0..BOARD_SIZE) |r_usize| {
         const r: u8 = @intCast(r_usize);
         for (0..BOARD_SIZE) |c_usize| {
             const c: u8 = @intCast(c_usize);
             if (cells[@as(u16, r) * BOARD_SIZE + c] != .empty) continue;
-            if (!isNearExistingStone(cells, r, c)) continue;
+            if (!threats.isNearFromMask(near_mask, r, c)) continue;
             if (!hasFourThreePotential(cells, r, c, color)) continue;
             if (createsFourThree(cells, r, c, color)) return true;
         }
@@ -255,12 +251,22 @@ pub fn evaluateBoardOnCells(
     if (!my_has_four_three) my_score -= my_pending_four_penalty;
     if (!opp_has_four_three) opp_score -= opp_pending_four_penalty;
 
+    // Phase B: ラインポテンシャル（bitboard 同期済みの前提）
+    // 非 incremental パスなので全ライン集計を毎回実行。Release ではこのパスは通らない。
+    const line_potential = @import("line_potential.zig");
+    const my_potential = line_potential.computeTotalGlobal(perspective);
+    const opp_potential = line_potential.computeTotalGlobal(opponent);
+    my_score += my_potential;
+    opp_score += opp_potential;
+
     return my_score - opp_score;
 }
 
 // === WASM export ===
 
 pub fn evaluateBoard(perspective: u8, options_flags: u32) i32 {
+    ll.init();
+    bitboard.initFromCells(&board_mod.board_cells);
     const options = decodeOptions(options_flags);
     return evaluateBoardOnCells(
         &board_mod.board_cells,
@@ -272,7 +278,9 @@ pub fn evaluateBoard(perspective: u8, options_flags: u32) i32 {
 // === Zig unit tests ===
 
 test "empty board evaluates to 0" {
+    ll.init();
     var cells = [_]Cell{.empty} ** CELL_COUNT;
+    bitboard.initFromCells(&cells);
     const result = evaluateBoardOnCells(&cells, .black, .{
         .enable_leaf_mise = false,
         .last_mover_is_perspective = .unset,
@@ -282,19 +290,25 @@ test "empty board evaluates to 0" {
     try std.testing.expectEqual(result, 0);
 }
 
-test "single stone evaluates to 0 (no pattern)" {
+test "single stone has only line potential (no pattern score)" {
+    ll.init();
     var cells = [_]Cell{.empty} ** CELL_COUNT;
     cells[7 * BOARD_SIZE + 7] = .black;
+    bitboard.initFromCells(&cells);
     const result = evaluateBoardOnCells(&cells, .black, .{
         .enable_leaf_mise = false,
         .last_mover_is_perspective = .unset,
         .single_four_penalty_multiplier = 100,
         .connectivity_bonus = scores.CONNECTIVITY_BONUS,
     });
-    try std.testing.expectEqual(result, 0);
+    // Phase B: 1石でもラインポテンシャルが入る
+    // 中央 (7,7) は 4 方向それぞれで 5 ウィンドウに含まれる
+    // 各ウィンドウ: popcount=1, [1]=3 → 合計 4 * 5 * 3 = 60
+    try std.testing.expectEqual(@as(i32, 60), result);
 }
 
 test "symmetric position evaluates to 0" {
+    ll.init();
     var cells = [_]Cell{.empty} ** CELL_COUNT;
     // Black horizontal 3: (7,6),(7,7),(7,8)
     cells[7 * BOARD_SIZE + 6] = .black;
@@ -304,6 +318,7 @@ test "symmetric position evaluates to 0" {
     cells[3 * BOARD_SIZE + 6] = .white;
     cells[3 * BOARD_SIZE + 7] = .white;
     cells[3 * BOARD_SIZE + 8] = .white;
+    bitboard.initFromCells(&cells);
 
     const black_perspective = evaluateBoardOnCells(&cells, .black, .{
         .enable_leaf_mise = false,

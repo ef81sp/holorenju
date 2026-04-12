@@ -4,9 +4,11 @@
 /// 白番の場合、黒の防御点が禁手なら即勝利。
 /// TS版 vcf.ts に対応
 
+const bitboard = @import("bitboard.zig");
 const board_mod = @import("board.zig");
 const forbidden = @import("forbidden.zig");
 const jp = @import("jump_patterns.zig");
+const ll = @import("line_lookup.zig");
 const quiescence = @import("quiescence.zig");
 const scores = @import("scores.zig");
 const threats = @import("threats.zig");
@@ -57,6 +59,7 @@ fn incrementNodes(limiter: *TimeLimiter) void {
 /// TS版 threatPatterns.ts の findFourMoves に対応
 pub fn findFourMoves(cells: []Cell, color: Cell, buf: *[225]Position) u16 {
     var count: u16 = 0;
+    const near_mask = threats.computeNearMask(threats.computeOccupiedRows(cells), 2);
 
     for (0..BOARD_SIZE) |r_usize| {
         const r: u8 = @intCast(r_usize);
@@ -64,14 +67,16 @@ pub fn findFourMoves(cells: []Cell, color: Cell, buf: *[225]Position) u16 {
             const c: u8 = @intCast(c_usize);
             const idx = @as(u16, r) * BOARD_SIZE + c;
             if (cells[idx] != .empty) continue;
-            if (!threats.isNearExistingStone(cells, r, c)) continue;
+            if (!threats.isNearFromMask(near_mask, r, c)) continue;
 
-            // 仮配置
+            // 仮配置（bitboard も同期）
             cells[idx] = color;
+            bitboard.placeStone(r, c, color);
 
             // 五連チェック（最優先）
             if (forbidden.checkFive(cells, r, c, color)) {
                 cells[idx] = .empty;
+                bitboard.removeStone(r, c);
                 buf[count] = .{ .row = r, .col = c };
                 count += 1;
                 continue;
@@ -80,6 +85,7 @@ pub fn findFourMoves(cells: []Cell, color: Cell, buf: *[225]Position) u16 {
             // 四チェック
             const is_four = quiescence.createsFour(cells, r, c, color);
             cells[idx] = .empty;
+            bitboard.removeStone(r, c);
 
             if (!is_four) continue;
 
@@ -121,13 +127,15 @@ pub fn hasVCF(
         const move = buf[i];
         incrementNodes(limiter);
 
-        // 四を作る（インプレース）
+        // 四を作る（インプレース、bitboard も同期）
         const idx = @as(u16, move.row) * BOARD_SIZE + move.col;
         cells[idx] = color;
+        bitboard.placeStone(move.row, move.col, color);
 
         // 五連チェック
         if (forbidden.checkFive(cells, move.row, move.col, color)) {
             cells[idx] = .empty;
+            bitboard.removeStone(move.row, move.col);
             return true;
         }
 
@@ -137,6 +145,7 @@ pub fn hasVCF(
         if (defense_pos == null) {
             // 止められない = 勝利
             cells[idx] = .empty;
+            bitboard.removeStone(move.row, move.col);
             return true;
         }
 
@@ -147,6 +156,7 @@ pub fn hasVCF(
             const fr = forbidden.checkForbiddenMove(cells, dp.row, dp.col);
             if (fr != .none) {
                 cells[idx] = .empty;
+                bitboard.removeStone(move.row, move.col);
                 return true;
             }
         }
@@ -154,6 +164,7 @@ pub fn hasVCF(
         // 相手が止めた後の局面で再帰
         const def_idx = @as(u16, dp.row) * BOARD_SIZE + dp.col;
         cells[def_idx] = opponent;
+        bitboard.placeStone(dp.row, dp.col, opponent);
 
         // 防御で五連完成 → VCF不成立
         const defense_wins = forbidden.checkFive(cells, dp.row, dp.col, opponent);
@@ -167,7 +178,9 @@ pub fn hasVCF(
 
         // Undo（逆順）
         cells[def_idx] = .empty;
+        bitboard.removeStone(dp.row, dp.col);
         cells[idx] = .empty;
+        bitboard.removeStone(move.row, move.col);
 
         if (result) return true;
     }
@@ -187,6 +200,10 @@ pub fn findVCFMove(cells: []Cell, color: Cell, max_depth: u8, time_limit: u32) ?
 /// VCFの最初の手を返す（ノード数制限付き）
 /// max_nodes=0 は無制限
 pub fn findVCFMoveWithBudget(cells: []Cell, color: Cell, max_depth: u8, time_limit: u32, max_nodes: u32) ?Position {
+    // トップレベルエントリ: bitboard を cells と同期
+    bitboard.initFromCells(cells);
+    ll.init();
+
     var limiter = TimeLimiter{
         .start_time = getTimestampMs(),
         .time_limit = time_limit,
@@ -234,15 +251,18 @@ fn findVCFMoveRecursive(
 
         const idx = @as(u16, move.row) * BOARD_SIZE + move.col;
         cells[idx] = color;
+        bitboard.placeStone(move.row, move.col, color);
 
         // 五連 → 即勝ち
         if (forbidden.checkFive(cells, move.row, move.col, color)) {
             cells[idx] = .empty;
+            bitboard.removeStone(move.row, move.col);
             return move;
         }
 
         const defense_pos = quiescence.getFourDefensePosition(cells, move.row, move.col, color);
         cells[idx] = .empty;
+        bitboard.removeStone(move.row, move.col);
 
         // 活四（防御不能） → 即勝ち
         if (defense_pos == null) {
@@ -273,7 +293,9 @@ fn findVCFMoveRecursive(
         const def_idx = @as(u16, dp.row) * BOARD_SIZE + dp.col;
 
         cells[move_idx] = color;
+        bitboard.placeStone(move.row, move.col, color);
         cells[def_idx] = opponent;
+        bitboard.placeStone(dp.row, dp.col, opponent);
 
         // 防御で五連完成 or カウンターフォー → スキップ
         const defense_wins = forbidden.checkFive(cells, dp.row, dp.col, opponent);
@@ -286,7 +308,9 @@ fn findVCFMoveRecursive(
 
         // Undo
         cells[def_idx] = .empty;
+        bitboard.removeStone(dp.row, dp.col);
         cells[move_idx] = .empty;
+        bitboard.removeStone(move.row, move.col);
 
         if (vcf_move != null) {
             return if (depth == 0) move else vcf_move;
@@ -316,6 +340,10 @@ pub fn findVCFSequence(
     time_limit: u32,
     max_nodes: u32,
 ) VCFSequenceResult {
+    // トップレベルエントリ: bitboard を cells と同期
+    bitboard.initFromCells(cells);
+    ll.init();
+
     var limiter = TimeLimiter{
         .start_time = getTimestampMs(),
         .time_limit = time_limit,
@@ -367,12 +395,18 @@ pub fn findVCFSequenceFromFirstMove(
     const idx = @as(u16, first_move.row) * BOARD_SIZE + first_move.col;
     if (cells[idx] != .empty) return result;
 
+    // トップレベルエントリ: bitboard を cells と同期
+    bitboard.initFromCells(cells);
+    ll.init();
+
     // 仮配置
     cells[idx] = color;
+    bitboard.placeStone(first_move.row, first_move.col, color);
 
     // 五連チェック → 即勝ち
     if (forbidden.checkFive(cells, first_move.row, first_move.col, color)) {
         cells[idx] = .empty;
+        bitboard.removeStone(first_move.row, first_move.col);
         result.sequence[0] = first_move;
         result.len = 1;
         result.found = true;
@@ -382,6 +416,7 @@ pub fn findVCFSequenceFromFirstMove(
     // 四を作るかチェック
     if (!quiescence.createsFour(cells, first_move.row, first_move.col, color)) {
         cells[idx] = .empty;
+        bitboard.removeStone(first_move.row, first_move.col);
         return result;
     }
 
@@ -390,6 +425,7 @@ pub fn findVCFSequenceFromFirstMove(
     if (defense_pos == null) {
         // 活四 → 防御不可能 → VCF成立
         cells[idx] = .empty;
+        bitboard.removeStone(first_move.row, first_move.col);
         result.sequence[0] = first_move;
         result.len = 1;
         result.found = true;
@@ -403,6 +439,7 @@ pub fn findVCFSequenceFromFirstMove(
         const fr = forbidden.checkForbiddenMove(cells, dp.row, dp.col);
         if (fr != .none) {
             cells[idx] = .empty;
+            bitboard.removeStone(first_move.row, first_move.col);
             result.sequence[0] = first_move;
             result.len = 1;
             result.is_forbidden_trap = true;
@@ -415,12 +452,15 @@ pub fn findVCFSequenceFromFirstMove(
     const opponent = color.opposite();
     const def_idx = @as(u16, dp.row) * BOARD_SIZE + dp.col;
     cells[def_idx] = opponent;
+    bitboard.placeStone(dp.row, dp.col, opponent);
 
     const continuation = findVCFSequence(cells, color, max_depth, time_limit, max_nodes);
 
     // Undo（逆順）
     cells[def_idx] = .empty;
+    bitboard.removeStone(dp.row, dp.col);
     cells[idx] = .empty;
+    bitboard.removeStone(first_move.row, first_move.col);
 
     if (!continuation.found) return result;
 
@@ -470,10 +510,12 @@ fn findVCFSequenceRecursive(
 
         const idx = @as(u16, move.row) * BOARD_SIZE + move.col;
         cells[idx] = color;
+        bitboard.placeStone(move.row, move.col, color);
 
         // 五連 → 即勝ち
         if (forbidden.checkFive(cells, move.row, move.col, color)) {
             cells[idx] = .empty;
+            bitboard.removeStone(move.row, move.col);
             sequence[seq_len.*] = move;
             seq_len.* += 1;
             return true;
@@ -481,6 +523,7 @@ fn findVCFSequenceRecursive(
 
         const defense_pos = quiescence.getFourDefensePosition(cells, move.row, move.col, color);
         cells[idx] = .empty;
+        bitboard.removeStone(move.row, move.col);
 
         // 活四（防御不能） → 即勝ち
         if (defense_pos == null) {
@@ -518,7 +561,9 @@ fn findVCFSequenceRecursive(
         const def_idx = @as(u16, dp.row) * BOARD_SIZE + dp.col;
 
         cells[move_idx] = color;
+        bitboard.placeStone(move.row, move.col, color);
         cells[def_idx] = opponent;
+        bitboard.placeStone(dp.row, dp.col, opponent);
 
         // 防御で五連完成 or カウンターフォー → スキップ
         const defense_wins = forbidden.checkFive(cells, dp.row, dp.col, opponent);
@@ -542,7 +587,9 @@ fn findVCFSequenceRecursive(
 
         // Undo
         cells[def_idx] = .empty;
+        bitboard.removeStone(dp.row, dp.col);
         cells[move_idx] = .empty;
+        bitboard.removeStone(move.row, move.col);
 
         if (found) return true;
     }
@@ -568,11 +615,13 @@ fn getTimestampMs() u32 {
 const testing = std.testing;
 
 test "findFourMoves: basic" {
+    ll.init();
     var cells = [_]Cell{.empty} ** CELL_COUNT;
     // 黒の3連: (7,5),(7,6),(7,7) → (7,4) と (7,8) が四の手
     cells[7 * BOARD_SIZE + 5] = .black;
     cells[7 * BOARD_SIZE + 6] = .black;
     cells[7 * BOARD_SIZE + 7] = .black;
+    bitboard.initFromCells(&cells);
 
     var buf: [225]Position = undefined;
     const count = findFourMoves(&cells, .black, &buf);
@@ -580,12 +629,14 @@ test "findFourMoves: basic" {
 }
 
 test "hasVCF: immediate five" {
+    ll.init();
     var cells = [_]Cell{.empty} ** CELL_COUNT;
     // 黒の4連: (7,4),(7,5),(7,6),(7,7) → 五連可能
     cells[7 * BOARD_SIZE + 4] = .black;
     cells[7 * BOARD_SIZE + 5] = .black;
     cells[7 * BOARD_SIZE + 6] = .black;
     cells[7 * BOARD_SIZE + 7] = .black;
+    bitboard.initFromCells(&cells);
 
     var limiter = TimeLimiter{
         .start_time = 0,
@@ -599,9 +650,11 @@ test "hasVCF: immediate five" {
 }
 
 test "hasVCF: no four available" {
+    ll.init();
     var cells = [_]Cell{.empty} ** CELL_COUNT;
     // 黒1石のみ
     cells[7 * BOARD_SIZE + 7] = .black;
+    bitboard.initFromCells(&cells);
 
     var limiter = TimeLimiter{
         .start_time = 0,
@@ -635,6 +688,7 @@ test "findVCFMove: no VCF" {
 }
 
 test "hasVCF: open four (unblockable)" {
+    ll.init();
     var cells = [_]Cell{.empty} ** CELL_COUNT;
     // 黒の3連 + 両端空き → 仮置きで活四になる
     cells[7 * BOARD_SIZE + 5] = .black;
@@ -642,6 +696,7 @@ test "hasVCF: open four (unblockable)" {
     cells[7 * BOARD_SIZE + 7] = .black;
     // 白が1つブロック
     cells[7 * BOARD_SIZE + 4] = .white;
+    bitboard.initFromCells(&cells);
 
     var limiter = TimeLimiter{
         .start_time = 0,

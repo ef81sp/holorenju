@@ -63,7 +63,7 @@ CPU手番 → cpu.worker.ts onmessage
 
 - プレイヤー手番中にCPUは何もしていない
 - TTがWorker terminate で消失（手番間のキャッシュが活用されない）
-- `detectOpponentThreats` の二重呼び出し（`cpu-flow-review-plan.md` R-1）
+- `detectOpponentThreats` の二重呼び出し
 - hard難易度でdepth=4が限界（8秒制限内）
 
 ---
@@ -147,7 +147,7 @@ CPU着手後、最善応手を1つ予測して探索開始:
 
 **実現可能性: 中 / コスト: 中〜高**
 
-`detectOpponentThreats` が毎回盤面全体をスキャン（O(225)）している問題を、着手影響範囲のみの再評価（O(40)）に改善。`cpu-flow-review-plan.md` の R-1（二重呼び出し解消）と合わせて実施するのが効率的。
+`detectOpponentThreats` が毎回盤面全体をスキャン（O(225)）している問題を、着手影響範囲のみの再評価（O(40)）に改善。二重呼び出し解消と合わせて実施するのが効率的。
 
 変更ファイル: `src/logic/cpu/evaluation/threatDetection.ts`, `src/logic/cpu/search/iterativeDeepening.ts`
 

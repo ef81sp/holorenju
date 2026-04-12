@@ -1,5 +1,8 @@
+const bitboard = @import("bitboard.zig");
 const board_mod = @import("board.zig");
 const evaluate = @import("evaluate.zig");
+const line_potential = @import("line_potential.zig");
+const ll = @import("line_lookup.zig");
 const patterns = @import("patterns.zig");
 const scores = @import("scores.zig");
 const std = @import("std");
@@ -36,6 +39,10 @@ pub const IncrementalEvalState = struct {
     white: ColorAggregates = .{},
     connectivity_bonus: i32 = 0,
     single_four_penalty_multiplier: i32 = 100,
+    /// Phase B: ラインポテンシャル評価（各色の全ライン集計値）
+    /// `computeLinePotential` の総和で、`placeStone`/`removeStone` で影響 4 ラインを差分更新。
+    line_potential_black: i32 = 0,
+    line_potential_white: i32 = 0,
 
     fn aggregatesFor(self: *IncrementalEvalState, color: Cell) *ColorAggregates {
         return switch (color) {
@@ -109,6 +116,10 @@ pub fn initFromBoard(cells: []Cell, connectivity_bonus: i32, multiplier: i32) vo
         .single_four_penalty_multiplier = multiplier,
     };
 
+    // LUT版 evaluateStonePatternsLightOnCells が bitboard を使うため同期
+    ll.init();
+    bitboard.initFromCells(cells);
+
     for (0..CELL_COUNT) |i| {
         const idx: u16 = @intCast(i);
         if (cells[idx] == .empty) continue;
@@ -116,6 +127,10 @@ pub fn initFromBoard(cells: []Cell, connectivity_bonus: i32, multiplier: i32) vo
         eval_state.reEvaluateStone(idx, cells);
         eval_state.addToAggregates(idx);
     }
+
+    // Phase B: ラインポテンシャル初期化（全ライン一括集計）
+    eval_state.line_potential_black = line_potential.computeTotalGlobal(.black);
+    eval_state.line_potential_white = line_potential.computeTotalGlobal(.white);
 }
 
 /// 4方向 × 距離5以内の非空マスを収集（自身も含む）
@@ -172,8 +187,16 @@ pub fn placeStone(cells: []Cell, row: u8, col: u8, color: Cell) void {
         eval_state.subtractFromAggregates(idx);
     }
 
+    // Phase B: 影響を受ける 4 ラインの変更前ポテンシャルを差し引く
+    const lines_info = bitboard.CELL_LINES[self_idx];
+    subtractLinePotential(lines_info);
+
     // 盤面更新
     cells[self_idx] = color;
+    bitboard.placeStone(row, col, color);
+
+    // Phase B: 変更後ポテンシャルを加える
+    addLinePotential(lines_info);
 
     // 新石自身を affected リストに追加
     buf[affected_count] = self_idx;
@@ -200,7 +223,16 @@ pub fn removeStone(cells: []Cell, row: u8, col: u8) void {
 
     // 盤面更新
     const self_idx = @as(u16, row) * BOARD_SIZE + col;
+
+    // Phase B: 影響を受ける 4 ラインの変更前ポテンシャルを差し引く
+    const lines_info = bitboard.CELL_LINES[self_idx];
+    subtractLinePotential(lines_info);
+
     cells[self_idx] = .empty;
+    bitboard.removeStone(row, col);
+
+    // Phase B: 変更後ポテンシャルを加える
+    addLinePotential(lines_info);
 
     // 除去石のキャッシュをクリア
     eval_state.cache[self_idx] = .{};
@@ -210,6 +242,28 @@ pub fn removeStone(cells: []Cell, row: u8, col: u8) void {
         if (idx == self_idx) continue;
         eval_state.reEvaluateStone(idx, cells);
         eval_state.addToAggregates(idx);
+    }
+}
+
+/// 指定された 4 ラインの現在のポテンシャル値を eval_state から差し引く
+fn subtractLinePotential(lines: [4]bitboard.CellLineInfo) void {
+    for (lines) |info| {
+        const len = bitboard.LINE_LENGTHS[info.line_index];
+        const black_line = bitboard.global_bb.black[info.line_index];
+        const white_line = bitboard.global_bb.white[info.line_index];
+        eval_state.line_potential_black -= line_potential.computeLinePotential(black_line, white_line, len);
+        eval_state.line_potential_white -= line_potential.computeLinePotential(white_line, black_line, len);
+    }
+}
+
+/// 指定された 4 ラインの現在のポテンシャル値を eval_state に加える
+fn addLinePotential(lines: [4]bitboard.CellLineInfo) void {
+    for (lines) |info| {
+        const len = bitboard.LINE_LENGTHS[info.line_index];
+        const black_line = bitboard.global_bb.black[info.line_index];
+        const white_line = bitboard.global_bb.white[info.line_index];
+        eval_state.line_potential_black += line_potential.computeLinePotential(black_line, white_line, len);
+        eval_state.line_potential_white += line_potential.computeLinePotential(white_line, black_line, len);
     }
 }
 
@@ -264,6 +318,20 @@ pub fn getEvaluation(cells: []Cell, perspective: Cell, options: evaluate.EvalOpt
     // 四三脅威がなければ単発四ペナルティ適用
     if (!my_has_four_three) my_score -= my_agg.pending_four_penalty;
     if (!opp_has_four_three) opp_score -= opp_agg.pending_four_penalty;
+
+    // Phase B: ラインポテンシャル加算（テンポ補正・ペナルティの対象外、純粋加算）
+    const my_potential = switch (perspective) {
+        .black => eval_state.line_potential_black,
+        .white => eval_state.line_potential_white,
+        .empty => unreachable,
+    };
+    const opp_potential = switch (perspective) {
+        .black => eval_state.line_potential_white,
+        .white => eval_state.line_potential_black,
+        .empty => unreachable,
+    };
+    my_score += my_potential;
+    opp_score += opp_potential;
 
     const result = my_score - opp_score;
 

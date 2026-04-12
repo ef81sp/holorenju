@@ -5,11 +5,14 @@
 /// 水平線効果を軽減する。
 /// TS版 quiescence.ts に対応
 
+const bitboard = @import("bitboard.zig");
 const board_mod = @import("board.zig");
 const evaluate = @import("evaluate.zig");
 const forbidden = @import("forbidden.zig");
-const jp = @import("jump_patterns.zig");
+const incremental_eval = @import("incremental_eval.zig");
+const ll = @import("line_lookup.zig");
 const scores = @import("scores.zig");
+const threats = @import("threats.zig");
 const tt_mod = @import("tt.zig");
 const zobrist = @import("zobrist.zig");
 const std = @import("std");
@@ -24,26 +27,57 @@ pub const Position = @import("threats.zig").Position;
 /// Quiescence Search の最大深度（四+ブロック 2往復分）
 pub const MAX_QUIESCENCE_DEPTH: u8 = 4;
 
-/// 四を作るかチェック（石配置済み前提）
+/// 四を作るかチェック（石配置済み前提、bitboard も同期済み前提）
 /// TS版 threatMoves.ts の createsFour に対応
 pub fn createsFour(cells: []const Cell, row: u8, col: u8, color: Cell) bool {
     for (DIRECTIONS, 0..) |dir, i| {
-        const result = board_mod.analyzeDirectionOnCells(cells, row, col, dir.dr, dir.dc, color);
+        const result = ll.queryPatternByCell(row, col, i, color);
 
-        // 連続四をチェック
-        if (result.count == 4 and (result.end1 == .empty or result.end2 == .empty)) {
-            // 黒の長連チェック: 五以上になる場合は四ではない
-            if (color == .black and result.count >= 5) continue;
-            return true;
+        // 連続四をチェック（黒はオーバーライン補正）
+        if (result.count == 4) {
+            var end1_open = result.end1 == 0;
+            var end2_open = result.end2 == 0;
+            if (color == .black) {
+                if (end1_open) end1_open = !isOverlineEnd(cells, row, col, i, true);
+                if (end2_open) end2_open = !isOverlineEnd(cells, row, col, i, false);
+            }
+            if (end1_open or end2_open) {
+                return true;
+            }
         }
 
         // 跳び四をチェック
-        const dir_index = jp.DIRECTION_INDICES[i];
-        if (result.count != 4 and jp.checkJumpFour(cells, row, col, dir_index, color)) {
+        if (result.count != 4 and result.has_jump_four) {
             // 黒の長連チェック: 跳び四のギャップを埋めると長連になる場合はスキップ
             if (color == .black) {
                 if (isJumpFourOverline(cells, row, col, dir.dr, dir.dc)) continue;
             }
+            return true;
+        }
+    }
+    return false;
+}
+
+/// 黒のオーバーライン補正: count==4 の空き端の先に黒石があるかチェック
+fn isOverlineEnd(cells: []const Cell, row: u8, col: u8, dir_idx: usize, is_positive: bool) bool {
+    const dir = DIRECTIONS[dir_idx];
+    const dr: i8 = if (is_positive) dir.dr else -dir.dr;
+    const dc: i8 = if (is_positive) dir.dc else -dir.dc;
+
+    var consecutive: i16 = 0;
+    var r: i16 = @as(i16, row) + @as(i16, dr);
+    var c: i16 = @as(i16, col) + @as(i16, dc);
+    while (board_mod.isValid(r, c) and cells[@intCast(@as(u16, @intCast(r)) * BOARD_SIZE + @as(u16, @intCast(c)))] == .black) {
+        consecutive += 1;
+        r += @as(i16, dr);
+        c += @as(i16, dc);
+    }
+
+    const check_r = @as(i16, row) + @as(i16, dr) * (consecutive + 2);
+    const check_c = @as(i16, col) + @as(i16, dc) * (consecutive + 2);
+    if (board_mod.isValid(check_r, check_c)) {
+        const check_idx = @as(u16, @intCast(check_r)) * BOARD_SIZE + @as(u16, @intCast(check_c));
+        if (cells[check_idx] == .black) {
             return true;
         }
     }
@@ -94,12 +128,13 @@ fn findJumpFourGap(cells: []const Cell, row: u8, col: u8, dr: i8, dc: i8) ?Posit
 
 /// 四に対する防御位置を取得
 /// 四は1点でしか止められないのでその位置を返す
+/// 石配置済み前提、bitboard も同期済み前提。
 /// TS版 threatPatterns.ts の getFourDefensePosition に対応
 pub fn getFourDefensePosition(cells: []const Cell, last_row: u8, last_col: u8, color: Cell) ?Position {
     var first_defense: ?Position = null;
 
     for (DIRECTIONS, 0..) |dir, i| {
-        const result = board_mod.analyzeDirectionOnCells(cells, last_row, last_col, dir.dr, dir.dc, color);
+        const result = ll.queryPatternByCell(last_row, last_col, i, color);
 
         // 連続四をチェック
         if (result.count == 4) {
@@ -115,8 +150,7 @@ pub fn getFourDefensePosition(cells: []const Cell, last_row: u8, last_col: u8, c
         }
 
         // 跳び四をチェック
-        const dir_index = jp.DIRECTION_INDICES[i];
-        if (jp.checkJumpFour(cells, last_row, last_col, dir_index, color)) {
+        if (result.has_jump_four) {
             const gap = @import("threats.zig").findJumpGapPosition(cells, last_row, last_col, dir.dr, dir.dc, color);
             if (gap != null and first_defense == null) {
                 first_defense = gap;
@@ -185,27 +219,6 @@ fn getLineEnds(cells: []const Cell, row: u8, col: u8, dr: i8, dc: i8, color: Cel
     return ends;
 }
 
-/// 隣接マス（距離1）に石があるかチェック
-fn isNearExistingStone(cells: []const Cell, row: u8, col: u8) bool {
-    const r: i16 = row;
-    const c: i16 = col;
-    var dr: i16 = -1;
-    while (dr <= 1) : (dr += 1) {
-        var dc: i16 = -1;
-        while (dc <= 1) : (dc += 1) {
-            if (dr == 0 and dc == 0) continue;
-            const nr = r + dr;
-            const nc = c + dc;
-            if (board_mod.isValid(nr, nc)) {
-                if (cells[@intCast(@as(u16, @intCast(nr)) * BOARD_SIZE + @as(u16, @intCast(nc)))] != .empty) {
-                    return true;
-                }
-            }
-        }
-    }
-    return false;
-}
-
 /// 脅威手（四を作る手 + 相手の四へのブロック）を生成
 /// TS版 quiescence.ts の generateTacticalMoves に対応
 pub fn generateTacticalMoves(
@@ -227,18 +240,21 @@ pub fn generateTacticalMoves(
     }
 
     // 2. 自分が四を作れる手を列挙
+    const near_mask = threats.computeNearMask(threats.computeOccupiedRows(cells), 1);
     for (0..BOARD_SIZE) |r_usize| {
         const r: u8 = @intCast(r_usize);
         for (0..BOARD_SIZE) |c_usize| {
             const c: u8 = @intCast(c_usize);
             const idx = @as(u16, r) * BOARD_SIZE + c;
             if (cells[idx] != .empty) continue;
-            if (!isNearExistingStone(cells, r, c)) continue;
+            if (!threats.isNearFromMask(near_mask, r, c)) continue;
 
-            // 仮配置してチェック
+            // 仮配置してチェック（bitboard も同期）
             cells[idx] = color;
+            bitboard.placeStone(r, c, color);
             const is_four = createsFour(cells, r, c, color);
             cells[idx] = .empty;
+            bitboard.removeStone(r, c);
 
             if (is_four) {
                 result_buf[count] = .{ .row = r, .col = c };
@@ -302,11 +318,11 @@ pub fn quiescenceSearch(
 
     // 時間/ノード制限チェック
     if (timeout_flag.*) {
-        return evaluate.evaluateBoardOnCells(cells, perspective, eval_opts);
+        return incremental_eval.getEvaluation(cells, perspective, eval_opts, false);
     }
 
-    // Stand-pat: 何もしない場合の評価
-    const stand_pat = evaluate.evaluateBoardOnCells(cells, perspective, eval_opts);
+    // Stand-pat: 何もしない場合の評価（インクリメンタル評価を使用）
+    const stand_pat = incremental_eval.getEvaluation(cells, perspective, eval_opts, false);
 
     var alpha = alpha_init;
     var beta = beta_init;
@@ -338,10 +354,9 @@ pub fn quiescenceSearch(
 
     for (0..move_count) |mi| {
         const move = move_buf[mi];
-        const idx = @as(u16, move.row) * BOARD_SIZE + move.col;
 
-        // 石を配置
-        cells[idx] = current_color;
+        // 石を配置（cells, bitboard, incremental eval_state を同期更新）
+        incremental_eval.placeStone(cells, move.row, move.col, current_color);
         const new_hash = zobrist.updateHash(hash, move.row, move.col, current_color);
 
         const score = quiescenceSearch(
@@ -360,7 +375,7 @@ pub fn quiescenceSearch(
         );
 
         // 石を除去
-        cells[idx] = .empty;
+        incremental_eval.removeStone(cells, move.row, move.col);
 
         // Alpha-beta更新
         if (is_maximizing) {
@@ -385,17 +400,20 @@ pub fn quiescenceSearch(
 // === Tests ===
 
 test "createsFour detects consecutive four" {
+    ll.init();
     var cells = [_]Cell{.empty} ** CELL_COUNT;
     // 横に3石: (7,5),(7,6),(7,7) + (7,8) に置くと四
     cells[7 * BOARD_SIZE + 5] = .black;
     cells[7 * BOARD_SIZE + 6] = .black;
     cells[7 * BOARD_SIZE + 7] = .black;
     cells[7 * BOARD_SIZE + 8] = .black; // 仮配置済み
+    bitboard.initFromCells(&cells);
 
     try std.testing.expect(createsFour(&cells, 7, 8, .black));
 }
 
 test "getFourDefensePosition finds defense for consecutive four" {
+    ll.init();
     var cells = [_]Cell{.empty} ** CELL_COUNT;
     // 止め四: (7,5),(7,6),(7,7),(7,8) で片端を白で塞ぐ
     cells[7 * BOARD_SIZE + 4] = .white; // 左端を塞ぐ
@@ -403,6 +421,7 @@ test "getFourDefensePosition finds defense for consecutive four" {
     cells[7 * BOARD_SIZE + 6] = .black;
     cells[7 * BOARD_SIZE + 7] = .black;
     cells[7 * BOARD_SIZE + 8] = .black;
+    bitboard.initFromCells(&cells);
 
     const defense = getFourDefensePosition(&cells, 7, 8, .black);
     try std.testing.expect(defense != null);
@@ -413,23 +432,27 @@ test "getFourDefensePosition finds defense for consecutive four" {
 }
 
 test "getFourDefensePosition returns null for open four" {
+    ll.init();
     var cells = [_]Cell{.empty} ** CELL_COUNT;
     // 活四: 両端空き → 防御不可能
     cells[7 * BOARD_SIZE + 5] = .black;
     cells[7 * BOARD_SIZE + 6] = .black;
     cells[7 * BOARD_SIZE + 7] = .black;
     cells[7 * BOARD_SIZE + 8] = .black;
+    bitboard.initFromCells(&cells);
 
     const defense = getFourDefensePosition(&cells, 7, 8, .black);
     try std.testing.expect(defense == null);
 }
 
 test "generateTacticalMoves finds four moves" {
+    ll.init();
     var cells = [_]Cell{.empty} ** CELL_COUNT;
     // 横に3石
     cells[7 * BOARD_SIZE + 5] = .black;
     cells[7 * BOARD_SIZE + 6] = .black;
     cells[7 * BOARD_SIZE + 7] = .black;
+    bitboard.initFromCells(&cells);
 
     var buf: [225]Position = undefined;
     const count = generateTacticalMoves(&cells, .black, null, &buf);
@@ -438,7 +461,9 @@ test "generateTacticalMoves finds four moves" {
 }
 
 test "quiescenceSearch stand-pat on empty" {
+    ll.init();
     var cells = [_]Cell{.empty} ** CELL_COUNT;
+    incremental_eval.initFromBoard(&cells, scores.CONNECTIVITY_BONUS, 100);
     var stats = QSearchStats{};
     var timeout_flag = false;
     var tt = tt_mod.TranspositionTable{
@@ -470,6 +495,7 @@ test "quiescenceSearch stand-pat on empty" {
 }
 
 test "getFourDefensePosition: black four with overline should not be open four" {
+    ll.init();
     // C8-D8-E8-F8-(空G8)-H8(黒) の配置
     // row=7 (0-indexed), C=2, D=3, E=4, F=5, G=6(empty), H=7
     var cells = [_]Cell{.empty} ** CELL_COUNT;
@@ -479,6 +505,7 @@ test "getFourDefensePosition: black four with overline should not be open four" 
     cells[7 * BOARD_SIZE + 5] = .black; // F8
     // G8 (7*15+6) = empty
     cells[7 * BOARD_SIZE + 7] = .black; // H8
+    bitboard.initFromCells(&cells);
 
     // E8を基準に四判定: C8-D8-E8-F8 は四だが、G8方向はoverlineで塞がり
     // → 活四ではなく止め四（B8で防御可能）→ null ではなく B8 を返すべき

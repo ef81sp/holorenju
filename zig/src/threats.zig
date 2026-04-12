@@ -3,10 +3,12 @@
 /// 相手の活四・止め四・活三・ミセ手・三三脅威を検出
 /// TS版 threatDetection.ts + threatDetectionFast.ts に対応
 
+const bitboard = @import("bitboard.zig");
 const board_mod = @import("board.zig");
 const evaluate = @import("evaluate.zig");
 const forbidden = @import("forbidden.zig");
 const jp = @import("jump_patterns.zig");
+const ll = @import("line_lookup.zig");
 const patterns = @import("patterns.zig");
 const scores = @import("scores.zig");
 const std = @import("std");
@@ -15,6 +17,11 @@ const Cell = board_mod.Cell;
 const BOARD_SIZE = board_mod.BOARD_SIZE;
 const CELL_COUNT = board_mod.CELL_COUNT;
 const DIRECTIONS = board_mod.DIRECTIONS;
+
+/// LUT の end (0=empty, 1=blocked) を EndState に変換
+fn lutEnd(end: u2) board_mod.EndState {
+    return if (end == 0) .empty else .opponent;
+}
 
 /// Position (row, col)
 pub const Position = struct {
@@ -385,25 +392,72 @@ pub fn findJumpGapPosition(cells: []const Cell, row: u8, col: u8, dr: i8, dc: i8
     return null;
 }
 
-/// 石の近くかチェック（距離2以内）
-pub fn isNearExistingStone(cells: []const Cell, row: u8, col: u8) bool {
-    const r: i16 = row;
-    const c_val: i16 = col;
-    var dr: i16 = -2;
-    while (dr <= 2) : (dr += 1) {
-        var dc: i16 = -2;
-        while (dc <= 2) : (dc += 1) {
-            if (dr == 0 and dc == 0) continue;
-            const nr = r + dr;
-            const nc = c_val + dc;
-            if (board_mod.isValid(nr, nc)) {
-                if (cells[@intCast(@as(u16, @intCast(nr)) * BOARD_SIZE + @as(u16, @intCast(nc)))] != .empty) {
-                    return true;
-                }
+// =========================================================================
+// ビットマスクベースの近傍チェック
+// =========================================================================
+
+/// cells から行ごとの occupied ビットマスクを構築
+pub fn computeOccupiedRows(cells: []const Cell) [BOARD_SIZE]u16 {
+    var rows: [BOARD_SIZE]u16 = .{0} ** BOARD_SIZE;
+    for (0..BOARD_SIZE) |r| {
+        const base = r * BOARD_SIZE;
+        for (0..BOARD_SIZE) |c| {
+            if (cells[base + c] != .empty) {
+                rows[r] |= @as(u16, 1) << @intCast(c);
             }
         }
     }
-    return false;
+    return rows;
+}
+
+/// occupied_rows を距離 distance で膨張させた near マスクを返す
+/// distance=1: 8近傍, distance=2: 24近傍
+pub fn computeNearMask(occupied_rows: [BOARD_SIZE]u16, comptime distance: u8) [BOARD_SIZE]u16 {
+    // 各行を横方向に膨張
+    var dilated: [BOARD_SIZE]u16 = undefined;
+    for (0..BOARD_SIZE) |r| {
+        dilated[r] = dilateRow(occupied_rows[r], distance);
+    }
+    // 縦方向に膨張（distance行分のORを取る）
+    var result: [BOARD_SIZE]u16 = .{0} ** BOARD_SIZE;
+    for (0..BOARD_SIZE) |r| {
+        const r_i: i16 = @intCast(r);
+        const dist_i16: i16 = distance;
+        var dr: i16 = -dist_i16;
+        while (dr <= dist_i16) : (dr += 1) {
+            const nr = r_i + dr;
+            if (nr >= 0 and nr < BOARD_SIZE) {
+                result[r] |= dilated[@intCast(nr)];
+            }
+        }
+    }
+    // occupied 自体のビットを除外（空きマスのみ対象のため不要だが、明示的に残さない）
+    // → 呼び出し側で cells[idx] != .empty チェック済みなので不要
+    return result;
+}
+
+/// 1行を横方向に distance ビット膨張
+fn dilateRow(bits: u16, comptime distance: u8) u16 {
+    var result: u16 = bits;
+    inline for (1..distance + 1) |d| {
+        result |= bits << d;
+        result |= bits >> d;
+    }
+    // 15ビット幅にマスク（16ビット目以上をクリア）
+    return result & 0x7FFF;
+}
+
+/// near マスクから特定位置が近傍かチェック（O(1)）
+pub inline fn isNearFromMask(near_mask: [BOARD_SIZE]u16, row: u8, col: u8) bool {
+    return near_mask[row] & (@as(u16, 1) << @intCast(col)) != 0;
+}
+
+/// 石の近くかチェック（距離2以内）
+/// 注意: 全盤面スキャン時は computeOccupiedRows + computeNearMask を使うこと
+pub fn isNearExistingStone(cells: []const Cell, row: u8, col: u8) bool {
+    const occupied = computeOccupiedRows(cells);
+    const near = computeNearMask(occupied, 2);
+    return isNearFromMask(near, row, col);
 }
 
 /// 活三とミセ手の両方を止める手が存在するかチェック
@@ -418,35 +472,38 @@ pub fn hasDefenseThatBlocksBoth(open_threes: *const PositionList, mises: *const 
 }
 
 /// 複数方向に脅威（活三以上）がある数をカウント
+/// 注意: 呼び出し元で bitboard.global_bb が cells と同期している必要あり
 pub fn countThreatDirections(cells: []Cell, row: u8, col: u8, color: Cell) u8 {
     var threat_count: u8 = 0;
 
-    for (DIRECTIONS, 0..) |dir, i| {
-        const result = board_mod.analyzeDirectionOnCells(cells, row, col, dir.dr, dir.dc, color);
+    for (0..4) |i| {
+        const lut = ll.queryPatternByCell(row, col, i, color);
+        const end1 = lutEnd(lut.end1);
+        const end2 = lutEnd(lut.end2);
+        const dir_index = jp.DIRECTION_INDICES[i];
 
         // 活四 or 止め四
-        if (result.count == 4 and (result.end1 == .empty or result.end2 == .empty)) {
+        if (lut.count == 4 and (end1 == .empty or end2 == .empty)) {
             threat_count += 1;
             continue;
         }
 
-        // 跳び四をチェック
-        const dir_index = jp.DIRECTION_INDICES[i];
-        if (result.count != 4 and jp.checkJumpFour(cells, row, col, dir_index, color)) {
+        // 跳び四 (LUT版)
+        if (lut.count != 4 and lut.has_jump_four) {
             threat_count += 1;
             continue;
         }
 
         // 活三
-        if (result.count == 3 and result.end1 == .empty and result.end2 == .empty) {
+        if (lut.count == 3 and end1 == .empty and end2 == .empty) {
             if (color == .white or patterns.isValidConsecutiveThree(cells, row, col, dir_index, color)) {
                 threat_count += 1;
                 continue;
             }
         }
 
-        // 跳び三
-        if (result.count != 3 and jp.checkJumpThree(cells, row, col, dir_index, color)) {
+        // 跳び三 (LUT版)
+        if (lut.count != 3 and lut.has_jump_three) {
             if (color == .white or patterns.isValidJumpThree(cells, row, col, dir_index, color)) {
                 threat_count += 1;
             }
@@ -477,27 +534,28 @@ pub fn detectOpponentThreats(cells: []Cell, opponent_color: Cell) ThreatInfo {
 
             // 各方向をチェック
             for (DIRECTIONS, 0..) |dir, dir_idx| {
-                const renju_dir_index = jp.DIRECTION_INDICES[dir_idx];
-                const pattern = board_mod.analyzeDirectionOnCells(cells, row, col, dir.dr, dir.dc, opponent_color);
+                const lut = ll.queryPatternByCell(row, col, dir_idx, opponent_color);
+                const end1 = lutEnd(lut.end1);
+                const end2 = lutEnd(lut.end2);
 
                 // 活四: 両端が空いている4連
-                if (pattern.count == 4 and pattern.end1 == .empty and pattern.end2 == .empty) {
+                if (lut.count == 4 and end1 == .empty and end2 == .empty) {
                     const defense = getOpenFourDefensePositions(cells, row, col, dir.dr, dir.dc, opponent_color);
                     result.open_fours.addUniqueList(&defense);
                 }
 
                 // 止め四: 片側だけ空いている4連
-                if (pattern.count == 4 and
-                    ((pattern.end1 == .empty and pattern.end2 != .empty) or
-                    (pattern.end1 != .empty and pattern.end2 == .empty)))
+                if (lut.count == 4 and
+                    ((end1 == .empty and end2 != .empty) or
+                    (end1 != .empty and end2 == .empty)))
                 {
                     const defense = getOpenFourDefensePositions(cells, row, col, dir.dr, dir.dc, opponent_color);
                     result.fours.addUniqueList(&defense);
                 }
 
-                // 跳び四
+                // 跳び四 (LUT版)
                 var is_jump_four = false;
-                if (pattern.count != 4 and jp.checkJumpFour(cells, row, col, renju_dir_index, opponent_color)) {
+                if (lut.count != 4 and lut.has_jump_four) {
                     is_jump_four = true;
                     if (findJumpGapPosition(cells, row, col, dir.dr, dir.dc, opponent_color)) |gap_pos| {
                         result.fours.addUnique(gap_pos);
@@ -505,13 +563,13 @@ pub fn detectOpponentThreats(cells: []Cell, opponent_color: Cell) ThreatInfo {
                 }
 
                 // 活三: 両端が空いている3連（跳び四の一部でない）
-                if (!is_jump_four and pattern.count == 3 and pattern.end1 == .empty and pattern.end2 == .empty) {
+                if (!is_jump_four and lut.count == 3 and end1 == .empty and end2 == .empty) {
                     const defense = getOpenThreeDefensePositions(cells, row, col, dir.dr, dir.dc, opponent_color);
                     result.open_threes.addUniqueList(&defense);
                 }
 
                 // 跳び三
-                if (pattern.count < 3) {
+                if (lut.count < 3) {
                     const defense = detectJumpThreePattern(cells, row, col, dir.dr, dir.dc, opponent_color);
                     result.open_threes.addUniqueList(&defense);
                 }
@@ -520,13 +578,14 @@ pub fn detectOpponentThreats(cells: []Cell, opponent_color: Cell) ThreatInfo {
     }
 
     // ミセ手・三三脅威を検出
+    const near_mask_d2 = computeNearMask(computeOccupiedRows(cells), 2);
     for (0..BOARD_SIZE) |r_usize| {
         const row: u8 = @intCast(r_usize);
         for (0..BOARD_SIZE) |c_usize| {
             const col: u8 = @intCast(c_usize);
             const idx = @as(u16, row) * BOARD_SIZE + col;
             if (cells[idx] != .empty) continue;
-            if (!isNearExistingStone(cells, row, col)) continue;
+            if (!isNearFromMask(near_mask_d2, row, col)) continue;
 
             // ミセ手チェック
             if (evaluate.createsFourThree(cells, row, col, opponent_color)) {
@@ -547,20 +606,26 @@ pub fn detectOpponentThreats(cells: []Cell, opponent_color: Cell) ThreatInfo {
 pub fn createsDoubleThree(cells: []Cell, row: u8, col: u8, color: Cell) bool {
     const idx = @as(u16, row) * BOARD_SIZE + col;
     cells[idx] = color;
-    defer cells[idx] = .empty;
+    bitboard.placeStone(row, col, color);
+    defer {
+        cells[idx] = .empty;
+        bitboard.removeStone(row, col);
+    }
 
     var open_three_count: u8 = 0;
 
-    for (DIRECTIONS, 0..) |_, i| {
+    for (0..4) |i| {
         const dir_index = jp.DIRECTION_INDICES[i];
-        const result = board_mod.analyzeDirectionOnCells(cells, row, col, DIRECTIONS[i].dr, DIRECTIONS[i].dc, color);
+        const lut = ll.queryPatternByCell(row, col, i, color);
+        const end1 = lutEnd(lut.end1);
+        const end2 = lutEnd(lut.end2);
 
         // 活三カウント
-        if (result.count == 3 and result.end1 == .empty and result.end2 == .empty and
+        if (lut.count == 3 and end1 == .empty and end2 == .empty and
             patterns.isValidConsecutiveThree(cells, row, col, dir_index, color))
         {
             open_three_count += 1;
-        } else if (result.count != 3 and jp.checkJumpThree(cells, row, col, dir_index, color) and
+        } else if (lut.count != 3 and lut.has_jump_three and
             patterns.isValidJumpThree(cells, row, col, dir_index, color))
         {
             open_three_count += 1;
@@ -577,31 +642,34 @@ pub fn checkWhiteWinningPattern(cells: []Cell, row: u8, col: u8) bool {
     var open_three_count: u8 = 0;
     var four_count: u8 = 0;
 
-    for (DIRECTIONS, 0..) |dir, i| {
+    for (0..4) |i| {
         const dir_index = jp.DIRECTION_INDICES[i];
-        const result = board_mod.analyzeDirectionOnCells(cells, row, col, dir.dr, dir.dc, .white);
+        const lut = ll.queryPatternByCell(row, col, i, .white);
+        // 白なのでオーバーライン補正不要
+        const end1 = lutEnd(lut.end1);
+        const end2 = lutEnd(lut.end2);
 
         // 活三カウント
-        if (result.count == 3 and result.end1 == .empty and result.end2 == .empty and
+        if (lut.count == 3 and end1 == .empty and end2 == .empty and
             patterns.isValidConsecutiveThree(cells, row, col, dir_index, .white))
         {
             open_three_count += 1;
         }
 
         // 四カウント
-        if (result.count == 4 and (result.end1 == .empty or result.end2 == .empty)) {
+        if (lut.count == 4 and (end1 == .empty or end2 == .empty)) {
             four_count += 1;
         }
 
-        // 跳び三
-        if (result.count != 3 and jp.checkJumpThree(cells, row, col, dir_index, .white) and
+        // 跳び三 (LUT版)
+        if (lut.count != 3 and lut.has_jump_three and
             patterns.isValidJumpThree(cells, row, col, dir_index, .white))
         {
             open_three_count += 1;
         }
 
-        // 跳び四
-        if (result.count != 4 and jp.checkJumpFour(cells, row, col, dir_index, .white)) {
+        // 跳び四 (LUT版)
+        if (lut.count != 4 and lut.has_jump_four) {
             four_count += 1;
         }
     }
@@ -618,6 +686,7 @@ test "detectOpponentThreats: 活四検出" {
     cells[7 * BOARD_SIZE + 5] = .white;
     cells[7 * BOARD_SIZE + 6] = .white;
     cells[7 * BOARD_SIZE + 7] = .white;
+    bitboard.initFromCells(&cells);
 
     const result = detectOpponentThreats(&cells, .white);
     try std.testing.expect(result.open_fours.len > 0);
@@ -630,6 +699,75 @@ test "isNearExistingStone" {
     try std.testing.expect(isNearExistingStone(&cells, 7, 9));
     try std.testing.expect(isNearExistingStone(&cells, 5, 5));
     try std.testing.expect(!isNearExistingStone(&cells, 4, 4));
+}
+
+test "computeNearMask distance 2: exhaustive check against naive" {
+    // 複数石を配置して、全空きマスについてビットマスク版とナイーブ版の結果が一致することを確認
+    // 注意: 占有マスは near mask に含まれるが、呼び出し側で cells[idx] != .empty チェック済みのため問題ない
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[3 * BOARD_SIZE + 3] = .black;
+    cells[7 * BOARD_SIZE + 7] = .white;
+    cells[0 * BOARD_SIZE + 0] = .black; // 隅
+    cells[14 * BOARD_SIZE + 14] = .white; // 隅
+    cells[0 * BOARD_SIZE + 14] = .black; // 隅
+    cells[10 * BOARD_SIZE + 5] = .white;
+
+    const near_mask = computeNearMask(computeOccupiedRows(&cells), 2);
+
+    for (0..BOARD_SIZE) |r| {
+        for (0..BOARD_SIZE) |c| {
+            const row: u8 = @intCast(r);
+            const col: u8 = @intCast(c);
+            if (cells[r * BOARD_SIZE + c] != .empty) continue; // 占有マスはスキップ
+            const bitmask_result = isNearFromMask(near_mask, row, col);
+            const naive_result = isNearExistingStoneNaive(&cells, row, col, 2);
+            try std.testing.expectEqual(naive_result, bitmask_result);
+        }
+    }
+}
+
+test "computeNearMask distance 1: exhaustive check against naive" {
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[3 * BOARD_SIZE + 3] = .black;
+    cells[7 * BOARD_SIZE + 7] = .white;
+    cells[0 * BOARD_SIZE + 0] = .black;
+    cells[14 * BOARD_SIZE + 14] = .white;
+    cells[0 * BOARD_SIZE + 14] = .black;
+    cells[10 * BOARD_SIZE + 5] = .white;
+
+    const near_mask = computeNearMask(computeOccupiedRows(&cells), 1);
+
+    for (0..BOARD_SIZE) |r| {
+        for (0..BOARD_SIZE) |c| {
+            const row: u8 = @intCast(r);
+            const col: u8 = @intCast(c);
+            if (cells[r * BOARD_SIZE + c] != .empty) continue;
+            const bitmask_result = isNearFromMask(near_mask, row, col);
+            const naive_result = isNearExistingStoneNaive(&cells, row, col, 1);
+            try std.testing.expectEqual(naive_result, bitmask_result);
+        }
+    }
+}
+
+/// テスト用: ナイーブな近傍チェック（旧実装と同等）
+fn isNearExistingStoneNaive(cells: []const Cell, row: u8, col: u8, comptime distance: i16) bool {
+    const r: i16 = row;
+    const c_val: i16 = col;
+    var dr: i16 = -distance;
+    while (dr <= distance) : (dr += 1) {
+        var dc: i16 = -distance;
+        while (dc <= distance) : (dc += 1) {
+            if (dr == 0 and dc == 0) continue;
+            const nr = r + dr;
+            const nc = c_val + dc;
+            if (board_mod.isValid(nr, nc)) {
+                if (cells[@intCast(@as(u16, @intCast(nr)) * BOARD_SIZE + @as(u16, @intCast(nc)))] != .empty) {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
 }
 
 test "findJumpGapPosition: ●●●・●" {
@@ -684,6 +822,7 @@ test "countThreatDirections basic" {
     cells[7 * BOARD_SIZE + 5] = .white;
     cells[7 * BOARD_SIZE + 6] = .white;
     cells[7 * BOARD_SIZE + 7] = .white;
+    bitboard.initFromCells(&cells);
     const count = countThreatDirections(&cells, 7, 7, .white);
     try std.testing.expect(count >= 1);
 }

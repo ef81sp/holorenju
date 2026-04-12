@@ -1,6 +1,8 @@
+const bitboard = @import("bitboard.zig");
 const board_mod = @import("board.zig");
 const forbidden = @import("forbidden.zig");
 const jp = @import("jump_patterns.zig");
+const ll = @import("line_lookup.zig");
 const scores = @import("scores.zig");
 const std = @import("std");
 
@@ -76,8 +78,8 @@ pub const StonePatternsResult = struct {
     active_direction_count: u8,
 };
 
-/// evaluateStonePatternsLight 相当（跳びパターン込み）
-/// 各方向の連続パターンスコア + 斜めボーナス + 跳びパターンを計算し、
+/// evaluateStonePatternsLight 相当（跳びパターン込み）— LUT版
+/// ビットボード + ll.queryPattern で4方向のパターンを高速取得し、
 /// fourScore, openThreeScore, activeDirectionCount を追跡
 pub fn evaluateStonePatternsLightOnCells(cells: []Cell, row: u8, col: u8, color: Cell) StonePatternsResult {
     var score: i32 = 0;
@@ -85,8 +87,10 @@ pub fn evaluateStonePatternsLightOnCells(cells: []Cell, row: u8, col: u8, color:
     var open_three_score: i32 = 0;
     var active_direction_count: u8 = 0;
 
-    // 各方向の連続パターンとそのタイプを記録
-    var dir_counts: [4]u8 = undefined;
+    const cell_idx = @as(usize, row) * board_mod.BOARD_SIZE + col;
+
+    // 各方向のLUT結果を記録
+    var lut_results: [4]ll.PatternResult = undefined;
     var dir_end1s: [4]EndState = undefined;
     var dir_end2s: [4]EndState = undefined;
 
@@ -96,15 +100,33 @@ pub fn evaluateStonePatternsLightOnCells(cells: []Cell, row: u8, col: u8, color:
     var has_jump_three = false;
     var has_valid_open_three = false;
 
-    // 1st pass: 連続パターン + 跳び四検出
-    for (DIRECTIONS, 0..) |dir, i| {
-        const result = board_mod.analyzeDirectionOnCells(cells, row, col, dir.dr, dir.dc, color);
-        dir_counts[i] = result.count;
-        dir_end1s[i] = result.end1;
-        dir_end2s[i] = result.end2;
+    // 1st pass: LUT queryPattern + 跳び四検出
+    for (0..4) |i| {
+        const info = bitboard.CELL_LINES[cell_idx][i];
+        const result = ll.queryPattern(info.line_index, info.bit_pos, color);
+        lut_results[i] = result;
 
-        const base_score = getPatternScore(result.count, result.end1, result.end2);
-        const pattern_type = getPatternType(result.count, result.end1, result.end2);
+        // LUT の end 値を EndState に変換
+        const end1 = lutEndToEndState(result.end1);
+        const end2 = lutEndToEndState(result.end2);
+
+        // 黒のオーバーライン補正: count==4 かつ空き端の先に黒石があれば blocked 扱い
+        var adj_end1 = end1;
+        var adj_end2 = end2;
+        if (color == .black and result.count == 4) {
+            if (adj_end1 == .empty) {
+                adj_end1 = checkOverlineEnd(cells, row, col, i, true);
+            }
+            if (adj_end2 == .empty) {
+                adj_end2 = checkOverlineEnd(cells, row, col, i, false);
+            }
+        }
+
+        dir_end1s[i] = adj_end1;
+        dir_end2s[i] = adj_end2;
+
+        const base_score = getPatternScore(result.count, adj_end1, adj_end2);
+        const pattern_type = getPatternType(result.count, adj_end1, adj_end2);
 
         if (base_score > 0) {
             active_direction_count += 1;
@@ -123,24 +145,18 @@ pub fn evaluateStonePatternsLightOnCells(cells: []Cell, row: u8, col: u8, color:
             open_three_score += final_score;
         }
 
-        // 跳び四チェック: 連続四がなく跳び四がある場合
-        const dir_index = jp.DIRECTION_INDICES[i];
-        if (result.count != 4 and jp.checkJumpFour(cells, row, col, dir_index, color)) {
+        // 跳び四チェック: 連続四がなく LUT が跳び四を検出
+        if (result.count != 4 and result.has_jump_four) {
             jump_four_dirs[i] = true;
         }
     }
 
     // 2nd pass: 連続三の有効性、跳び四スコア、跳び三
-    for (DIRECTIONS, 0..) |_, i| {
+    for (0..4) |i| {
         const dir_index = jp.DIRECTION_INDICES[i];
-        const count = dir_counts[i];
+        const count = lut_results[i].count;
         const end1 = dir_end1s[i];
         const end2 = dir_end2s[i];
-
-        // 連続四チェック
-        if (count == 4 and (end1 == .empty or end2 == .empty)) {
-            // hasFour は analyzeJumpPatterns 内の判定
-        }
 
         // 連続三の有効性チェック（跳び四方向でなければ）
         if (count == 3 and !jump_four_dirs[i]) {
@@ -156,8 +172,8 @@ pub fn evaluateStonePatternsLightOnCells(cells: []Cell, row: u8, col: u8, color:
             jump_four_count += 1;
         }
 
-        // 跳び三チェック（連続三がない場合のみ）
-        if (count != 3 and jp.checkJumpThree(cells, row, col, dir_index, color)) {
+        // 跳び三チェック: LUT の has_jump_three で事前フィルタ（連続三がない場合のみ）
+        if (count != 3 and lut_results[i].has_jump_three) {
             has_jump_three = true;
             if (isValidJumpThree(cells, row, col, dir_index, color)) {
                 has_valid_open_three = true;
@@ -187,6 +203,46 @@ pub fn evaluateStonePatternsLightOnCells(cells: []Cell, row: u8, col: u8, color:
         .open_three_score = open_three_score,
         .active_direction_count = active_direction_count,
     };
+}
+
+/// LUT の end (0=empty, 1=blocked) を EndState に変換
+/// blocked のうち edge か opponent かを判定
+fn lutEndToEndState(lut_end: u2) EndState {
+    if (lut_end == 0) return .empty;
+    // LUT では edge と opponent を区別しない（both = blocked）
+    // getPatternScore は edge も opponent も同じスコアを返すため、
+    // opponent として扱っても結果は同じ
+    return .opponent;
+}
+
+/// 黒のオーバーライン補正: count==4 の空き端の先に黒石があるかチェック
+fn checkOverlineEnd(cells: []const Cell, row: u8, col: u8, dir_idx: usize, is_positive: bool) EndState {
+    const dir = DIRECTIONS[dir_idx];
+    const dr: i8 = if (is_positive) dir.dr else -dir.dr;
+    const dc: i8 = if (is_positive) dir.dc else -dir.dc;
+
+    // Count consecutive own stones from center in this direction
+    var consecutive: i16 = 0;
+    var r: i16 = @as(i16, row) + @as(i16, dr);
+    var c: i16 = @as(i16, col) + @as(i16, dc);
+    while (r >= 0 and r < board_mod.BOARD_SIZE and c >= 0 and c < board_mod.BOARD_SIZE) {
+        const idx = @as(u16, @intCast(r)) * board_mod.BOARD_SIZE + @as(u16, @intCast(c));
+        if (cells[idx] != .black) break;
+        consecutive += 1;
+        r += @as(i16, dr);
+        c += @as(i16, dc);
+    }
+
+    // The end is at the empty cell. Check 1 further past it for a black stone (overline).
+    const check_r = @as(i16, row) + @as(i16, dr) * (consecutive + 2);
+    const check_c = @as(i16, col) + @as(i16, dc) * (consecutive + 2);
+    if (board_mod.isValid(check_r, check_c)) {
+        const check_idx = @as(u16, @intCast(check_r)) * board_mod.BOARD_SIZE + @as(u16, @intCast(check_c));
+        if (cells[check_idx] == .black) {
+            return .opponent; // Treat as blocked for overline
+        }
+    }
+    return .empty;
 }
 
 /// 連続三が有効（ウソの三でない）かをチェック
