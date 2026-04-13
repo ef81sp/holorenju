@@ -522,19 +522,22 @@ pub fn evaluateMultiThreat(threat_count: u8) i32 {
 }
 
 /// 相手の脅威を検出
-pub fn detectOpponentThreats(cells: []Cell, opponent_color: Cell) ThreatInfo {
+/// 脅威検出コアループ（四/活四/跳び四/活三/跳び三）
+/// comptime use_cells_query: true ならビットボード不要の cells 直接参照版を使用
+fn detectThreatsCore(cells: []const Cell, opponent_color: Cell, comptime use_cells_query: bool) ThreatInfo {
     var result = ThreatInfo.init();
 
-    // 相手の石を全て走査
     for (0..BOARD_SIZE) |r_usize| {
         const row: u8 = @intCast(r_usize);
         for (0..BOARD_SIZE) |c_usize| {
             const col: u8 = @intCast(c_usize);
             if (cells[@as(u16, row) * BOARD_SIZE + col] != opponent_color) continue;
 
-            // 各方向をチェック
             for (DIRECTIONS, 0..) |dir, dir_idx| {
-                const lut = ll.queryPatternByCell(row, col, dir_idx, opponent_color);
+                const lut = if (use_cells_query)
+                    ll.queryPatternFromCells(cells, row, col, dir_idx, opponent_color)
+                else
+                    ll.queryPatternByCell(row, col, dir_idx, opponent_color);
                 const end1 = lutEnd(lut.end1);
                 const end2 = lutEnd(lut.end2);
 
@@ -577,6 +580,12 @@ pub fn detectOpponentThreats(cells: []Cell, opponent_color: Cell) ThreatInfo {
         }
     }
 
+    return result;
+}
+
+pub fn detectOpponentThreats(cells: []Cell, opponent_color: Cell) ThreatInfo {
+    var result = detectThreatsCore(cells, opponent_color, false);
+
     // ミセ手・三三脅威を検出
     const near_mask_d2 = computeNearMask(computeOccupiedRows(cells), 2);
     for (0..BOARD_SIZE) |r_usize| {
@@ -600,6 +609,12 @@ pub fn detectOpponentThreats(cells: []Cell, opponent_color: Cell) ThreatInfo {
     }
 
     return result;
+}
+
+/// 相手の脅威を検出（cells 配列直接参照版、ビットボード不要）
+/// PV 抽出など一時的な石配置でビットボードが未更新の場合に使用
+pub fn detectOpponentThreatsFromCells(cells: []const Cell, opponent_color: Cell) ThreatInfo {
+    return detectThreatsCore(cells, opponent_color, true);
 }
 
 /// 三三チェック（活三2つ以上）
@@ -814,6 +829,64 @@ test "findJumpGapPosition: ●●・●●" {
     const g = gap.?;
     try std.testing.expectEqual(@as(u8, 7), g.row);
     try std.testing.expectEqual(@as(u8, 6), g.col);
+}
+
+test "detectOpponentThreatsFromCells: 活四検出（ビットボード未同期）" {
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    // 白の4連: (7,4),(7,5),(7,6),(7,7) 両端空き
+    cells[7 * BOARD_SIZE + 4] = .white;
+    cells[7 * BOARD_SIZE + 5] = .white;
+    cells[7 * BOARD_SIZE + 6] = .white;
+    cells[7 * BOARD_SIZE + 7] = .white;
+    // ビットボード未同期（initFromCells を呼ばない）
+
+    const result = detectOpponentThreatsFromCells(&cells, .white);
+    try std.testing.expect(result.open_fours.len > 0);
+}
+
+test "detectOpponentThreatsFromCells: 止め四検出" {
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    // 白の止め四: 黒(7,3), 白(7,4..7), 空(7,8)
+    cells[7 * BOARD_SIZE + 3] = .black;
+    cells[7 * BOARD_SIZE + 4] = .white;
+    cells[7 * BOARD_SIZE + 5] = .white;
+    cells[7 * BOARD_SIZE + 6] = .white;
+    cells[7 * BOARD_SIZE + 7] = .white;
+
+    const result = detectOpponentThreatsFromCells(&cells, .white);
+    try std.testing.expect(result.fours.len > 0);
+    try std.testing.expect(result.fours.contains(7, 8));
+}
+
+test "detectOpponentThreatsFromCells: 跳び四検出" {
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    // 白の跳び四: (7,4),(7,5),(7,6),空,(7,8)
+    cells[7 * BOARD_SIZE + 4] = .white;
+    cells[7 * BOARD_SIZE + 5] = .white;
+    cells[7 * BOARD_SIZE + 6] = .white;
+    cells[7 * BOARD_SIZE + 8] = .white;
+
+    const result = detectOpponentThreatsFromCells(&cells, .white);
+    try std.testing.expect(result.fours.len > 0);
+    try std.testing.expect(result.fours.contains(7, 7));
+}
+
+test "detectOpponentThreatsFromCells: ビットボード同期時に detectOpponentThreats と一致" {
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[7 * BOARD_SIZE + 4] = .white;
+    cells[7 * BOARD_SIZE + 5] = .white;
+    cells[7 * BOARD_SIZE + 6] = .white;
+    cells[7 * BOARD_SIZE + 7] = .white;
+    cells[5 * BOARD_SIZE + 5] = .black;
+    bitboard.initFromCells(&cells);
+
+    const result_bb = detectOpponentThreats(&cells, .white);
+    const result_cells = detectOpponentThreatsFromCells(&cells, .white);
+
+    // 四/活四は一致すべき（ミセ/三三は cells 版では省略）
+    try std.testing.expectEqual(result_bb.open_fours.len, result_cells.open_fours.len);
+    try std.testing.expectEqual(result_bb.fours.len, result_cells.fours.len);
+    try std.testing.expectEqual(result_bb.open_threes.len, result_cells.open_threes.len);
 }
 
 test "countThreatDirections basic" {

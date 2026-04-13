@@ -194,17 +194,18 @@ export fn extractPV(best_row: u8, best_col: u8, color: u8, max_len: u8) void {
         const idx = @as(u16, move.row) * board.BOARD_SIZE + move.col;
         if (cells[idx] != .empty) break;
 
-        // 脅威検証: 相手の脅威を無視する手でPVを打ち切り
-        if (!isValidPVMoveZig(cells, move.row, move.col, current_color)) break;
+        // 脅威検証: 相手の脅威を無視する手は防御手に差し替え、防御不可なら打ち切り
+        const validated = validatePVMove(cells, move.row, move.col, current_color) orelse break;
 
-        // PVに追加
-        pv_buffer[1 + pv_len * 2] = move.row;
-        pv_buffer[1 + pv_len * 2 + 1] = move.col;
+        // PVに追加（差し替え済みの手を使用）
+        pv_buffer[1 + pv_len * 2] = validated.row;
+        pv_buffer[1 + pv_len * 2 + 1] = validated.col;
         pv_len += 1;
 
-        // 盤面更新
-        cells[idx] = current_color;
-        current_hash = zobrist.updateHash(current_hash, move.row, move.col, current_color);
+        // 盤面更新（差し替え後の位置を使用）
+        const validated_idx = @as(u16, validated.row) * board.BOARD_SIZE + validated.col;
+        cells[validated_idx] = current_color;
+        current_hash = zobrist.updateHash(current_hash, validated.row, validated.col, current_color);
         current_color = current_color.opposite();
     }
 
@@ -220,34 +221,48 @@ export fn extractPV(best_row: u8, best_col: u8, color: u8, max_len: u8) void {
     }
 }
 
-/// PV手の妥当性チェック（TS版 isValidPVMove の簡易版）
-/// 五連が作れるか、相手の脅威を適切に処理しているかを検証
-fn isValidPVMoveZig(cells: []board.Cell, row: u8, col: u8, color: board.Cell) bool {
+const PVMove = struct { row: u8, col: u8 };
+
+/// PV手の検証と必要に応じた差し替え
+/// 五連が作れるか、相手の脅威を適切に処理しているかを検証。
+/// TT手が脅威を止めない場合、止め四なら防御手に差し替え、防御不可なら null を返す。
+fn validatePVMove(cells: []board.Cell, row: u8, col: u8, color: board.Cell) ?PVMove {
     // 五連が作れるなら常にOK
     cells[@as(u16, row) * board.BOARD_SIZE + col] = color;
     const is_five = forbidden.checkFive(cells, row, col, color);
     cells[@as(u16, row) * board.BOARD_SIZE + col] = .empty;
-    if (is_five) return true;
+    if (is_five) return .{ .row = row, .col = col };
 
     const opponent = color.opposite();
-    const threats = threats_mod.detectOpponentThreats(cells, opponent);
+    const threats = threats_mod.detectOpponentThreatsFromCells(cells, opponent);
 
-    // 相手の活四がある場合: 脅威位置を止めるかチェック
+    // 相手の活四がある場合: 防御不可（打ち切り）
     if (threats.open_fours.len > 0) {
-        return threats.open_fours.contains(row, col);
+        if (threats.open_fours.contains(row, col)) return .{ .row = row, .col = col };
+        return null;
     }
 
-    // 相手の止め四がある場合
+    // 相手の止め四がある場合: TT手が防御していなければ防御手に差し替え
     if (threats.fours.len > 0) {
-        return threats.fours.contains(row, col);
+        if (threats.fours.contains(row, col)) return .{ .row = row, .col = col };
+        // 防御位置が1つなら差し替え（複数四は防御不可）
+        if (threats.fours.len == 1) {
+            const defense = threats.fours.items[0];
+            // 差し替え先が空いていることを確認
+            if (cells[@as(u16, defense.row) * board.BOARD_SIZE + defense.col] == .empty) {
+                return .{ .row = defense.row, .col = defense.col };
+            }
+        }
+        return null;
     }
 
     // 相手の活三がある場合
     if (threats.open_threes.len > 0) {
-        return threats.open_threes.contains(row, col);
+        if (threats.open_threes.contains(row, col)) return .{ .row = row, .col = col };
+        return null;
     }
 
-    return true;
+    return .{ .row = row, .col = col };
 }
 
 // ─── VCF Sequence ──────────────────────────────────────
