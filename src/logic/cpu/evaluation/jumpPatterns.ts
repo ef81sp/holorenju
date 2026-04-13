@@ -201,9 +201,11 @@ export function analyzeJumpPatterns(
       // 跳び四は両端開の形がないので、常に止め四扱い
     }
 
-    // 跳び三をチェック（連続三がない場合のみ）
+    // 跳び三をチェック（連続三がなく、跳び四もない場合のみ）
+    // 跳び四と同方向の跳び三は同一スジの四と三であり、四三を構成しない
     if (
       pattern.count !== 3 &&
+      !jumpFourDirections.has(i) &&
       checkJumpThree(board, row, col, dirIndex, color)
     ) {
       result.hasJumpThree = true;

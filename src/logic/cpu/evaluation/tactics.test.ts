@@ -1468,3 +1468,31 @@ describe("白の制約ライン偽活三 - 棋譜回帰テスト", () => {
     expect(isDoubleMise(board, 9, 5, "white")).toBe(false);
   });
 });
+
+describe("Issue #13: 跳び四+跳び三の同方向重複", () => {
+  // 棋譜: 44手目（白番）でJ13が不正に両ミセと検出される
+  // J13に白を置いた後、ターゲットJ11の縦方向で
+  // 跳び四(J7-J8-gap-J10-J11)と跳び三(J10-J11-gap-J12-J13)が同時検出され偽陽性
+  const RECORD =
+    "H8 H9 I9 I8 G7 F6 G10 G9 F9 H11 H7 F7 F10 G8 I10 H10 K11 J10 F8 K9 I11 I13 H6 E9 F11 F12 I5 J4 G5 H5 I7 J8 J6 J7 K7 L8 F4 E3 G3 H4 I6 K6 L5 K5 L6 I4 K4 G6 J3 E8";
+
+  it("J11は四三ではない（縦方向の跳び四と跳び三が同一スジ）", () => {
+    const { board } = createBoardFromRecord(RECORD, 43);
+    board[2]![9] = "white"; // J13
+    expect(createsFourThree(board, 4, 9, "white")).toBe(false);
+    board[2]![9] = null;
+  });
+
+  it("J13は白の両ミセではない", () => {
+    const { board } = createBoardFromRecord(RECORD, 43);
+    board[2]![9] = "white";
+    expect(isDoubleMise(board, 2, 9, "white")).toBe(false);
+    board[2]![9] = null;
+  });
+
+  it("findDoubleMiseMovesがJ13を返さない", () => {
+    const { board } = createBoardFromRecord(RECORD, 43);
+    const moves = findDoubleMiseMoves(board, "white");
+    expect(moves.some((m) => m.row === 2 && m.col === 9)).toBe(false);
+  });
+});
