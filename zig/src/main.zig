@@ -230,7 +230,7 @@ fn isValidPVMoveZig(cells: []board.Cell, row: u8, col: u8, color: board.Cell) bo
     if (is_five) return true;
 
     const opponent = color.opposite();
-    const threats = threats_mod.detectOpponentThreats(cells, opponent);
+    const threats = threats_mod.detectOpponentThreatsFromCells(cells, opponent);
 
     // 相手の活四がある場合: 脅威位置を止めるかチェック
     if (threats.open_fours.len > 0) {
