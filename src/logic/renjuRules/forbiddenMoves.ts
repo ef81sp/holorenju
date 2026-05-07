@@ -18,6 +18,17 @@ import {
 } from "./patterns";
 
 /**
+ * 四四判定用の4方向ベクトル（縦, 横, 斜め↘, 斜め↙）
+ * DIRECTION_PAIRS の各ペアの先頭方向に対応
+ */
+const FOUR_DIRECTION_VECTORS: readonly (readonly [number, number])[] = [
+  [1, 0], // 縦
+  [0, 1], // 横
+  [1, 1], // 斜め↘
+  [1, -1], // 斜め↙
+];
+
+/**
  * 禁手判定の再帰的コンテキスト
  * - inProgress: 現在判定中の点のSet（循環参照検出用）
  * - cache: 計算済みの禁手判定結果のキャッシュ（ローカル）
@@ -51,12 +62,6 @@ interface ThreeInfo {
   directionIndex: number;
   type: "consecutive" | "jump";
   straightFourPoints: Position[];
-}
-
-/** 四の情報 */
-interface FourInfo {
-  directionIndex: number;
-  type: "consecutive" | "jump";
 }
 
 /**
@@ -328,33 +333,130 @@ function checkForbiddenMoveInternal(
 }
 
 /**
- * 四四をチェック（2つ以上の四ができるか）
- * 連続四と飛び四の両方をカウント
- * @returns 四四の禁じ手に該当する場合true
+ * 指定方向の「異なる4石セットの真の四」を数える
+ *
+ * 配置点 (row, col) を含む 5-cell ウィンドウを 5個（start offset = -4..0）列挙し、
+ * 各ウィンドウが「自色4石 + 空き1マス、相手石・盤外なし」を満たすかチェック。
+ * 該当ウィンドウについて:
+ * - 4石の位置を bitmask 化して、同じ4石セットの重複を排除
+ * - 完成形が 5石ちょうど（長連=overline にならない）かチェック
+ *   完成後の連を [windowStart, windowStart+4] とし、windowStart-1 / windowStart+5 が
+ *   自色でないことを要請
+ *
+ * 既存の `checkOpenPattern.four` / `checkJumpFour` は方向ごとに boolean しか返さず、
+ * 同方向に4石セットが異なる複数の四（飛び四×2 や 連続四＋飛び四）を区別できないため
+ * ここでは独自に 5-cell ウィンドウ列挙する（Issue #19）。
+ *
+ * 仕様 SSoT: zig/src/forbidden.zig の countDistinctFoursInDirection と同期させること。
+ *
+ * @returns 真の四として成立する異なる4石セットの数
  */
-function checkDoubleFour(board: BoardState, row: number, col: number): boolean {
-  const fours: FourInfo[] = [];
+/* eslint-disable no-bitwise -- 4石セットの bitmask 表現に必要 */
+function countDistinctFoursInDirection(
+  board: BoardState,
+  row: number,
+  col: number,
+  dr: number,
+  dc: number,
+): number {
+  // 配置点を含む 5-cell window は最大5個 (start offset = -4..0)。
+  // 線形探索で dedupe（最大5 entries なので Map のアロケーション不要）。
+  // 同じ stone set 由来の複数 window がある場合、いずれかが real なら真の四扱い。
+  const masks: number[] = [];
+  const isReals: boolean[] = [];
 
-  for (let i = 0; i < 4; i++) {
-    const pair = DIRECTION_PAIRS[i];
-    const dir1Index = pair?.[0];
-    if (dir1Index === undefined) {
+  for (let start = -4; start <= 0; start++) {
+    let stoneMask = 0;
+    let stoneCount = 0;
+    let emptyCount = 0;
+    let windowInBounds = true;
+
+    for (let i = 0; i < 5; i++) {
+      const offset = start + i;
+      const r = row + offset * dr;
+      const c = col + offset * dc;
+      if (r < 0 || r >= 15 || c < 0 || c >= 15) {
+        windowInBounds = false;
+        break;
+      }
+      const cell = offset === 0 ? "black" : (board[r]?.[c] ?? null);
+      if (cell === "black") {
+        // bit (offset+4) で stone 位置を表現（offset ∈ [-4, +4] → bit 0..8 = 9bit）
+        stoneMask |= 1 << (offset + 4);
+        stoneCount++;
+      } else if (cell === null) {
+        emptyCount++;
+      } else {
+        // 相手石は四四を構成しないので即除外
+        windowInBounds = false;
+        break;
+      }
+    }
+
+    if (!windowInBounds || stoneCount !== 4 || emptyCount !== 1) {
       continue;
     }
 
-    // 連続四をチェック
-    const pattern = checkOpenPattern(board, row, col, dir1Index, "black");
-    if (pattern.four) {
-      fours.push({ directionIndex: dir1Index, type: "consecutive" });
-    }
+    // 完成形の長連チェック: 完成後の5石は [start, start+4]、
+    // 隣接マス (start-1, start+5) が黒なら長連 (ウソの四)
+    const beforeR = row + (start - 1) * dr;
+    const beforeC = col + (start - 1) * dc;
+    const afterR = row + (start + 5) * dr;
+    const afterC = col + (start + 5) * dc;
+    const beforeIsBlack =
+      beforeR >= 0 &&
+      beforeR < 15 &&
+      beforeC >= 0 &&
+      beforeC < 15 &&
+      (board[beforeR]?.[beforeC] ?? null) === "black";
+    const afterIsBlack =
+      afterR >= 0 &&
+      afterR < 15 &&
+      afterC >= 0 &&
+      afterC < 15 &&
+      (board[afterR]?.[afterC] ?? null) === "black";
+    const isReal = !beforeIsBlack && !afterIsBlack;
 
-    // 飛び四をチェック（連続四がない場合のみ）
-    if (!pattern.four && checkJumpFour(board, row, col, dir1Index, "black")) {
-      fours.push({ directionIndex: dir1Index, type: "jump" });
+    let foundIdx = -1;
+    for (let k = 0; k < masks.length; k++) {
+      if (masks[k] === stoneMask) {
+        foundIdx = k;
+        break;
+      }
+    }
+    if (foundIdx === -1) {
+      masks.push(stoneMask);
+      isReals.push(isReal);
+    } else if (isReal && !isReals[foundIdx]) {
+      isReals[foundIdx] = true;
     }
   }
 
-  return fours.length >= 2;
+  let realCount = 0;
+  for (const r of isReals) {
+    if (r) {
+      realCount++;
+    }
+  }
+  return realCount;
+}
+/* eslint-enable no-bitwise */
+
+/**
+ * 四四をチェック（2つ以上の真の四ができるか）
+ * 同方向に4石セットが異なる複数の四が成立する場合もそれぞれ別個にカウントする。
+ * 連続四・飛び四を区別せず、5-cell ウィンドウ列挙で統一的に判定する。
+ * @returns 四四の禁じ手に該当する場合true
+ */
+function checkDoubleFour(board: BoardState, row: number, col: number): boolean {
+  let total = 0;
+  for (const [dr, dc] of FOUR_DIRECTION_VECTORS) {
+    total += countDistinctFoursInDirection(board, row, col, dr, dc);
+    if (total >= 2) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /**
