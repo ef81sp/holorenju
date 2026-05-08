@@ -756,6 +756,48 @@ describe("飛び四の検出", () => {
     expect(result.isForbidden).toBe(true);
     expect(result.type).toBe("double-four");
   });
+
+  // 連続四(XXXX)と同方向の飛び四(XXX_X)の片方のみが「真の四」(他方は overline)
+  it("XXXX_X 配置（連続四＋飛び四同方向）は真の四1つ＋ウソの四1つ → 四四ではない", () => {
+    const board = createEmptyBoard();
+    // row=7, cols 4,5,6 に黒、col 7 に置く、col 9 に黒（col 8 は空き）
+    // 配置後: 0(空き) 4(B) 5(B) 6(B) 7(B*placed) 8(空き) 9(B)
+    //   - 連続四 {4,5,6,7}: gap=3 で完成 → 5石(3..7) 真の四
+    //                       gap=8 で完成 → 5石(4..8) だが col 9 が同色 → 長連
+    //                       少なくとも1つ真の完成があるので真の四
+    //   - 飛び四 {5,6,7,9}: gap=8 で完成 → 5石(5..9) だが col 4 が同色 → 長連
+    //                       他に completion なし → ウソの四
+    // 結果: 真の四は1つだけ → 四四ではない
+    board[7][4] = "black";
+    board[7][5] = "black";
+    board[7][6] = "black";
+    board[7][9] = "black";
+
+    const result = checkForbiddenMove(board, 7, 7);
+    expect(result.isForbidden).toBe(false);
+  });
+
+  // Issue #19 リグレッション: 同一方向に2つの異なる飛び四ができる
+  it("同方向の2つの飛び四（D_FGH と FGH_J）で四四禁になる", () => {
+    const board = createEmptyBoard();
+    // 横方向 row=5 に D, F, H, J を黒、E, I は空き、G に置く
+    // 配置後: ●・●*●・● → 4石セット {D,F,G,H} と {F,G,H,J} の2つの飛び四
+    // (※座標は内部表現: G11=(row=4,col=6), F10=(row=5,col=5), G10=(row=5,col=6) ...
+    //   ここでは簡略化のため row=5 で再現)
+    board[5][3] = "black"; // D
+    board[5][5] = "black"; // F
+    // col=6 (G) が置く位置
+    board[5][7] = "black"; // H
+    board[5][9] = "black"; // J
+
+    // (5,6) に置くと、行 row=5 だけで:
+    //   - 飛び四 D・FGH (gap=E10 相当)
+    //   - 飛び四 FGH・J (gap=I10 相当)
+    // 2つの異なる4石セットが同時にできる → 四四禁
+    const result = checkForbiddenMove(board, 5, 6);
+    expect(result.isForbidden).toBe(true);
+    expect(result.type).toBe("double-four");
+  });
 });
 
 describe("recognizePattern（パターン認識）", () => {
