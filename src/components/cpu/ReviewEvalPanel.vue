@@ -2,28 +2,19 @@
 /**
  * 振り返り評価結果パネル
  *
- * 現在表示中の手の評価（スコア・順位・候補手リスト）を表示。
+ * 「結論＋スコア」「候補手」「最善の進行＋分岐」の 3 セクション構成。
+ * 候補手・進行手のホバーで盤面に想定石をプレビュー、進行はタブと
+ * 「全表示／1つ進む／リセット」ボタンで明示的に操作する。
  */
 
 import { computed, ref, watch } from "vue";
 
-import type {
-  EvaluatedMove,
-  ForcedWinBranch,
-  ReviewCandidate,
-} from "@/types/review";
+import type { EvaluatedMove, ReviewCandidate } from "@/types/review";
 import type { Position } from "@/types/game";
 import { CPU_WIN_LABELS, SHORT_LABELS } from "@/logic/forcedTypeLabels";
 import { formatMove } from "@/logic/gameRecordParser";
 import { getQualityLabel, getQualityColor } from "@/logic/reviewLogic";
-import { PATTERN_SCORES } from "@/logic/cpu/evaluation/patternScores";
-import ReviewEvalHelpDialog from "./ReviewEvalHelpDialog.vue";
-import {
-  getLeafBreakdownItems,
-  formatScore as formatScoreUtil,
-  patternLabels,
-  type LeafBreakdownItem,
-} from "@/logic/cpu/evaluation/breakdownUtils";
+import { formatScore as formatScoreUtil } from "@/logic/cpu/evaluation/breakdownUtils";
 
 const props = defineProps<{
   /** 現在の手の評価データ */
@@ -48,35 +39,11 @@ const emit = defineEmits<{
   leavePvMove: [];
 }>();
 
-/** クリック固定されたPV手 */
-const pinnedPv = ref<{ line: "best" | "played"; index: number } | null>(null);
-
-// 手数変更時にリセット
-watch(
-  () => props.moveIndex,
-  () => {
-    pinnedPv.value = null;
-  },
-);
-
 const formatScore = formatScoreUtil;
 
-/** 実際に打った手の順位（候補手の中で何位か、上位5位内のみ） */
-const playedRank = computed<number | "unranked" | null>(() => {
-  const eval_ = props.evaluation;
-  if (!eval_) {
-    return null;
-  }
-  const idx = eval_.candidates.findIndex(
-    (c) =>
-      c.position.row === eval_.position.row &&
-      c.position.col === eval_.position.col,
-  );
-  if (idx < 0) {
-    return null;
-  }
-  return idx < 5 ? idx + 1 : "unranked";
-});
+// ────────────────────────────────────────────────────────────────
+// Verdict / Score
+// ────────────────────────────────────────────────────────────────
 
 /** 品質ラベルの色 */
 const qualityColor = computed(() => {
@@ -100,7 +67,6 @@ const forcedWinLabel = computed(() => {
   if (!type) {
     return null;
   }
-  // 両ミセ見逃し時は missedDoubleMiseLabel に委譲（重複バッジを防止）
   if (type === "double-mise") {
     const missed = props.evaluation?.missedDoubleMise;
     return missed && missed.length > 0 ? null : SHORT_LABELS[type];
@@ -140,6 +106,15 @@ const moveCoord = computed(() => {
   return "";
 });
 
+/** 着手側が黒か（手番バッジ色用） */
+const isBlackMove = computed(
+  () => props.moveIndex > 0 && props.moveIndex % 2 === 1,
+);
+
+// ────────────────────────────────────────────────────────────────
+// Candidates
+// ────────────────────────────────────────────────────────────────
+
 /** 最善手の候補データ */
 const bestCandidate = computed<ReviewCandidate | null>(() => {
   const eval_ = props.evaluation;
@@ -157,6 +132,117 @@ const bestCandidate = computed<ReviewCandidate | null>(() => {
   );
 });
 
+interface CandidateView {
+  rank: number;
+  position: Position;
+  coord: string;
+  /** searchScore を最善との差分として表示（負値 / ±0） */
+  delta: number;
+  kind: "best" | "actual" | "alt";
+  isFukumi: boolean;
+  fukumiDepth?: number;
+  opponentForcedWinShort?: string;
+}
+
+const candidateViews = computed<CandidateView[]>(() => {
+  const eval_ = props.evaluation;
+  if (!eval_ || eval_.candidates.length === 0) {
+    return [];
+  }
+  const bestSearchScore =
+    bestCandidate.value?.searchScore ?? eval_.candidates[0]?.searchScore ?? 0;
+  return eval_.candidates.map((c, idx) => {
+    const isBest =
+      c.position.row === eval_.bestMove.row &&
+      c.position.col === eval_.bestMove.col;
+    const isPlayed =
+      c.position.row === eval_.position.row &&
+      c.position.col === eval_.position.col;
+    let kind: "best" | "actual" | "alt" = "alt";
+    if (isBest) {
+      kind = "best";
+    } else if (isPlayed) {
+      kind = "actual";
+    }
+    return {
+      rank: idx + 1,
+      position: c.position,
+      coord: formatMove(c.position),
+      delta: c.searchScore - bestSearchScore,
+      kind,
+      isFukumi: c.isFukumi ?? false,
+      fukumiDepth: c.fukumiDepth,
+      opponentForcedWinShort: c.opponentForcedWin
+        ? SHORT_LABELS[c.opponentForcedWin]
+        : undefined,
+    };
+  });
+});
+
+function formatDelta(delta: number): string {
+  if (delta === 0) {
+    return "±0";
+  }
+  return delta.toLocaleString("en");
+}
+
+function handleCandidateEnter(position: Position): void {
+  emit("hoverCandidate", position);
+}
+
+function handleCandidateLeave(): void {
+  emit("leaveCandidate");
+}
+
+// ────────────────────────────────────────────────────────────────
+// Best line / Branches → tabs
+// ────────────────────────────────────────────────────────────────
+
+interface PVDisplayItem {
+  isSelf: boolean;
+  position: Position;
+  coord: string;
+  /** 対局全体での手番（Verdict の moveIndex を起点とする1始まり） */
+  moveNum: number;
+}
+
+function buildPV(
+  candidate: ReviewCandidate,
+  startMoveIndex: number,
+  selfFirst: boolean,
+): PVDisplayItem[] {
+  if (
+    !candidate.principalVariation ||
+    candidate.principalVariation.length === 0
+  ) {
+    return [];
+  }
+  const items: PVDisplayItem[] = [];
+  for (let i = 0; i < candidate.principalVariation.length; i++) {
+    const pos = candidate.principalVariation[i];
+    if (!pos) {
+      break;
+    }
+    items.push({
+      isSelf: selfFirst ? i % 2 === 0 : i % 2 !== 0,
+      position: pos,
+      coord: formatMove(pos),
+      moveNum: startMoveIndex + i,
+    });
+  }
+  return items;
+}
+
+/** 最善手の PV */
+const bestPV = computed<PVDisplayItem[]>(() => {
+  const eval_ = props.evaluation;
+  const best = bestCandidate.value;
+  if (!eval_ || !best) {
+    return [];
+  }
+  return buildPV(best, props.moveIndex, true);
+});
+
 /** 実際の手の候補データ */
 const playedCandidate = computed<ReviewCandidate | null>(() => {
   const eval_ = props.evaluation;
@@ -172,514 +258,514 @@ const playedCandidate = computed<ReviewCandidate | null>(() => {
   );
 });
 
-/** 末端評価の差分項目 */
-interface LeafDiffItem {
-  key: string;
-  label: string;
-  bestValue: number;
-  playedValue: number;
-  category: string;
-}
-
-/**
- * 末端評価の差分を計算（差がある項目のみ）
- */
-function diffLeafItems(
-  bestItems: LeafBreakdownItem[],
-  playedItems: LeafBreakdownItem[],
-  category: string,
-): LeafDiffItem[] {
-  const allKeys = new Set([
-    ...bestItems.map((i) => i.key),
-    ...playedItems.map((i) => i.key),
-  ]);
-  const result: LeafDiffItem[] = [];
-  for (const key of allKeys) {
-    const bestItem = bestItems.find((i) => i.key === key);
-    const playedItem = playedItems.find((i) => i.key === key);
-    const bestValue = bestItem?.score ?? 0;
-    const playedValue = playedItem?.score ?? 0;
-    if (bestValue !== playedValue) {
-      result.push({
-        key,
-        label: patternLabels[key] ?? key,
-        bestValue,
-        playedValue,
-        category,
-      });
-    }
-  }
-  return result;
-}
-
-/** カテゴリごとにグループ化した末端差分 */
-interface LeafDiffGroup {
-  category: string;
-  items: LeafDiffItem[];
-  bestTotal: number;
-  playedTotal: number;
-}
-
-function sumGroup(items: LeafDiffItem[]): {
-  bestTotal: number;
-  playedTotal: number;
-} {
-  let bestTotal = 0;
-  let playedTotal = 0;
-  for (const item of items) {
-    bestTotal += item.bestValue;
-    playedTotal += item.playedValue;
-  }
-  return { bestTotal, playedTotal };
-}
-
-/** 末端評価の差分をカテゴリ別にグループ化 */
-const leafEvalDiffGroups = computed<LeafDiffGroup[]>(() => {
+/** 実際の手の PV（被詰がある場合は省略） */
+const playedPV = computed<PVDisplayItem[]>(() => {
   const eval_ = props.evaluation;
-  if (!eval_ || eval_.quality === "excellent") {
+  if (!eval_) {
     return [];
   }
-  const best = bestCandidate.value;
+  if (eval_.forcedLossSequence && eval_.forcedLossSequence.length > 0) {
+    return [];
+  }
   const played = playedCandidate.value;
-  if (!best?.leafEvaluation || !played?.leafEvaluation) {
+  if (!played) {
     return [];
   }
-
-  const groups: LeafDiffGroup[] = [];
-  const myItems = diffLeafItems(
-    getLeafBreakdownItems(best.leafEvaluation.myBreakdown),
-    getLeafBreakdownItems(played.leafEvaluation.myBreakdown),
-    "自分",
-  );
-  if (myItems.length > 0) {
-    groups.push({ category: "自分", items: myItems, ...sumGroup(myItems) });
-  }
-  const oppItems = diffLeafItems(
-    getLeafBreakdownItems(best.leafEvaluation.opponentBreakdown),
-    getLeafBreakdownItems(played.leafEvaluation.opponentBreakdown),
-    "相手",
-  );
-  if (oppItems.length > 0) {
-    groups.push({
-      category: "相手",
-      items: oppItems,
-      ...sumGroup(oppItems),
-    });
-  }
-  return groups;
+  return buildPV(played, props.moveIndex, true);
 });
 
-/** 差引（自分 - 相手） */
-const leafEvalNet = computed<{
-  best: number;
-  played: number;
-} | null>(() => {
-  const groups = leafEvalDiffGroups.value;
-  if (groups.length === 0) {
-    return null;
-  }
-  const my = groups.find((g) => g.category === "自分");
-  const opp = groups.find((g) => g.category === "相手");
-  return {
-    best: (my?.bestTotal ?? 0) - (opp?.bestTotal ?? 0),
-    played: (my?.playedTotal ?? 0) - (opp?.playedTotal ?? 0),
-  };
-});
-
-/** PV表示アイテム */
-interface PVDisplayItem {
-  text: string;
-  isSelf: boolean;
-  position: Position;
-}
-
-/** 読み筋データ */
-interface PVLine {
-  label: string;
-  searchScore: number;
-  items: PVDisplayItem[];
-}
-
-/** 候補手からPVデータを構築 */
-function buildPVLine(
-  candidate: ReviewCandidate,
-  label: string,
-  moveIndex: number,
-): PVLine | null {
-  if (
-    !candidate.principalVariation ||
-    candidate.principalVariation.length <= 1
-  ) {
-    return null;
-  }
-
-  const items: PVDisplayItem[] = [];
-  for (let i = 0; i < candidate.principalVariation.length; i++) {
-    const pos = candidate.principalVariation[i];
-    if (!pos) {
-      break;
-    }
-    items.push({
-      text: `${moveIndex + i}.${formatMove(pos)}`,
-      isSelf: i % 2 === 0,
-      position: pos,
-    });
-  }
-
-  return { label, searchScore: candidate.searchScore, items };
-}
-
-/** 最善手のPV+推移 */
-const bestPVLine = computed<PVLine | null>(() => {
-  const eval_ = props.evaluation;
-  const best = bestCandidate.value;
-  if (!eval_ || !best) {
-    return null;
-  }
-  return buildPVLine(
-    best,
-    `最善 ${formatMove(eval_.bestMove)}`,
-    props.moveIndex,
-  );
-});
-
-/** 分岐表示データ */
-interface BranchLine {
-  key: string;
-  label: string;
-  prefix: string;
-  /** メインPVの分岐点前 + 防御手（ホバー時に先頭に付与） */
-  prefixItems: PVDisplayItem[];
-  items: PVDisplayItem[];
-}
-
-const branchLines = computed<BranchLine[]>(() => {
-  const eval_ = props.evaluation;
-  if (!eval_?.forcedWinBranches || eval_.forcedWinBranches.length === 0) {
-    return [];
-  }
-  const bestPVItems = bestPVLine.value?.items;
-  if (!bestPVItems) {
-    return [];
-  }
-
-  return eval_.forcedWinBranches.map(
-    (branch: ForcedWinBranch, branchIdx: number) => {
-      // 防御手の手番号（PVの defenseIndex 位置）
-      const moveNum = props.moveIndex + branch.defenseIndex;
-      const label = "の場合:";
-      const prefix =
-        branchIdx === (eval_.forcedWinBranches?.length ?? 0) - 1 ? "└" : "├";
-
-      // メインPVの分岐点前の手（ホバー時に盤面プレビュー用）
-      const prefixItems: PVDisplayItem[] = bestPVItems.slice(
-        0,
-        branch.defenseIndex,
-      );
-
-      // 防御手自体 + 継続手順
-      const defenseItem: PVDisplayItem = {
-        text: `${moveNum}.${formatMove(branch.defenseMove)}`,
-        isSelf: false,
-        position: branch.defenseMove,
-      };
-      const items: PVDisplayItem[] = [defenseItem];
-      for (let i = 0; i < branch.continuation.length; i++) {
-        const pos = branch.continuation[i];
-        if (!pos) {
-          break;
-        }
-        const num = moveNum + 1 + i;
-        items.push({
-          text: `${num}.${formatMove(pos)}`,
-          isSelf: i % 2 === 0, // 攻撃手=自分
-          position: pos,
-        });
-      }
-
-      return {
-        key: `branch-${branchIdx}`,
-        label,
-        prefix,
-        prefixItems,
-        items,
-      };
-    },
-  );
-});
-
-/** 実際の手のPV+推移 */
-const playedPVLine = computed<PVLine | null>(() => {
-  const eval_ = props.evaluation;
-  const played = playedCandidate.value;
-  if (!eval_ || !played) {
-    return null;
-  }
-  return buildPVLine(
-    played,
-    `実際 ${formatMove(eval_.position)}`,
-    props.moveIndex,
-  );
-});
-
-/** 負け確定手順の読み筋（相手視点） */
-const forcedLossPVLine = computed<PVLine | null>(() => {
+/** 被詰手順（プレイヤー着手 + 相手の必勝手順） */
+const forcedLossPV = computed<PVDisplayItem[]>(() => {
   const eval_ = props.evaluation;
   if (!eval_?.forcedLossSequence || eval_.forcedLossSequence.length === 0) {
-    return null;
+    return [];
   }
-
-  const label = forcedLossLabel.value ?? "被必勝";
-  const items: PVDisplayItem[] = [];
-
-  // プレイヤーの着手を先頭に含める
-  // → 'played' モードで盤面ラベル番号(currentMoveIndex + i)と整合させる
-  items.push({
-    text: `${props.moveIndex}.${formatMove(eval_.position)}`,
-    isSelf: true,
-    position: eval_.position,
-  });
-
-  // 相手の必勝手順（着手後の局面から算出）
-  let moveNum = props.moveIndex + 1;
+  const items: PVDisplayItem[] = [
+    {
+      isSelf: true,
+      position: eval_.position,
+      coord: formatMove(eval_.position),
+      moveNum: props.moveIndex,
+    },
+  ];
+  let n = props.moveIndex + 1;
   for (let i = 0; i < eval_.forcedLossSequence.length; i++) {
     const pos = eval_.forcedLossSequence[i];
     if (!pos) {
       break;
     }
     items.push({
-      text: `${moveNum}.${formatMove(pos)}`,
-      // 偶数=相手（攻撃側）、奇数=自分（防御側）
       isSelf: i % 2 !== 0,
       position: pos,
+      coord: formatMove(pos),
+      moveNum: n,
     });
-    moveNum++;
+    n++;
   }
-
-  return { label, searchScore: 0, items };
+  return items;
 });
 
-/** 被追詰の分岐手順（Phase 3 遡及で構築） */
-const forcedLossBranchLines = computed<BranchLine[]>(() => {
+/** 進行ツリー上の分岐（同一深度に複数の代替手が存在する場合） */
+interface InlineBranch {
+  id: string;
+  /** basePV のどのインデックスで分岐するか（このインデックスの best 手の代替） */
+  pvIdx: number;
+  /** 代替手（このタブの emitType により isSelf の意味が決まる） */
+  defenseMove: PVDisplayItem;
+  /** defenseMove の後に続く手列（isSelf, moveNum 付き） */
+  continuation: PVDisplayItem[];
+}
+
+interface ProgressionTab {
+  id: string;
+  label: string;
+  sub?: string;
+  emitType: "best" | "played";
+  basePV: PVDisplayItem[];
+  branches: InlineBranch[];
+}
+
+const topTabs = computed<ProgressionTab[]>(() => {
   const eval_ = props.evaluation;
-  if (!eval_?.forcedLossBranches || eval_.forcedLossBranches.length === 0) {
+  if (!eval_) {
     return [];
   }
-  const mainItems = forcedLossPVLine.value?.items;
-  if (!mainItems) {
-    return [];
-  }
+  const result: ProgressionTab[] = [];
 
-  return eval_.forcedLossBranches.map(
-    (branch: ForcedWinBranch, branchIdx: number) => {
-      const moveNum = props.moveIndex + branch.defenseIndex + 1;
-      const label = "の場合:";
-      const prefix =
-        branchIdx === (eval_.forcedLossBranches?.length ?? 0) - 1 ? "└" : "├";
-
-      // メイン手順の分岐点前（ホバー時に盤面プレビュー用）
-      const prefixItems: PVDisplayItem[] = mainItems.slice(
-        0,
-        branch.defenseIndex + 1, // +1: 着手自体を含む
-      );
-
-      // 防御手 + 継続手順
-      const defenseItem: PVDisplayItem = {
-        text: `${moveNum}.${formatMove(branch.defenseMove)}`,
-        isSelf: true, // 防御側 = プレイヤー
-        position: branch.defenseMove,
-      };
-      const items: PVDisplayItem[] = [defenseItem];
-      for (let i = 0; i < branch.continuation.length; i++) {
-        const pos = branch.continuation[i];
+  // 最善 + forcedWinBranches
+  if (bestPV.value.length > 0) {
+    const branches: InlineBranch[] = [];
+    const winBranches = eval_.forcedWinBranches ?? [];
+    for (let idx = 0; idx < winBranches.length; idx++) {
+      const branch = winBranches[idx];
+      if (!branch) {
+        continue;
+      }
+      const moveNum = props.moveIndex + branch.defenseIndex;
+      const continuation: PVDisplayItem[] = [];
+      for (let j = 0; j < branch.continuation.length; j++) {
+        const pos = branch.continuation[j];
         if (!pos) {
           break;
         }
-        items.push({
-          text: `${moveNum + 1 + i}.${formatMove(pos)}`,
-          isSelf: i % 2 !== 0, // 偶数=相手の攻撃、奇数=自分の防御
+        continuation.push({
+          isSelf: j % 2 === 0,
           position: pos,
+          coord: formatMove(pos),
+          moveNum: moveNum + 1 + j,
         });
       }
-
-      return {
-        key: `loss-branch-${branchIdx}`,
-        label,
-        prefix,
-        prefixItems,
-        items,
-      };
-    },
-  );
-});
-
-/** 被追詰/被四追いがあり最善手で回避可能か */
-const canAvoidForcedLoss = computed(() => {
-  const eval_ = props.evaluation;
-  if (!eval_?.forcedLossType) {
-    return false;
+      branches.push({
+        id: `win-${idx}`,
+        pvIdx: branch.defenseIndex,
+        defenseMove: {
+          isSelf: false,
+          position: branch.defenseMove,
+          coord: formatMove(branch.defenseMove),
+          moveNum,
+        },
+        continuation,
+      });
+    }
+    result.push({
+      id: "best",
+      label: "最善",
+      sub: formatMove(eval_.bestMove),
+      emitType: "best",
+      basePV: bestPV.value,
+      branches,
+    });
   }
-  // 最善手のスコアが被追詰でない（相手のFIVEに近くない）なら回避可能
-  return eval_.bestScore > -(PATTERN_SCORES.FIVE - 10000);
+
+  // 実際（被詰がない場合のみ・分岐なし）
+  if (playedPV.value.length > 0) {
+    result.push({
+      id: "played",
+      label: "実際",
+      sub: formatMove(eval_.position),
+      emitType: "played",
+      basePV: playedPV.value,
+      branches: [],
+    });
+  }
+
+  // 被詰 + forcedLossBranches
+  if (forcedLossPV.value.length > 0) {
+    const branches: InlineBranch[] = [];
+    const lossBranches = eval_.forcedLossBranches ?? [];
+    for (let idx = 0; idx < lossBranches.length; idx++) {
+      const branch = lossBranches[idx];
+      if (!branch) {
+        continue;
+      }
+      const moveNum = props.moveIndex + branch.defenseIndex + 1;
+      const continuation: PVDisplayItem[] = [];
+      for (let j = 0; j < branch.continuation.length; j++) {
+        const pos = branch.continuation[j];
+        if (!pos) {
+          break;
+        }
+        continuation.push({
+          isSelf: j % 2 !== 0,
+          position: pos,
+          coord: formatMove(pos),
+          moveNum: moveNum + 1 + j,
+        });
+      }
+      branches.push({
+        id: `loss-${idx}`,
+        // forcedLossPV[0] = プレイヤーの着手なので、forcedLossSequence の index は basePV では +1 される
+        pvIdx: branch.defenseIndex + 1,
+        defenseMove: {
+          isSelf: true,
+          position: branch.defenseMove,
+          coord: formatMove(branch.defenseMove),
+          moveNum,
+        },
+        continuation,
+      });
+    }
+    result.push({
+      id: "loss",
+      label: forcedLossLabel.value ?? "被詰",
+      sub: formatMove(eval_.position),
+      emitType: "played",
+      basePV: forcedLossPV.value,
+      branches,
+    });
+  }
+
+  return result;
 });
 
-/** 被追詰時は「実際」PVを省略し、被追詰手順を優先表示 */
-const effectivePlayedPVLine = computed<PVLine | null>(() => {
-  if (forcedLossPVLine.value) {
-    return null;
-  } // 被追詰表示があれば「実際」は省略
-  return playedPVLine.value;
-});
+// ────────────────────────────────────────────────────────────────
+// Tab / row state
+// ────────────────────────────────────────────────────────────────
 
-/** 内訳比較表示が必要か */
-const showBreakdown = computed(
-  () =>
-    leafEvalDiffGroups.value.length > 0 ||
-    bestPVLine.value !== null ||
-    effectivePlayedPVLine.value !== null ||
-    forcedLossPVLine.value !== null,
+const activeTabId = ref<string | null>(null);
+const step = ref(0);
+const showAll = ref(false);
+/** タブごとの選択状態: tabId -> { pvIdx -> optionId } */
+const selections = ref<Record<string, Record<number, string>>>({});
+
+const activeTab = computed<ProgressionTab | null>(
+  () => topTabs.value.find((t) => t.id === activeTabId.value) ?? null,
 );
 
-/** ヘルプダイアログのref */
-const helpDialogRef = ref<InstanceType<typeof ReviewEvalHelpDialog> | null>(
-  null,
-);
+type Row =
+  | { type: "move"; key: string; item: PVDisplayItem }
+  | {
+      type: "branch";
+      key: string;
+      pvIdx: number;
+      options: { id: string; item: PVDisplayItem }[];
+    };
 
-function openHelp(): void {
-  helpDialogRef.value?.showModal();
-}
-
-function handleCandidateEnter(position: Position): void {
-  emit("hoverCandidate", position);
-}
-
-function handleCandidateLeave(): void {
-  emit("leaveCandidate");
-}
-
-function emitPvSlice(
-  items: PVDisplayItem[],
-  index: number,
-  type: "best" | "played",
-): void {
-  emit(
-    "hoverPvMove",
-    items.slice(0, index + 1).map((item) => ({
-      position: item.position,
-      isSelf: item.isSelf,
-    })),
-    type,
-  );
-}
-
-function handlePVMoveEnter(
-  items: PVDisplayItem[],
-  index: number,
-  type: "best" | "played",
-): void {
-  if (pinnedPv.value) {
-    return;
+const rows = computed<Row[]>(() => {
+  const tab = activeTab.value;
+  if (!tab) {
+    return [];
   }
-  emitPvSlice(items, index, type);
-}
-
-function handleBranchMoveEnter(branch: BranchLine, index: number): void {
-  if (pinnedPv.value) {
-    return;
+  const sel = selections.value[tab.id] ?? {};
+  const branchesByIdx = new Map<number, InlineBranch[]>();
+  for (const b of tab.branches) {
+    const list = branchesByIdx.get(b.pvIdx) ?? [];
+    list.push(b);
+    branchesByIdx.set(b.pvIdx, list);
   }
-  const allItems = [...branch.prefixItems, ...branch.items.slice(0, index + 1)];
-  emit(
-    "hoverPvMove",
-    allItems.map((item) => ({
-      position: item.position,
-      isSelf: item.isSelf,
-    })),
-    "best",
-  );
-}
 
-function handlePVMoveLeave(): void {
-  if (pinnedPv.value) {
-    return;
+  const result: Row[] = [];
+  let i = 0;
+  let inBranch: InlineBranch | null = null;
+  let branchOff = 0;
+
+  while (true) {
+    if (inBranch) {
+      if (branchOff >= inBranch.continuation.length) {
+        break;
+      }
+      const item = inBranch.continuation[branchOff];
+      if (!item) {
+        break;
+      }
+      result.push({
+        type: "move",
+        key: `${tab.id}-${inBranch.id}-${branchOff}`,
+        item,
+      });
+      branchOff++;
+      continue;
+    }
+
+    if (i >= tab.basePV.length) {
+      break;
+    }
+
+    const branchesHere = branchesByIdx.get(i);
+    const baseItem = tab.basePV[i];
+    if (branchesHere && branchesHere.length > 0 && baseItem) {
+      const options = [
+        { id: "best", item: baseItem },
+        ...branchesHere.map((b) => ({ id: b.id, item: b.defenseMove })),
+      ];
+      result.push({
+        type: "branch",
+        key: `${tab.id}-br-${i}`,
+        pvIdx: i,
+        options,
+      });
+
+      const selected = sel[i] ?? "best";
+      if (selected !== "best") {
+        const branch = branchesHere.find((b) => b.id === selected);
+        if (branch) {
+          inBranch = branch;
+          branchOff = 0;
+        }
+      }
+      i++;
+    } else {
+      if (baseItem) {
+        result.push({ type: "move", key: `${tab.id}-${i}`, item: baseItem });
+      }
+      i++;
+    }
   }
-  emit("leavePvMove");
+
+  return result;
+});
+
+function getVisibleItems(
+  upToRowIdx: number,
+): { position: Position; isSelf: boolean }[] {
+  const tab = activeTab.value;
+  if (!tab) {
+    return [];
+  }
+  const sel = selections.value[tab.id] ?? {};
+  const items: { position: Position; isSelf: boolean }[] = [];
+  const allRows = rows.value;
+  for (let r = 0; r < upToRowIdx && r < allRows.length; r++) {
+    const row = allRows[r];
+    if (!row) {
+      break;
+    }
+    if (row.type === "move") {
+      items.push({ position: row.item.position, isSelf: row.item.isSelf });
+    } else {
+      const selectedId = sel[row.pvIdx] ?? "best";
+      const opt =
+        row.options.find((o) => o.id === selectedId) ?? row.options[0];
+      if (opt) {
+        items.push({ position: opt.item.position, isSelf: opt.item.isSelf });
+      }
+    }
+  }
+  return items;
 }
 
-function handlePVMoveClick(
-  items: PVDisplayItem[],
-  index: number,
-  type: "best" | "played",
-): void {
-  // 同じ手をクリック → 固定解除
-  if (pinnedPv.value?.line === type && pinnedPv.value.index === index) {
-    pinnedPv.value = null;
+function emitPreview(): void {
+  const tab = activeTab.value;
+  if (!tab || step.value <= 0) {
     emit("leavePvMove");
     return;
   }
-
-  pinnedPv.value = { line: type, index };
-  emitPvSlice(items, index, type);
+  const items = getVisibleItems(step.value);
+  emit("hoverPvMove", items, tab.emitType);
 }
 
-/** PV手が固定範囲内か */
-function isPvPinned(line: "best" | "played", index: number): boolean {
-  const pin = pinnedPv.value;
-  return pin !== null && pin.line === line && index <= pin.index;
+function switchTab(id: string): void {
+  if (activeTabId.value === id) {
+    return;
+  }
+  activeTabId.value = id;
+  step.value = 0;
+  showAll.value = false;
+  emit("leavePvMove");
 }
 
-function candidateForcedLossLabel(type: string): string {
-  return SHORT_LABELS[type as keyof typeof SHORT_LABELS] ?? "必勝";
+function toggleShowAll(): void {
+  const total = rows.value.length;
+  showAll.value = !showAll.value;
+  step.value = showAll.value ? total : 0;
+  emitPreview();
 }
 
-function isPlayed(candidate: { position: Position }): boolean {
-  const eval_ = props.evaluation;
-  if (!eval_) {
+function stepForward(): void {
+  const total = rows.value.length;
+  if (step.value < total) {
+    step.value++;
+    if (step.value === total) {
+      showAll.value = true;
+    }
+    emitPreview();
+  }
+}
+
+function resetTree(): void {
+  const tab = activeTab.value;
+  if (tab) {
+    const next: Record<string, Record<number, string>> = {};
+    for (const [k, v] of Object.entries(selections.value)) {
+      if (k !== tab.id) {
+        next[k] = v;
+      }
+    }
+    selections.value = next;
+  }
+  step.value = 0;
+  showAll.value = false;
+  emit("leavePvMove");
+}
+
+function jumpTo(rowIdx: number): void {
+  step.value = rowIdx + 1;
+  showAll.value = step.value >= rows.value.length;
+  emitPreview();
+}
+
+function selectBranchOption(rowIdx: number, optId: string): void {
+  const tab = activeTab.value;
+  if (!tab) {
+    return;
+  }
+  const row = rows.value[rowIdx];
+  if (!row || row.type !== "branch") {
+    return;
+  }
+  selections.value = {
+    ...selections.value,
+    [tab.id]: {
+      ...(selections.value[tab.id] ?? {}),
+      [row.pvIdx]: optId,
+    },
+  };
+  step.value = Math.max(step.value, rowIdx + 1);
+  showAll.value = step.value >= rows.value.length;
+  emitPreview();
+}
+
+function isOptionSelected(pvIdx: number, optId: string): boolean {
+  const tab = activeTab.value;
+  if (!tab) {
     return false;
   }
-  return (
-    candidate.position.row === eval_.position.row &&
-    candidate.position.col === eval_.position.col
-  );
+  const sel = selections.value[tab.id] ?? {};
+  const current = sel[pvIdx] ?? "best";
+  return current === optId;
 }
+
+function previewHoverMove(rowIdx: number): void {
+  const tab = activeTab.value;
+  if (!tab) {
+    return;
+  }
+  const items = getVisibleItems(rowIdx + 1);
+  emit("hoverPvMove", items, tab.emitType);
+}
+
+function previewHoverOption(rowIdx: number, optId: string): void {
+  const tab = activeTab.value;
+  if (!tab) {
+    return;
+  }
+  const row = rows.value[rowIdx];
+  if (!row || row.type !== "branch") {
+    return;
+  }
+  const items = getVisibleItems(rowIdx);
+  const opt = row.options.find((o) => o.id === optId);
+  if (opt) {
+    items.push({ position: opt.item.position, isSelf: opt.item.isSelf });
+  }
+  emit("hoverPvMove", items, tab.emitType);
+}
+
+function previewLeave(): void {
+  emitPreview();
+}
+
+const hasSelections = computed(() => {
+  const id = activeTabId.value;
+  if (!id) {
+    return false;
+  }
+  return Object.keys(selections.value[id] ?? {}).length > 0;
+});
+
+watch(
+  () => props.moveIndex,
+  () => {
+    step.value = 0;
+    showAll.value = false;
+    selections.value = {};
+  },
+);
+
+watch(
+  topTabs,
+  (next) => {
+    if (next.length === 0) {
+      activeTabId.value = null;
+      return;
+    }
+    if (!next.some((t) => t.id === activeTabId.value)) {
+      activeTabId.value = next[0]?.id ?? null;
+      step.value = 0;
+      showAll.value = false;
+    }
+  },
+  { immediate: true },
+);
 </script>
 
 <template>
   <div class="review-eval-panel">
-    <!-- 初期状態（手が選択されていない） -->
+    <!-- 初期状態 -->
     <div
       v-if="moveIndex === 0"
-      class="no-eval"
+      class="empty"
     >
-      <span class="no-eval-text">手を選択してください</span>
+      <span>手を選択してください</span>
     </div>
 
-    <!-- 解析中（まだ結果が届いていない手） -->
+    <!-- 解析中 -->
     <div
       v-else-if="!evaluation && isEvaluating"
       class="cpu-move"
     >
-      <div class="eval-header">
-        <span class="move-label">
-          <span class="move-index">{{ moveIndex }}:</span>
-          {{ moveCoord }}
+      <div class="verdict-head">
+        <span class="verdict-num">
+          <span
+            class="n"
+            :class="{ 'is-white': !isBlackMove }"
+          >
+            {{ moveIndex }}
+          </span>
+          <span class="coord">{{ moveCoord }}</span>
         </span>
       </div>
-      <div class="cpu-move-text analyzing-text">解析中...</div>
+      <div class="cpu-move-text analyzing">解析中...</div>
     </div>
 
-    <!-- CPUの手（evaluationがない or 軽量評価） -->
+    <!-- CPU の手 / 軽量評価 -->
     <div
       v-else-if="!evaluation || evaluation.isLightEval"
       class="cpu-move"
     >
-      <div class="eval-header">
-        <span class="move-label">
-          <span class="move-index">{{ moveIndex }}:</span>
-          {{ moveCoord }}
+      <div class="verdict-head">
+        <span class="verdict-num">
+          <span
+            class="n"
+            :class="{ 'is-white': !isBlackMove }"
+          >
+            {{ moveIndex }}
+          </span>
+          <span class="coord">{{ moveCoord }}</span>
         </span>
         <span
           v-if="cpuForcedWinLabel"
-          class="cpu-forced-win-badge"
+          class="tag forced"
         >
           {{ cpuForcedWinLabel }}
         </span>
@@ -692,447 +778,295 @@ function isPlayed(candidate: { position: Position }): boolean {
       v-else
       class="player-eval"
     >
-      <!-- ヘッダ: 手番号 + 座標 + 品質ラベル + ヘルプ -->
-      <div class="eval-header">
-        <span class="move-label">
-          <span class="move-index">{{ moveIndex }}:</span>
-          {{ moveCoord }}
-        </span>
-        <span
-          v-if="props.isLosingMove"
-          class="losing-move-badge"
-        >
-          敗着
-        </span>
-        <span
-          v-else
-          class="quality-badge"
-          :style="{ backgroundColor: qualityColor }"
-        >
-          {{ qualityLabel }}
-        </span>
-        <span
-          v-if="forcedWinLabel"
-          class="forced-win-badge"
-        >
-          {{ forcedWinLabel }}
-        </span>
-        <span
-          v-if="forcedLossLabel && !props.isLosingMove"
-          class="forced-loss-badge"
-        >
-          {{ forcedLossLabel }}
-        </span>
-        <span
-          v-if="missedDoubleMiseLabel"
-          class="missed-double-mise-badge"
-        >
-          {{ missedDoubleMiseLabel }}
-        </span>
-        <button
-          type="button"
-          class="help-button"
-          aria-label="評価の読み方ヘルプ"
-          @click="openHelp"
-        >
-          ?
-        </button>
-      </div>
-
-      <!-- スコア情報（2×2グリッド） -->
-      <div class="score-grid">
-        <div class="score-cell">
-          <span class="score-label">実際:</span>
-          <span class="score-value">
-            {{ formatScore(evaluation.playedScore) }}
-          </span>
-        </div>
-        <div class="score-cell">
-          <span class="score-label">最善:</span>
-          <span class="score-value best">
-            {{ formatScore(evaluation.bestScore) }}
-          </span>
-        </div>
-        <div class="score-cell">
-          <span class="score-label">差:</span>
-          <span class="score-value diff">-{{ evaluation.scoreDiff }}</span>
-        </div>
-        <div
-          v-if="playedRank !== null"
-          class="score-cell"
-        >
-          <span class="score-label">順位:</span>
-          <span class="score-value">
-            {{
-              playedRank === "unranked"
-                ? "-"
-                : `${playedRank}位/${Math.min(evaluation.candidates.length, 5)}候補`
-            }}
-          </span>
-        </div>
-      </div>
-
-      <!-- スコアの注意書き -->
-      <div class="pv-note">
-        ※ スコアは総合評価。末端評価単体の値と傾向が異なる場合あり。
-      </div>
-
-      <!-- 候補手チップ -->
-      <div
-        v-if="evaluation.candidates.length > 0"
-        class="candidate-chips"
-      >
-        <span
-          v-for="(candidate, idx) in evaluation.candidates"
-          :key="`${candidate.position.row}-${candidate.position.col}`"
-          class="candidate-chip"
-          :class="{ 'chip-played': isPlayed(candidate) }"
-          tabindex="0"
-          @mouseenter="handleCandidateEnter(candidate.position)"
-          @mouseleave="handleCandidateLeave"
-          @focus="handleCandidateEnter(candidate.position)"
-          @blur="handleCandidateLeave"
-        >
-          <span class="chip-rank">{{ idx < 5 ? `#${idx + 1}` : "—" }}</span>
-          :
-          <span class="chip-pos">{{ formatMove(candidate.position) }}</span>
-          /
-          <span class="chip-score">
-            {{ formatScore(candidate.searchScore ?? candidate.score) }}
-          </span>
-          <span
-            v-if="isPlayed(candidate)"
-            class="chip-tag"
-          >
-            ◂
-          </span>
-          <span
-            v-if="candidate.opponentForcedWin"
-            class="chip-tag chip-danger"
-          >
-            危:{{ candidateForcedLossLabel(candidate.opponentForcedWin) }}
-          </span>
-          <span
-            v-if="candidate.isFukumi"
-            class="chip-tag chip-fukumi"
-          >
-            フクミ{{
-              candidate.fukumiDepth ? `(${candidate.fukumiDepth}手)` : ""
-            }}
-          </span>
-        </span>
-      </div>
-
-      <!-- 内訳比較セクション（PV/末端比較/被追詰のいずれかがある場合に表示） -->
-      <div
-        v-if="showBreakdown"
-        class="breakdown-section"
-      >
-        <div class="breakdown-divider" />
-
-        <!-- 読み筋（最善手） -->
-        <template v-if="bestPVLine">
-          <div class="pv-header">
-            <span class="pv-label">{{ bestPVLine.label }}</span>
-            <span class="pv-search-score pv-best-score">
-              {{ formatScore(bestPVLine.searchScore) }}
-            </span>
-          </div>
-          <div class="pv-sequence">
-            <button
-              v-for="(item, idx) in bestPVLine.items"
-              :key="`best-${idx}`"
-              type="button"
-              class="pv-move"
-              :class="{
-                'pv-self': item.isSelf,
-                'pv-opponent': !item.isSelf,
-                'pv-pinned': isPvPinned('best', idx),
-              }"
-              @mouseenter="handlePVMoveEnter(bestPVLine.items, idx, 'best')"
-              @mouseleave="handlePVMoveLeave"
-              @focus="handlePVMoveEnter(bestPVLine.items, idx, 'best')"
-              @blur="handlePVMoveLeave"
-              @click="handlePVMoveClick(bestPVLine.items, idx, 'best')"
+      <!-- (1) 結論 + スコア -->
+      <section class="panel-section verdict-section">
+        <div class="verdict-head">
+          <span class="verdict-num">
+            <span
+              class="n"
+              :class="{ 'is-white': !isBlackMove }"
             >
-              {{ item.text }}
-            </button>
-          </div>
-          <!-- 分岐表示 -->
-          <div
-            v-for="branch in branchLines"
-            :key="branch.key"
-            class="pv-branch"
+              {{ moveIndex }}
+            </span>
+            <span class="coord">{{ moveCoord }}</span>
+          </span>
+          <span
+            v-if="props.isLosingMove"
+            class="tag losing"
           >
-            <span class="pv-branch-prefix">{{ branch.prefix }}</span>
-            <div class="pv-sequence pv-branch-sequence">
-              <!-- 防御手ボタン -->
-              <button
-                v-if="branch.items[0]"
-                type="button"
-                class="pv-move pv-opponent"
-                @mouseenter="handleBranchMoveEnter(branch, 0)"
-                @mouseleave="handlePVMoveLeave"
-                @focus="handleBranchMoveEnter(branch, 0)"
-                @blur="handlePVMoveLeave"
-              >
-                {{ branch.items[0].text }}
-              </button>
-              <span class="pv-branch-label">{{ branch.label }}</span>
-              <!-- 継続手順 -->
-              <button
-                v-for="(item, idx) in branch.items.slice(1)"
-                :key="`${branch.key}-${idx + 1}`"
-                type="button"
-                class="pv-move"
-                :class="{
-                  'pv-self': item.isSelf,
-                  'pv-opponent': !item.isSelf,
-                }"
-                @mouseenter="handleBranchMoveEnter(branch, idx + 1)"
-                @mouseleave="handlePVMoveLeave"
-                @focus="handleBranchMoveEnter(branch, idx + 1)"
-                @blur="handlePVMoveLeave"
-              >
-                {{ item.text }}
-              </button>
+            敗着
+          </span>
+          <span
+            v-else
+            class="tag quality"
+            :style="{ backgroundColor: qualityColor }"
+          >
+            {{ qualityLabel }}
+          </span>
+          <span
+            v-if="forcedWinLabel"
+            class="tag forced"
+          >
+            {{ forcedWinLabel }}
+          </span>
+          <span
+            v-if="forcedLossLabel && !props.isLosingMove"
+            class="tag loss"
+          >
+            {{ forcedLossLabel }}
+          </span>
+          <span
+            v-if="missedDoubleMiseLabel"
+            class="tag miss"
+          >
+            {{ missedDoubleMiseLabel }}
+          </span>
+        </div>
+
+        <div class="score-block">
+          <div class="score-cell">
+            <div class="label">実際</div>
+            <div class="v actual">
+              {{ formatScore(evaluation.playedScore) }}
             </div>
           </div>
-        </template>
+          <div class="score-cell">
+            <div class="label">最善</div>
+            <div class="v best">{{ formatScore(evaluation.bestScore) }}</div>
+          </div>
+        </div>
+      </section>
 
-        <!-- 読み筋（実際の手） -->
-        <template v-if="effectivePlayedPVLine">
-          <div class="pv-header">
-            <span class="pv-label">{{ effectivePlayedPVLine.label }}</span>
-            <span class="pv-search-score">
-              {{ formatScore(effectivePlayedPVLine.searchScore) }}
-            </span>
-          </div>
-          <div class="pv-sequence">
+      <!-- (2) 候補手 -->
+      <section
+        v-if="candidateViews.length > 0"
+        class="panel-section cand-section"
+      >
+        <div class="panel-label">
+          <span>候補手</span>
+          <span class="panel-label-count">{{ candidateViews.length }}件</span>
+        </div>
+        <div class="cand-scroll">
+          <div class="cand-grid">
             <button
-              v-for="(item, idx) in effectivePlayedPVLine.items"
-              :key="`played-${idx}`"
+              v-for="c in candidateViews"
+              :key="`${c.position.row},${c.position.col}`"
               type="button"
-              class="pv-move"
+              class="cand-card"
               :class="{
-                'pv-self': item.isSelf,
-                'pv-opponent': !item.isSelf,
-                'pv-pinned': isPvPinned('played', Number(idx)),
+                'is-best': c.kind === 'best',
+                'is-actual': c.kind === 'actual',
+                'is-danger': c.opponentForcedWinShort,
+                'is-fukumi': c.isFukumi,
               }"
-              @mouseenter="
-                handlePVMoveEnter(
-                  effectivePlayedPVLine.items,
-                  Number(idx),
-                  'played',
-                )
-              "
-              @mouseleave="handlePVMoveLeave"
-              @focus="
-                handlePVMoveEnter(
-                  effectivePlayedPVLine.items,
-                  Number(idx),
-                  'played',
-                )
-              "
-              @blur="handlePVMoveLeave"
-              @click="
-                handlePVMoveClick(
-                  effectivePlayedPVLine.items,
-                  Number(idx),
-                  'played',
-                )
-              "
+              @mouseenter="handleCandidateEnter(c.position)"
+              @mouseleave="handleCandidateLeave"
+              @focus="handleCandidateEnter(c.position)"
+              @blur="handleCandidateLeave"
             >
-              {{ item.text }}
-            </button>
-          </div>
-        </template>
-
-        <!-- 負け確定手順 -->
-        <template v-if="forcedLossPVLine">
-          <div class="pv-header">
-            <span class="pv-label pv-loss-label">
-              {{ forcedLossPVLine.label }}
-            </span>
-          </div>
-          <div class="pv-sequence">
-            <button
-              v-for="(item, idx) in forcedLossPVLine.items"
-              :key="`loss-${idx}`"
-              type="button"
-              class="pv-move"
-              :class="{
-                'pv-self': item.isSelf,
-                'pv-loss-opponent': !item.isSelf,
-                'pv-pinned': isPvPinned('played', idx),
-              }"
-              @mouseenter="
-                handlePVMoveEnter(forcedLossPVLine.items, idx, 'played')
-              "
-              @mouseleave="handlePVMoveLeave"
-              @focus="handlePVMoveEnter(forcedLossPVLine.items, idx, 'played')"
-              @blur="handlePVMoveLeave"
-              @click="handlePVMoveClick(forcedLossPVLine.items, idx, 'played')"
-            >
-              {{ item.text }}
-            </button>
-          </div>
-        </template>
-
-        <!-- 被追詰の分岐手順 -->
-        <div
-          v-for="branch in forcedLossBranchLines"
-          :key="branch.key"
-          class="pv-branch"
-        >
-          <span class="pv-branch-prefix">{{ branch.prefix }}</span>
-          <div class="pv-sequence pv-branch-sequence">
-            <button
-              v-if="branch.items[0]"
-              type="button"
-              class="pv-move pv-self"
-              @mouseenter="handleBranchMoveEnter(branch, 0)"
-              @mouseleave="handlePVMoveLeave"
-              @focus="handleBranchMoveEnter(branch, 0)"
-              @blur="handlePVMoveLeave"
-            >
-              {{ branch.items[0].text }}
-            </button>
-            <span class="pv-branch-label">{{ branch.label }}</span>
-            <button
-              v-for="(item, idx) in branch.items.slice(1)"
-              :key="`${branch.key}-${idx + 1}`"
-              type="button"
-              class="pv-move"
-              :class="{
-                'pv-self': item.isSelf,
-                'pv-loss-opponent': !item.isSelf,
-              }"
-              @mouseenter="handleBranchMoveEnter(branch, idx + 1)"
-              @mouseleave="handlePVMoveLeave"
-              @focus="handleBranchMoveEnter(branch, idx + 1)"
-              @blur="handlePVMoveLeave"
-            >
-              {{ item.text }}
+              <span
+                class="cand-rank"
+                :class="c.kind"
+              >
+                {{ c.rank }}
+              </span>
+              <span class="cand-coord">{{ c.coord }}</span>
+              <span
+                class="cand-delta"
+                :class="c.delta === 0 ? 'zero' : 'neg'"
+              >
+                {{ formatDelta(c.delta) }}
+              </span>
+              <span
+                v-if="c.opponentForcedWinShort"
+                class="cand-flag danger"
+              >
+                危{{ c.opponentForcedWinShort }}
+              </span>
+              <span
+                v-else-if="c.isFukumi"
+                class="cand-flag fukumi"
+              >
+                フクミ{{ c.fukumiDepth ? c.fukumiDepth : "" }}
+              </span>
             </button>
           </div>
         </div>
+      </section>
 
-        <!-- 末端評価の比較テーブル -->
-        <template v-if="leafEvalDiffGroups.length > 0">
-          <div class="breakdown-title-row">
-            <span class="breakdown-title">末端比較</span>
-          </div>
-          <table class="breakdown-table">
-            <thead>
-              <tr>
-                <th class="bd-th" />
-                <th class="bd-th" />
-                <th class="bd-th-best">最善</th>
-                <th class="bd-th-played">実際</th>
-              </tr>
-            </thead>
-            <tbody
-              v-for="group in leafEvalDiffGroups"
-              :key="group.category"
+      <!-- (3) 進行 + 分岐 -->
+      <section
+        v-if="topTabs.length > 0"
+        class="panel-section tree-section"
+      >
+        <div class="panel-label">
+          <span>最善の進行</span>
+          <span
+            v-if="rows.length > 0"
+            class="panel-label-count"
+          >
+            {{ rows.length }}手
+          </span>
+        </div>
+
+        <div
+          v-if="topTabs.length > 1"
+          class="tree-tabs"
+          role="tablist"
+        >
+          <button
+            v-for="t in topTabs"
+            :key="t.id"
+            type="button"
+            role="tab"
+            class="tree-tab"
+            :class="{
+              'is-on': activeTabId === t.id,
+              'is-loss': t.id === 'loss',
+            }"
+            @click="switchTab(t.id)"
+          >
+            <span class="tab-label">{{ t.label }}</span>
+            <span
+              v-if="t.sub"
+              class="tab-sub"
             >
-              <tr
-                v-for="(item, idx) in group.items"
-                :key="item.key"
+              {{ t.sub }}
+            </span>
+          </button>
+        </div>
+
+        <div class="tree-controls">
+          <button
+            type="button"
+            class="ctl-btn primary"
+            :class="{ 'is-on': showAll }"
+            :disabled="rows.length === 0"
+            @click="toggleShowAll"
+          >
+            全表示
+          </button>
+          <button
+            type="button"
+            class="ctl-btn"
+            :disabled="step >= rows.length"
+            @click="stepForward"
+          >
+            1つ進む
+          </button>
+          <button
+            type="button"
+            class="ctl-btn"
+            :disabled="step === 0 && !showAll && !hasSelections"
+            @click="resetTree"
+          >
+            リセット
+          </button>
+        </div>
+
+        <div class="tree-scroll">
+          <div
+            v-if="rows.length > 0"
+            class="prog-list"
+          >
+            <template
+              v-for="(row, i) in rows"
+              :key="row.key"
+            >
+              <button
+                v-if="row.type === 'move'"
+                type="button"
+                class="prog-move"
+                :class="[
+                  row.item.moveNum % 2 === 1 ? 'black' : 'white',
+                  {
+                    'is-played': i < step,
+                    'is-current': i === step - 1,
+                  },
+                ]"
+                @mouseenter="previewHoverMove(i)"
+                @mouseleave="previewLeave"
+                @focus="previewHoverMove(i)"
+                @blur="previewLeave"
+                @click="jumpTo(i)"
               >
-                <th
-                  v-if="idx === 0"
-                  class="bd-category"
-                  scope="rowgroup"
-                  :rowspan="group.items.length + 1"
+                <span class="m-num">{{ row.item.moveNum }}</span>
+                <span class="m-coord">{{ row.item.coord }}</span>
+              </button>
+              <div
+                v-else
+                class="prog-branch"
+                :class="{
+                  'is-played': i < step,
+                  'is-current-row': i === step - 1,
+                }"
+              >
+                <button
+                  v-for="opt in row.options"
+                  :key="opt.id"
+                  type="button"
+                  class="prog-opt"
+                  :class="[
+                    opt.item.moveNum % 2 === 1 ? 'black' : 'white',
+                    {
+                      'is-best-opt': opt.id === 'best',
+                      'is-selected': isOptionSelected(row.pvIdx, opt.id),
+                    },
+                  ]"
+                  @mouseenter="previewHoverOption(i, opt.id)"
+                  @mouseleave="previewLeave"
+                  @focus="previewHoverOption(i, opt.id)"
+                  @blur="previewLeave"
+                  @click="selectBranchOption(i, opt.id)"
                 >
-                  {{ group.category }}
-                </th>
-                <th
-                  class="bd-label"
-                  scope="row"
-                >
-                  {{ item.label }}
-                </th>
-                <td class="bd-best">{{ formatScore(item.bestValue) }}</td>
-                <td class="bd-played">{{ formatScore(item.playedValue) }}</td>
-              </tr>
-              <!-- 小計行 -->
-              <tr class="bd-subtotal-row">
-                <th
-                  class="bd-subtotal-label"
-                  scope="row"
-                >
-                  小計
-                </th>
-                <td class="bd-best bd-subtotal">
-                  {{ formatScore(group.bestTotal) }}
-                </td>
-                <td class="bd-played bd-subtotal">
-                  {{ formatScore(group.playedTotal) }}
-                </td>
-              </tr>
-            </tbody>
-            <!-- 差引行 -->
-            <tfoot v-if="leafEvalNet">
-              <tr class="bd-net-row">
-                <th
-                  class="bd-net-label"
-                  colspan="2"
-                  scope="row"
-                >
-                  差引
-                </th>
-                <td class="bd-best bd-net">
-                  {{ formatScore(leafEvalNet.best) }}
-                </td>
-                <td class="bd-played bd-net">
-                  {{ formatScore(leafEvalNet.played) }}
-                </td>
-              </tr>
-            </tfoot>
-          </table>
-        </template>
-      </div>
+                  <span class="m-num">{{ opt.item.moveNum }}</span>
+                  <span class="m-coord">{{ opt.item.coord }}</span>
+                </button>
+              </div>
+            </template>
+          </div>
+        </div>
+      </section>
     </div>
   </div>
-
-  <ReviewEvalHelpDialog ref="helpDialogRef" />
 </template>
 
 <style scoped>
 .review-eval-panel {
-  padding: var(--size-8);
   height: 100%;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
+  gap: var(--size-10);
+  padding: var(--size-10);
+  background: var(--color-bg-white);
+  border-radius: var(--size-12);
+  box-shadow: 0 var(--size-2) var(--size-8) rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+  min-height: 0;
 }
 
-.no-eval {
+.empty {
   display: flex;
   align-items: center;
   justify-content: center;
   height: 100%;
-}
-
-.no-eval-text {
   color: var(--color-text-secondary);
-  font-size: var(--font-size-14);
+  font-size: var(--font-size-13);
 }
 
 .cpu-move {
   display: flex;
   flex-direction: column;
-  gap: var(--size-6);
+  gap: var(--size-8);
 }
 
 .cpu-move-text {
   color: var(--color-text-secondary);
-  font-size: var(--font-size-14);
+  font-size: var(--font-size-13);
 }
 
-.analyzing-text {
+.analyzing {
   animation: analyzing-pulse 1.5s ease-in-out infinite;
 }
 
@@ -1149,424 +1083,652 @@ function isPlayed(candidate: { position: Position }): boolean {
 .player-eval {
   display: flex;
   flex-direction: column;
-  gap: var(--size-6);
+  gap: var(--size-10);
   height: 100%;
   min-height: 0;
 }
 
-.eval-header {
+.panel-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-6);
+}
+
+.panel-section + .panel-section {
+  padding-top: var(--size-10);
+  border-top: 1px solid var(--color-border-light);
+}
+
+.panel-label {
   display: flex;
   align-items: center;
-  gap: var(--size-8);
-}
-
-.move-label {
-  font-size: var(--font-size-13);
-  font-weight: 500;
-  color: var(--color-text-primary);
-  white-space: nowrap;
-}
-
-.move-index {
+  gap: var(--size-6);
   font-size: var(--font-size-11);
+  font-weight: 500;
   color: var(--color-text-secondary);
+  letter-spacing: 0.05em;
 }
 
-.quality-badge {
-  padding: var(--size-1) var(--size-6);
-  border-radius: var(--size-4);
-  color: white;
+.panel-label::before {
+  content: "";
+  width: var(--size-3);
+  height: var(--size-10);
+  background: var(--color-fubuki-primary);
+  border-radius: var(--size-2);
+}
+
+.panel-label-count {
+  font-weight: var(--font-weight-normal);
+  color: var(--color-text-secondary);
+  margin-left: auto;
+}
+
+/* ── Verdict header ─────────────────────────────────────── */
+
+.verdict-section {
+  flex-shrink: 0;
+}
+
+.verdict-head {
+  display: flex;
+  align-items: center;
+  gap: var(--size-6);
+  flex-wrap: wrap;
+}
+
+.verdict-num {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--size-6);
+  font-size: var(--font-size-16);
+  font-weight: 500;
+  font-feature-settings: "tnum";
+}
+
+.verdict-num .n {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--size-24);
+  height: var(--size-24);
+  border-radius: 50%;
+  background: #1a1a1a;
+  color: #fff;
+  font-size: var(--font-size-11);
+  font-weight: 500;
+}
+
+.verdict-num .n.is-white {
+  background: #fff;
+  color: #1a1a1a;
+  border: 1px solid var(--color-border-heavy);
+}
+
+.verdict-num .coord {
+  font-size: var(--font-size-16);
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--size-2) var(--size-8);
+  border-radius: 999px;
   font-size: var(--font-size-10);
   font-weight: 500;
   white-space: nowrap;
+  color: #fff;
 }
 
-.forced-win-badge {
-  padding: var(--size-1) var(--size-6);
-  border-radius: var(--size-4);
-  color: white;
-  font-size: var(--font-size-10);
-  font-weight: 500;
-  white-space: nowrap;
-  background-color: hsl(270, 50%, 55%);
+.tag.quality {
+  background: var(--color-fubuki-primary);
 }
 
-.forced-loss-badge {
-  padding: var(--size-1) var(--size-6);
-  border-radius: var(--size-4);
-  color: white;
-  font-size: var(--font-size-10);
-  font-weight: 500;
-  white-space: nowrap;
-  background-color: hsl(0, 65%, 50%);
+.tag.forced {
+  background: hsl(270, 50%, 55%);
 }
 
-.losing-move-badge {
-  padding: var(--size-1) var(--size-6);
-  border-radius: var(--size-4);
-  color: white;
-  font-size: var(--font-size-10);
-  font-weight: 500;
-  white-space: nowrap;
-  background-color: hsl(0, 80%, 40%);
+.tag.loss {
+  background: hsl(0, 65%, 50%);
 }
 
-.missed-double-mise-badge {
-  padding: var(--size-1) var(--size-6);
-  border-radius: var(--size-4);
-  color: white;
-  font-size: var(--font-size-10);
-  font-weight: 500;
-  white-space: nowrap;
-  background-color: hsl(30, 80%, 50%);
+.tag.miss {
+  background: var(--color-fubuki-primary);
 }
 
-.cpu-forced-win-badge {
-  padding: var(--size-1) var(--size-6);
-  border-radius: var(--size-4);
-  color: white;
-  font-size: var(--font-size-10);
-  font-weight: 500;
-  white-space: nowrap;
-  background-color: hsl(270, 50%, 55%);
+.tag.losing {
+  background: hsl(0, 80%, 40%);
 }
 
-/* スコア情報（2×2グリッド） */
-.score-grid {
+/* ── Score block ────────────────────────────────────────── */
+
+.score-block {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: var(--size-1) var(--size-6);
-  font-size: var(--font-size-11);
-  font-family: monospace;
+  gap: var(--size-2) var(--size-12);
 }
 
 .score-cell {
   display: flex;
-  gap: var(--size-4);
+  flex-direction: column;
+  gap: var(--size-1);
 }
 
-.score-label {
+.score-cell .label {
+  font-size: var(--font-size-10);
   color: var(--color-text-secondary);
-  white-space: nowrap;
 }
 
-.score-value {
-  color: var(--color-text-primary);
-  white-space: nowrap;
-}
-
-.score-value.best {
-  color: hsl(186, 60%, 40%);
+.score-cell .v {
+  font-size: var(--font-size-14);
   font-weight: 500;
+  font-feature-settings: "tnum";
 }
 
-.score-value.diff {
+.score-cell .v.actual {
   color: var(--color-miko-primary);
 }
 
-/* 候補手チップ */
-.candidate-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--size-2);
-  font-size: var(--font-size-10);
-  font-family: monospace;
+.score-cell .v.best {
+  color: var(--color-blue-500);
 }
 
-.candidate-chip {
-  display: inline-flex;
-  padding: 0 var(--size-3);
-  border-radius: var(--size-3);
-  cursor: pointer;
-  background: rgba(0, 0, 0, 0.04);
-  transition: background-color 0.15s ease;
-  outline: none;
+/* ── Candidate grid ─────────────────────────────────────── */
 
-  &:hover,
-  &:focus-visible {
-    background: rgba(95, 222, 236, 0.15);
-  }
-
-  &.chip-played {
-    background: rgba(95, 222, 236, 0.15);
-    border: 1px solid rgba(95, 222, 236, 0.3);
-    padding: 0 calc(var(--size-3) - 1px);
-  }
-}
-
-.chip-rank {
-  color: var(--color-text-secondary);
-}
-
-.chip-pos {
-  font-weight: 500;
-  color: var(--color-text-primary);
-}
-
-.chip-score {
-  color: var(--color-text-secondary);
-}
-
-.chip-tag {
-  color: hsl(186, 60%, 40%);
-}
-
-.chip-danger {
-  color: hsl(0, 65%, 50%);
-  font-weight: 500;
-}
-
-.chip-fukumi {
-  color: hsl(270, 50%, 55%);
-  font-weight: 500;
-}
-
-/* 内訳比較セクション */
-.breakdown-section {
-  font-size: var(--font-size-10);
-  font-family: monospace;
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-}
-
-.breakdown-divider {
-  height: 1px;
-  background: var(--color-border-light);
-  margin: var(--size-2) 0;
-}
-
-.breakdown-title-row {
-  margin-bottom: var(--size-1);
-}
-
-.breakdown-title {
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-9);
-}
-
-.help-button {
-  position: relative;
-  width: var(--size-16);
-  height: var(--size-16);
-  padding: 0;
-  margin-left: auto;
-  background: var(--color-text-secondary);
-  color: white;
-  border: none;
-  border-radius: 50%;
-  font-size: var(--font-size-10);
-  font-weight: 500;
-  line-height: var(--size-16);
-  text-align: center;
-  cursor: pointer;
-  opacity: 0.6;
-  transition: opacity 0.15s ease;
+.cand-section {
   flex-shrink: 0;
-
-  &:hover {
-    opacity: 1;
-  }
-
-  &::before {
-    content: "";
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: var(--size-48);
-    height: var(--size-48);
-  }
 }
 
-/* 末端比較テーブル */
-.breakdown-table {
-  width: 100%;
-  border-collapse: collapse;
-  border: 1px solid var(--color-border);
-  background: var(--color-background-secondary);
-
-  th,
-  td {
-    padding: 0 var(--size-2);
-    border: 1px solid var(--color-border);
-  }
+.cand-scroll {
+  max-height: var(--size-150);
+  overflow-y: auto;
+  padding-right: var(--size-2);
+  margin-right: calc(var(--size-2) * -1);
 }
 
-.bd-th {
-  border: none;
+.cand-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.cand-scroll::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 3px;
+}
+
+.cand-scroll::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.bd-th-best {
-  color: hsl(186, 60%, 40%);
-  font-weight: 500;
-  text-align: right;
-}
-
-.bd-th-played {
-  color: var(--color-text-primary);
-  text-align: right;
-}
-
-.bd-category {
-  color: var(--color-text-secondary);
-  font-weight: 500;
-  width: var(--size-24);
-  vertical-align: middle;
-  text-align: center;
-  background: var(--color-bg-gray);
-}
-
-.bd-label {
-  color: var(--color-text-secondary);
-  font-weight: 500;
-  background: var(--color-bg-gray);
-}
-
-.bd-best {
-  color: hsl(186, 60%, 40%);
-  font-weight: 500;
-  text-align: right;
-}
-
-.bd-played {
-  color: var(--color-text-primary);
-  text-align: right;
-}
-
-.bd-subtotal-row {
-  border-top: 1px solid var(--color-border);
-}
-
-.bd-subtotal-label {
-  color: var(--color-text-secondary);
-  font-weight: 500;
-  text-align: right;
-  background: var(--color-bg-gray);
-}
-
-.bd-subtotal {
-  font-weight: 500;
-}
-
-.bd-net-row {
-  border-top: 2px solid var(--color-border);
-}
-
-.bd-net-label {
-  color: var(--color-text-primary);
-  font-weight: 500;
-  text-align: center;
-  background: var(--color-bg-gray);
-}
-
-.bd-net {
-  font-weight: 500;
-}
-
-/* 読み筋 + スコア推移 */
-.pv-header {
-  display: flex;
-  align-items: center;
+.cand-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--size-56), 1fr));
   gap: var(--size-4);
-  margin-top: var(--size-2);
 }
 
-.pv-label {
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-9);
-}
-
-.pv-search-score {
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-9);
-  font-family: monospace;
-}
-
-.pv-best-score {
-  color: hsl(186, 60%, 40%);
-}
-
-.pv-sequence {
+.cand-card {
+  position: relative;
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--size-2);
-  font-size: var(--font-size-10);
-  font-family: monospace;
-}
-
-.pv-move {
-  border: none;
-  font: inherit;
-  padding: 0 var(--size-2);
-  border-radius: var(--size-2);
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  padding: var(--size-12) var(--size-4) var(--size-4);
+  border-radius: var(--size-8);
+  border: 1px solid var(--color-border);
+  background: #fff;
   cursor: pointer;
+  font-family: inherit;
+  font-feature-settings: "tnum";
+  transition:
+    transform 0.12s,
+    border-color 0.12s,
+    box-shadow 0.12s;
+}
+
+.cand-card:hover,
+.cand-card:focus-visible {
+  border-color: var(--color-fubuki-primary);
+  transform: translateY(-1px);
+  box-shadow: 0 var(--size-2) var(--size-6) rgba(0, 0, 0, 0.08);
   outline: none;
-
-  &:hover,
-  &:focus-visible {
-    outline: 1px solid currentColor;
-    outline-offset: 0;
-  }
 }
 
-.pv-self {
-  background: rgba(95, 222, 236, 0.15);
-  color: hsl(186, 60%, 40%);
+.cand-card.is-best {
+  border-color: var(--color-blue-400);
+  background: var(--color-blue-100);
 }
 
-.pv-loss-label {
-  color: hsl(0, 65%, 50%);
+.cand-card.is-actual {
+  border-color: var(--color-miko-primary);
+  background: var(--color-miko-bg-light);
 }
 
-.pv-loss-opponent {
-  background: rgba(220, 50, 50, 0.12);
-  color: hsl(0, 55%, 45%);
+.cand-card.is-danger {
+  border-color: hsl(0, 65%, 50%);
 }
 
-.pv-opponent {
-  background: rgba(0, 0, 0, 0.08);
-  color: var(--color-text-secondary);
+.cand-card.is-best::after,
+.cand-card.is-actual::after {
+  content: "";
+  position: absolute;
+  top: var(--size-3);
+  right: var(--size-3);
+  width: var(--size-6);
+  height: var(--size-6);
+  border-radius: 50%;
 }
 
-.pv-pinned {
-  outline: 1px solid currentColor;
-  outline-offset: 0;
+.cand-card.is-best::after {
+  background: var(--color-blue-500);
 }
 
-/* 分岐表示 */
-.pv-branch {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--size-2);
-  margin-top: var(--size-1);
-  padding-left: var(--size-4);
+.cand-card.is-actual::after {
+  background: var(--color-miko-primary);
+}
+
+.cand-rank {
+  position: absolute;
+  top: var(--size-2);
+  left: var(--size-3);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--size-12);
+  height: var(--size-12);
+  border-radius: 50%;
+  background: var(--color-text-light);
+  color: #fff;
   font-size: var(--font-size-9);
-  opacity: 0.8;
+  font-weight: 500;
 }
 
-.pv-branch-prefix {
-  color: var(--color-text-secondary);
-  font-family: monospace;
-  line-height: 1;
+.cand-rank.best {
+  background: var(--color-blue-500);
 }
 
-.pv-branch-label {
-  color: var(--color-text-secondary);
-  font-family: monospace;
+.cand-rank.actual {
+  background: var(--color-miko-primary);
+}
+
+.cand-coord {
+  font-size: var(--font-size-13);
+  font-weight: 500;
+  color: var(--color-text-primary);
+  line-height: 1.1;
+}
+
+.cand-delta {
+  font-size: var(--font-size-9);
+  line-height: 1.1;
   white-space: nowrap;
 }
 
-.pv-branch-sequence {
-  font-size: var(--font-size-9);
+.cand-delta.zero {
+  color: var(--color-blue-500);
 }
 
-.pv-note {
-  margin-top: var(--size-3);
+.cand-delta.neg {
+  color: var(--color-miko-primary);
+}
+
+.cand-flag {
   font-size: var(--font-size-8);
+  line-height: 1.1;
+  margin-top: var(--size-1);
+  padding: 0 var(--size-3);
+  border-radius: var(--size-2);
+  white-space: nowrap;
+}
+
+.cand-flag.danger {
+  background: hsl(0, 65%, 95%);
+  color: hsl(0, 65%, 45%);
+}
+
+.cand-flag.fukumi {
+  background: hsl(270, 50%, 95%);
+  color: hsl(270, 50%, 45%);
+}
+
+/* ── Tree (tabs + controls + grid) ──────────────────────── */
+
+.tree-section {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.tree-tabs {
+  display: flex;
+  gap: var(--size-1);
+  border-bottom: 1px solid var(--color-border);
+  overflow-x: auto;
+  scrollbar-width: thin;
+  flex-shrink: 0;
+}
+
+.tree-tabs::-webkit-scrollbar {
+  height: 4px;
+}
+
+.tree-tabs::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 2px;
+}
+
+.tree-tab {
+  flex: 1 0 auto;
+  min-width: var(--size-60);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  padding: var(--size-4) var(--size-6) var(--size-5);
+  margin-bottom: -1px;
+  background: var(--color-bg-gray);
+  border: 1px solid var(--color-border);
+  border-bottom: none;
+  border-radius: var(--size-6) var(--size-6) 0 0;
+  font-family: inherit;
+  font-size: var(--font-size-11);
+  font-weight: 500;
   color: var(--color-text-secondary);
-  line-height: 1.4;
+  cursor: pointer;
+  white-space: nowrap;
+  line-height: 1.2;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.tree-tab:hover {
+  background: var(--color-bg-white);
+  color: var(--color-fubuki-name);
+}
+
+.tree-tab.is-on {
+  background: #fff;
+  color: var(--color-fubuki-name);
+  border-bottom: 1px solid #fff;
+  z-index: 1;
+}
+
+.tree-tab.is-loss {
+  color: hsl(0, 55%, 45%);
+}
+
+.tree-tab.is-on.is-loss {
+  color: hsl(0, 65%, 45%);
+}
+
+.tree-tab .tab-sub {
+  font-size: var(--font-size-9);
+  font-weight: var(--font-weight-normal);
+  opacity: 0.85;
+}
+
+.tree-controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: var(--size-4);
+  flex-shrink: 0;
+}
+
+.ctl-btn {
+  font-family: inherit;
+  font-size: var(--font-size-10);
+  font-weight: 500;
+  padding: var(--size-5) var(--size-3);
+  border-radius: var(--size-6);
+  border: 1px solid var(--color-border);
+  background: #fff;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  transition:
+    transform 0.12s,
+    border-color 0.12s,
+    background 0.12s;
+}
+
+.ctl-btn:hover:not(:disabled) {
+  border-color: var(--color-fubuki-primary);
+  transform: translateY(-1px);
+}
+
+.ctl-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.ctl-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.ctl-btn.primary {
+  background: var(--color-fubuki-primary);
+  color: #fff;
+  border-color: var(--color-fubuki-primary);
+}
+
+.ctl-btn.primary:hover:not(:disabled) {
+  background: var(--color-blue-500);
+  border-color: var(--color-blue-500);
+}
+
+.ctl-btn.primary.is-on {
+  background: var(--color-blue-500);
+  border-color: var(--color-blue-500);
+}
+
+.tree-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: var(--size-2);
+  margin-right: calc(var(--size-2) * -1);
+}
+
+.tree-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.tree-scroll::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 3px;
+}
+
+.prog-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--size-56), 1fr));
+  gap: var(--size-4);
+  padding: var(--size-2) 0;
+  align-content: start;
+}
+
+/* 単一手のセル（カード形式・グリッドの1セル分） */
+.prog-move {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  padding: var(--size-12) var(--size-4) var(--size-4);
+  border-radius: var(--size-8);
+  border: 1px solid var(--color-border);
+  background: #fff;
+  color: var(--color-text-primary);
+  font-family: inherit;
+  font-size: var(--font-size-13);
+  font-weight: 500;
+  font-feature-settings: "tnum";
+  cursor: pointer;
+  opacity: 0.7;
+  min-height: 0;
+  transition:
+    opacity 0.15s,
+    border-color 0.15s,
+    background 0.15s,
+    transform 0.12s;
+}
+
+.prog-move:hover,
+.prog-move:focus-visible {
+  border-color: var(--color-fubuki-primary);
+  opacity: 1;
+  outline: none;
+}
+
+.prog-move.is-played {
+  opacity: 1;
+  border-color: var(--color-fubuki-primary);
+  background: var(--color-fubuki-bg-light);
+}
+
+.prog-move.is-current {
+  background: var(--color-fubuki-primary);
+  color: #fff;
+  border-color: var(--color-fubuki-primary);
+  box-shadow: 0 var(--size-2) var(--size-8) rgba(84, 199, 234, 0.45);
+  opacity: 1;
+}
+
+.prog-move.is-current .m-coord {
+  color: #fff;
+}
+
+/* 分岐行（タブ付きコンテナ・横幅いっぱいに広げる） */
+.prog-branch {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  padding: 0;
+  border-radius: var(--size-8);
+  background: var(--color-bg-gray);
+  border: 1px solid var(--color-border);
+  border-bottom-width: 2px;
+  border-bottom-color: var(--color-border-heavy);
+  overflow: hidden;
+  transition:
+    border-color 0.15s,
+    background 0.15s,
+    box-shadow 0.15s,
+    opacity 0.15s;
+}
+
+.prog-branch:not(.is-played) {
+  opacity: 0.85;
+}
+
+.prog-branch.is-played {
+  background: #fff;
+  border-bottom-color: var(--color-fubuki-primary);
+}
+
+.prog-branch.is-current-row {
+  border-bottom-color: var(--color-fubuki-primary);
+  box-shadow: 0 var(--size-2) var(--size-8) rgba(84, 199, 234, 0.25);
+}
+
+/* 分岐タブボタン（コンテナ内で等分） */
+.prog-opt {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  padding: var(--size-12) var(--size-4) var(--size-4);
+  margin: 0;
+  border: none;
+  border-right: 1px solid var(--color-border);
+  background: var(--color-bg-gray);
+  color: var(--color-text-primary);
+  font-family: inherit;
+  font-size: var(--font-size-13);
+  font-weight: 500;
+  font-feature-settings: "tnum";
+  cursor: pointer;
+  flex: 1 1 0;
+  min-width: 0;
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+
+.prog-opt:last-child {
+  border-right: none;
+}
+
+.prog-opt:hover,
+.prog-opt:focus-visible {
+  background: #fff;
+  outline: none;
+}
+
+/* 推奨手にはタブ右上にドット */
+.prog-opt.is-best-opt::after {
+  content: "";
+  position: absolute;
+  top: var(--size-3);
+  right: var(--size-3);
+  width: var(--size-5);
+  height: var(--size-5);
+  border-radius: 50%;
+  background: var(--color-blue-500);
+}
+
+/* 選択中タブ（active） */
+.prog-opt.is-selected {
+  background: #fff;
+  color: var(--color-fubuki-name);
+}
+
+.prog-opt.is-selected::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -2px;
+  height: 2px;
+  background: var(--color-fubuki-primary);
+}
+
+/* 共通: 手番バッジ（カード左肩） */
+.prog-move .m-num,
+.prog-opt .m-num {
+  position: absolute;
+  top: var(--size-2);
+  left: var(--size-3);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--size-14);
+  height: var(--size-14);
+  border-radius: 50%;
+  font-size: var(--font-size-9);
+  font-weight: 500;
+}
+
+.prog-move.black .m-num,
+.prog-opt.black .m-num {
+  background: #1a1a1a;
+  color: #fff;
+}
+
+.prog-move.white .m-num,
+.prog-opt.white .m-num {
+  background: #fff;
+  color: #1a1a1a;
+  border: 1px solid var(--color-border-heavy);
+}
+
+.prog-move.is-current .m-num {
+  box-shadow: 0 0 0 1.5px #fff;
+}
+
+.prog-move .m-coord,
+.prog-opt .m-coord {
+  font-size: var(--font-size-13);
+  color: var(--color-text-primary);
+  line-height: 1.1;
+  text-align: center;
 }
 </style>
