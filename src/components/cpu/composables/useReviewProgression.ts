@@ -77,6 +77,7 @@ interface UseReviewProgressionReturn {
   jumpTo: (rowIdx: number) => void;
   selectBranchOption: (rowIdx: number, optId: string) => void;
   isOptionSelected: (pvIdx: number, optId: string) => boolean;
+  getSelectedOptionId: (pvIdx: number) => string;
   previewHoverMove: (rowIdx: number) => void;
   previewHoverOption: (rowIdx: number, optId: string) => void;
   previewLeave: () => void;
@@ -519,13 +520,16 @@ export function useReviewProgression(
   }
 
   function isOptionSelected(pvIdx: number, optId: string): boolean {
+    return getSelectedOptionId(pvIdx) === optId;
+  }
+
+  function getSelectedOptionId(pvIdx: number): string {
     const tab = activeTab.value;
     if (!tab) {
-      return false;
+      return "best";
     }
     const sel = selections.value[tab.id] ?? {};
-    const current = sel[pvIdx] ?? "best";
-    return current === optId;
+    return sel[pvIdx] ?? "best";
   }
 
   function previewHoverMove(rowIdx: number): void {
@@ -597,6 +601,7 @@ export function useReviewProgression(
     jumpTo,
     selectBranchOption,
     isOptionSelected,
+    getSelectedOptionId,
     previewHoverMove,
     previewHoverOption,
     previewLeave,

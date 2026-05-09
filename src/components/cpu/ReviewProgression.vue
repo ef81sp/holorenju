@@ -2,19 +2,23 @@
 /**
  * 振り返り評価パネルの「最善の進行 ＋ 分岐」セクション
  *
- * - 上位タブ: 最善 / 実際 / 被詰
- * - 各タブ内に進行ツリーを描画。分岐ポイントでは該当深度に
- *   インラインタブとして複数候補を提示し、選択次第で続きを切り替える
- * - 操作: 「全表示／1つ進む／リセット」
- * - ホバー/クリックで盤面に手順をプレビュー（hoverPvMove emit）
+ * - 上位タブ（最善 / 実際 / 被詰）: APG tabs パターン
+ *   - role="tablist" / role="tab" / role="tabpanel"
+ *   - aria-selected / aria-controls / aria-labelledby
+ *   - Roving tabindex（選択中タブのみ tabindex=0）
+ *   - キーボード: ←/→ で前後タブ（自動アクティベーション）、Home/End で先頭/末尾
  *
- * ロジック・状態は `useReviewProgression` composable に分離している。
+ * - インライン分岐は `BranchOptions` コンポーネントに分離
+ *   （APG radiogroup パターン）
+ *
+ * @see https://www.w3.org/WAI/ARIA/apg/patterns/tabs/
  */
 
-import { toRef } from "vue";
+import { nextTick, toRef, useId, useTemplateRef } from "vue";
 
 import type { EvaluatedMove } from "@/types/review";
 import type { Position } from "@/types/game";
+import BranchOptions from "./BranchOptions.vue";
 import { useReviewProgression } from "./composables/useReviewProgression";
 
 const props = defineProps<{
@@ -43,7 +47,7 @@ const {
   resetTree,
   jumpTo,
   selectBranchOption,
-  isOptionSelected,
+  getSelectedOptionId,
   previewHoverMove,
   previewHoverOption,
   previewLeave,
@@ -53,6 +57,63 @@ const {
   emitHover: (items, type) => emit("hoverPvMove", items, type),
   emitLeave: () => emit("leavePvMove"),
 });
+
+const uid = useId();
+const tabIdFor = (id: string): string => `${uid}-tab-${id}`;
+const panelIdFor = (id: string): string => `${uid}-panel-${id}`;
+
+const tabsRef = useTemplateRef<HTMLButtonElement[]>("tabs");
+
+function focusTabAt(idx: number): void {
+  nextTick(() => {
+    tabsRef.value?.[idx]?.focus();
+  });
+}
+
+/**
+ * APG tabs パターンの自動アクティベーション:
+ * 矢印キーで前後タブ、Home/End で先頭・末尾に移動し、フォーカス移動と同時に切替。
+ */
+function onTabKeydown(event: KeyboardEvent, currentId: string): void {
+  const tabs = topTabs.value;
+  const currentIdx = tabs.findIndex((t) => t.id === currentId);
+  if (currentIdx < 0) {
+    return;
+  }
+  let nextIdx = -1;
+  switch (event.key) {
+    case "ArrowLeft":
+      nextIdx = (currentIdx - 1 + tabs.length) % tabs.length;
+      break;
+    case "ArrowRight":
+      nextIdx = (currentIdx + 1) % tabs.length;
+      break;
+    case "Home":
+      nextIdx = 0;
+      break;
+    case "End":
+      nextIdx = tabs.length - 1;
+      break;
+    default:
+      return;
+  }
+  // window レベルで Arrow / Home / End が手数送りに使われているため、
+  // タブ内では確実に停止させる。
+  event.preventDefault();
+  event.stopPropagation();
+  const next = tabs[nextIdx];
+  if (next) {
+    switchTab(next.id);
+    focusTabAt(nextIdx);
+  }
+}
+
+function branchAriaLabel(pvIdx: number): string {
+  const tab = topTabs.value.find((t) => t.id === activeTabId.value);
+  const baseItem = tab?.basePV[pvIdx];
+  const moveNum = baseItem?.moveNum ?? props.moveIndex + pvIdx;
+  return `${moveNum} 手目の代替手`;
+}
 </script>
 
 <template>
@@ -74,18 +135,26 @@ const {
       v-if="topTabs.length > 1"
       class="tree-tabs"
       role="tablist"
+      aria-label="進行系統"
+      aria-orientation="horizontal"
     >
       <button
         v-for="t in topTabs"
+        :id="tabIdFor(t.id)"
         :key="t.id"
+        ref="tabs"
         type="button"
         role="tab"
+        :aria-selected="activeTabId === t.id"
+        :aria-controls="panelIdFor(t.id)"
+        :tabindex="activeTabId === t.id ? 0 : -1"
         class="tree-tab"
         :class="{
           'is-on': activeTabId === t.id,
           'is-loss': t.id === 'loss',
         }"
         @click="switchTab(t.id)"
+        @keydown="onTabKeydown($event, t.id)"
       >
         <span class="tab-label">{{ t.label }}</span>
         <span
@@ -125,7 +194,13 @@ const {
       </button>
     </div>
 
-    <div class="tree-scroll">
+    <div
+      v-if="activeTabId"
+      :id="panelIdFor(activeTabId)"
+      role="tabpanel"
+      :aria-labelledby="tabIdFor(activeTabId)"
+      class="tree-scroll"
+    >
       <div
         v-if="rows.length > 0"
         class="prog-list"
@@ -154,36 +229,19 @@ const {
             <span class="m-num">{{ row.item.moveNum }}</span>
             <span class="m-coord">{{ row.item.coord }}</span>
           </button>
-          <div
+          <BranchOptions
             v-else
-            class="prog-branch"
-            :class="{
+            :options="row.options"
+            :selected-id="getSelectedOptionId(row.pvIdx)"
+            :group-label="branchAriaLabel(row.pvIdx)"
+            :row-class="{
               'is-played': i < step,
               'is-current-row': i === step - 1,
             }"
-          >
-            <button
-              v-for="opt in row.options"
-              :key="opt.id"
-              type="button"
-              class="prog-opt"
-              :class="[
-                opt.item.moveNum % 2 === 1 ? 'black' : 'white',
-                {
-                  'is-best-opt': opt.id === 'best',
-                  'is-selected': isOptionSelected(row.pvIdx, opt.id),
-                },
-              ]"
-              @mouseenter="previewHoverOption(i, opt.id)"
-              @mouseleave="previewLeave"
-              @focus="previewHoverOption(i, opt.id)"
-              @blur="previewLeave"
-              @click="selectBranchOption(i, opt.id)"
-            >
-              <span class="m-num">{{ opt.item.moveNum }}</span>
-              <span class="m-coord">{{ opt.item.coord }}</span>
-            </button>
-          </div>
+            @select="(optId) => selectBranchOption(i, optId)"
+            @preview="(optId) => previewHoverOption(i, optId)"
+            @preview-leave="previewLeave"
+          />
         </template>
       </div>
     </div>
@@ -280,6 +338,12 @@ const {
   color: var(--color-fubuki-name);
   border-bottom: 1px solid #fff;
   z-index: 1;
+}
+
+.tree-tab:focus-visible {
+  outline: var(--size-2) solid var(--color-fubuki-primary);
+  outline-offset: -2px;
+  z-index: 2;
 }
 
 .tree-tab.is-loss {
@@ -406,6 +470,11 @@ const {
   outline: none;
 }
 
+.prog-move:focus-visible {
+  outline: var(--size-2) solid var(--color-fubuki-primary);
+  outline-offset: -2px;
+}
+
 .prog-move.is-played {
   opacity: 1;
   border-color: var(--color-fubuki-primary);
@@ -424,104 +493,7 @@ const {
   color: #fff;
 }
 
-/* 分岐行（タブ付きコンテナ・グリッド全列に展開） */
-.prog-branch {
-  grid-column: 1 / -1;
-  display: flex;
-  align-items: stretch;
-  gap: 0;
-  padding: 0;
-  border-radius: var(--size-8);
-  background: var(--color-bg-gray);
-  border: 1px solid var(--color-border);
-  border-bottom-width: 2px;
-  border-bottom-color: var(--color-border-heavy);
-  overflow: hidden;
-  transition:
-    border-color 0.15s,
-    background 0.15s,
-    box-shadow 0.15s,
-    opacity 0.15s;
-}
-
-.prog-branch:not(.is-played) {
-  opacity: 0.85;
-}
-
-.prog-branch.is-played {
-  background: #fff;
-  border-bottom-color: var(--color-fubuki-primary);
-}
-
-.prog-branch.is-current-row {
-  border-bottom-color: var(--color-fubuki-primary);
-  box-shadow: 0 var(--size-2) var(--size-8) rgba(84, 199, 234, 0.25);
-}
-
-/* 分岐タブボタン（コンテナ内で等分） */
-.prog-opt {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0;
-  padding: var(--size-12) var(--size-4) var(--size-4);
-  margin: 0;
-  border: none;
-  border-right: 1px solid var(--color-border);
-  background: var(--color-bg-gray);
-  color: var(--color-text-primary);
-  font-family: inherit;
-  font-size: var(--font-size-13);
-  font-weight: 500;
-  font-feature-settings: "tnum";
-  cursor: pointer;
-  flex: 1 1 0;
-  min-width: 0;
-  transition:
-    background 0.15s,
-    color 0.15s;
-}
-
-.prog-opt:last-child {
-  border-right: none;
-}
-
-.prog-opt:hover,
-.prog-opt:focus-visible {
-  background: #fff;
-  outline: none;
-}
-
-.prog-opt.is-best-opt::after {
-  content: "";
-  position: absolute;
-  top: var(--size-3);
-  right: var(--size-3);
-  width: var(--size-5);
-  height: var(--size-5);
-  border-radius: 50%;
-  background: var(--color-blue-500);
-}
-
-.prog-opt.is-selected {
-  background: #fff;
-  color: var(--color-fubuki-name);
-}
-
-.prog-opt.is-selected::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -2px;
-  height: 2px;
-  background: var(--color-fubuki-primary);
-}
-
-/* 共通: 手番バッジ（カード左肩） */
-.prog-move .m-num,
-.prog-opt .m-num {
+.prog-move .m-num {
   position: absolute;
   top: var(--size-2);
   left: var(--size-3);
@@ -535,14 +507,12 @@ const {
   font-weight: 500;
 }
 
-.prog-move.black .m-num,
-.prog-opt.black .m-num {
+.prog-move.black .m-num {
   background: #1a1a1a;
   color: #fff;
 }
 
-.prog-move.white .m-num,
-.prog-opt.white .m-num {
+.prog-move.white .m-num {
   background: #fff;
   color: #1a1a1a;
   border: 1px solid var(--color-border-heavy);
@@ -552,8 +522,7 @@ const {
   box-shadow: 0 0 0 1.5px #fff;
 }
 
-.prog-move .m-coord,
-.prog-opt .m-coord {
+.prog-move .m-coord {
   font-size: var(--font-size-13);
   color: var(--color-text-primary);
   line-height: 1.1;
