@@ -2,23 +2,19 @@
 /**
  * 振り返り評価パネルの「最善の進行 ＋ 分岐」セクション
  *
- * - 上位タブ（最善 / 実際 / 被詰）: APG tabs パターン
- *   - role="tablist" / role="tab" / role="tabpanel"
- *   - aria-selected / aria-controls / aria-labelledby
- *   - Roving tabindex（選択中タブのみ tabindex=0）
- *   - キーボード: ←/→ で前後タブ（自動アクティベーション）、Home/End で先頭/末尾
+ * - 上位タブ（最善 / 実際 / 被詰）は `TabList` コンポーネントに委譲
+ * - インライン分岐は `BranchOptions` コンポーネントに委譲（APG radiogroup）
  *
- * - インライン分岐は `BranchOptions` コンポーネントに分離
- *   （APG radiogroup パターン）
- *
- * @see https://www.w3.org/WAI/ARIA/apg/patterns/tabs/
+ * 本ファイルは Composable から得たデータをサブコンポーネントに渡し、
+ * コントロール（全表示/1つ進む/リセット）と単一手の行を描画する。
  */
 
-import { nextTick, toRef, useId, useTemplateRef } from "vue";
+import { toRef } from "vue";
 
 import type { EvaluatedMove } from "@/types/review";
 import type { Position } from "@/types/game";
 import BranchOptions from "./BranchOptions.vue";
+import TabList from "./TabList.vue";
 import { useReviewProgression } from "./composables/useReviewProgression";
 
 const props = defineProps<{
@@ -58,54 +54,8 @@ const {
   emitLeave: () => emit("leavePvMove"),
 });
 
-const uid = useId();
-const tabIdFor = (id: string): string => `${uid}-tab-${id}`;
-const panelIdFor = (id: string): string => `${uid}-panel-${id}`;
-
-const tabsRef = useTemplateRef<HTMLButtonElement[]>("tabs");
-
-function focusTabAt(idx: number): void {
-  nextTick(() => {
-    tabsRef.value?.[idx]?.focus();
-  });
-}
-
-/**
- * APG tabs パターンの自動アクティベーション:
- * 矢印キーで前後タブ、Home/End で先頭・末尾に移動し、フォーカス移動と同時に切替。
- */
-function onTabKeydown(event: KeyboardEvent, currentId: string): void {
-  const tabs = topTabs.value;
-  const currentIdx = tabs.findIndex((t) => t.id === currentId);
-  if (currentIdx < 0) {
-    return;
-  }
-  let nextIdx = -1;
-  switch (event.key) {
-    case "ArrowLeft":
-      nextIdx = (currentIdx - 1 + tabs.length) % tabs.length;
-      break;
-    case "ArrowRight":
-      nextIdx = (currentIdx + 1) % tabs.length;
-      break;
-    case "Home":
-      nextIdx = 0;
-      break;
-    case "End":
-      nextIdx = tabs.length - 1;
-      break;
-    default:
-      return;
-  }
-  // window レベルで Arrow / Home / End が手数送りに使われているため、
-  // タブ内では確実に停止させる。
-  event.preventDefault();
-  event.stopPropagation();
-  const next = tabs[nextIdx];
-  if (next) {
-    switchTab(next.id);
-    focusTabAt(nextIdx);
-  }
+function tabExtraClass(t: { id: string }): Record<string, boolean> {
+  return { "is-loss": t.id === "loss" };
 }
 
 function branchAriaLabel(pvIdx: number): string {
@@ -131,120 +81,87 @@ function branchAriaLabel(pvIdx: number): string {
       </span>
     </div>
 
-    <div
-      v-if="topTabs.length > 1"
-      class="tree-tabs"
-      role="tablist"
+    <TabList
+      :tabs="topTabs"
+      :active-id="activeTabId ?? ''"
       aria-label="進行系統"
-      aria-orientation="horizontal"
+      :tab-class="tabExtraClass"
+      @change="switchTab"
     >
-      <button
-        v-for="t in topTabs"
-        :id="tabIdFor(t.id)"
-        :key="t.id"
-        ref="tabs"
-        type="button"
-        role="tab"
-        :aria-selected="activeTabId === t.id"
-        :aria-controls="panelIdFor(t.id)"
-        :tabindex="activeTabId === t.id ? 0 : -1"
-        class="tree-tab"
-        :class="{
-          'is-on': activeTabId === t.id,
-          'is-loss': t.id === 'loss',
-        }"
-        @click="switchTab(t.id)"
-        @keydown="onTabKeydown($event, t.id)"
-      >
-        <span class="tab-label">{{ t.label }}</span>
-        <span
-          v-if="t.sub"
-          class="tab-sub"
+      <div class="tree-controls">
+        <button
+          type="button"
+          class="ctl-btn primary"
+          :class="{ 'is-on': showAll }"
+          :disabled="rows.length === 0"
+          @click="toggleShowAll"
         >
-          {{ t.sub }}
-        </span>
-      </button>
-    </div>
-
-    <div class="tree-controls">
-      <button
-        type="button"
-        class="ctl-btn primary"
-        :class="{ 'is-on': showAll }"
-        :disabled="rows.length === 0"
-        @click="toggleShowAll"
-      >
-        全表示
-      </button>
-      <button
-        type="button"
-        class="ctl-btn"
-        :disabled="step >= rows.length"
-        @click="stepForward"
-      >
-        1つ進む
-      </button>
-      <button
-        type="button"
-        class="ctl-btn"
-        :disabled="step === 0 && !showAll && !hasSelections"
-        @click="resetTree"
-      >
-        リセット
-      </button>
-    </div>
-
-    <div
-      v-if="activeTabId"
-      :id="panelIdFor(activeTabId)"
-      role="tabpanel"
-      :aria-labelledby="tabIdFor(activeTabId)"
-      class="tree-scroll"
-    >
-      <div
-        v-if="rows.length > 0"
-        class="prog-list"
-      >
-        <template
-          v-for="(row, i) in rows"
-          :key="row.key"
+          全表示
+        </button>
+        <button
+          type="button"
+          class="ctl-btn"
+          :disabled="step >= rows.length"
+          @click="stepForward"
         >
-          <button
-            v-if="row.type === 'move'"
-            type="button"
-            class="prog-move"
-            :class="[
-              row.item.moveNum % 2 === 1 ? 'black' : 'white',
-              {
-                'is-played': i < step,
-                'is-current': i === step - 1,
-              },
-            ]"
-            @mouseenter="previewHoverMove(i)"
-            @mouseleave="previewLeave"
-            @focus="previewHoverMove(i)"
-            @blur="previewLeave"
-            @click="jumpTo(i)"
-          >
-            <span class="m-num">{{ row.item.moveNum }}</span>
-            <span class="m-coord">{{ row.item.coord }}</span>
-          </button>
-          <BranchOptions
-            v-else
-            :options="row.options"
-            :selected-id="getSelectedOptionId(row.pvIdx)"
-            :group-label="branchAriaLabel(row.pvIdx)"
-            :row-class="{
-              'is-played': i < step,
-              'is-current-row': i === step - 1,
-            }"
-            @select="(optId) => selectBranchOption(i, optId)"
-            @preview="(optId) => previewHoverOption(i, optId)"
-            @preview-leave="previewLeave"
-          />
-        </template>
+          1つ進む
+        </button>
+        <button
+          type="button"
+          class="ctl-btn"
+          :disabled="step === 0 && !showAll && !hasSelections"
+          @click="resetTree"
+        >
+          リセット
+        </button>
       </div>
-    </div>
+
+      <div class="tree-scroll">
+        <div
+          v-if="rows.length > 0"
+          class="prog-list"
+        >
+          <template
+            v-for="(row, i) in rows"
+            :key="row.key"
+          >
+            <button
+              v-if="row.type === 'move'"
+              type="button"
+              class="prog-move"
+              :class="[
+                row.item.moveNum % 2 === 1 ? 'black' : 'white',
+                {
+                  'is-played': i < step,
+                  'is-current': i === step - 1,
+                },
+              ]"
+              @mouseenter="previewHoverMove(i)"
+              @mouseleave="previewLeave"
+              @focus="previewHoverMove(i)"
+              @blur="previewLeave"
+              @click="jumpTo(i)"
+            >
+              <span class="m-num">{{ row.item.moveNum }}</span>
+              <span class="m-coord">{{ row.item.coord }}</span>
+            </button>
+            <BranchOptions
+              v-else
+              :options="row.options"
+              :selected-id="getSelectedOptionId(row.pvIdx)"
+              :group-label="branchAriaLabel(row.pvIdx)"
+              :row-class="{
+                'is-played': i < step,
+                'is-current-row': i === step - 1,
+              }"
+              @select="(optId) => selectBranchOption(i, optId)"
+              @preview="(optId) => previewHoverOption(i, optId)"
+              @preview-leave="previewLeave"
+            />
+          </template>
+        </div>
+      </div>
+    </TabList>
   </section>
 </template>
 
@@ -285,79 +202,18 @@ function branchAriaLabel(pvIdx: number): string {
   overflow: hidden;
 }
 
-.tree-tabs {
-  display: flex;
-  gap: var(--size-1);
-  border-bottom: 1px solid var(--color-border);
-  overflow-x: auto;
-  scrollbar-width: thin;
-  flex-shrink: 0;
-}
-
-.tree-tabs::-webkit-scrollbar {
-  height: 4px;
-}
-
-.tree-tabs::-webkit-scrollbar-thumb {
-  background: var(--color-border);
-  border-radius: 2px;
-}
-
-.tree-tab {
-  flex: 1 0 auto;
-  min-width: var(--size-60);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0;
-  padding: var(--size-4) var(--size-6) var(--size-5);
-  margin-bottom: -1px;
-  background: var(--color-bg-gray);
-  border: 1px solid var(--color-border);
-  border-bottom: none;
-  border-radius: var(--size-6) var(--size-6) 0 0;
-  font-family: inherit;
-  font-size: var(--font-size-11);
-  font-weight: 500;
-  color: var(--color-text-secondary);
-  cursor: pointer;
-  white-space: nowrap;
-  line-height: 1.2;
-  transition:
-    background 0.15s ease,
-    color 0.15s ease;
-}
-
-.tree-tab:hover {
-  background: var(--color-bg-white);
-  color: var(--color-fubuki-name);
-}
-
-.tree-tab.is-on {
-  background: #fff;
-  color: var(--color-fubuki-name);
-  border-bottom: 1px solid #fff;
-  z-index: 1;
-}
-
-.tree-tab:focus-visible {
-  outline: var(--size-2) solid var(--color-fubuki-primary);
-  outline-offset: -2px;
-  z-index: 2;
-}
-
-.tree-tab.is-loss {
+/* 「is-loss」装飾は TabList の tab-class 経由 */
+.tree-section :deep(.tab.is-loss) {
   color: hsl(0, 55%, 45%);
 }
 
-.tree-tab.is-on.is-loss {
+.tree-section :deep(.tab.is-on.is-loss) {
   color: hsl(0, 65%, 45%);
 }
 
-.tree-tab .tab-sub {
-  font-size: var(--font-size-9);
-  font-weight: var(--font-weight-normal);
-  opacity: 0.85;
+/* TabList の tabpanel 内に控えるコントロール／ツリー */
+.tree-section :deep(.tabpanel) {
+  gap: var(--size-6);
 }
 
 .tree-controls {
