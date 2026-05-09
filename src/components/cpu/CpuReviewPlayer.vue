@@ -7,6 +7,7 @@
 
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 
+import InfoIcon from "@/assets/icons/info.svg?component";
 import RefreshIcon from "@/assets/icons/refresh.svg?component";
 import UploadFileIcon from "@/assets/icons/upload_file.svg?component";
 import BackButton from "@/components/common/BackButton.vue";
@@ -18,6 +19,7 @@ import CharacterSprite from "@/components/character/CharacterSprite.vue";
 import ReviewControls from "./ReviewControls.vue";
 import ReviewStatus from "./ReviewStatus.vue";
 import ReviewEvalPanel from "./ReviewEvalPanel.vue";
+import ReviewEvalHelpDialog from "./ReviewEvalHelpDialog.vue";
 // oxlint-disable-next-line consistent-type-imports
 import GameRecordImportDialog from "./GameRecordImportDialog.vue";
 import { useReviewEvaluator } from "./composables/useReviewEvaluator";
@@ -45,6 +47,13 @@ const layoutRef = ref<InstanceType<typeof GamePlayerLayout> | null>(null);
 const importDialogRef = ref<InstanceType<typeof GameRecordImportDialog> | null>(
   null,
 );
+const helpDialogRef = ref<InstanceType<typeof ReviewEvalHelpDialog> | null>(
+  null,
+);
+
+function openHelp(): void {
+  helpDialogRef.value?.showModal();
+}
 
 // Composables
 const evaluator = useReviewEvaluator();
@@ -314,6 +323,13 @@ function handleLayoutClick(event: MouseEvent): void {
       <template #header-controls>
         <button
           class="header-icon-button"
+          aria-label="評価の読み方ヘルプ"
+          @click="openHelp"
+        >
+          <InfoIcon />
+        </button>
+        <button
+          class="header-icon-button"
           aria-label="棋譜を読み込む"
           @click="importDialogRef?.showModal()"
         >
@@ -378,6 +394,7 @@ function handleLayoutClick(event: MouseEvent): void {
             reviewStore.losingMove?.moveIndex ===
             reviewStore.currentMoveIndex - 1
           "
+          @click.stop
           @hover-candidate="overlay.handleHoverCandidate"
           @leave-candidate="overlay.handleLeaveCandidate"
           @hover-pv-move="overlay.handleHoverPVMove"
@@ -421,6 +438,7 @@ function handleLayoutClick(event: MouseEvent): void {
       ref="importDialogRef"
       @imported="handleImported"
     />
+    <ReviewEvalHelpDialog ref="helpDialogRef" />
   </div>
 </template>
 
