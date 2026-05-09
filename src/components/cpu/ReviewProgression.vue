@@ -81,6 +81,34 @@ function branchAriaLabel(pvIdx: number): string {
       </span>
     </div>
 
+    <div class="tree-controls">
+      <button
+        type="button"
+        class="ctl-btn primary"
+        :class="{ 'is-on': showAll }"
+        :disabled="rows.length === 0"
+        @click="toggleShowAll"
+      >
+        全表示
+      </button>
+      <button
+        type="button"
+        class="ctl-btn"
+        :disabled="step >= rows.length"
+        @click="stepForward"
+      >
+        1つ進む
+      </button>
+      <button
+        type="button"
+        class="ctl-btn"
+        :disabled="step === 0 && !showAll && !hasSelections"
+        @click="resetTree"
+      >
+        リセット
+      </button>
+    </div>
+
     <TabList
       :tabs="topTabs"
       :active-id="activeTabId ?? ''"
@@ -88,34 +116,6 @@ function branchAriaLabel(pvIdx: number): string {
       :tab-class="tabExtraClass"
       @change="switchTab"
     >
-      <div class="tree-controls">
-        <button
-          type="button"
-          class="ctl-btn primary"
-          :class="{ 'is-on': showAll }"
-          :disabled="rows.length === 0"
-          @click="toggleShowAll"
-        >
-          全表示
-        </button>
-        <button
-          type="button"
-          class="ctl-btn"
-          :disabled="step >= rows.length"
-          @click="stepForward"
-        >
-          1つ進む
-        </button>
-        <button
-          type="button"
-          class="ctl-btn"
-          :disabled="step === 0 && !showAll && !hasSelections"
-          @click="resetTree"
-        >
-          リセット
-        </button>
-      </div>
-
       <div class="tree-scroll">
         <div
           v-if="rows.length > 0"
