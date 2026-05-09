@@ -71,7 +71,7 @@ function branchAriaLabel(pvIdx: number): string {
     v-if="topTabs.length > 0"
     class="panel-section tree-section"
   >
-    <h2 class="panel-label">
+    <h3 class="panel-label">
       <span>最善の進行</span>
       <span
         v-if="rows.length > 0"
@@ -79,7 +79,7 @@ function branchAriaLabel(pvIdx: number): string {
       >
         {{ rows.length }}手
       </span>
-    </h2>
+    </h3>
 
     <div class="tree-controls">
       <button

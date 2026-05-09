@@ -107,13 +107,13 @@ function handleLeave(): void {
     class="panel-section cand-section"
     aria-labelledby="review-cand-heading"
   >
-    <h2
+    <h3
       id="review-cand-heading"
       class="panel-label"
     >
       <span>候補手</span>
       <span class="panel-label-count">{{ candidateViews.length }}件</span>
-    </h2>
+    </h3>
     <div class="cand-scroll">
       <ul class="cand-grid">
         <li
