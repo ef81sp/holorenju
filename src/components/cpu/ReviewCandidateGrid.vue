@@ -105,56 +105,64 @@ function handleLeave(): void {
   <section
     v-if="candidateViews.length > 0"
     class="panel-section cand-section"
+    aria-labelledby="review-cand-heading"
   >
-    <div class="panel-label">
+    <h2
+      id="review-cand-heading"
+      class="panel-label"
+    >
       <span>候補手</span>
       <span class="panel-label-count">{{ candidateViews.length }}件</span>
-    </div>
+    </h2>
     <div class="cand-scroll">
-      <div class="cand-grid">
-        <button
+      <ul class="cand-grid">
+        <li
           v-for="c in candidateViews"
           :key="`${c.position.row},${c.position.col}`"
-          type="button"
-          class="cand-card"
-          :class="{
-            'is-best': c.kind === 'best',
-            'is-actual': c.kind === 'actual',
-            'is-danger': c.opponentForcedWinShort,
-            'is-fukumi': c.isFukumi,
-          }"
-          @mouseenter="handleEnter(c.position)"
-          @mouseleave="handleLeave"
-          @focus="handleEnter(c.position)"
-          @blur="handleLeave"
+          class="cand-item"
         >
-          <span
-            class="cand-rank"
-            :class="c.kind"
+          <button
+            type="button"
+            class="cand-card"
+            :class="{
+              'is-best': c.kind === 'best',
+              'is-actual': c.kind === 'actual',
+              'is-danger': c.opponentForcedWinShort,
+              'is-fukumi': c.isFukumi,
+            }"
+            @mouseenter="handleEnter(c.position)"
+            @mouseleave="handleLeave"
+            @focus="handleEnter(c.position)"
+            @blur="handleLeave"
           >
-            {{ c.rank }}
-          </span>
-          <span class="cand-coord">{{ c.coord }}</span>
-          <span
-            class="cand-delta"
-            :class="c.delta === 0 ? 'zero' : 'neg'"
-          >
-            {{ formatDelta(c.delta) }}
-          </span>
-          <span
-            v-if="c.opponentForcedWinShort"
-            class="cand-flag danger"
-          >
-            危{{ c.opponentForcedWinShort }}
-          </span>
-          <span
-            v-else-if="c.isFukumi"
-            class="cand-flag fukumi"
-          >
-            フクミ{{ c.fukumiDepth ? c.fukumiDepth : "" }}
-          </span>
-        </button>
-      </div>
+            <span
+              class="cand-rank"
+              :class="c.kind"
+            >
+              {{ c.rank }}
+            </span>
+            <span class="cand-coord">{{ c.coord }}</span>
+            <span
+              class="cand-delta"
+              :class="c.delta === 0 ? 'zero' : 'neg'"
+            >
+              {{ formatDelta(c.delta) }}
+            </span>
+            <span
+              v-if="c.opponentForcedWinShort"
+              class="cand-flag danger"
+            >
+              危{{ c.opponentForcedWinShort }}
+            </span>
+            <span
+              v-else-if="c.isFukumi"
+              class="cand-flag fukumi"
+            >
+              フクミ{{ c.fukumiDepth ? c.fukumiDepth : "" }}
+            </span>
+          </button>
+        </li>
+      </ul>
     </div>
   </section>
 </template>
@@ -170,6 +178,7 @@ function handleLeave(): void {
   display: flex;
   align-items: center;
   gap: var(--size-6);
+  margin: 0;
   font-size: var(--font-size-11);
   font-weight: 500;
   color: var(--color-text-secondary);
@@ -218,6 +227,23 @@ function handleLeave(): void {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(var(--size-56), 1fr));
   gap: var(--size-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/*
+ * li を矩形のグリッドセルとして配置し、内側のボタンを li いっぱいに
+ * 広げる。display: contents は一部ブラウザでアクセシビリティツリーから
+ * 消えるため使わない。
+ */
+.cand-item {
+  display: flex;
+  min-width: 0;
+}
+
+.cand-item > .cand-card {
+  width: 100%;
 }
 
 .cand-card {

@@ -113,7 +113,7 @@ const mode = computed<"empty" | "analyzing" | "cpu" | "player">(() => {
     class="cpu-move"
   >
     <div class="verdict-head">
-      <span class="verdict-num">
+      <h2 class="verdict-num">
         <span
           class="n"
           :class="{ 'is-white': !isBlackMove }"
@@ -121,7 +121,7 @@ const mode = computed<"empty" | "analyzing" | "cpu" | "player">(() => {
           {{ moveIndex }}
         </span>
         <span class="coord">{{ moveCoord }}</span>
-      </span>
+      </h2>
     </div>
     <div class="cpu-move-text analyzing">解析中...</div>
   </div>
@@ -131,7 +131,7 @@ const mode = computed<"empty" | "analyzing" | "cpu" | "player">(() => {
     class="cpu-move"
   >
     <div class="verdict-head">
-      <span class="verdict-num">
+      <h2 class="verdict-num">
         <span
           class="n"
           :class="{ 'is-white': !isBlackMove }"
@@ -139,7 +139,7 @@ const mode = computed<"empty" | "analyzing" | "cpu" | "player">(() => {
           {{ moveIndex }}
         </span>
         <span class="coord">{{ moveCoord }}</span>
-      </span>
+      </h2>
       <span
         v-if="cpuForcedWinLabel"
         class="tag forced"
@@ -155,7 +155,7 @@ const mode = computed<"empty" | "analyzing" | "cpu" | "player">(() => {
     class="panel-section verdict-section"
   >
     <div class="verdict-head">
-      <span class="verdict-num">
+      <h2 class="verdict-num">
         <span
           class="n"
           :class="{ 'is-white': !isBlackMove }"
@@ -163,7 +163,7 @@ const mode = computed<"empty" | "analyzing" | "cpu" | "player">(() => {
           {{ moveIndex }}
         </span>
         <span class="coord">{{ moveCoord }}</span>
-      </span>
+      </h2>
       <span
         v-if="props.isLosingMove"
         class="tag losing"
@@ -263,6 +263,7 @@ const mode = computed<"empty" | "analyzing" | "cpu" | "player">(() => {
   display: inline-flex;
   align-items: center;
   gap: var(--size-6);
+  margin: 0;
   font-size: var(--font-size-16);
   font-weight: 500;
   font-feature-settings: "tnum";
