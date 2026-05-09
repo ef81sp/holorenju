@@ -228,7 +228,7 @@ function handleLeave(): void {
   grid-template-columns: repeat(auto-fill, minmax(var(--size-56), 1fr));
   gap: var(--size-4);
   margin: 0;
-  padding: 0;
+  padding-block: var(--size-2);
   list-style: none;
 }
 

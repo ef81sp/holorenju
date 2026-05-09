@@ -351,7 +351,7 @@ defineExpose({
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   gap: var(--size-4);
-  padding-block: var(--size-2);
+  overflow-y: auto;
 }
 
 .jushu-card {
