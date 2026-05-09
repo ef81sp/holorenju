@@ -17,9 +17,10 @@
  * @see https://www.w3.org/WAI/ARIA/apg/patterns/radio/
  */
 
-import { nextTick, useTemplateRef } from "vue";
+import { toRef } from "vue";
 
 import type { PVDisplayItem } from "./composables/useReviewProgression";
+import { useRovingTabindex } from "./composables/useRovingTabindex";
 
 interface Option {
   id: string;
@@ -41,59 +42,31 @@ const emit = defineEmits<{
   previewLeave: [];
 }>();
 
-const buttonsRef = useTemplateRef<HTMLButtonElement[]>("buttons");
-
 function isSelected(optId: string): boolean {
   return optId === props.selectedId;
 }
 
-function focusIndex(idx: number): void {
-  nextTick(() => {
-    buttonsRef.value?.[idx]?.focus();
-  });
-}
+const { onKeydown: onArrowKeydown } = useRovingTabindex({
+  items: toRef(() => props.options),
+  getId: (o) => o.id,
+  onChange: (id) => emit("select", id),
+  orientation: "both",
+});
 
+/**
+ * radio の Space / Enter は明示的選択。共通 composable の矢印操作と
+ * 合流させ、それ以外は素通り。
+ */
 function onKeydown(event: KeyboardEvent, currentId: string): void {
-  const opts = props.options;
-  const currentIdx = opts.findIndex((o) => o.id === currentId);
-  if (currentIdx < 0) {
+  if (event.key === " " || event.key === "Enter") {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!isSelected(currentId)) {
+      emit("select", currentId);
+    }
     return;
   }
-  let nextIdx = -1;
-  switch (event.key) {
-    case "ArrowLeft":
-    case "ArrowUp":
-      nextIdx = (currentIdx - 1 + opts.length) % opts.length;
-      break;
-    case "ArrowRight":
-    case "ArrowDown":
-      nextIdx = (currentIdx + 1) % opts.length;
-      break;
-    case "Home":
-      nextIdx = 0;
-      break;
-    case "End":
-      nextIdx = opts.length - 1;
-      break;
-    case " ":
-    case "Enter":
-      event.preventDefault();
-      event.stopPropagation();
-      if (!isSelected(currentId)) {
-        emit("select", currentId);
-      }
-      return;
-    default:
-      return;
-  }
-  // window レベルの Arrow / Home / End（手数送り）を抑止
-  event.preventDefault();
-  event.stopPropagation();
-  const next = opts[nextIdx];
-  if (next) {
-    emit("select", next.id);
-    focusIndex(nextIdx);
-  }
+  onArrowKeydown(event, currentId);
 }
 </script>
 
@@ -107,7 +80,7 @@ function onKeydown(event: KeyboardEvent, currentId: string): void {
     <button
       v-for="opt in options"
       :key="opt.id"
-      ref="buttons"
+      ref="items"
       type="button"
       role="radio"
       :aria-checked="isSelected(opt.id)"

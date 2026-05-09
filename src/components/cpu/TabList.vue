@@ -22,7 +22,9 @@
  * tabs.length が 1 以下のときはタブリストを描画しない（パネルだけ表示）。
  */
 
-import { nextTick, useId, useTemplateRef } from "vue";
+import { toRef, useId } from "vue";
+
+import { useRovingTabindex } from "./composables/useRovingTabindex";
 
 const props = defineProps<{
   tabs: T[];
@@ -41,46 +43,12 @@ const uid = useId();
 const tabIdFor = (id: string): string => `${uid}-tab-${id}`;
 const panelIdFor = (id: string): string => `${uid}-panel-${id}`;
 
-const tabsRef = useTemplateRef<HTMLButtonElement[]>("tabButtons");
-
-function focusTabAt(idx: number): void {
-  nextTick(() => {
-    tabsRef.value?.[idx]?.focus();
-  });
-}
-
-function onKeydown(event: KeyboardEvent, currentId: string): void {
-  const list = props.tabs;
-  const currentIdx = list.findIndex((t) => t.id === currentId);
-  if (currentIdx < 0) {
-    return;
-  }
-  let nextIdx = -1;
-  switch (event.key) {
-    case "ArrowLeft":
-      nextIdx = (currentIdx - 1 + list.length) % list.length;
-      break;
-    case "ArrowRight":
-      nextIdx = (currentIdx + 1) % list.length;
-      break;
-    case "Home":
-      nextIdx = 0;
-      break;
-    case "End":
-      nextIdx = list.length - 1;
-      break;
-    default:
-      return;
-  }
-  // 親側 window で ArrowLeft/Right を使っているケースに干渉しないよう停止
-  event.preventDefault();
-  event.stopPropagation();
-  const next = list[nextIdx];
-  if (next) {
-    emit("change", next.id);
-    focusTabAt(nextIdx);
-  }
-}
+const { onKeydown } = useRovingTabindex({
+  items: toRef(() => props.tabs),
+  getId: (t) => t.id,
+  onChange: (id) => emit("change", id),
+  orientation: "horizontal",
+});
 </script>
 
 <template>
@@ -95,7 +63,7 @@ function onKeydown(event: KeyboardEvent, currentId: string): void {
       v-for="t in tabs"
       :id="tabIdFor(t.id)"
       :key="t.id"
-      ref="tabButtons"
+      ref="items"
       type="button"
       role="tab"
       :aria-selected="activeId === t.id"
