@@ -175,16 +175,27 @@ function onKeydown(event: KeyboardEvent, currentId: string): void {
 }
 
 .tab.is-on {
-  background: #fff;
+  background: var(--color-bg-white);
   color: var(--color-fubuki-name);
-  border-bottom: 1px solid #fff;
+  border-bottom: 1px solid var(--color-bg-white);
   z-index: 1;
 }
 
 .tab:focus-visible {
   outline: var(--size-2) solid var(--color-fubuki-primary);
-  outline-offset: -2px;
+  outline-offset: calc(var(--size-2) * -1);
   z-index: 2;
+}
+
+/* 親が tabClass で付与する装飾クラス。エラー系（被詰など）の警告色 */
+.tab.is-loss {
+  color: var(--color-error);
+  opacity: 0.85;
+}
+
+.tab.is-on.is-loss {
+  color: var(--color-error);
+  opacity: 1;
 }
 
 .tab .tab-sub {
@@ -198,6 +209,7 @@ function onKeydown(event: KeyboardEvent, currentId: string): void {
   min-height: 0;
   display: flex;
   flex-direction: column;
+  gap: var(--size-6);
   min-width: 0;
 }
 </style>

@@ -93,8 +93,16 @@
   --color-success-dark: #276749;
   --color-error: #dc2626;
   --color-error-light: #fee2e2;
+  --color-error-dark: hsl(0, 80%, 40%);
   --color-warning: #f59e0b;
   --color-warning-light: #fff3cd;
+  /* 紫系（必勝・フクミ用） */
+  --color-violet: hsl(270, 50%, 55%);
+  --color-violet-light: hsl(270, 50%, 95%);
+  --color-violet-dark: hsl(270, 50%, 45%);
+  /* 石・盤面 */
+  --color-stone-black: #1a1a1a;
+  --color-stone-white: #ffffff;
 
   /* 無効状態 */
   --color-disabled-bg: #cccccc;

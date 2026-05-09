@@ -136,14 +136,25 @@ function branchAriaLabel(pvIdx: number): string {
                   'is-current': i === step - 1,
                 },
               ]"
+              :aria-label="`${row.item.moveNum} 手目 ${row.item.coord} まで再生`"
               @mouseenter="previewHoverMove(i)"
               @mouseleave="previewLeave"
               @focus="previewHoverMove(i)"
               @blur="previewLeave"
               @click="jumpTo(i)"
             >
-              <span class="m-num">{{ row.item.moveNum }}</span>
-              <span class="m-coord">{{ row.item.coord }}</span>
+              <span
+                class="m-num"
+                aria-hidden="true"
+              >
+                {{ row.item.moveNum }}
+              </span>
+              <span
+                class="m-coord"
+                aria-hidden="true"
+              >
+                {{ row.item.coord }}
+              </span>
             </button>
             <BranchOptions
               v-else
@@ -203,20 +214,6 @@ function branchAriaLabel(pvIdx: number): string {
   overflow: hidden;
 }
 
-/* 「is-loss」装飾は TabList の tab-class 経由 */
-.tree-section :deep(.tab.is-loss) {
-  color: hsl(0, 55%, 45%);
-}
-
-.tree-section :deep(.tab.is-on.is-loss) {
-  color: hsl(0, 65%, 45%);
-}
-
-/* TabList の tabpanel 内に控えるコントロール／ツリー */
-.tree-section :deep(.tabpanel) {
-  gap: var(--size-6);
-}
-
 .tree-controls {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
@@ -231,7 +228,7 @@ function branchAriaLabel(pvIdx: number): string {
   padding: var(--size-5) var(--size-3);
   border-radius: var(--size-6);
   border: 1px solid var(--color-border);
-  background: #fff;
+  background: var(--color-bg-white);
   color: var(--color-text-primary);
   cursor: pointer;
   transition:
@@ -256,7 +253,7 @@ function branchAriaLabel(pvIdx: number): string {
 
 .ctl-btn.primary {
   background: var(--color-fubuki-primary);
-  color: #fff;
+  color: var(--color-bg-white);
   border-color: var(--color-fubuki-primary);
 }
 
@@ -279,12 +276,12 @@ function branchAriaLabel(pvIdx: number): string {
 }
 
 .tree-scroll::-webkit-scrollbar {
-  width: 6px;
+  width: var(--size-6);
 }
 
 .tree-scroll::-webkit-scrollbar-thumb {
   background: var(--color-border);
-  border-radius: 3px;
+  border-radius: var(--size-3);
 }
 
 .prog-list {
@@ -304,7 +301,7 @@ function branchAriaLabel(pvIdx: number): string {
   padding: var(--size-12) var(--size-4) var(--size-4);
   border-radius: var(--size-8);
   border: 1px solid var(--color-border);
-  background: #fff;
+  background: var(--color-bg-white);
   color: var(--color-text-primary);
   font-family: inherit;
   font-size: var(--font-size-13);
@@ -320,16 +317,16 @@ function branchAriaLabel(pvIdx: number): string {
     transform 0.12s;
 }
 
-.prog-move:hover,
-.prog-move:focus-visible {
+.prog-move:hover {
   border-color: var(--color-fubuki-primary);
   opacity: 1;
-  outline: none;
 }
 
 .prog-move:focus-visible {
+  border-color: var(--color-fubuki-primary);
+  opacity: 1;
   outline: var(--size-2) solid var(--color-fubuki-primary);
-  outline-offset: -2px;
+  outline-offset: calc(var(--size-2) * -1);
 }
 
 .prog-move.is-played {
@@ -340,14 +337,15 @@ function branchAriaLabel(pvIdx: number): string {
 
 .prog-move.is-current {
   background: var(--color-fubuki-primary);
-  color: #fff;
+  color: var(--color-bg-white);
   border-color: var(--color-fubuki-primary);
-  box-shadow: 0 var(--size-2) var(--size-8) rgba(84, 199, 234, 0.45);
+  box-shadow: 0 var(--size-2) var(--size-8)
+    color-mix(in srgb, var(--color-fubuki-primary) 45%, transparent);
   opacity: 1;
 }
 
 .prog-move.is-current .m-coord {
-  color: #fff;
+  color: var(--color-bg-white);
 }
 
 .prog-move .m-num {
@@ -365,18 +363,18 @@ function branchAriaLabel(pvIdx: number): string {
 }
 
 .prog-move.black .m-num {
-  background: #1a1a1a;
-  color: #fff;
+  background: var(--color-stone-black);
+  color: var(--color-bg-white);
 }
 
 .prog-move.white .m-num {
-  background: #fff;
-  color: #1a1a1a;
+  background: var(--color-bg-white);
+  color: var(--color-stone-black);
   border: 1px solid var(--color-border-heavy);
 }
 
 .prog-move.is-current .m-num {
-  box-shadow: 0 0 0 1.5px #fff;
+  box-shadow: 0 0 0 var(--size-2) var(--color-bg-white);
 }
 
 .prog-move .m-coord {

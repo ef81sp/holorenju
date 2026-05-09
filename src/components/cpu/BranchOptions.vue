@@ -111,6 +111,11 @@ function onKeydown(event: KeyboardEvent, currentId: string): void {
       type="button"
       role="radio"
       :aria-checked="isSelected(opt.id)"
+      :aria-label="
+        opt.id === 'best'
+          ? `${opt.item.moveNum} 手目 ${opt.item.coord}（推奨手）`
+          : `${opt.item.moveNum} 手目 ${opt.item.coord}（代替手）`
+      "
       :tabindex="isSelected(opt.id) ? 0 : -1"
       class="prog-opt"
       :class="[
@@ -127,8 +132,18 @@ function onKeydown(event: KeyboardEvent, currentId: string): void {
       @focus="emit('preview', opt.id)"
       @blur="emit('previewLeave')"
     >
-      <span class="m-num">{{ opt.item.moveNum }}</span>
-      <span class="m-coord">{{ opt.item.coord }}</span>
+      <span
+        class="m-num"
+        aria-hidden="true"
+      >
+        {{ opt.item.moveNum }}
+      </span>
+      <span
+        class="m-coord"
+        aria-hidden="true"
+      >
+        {{ opt.item.coord }}
+      </span>
     </button>
   </div>
 </template>
@@ -158,13 +173,14 @@ function onKeydown(event: KeyboardEvent, currentId: string): void {
 }
 
 .prog-branch.is-played {
-  background: #fff;
+  background: var(--color-bg-white);
   border-bottom-color: var(--color-fubuki-primary);
 }
 
 .prog-branch.is-current-row {
   border-bottom-color: var(--color-fubuki-primary);
-  box-shadow: 0 var(--size-2) var(--size-8) rgba(84, 199, 234, 0.25);
+  box-shadow: 0 var(--size-2) var(--size-8)
+    color-mix(in srgb, var(--color-fubuki-primary) 25%, transparent);
 }
 
 .prog-opt {
@@ -209,7 +225,7 @@ function onKeydown(event: KeyboardEvent, currentId: string): void {
 }
 
 .prog-opt:hover {
-  background: #fff;
+  background: var(--color-bg-white);
 }
 
 .prog-opt:focus-visible {
@@ -229,7 +245,7 @@ function onKeydown(event: KeyboardEvent, currentId: string): void {
 }
 
 .prog-opt.is-selected {
-  background: #fff;
+  background: var(--color-bg-white);
   color: var(--color-fubuki-name);
 }
 
@@ -238,8 +254,8 @@ function onKeydown(event: KeyboardEvent, currentId: string): void {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: -2px;
-  height: 2px;
+  bottom: calc(var(--size-2) * -1);
+  height: var(--size-2);
   background: var(--color-fubuki-primary);
 }
 
@@ -258,13 +274,13 @@ function onKeydown(event: KeyboardEvent, currentId: string): void {
 }
 
 .prog-opt.black .m-num {
-  background: #1a1a1a;
-  color: #fff;
+  background: var(--color-stone-black);
+  color: var(--color-bg-white);
 }
 
 .prog-opt.white .m-num {
-  background: #fff;
-  color: #1a1a1a;
+  background: var(--color-bg-white);
+  color: var(--color-stone-black);
   border: 1px solid var(--color-border-heavy);
 }
 

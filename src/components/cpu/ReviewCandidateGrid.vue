@@ -128,7 +128,6 @@ function handleLeave(): void {
               'is-best': c.kind === 'best',
               'is-actual': c.kind === 'actual',
               'is-danger': c.opponentForcedWinShort,
-              'is-fukumi': c.isFukumi,
             }"
             @mouseenter="handleEnter(c.position)"
             @mouseleave="handleLeave"
@@ -211,12 +210,12 @@ function handleLeave(): void {
 }
 
 .cand-scroll::-webkit-scrollbar {
-  width: 6px;
+  width: var(--size-6);
 }
 
 .cand-scroll::-webkit-scrollbar-thumb {
   background: var(--color-border);
-  border-radius: 3px;
+  border-radius: var(--size-3);
 }
 
 .cand-scroll::-webkit-scrollbar-track {
@@ -255,7 +254,7 @@ function handleLeave(): void {
   padding: var(--size-12) var(--size-4) var(--size-4);
   border-radius: var(--size-8);
   border: 1px solid var(--color-border);
-  background: #fff;
+  background: var(--color-bg-white);
   cursor: pointer;
   font-family: inherit;
   font-feature-settings: "tnum";
@@ -284,7 +283,7 @@ function handleLeave(): void {
 }
 
 .cand-card.is-danger {
-  border-color: hsl(0, 65%, 50%);
+  border-color: var(--color-error);
 }
 
 .cand-card.is-best::after,
@@ -317,7 +316,7 @@ function handleLeave(): void {
   height: var(--size-12);
   border-radius: 50%;
   background: var(--color-text-light);
-  color: #fff;
+  color: var(--color-bg-white);
   font-size: var(--font-size-9);
   font-weight: 500;
 }
@@ -361,12 +360,12 @@ function handleLeave(): void {
 }
 
 .cand-flag.danger {
-  background: hsl(0, 65%, 95%);
-  color: hsl(0, 65%, 45%);
+  background: var(--color-error-light);
+  color: var(--color-error);
 }
 
 .cand-flag.fukumi {
-  background: hsl(270, 50%, 95%);
-  color: hsl(270, 50%, 45%);
+  background: var(--color-violet-light);
+  color: var(--color-violet-dark);
 }
 </style>

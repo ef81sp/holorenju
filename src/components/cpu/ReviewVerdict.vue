@@ -9,7 +9,7 @@
  *   4. プレイヤー手のフル評価: 手数バッジ・座標・品質タグ・スコアブロック
  */
 
-import { computed } from "vue";
+import { computed, useId } from "vue";
 
 import type { EvaluatedMove } from "@/types/review";
 import type { Position } from "@/types/game";
@@ -17,6 +17,8 @@ import { CPU_WIN_LABELS, SHORT_LABELS } from "@/logic/forcedTypeLabels";
 import { formatMove } from "@/logic/gameRecordParser";
 import { getQualityLabel, getQualityColor } from "@/logic/reviewLogic";
 import { formatScore as formatScoreUtil } from "@/logic/cpu/evaluation/breakdownUtils";
+
+const verdictHeadingId = `${useId()}-verdict`;
 
 const props = defineProps<{
   evaluation: EvaluatedMove | null;
@@ -101,103 +103,89 @@ const mode = computed<"empty" | "analyzing" | "cpu" | "player">(() => {
 </script>
 
 <template>
-  <div
+  <p
     v-if="mode === 'empty'"
     class="empty"
   >
-    <span>手を選択してください</span>
-  </div>
-
-  <div
-    v-else-if="mode === 'analyzing'"
-    class="cpu-move"
-  >
-    <div class="verdict-head">
-      <h2 class="verdict-num">
-        <span
-          class="n"
-          :class="{ 'is-white': !isBlackMove }"
-        >
-          {{ moveIndex }}
-        </span>
-        <span class="coord">{{ moveCoord }}</span>
-      </h2>
-    </div>
-    <div class="cpu-move-text analyzing">解析中...</div>
-  </div>
-
-  <div
-    v-else-if="mode === 'cpu'"
-    class="cpu-move"
-  >
-    <div class="verdict-head">
-      <h2 class="verdict-num">
-        <span
-          class="n"
-          :class="{ 'is-white': !isBlackMove }"
-        >
-          {{ moveIndex }}
-        </span>
-        <span class="coord">{{ moveCoord }}</span>
-      </h2>
-      <span
-        v-if="cpuForcedWinLabel"
-        class="tag forced"
-      >
-        {{ cpuForcedWinLabel }}
-      </span>
-    </div>
-    <div class="cpu-move-text">相手の手</div>
-  </div>
+    手を選択してください
+  </p>
 
   <section
-    v-else-if="evaluation"
+    v-else
     class="panel-section verdict-section"
+    :aria-labelledby="verdictHeadingId"
+    :aria-busy="mode === 'analyzing' ? true : undefined"
   >
     <div class="verdict-head">
-      <h2 class="verdict-num">
+      <h2
+        :id="verdictHeadingId"
+        class="verdict-num"
+      >
         <span
           class="n"
           :class="{ 'is-white': !isBlackMove }"
+          aria-hidden="true"
         >
           {{ moveIndex }}
         </span>
+        <span class="visually-hidden">{{ moveIndex }} 手目</span>
         <span class="coord">{{ moveCoord }}</span>
       </h2>
-      <span
-        v-if="props.isLosingMove"
-        class="tag losing"
-      >
-        敗着
-      </span>
-      <span
-        v-else
-        class="tag quality"
-        :style="{ backgroundColor: qualityColor }"
-      >
-        {{ qualityLabel }}
-      </span>
-      <span
-        v-if="forcedWinLabel"
-        class="tag forced"
-      >
-        {{ forcedWinLabel }}
-      </span>
-      <span
-        v-if="forcedLossLabel && !props.isLosingMove"
-        class="tag loss"
-      >
-        {{ forcedLossLabel }}
-      </span>
-      <span
-        v-if="missedDoubleMiseLabel"
-        class="tag miss"
-      >
-        {{ missedDoubleMiseLabel }}
-      </span>
+      <template v-if="mode === 'cpu' && cpuForcedWinLabel">
+        <span class="tag forced">{{ cpuForcedWinLabel }}</span>
+      </template>
+      <template v-if="mode === 'player' && evaluation">
+        <span
+          v-if="props.isLosingMove"
+          class="tag losing"
+        >
+          敗着
+        </span>
+        <span
+          v-else
+          class="tag quality"
+          :style="{ backgroundColor: qualityColor }"
+        >
+          {{ qualityLabel }}
+        </span>
+        <span
+          v-if="forcedWinLabel"
+          class="tag forced"
+        >
+          {{ forcedWinLabel }}
+        </span>
+        <span
+          v-if="forcedLossLabel && !props.isLosingMove"
+          class="tag loss"
+        >
+          {{ forcedLossLabel }}
+        </span>
+        <span
+          v-if="missedDoubleMiseLabel"
+          class="tag miss"
+        >
+          {{ missedDoubleMiseLabel }}
+        </span>
+      </template>
     </div>
 
-    <div class="score-block">
+    <p
+      v-if="mode === 'analyzing'"
+      class="status-text status-analyzing"
+      role="status"
+    >
+      解析中...
+    </p>
+    <p
+      v-else-if="mode === 'cpu'"
+      class="status-text"
+    >
+      相手の手
+    </p>
+    <div
+      v-else-if="mode === 'player' && evaluation"
+      class="score-block"
+    >
       <div class="score-cell">
         <div class="label">実際</div>
         <div class="v actual">{{ formatScore(evaluation.playedScore) }}</div>
@@ -216,22 +204,18 @@ const mode = computed<"empty" | "analyzing" | "cpu" | "player">(() => {
   align-items: center;
   justify-content: center;
   height: 100%;
+  margin: 0;
   color: var(--color-text-secondary);
   font-size: var(--font-size-13);
 }
 
-.cpu-move {
-  display: flex;
-  flex-direction: column;
-  gap: var(--size-8);
-}
-
-.cpu-move-text {
+.status-text {
+  margin: 0;
   color: var(--color-text-secondary);
   font-size: var(--font-size-13);
 }
 
-.analyzing {
+.status-analyzing {
   animation: analyzing-pulse 1.5s ease-in-out infinite;
 }
 
@@ -276,15 +260,15 @@ const mode = computed<"empty" | "analyzing" | "cpu" | "player">(() => {
   width: var(--size-24);
   height: var(--size-24);
   border-radius: 50%;
-  background: #1a1a1a;
-  color: #fff;
+  background: var(--color-stone-black);
+  color: var(--color-stone-white);
   font-size: var(--font-size-11);
   font-weight: 500;
 }
 
 .verdict-num .n.is-white {
-  background: #fff;
-  color: #1a1a1a;
+  background: var(--color-stone-white);
+  color: var(--color-stone-black);
   border: 1px solid var(--color-border-heavy);
 }
 
@@ -300,7 +284,7 @@ const mode = computed<"empty" | "analyzing" | "cpu" | "player">(() => {
   font-size: var(--font-size-10);
   font-weight: 500;
   white-space: nowrap;
-  color: #fff;
+  color: var(--color-bg-white);
 }
 
 .tag.quality {
@@ -308,11 +292,11 @@ const mode = computed<"empty" | "analyzing" | "cpu" | "player">(() => {
 }
 
 .tag.forced {
-  background: hsl(270, 50%, 55%);
+  background: var(--color-violet);
 }
 
 .tag.loss {
-  background: hsl(0, 65%, 50%);
+  background: var(--color-error);
 }
 
 .tag.miss {
@@ -320,7 +304,7 @@ const mode = computed<"empty" | "analyzing" | "cpu" | "player">(() => {
 }
 
 .tag.losing {
-  background: hsl(0, 80%, 40%);
+  background: var(--color-error-dark);
 }
 
 .score-block {

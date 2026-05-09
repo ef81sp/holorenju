@@ -76,7 +76,6 @@ interface UseReviewProgressionReturn {
   resetTree: () => void;
   jumpTo: (rowIdx: number) => void;
   selectBranchOption: (rowIdx: number, optId: string) => void;
-  isOptionSelected: (pvIdx: number, optId: string) => boolean;
   getSelectedOptionId: (pvIdx: number) => string;
   previewHoverMove: (rowIdx: number) => void;
   previewHoverOption: (rowIdx: number, optId: string) => void;
@@ -519,10 +518,6 @@ export function useReviewProgression(
     emitPreview();
   }
 
-  function isOptionSelected(pvIdx: number, optId: string): boolean {
-    return getSelectedOptionId(pvIdx) === optId;
-  }
-
   function getSelectedOptionId(pvIdx: number): string {
     const tab = activeTab.value;
     if (!tab) {
@@ -600,7 +595,6 @@ export function useReviewProgression(
     resetTree,
     jumpTo,
     selectBranchOption,
-    isOptionSelected,
     getSelectedOptionId,
     previewHoverMove,
     previewHoverOption,
