@@ -152,9 +152,7 @@ function onKeydown(event: KeyboardEvent, currentId: string): void {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0;
   padding: var(--size-4) var(--size-6) var(--size-5);
-  margin-bottom: -1px;
   background: var(--color-bg-gray);
   border: 1px solid var(--color-border);
   border-bottom: none;

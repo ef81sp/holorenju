@@ -191,19 +191,30 @@ function onKeydown(event: KeyboardEvent, currentId: string): void {
     color 0.15s;
 }
 
-.prog-opt:last-child {
-  border-right: none;
+/*
+ * 端タブの外側角はコンテナの border-radius に合わせて丸める。
+ * 角を丸めないとフォーカスリング（outline-offset で内側に描画）が
+ * 矩形になり、コンテナの overflow:hidden で見た目だけ角が丸い形と
+ * 一致しなくなる。
+ */
+.prog-opt:first-child {
+  border-top-left-radius: calc(var(--size-8) - 1px);
+  border-bottom-left-radius: calc(var(--size-8) - 1px);
 }
 
-.prog-opt:hover,
-.prog-opt:focus-visible {
+.prog-opt:last-child {
+  border-right: none;
+  border-top-right-radius: calc(var(--size-8) - 1px);
+  border-bottom-right-radius: calc(var(--size-8) - 1px);
+}
+
+.prog-opt:hover {
   background: #fff;
-  outline: none;
 }
 
 .prog-opt:focus-visible {
   outline: var(--size-2) solid var(--color-fubuki-primary);
-  outline-offset: -2px;
+  outline-offset: calc(var(--size-2) * -1);
 }
 
 .prog-opt.is-best-opt::after {
