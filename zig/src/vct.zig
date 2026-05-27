@@ -442,6 +442,279 @@ fn blockHasThreat(ct: CounterThreat) bool {
 }
 
 // =============================================================================
+// カウンターフォー耐性検証（TS版 vctValidation.ts に対応）
+//
+// VCT手順を見つけても、相手は防御位置ではなくカウンターフォー（任意の四を作る手）
+// で応じる可能性がある。我々の活三を打った後で相手にカウンターフォーがあると、
+// 速度負けで手順が崩壊する（活三＝5を作るのに2手 vs カウンターフォー＝5を作るのに1手）。
+//
+// この検証は findVCTSequence の事後処理として実行する。
+// =============================================================================
+
+/// 白に三三または四四の勝ち手があるかスキャン（CF+ブロック後の脅威判定用）
+fn hasDoubleThreeForWhite(cells: []Cell) bool {
+    const near_mask = threats.computeNearMask(threats.computeOccupiedRows(cells), 2);
+    for (0..BOARD_SIZE) |r_usize| {
+        const r: u8 = @intCast(r_usize);
+        for (0..BOARD_SIZE) |c_usize| {
+            const c: u8 = @intCast(c_usize);
+            const idx = @as(u16, r) * BOARD_SIZE + c;
+            if (cells[idx] != .empty) continue;
+            if (!threats.isNearFromMask(near_mask, r, c)) continue;
+
+            cells[idx] = .white;
+            bitboard.placeStone(r, c, .white);
+            const winning = threats.checkWhiteWinningPattern(cells, r, c);
+            cells[idx] = .empty;
+            bitboard.removeStone(r, c);
+
+            if (winning) return true;
+        }
+    }
+    return false;
+}
+
+/// CF+ブロック配置下で残りの手順の防御 ct 値が破壊的に変化するか検査
+///
+/// TS版 checkSequenceBreaksByCF を拡張: 防御配置後に相手が活三/ミセ手を持つ場合、
+/// 次の攻撃手が四/五でなければ手順が崩壊する。
+/// （カウンターフォーで相手に間接的に活三/ミセ手が生まれるケースを検出する）
+fn checkSequenceBreaksByCF(
+    cells: []Cell,
+    color: Cell,
+    sequence: []const Position,
+    start_index: usize,
+) bool {
+    const opponent = color.opposite();
+
+    var placed_buf: [64]Position = undefined;
+    var placed_len: usize = 0;
+
+    var breaks = false;
+    var i: usize = start_index;
+    while (i < sequence.len) : (i += 1) {
+        const pos = sequence[i];
+        const idx = @as(u16, pos.row) * BOARD_SIZE + pos.col;
+
+        // CF/ブロックが占有済みの位置はスキップ（lenient方向）
+        if (cells[idx] != .empty) continue;
+
+        const is_defense = (i % 2) == 1;
+        const stone_color: Cell = if (is_defense) opponent else color;
+
+        cells[idx] = stone_color;
+        bitboard.placeStone(pos.row, pos.col, stone_color);
+        placed_buf[placed_len] = pos;
+        placed_len += 1;
+
+        if (is_defense) {
+            const ct = checkDefenseCounterThreat(cells, pos.row, pos.col, opponent);
+            if (ct == .win) {
+                breaks = true;
+                break;
+            }
+            if (ct == .four) {
+                const four_block_pos = quiescence.getFourDefensePosition(cells, pos.row, pos.col, opponent);
+                if (four_block_pos == null) {
+                    breaks = true;
+                    break;
+                }
+                const fbp = four_block_pos.?;
+                const next_idx = i + 1;
+                if (next_idx >= sequence.len) {
+                    breaks = true;
+                    break;
+                }
+                const next_pos = sequence[next_idx];
+                if (next_pos.row != fbp.row or next_pos.col != fbp.col) {
+                    breaks = true;
+                    break;
+                }
+                continue;
+            }
+
+            // 相手の活三/ミセ手チェック: 次の攻撃手が四/五でなければ手順崩壊
+            if (hasOpenThree(cells, opponent) or hasFourThreeAvailable(cells, opponent)) {
+                const next_idx = i + 1;
+                if (next_idx >= sequence.len) {
+                    breaks = true;
+                    break;
+                }
+                const next_pos = sequence[next_idx];
+                const n_idx = @as(u16, next_pos.row) * BOARD_SIZE + next_pos.col;
+                if (cells[n_idx] != .empty) {
+                    // CF/ブロックと衝突 → 手順崩壊
+                    breaks = true;
+                    break;
+                }
+                cells[n_idx] = color;
+                bitboard.placeStone(next_pos.row, next_pos.col, color);
+                const makes_five = forbidden.checkFive(cells, next_pos.row, next_pos.col, color);
+                const makes_four = quiescence.createsFour(cells, next_pos.row, next_pos.col, color);
+                cells[n_idx] = .empty;
+                bitboard.removeStone(next_pos.row, next_pos.col);
+                if (!makes_five and !makes_four) {
+                    breaks = true;
+                    break;
+                }
+            }
+        }
+    }
+
+    // 盤面を元に戻す
+    var j: usize = placed_len;
+    while (j > 0) {
+        j -= 1;
+        const p = placed_buf[j];
+        const idx = @as(u16, p.row) * BOARD_SIZE + p.col;
+        cells[idx] = .empty;
+        bitboard.removeStone(p.row, p.col);
+    }
+
+    return breaks;
+}
+
+/// 攻撃手（活三のみ）の段階で、相手のカウンターフォーが残り手順を破壊するか検査
+///
+/// TS版 hasBreakingCounterFour を移植・拡張。
+/// CF を仮置きしてその場での五連完成 / 防御不可（活四）/ ブロック後の即時勝ち手段（VCF/4-3）/
+/// ブロック後の手順崩壊を順に判定。
+fn hasBreakingCounterFour(
+    cells: []Cell,
+    color: Cell,
+    sequence: []const Position,
+    attack_index: usize,
+) bool {
+    const opponent = color.opposite();
+
+    var four_buf: [225]Position = undefined;
+    const four_count = vcf_mod.findFourMoves(cells, opponent, &four_buf);
+
+    for (0..four_count) |i| {
+        const cf = four_buf[i];
+        const cf_idx = @as(u16, cf.row) * BOARD_SIZE + cf.col;
+
+        cells[cf_idx] = opponent;
+        bitboard.placeStone(cf.row, cf.col, opponent);
+
+        // CF が五連を作るならその場で勝ち（手順崩壊）
+        if (forbidden.checkFive(cells, cf.row, cf.col, opponent)) {
+            cells[cf_idx] = .empty;
+            bitboard.removeStone(cf.row, cf.col);
+            return true;
+        }
+
+        // ブロック位置取得（null = 活四 → 防御不可）
+        const block_pos_opt = quiescence.getFourDefensePosition(cells, cf.row, cf.col, opponent);
+        if (block_pos_opt == null) {
+            cells[cf_idx] = .empty;
+            bitboard.removeStone(cf.row, cf.col);
+            return true;
+        }
+        const bp = block_pos_opt.?;
+        const bp_idx = @as(u16, bp.row) * BOARD_SIZE + bp.col;
+
+        cells[bp_idx] = color;
+        bitboard.placeStone(bp.row, bp.col, color);
+
+        // CF+ブロック後に相手が即時勝ち手段を持つか（4-3/活四/VCF/白の三三）
+        // 元手順は相手が "受け身の防御" を打つ前提だが、CF後に強力な攻撃が生まれるなら
+        // 相手は防御せずその攻撃を選ぶ → 元手順は崩壊
+        const opp_has_threat = blk: {
+            if (hasFourThreeAvailable(cells, opponent)) break :blk true;
+            // 白相手の場合、三三・四四も即勝ち
+            if (opponent == .white and hasDoubleThreeForWhite(cells)) break :blk true;
+            var probe_limiter = TimeLimiter{
+                .start_time = 0,
+                .time_limit = 0,
+                .nodes = 0,
+                .max_nodes = 3000,
+            };
+            if (vcf_mod.hasVCF(cells, opponent, 0, &probe_limiter, vcf_mod.VCF_MAX_DEPTH)) break :blk true;
+            break :blk false;
+        };
+        if (opp_has_threat) {
+            cells[bp_idx] = .empty;
+            bitboard.removeStone(bp.row, bp.col);
+            cells[cf_idx] = .empty;
+            bitboard.removeStone(cf.row, cf.col);
+            return true;
+        }
+
+        const breaks = checkSequenceBreaksByCF(cells, color, sequence, attack_index + 1);
+
+        // Undo
+        cells[bp_idx] = .empty;
+        bitboard.removeStone(bp.row, bp.col);
+        cells[cf_idx] = .empty;
+        bitboard.removeStone(cf.row, cf.col);
+
+        if (breaks) return true;
+    }
+
+    return false;
+}
+
+/// VCT手順がカウンターフォー耐性を持つか検証
+///
+/// TS版 isResilientToCounterFours を移植。
+/// 各攻撃手（活三）の段階で、相手のカウンターフォーが手順を破壊しないことを確認する。
+/// 四・五を作る攻撃手はチェック対象外（相手は必ず防御を強いられるため）。
+pub fn isResilientToCounterFours(
+    cells: []Cell,
+    color: Cell,
+    sequence: []const Position,
+) bool {
+    const opponent = color.opposite();
+
+    var placed_buf: [64]Position = undefined;
+    var placed_len: usize = 0;
+
+    var resilient = true;
+    var i: usize = 0;
+    while (i < sequence.len) : (i += 1) {
+        const pos = sequence[i];
+        const idx = @as(u16, pos.row) * BOARD_SIZE + pos.col;
+        if (cells[idx] != .empty) {
+            // sequence上のpositionが既存石と衝突するケース：lenient方向でスキップ
+            continue;
+        }
+
+        const is_attack = (i % 2) == 0;
+        const stone_color: Cell = if (is_attack) color else opponent;
+
+        cells[idx] = stone_color;
+        bitboard.placeStone(pos.row, pos.col, stone_color);
+        placed_buf[placed_len] = pos;
+        placed_len += 1;
+
+        // 攻撃手かつ五・四でない（=活三のみ）の場合のみカウンターフォーをチェック
+        if (is_attack) {
+            const is_five = forbidden.checkFive(cells, pos.row, pos.col, color);
+            const is_four = quiescence.createsFour(cells, pos.row, pos.col, color);
+            if (!is_five and !is_four) {
+                if (hasBreakingCounterFour(cells, color, sequence, i)) {
+                    resilient = false;
+                    break;
+                }
+            }
+        }
+    }
+
+    // 盤面を元に戻す
+    var j: usize = placed_len;
+    while (j > 0) {
+        j -= 1;
+        const p = placed_buf[j];
+        const idx = @as(u16, p.row) * BOARD_SIZE + p.col;
+        cells[idx] = .empty;
+        bitboard.removeStone(p.row, p.col);
+    }
+
+    return resilient;
+}
+
+// =============================================================================
 // evaluateCounterThreat（TS版 vct.ts に対応）
 // =============================================================================
 
@@ -670,162 +943,15 @@ pub fn findVCTMove(cells: []Cell, color: Cell, max_depth: u8, time_limit: u32) ?
 
 /// VCT勝ち手を探索（ノード数制限付き）
 /// max_nodes=0 は無制限
+///
+/// 内部で findVCTSequence を呼び出し、その手順の先頭手を返す。
+/// findVCTSequence にはカウンターフォー耐性検証が含まれるため、
+/// VCT手順が相手のカウンターフォーで崩壊するケースを除外できる。
 pub fn findVCTMoveWithBudget(cells: []Cell, color: Cell, max_depth: u8, time_limit: u32, max_nodes: u32) ?Position {
-    // トップレベルエントリ: bitboard を cells と同期
-    bitboard.initFromCells(cells);
-    ll.init();
-
-    var limiter = TimeLimiter{
-        .start_time = getTimestampMs(),
-        .time_limit = time_limit,
-        .nodes = 0,
-        .max_nodes = max_nodes,
-    };
-
-    const opponent = color.opposite();
-
-    // 相手に活三・ミセ手・VCFがあればVCT無効
-    if (hasOpenThree(cells, opponent)) return null;
-    if (hasFourThreeAvailable(cells, opponent)) return null;
-    if (vcf_mod.hasVCF(cells, opponent, 0, &limiter, vcf_mod.VCF_MAX_DEPTH)) return null;
-
-    // まずVCFの手を試す
-    const vcf_move = vcf_mod.findVCFMoveWithBudget(cells, color, vcf_mod.VCF_MAX_DEPTH, time_limit, max_nodes);
-    if (vcf_move) |vm| return vm;
-
-    // 反復深化
-    var depth: u8 = 1;
-    while (depth <= max_depth) : (depth += 1) {
-        if (isTimeExceeded(&limiter)) return null;
-        const result = findVCTMoveRecursive(cells, color, 0, &limiter, depth);
-        if (result) |_| return result;
+    const seq_result = findVCTSequence(cells, color, max_depth, time_limit, max_nodes, false);
+    if (seq_result.found and seq_result.len > 0) {
+        return seq_result.sequence[0];
     }
-    return null;
-}
-
-/// VCT手の再帰探索
-fn findVCTMoveRecursive(
-    cells: []Cell,
-    color: Cell,
-    depth: u8,
-    limiter: *TimeLimiter,
-    max_depth: u8,
-) ?Position {
-    if (depth >= max_depth) return null;
-    if (isTimeExceeded(limiter)) return null;
-
-    // VCFに委譲
-    const vcf_move = vcf_mod.findVCFMove(cells, color, vcf_mod.VCF_MAX_DEPTH, 0);
-    if (vcf_move) |vm| return if (depth == 0) vm else vcf_move;
-
-    const opponent = color.opposite();
-
-    // 相手に活三があればVCT不成立
-    if (hasOpenThree(cells, opponent)) return null;
-
-    var threat_buf: [225]Position = undefined;
-    const threat_count = findThreatMoves(cells, color, &threat_buf);
-
-    for (0..threat_count) |i| {
-        const move = threat_buf[i];
-        const move_idx = @as(u16, move.row) * BOARD_SIZE + move.col;
-        cells[move_idx] = color;
-        bitboard.placeStone(move.row, move.col, color);
-
-        if (forbidden.checkFive(cells, move.row, move.col, color)) {
-            cells[move_idx] = .empty;
-            bitboard.removeStone(move.row, move.col);
-            return move;
-        }
-
-        const defense_positions = getThreatDefensePositions(cells, move.row, move.col, color);
-
-        if (defense_positions.len == 0) {
-            if (isThreat(cells, move.row, move.col, color)) {
-                cells[move_idx] = .empty;
-                bitboard.removeStone(move.row, move.col);
-                return move;
-            }
-            cells[move_idx] = .empty;
-            bitboard.removeStone(move.row, move.col);
-            continue;
-        }
-
-        var all_defense_leads_to_vct = true;
-
-        for (0..defense_positions.len) |j| {
-            const dp = defense_positions.items[j];
-
-            if (color == .white) {
-                const fr = forbidden.checkForbiddenMove(cells, dp.row, dp.col);
-                if (fr != .none) continue;
-            }
-
-            const def_idx = @as(u16, dp.row) * BOARD_SIZE + dp.col;
-            cells[def_idx] = opponent;
-            bitboard.placeStone(dp.row, dp.col, opponent);
-
-            const ct = checkDefenseCounterThreat(cells, dp.row, dp.col, opponent);
-
-            var vct_ok = false;
-            switch (ct) {
-                .win => vct_ok = false,
-                .four => {
-                    const block_pos = quiescence.getFourDefensePosition(cells, dp.row, dp.col, opponent);
-                    if (block_pos == null) {
-                        vct_ok = false;
-                    } else {
-                        const bp = block_pos.?;
-                        const block_idx = @as(u16, bp.row) * BOARD_SIZE + bp.col;
-                        cells[block_idx] = color;
-                        bitboard.placeStone(bp.row, bp.col, color);
-
-                        const block_ct = checkDefenseCounterThreat(cells, bp.row, bp.col, color);
-                        if (!blockHasThreat(block_ct)) {
-                            vct_ok = false;
-                        } else {
-                            vct_ok = processBlockDefenses(cells, bp, color, depth, max_depth, limiter);
-                        }
-
-                        cells[block_idx] = .empty;
-                        bitboard.removeStone(bp.row, bp.col);
-                    }
-                },
-                .three => {
-                    if (!isTimeExceeded(limiter)) {
-                        const vcf_depth = @min(CT_THREE_VCF_MAX_DEPTH, vcf_mod.VCF_MAX_DEPTH);
-                        vct_ok = vcf_mod.hasVCF(cells, color, 0, limiter, vcf_depth);
-                    }
-                },
-                .none => {
-                    // hasVCTで2番目以降の防御をチェック
-                    if (j == 0) {
-                        // 最初の防御は再帰で手を探す
-                        const sub = findVCTMoveRecursive(cells, color, depth + 1, limiter, max_depth);
-                        vct_ok = (sub != null);
-                    } else {
-                        vct_ok = hasVCT(cells, color, depth + 1, limiter, max_depth);
-                    }
-                },
-            }
-
-            cells[def_idx] = .empty;
-            bitboard.removeStone(dp.row, dp.col);
-
-            if (!vct_ok) {
-                all_defense_leads_to_vct = false;
-                break;
-            }
-        }
-
-        cells[move_idx] = .empty;
-        bitboard.removeStone(move.row, move.col);
-
-        if (all_defense_leads_to_vct and defense_positions.len > 0) {
-            return move;
-        }
-    }
-
     return null;
 }
 
@@ -932,6 +1058,21 @@ pub fn findVCTSequence(
         };
         const found = findVCTSequenceRecursive(cells, color, 0, depth, &limiter, &result.sequence, &seq_len, &context);
         if (found) {
+            // カウンターフォー耐性検証: 活三を打つ段階で相手のカウンターフォーが
+            // 残り手順を破壊するならVCT不成立扱い → VCF-onlyにフォールバック
+            //
+            // 深い反復に進んでも先頭の活三は同じで再度棄却されるため早期終了する。
+            if (!isResilientToCounterFours(cells, color, result.sequence[0..seq_len])) {
+                var fallback = VCTSequenceResult{
+                    .sequence = undefined,
+                    .len = 0,
+                    .is_forbidden_trap = false,
+                    .found = false,
+                    .branches = undefined,
+                    .branch_count = 0,
+                };
+                return tryVCFOnly(cells, color, &limiter, &fallback);
+            }
             result.len = seq_len;
             result.is_forbidden_trap = context.is_forbidden_trap;
             result.found = true;
@@ -2160,4 +2301,95 @@ test "getThreatDefensePositions: black four with overline should not be undefend
     try testing.expect(defense.len > 0); // 防御可能
     try testing.expectEqual(defense.items[0].row, 7);
     try testing.expectEqual(defense.items[0].col, 1); // B8
+}
+
+/// Issue #27 局面（10手目まで）をセットアップする共通ヘルパ
+fn setupIssue27Position(cells: []Cell) void {
+    cells[7 * BOARD_SIZE + 7] = .black; // H8
+    cells[6 * BOARD_SIZE + 6] = .white; // G9
+    cells[7 * BOARD_SIZE + 6] = .black; // G8
+    cells[7 * BOARD_SIZE + 5] = .white; // F8
+    cells[5 * BOARD_SIZE + 7] = .black; // H10
+    cells[6 * BOARD_SIZE + 7] = .white; // H9
+    cells[6 * BOARD_SIZE + 8] = .black; // I9
+    cells[6 * BOARD_SIZE + 5] = .white; // F9
+    cells[7 * BOARD_SIZE + 9] = .black; // J8
+    cells[4 * BOARD_SIZE + 6] = .white; // G11
+}
+
+test "findVCTMove: open three rejected when opponent has counter-four (issue #27)" {
+    // 棋譜: H8 G9 G8 F8 H10 H9 I9 F9 J8 G11 (10手目まで)
+    // 11手目の黒に勝ちVCTはない (J10活三は白E9のカウンターフォーで速度負けする)
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    setupIssue27Position(&cells);
+    bitboard.initFromCells(&cells);
+
+    // 黒の勝ちVCTは存在しない（活三・四追いとも成立しない）
+    const move = findVCTMoveWithBudget(&cells, .black, VCT_MAX_DEPTH, 0, 50000);
+    try testing.expect(move == null);
+}
+
+test "findVCTSequence: rejects sequence broken by counter-four (issue #27)" {
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    setupIssue27Position(&cells);
+    bitboard.initFromCells(&cells);
+
+    // 手順自体が見つからないこと（VCF-onlyフォールバック含めて勝ち手順なし）
+    const result = findVCTSequence(&cells, .black, VCT_MAX_DEPTH, 0, 50000, false);
+    try testing.expect(!result.found);
+}
+
+test "isResilientToCounterFours: J10 sequence rejected by counter-four (issue #27)" {
+    // 修正前にVCT探索が返していた手順 (J10で始まる活三起点)
+    // 単独でカウンターフォー耐性検証関数を呼び、Resilientでないこと（false）を確認する
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    setupIssue27Position(&cells);
+    bitboard.initFromCells(&cells);
+
+    // 旧VCT探索が誤って返していたシーケンス
+    const seq = [_]Position{
+        .{ .row = 5, .col = 9 }, // J10 (黒活三)
+        .{ .row = 8, .col = 6 }, // G7 (白の "防御"想定)
+        .{ .row = 4, .col = 10 }, // K11 (黒)
+        .{ .row = 3, .col = 11 }, // L12 (白)
+        .{ .row = 7, .col = 10 }, // K8 (黒)
+        .{ .row = 7, .col = 8 }, // I8 (白)
+        .{ .row = 8, .col = 10 }, // K7 (黒)
+        .{ .row = 9, .col = 11 }, // L6 (白)
+        .{ .row = 5, .col = 10 }, // K10 (黒)
+        .{ .row = 6, .col = 10 }, // K9 (白)
+        .{ .row = 5, .col = 8 }, // I10 (黒)
+    };
+
+    try testing.expect(!isResilientToCounterFours(&cells, .black, &seq));
+}
+
+test "isResilientToCounterFours: empty sequence is trivially resilient" {
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    bitboard.initFromCells(&cells);
+
+    const seq = [_]Position{};
+    try testing.expect(isResilientToCounterFours(&cells, .black, &seq));
+}
+
+test "isResilientToCounterFours: VCF (four-only) sequence is resilient" {
+    // 全ての攻撃手が四ならカウンターフォー耐性チェックの対象外（trivially resilient）
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[7 * BOARD_SIZE + 4] = .black; // E8
+    cells[7 * BOARD_SIZE + 5] = .black; // F8
+    cells[7 * BOARD_SIZE + 6] = .black; // G8
+    cells[7 * BOARD_SIZE + 7] = .black; // H8
+    bitboard.initFromCells(&cells);
+
+    // I8 は四+五連完成手（VCF）。攻撃手はすべて四以上なら resilient
+    const seq = [_]Position{
+        .{ .row = 7, .col = 8 }, // I8 (五連完成)
+    };
+
+    try testing.expect(isResilientToCounterFours(&cells, .black, &seq));
 }
