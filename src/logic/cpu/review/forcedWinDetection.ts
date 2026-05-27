@@ -14,12 +14,11 @@ import { findDoubleMiseMoves } from "../evaluation/tactics";
 import { createsFourThree } from "../evaluation/winningPatterns";
 import { findThreatMoves } from "../search/vctHelpers";
 import { validateVCTSequence } from "../search/vctValidation";
+import { filterByCounterThreats, REVIEW_VCF_OPTIONS } from "./forcedLossCheck";
 import {
-  filterByCounterThreats,
-  REVIEW_MISE_VCF_OPTIONS,
-  REVIEW_VCF_OPTIONS,
-} from "./forcedLossCheck";
-import { REVIEW_VCT_OPTIONS_WITH_BRANCHES } from "./reviewConstants";
+  REVIEW_MISE_VCF_OPTIONS_WITH_BRANCHES,
+  REVIEW_VCT_OPTIONS_WITH_BRANCHES,
+} from "./reviewConstants";
 import {
   wasmFindVCFSequence,
   wasmFindMiseVCFSequence,
@@ -150,7 +149,7 @@ export function detectForcedWin(
       wasmSearchEngine,
       board,
       color,
-      REVIEW_MISE_VCF_OPTIONS,
+      REVIEW_MISE_VCF_OPTIONS_WITH_BRANCHES,
     );
   }
 

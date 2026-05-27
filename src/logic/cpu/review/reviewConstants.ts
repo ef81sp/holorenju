@@ -6,7 +6,7 @@
 
 import { DIFFICULTY_PARAMS } from "@/types/cpu";
 
-import type { VCTSearchOptions } from "../search/types";
+import type { MiseVCFSearchOptions, VCTSearchOptions } from "../search/types";
 
 /** 振り返り専用の探索パラメータ（hardから分離し深度を引き上げ） */
 export const REVIEW_SEARCH_PARAMS = {
@@ -52,5 +52,12 @@ export const REVIEW_VCT_OPTIONS_WITH_BRANCHES: VCTSearchOptions = {
   vcfOptions: {
     maxDepth: 16,
   },
+  collectBranches: true,
+};
+
+/** 振り返り用Mise-VCF探索パラメータ（forcedWin表示用、三防御分岐収集あり） */
+export const REVIEW_MISE_VCF_OPTIONS_WITH_BRANCHES: MiseVCFSearchOptions = {
+  vcfOptions: { maxDepth: 12, timeLimit: 3_000, maxNodes: 500_000 },
+  timeLimit: 5_000,
   collectBranches: true,
 };

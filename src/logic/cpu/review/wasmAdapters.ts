@@ -10,6 +10,7 @@ import type { BoardState, Position } from "@/types/game";
 
 import type {
   MiseVCFSearchOptions,
+  MiseVCFSequenceResult,
   VCFSearchOptions,
   VCFSequenceResult,
   VCTSearchOptions,
@@ -62,12 +63,13 @@ export function wasmFindMiseVCFSequence(
   board: BoardState,
   color: "black" | "white",
   options: MiseVCFSearchOptions,
-): VCFSequenceResult | null {
+): MiseVCFSequenceResult | null {
   return engine.findMiseVCFSequence(
     board,
     color,
     toWasmLimit(options.timeLimit),
     toWasmLimit(options.vcfOptions?.maxNodes),
+    options.collectBranches ?? false,
   );
 }
 

@@ -75,6 +75,7 @@ export interface WasmModuleContext {
     color: number,
     timeLimitMs: number,
     maxNodes: number,
+    collectBranches: number,
   ) => void;
   getMiseVCFSequenceBuffer: () => number;
 

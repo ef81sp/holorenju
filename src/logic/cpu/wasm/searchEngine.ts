@@ -11,6 +11,8 @@ import { DIFFICULTY_PARAMS, type CpuDifficulty } from "@/types/cpu";
 
 import type { EvaluationOptions } from "../evaluation/patternScores";
 import type {
+  MiseVCFBranch,
+  MiseVCFSequenceResult,
   VCFSequenceResult,
   VCTBranch,
   VCTSequenceResult,
@@ -284,17 +286,19 @@ export class WasmSearchEngine {
     color: "black" | "white",
     timeLimitMs: number,
     maxNodes: number,
-  ): VCFSequenceResult | null {
+    collectBranches: boolean,
+  ): MiseVCFSequenceResult | null {
     boardStateToWasm(this.wasm, board);
     this.wasm.findMiseVCFSequenceWasm(
       colorToWasm(color),
       timeLimitMs,
       maxNodes,
+      collectBranches ? 1 : 0,
     );
     return this.readMiseVCFSequenceResult();
   }
 
-  private readMiseVCFSequenceResult(): VCFSequenceResult | null {
+  private readMiseVCFSequenceResult(): MiseVCFSequenceResult | null {
     const ptr = this.wasm.getMiseVCFSequenceBuffer();
     const { memory } = this.wasm;
     const view = new DataView(memory.buffer);
@@ -316,7 +320,45 @@ export class WasmSearchEngine {
     }
 
     const firstMove = sequence[0] ?? { row: 0, col: 0 };
-    return { firstMove, sequence, isForbiddenTrap };
+
+    const branchOffset = ptr + 3 + len * 2;
+    const branchCount = view.getUint8(branchOffset);
+
+    const result: MiseVCFSequenceResult = {
+      firstMove,
+      sequence,
+      isForbiddenTrap,
+    };
+
+    if (branchCount > 0) {
+      const branches: MiseVCFBranch[] = [];
+      let pos = branchOffset + 1;
+      for (let bi = 0; bi < branchCount; bi++) {
+        const defenseIndex = view.getUint8(pos);
+        const defRow = view.getUint8(pos + 1);
+        const defCol = view.getUint8(pos + 2);
+        const contLen = view.getUint8(pos + 3);
+        pos += 4;
+
+        const continuation: Position[] = [];
+        for (let ci = 0; ci < contLen; ci++) {
+          continuation.push({
+            row: view.getUint8(pos),
+            col: view.getUint8(pos + 1),
+          });
+          pos += 2;
+        }
+
+        branches.push({
+          defenseIndex,
+          defenseMove: { row: defRow, col: defCol },
+          continuation,
+        });
+      }
+      result.branches = branches;
+    }
+
+    return result;
   }
 
   private readVCFSequenceResult(): VCFSequenceResult | null {

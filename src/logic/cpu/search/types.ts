@@ -96,6 +96,26 @@ export interface MiseVCFSearchOptions {
   vcfOptions?: VCFSearchOptions;
   /** 全体の時間制限（ミリ秒、デフォルト: 500） */
   timeLimit?: number;
+  /** 分岐情報を収集するか（レビュー用、メインのT以外の三防御位置を収集） */
+  collectBranches?: boolean;
+}
+
+/** Mise-VCF手順内の分岐情報 */
+export interface MiseVCFBranch {
+  /** 分岐点のsequence内インデックス（防御手の位置、常に 1） */
+  defenseIndex: number;
+  /** 代替防御手（メインPVのTとは異なる三防御位置） */
+  defenseMove: Position;
+  /** この防御後の継続手順 [D, VCF手順...] */
+  continuation: Position[];
+}
+
+/**
+ * Mise-VCF手順の探索結果
+ */
+export interface MiseVCFSequenceResult extends VCFSequenceResult {
+  /** 分岐情報（collectBranches有効時のみ） */
+  branches?: MiseVCFBranch[];
 }
 
 // =============================================================================

@@ -163,6 +163,13 @@ pub fn build(b: *std.Build) void {
         }),
     });
 
+    const test_mise_vcf = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/mise_vcf.zig"),
+            .target = native_target,
+        }),
+    });
+
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&b.addRunArtifact(test_board).step);
     test_step.dependOn(&b.addRunArtifact(test_patterns).step);
@@ -184,4 +191,5 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&b.addRunArtifact(test_bitboard).step);
     test_step.dependOn(&b.addRunArtifact(test_line_lookup).step);
     test_step.dependOn(&b.addRunArtifact(test_line_potential).step);
+    test_step.dependOn(&b.addRunArtifact(test_mise_vcf).step);
 }
