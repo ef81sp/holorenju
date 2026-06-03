@@ -322,9 +322,7 @@ export function buildRows(
   selection: Record<string, string>,
 ): Row[] {
   if (tab.tree) {
-    const rows: Row[] = [];
-    walkTreeNode(tab, tab.tree, "", 0, selection, rows, 0);
-    return rows;
+    return walkTree(tab, tab.tree, selection);
   }
   return buildRowsFlat(tab, selection);
 }
@@ -338,64 +336,74 @@ function moveItem(
 }
 
 /**
- * 詰み木を選択経路に沿って再帰展開する。
+ * 詰み木を選択経路に沿って再帰展開して Row[] を生成する。
  * 攻め手は self（攻め始まり交互）。防御が2件以上なら branch 行を出し、
  * 選択（既定 index 0 = "best"）した防御の継続へ降りる。
+ *
+ * 再帰中 tab / selection / rows は不変なのでクロージャで捕捉し、
+ * 変化する (node, pathKey, ply, depth) のみを引数に取る。
  */
-function walkTreeNode(
+function walkTree(
   tab: ProgressionTab,
-  node: ForcedWinNode,
-  pathKey: string,
-  ply: number,
+  root: ForcedWinNode,
   selection: Record<string, string>,
-  rows: Row[],
-  depth: number,
-): void {
-  if (depth >= MAX_WALK_DEPTH) {
-    return;
-  }
-  // 攻め手（ply 偶数 = self）
-  rows.push({
-    type: "move",
-    key: `${tab.id}-m-${pathKey}-${ply}`,
-    item: moveItem(node.attackerMove, ply % 2 === 0, tab.baseMoveNum + ply),
-  });
-  if (node.defenses.length === 0) {
-    return;
-  }
-  const defPly = ply + 1;
-  if (node.defenses.length === 1) {
-    const d = node.defenses[0]!;
+): Row[] {
+  const rows: Row[] = [];
+
+  const walk = (
+    node: ForcedWinNode,
+    pathKey: string,
+    ply: number,
+    depth: number,
+  ): void => {
+    if (depth >= MAX_WALK_DEPTH) {
+      return;
+    }
+    // 攻め手（ply 偶数 = self）
     rows.push({
       type: "move",
-      key: `${tab.id}-m-${pathKey}-${defPly}`,
-      item: moveItem(d.defenderMove, false, tab.baseMoveNum + defPly),
+      key: `${tab.id}-m-${pathKey}-${ply}`,
+      item: moveItem(node.attackerMove, ply % 2 === 0, tab.baseMoveNum + ply),
     });
-    walkTreeNode(tab, d.next, pathKey, ply + 2, selection, rows, depth + 1);
-    return;
-  }
-  // 分岐: 防御2件以上
-  const options = node.defenses.map((d, idx) => ({
-    id: idx === 0 ? "best" : String(idx),
-    item: moveItem(d.defenderMove, false, tab.baseMoveNum + defPly),
-  }));
-  rows.push({
-    type: "branch",
-    key: `${tab.id}-br-${pathKey}-${defPly}`,
-    selKey: pathKey,
-    moveNum: tab.baseMoveNum + defPly,
-    options,
-  });
-  const selId = selection[pathKey] ?? "best";
-  const parsed = selId === "best" ? 0 : Number(selId);
-  // 不正値（NaN・範囲外）は主筋(0)へフォールバックし childKey の破損を防ぐ
-  const selIdx =
-    Number.isInteger(parsed) && parsed >= 0 && parsed < node.defenses.length
-      ? parsed
-      : 0;
-  const chosen = node.defenses[selIdx]!;
-  const childKey = pathKey === "" ? String(selIdx) : `${pathKey}/${selIdx}`;
-  walkTreeNode(tab, chosen.next, childKey, ply + 2, selection, rows, depth + 1);
+    if (node.defenses.length === 0) {
+      return;
+    }
+    const defPly = ply + 1;
+    if (node.defenses.length === 1) {
+      const d = node.defenses[0]!;
+      rows.push({
+        type: "move",
+        key: `${tab.id}-m-${pathKey}-${defPly}`,
+        item: moveItem(d.defenderMove, false, tab.baseMoveNum + defPly),
+      });
+      walk(d.next, pathKey, ply + 2, depth + 1);
+      return;
+    }
+    // 分岐: 防御2件以上
+    const options = node.defenses.map((d, idx) => ({
+      id: idx === 0 ? "best" : String(idx),
+      item: moveItem(d.defenderMove, false, tab.baseMoveNum + defPly),
+    }));
+    rows.push({
+      type: "branch",
+      key: `${tab.id}-br-${pathKey}-${defPly}`,
+      selKey: pathKey,
+      moveNum: tab.baseMoveNum + defPly,
+      options,
+    });
+    const selId = selection[pathKey] ?? "best";
+    const parsed = selId === "best" ? 0 : Number(selId);
+    // 不正値（NaN・範囲外）は主筋(0)へフォールバックし childKey の破損を防ぐ
+    const selIdx =
+      Number.isInteger(parsed) && parsed >= 0 && parsed < node.defenses.length
+        ? parsed
+        : 0;
+    const childKey = pathKey === "" ? String(selIdx) : `${pathKey}/${selIdx}`;
+    walk(node.defenses[selIdx]!.next, childKey, ply + 2, depth + 1);
+  };
+
+  walk(root, "", 0, 0);
+  return rows;
 }
 
 /** basePV ＋ フラット分岐（被詰タブ等、#26 まで）の行展開 */
