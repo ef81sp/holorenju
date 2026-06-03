@@ -1,6 +1,8 @@
+const std = @import("std");
 const board = @import("board.zig");
 const evaluate = @import("evaluate.zig");
 const forbidden = @import("forbidden.zig");
+const ft = @import("forced_win_tree.zig");
 const patterns = @import("patterns.zig");
 const search = @import("search.zig");
 const position_eval = @import("position_eval.zig");
@@ -331,18 +333,54 @@ export fn findVCFSequenceFromFirstMoveWasm(row: u8, col: u8, color: u8, max_dept
     }
 }
 
+// ─── 詰み木シリアライズ（#22 共通） ──────────────────────
+
+/// 直列化スクラッチ（compact 済みの木の格納先）。表示用途の上限。
+const MAX_SER_NODES: u16 = 1024;
+const MAX_SER_DEFENSES: u16 = 2048;
+var serialize_nodes: [MAX_SER_NODES]ft.TreeNode = undefined;
+var serialize_defenses: [MAX_SER_DEFENSES]ft.TreeDefense = undefined;
+
+/// 詰み木（アリーナ＋root）を buffer の start 位置から直列化する。
+///
+/// ワイヤ形式（little-endian u16）:
+///   [start]      node_count    (u16 LE)
+///   [start+2]    defense_count (u16 LE)
+///   [start+4]    node_count × { row:u8, col:u8, defense_start:u16 LE, defense_count:u16 LE }  (6B)
+///   [...]        defense_count × { row:u8, col:u8, child_node:u16 LE }                        (4B)
+///   node[0] = root。child_node == 0xFFFF は終端（継続なし）。
+///   node_count == 0 は木なし（TS 側は sequence から線形木を合成する）。
+fn writeForcedWinTree(buffer: []u8, start: usize, arena: *const ft.Arena, root: u16) void {
+    const r = ft.serializeCompact(arena, root, serialize_nodes[0..], serialize_defenses[0..]);
+    std.mem.writeInt(u16, buffer[start..][0..2], r.node_count, .little);
+    std.mem.writeInt(u16, buffer[start + 2 ..][0..2], r.defense_count, .little);
+    var pos: usize = start + 4;
+    for (0..r.node_count) |i| {
+        const n = serialize_nodes[i];
+        buffer[pos] = n.attacker.row;
+        buffer[pos + 1] = n.attacker.col;
+        std.mem.writeInt(u16, buffer[pos + 2 ..][0..2], n.defense_start, .little);
+        std.mem.writeInt(u16, buffer[pos + 4 ..][0..2], n.defense_count, .little);
+        pos += 6;
+    }
+    for (0..r.defense_count) |i| {
+        const d = serialize_defenses[i];
+        buffer[pos] = d.defender.row;
+        buffer[pos + 1] = d.defender.col;
+        std.mem.writeInt(u16, buffer[pos + 2 ..][0..2], d.child_node, .little);
+        pos += 4;
+    }
+}
+
 // ─── Mise-VCF Sequence ──────────────────────────────────
 
 const mise_vcf = @import("mise_vcf.zig");
 
-/// Mise-VCF手順バッファ
-/// [0]: found (0 or 1)
-/// [1]: sequence length
-/// [2]: isForbiddenTrap (0 or 1)
-/// [3..N*2+2]: row, col pairs
-/// Mise-VCF手順バッファ（VCT同様、分岐情報を含むため大きめ）
-/// フォーマットは vct_seq_buffer と同一（writeVCTResult 参照）
-var mise_vcf_seq_buffer: [2048]u8 = .{0} ** 2048;
+/// Mise-VCF手順バッファ（VCT同様、詰み木を含むため大きめ）
+/// フォーマットは vct_seq_buffer と同一（writeVCTResult / writeForcedWinTree 参照）:
+/// [0] found, [1] seq_len, [2] isForbiddenTrap, [3..] sequence row/col ペア,
+/// その後 writeForcedWinTree の木セクション。
+var mise_vcf_seq_buffer: [16384]u8 = .{0} ** 16384;
 
 export fn getMiseVCFSequenceBuffer() [*]u8 {
     return &mise_vcf_seq_buffer;
@@ -372,24 +410,9 @@ export fn findMiseVCFSequenceWasm(color: u8, time_limit_ms: u32, max_nodes: u32,
             mise_vcf_seq_buffer[3 + i * 2 + 1] = result.sequence[i].col;
         }
 
-        // 分岐情報（VCT と同一フォーマット）
+        // 詰み木（VCT と同一フォーマット、writeForcedWinTree 参照）
         const offset = 3 + @as(usize, result.len) * 2;
-        mise_vcf_seq_buffer[offset] = result.branch_count;
-
-        var pos: usize = offset + 1;
-        for (0..result.branch_count) |bi| {
-            const branch = result.branches[bi];
-            mise_vcf_seq_buffer[pos] = branch.defense_index;
-            mise_vcf_seq_buffer[pos + 1] = branch.defense_move.row;
-            mise_vcf_seq_buffer[pos + 2] = branch.defense_move.col;
-            mise_vcf_seq_buffer[pos + 3] = branch.continuation_len;
-            pos += 4;
-            for (0..branch.continuation_len) |ci| {
-                mise_vcf_seq_buffer[pos] = branch.continuation[ci].row;
-                mise_vcf_seq_buffer[pos + 1] = branch.continuation[ci].col;
-                pos += 2;
-            }
-        }
+        writeForcedWinTree(mise_vcf_seq_buffer[0..], offset, &mise_vcf.g_tree_arena, result.tree_root);
     }
 }
 
@@ -397,20 +420,15 @@ export fn findMiseVCFSequenceWasm(color: u8, time_limit_ms: u32, max_nodes: u32,
 
 const vct = @import("vct.zig");
 
-/// VCT手順バッファ（分岐情報を含むため大きめ）
+/// VCT手順バッファ（詰み木を含むため大きめ）
 /// [0]: found (0 or 1)
 /// [1]: seq_len
 /// [2]: isForbiddenTrap (0 or 1)
-/// [3..3+seq_len*2]: row,col pairs (メインPV)
-/// offset = 3 + seq_len * 2
-/// [offset]: branch_count
-/// [offset+1..]: 各branch:
-///   [0]: defenseIndex (u8)
-///   [1]: defRow
-///   [2]: defCol
-///   [3]: continuation_len
-///   [4..4+cont_len*2]: continuation row,col pairs
-var vct_seq_buffer: [2048]u8 = .{0} ** 2048;
+/// [3..3+seq_len*2]: row,col pairs (メインPV = 木の defenses[0] 連鎖)
+/// offset = 3 + seq_len * 2 以降: writeForcedWinTree の木セクション
+///   [offset] node_count(u16 LE), [offset+2] defense_count(u16 LE),
+///   nodes(各6B), defenses(各4B)。詳細は writeForcedWinTree 参照。
+var vct_seq_buffer: [16384]u8 = .{0} ** 16384;
 
 export fn getVCTSequenceBuffer() [*]u8 {
     return &vct_seq_buffer;
@@ -428,23 +446,9 @@ fn writeVCTResult(result: vct.VCTSequenceResult) void {
             vct_seq_buffer[3 + i * 2 + 1] = result.sequence[i].col;
         }
 
+        // 詰み木（writeForcedWinTree 参照）
         const offset = 3 + @as(usize, result.len) * 2;
-        vct_seq_buffer[offset] = result.branch_count;
-
-        var pos: usize = offset + 1;
-        for (0..result.branch_count) |bi| {
-            const branch = result.branches[bi];
-            vct_seq_buffer[pos] = branch.defense_index;
-            vct_seq_buffer[pos + 1] = branch.defense_move.row;
-            vct_seq_buffer[pos + 2] = branch.defense_move.col;
-            vct_seq_buffer[pos + 3] = branch.continuation_len;
-            pos += 4;
-            for (0..branch.continuation_len) |ci| {
-                vct_seq_buffer[pos] = branch.continuation[ci].row;
-                vct_seq_buffer[pos + 1] = branch.continuation[ci].col;
-                pos += 2;
-            }
-        }
+        writeForcedWinTree(vct_seq_buffer[0..], offset, &vct.g_tree_arena, result.tree_root);
     }
 }
 

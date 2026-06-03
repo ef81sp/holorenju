@@ -9,6 +9,7 @@ const bitboard = @import("bitboard.zig");
 const board_mod = @import("board.zig");
 const evaluate = @import("evaluate.zig");
 const forbidden = @import("forbidden.zig");
+const ft = @import("forced_win_tree.zig");
 const jp = @import("jump_patterns.zig");
 const ll = @import("line_lookup.zig");
 const patterns = @import("patterns.zig");
@@ -381,7 +382,13 @@ pub const MiseVCFSequenceResult = struct {
     /// 三の代替防御の分岐（collect_branches有効時のみ）
     branches: [MAX_MISE_BRANCHES]MiseVCFBranch = undefined,
     branch_count: u8 = 0,
+    /// 詰み木の root node index（collect_branches 有効時のみ構築。g_tree_arena 参照）
+    tree_root: u16 = ft.TREE_TERMINAL,
 };
+
+/// 詰み木アリーナ（review 専用・collect_branches 時のみ構築）。
+/// findMiseVCFSequence の結果 tree_root が指す木の格納先。main.zig が直列化に使う。
+pub var g_tree_arena: ft.Arena = .{};
 
 /// Mise-VCF手順を探索
 ///
@@ -534,6 +541,36 @@ pub fn findMiseVCFSequence(
                                 result.branch_count += 1;
                             }
                         }
+                    }
+
+                    // 詰み木を構築（review 表示用）。
+                    // root = ミセ手(sequence[0])、
+                    // defenses[0] = 主筋防御(sequence[1]) → VCF 手順(sequence[2..]) の線形チェイン、
+                    // defenses[1..] = 代替三防御(branches) → 各 VCF 継続の線形チェイン。
+                    // これにより「defenses[0] 連鎖 == sequence」の不変条件が成り立つ。
+                    if (collect_branches) {
+                        g_tree_arena.reset();
+                        // 子ノードを先に全て構築（defenses を contiguous に積むため）
+                        var child_nodes: [1 + MAX_MISE_BRANCHES]u16 = undefined;
+                        const main_len: u8 = if (result.len >= 2) result.len - 2 else 0;
+                        child_nodes[0] = g_tree_arena.buildLinearChain(result.sequence[2..result.len], main_len);
+                        var di: u8 = 0;
+                        while (di < result.branch_count) : (di += 1) {
+                            const br = result.branches[di];
+                            child_nodes[1 + di] = g_tree_arena.buildLinearChain(
+                                br.continuation[0..br.continuation_len],
+                                br.continuation_len,
+                            );
+                        }
+                        // defenses を contiguous に積む（子は全て構築済み）
+                        const def_start = g_tree_arena.defense_count;
+                        g_tree_arena.addDefense(result.sequence[1], child_nodes[0]);
+                        di = 0;
+                        while (di < result.branch_count) : (di += 1) {
+                            g_tree_arena.addDefense(result.branches[di].defense_move, child_nodes[1 + di]);
+                        }
+                        const total_def: u16 = 1 + @as(u16, result.branch_count);
+                        result.tree_root = g_tree_arena.addNode(result.sequence[0], def_start, total_def);
                     }
 
                     cells[idx] = .empty;
@@ -769,6 +806,42 @@ test "findMiseVCFSequence: collect_branches で三の代替防御を分岐収集
         }
     }
     try testing.expect(found_e8);
+
+    // 詰み木の検証（#22）
+    try testing.expect(result.tree_root != ft.TREE_TERMINAL);
+    const root = g_tree_arena.nodes[result.tree_root];
+    // root の攻め手 == sequence[0]（ミセ手）
+    try testing.expectEqual(result.sequence[0].row, root.attacker.row);
+    try testing.expectEqual(result.sequence[0].col, root.attacker.col);
+    // defenses[0] == 主筋防御 sequence[1]、かつその連鎖が sequence と一致
+    try testing.expect(root.defense_count >= 1);
+    const d0 = g_tree_arena.defenses[root.defense_start];
+    try testing.expectEqual(result.sequence[1].row, d0.defender.row);
+    try testing.expectEqual(result.sequence[1].col, d0.defender.col);
+    // defenses[0] 連鎖（攻め始まり交互）== sequence
+    var k: u8 = 0;
+    var node_idx: u16 = result.tree_root;
+    while (node_idx != ft.TREE_TERMINAL and node_idx < g_tree_arena.node_count and k < result.len) {
+        const node = g_tree_arena.nodes[node_idx];
+        try testing.expectEqual(result.sequence[k].row, node.attacker.row);
+        try testing.expectEqual(result.sequence[k].col, node.attacker.col);
+        k += 1;
+        if (node.defense_count == 0) break;
+        const d = g_tree_arena.defenses[node.defense_start];
+        try testing.expectEqual(result.sequence[k].row, d.defender.row);
+        try testing.expectEqual(result.sequence[k].col, d.defender.col);
+        k += 1;
+        node_idx = d.child_node;
+    }
+    try testing.expectEqual(result.len, k);
+    // E8 が root の代替防御(defenses[1..])として木に存在する
+    var tree_has_e8 = false;
+    var di: u16 = 1;
+    while (di < root.defense_count) : (di += 1) {
+        const d = g_tree_arena.defenses[root.defense_start + di];
+        if (d.defender.row == 7 and d.defender.col == 4) tree_has_e8 = true;
+    }
+    try testing.expect(tree_has_e8);
 }
 
 test "findMiseVCFSequence: collect_branches=false では分岐を収集しない" {

@@ -5,13 +5,9 @@
  */
 
 import type { BoardState, Position } from "@/types/game";
-import type { ForcedWinType } from "@/types/review";
+import type { ForcedWinNode, ForcedWinType } from "@/types/review";
 
-import type {
-  VCTBranch,
-  VCTSearchOptions,
-  VCTSequenceResult,
-} from "../search/types";
+import type { VCTSearchOptions, VCTSequenceResult } from "../search/types";
 import type { WasmSearchEngine } from "../wasm/searchEngine";
 
 import { findDoubleMiseMoves } from "../evaluation/tactics";
@@ -35,7 +31,8 @@ export interface ForcedWinInfo {
   firstMove: Position;
   sequence: Position[];
   isForbiddenTrap: boolean;
-  branches?: VCTBranch[];
+  /** 詰み木（#22。VCT/Mise-VCF は Zig 由来。VCF/両ミセ/単一初手は fullEval で合成） */
+  tree?: ForcedWinNode;
 }
 
 export interface ForcedWinDetectionResult {

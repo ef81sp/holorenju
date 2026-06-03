@@ -15,6 +15,7 @@ import type { Position } from "@/types/game";
 import type {
   EvaluatedMove,
   ForcedWinBranch,
+  ForcedWinNode,
   ReviewCandidate,
 } from "@/types/review";
 
@@ -42,8 +43,12 @@ export interface ProgressionTab {
   label: string;
   sub?: string;
   emitType: "best" | "played";
+  /** basePV[0] の手番（= 木ルート攻め手の手番）。木ウォーカーの手番起点 */
+  baseMoveNum: number;
   basePV: PVDisplayItem[];
   branches: InlineBranch[];
+  /** 詰み木（#22）。あれば buildRows は木を再帰的に展開する */
+  tree?: ForcedWinNode;
 }
 
 export type Row =
@@ -51,7 +56,13 @@ export type Row =
   | {
       type: "branch";
       key: string;
-      pvIdx: number;
+      /**
+       * 選択状態のキー（フラット: basePV index 文字列 / 木: ルートからのパス）。
+       * 1タブは flat か tree の一方のみを持つため両者の名前空間は衝突しない。
+       */
+      selKey: string;
+      /** 分岐点（防御手）の手番。aria ラベル用 */
+      moveNum: number;
       options: { id: string; item: PVDisplayItem }[];
     };
 
@@ -245,19 +256,19 @@ export function buildTopTabs(
   }
   const result: ProgressionTab[] = [];
 
+  // 最善タブ: 詰み木があれば木を展開（#22、basePV は木モードでは未使用）。
+  // なければ候補 PV(basePV) を線形表示。
   const bestPV = buildBestPV(eval_, moveIndex);
-  if (bestPV.length > 0) {
+  if (bestPV.length > 0 || eval_.forcedWinTree) {
     result.push({
       id: "best",
       label: "最善",
       sub: formatMove(eval_.bestMove),
       emitType: "best",
+      baseMoveNum: moveIndex,
       basePV: bestPV,
-      branches: buildInlineBranches(
-        eval_.forcedWinBranches ?? [],
-        moveIndex,
-        "win",
-      ),
+      branches: [],
+      tree: eval_.forcedWinTree,
     });
   }
 
@@ -268,6 +279,7 @@ export function buildTopTabs(
       label: "実際",
       sub: formatMove(eval_.position),
       emitType: "played",
+      baseMoveNum: moveIndex,
       basePV: playedPV,
       branches: [],
     });
@@ -280,6 +292,7 @@ export function buildTopTabs(
       label: forcedLossLabelOf(eval_) ?? "被詰",
       sub: formatMove(eval_.position),
       emitType: "played",
+      baseMoveNum: moveIndex,
       basePV: forcedLossPV,
       branches: buildInlineBranches(
         eval_.forcedLossBranches ?? [],
@@ -292,16 +305,111 @@ export function buildTopTabs(
   return result;
 }
 
+/** 再帰の安全上限（malformed tree に対するガード） */
+const MAX_WALK_DEPTH = 256;
+
 /**
  * basePV と選択中の分岐から表示行（Row[]）を展開する。
  *
- * @param selection アクティブタブ1つ分の pvIdx → optId マップ。
- *   （将来 #22 の再帰分岐化で、キーが「親選択を含むパス文字列」へ
- *   変わる可能性がある）
+ * 詰み木（tab.tree）があれば木を選択経路に沿って再帰展開し、任意の深さの
+ * 分岐を出す（#22）。なければ basePV ＋ フラット分岐（被詰タブ等）を展開する。
+ *
+ * @param selection アクティブタブ1つ分の selKey → optId マップ。
+ *   selKey はフラットでは basePV index 文字列、木ではルートからのパス文字列。
  */
 export function buildRows(
   tab: ProgressionTab,
-  selection: Record<number, string>,
+  selection: Record<string, string>,
+): Row[] {
+  if (tab.tree) {
+    return walkTree(tab, tab.tree, selection);
+  }
+  return buildRowsFlat(tab, selection);
+}
+
+function moveItem(
+  position: Position,
+  isSelf: boolean,
+  moveNum: number,
+): PVDisplayItem {
+  return { isSelf, position, coord: formatMove(position), moveNum };
+}
+
+/**
+ * 詰み木を選択経路に沿って再帰展開して Row[] を生成する。
+ * 攻め手は self（攻め始まり交互）。防御が2件以上なら branch 行を出し、
+ * 選択（既定 index 0 = "best"）した防御の継続へ降りる。
+ *
+ * 再帰中 tab / selection / rows は不変なのでクロージャで捕捉し、
+ * 変化する (node, pathKey, ply, depth) のみを引数に取る。
+ */
+function walkTree(
+  tab: ProgressionTab,
+  root: ForcedWinNode,
+  selection: Record<string, string>,
+): Row[] {
+  const rows: Row[] = [];
+
+  const walk = (
+    node: ForcedWinNode,
+    pathKey: string,
+    ply: number,
+    depth: number,
+  ): void => {
+    if (depth >= MAX_WALK_DEPTH) {
+      return;
+    }
+    // 攻め手（ply 偶数 = self）
+    rows.push({
+      type: "move",
+      key: `${tab.id}-m-${pathKey}-${ply}`,
+      item: moveItem(node.attackerMove, ply % 2 === 0, tab.baseMoveNum + ply),
+    });
+    if (node.defenses.length === 0) {
+      return;
+    }
+    const defPly = ply + 1;
+    if (node.defenses.length === 1) {
+      const d = node.defenses[0]!;
+      rows.push({
+        type: "move",
+        key: `${tab.id}-m-${pathKey}-${defPly}`,
+        item: moveItem(d.defenderMove, false, tab.baseMoveNum + defPly),
+      });
+      walk(d.next, pathKey, ply + 2, depth + 1);
+      return;
+    }
+    // 分岐: 防御2件以上
+    const options = node.defenses.map((d, idx) => ({
+      id: idx === 0 ? "best" : String(idx),
+      item: moveItem(d.defenderMove, false, tab.baseMoveNum + defPly),
+    }));
+    rows.push({
+      type: "branch",
+      key: `${tab.id}-br-${pathKey}-${defPly}`,
+      selKey: pathKey,
+      moveNum: tab.baseMoveNum + defPly,
+      options,
+    });
+    const selId = selection[pathKey] ?? "best";
+    const parsed = selId === "best" ? 0 : Number(selId);
+    // 不正値（NaN・範囲外）は主筋(0)へフォールバックし childKey の破損を防ぐ
+    const selIdx =
+      Number.isInteger(parsed) && parsed >= 0 && parsed < node.defenses.length
+        ? parsed
+        : 0;
+    const childKey = pathKey === "" ? String(selIdx) : `${pathKey}/${selIdx}`;
+    walk(node.defenses[selIdx]!.next, childKey, ply + 2, depth + 1);
+  };
+
+  walk(root, "", 0, 0);
+  return rows;
+}
+
+/** basePV ＋ フラット分岐（被詰タブ等、#26 まで）の行展開 */
+function buildRowsFlat(
+  tab: ProgressionTab,
+  selection: Record<string, string>,
 ): Row[] {
   const branchesByIdx = new Map<number, InlineBranch[]>();
   for (const b of tab.branches) {
@@ -347,11 +455,12 @@ export function buildRows(
       result.push({
         type: "branch",
         key: `${tab.id}-br-${i}`,
-        pvIdx: i,
+        selKey: String(i),
+        moveNum: baseItem.moveNum,
         options,
       });
 
-      const selected = selection[i] ?? "best";
+      const selected = selection[String(i)] ?? "best";
       if (selected !== "best") {
         const branch = branchesHere.find((b) => b.id === selected);
         if (branch) {
@@ -374,11 +483,13 @@ export function buildRows(
 /**
  * 行 0..upToRowIdx-1 の可視手列を返す（盤面プレビュー用）。
  * branch 行は selection で選ばれたオプション（既定 best）を採用する。
+ * 木モードでは rows が既に選択経路に沿って展開済みのため、branch 行は
+ * 選択オプションの1手のみを寄与する（後続行が継続を表す）。
  */
 export function buildVisibleItems(
   rows: Row[],
   upToRowIdx: number,
-  selection: Record<number, string>,
+  selection: Record<string, string>,
 ): { position: Position; isSelf: boolean }[] {
   const items: { position: Position; isSelf: boolean }[] = [];
   for (let r = 0; r < upToRowIdx && r < rows.length; r++) {
@@ -389,7 +500,7 @@ export function buildVisibleItems(
     if (row.type === "move") {
       items.push({ position: row.item.position, isSelf: row.item.isSelf });
     } else {
-      const selectedId = selection[row.pvIdx] ?? "best";
+      const selectedId = selection[row.selKey] ?? "best";
       const opt =
         row.options.find((o) => o.id === selectedId) ?? row.options[0];
       if (opt) {

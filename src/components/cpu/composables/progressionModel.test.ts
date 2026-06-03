@@ -243,8 +243,9 @@ describe("buildTopTabs", () => {
   });
 });
 
-describe("buildRows", () => {
-  function tabWithBranch(): ProgressionTab {
+describe("buildRows (詰み木モード #22)", () => {
+  // root(0,0) → 防御2件: 主筋 (1,1)→(2,2)終端 / 代替 (8,8)→(9,9)終端
+  function tabWithTree(): ProgressionTab {
     return buildTopTabs(
       evaluatedMove({
         moveIndex: 0,
@@ -255,33 +256,94 @@ describe("buildRows", () => {
             principalVariation: [pos(0, 0), pos(1, 1), pos(2, 2)],
           }),
         ],
-        forcedWinBranches: [
-          {
-            defenseIndex: 1,
-            defenseMove: pos(8, 8),
-            continuation: [pos(9, 9)],
-          },
-        ],
+        forcedWinTree: {
+          attackerMove: pos(0, 0),
+          defenses: [
+            {
+              defenderMove: pos(1, 1),
+              next: { attackerMove: pos(2, 2), defenses: [] },
+            },
+            {
+              defenderMove: pos(8, 8),
+              next: { attackerMove: pos(9, 9), defenses: [] },
+            },
+          ],
+        },
       }),
       0,
     )[0]!;
   }
 
-  it("分岐点に branch 行を挿入し、既定では basePV を辿る", () => {
-    const rows = buildRows(tabWithBranch(), {});
+  it("分岐点に branch 行を挿入し、既定では defenses[0] を辿る", () => {
+    const rows = buildRows(tabWithTree(), {});
     expect(rows.map((r) => r.type)).toEqual(["move", "branch", "move"]);
-    const [, branchRow] = rows;
+    const [first, branchRow, last] = rows;
+    expect(first?.type === "move" && first.item.position).toEqual(pos(0, 0));
     expect(
       branchRow?.type === "branch" && branchRow.options.map((o) => o.id),
-    ).toEqual(["best", "win-0"]);
+    ).toEqual(["best", "1"]);
+    // 既定 (best) は主筋 (2,2)
+    expect(last?.type === "move" && last.item.position).toEqual(pos(2, 2));
   });
 
-  it("分岐を選択すると continuation に切り替わる", () => {
-    const rows = buildRows(tabWithBranch(), { 1: "win-0" });
-    // move(base0), branch(idx1), then win-0 continuation
+  it("代替防御を選択すると別の継続に切り替わる", () => {
+    // ルート分岐の selKey は ""（パス先頭）
+    const rows = buildRows(tabWithTree(), { "": "1" });
     expect(rows.map((r) => r.type)).toEqual(["move", "branch", "move"]);
     const [, , last] = rows;
     expect(last?.type === "move" && last.item.position).toEqual(pos(9, 9));
+  });
+
+  it("選択した側分岐の中に更なる分岐を再帰展開する", () => {
+    // 代替 (8,8) の後、攻め (9,9)→ 防御2件 (10,10)/(11,11)
+    const tab = buildTopTabs(
+      evaluatedMove({
+        moveIndex: 0,
+        bestMove: pos(0, 0),
+        candidates: [
+          candidate({
+            position: pos(0, 0),
+            principalVariation: [pos(0, 0)],
+          }),
+        ],
+        forcedWinTree: {
+          attackerMove: pos(0, 0),
+          defenses: [
+            {
+              defenderMove: pos(1, 1),
+              next: { attackerMove: pos(2, 2), defenses: [] },
+            },
+            {
+              defenderMove: pos(8, 8),
+              next: {
+                attackerMove: pos(9, 9),
+                defenses: [
+                  {
+                    defenderMove: pos(10, 10),
+                    next: { attackerMove: pos(12, 12), defenses: [] },
+                  },
+                  {
+                    defenderMove: pos(11, 11),
+                    next: { attackerMove: pos(13, 13), defenses: [] },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      }),
+      0,
+    )[0]!;
+    // 既定（主筋）では深い分岐は現れない
+    expect(buildRows(tab, {}).filter((r) => r.type === "branch")).toHaveLength(
+      1,
+    );
+    // 代替 (8,8) を選ぶと 2段目の分岐が現れる
+    const rows = buildRows(tab, { "": "1" });
+    const branchRows = rows.filter((r) => r.type === "branch");
+    expect(branchRows).toHaveLength(2);
+    // 2段目分岐の selKey はルートで idx1 を選んだパス "1"
+    expect(branchRows[1]?.type === "branch" && branchRows[1].selKey).toBe("1");
   });
 });
 
@@ -294,22 +356,27 @@ describe("buildVisibleItems", () => {
         candidates: [
           candidate({
             position: pos(0, 0),
-            principalVariation: [pos(0, 0), pos(1, 1)],
+            principalVariation: [pos(0, 0)],
           }),
         ],
-        forcedWinBranches: [
-          {
-            defenseIndex: 1,
-            defenseMove: pos(8, 8),
-            continuation: [pos(9, 9)],
-          },
-        ],
+        forcedWinTree: {
+          attackerMove: pos(0, 0),
+          defenses: [
+            {
+              defenderMove: pos(1, 1),
+              next: { attackerMove: pos(2, 2), defenses: [] },
+            },
+            {
+              defenderMove: pos(8, 8),
+              next: { attackerMove: pos(9, 9), defenses: [] },
+            },
+          ],
+        },
       }),
       0,
     )[0]!;
-    const rows = buildRows(tab, { 1: "win-0" });
-    // branch 行で win-0 を選んだ可視手列
-    const items = buildVisibleItems(rows, rows.length, { 1: "win-0" });
+    const rows = buildRows(tab, { "": "1" });
+    const items = buildVisibleItems(rows, rows.length, { "": "1" });
     expect(items.map((i) => i.position)).toEqual([
       pos(0, 0),
       pos(8, 8),
@@ -317,7 +384,7 @@ describe("buildVisibleItems", () => {
     ]);
   });
 
-  it("upToRowIdx で打ち切る", () => {
+  it("upToRowIdx で打ち切る（木なし・候補PVフラット）", () => {
     const tab = buildTopTabs(
       evaluatedMove({
         moveIndex: 0,

@@ -5,30 +5,38 @@
  */
 
 import type { BoardState, Position } from "@/types/game";
-import type { ForcedWinBranch } from "@/types/review";
+import type { ForcedWinDefense, ForcedWinNode } from "@/types/review";
 
 import { createsFourThree } from "../evaluation/winningPatterns";
 
 /**
- * 両ミセの分岐情報を構築
+ * 両ミセの詰み木を構築（#22）
  *
- * Main PV: [bestMove, targets[0], targets[1]]
- * 各分岐: opponent が targets[i] (i>=1) を防御 → self が surviving target で四三完成
+ * root = bestMove。各防御 targets[i] に対し:
+ * - i=0（主筋）: opponent が targets[0] を防御 → self が targets[1] で四三完成（終端）
+ * - i>=1: opponent が targets[i] を防御 → self が surviving target で四三完成（終端）
+ *
+ * defenses[0] 連鎖 = [bestMove, targets[0], targets[1]]（最善タブの既定経路）。
  */
-export function buildDoubleMiseBranches(
+export function buildDoubleMiseTree(
   board: BoardState,
   bestMove: Position,
   color: "black" | "white",
   opponentColor: "black" | "white",
   targets: Position[],
-): ForcedWinBranch[] | undefined {
+): ForcedWinNode | null {
   const bmRow = board[bestMove.row];
-  if (!bmRow) {
-    return undefined;
+  const [main, mainWin] = targets;
+  if (!bmRow || !main || !mainWin) {
+    return null;
   }
 
   bmRow[bestMove.col] = color;
-  const branches: ForcedWinBranch[] = [];
+
+  const defenses: ForcedWinDefense[] = [
+    // 主筋: targets[0] を受け → targets[1] で完成
+    { defenderMove: main, next: { attackerMove: mainWin, defenses: [] } },
+  ];
 
   for (let i = 1; i < targets.length; i++) {
     const defense = targets[i];
@@ -44,16 +52,15 @@ export function buildDoubleMiseBranches(
       opponentColor,
     );
     if (surviving) {
-      branches.push({
-        defenseIndex: 1,
-        defenseMove: defense,
-        continuation: [surviving],
+      defenses.push({
+        defenderMove: defense,
+        next: { attackerMove: surviving, defenses: [] },
       });
     }
   }
 
   bmRow[bestMove.col] = null;
-  return branches.length > 0 ? branches : undefined;
+  return { attackerMove: bestMove, defenses };
 }
 
 /**

@@ -8,6 +8,7 @@ const bitboard = @import("bitboard.zig");
 const board_mod = @import("board.zig");
 const evaluate = @import("evaluate.zig");
 const forbidden = @import("forbidden.zig");
+const ft = @import("forced_win_tree.zig");
 const ll = @import("line_lookup.zig");
 const patterns = @import("patterns.zig");
 const quiescence = @import("quiescence.zig");
@@ -973,7 +974,14 @@ pub const VCTSequenceResult = struct {
     found: bool,
     branches: [20]VCTBranch,
     branch_count: u8,
+    /// 詰み木 root node index（g_tree_arena 内）。TREE_TERMINAL = 木なし。
+    /// collect_branches 有効時のみ構築される。
+    tree_root: u16 = ft.TREE_TERMINAL,
 };
+
+/// 詰み木アリーナ（review 専用・collect_branches 時のみ構築）。
+/// 単一スレッド WASM 前提でグローバル保持しスタック肥大を避ける。
+pub var g_tree_arena: ft.Arena = .{};
 
 /// 再帰コンテキスト（分岐収集用）
 const VCTRecursiveContext = struct {
@@ -981,6 +989,8 @@ const VCTRecursiveContext = struct {
     collect_branches: bool,
     branches: [20]VCTBranch,
     branch_count: u8,
+    /// この部分木の root node index（collect_branches 時のみ設定）
+    out_node: u16 = ft.TREE_TERMINAL,
 };
 
 /// 防御ごとの手順エントリ
@@ -991,6 +1001,8 @@ const DefenseSeqEntry = struct {
     child_branches: [20]VCTBranch,
     child_branch_count: u8,
     is_forbidden_trap: bool,
+    /// この防御後の継続ノード index（collect_branches 時のみ設定）
+    child_node: u16 = ft.TREE_TERMINAL,
 };
 
 const MAX_DEFENSE_ENTRIES = 20;
@@ -1024,12 +1036,15 @@ pub fn findVCTSequence(
         .branch_count = 0,
     };
 
+    // 詰み木アリーナを初期化（collect_branches 時のみ構築する）
+    if (collect_branches) g_tree_arena.reset();
+
     const opponent = color.opposite();
 
     // 相手に活三・ミセ手・VCFがあればVCT不成立（四追いでしか勝てない）
-    if (hasOpenThree(cells, opponent)) return tryVCFOnly(cells, color, &limiter, &result);
-    if (hasFourThreeAvailable(cells, opponent)) return tryVCFOnly(cells, color, &limiter, &result);
-    if (vcf_mod.hasVCF(cells, opponent, 0, &limiter, vcf_mod.VCF_MAX_DEPTH)) return tryVCFOnly(cells, color, &limiter, &result);
+    if (hasOpenThree(cells, opponent)) return tryVCFOnly(cells, color, &limiter, &result, collect_branches);
+    if (hasFourThreeAvailable(cells, opponent)) return tryVCFOnly(cells, color, &limiter, &result, collect_branches);
+    if (vcf_mod.hasVCF(cells, opponent, 0, &limiter, vcf_mod.VCF_MAX_DEPTH)) return tryVCFOnly(cells, color, &limiter, &result, collect_branches);
 
     // VCFが先に成立する場合はVCF手順を返す
     const vcf_seq = vcf_mod.findVCFSequence(cells, color, vcf_mod.VCF_MAX_DEPTH, time_limit, max_nodes);
@@ -1041,6 +1056,8 @@ pub fn findVCTSequence(
         result.len = vcf_seq.len;
         result.is_forbidden_trap = vcf_seq.is_forbidden_trap;
         result.found = true;
+        // VCF は受け一意の線形手順 → 線形チェイン木
+        if (collect_branches) result.tree_root = g_tree_arena.buildLinearChain(result.sequence[0..], result.len);
         return result;
     }
 
@@ -1071,7 +1088,7 @@ pub fn findVCTSequence(
                     .branches = undefined,
                     .branch_count = 0,
                 };
-                return tryVCFOnly(cells, color, &limiter, &fallback);
+                return tryVCFOnly(cells, color, &limiter, &fallback, collect_branches);
             }
             result.len = seq_len;
             result.is_forbidden_trap = context.is_forbidden_trap;
@@ -1081,6 +1098,8 @@ pub fn findVCTSequence(
             while (bi < context.branch_count) : (bi += 1) {
                 result.branches[bi] = context.branches[bi];
             }
+            // 再帰で構築した詰み木の root（collect_branches 時のみ）
+            result.tree_root = context.out_node;
             return result;
         }
     }
@@ -1088,7 +1107,7 @@ pub fn findVCTSequence(
 }
 
 /// VCF-onlyフォールバック: 相手にVCT阻害要因があるとき
-fn tryVCFOnly(cells: []Cell, color: Cell, limiter: *TimeLimiter, result: *VCTSequenceResult) VCTSequenceResult {
+fn tryVCFOnly(cells: []Cell, color: Cell, limiter: *TimeLimiter, result: *VCTSequenceResult, collect_branches: bool) VCTSequenceResult {
     const vcf_seq = vcf_mod.findVCFSequence(cells, color, vcf_mod.VCF_MAX_DEPTH, limiter.time_limit, if (limiter.max_nodes > 0) limiter.max_nodes else 0);
     if (vcf_seq.found) {
         var i: u8 = 0;
@@ -1098,6 +1117,8 @@ fn tryVCFOnly(cells: []Cell, color: Cell, limiter: *TimeLimiter, result: *VCTSeq
         result.len = vcf_seq.len;
         result.is_forbidden_trap = vcf_seq.is_forbidden_trap;
         result.found = true;
+        // VCF-only は線形手順 → 線形チェイン木
+        if (collect_branches) result.tree_root = g_tree_arena.buildLinearChain(result.sequence[0..], result.len);
     }
     return result.*;
 }
@@ -1129,6 +1150,8 @@ fn findVCTSequenceRecursive(
         if (vcf_seq.is_forbidden_trap) {
             context.is_forbidden_trap = true;
         }
+        // VCF は受け一意の線形手順 → 線形チェイン木
+        if (context.collect_branches) context.out_node = g_tree_arena.buildLinearChain(vcf_seq.sequence[0..], vcf_seq.len);
         return true;
     }
 
@@ -1143,6 +1166,7 @@ fn findVCTSequenceRecursive(
     // 最短手順の候補を保持（全脅威手を試して最短を選ぶ）
     var best_seq: [64]Position = undefined;
     var best_seq_len: u8 = 64; // 最短を見つけるため最大値で初期化
+    var best_root: u16 = ft.TREE_TERMINAL;
     var best_context = VCTRecursiveContext{
         .is_forbidden_trap = false,
         .collect_branches = context.collect_branches,
@@ -1152,6 +1176,8 @@ fn findVCTSequenceRecursive(
     var has_best = false;
 
     for (0..threat_count) |ti| {
+        // この脅威手の探索でアリーナへ積むノードの起点。採用されなければ巻き戻す。
+        const threat_snap = g_tree_arena.snapshot();
         const move = threat_buf[ti];
         const move_idx = @as(u16, move.row) * BOARD_SIZE + move.col;
         cells[move_idx] = color;
@@ -1163,6 +1189,8 @@ fn findVCTSequenceRecursive(
             bitboard.removeStone(move.row, move.col);
             sequence[seq_len.*] = move;
             seq_len.* += 1;
+            // 五連で終端（受けなし）
+            if (context.collect_branches) context.out_node = g_tree_arena.addNode(move, 0, 0);
             return true;
         }
 
@@ -1175,6 +1203,8 @@ fn findVCTSequenceRecursive(
                 // 1手で終わるので即返却
                 sequence[seq_len.*] = move;
                 seq_len.* += 1;
+                // 受け不能の脅威で終端
+                if (context.collect_branches) context.out_node = g_tree_arena.addNode(move, 0, 0);
                 return true;
             }
             cells[move_idx] = .empty;
@@ -1249,6 +1279,8 @@ fn findVCTSequenceRecursive(
                         entry.seq_len = 1 + block_ok.seq_len;
                         entry.child_branch_count = 0;
                         entry.is_forbidden_trap = block_ok.is_forbidden_trap;
+                        // ブロック四追いは受け一意の線形手順 → 線形チェイン木
+                        entry.child_node = g_tree_arena.buildLinearChain(entry.seq[0..], entry.seq_len);
                         defense_entry_count += 1;
                     }
                     if (!has_first_defense and block_ok.seq_len_valid) {
@@ -1296,6 +1328,8 @@ fn findVCTSequenceRecursive(
                         entry.seq_len = vcf_result.len;
                         entry.child_branch_count = 0;
                         entry.is_forbidden_trap = vcf_result.is_forbidden_trap;
+                        // 三防御後の VCF は受け一意の線形手順 → 線形チェイン木
+                        entry.child_node = g_tree_arena.buildLinearChain(entry.seq[0..], entry.seq_len);
                         defense_entry_count += 1;
                     }
                     if (!has_first_defense) {
@@ -1354,6 +1388,8 @@ fn findVCTSequenceRecursive(
                         entry.child_branches[bi] = sub_context.branches[bi];
                     }
                     entry.is_forbidden_trap = sub_context.is_forbidden_trap;
+                    // ct=none: 子は再帰で構築した部分木
+                    entry.child_node = sub_context.out_node;
                     defense_entry_count += 1;
                 } else if (sub_context.is_forbidden_trap) {
                     context.is_forbidden_trap = true;
@@ -1382,6 +1418,7 @@ fn findVCTSequenceRecursive(
         cells[move_idx] = .empty;
         bitboard.removeStone(move.row, move.col);
 
+        var kept = false;
         if (all_defense_leads_to_vct and defense_positions.len > 0 and has_first_defense) {
             // この脅威手での手順長を計算
             var candidate_seq: [64]Position = undefined;
@@ -1392,10 +1429,21 @@ fn findVCTSequenceRecursive(
                 .branches = undefined,
                 .branch_count = 0,
             };
+            var candidate_root: u16 = ft.TREE_TERMINAL;
 
             if (context.collect_branches and defense_entry_count > 0) {
                 const shortest_idx = selectShortestDefense(&defense_entries, defense_entry_count);
                 buildBranches(&defense_entries, defense_entry_count, shortest_idx, &candidate_seq, &candidate_len, move, &candidate_context);
+
+                // アリーナ: この攻め手ノードを構築。defenses[0] = 最短防御（前出し）。
+                const def_start = g_tree_arena.defense_count;
+                g_tree_arena.addDefense(defense_entries[shortest_idx].defense, defense_entries[shortest_idx].child_node);
+                var ei: u8 = 0;
+                while (ei < defense_entry_count) : (ei += 1) {
+                    if (ei == shortest_idx) continue;
+                    g_tree_arena.addDefense(defense_entries[ei].defense, defense_entries[ei].child_node);
+                }
+                candidate_root = g_tree_arena.addNode(move, def_start, defense_entry_count);
             } else {
                 candidate_seq[0] = move;
                 candidate_len = 1;
@@ -1416,8 +1464,15 @@ fn findVCTSequenceRecursive(
                 }
                 best_seq_len = candidate_len;
                 best_context = candidate_context;
+                best_root = candidate_root;
                 has_best = true;
+                kept = true;
             }
+        }
+        // 採用しなかった脅威手のアリーナノードは破棄（superseded best は dead node として残り
+        // シリアライズ時の compact で除外される）
+        if (context.collect_branches and !kept) {
+            g_tree_arena.rollback(threat_snap);
         }
     }
 
@@ -1435,6 +1490,7 @@ fn findVCTSequenceRecursive(
         while (bi < best_context.branch_count) : (bi += 1) {
             context.branches[bi] = best_context.branches[bi];
         }
+        context.out_node = best_root;
         return true;
     }
 
