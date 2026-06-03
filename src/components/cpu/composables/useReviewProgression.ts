@@ -6,7 +6,7 @@
  * - 行（rows）は単一手 or 分岐タブ群の判別共用体として展開し、
  *   ユーザー選択（selections）に応じて続きをブランチの continuation に切り替える
  * - step / showAll でステップ送り、jumpTo / selectBranchOption で位置やブランチを切替
- * - emit 関数を引数で受け取り、preview の発火を担当
+ * - プレビューの発火は reviewBoardPreviewStore を直接更新して行う
  */
 
 import { type ComputedRef, type Ref, computed, ref, watch } from "vue";
@@ -16,6 +16,7 @@ import type { EvaluatedMove, ReviewCandidate } from "@/types/review";
 
 import { SHORT_LABELS } from "@/logic/forcedTypeLabels";
 import { formatMove } from "@/logic/gameRecordParser";
+import { useReviewBoardPreviewStore } from "@/stores/reviewBoardPreviewStore";
 
 export interface PVDisplayItem {
   isSelf: boolean;
@@ -54,11 +55,6 @@ export type Row =
 interface UseReviewProgressionParams {
   evaluation: Ref<EvaluatedMove | null>;
   moveIndex: Ref<number>;
-  emitHover: (
-    items: { position: Position; isSelf: boolean }[],
-    type: "best" | "played",
-  ) => void;
-  emitLeave: () => void;
 }
 
 interface UseReviewProgressionReturn {
@@ -112,7 +108,8 @@ function buildPV(
 export function useReviewProgression(
   params: UseReviewProgressionParams,
 ): UseReviewProgressionReturn {
-  const { evaluation, moveIndex, emitHover, emitLeave } = params;
+  const { evaluation, moveIndex } = params;
+  const previewStore = useReviewBoardPreviewStore();
 
   const forcedLossLabel = computed(() => {
     const type = evaluation.value?.forcedLossType;
@@ -439,10 +436,10 @@ export function useReviewProgression(
   function emitPreview(): void {
     const tab = activeTab.value;
     if (!tab || step.value <= 0) {
-      emitLeave();
+      previewStore.clearPvPreview();
       return;
     }
-    emitHover(getVisibleItems(step.value), tab.emitType);
+    previewStore.setPvPreview(getVisibleItems(step.value), tab.emitType);
   }
 
   // ── Actions ──
@@ -454,7 +451,7 @@ export function useReviewProgression(
     activeTabId.value = id;
     step.value = 0;
     showAll.value = false;
-    emitLeave();
+    previewStore.clearPvPreview();
   }
 
   function toggleShowAll(): void {
@@ -488,7 +485,7 @@ export function useReviewProgression(
     }
     step.value = 0;
     showAll.value = false;
-    emitLeave();
+    previewStore.clearPvPreview();
   }
 
   function jumpTo(rowIdx: number): void {
@@ -532,7 +529,7 @@ export function useReviewProgression(
     if (!tab) {
       return;
     }
-    emitHover(getVisibleItems(rowIdx + 1), tab.emitType);
+    previewStore.setPvPreview(getVisibleItems(rowIdx + 1), tab.emitType);
   }
 
   function previewHoverOption(rowIdx: number, optId: string): void {
@@ -549,7 +546,7 @@ export function useReviewProgression(
     if (opt) {
       items.push({ position: opt.item.position, isSelf: opt.item.isSelf });
     }
-    emitHover(items, tab.emitType);
+    previewStore.setPvPreview(items, tab.emitType);
   }
 
   function previewLeave(): void {

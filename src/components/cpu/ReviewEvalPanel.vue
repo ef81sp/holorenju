@@ -4,9 +4,8 @@
  *
  * 「結論＋スコア」「候補手」「最善の進行＋分岐」の 3 セクションを組み合わせる。
  * 各セクションは独立コンポーネントに切り出されており、本ファイルは
- * - 表示モードの分岐
- * - 子コンポーネントの emit を親へ転送
- * のみを担う。
+ * 表示モードの分岐のみを担う。盤面プレビューのホバー状態は各セクションが
+ * reviewBoardPreviewStore を直接更新するため、emit 中継は持たない。
  */
 
 import { computed } from "vue";
@@ -23,16 +22,6 @@ const props = defineProps<{
   currentPosition: Position | null;
   isEvaluating?: boolean;
   isLosingMove?: boolean;
-}>();
-
-const emit = defineEmits<{
-  hoverCandidate: [position: Position];
-  leaveCandidate: [];
-  hoverPvMove: [
-    items: { position: Position; isSelf: boolean }[],
-    type: "best" | "played",
-  ];
-  leavePvMove: [];
 }>();
 
 /** 候補手・進行セクションを表示するか（プレイヤーのフル評価時のみ） */
@@ -58,16 +47,10 @@ const showSections = computed<boolean>(() => {
     />
 
     <template v-if="showSections && evaluation">
-      <ReviewCandidateGrid
-        :evaluation="evaluation"
-        @hover-candidate="(p) => emit('hoverCandidate', p)"
-        @leave-candidate="() => emit('leaveCandidate')"
-      />
+      <ReviewCandidateGrid :evaluation="evaluation" />
       <ReviewProgression
         :evaluation="evaluation"
         :move-index="moveIndex"
-        @hover-pv-move="(items, type) => emit('hoverPvMove', items, type)"
-        @leave-pv-move="() => emit('leavePvMove')"
       />
     </template>
   </div>

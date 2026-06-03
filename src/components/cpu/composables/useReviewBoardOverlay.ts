@@ -5,7 +5,7 @@
  * 盤面合成・マーク・ラベルを管理する。
  */
 
-import { type ComputedRef, computed, ref } from "vue";
+import { type ComputedRef, computed } from "vue";
 
 import type { StoneLabel } from "@/components/game/RenjuBoard/RenjuBoard.vue";
 import type { Mark } from "@/stores/boardStore";
@@ -13,16 +13,9 @@ import type { BoardState, Position, StoneColor } from "@/types/game";
 
 import { getOppositeColor } from "@/logic/cpu/core/boardUtils";
 import { useCpuReviewStore } from "@/stores/cpuReviewStore";
+import { useReviewBoardPreviewStore } from "@/stores/reviewBoardPreviewStore";
 
 interface UseReviewBoardOverlayReturn {
-  handleHoverCandidate: (position: Position) => void;
-  handleLeaveCandidate: () => void;
-  handleHoverPVMove: (
-    items: { position: Position; isSelf: boolean }[],
-    type: "best" | "played",
-  ) => void;
-  handleLeavePVMove: () => void;
-  clearPreview: () => void;
   displayBoardState: ComputedRef<BoardState>;
   stoneLabels: ComputedRef<Map<string, StoneLabel>>;
   displayMarks: ComputedRef<Mark[]>;
@@ -30,54 +23,40 @@ interface UseReviewBoardOverlayReturn {
 
 export function useReviewBoardOverlay(): UseReviewBoardOverlayReturn {
   const reviewStore = useCpuReviewStore();
+  const previewStore = useReviewBoardPreviewStore();
 
-  // ========== State ==========
+  // ========== Derived preview state ==========
+  // プレビュー状態は reviewBoardPreviewStore が SSoT。盤面合成に必要な
+  // 色・種別・候補位置をここで導出する。
 
   /** 候補手ホバー位置 */
-  const hoveredCandidatePosition = ref<Position | null>(null);
-
-  /** PVホバーの仮石（複数手） */
-  const pvPreviewStones = ref<{ position: Position; color: StoneColor }[]>([]);
+  const hoveredCandidatePosition = computed(
+    () => previewStore.hoveredCandidate,
+  );
 
   /** PVホバーの種別（"best" 時は現在手を除去） */
-  const pvHoverType = ref<"best" | "played" | null>(null);
+  const pvHoverType = computed<"best" | "played" | null>(
+    () => previewStore.pvPreview?.type ?? null,
+  );
 
-  // ========== Event handlers ==========
-
-  function handleHoverCandidate(position: Position): void {
-    hoveredCandidatePosition.value = position;
-  }
-
-  function handleLeaveCandidate(): void {
-    hoveredCandidatePosition.value = null;
-  }
-
-  function handleHoverPVMove(
-    items: { position: Position; isSelf: boolean }[],
-    type: "best" | "played",
-  ): void {
-    const evalMove = reviewStore.moves[reviewStore.currentMoveIndex - 1];
-    if (!evalMove?.color) {
-      return;
-    }
-    const evalColor = evalMove.color;
-    pvPreviewStones.value = items.map((item) => ({
-      position: item.position,
-      color: item.isSelf ? evalColor : getOppositeColor(evalColor),
-    }));
-    pvHoverType.value = type;
-  }
-
-  function handleLeavePVMove(): void {
-    pvPreviewStones.value = [];
-    pvHoverType.value = null;
-  }
-
-  /** 手数変更時などにすべてのプレビューをクリア */
-  function clearPreview(): void {
-    pvPreviewStones.value = [];
-    pvHoverType.value = null;
-  }
+  /** PVホバーの仮石（手番から色を導出） */
+  const pvPreviewStones = computed<{ position: Position; color: StoneColor }[]>(
+    () => {
+      const preview = previewStore.pvPreview;
+      if (!preview) {
+        return [];
+      }
+      const evalMove = reviewStore.moves[reviewStore.currentMoveIndex - 1];
+      if (!evalMove?.color) {
+        return [];
+      }
+      const evalColor = evalMove.color;
+      return preview.items.map((item) => ({
+        position: item.position,
+        color: item.isSelf ? evalColor : getOppositeColor(evalColor),
+      }));
+    },
+  );
 
   // ========== Computed: 盤面 ==========
 
@@ -249,11 +228,6 @@ export function useReviewBoardOverlay(): UseReviewBoardOverlayReturn {
   });
 
   return {
-    handleHoverCandidate,
-    handleLeaveCandidate,
-    handleHoverPVMove,
-    handleLeavePVMove,
-    clearPreview,
     displayBoardState,
     stoneLabels,
     displayMarks,

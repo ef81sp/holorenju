@@ -33,6 +33,7 @@ import { useCpuRecordStore } from "@/stores/cpuRecordStore";
 import { useDialogStore } from "@/stores/dialogStore";
 import { useAudioStore } from "@/stores/audioStore";
 import { useBoardStore } from "@/stores/boardStore";
+import { useReviewBoardPreviewStore } from "@/stores/reviewBoardPreviewStore";
 import type { Position } from "@/types/game";
 import { isInteractiveClick } from "@/utils/isInteractiveClick";
 
@@ -42,6 +43,7 @@ const reviewStore = useCpuReviewStore();
 const cpuRecordStore = useCpuRecordStore();
 const dialogStore = useDialogStore();
 const audioStore = useAudioStore();
+const previewStore = useReviewBoardPreviewStore();
 
 const layoutRef = ref<InstanceType<typeof GamePlayerLayout> | null>(null);
 const importDialogRef = ref<InstanceType<typeof GameRecordImportDialog> | null>(
@@ -64,6 +66,8 @@ const overlay = useReviewBoardOverlay();
 onMounted(() => {
   // 対戦画面から遷移した場合、boardStoreに残っている石をクリア
   boardStore.resetBoard();
+  // シングルトンの盤面プレビューストアを初期化（前回画面の残留状態を除去）
+  previewStore.clearAll();
 
   if (appStore.reviewRecordId) {
     // 既存パス: CPU対戦記録
@@ -103,6 +107,7 @@ onUnmounted(() => {
   evaluator.cancel();
   reviewStore.closeReview();
   dialogStore.reset();
+  previewStore.clearAll();
 });
 
 // 評価を開始
@@ -175,7 +180,7 @@ watch(
 watch(
   () => reviewStore.currentMoveIndex,
   () => {
-    overlay.clearPreview();
+    previewStore.clearPvPreview();
 
     // 最終手で五連（決着）があれば決着セリフを表示
     const isLastMove =
@@ -296,7 +301,7 @@ function handleReanalyze(): void {
 function handleImported(): void {
   evaluator.cancel();
   boardStore.resetBoard();
-  overlay.clearPreview();
+  previewStore.clearPvPreview();
   dialogue.showInitialDialogue();
   startEvaluation();
 }
@@ -395,10 +400,6 @@ function handleLayoutClick(event: MouseEvent): void {
             reviewStore.currentMoveIndex - 1
           "
           @click.stop
-          @hover-candidate="overlay.handleHoverCandidate"
-          @leave-candidate="overlay.handleLeaveCandidate"
-          @hover-pv-move="overlay.handleHoverPVMove"
-          @leave-pv-move="overlay.handleLeavePVMove"
         />
       </template>
 

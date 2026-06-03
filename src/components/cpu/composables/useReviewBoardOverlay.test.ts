@@ -11,6 +11,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type { CpuBattleRecord } from "@/types/cpu";
 
 import { useCpuReviewStore } from "@/stores/cpuReviewStore";
+import { useReviewBoardPreviewStore } from "@/stores/reviewBoardPreviewStore";
 
 import { useReviewBoardOverlay } from "./useReviewBoardOverlay";
 
@@ -31,12 +32,15 @@ describe("useReviewBoardOverlay", () => {
   // eslint-disable-next-line init-declarations
   let reviewStore: ReturnType<typeof useCpuReviewStore>;
   // eslint-disable-next-line init-declarations
+  let previewStore: ReturnType<typeof useReviewBoardPreviewStore>;
+  // eslint-disable-next-line init-declarations
   let overlay: ReturnType<typeof useReviewBoardOverlay>;
 
   beforeEach(() => {
     setActivePinia(createPinia());
     reviewStore = useCpuReviewStore();
     reviewStore.openReview(createTestRecord());
+    previewStore = useReviewBoardPreviewStore();
     overlay = useReviewBoardOverlay();
   });
 
@@ -45,7 +49,7 @@ describe("useReviewBoardOverlay", () => {
       reviewStore.goToMove(3);
 
       // 3手目（黒I8）を見ている状態でPVホバー
-      overlay.handleHoverPVMove(
+      previewStore.setPvPreview(
         [
           { position: { row: 6, col: 9 }, isSelf: true },
           { position: { row: 5, col: 9 }, isSelf: false },
@@ -62,7 +66,7 @@ describe("useReviewBoardOverlay", () => {
     it("2手目でPVホバーすると、ラベルが2,3,...と手数ベースになる", () => {
       reviewStore.goToMove(2);
 
-      overlay.handleHoverPVMove(
+      previewStore.setPvPreview(
         [
           { position: { row: 6, col: 9 }, isSelf: true },
           { position: { row: 5, col: 8 }, isSelf: false },
@@ -89,7 +93,7 @@ describe("useReviewBoardOverlay", () => {
       }
 
       // bestモードでホバー
-      overlay.handleHoverPVMove(
+      previewStore.setPvPreview(
         [{ position: { row: 6, col: 9 }, isSelf: true }],
         "best",
       );
@@ -104,7 +108,7 @@ describe("useReviewBoardOverlay", () => {
     it("bestモードでPVホバー時、現在手のラベルが除外される", () => {
       reviewStore.goToMove(3);
 
-      overlay.handleHoverPVMove(
+      previewStore.setPvPreview(
         [{ position: { row: 6, col: 9 }, isSelf: true }],
         "best",
       );
@@ -123,7 +127,7 @@ describe("useReviewBoardOverlay", () => {
     it("bestモードでPVホバー時、現在手マークが非表示になる", () => {
       reviewStore.goToMove(3);
 
-      overlay.handleHoverPVMove(
+      previewStore.setPvPreview(
         [{ position: { row: 6, col: 9 }, isSelf: true }],
         "best",
       );
@@ -143,7 +147,7 @@ describe("useReviewBoardOverlay", () => {
         return;
       }
 
-      overlay.handleHoverPVMove(
+      previewStore.setPvPreview(
         [{ position: { row: 6, col: 9 }, isSelf: true }],
         "played",
       );
@@ -159,7 +163,7 @@ describe("useReviewBoardOverlay", () => {
     it("PVホバー状態がクリアされる", () => {
       reviewStore.goToMove(3);
 
-      overlay.handleHoverPVMove(
+      previewStore.setPvPreview(
         [{ position: { row: 6, col: 9 }, isSelf: true }],
         "best",
       );
@@ -171,7 +175,7 @@ describe("useReviewBoardOverlay", () => {
         ),
       ).toBe(true);
 
-      overlay.clearPreview();
+      previewStore.clearPvPreview();
 
       // クリア後はPVプレビューマークなし
       expect(
@@ -187,7 +191,7 @@ describe("useReviewBoardOverlay", () => {
       reviewStore.goToMove(1);
       const pos = { row: 5, col: 5 };
 
-      overlay.handleHoverCandidate(pos);
+      previewStore.setHoveredCandidate(pos);
 
       const marks = overlay.displayMarks.value;
       const hoverMark = marks.find((m) => m.id === "review-hover");
@@ -198,8 +202,8 @@ describe("useReviewBoardOverlay", () => {
     it("リーブでマークが消える", () => {
       reviewStore.goToMove(1);
 
-      overlay.handleHoverCandidate({ row: 5, col: 5 });
-      overlay.handleLeaveCandidate();
+      previewStore.setHoveredCandidate({ row: 5, col: 5 });
+      previewStore.clearHoveredCandidate();
 
       const marks = overlay.displayMarks.value;
       expect(marks.find((m) => m.id === "review-hover")).toBeUndefined();
