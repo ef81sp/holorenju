@@ -45,7 +45,7 @@ interface UseReviewProgressionReturn {
   resetTree: () => void;
   jumpTo: (rowIdx: number) => void;
   selectBranchOption: (rowIdx: number, optId: string) => void;
-  getSelectedOptionId: (pvIdx: number) => string;
+  getSelectedOptionId: (selKey: string) => string;
   previewHoverMove: (rowIdx: number) => void;
   previewHoverOption: (rowIdx: number, optId: string) => void;
   previewLeave: () => void;
@@ -68,14 +68,14 @@ export function useReviewProgression(
   const activeTabId = ref<string | null>(null);
   const step = ref(0);
   const showAll = ref(false);
-  const selections = ref<Record<string, Record<number, string>>>({});
+  const selections = ref<Record<string, Record<string, string>>>({});
 
   const activeTab = computed<ProgressionTab | null>(
     () => topTabs.value.find((t) => t.id === activeTabId.value) ?? null,
   );
 
   /** アクティブタブ1つ分の selection マップ（タブ解決はここで吸収） */
-  function activeSelection(): Record<number, string> {
+  function activeSelection(): Record<string, string> {
     const tab = activeTab.value;
     return (tab && selections.value[tab.id]) ?? {};
   }
@@ -140,7 +140,7 @@ export function useReviewProgression(
   function resetTree(): void {
     const tab = activeTab.value;
     if (tab) {
-      const next: Record<string, Record<number, string>> = {};
+      const next: Record<string, Record<string, string>> = {};
       for (const [k, v] of Object.entries(selections.value)) {
         if (k !== tab.id) {
           next[k] = v;
@@ -172,7 +172,7 @@ export function useReviewProgression(
       ...selections.value,
       [tab.id]: {
         ...(selections.value[tab.id] ?? {}),
-        [row.pvIdx]: optId,
+        [row.selKey]: optId,
       },
     };
     step.value = Math.max(step.value, rowIdx + 1);
@@ -180,8 +180,8 @@ export function useReviewProgression(
     emitPreview();
   }
 
-  function getSelectedOptionId(pvIdx: number): string {
-    return activeSelection()[pvIdx] ?? "best";
+  function getSelectedOptionId(selKey: string): string {
+    return activeSelection()[selKey] ?? "best";
   }
 
   function previewHoverMove(rowIdx: number): void {

@@ -16,8 +16,6 @@
 import type { Position } from "@/types/game";
 import type { ForcedWinDefense, ForcedWinNode } from "@/types/review";
 
-import type { VCTBranch } from "../search/types";
-
 /** Zig 側 TREE_TERMINAL と一致（継続なしを表す番兵 index） */
 export const TREE_TERMINAL = 0xffff;
 
@@ -80,60 +78,28 @@ function buildNode(
 }
 
 /**
- * 詰み木の既定経路（defenses[0] 連鎖 = 主筋）を走査し、各ノードの代替防御
- * （defenses[1..]）をフラットな分岐リストへ変換する（旧 forcedWinBranches 互換）。
- *
- * Phase A の一時シム: progressionModel を変更せずに済むよう、木から旧来の
- * フラット分岐表現を再生成する。Phase B で木を直接消費するようになれば撤去。
+ * 攻め始まり交互の手列（[攻め, 受け, 攻め, ...]、末尾は攻めの勝ち手）から
+ * 分岐のない線形の詰み木を構築する。VCF / 単一初手 VCT など Zig が木を出さない
+ * 経路で `sequence` から木を合成するために使う。
  */
-export function spineWalkToBranches(root: ForcedWinNode): VCTBranch[] {
-  const branches: VCTBranch[] = [];
-  let node: ForcedWinNode | undefined = root;
-  let pvIdx = 0; // node.attackerMove の sequence 内インデックス
-  let guard = 0;
-  while (node && guard < MAX_TREE_DEPTH) {
-    guard++;
-    if (node.defenses.length === 0) {
-      break;
-    }
-    const defenseIndex = pvIdx + 1; // 防御手の sequence 内インデックス
-    for (let i = 1; i < node.defenses.length; i++) {
-      const d = node.defenses[i];
-      if (!d) {
-        continue;
-      }
-      branches.push({
-        defenseIndex,
-        defenseMove: d.defenderMove,
-        continuation: flattenSpine(d.next),
-      });
-    }
-    node = node.defenses[0]?.next;
-    pvIdx += 2;
+export function linearTreeFromSequence(
+  sequence: Position[],
+): ForcedWinNode | null {
+  if (sequence.length === 0) {
+    return null;
   }
-  return branches;
+  return linearNode(sequence, 0);
 }
 
-/**
- * ノードから既定経路（defenses[0] 連鎖）を攻め始まり交互の手列へ平坦化する。
- * 返り値 = [攻め, 受け, 攻め, ...]（先頭は攻め手）。
- */
-function flattenSpine(node: ForcedWinNode): Position[] {
-  const out: Position[] = [];
-  let cur: ForcedWinNode | undefined = node;
-  let guard = 0;
-  while (cur && guard < MAX_TREE_DEPTH) {
-    guard++;
-    out.push(cur.attackerMove);
-    if (cur.defenses.length === 0) {
-      break;
-    }
-    const [d0]: (ForcedWinDefense | undefined)[] = cur.defenses;
-    if (!d0) {
-      break;
-    }
-    out.push(d0.defenderMove);
-    cur = d0.next;
+function linearNode(sequence: Position[], i: number): ForcedWinNode {
+  const attacker = sequence[i] ?? { row: 0, col: 0 };
+  const defender = sequence[i + 1];
+  if (!defender) {
+    return { attackerMove: attacker, defenses: [] };
   }
-  return out;
+  const defense: ForcedWinDefense = {
+    defenderMove: defender,
+    next: linearNode(sequence, i + 2),
+  };
+  return { attackerMove: attacker, defenses: [defense] };
 }

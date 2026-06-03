@@ -9,7 +9,7 @@ import type { ScoreBreakdown } from "@/types/cpu";
 import type { BoardState, Position } from "@/types/game";
 import type {
   ForcedLossType,
-  ForcedWinBranch,
+  ForcedWinNode,
   ForcedWinType,
   FullEvalResult,
   ReviewCandidate,
@@ -33,12 +33,13 @@ import {
 } from "../evaluation";
 import { findMiseTargets } from "../evaluation/miseTactics";
 import { colorToWasm } from "../wasm/boardAdapter";
+import { linearTreeFromSequence } from "../wasm/forcedWinTreeWire";
 import {
   verifyCandidates,
   findSafeBest,
   annotateFukumiMoves,
 } from "./candidateVerification";
-import { buildDoubleMiseBranches } from "./doubleMiseBranches";
+import { buildDoubleMiseTree } from "./doubleMiseBranches";
 import { evaluatePlayedForcedWin } from "./evaluatePlayedMove";
 import {
   checkForcedLoss,
@@ -226,7 +227,7 @@ function handleDemotion(ctx: DemotionContext): {
   forcedWinType: ForcedWinType | undefined;
   finalBestMove: Position;
   finalBestScore: number;
-  forcedWinBranches: ForcedWinBranch[] | undefined;
+  forcedWinTree: ForcedWinNode | undefined;
   fwForcedLossType?: ForcedLossType;
   fwForcedLossSequence?: Position[];
   clearDoubleMise: boolean;
@@ -237,7 +238,7 @@ function handleDemotion(ctx: DemotionContext): {
       forcedWinType: ctx.forcedWinType,
       finalBestMove: ctx.bestMove,
       finalBestScore: ctx.bestScore,
-      forcedWinBranches: undefined,
+      forcedWinTree: undefined,
       fwForcedLossType: ctx.fwBestLoss?.type,
       fwForcedLossSequence: ctx.fwBestLoss?.sequence,
       clearDoubleMise: false,
@@ -261,7 +262,7 @@ function handleDemotion(ctx: DemotionContext): {
       forcedWinType: "vcf",
       finalBestMove: reVcf.firstMove,
       finalBestScore: PATTERN_SCORES.FIVE,
-      forcedWinBranches: undefined,
+      forcedWinTree: linearTreeFromSequence(reVcf.sequence) ?? undefined,
       clearDoubleMise: true,
     };
   }
@@ -270,7 +271,7 @@ function handleDemotion(ctx: DemotionContext): {
     forcedWinType: undefined,
     finalBestMove: safeBest.position,
     finalBestScore: safeBest.searchScore,
-    forcedWinBranches: undefined,
+    forcedWinTree: undefined,
     clearDoubleMise: true,
   };
 }
@@ -770,27 +771,28 @@ function buildForcedWinResult(
     );
   }
 
-  // 分岐情報の構築
-  let forcedWinBranches: ForcedWinBranch[] | undefined = undefined;
+  // 詰み木の構築（#22）。最善タブの分岐表示の出所。
+  // - 両ミセ: TS で木を合成
+  // - VCT/Mise-VCF: Zig 由来の木（forcedWin.tree）
+  // - VCF/単一初手 VCT: 木がないため sequence から線形木を合成
+  let forcedWinTree: ForcedWinNode | undefined = undefined;
 
   if (
     forcedWinType === "double-mise" &&
     doubleMiseTargets &&
     doubleMiseTargets.length >= 2
   ) {
-    forcedWinBranches = buildDoubleMiseBranches(
-      board,
-      bestMove,
-      color,
-      opponentColor,
-      doubleMiseTargets,
-    );
+    forcedWinTree =
+      buildDoubleMiseTree(
+        board,
+        bestMove,
+        color,
+        opponentColor,
+        doubleMiseTargets,
+      ) ?? undefined;
   } else {
-    forcedWinBranches = forcedWin.branches?.map((b) => ({
-      defenseIndex: b.defenseIndex,
-      defenseMove: b.defenseMove,
-      continuation: b.continuation,
-    }));
+    forcedWinTree =
+      forcedWin.tree ?? linearTreeFromSequence(forcedWin.sequence) ?? undefined;
   }
 
   // ─── 候補手検証 ───
@@ -861,7 +863,7 @@ function buildForcedWinResult(
     ({ forcedWinType } = dm);
     ({ finalBestMove } = dm);
     ({ finalBestScore } = dm);
-    ({ forcedWinBranches } = dm);
+    ({ forcedWinTree } = dm);
     if (dm.fwForcedLossType) {
       ({ fwForcedLossType } = dm);
       ({ fwForcedLossSequence } = dm);
@@ -909,7 +911,7 @@ function buildForcedWinResult(
     candidates,
     completedDepth: result.completedDepth,
     forcedWinType,
-    forcedWinBranches,
+    forcedWinTree,
     forcedLossType: fwForcedLossType,
     forcedLossSequence: fwForcedLossSequence,
     missedDoubleMise,

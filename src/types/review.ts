@@ -139,8 +139,8 @@ export interface EvaluatedMove {
   completedDepth?: number;
   /** 必勝手順の種類 */
   forcedWinType?: ForcedWinType;
-  /** 必勝手順の分岐情報 */
-  forcedWinBranches?: ForcedWinBranch[];
+  /** 必勝手順の詰み木（#22。最善タブの分岐表示の出所） */
+  forcedWinTree?: ForcedWinNode;
   /** 相手の必勝手順（自分が負け確定） */
   forcedLossType?: ForcedLossType;
   /** 相手の必勝手順のシーケンス */
@@ -249,8 +249,8 @@ export interface FullEvalResult extends ReviewWorkerResultBase {
   completedDepth: number;
   /** 必勝手順の種類 */
   forcedWinType?: ForcedWinType;
-  /** 必勝手順の分岐情報 */
-  forcedWinBranches?: ForcedWinBranch[];
+  /** 必勝手順の詰み木（#22。最善タブの分岐表示の出所） */
+  forcedWinTree?: ForcedWinNode;
   /** 相手の必勝手順（自分が負け確定） */
   forcedLossType?: ForcedLossType;
   /** 相手の必勝手順のシーケンス */

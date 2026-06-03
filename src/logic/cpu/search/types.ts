@@ -59,28 +59,17 @@ export interface VCTSearchOptions {
 }
 
 /** VCT手順内の分岐情報 */
-export interface VCTBranch {
-  /** 分岐点のsequence内インデックス（防御手の位置） */
-  defenseIndex: number;
-  /** 代替防御手 */
-  defenseMove: Position;
-  /** この防御後の継続手順 */
-  continuation: Position[];
-}
-
 /**
  * VCT手順の探索結果
  */
 export interface VCTSequenceResult {
   /** 最初の手 */
   firstMove: Position;
-  /** 手順 [攻撃1, 防御1, 攻撃2, ..., 攻撃N] */
+  /** 手順 [攻撃1, 防御1, 攻撃2, ..., 攻撃N]（= 木の defenses[0] 連鎖） */
   sequence: Position[];
   /** 禁手追い込みによる勝ちかどうか */
   isForbiddenTrap: boolean;
-  /** 分岐情報（collectBranches有効時のみ。#22 では tree から spine-walk で再生成） */
-  branches?: VCTBranch[];
-  /** 追詰の再帰的詰み木（collectBranches有効時のみ。#22、Phase B で消費） */
+  /** 追詰の再帰的詰み木（collectBranches有効時のみ。#22） */
   tree?: ForcedWinNode;
 }
 

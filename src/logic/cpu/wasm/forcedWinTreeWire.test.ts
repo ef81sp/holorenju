@@ -1,11 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import type { Position } from "@/types/game";
-import type { ForcedWinNode } from "@/types/review";
 
 import {
   buildForcedWinTreeFromArrays,
-  spineWalkToBranches,
+  linearTreeFromSequence,
   TREE_TERMINAL,
   type WireDefense,
   type WireNode,
@@ -64,70 +63,25 @@ describe("buildForcedWinTreeFromArrays", () => {
   });
 });
 
-describe("spineWalkToBranches", () => {
-  it("既定経路上の代替防御を defenseIndex 付きで列挙する", () => {
-    // root(a0,idx0) defenses: [d0(主筋,idx1)→ next(a1,idx2 終端), d1(代替,idx1)→ alt(aX 終端)]
-    const altLeaf: ForcedWinNode = { attackerMove: pos(9, 9), defenses: [] };
-    const mainLeaf: ForcedWinNode = { attackerMove: pos(2, 2), defenses: [] };
-    const root: ForcedWinNode = {
-      attackerMove: pos(0, 0),
-      defenses: [
-        { defenderMove: pos(1, 1), next: mainLeaf },
-        { defenderMove: pos(3, 3), next: altLeaf },
-      ],
-    };
-    const branches = spineWalkToBranches(root);
-    expect(branches).toHaveLength(1);
-    expect(branches[0]?.defenseIndex).toBe(1); // 防御手は sequence index 1
-    expect(branches[0]?.defenseMove).toEqual(pos(3, 3));
-    expect(branches[0]?.continuation).toEqual([pos(9, 9)]); // alt 攻め手
+describe("linearTreeFromSequence", () => {
+  it("空配列なら null", () => {
+    expect(linearTreeFromSequence([])).toBeNull();
   });
 
-  it("2段目の主筋上の代替防御も拾う（defenseIndex=3）", () => {
-    // 主筋: a0(0) d0(1) a1(2) d1(3) a2(4 終端)
-    // a1 ノードに代替防御 d1' あり
-    const a2: ForcedWinNode = { attackerMove: pos(4, 4), defenses: [] };
-    const altLeaf: ForcedWinNode = { attackerMove: pos(8, 8), defenses: [] };
-    const a1: ForcedWinNode = {
-      attackerMove: pos(2, 2),
-      defenses: [
-        { defenderMove: pos(3, 3), next: a2 },
-        { defenderMove: pos(7, 7), next: altLeaf },
-      ],
-    };
-    const root: ForcedWinNode = {
-      attackerMove: pos(0, 0),
-      defenses: [{ defenderMove: pos(1, 1), next: a1 }],
-    };
-    const branches = spineWalkToBranches(root);
-    expect(branches).toHaveLength(1);
-    expect(branches[0]?.defenseIndex).toBe(3);
-    expect(branches[0]?.defenseMove).toEqual(pos(7, 7));
-    expect(branches[0]?.continuation).toEqual([pos(8, 8)]);
+  it("攻め始まり交互の手列を線形木へ変換する", () => {
+    // [a0, d0, a1] → a0 -(d0)-> a1(終端)
+    const tree = linearTreeFromSequence([pos(0, 0), pos(1, 1), pos(2, 2)]);
+    expect(tree?.attackerMove).toEqual(pos(0, 0));
+    expect(tree?.defenses).toHaveLength(1);
+    expect(tree?.defenses[0]?.defenderMove).toEqual(pos(1, 1));
+    const next = tree?.defenses[0]?.next;
+    expect(next?.attackerMove).toEqual(pos(2, 2));
+    expect(next?.defenses).toHaveLength(0);
   });
 
-  it("continuation は攻め始まり交互で平坦化される", () => {
-    // 代替防御後に a,d,a と続く
-    const leaf: ForcedWinNode = { attackerMove: pos(20, 20), defenses: [] };
-    const mid: ForcedWinNode = {
-      attackerMove: pos(10, 10),
-      defenses: [{ defenderMove: pos(11, 11), next: leaf }],
-    };
-    const root: ForcedWinNode = {
-      attackerMove: pos(0, 0),
-      defenses: [
-        {
-          defenderMove: pos(1, 1),
-          next: { attackerMove: pos(2, 2), defenses: [] },
-        },
-        { defenderMove: pos(3, 3), next: mid },
-      ],
-    };
-    const branches = spineWalkToBranches(root);
-    expect(branches[0]?.continuation).toEqual([
-      pos(10, 10),
-      pos(11, 11),
-      pos(20, 20),
-    ]);
+  it("単一手なら終端ノード（防御なし）", () => {
+    const tree = linearTreeFromSequence([pos(5, 5)]);
+    expect(tree?.attackerMove).toEqual(pos(5, 5));
+    expect(tree?.defenses).toHaveLength(0);
   });
 });

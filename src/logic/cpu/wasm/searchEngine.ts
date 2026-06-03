@@ -16,7 +16,6 @@ import type { WasmModuleContext } from "./types";
 import { boardStateToWasm, colorToWasm } from "./boardAdapter";
 import {
   buildForcedWinTreeFromArrays,
-  spineWalkToBranches,
   type WireDefense,
   type WireNode,
 } from "./forcedWinTreeWire";
@@ -296,7 +295,7 @@ export class WasmSearchEngine {
       collectBranches ? 1 : 0,
     );
     // Mise-VCF バッファは VCT と同一フォーマット（分岐情報を含む）
-    return this.readSequenceWithBranches(this.wasm.getMiseVCFSequenceBuffer());
+    return this.readSequenceWithTree(this.wasm.getMiseVCFSequenceBuffer());
   }
 
   private readVCFSequenceResult(): VCFSequenceResult | null {
@@ -396,7 +395,7 @@ export class WasmSearchEngine {
   }
 
   private readVCTSequenceResult(): VCTSequenceResult | null {
-    return this.readSequenceWithBranches(this.wasm.getVCTSequenceBuffer());
+    return this.readSequenceWithTree(this.wasm.getVCTSequenceBuffer());
   }
 
   /**
@@ -410,10 +409,9 @@ export class WasmSearchEngine {
    *   nodes(各6B: row,col,defense_start u16,defense_count u16),
    *   defenses(各4B: row,col,child_node u16)。
    *
-   * 木は `result.tree` に復元する。Phase A の互換維持のため、木の既定経路を
-   * spine-walk して旧 `result.branches`（VCTBranch[]）も再生成する。
+   * 木は `result.tree` に復元する（progressionModel が再帰展開する）。
    */
-  private readSequenceWithBranches(ptr: number): VCTSequenceResult | null {
+  private readSequenceWithTree(ptr: number): VCTSequenceResult | null {
     const { memory } = this.wasm;
     const view = new DataView(memory.buffer);
 
@@ -475,11 +473,6 @@ export class WasmSearchEngine {
       const tree = buildForcedWinTreeFromArrays(nodes, defenses);
       if (tree) {
         result.tree = tree;
-        // Phase A 互換シム: 木から旧フラット分岐を再生成
-        const branches = spineWalkToBranches(tree);
-        if (branches.length > 0) {
-          result.branches = branches;
-        }
       }
     }
 
