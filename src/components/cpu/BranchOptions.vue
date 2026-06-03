@@ -19,7 +19,7 @@
 
 import { toRef } from "vue";
 
-import type { PVDisplayItem } from "./composables/useReviewProgression";
+import type { PVDisplayItem } from "./composables/progressionModel";
 import { useRovingTabindex } from "./composables/useRovingTabindex";
 
 interface Option {
