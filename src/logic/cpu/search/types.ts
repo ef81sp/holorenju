@@ -6,6 +6,7 @@
  */
 
 import type { BoardState, Position } from "@/types/game";
+import type { ForcedWinNode } from "@/types/review";
 
 import type { ProfilingCounters } from "../profiling/counters";
 
@@ -77,8 +78,10 @@ export interface VCTSequenceResult {
   sequence: Position[];
   /** 禁手追い込みによる勝ちかどうか */
   isForbiddenTrap: boolean;
-  /** 分岐情報（collectBranches有効時のみ） */
+  /** 分岐情報（collectBranches有効時のみ。#22 では tree から spine-walk で再生成） */
   branches?: VCTBranch[];
+  /** 追詰の再帰的詰み木（collectBranches有効時のみ。#22、Phase B で消費） */
+  tree?: ForcedWinNode;
 }
 
 /** VCT探索を有効にする石数の閾値（終盤のみ） */

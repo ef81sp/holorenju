@@ -56,6 +56,29 @@ export interface ForcedWinBranch {
 }
 
 /**
+ * 追詰（VCT / Mise-VCF / 両ミセ）の再帰的詰み木ノード（#22）。
+ *
+ * AND-OR 木の攻め手ノード。`defenses` が空なら終端（この攻め手で勝ち確定:
+ * 五 / 達四 / VCF 完了）。`defenses[0]` 連鎖が既存 `sequence`（既定経路）に一致する。
+ */
+export interface ForcedWinNode {
+  /** この局面での攻め手（OR を1つに固定） */
+  attackerMove: Position;
+  /** 受け側の全防御（AND）。空 = 終端 */
+  defenses: ForcedWinDefense[];
+}
+
+/**
+ * 詰み木の防御エッジ（#22）。
+ */
+export interface ForcedWinDefense {
+  /** 受け手 */
+  defenderMove: Position;
+  /** この防御後の攻め継続ノード（必須・非null。即勝ちは defenses:[] の node で表す） */
+  next: ForcedWinNode;
+}
+
+/**
  * 候補手（内訳付き）
  */
 export interface ReviewCandidate {
