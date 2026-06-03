@@ -96,6 +96,8 @@ export interface MiseVCFSearchOptions {
   vcfOptions?: VCFSearchOptions;
   /** 全体の時間制限（ミリ秒、デフォルト: 500） */
   timeLimit?: number;
+  /** 三の代替防御の分岐を収集するか（振り返り表示用、デフォルト: false） */
+  collectBranches?: boolean;
 }
 
 // =============================================================================

@@ -62,12 +62,13 @@ export function wasmFindMiseVCFSequence(
   board: BoardState,
   color: "black" | "white",
   options: MiseVCFSearchOptions,
-): VCFSequenceResult | null {
+): VCTSequenceResult | null {
   return engine.findMiseVCFSequence(
     board,
     color,
     toWasmLimit(options.timeLimit),
     toWasmLimit(options.vcfOptions?.maxNodes),
+    options.collectBranches ?? false,
   );
 }
 

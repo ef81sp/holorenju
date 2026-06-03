@@ -284,39 +284,17 @@ export class WasmSearchEngine {
     color: "black" | "white",
     timeLimitMs: number,
     maxNodes: number,
-  ): VCFSequenceResult | null {
+    collectBranches: boolean,
+  ): VCTSequenceResult | null {
     boardStateToWasm(this.wasm, board);
     this.wasm.findMiseVCFSequenceWasm(
       colorToWasm(color),
       timeLimitMs,
       maxNodes,
+      collectBranches ? 1 : 0,
     );
-    return this.readMiseVCFSequenceResult();
-  }
-
-  private readMiseVCFSequenceResult(): VCFSequenceResult | null {
-    const ptr = this.wasm.getMiseVCFSequenceBuffer();
-    const { memory } = this.wasm;
-    const view = new DataView(memory.buffer);
-
-    const found = view.getUint8(ptr) === 1;
-    if (!found) {
-      return null;
-    }
-
-    const len = view.getUint8(ptr + 1);
-    const isForbiddenTrap = view.getUint8(ptr + 2) === 1;
-
-    const sequence: Position[] = [];
-    for (let i = 0; i < len; i++) {
-      sequence.push({
-        row: view.getUint8(ptr + 3 + i * 2),
-        col: view.getUint8(ptr + 3 + i * 2 + 1),
-      });
-    }
-
-    const firstMove = sequence[0] ?? { row: 0, col: 0 };
-    return { firstMove, sequence, isForbiddenTrap };
+    // Mise-VCF バッファは VCT と同一フォーマット（分岐情報を含む）
+    return this.readSequenceWithBranches(this.wasm.getMiseVCFSequenceBuffer());
   }
 
   private readVCFSequenceResult(): VCFSequenceResult | null {
@@ -416,7 +394,19 @@ export class WasmSearchEngine {
   }
 
   private readVCTSequenceResult(): VCTSequenceResult | null {
-    const ptr = this.wasm.getVCTSequenceBuffer();
+    return this.readSequenceWithBranches(this.wasm.getVCTSequenceBuffer());
+  }
+
+  /**
+   * 分岐情報付きの手順バッファをデシリアライズする（VCT / Mise-VCF 共通）。
+   *
+   * バッファフォーマット（Zig writeVCTResult / findMiseVCFSequenceWasm と一致）:
+   * [0] found, [1] seq_len, [2] isForbiddenTrap,
+   * [3..] row,col ペア（メインPV）,
+   * offset = 3 + seq_len*2: branch_count,
+   * 以降の各 branch: defenseIndex, defRow, defCol, cont_len, cont の row,col ペア
+   */
+  private readSequenceWithBranches(ptr: number): VCTSequenceResult | null {
     const { memory } = this.wasm;
     const view = new DataView(memory.buffer);
 

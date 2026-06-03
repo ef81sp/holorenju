@@ -353,6 +353,24 @@ pub fn findMiseVCFMove(cells: []Cell, color: Cell) ?Position {
 // findMiseVCFSequence（TS版 miseVcf.ts の findMiseVCFSequence に対応）
 // =============================================================================
 
+/// 分岐の最大数（1ミセ手が作る三の防御点の数。活三2点×複数方向＋飛三）
+pub const MAX_MISE_BRANCHES = 16;
+/// 分岐continuationの最大手数（VCF手順。表示用途のため固定長で切り捨て）
+pub const MISE_BRANCH_CONT = 32;
+
+/// Mise-VCF分岐: 主筋以外の三防御手と、その後のVCF継続手順
+///
+/// VCTのVCTBranchと同じ役割だが、continuationがVCF手順で長くなり得るため
+/// 専用に [MISE_BRANCH_CONT] を持つ（VCTBranchの [16] では不足）。
+pub const MiseVCFBranch = struct {
+    /// 主筋sequenceのどのindexで分岐するか（ミセ手の次=常に1）
+    defense_index: u8,
+    /// 代替の三防御手
+    defense_move: Position,
+    continuation: [MISE_BRANCH_CONT]Position,
+    continuation_len: u8,
+};
+
 /// Mise-VCF手順の結果
 pub const MiseVCFSequenceResult = struct {
     /// [ミセ手, 防御手, VCF手順...]
@@ -360,6 +378,9 @@ pub const MiseVCFSequenceResult = struct {
     len: u8,
     is_forbidden_trap: bool,
     found: bool,
+    /// 三の代替防御の分岐（collect_branches有効時のみ）
+    branches: [MAX_MISE_BRANCHES]MiseVCFBranch = undefined,
+    branch_count: u8 = 0,
 };
 
 /// Mise-VCF手順を探索
@@ -371,6 +392,7 @@ pub fn findMiseVCFSequence(
     color: Cell,
     time_limit_ms: u32,
     max_nodes: u32,
+    collect_branches: bool,
 ) MiseVCFSequenceResult {
     // トップレベルエントリ: bitboard を cells と同期
     bitboard.initFromCells(cells);
@@ -478,6 +500,41 @@ pub fn findMiseVCFSequence(
                     result.len = 2 + vcf_result.len;
                     result.is_forbidden_trap = vcf_result.is_forbidden_trap;
                     result.found = true;
+
+                    // 三の代替防御を分岐収集（ミセ手 M は盤上のまま）。
+                    // 主筋防御 target 以外の各三防御点で VCF 手順を取得する。
+                    // ノリ手チェック (isInvalidatedByNoriTe) が全 three_defense で
+                    // VCF 成立を既に保証しているため found 前提だが、手順取得のため再探索する。
+                    if (collect_branches) {
+                        for (0..three_defenses.len) |di| {
+                            const d = three_defenses.items[di];
+                            // 主筋に採用済みの防御は除外
+                            if (d.row == target.row and d.col == target.col) continue;
+                            if (result.branch_count >= MAX_MISE_BRANCHES) break;
+
+                            const d_idx = @as(u16, d.row) * BOARD_SIZE + d.col;
+                            cells[d_idx] = opponent;
+                            bitboard.placeStone(d.row, d.col, opponent);
+                            const br = vcf.findVCFSequence(cells, color, MISE_VCF_DEPTH, time_limit_ms, max_nodes);
+                            cells[d_idx] = .empty;
+                            bitboard.removeStone(d.row, d.col);
+
+                            if (br.found) {
+                                var branch = MiseVCFBranch{
+                                    .defense_index = 1,
+                                    .defense_move = d,
+                                    .continuation = undefined,
+                                    .continuation_len = @min(br.len, MISE_BRANCH_CONT),
+                                };
+                                var ci: u8 = 0;
+                                while (ci < branch.continuation_len) : (ci += 1) {
+                                    branch.continuation[ci] = br.sequence[ci];
+                                }
+                                result.branches[result.branch_count] = branch;
+                                result.branch_count += 1;
+                            }
+                        }
+                    }
 
                     cells[idx] = .empty;
                     bitboard.removeStone(r, c);
@@ -612,7 +669,7 @@ test "findMiseVCFSequence: 12手目局面でG7がMise-VCF手順として検出�
     cells[6 * BOARD_SIZE + 9] = .black; // J9
     cells[5 * BOARD_SIZE + 8] = .white; // I10
 
-    const result = findMiseVCFSequence(&cells, .black, 0, 5000);
+    const result = findMiseVCFSequence(&cells, .black, 0, 5000, false);
     try testing.expect(result.found);
     // 最初の手はG7: row=8, col=6
     try testing.expectEqual(result.sequence[0].row, 8);
@@ -626,14 +683,114 @@ test "findMiseVCFSequence: 初期局面では不成立" {
     cells[7 * BOARD_SIZE + 7] = .black;
     cells[6 * BOARD_SIZE + 8] = .white;
 
-    const result = findMiseVCFSequence(&cells, .black, 0, 5000);
+    const result = findMiseVCFSequence(&cells, .black, 0, 5000, false);
     try testing.expect(!result.found);
 }
 
 test "findMiseVCFSequence: 空盤面では不成立" {
     var cells = [_]Cell{.empty} ** CELL_COUNT;
-    const result = findMiseVCFSequence(&cells, .black, 0, 5000);
+    const result = findMiseVCFSequence(&cells, .black, 0, 5000, false);
     try testing.expect(!result.found);
+}
+
+test "findMiseVCFSequence: collect_branches で三の代替防御を分岐収集 (issue #18)" {
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    const P = struct {
+        fn place(c: []Cell, col_letter: u8, disp_row: u8, color: Cell) void {
+            const col: u16 = col_letter - 'A';
+            const irow: u16 = 15 - @as(u16, disp_row);
+            c[irow * BOARD_SIZE + col] = color;
+        }
+    };
+    const B = Cell.black;
+    const W = Cell.white;
+    // issue #18 の棋譜 43手目まで（黒=奇数, 白=偶数）。44手目は白番、最善 G6（ミセ手）。
+    P.place(&cells, 'H', 8, B);
+    P.place(&cells, 'H', 9, W);
+    P.place(&cells, 'I', 9, B);
+    P.place(&cells, 'I', 8, W);
+    P.place(&cells, 'G', 7, B);
+    P.place(&cells, 'F', 6, W);
+    P.place(&cells, 'G', 10, B);
+    P.place(&cells, 'G', 9, W);
+    P.place(&cells, 'F', 9, B);
+    P.place(&cells, 'H', 11, W);
+    P.place(&cells, 'H', 7, B);
+    P.place(&cells, 'F', 7, W);
+    P.place(&cells, 'F', 10, B);
+    P.place(&cells, 'G', 8, W);
+    P.place(&cells, 'I', 10, B);
+    P.place(&cells, 'H', 10, W);
+    P.place(&cells, 'K', 11, B);
+    P.place(&cells, 'J', 10, W);
+    P.place(&cells, 'F', 8, B);
+    P.place(&cells, 'K', 9, W);
+    P.place(&cells, 'I', 11, B);
+    P.place(&cells, 'I', 13, W);
+    P.place(&cells, 'H', 6, B);
+    P.place(&cells, 'E', 9, W);
+    P.place(&cells, 'F', 11, B);
+    P.place(&cells, 'F', 12, W);
+    P.place(&cells, 'I', 5, B);
+    P.place(&cells, 'J', 4, W);
+    P.place(&cells, 'G', 5, B);
+    P.place(&cells, 'H', 5, W);
+    P.place(&cells, 'I', 7, B);
+    P.place(&cells, 'J', 8, W);
+    P.place(&cells, 'J', 6, B);
+    P.place(&cells, 'J', 7, W);
+    P.place(&cells, 'K', 7, B);
+    P.place(&cells, 'L', 8, W);
+    P.place(&cells, 'F', 4, B);
+    P.place(&cells, 'E', 3, W);
+    P.place(&cells, 'G', 3, B);
+    P.place(&cells, 'H', 4, W);
+    P.place(&cells, 'I', 6, B);
+    P.place(&cells, 'K', 6, W);
+    P.place(&cells, 'L', 5, B);
+    bitboard.initFromCells(&cells);
+
+    const result = findMiseVCFSequence(&cells, W, 0, 5000, true);
+    try testing.expect(result.found);
+    // 主筋防御は I4 (col='I'-'A'=8, row=15-4=11)
+    try testing.expectEqual(@as(u8, 8), result.sequence[1].col);
+    try testing.expectEqual(@as(u8, 11), result.sequence[1].row);
+    // 三の代替防御 E8 (col='E'-'A'=4, row=15-8=7) が分岐に含まれること
+    try testing.expect(result.branch_count >= 1);
+    var found_e8 = false;
+    for (0..result.branch_count) |i| {
+        const d = result.branches[i].defense_move;
+        if (d.row == 7 and d.col == 4) {
+            found_e8 = true;
+            // 分岐は M の次手なので defense_index は 1、continuation が存在する
+            try testing.expectEqual(@as(u8, 1), result.branches[i].defense_index);
+            try testing.expect(result.branches[i].continuation_len >= 1);
+        }
+    }
+    try testing.expect(found_e8);
+}
+
+test "findMiseVCFSequence: collect_branches=false では分岐を収集しない" {
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    // H8 I9 I7 G9 J8 H10 H6 K9 H7 H9 J9 I10（既存テストと同じ局面）
+    cells[7 * BOARD_SIZE + 7] = .black; // H8
+    cells[6 * BOARD_SIZE + 8] = .white; // I9
+    cells[8 * BOARD_SIZE + 8] = .black; // I7
+    cells[6 * BOARD_SIZE + 6] = .white; // G9
+    cells[7 * BOARD_SIZE + 9] = .black; // J8
+    cells[5 * BOARD_SIZE + 7] = .white; // H10
+    cells[9 * BOARD_SIZE + 7] = .black; // H6
+    cells[6 * BOARD_SIZE + 10] = .white; // K9
+    cells[8 * BOARD_SIZE + 7] = .black; // H7
+    cells[6 * BOARD_SIZE + 7] = .white; // H9
+    cells[6 * BOARD_SIZE + 9] = .black; // J9
+    cells[5 * BOARD_SIZE + 8] = .white; // I10
+
+    const result = findMiseVCFSequence(&cells, .black, 0, 5000, false);
+    try testing.expect(result.found);
+    try testing.expectEqual(@as(u8, 0), result.branch_count);
 }
 
 test "findMiseVCFMove: ノリ手で無効なH7をMise-VCF手として返さない" {

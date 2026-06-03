@@ -21,7 +21,6 @@ import type {
   IterativeDeepingResult,
   MoveScoreEntry,
   VCFSequenceResult,
-  VCTBranch,
 } from "../search/types";
 import type { WasmSearchEngine } from "../wasm/searchEngine";
 
@@ -787,11 +786,7 @@ function buildForcedWinResult(
       doubleMiseTargets,
     );
   } else {
-    const rawBranches =
-      "branches" in forcedWin
-        ? (forcedWin.branches as VCTBranch[] | undefined)
-        : undefined;
-    forcedWinBranches = rawBranches?.map((b) => ({
+    forcedWinBranches = forcedWin.branches?.map((b) => ({
       defenseIndex: b.defenseIndex,
       defenseMove: b.defenseMove,
       continuation: b.continuation,
