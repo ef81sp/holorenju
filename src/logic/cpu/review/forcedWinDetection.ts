@@ -7,7 +7,11 @@
 import type { BoardState, Position } from "@/types/game";
 import type { ForcedWinType } from "@/types/review";
 
-import type { VCTSearchOptions, VCTSequenceResult } from "../search/types";
+import type {
+  VCTBranch,
+  VCTSearchOptions,
+  VCTSequenceResult,
+} from "../search/types";
 import type { WasmSearchEngine } from "../wasm/searchEngine";
 
 import { findDoubleMiseMoves } from "../evaluation/tactics";
@@ -31,7 +35,7 @@ export interface ForcedWinInfo {
   firstMove: Position;
   sequence: Position[];
   isForbiddenTrap: boolean;
-  branches?: unknown;
+  branches?: VCTBranch[];
 }
 
 export interface ForcedWinDetectionResult {
@@ -150,7 +154,8 @@ export function detectForcedWin(
       wasmSearchEngine,
       board,
       color,
-      REVIEW_MISE_VCF_OPTIONS,
+      // 振り返り表示で三の代替防御を分岐タブに出すため分岐収集を有効化（issue #18）
+      { ...REVIEW_MISE_VCF_OPTIONS, collectBranches: true },
     );
   }
 

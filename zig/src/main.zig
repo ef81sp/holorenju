@@ -340,14 +340,16 @@ const mise_vcf = @import("mise_vcf.zig");
 /// [1]: sequence length
 /// [2]: isForbiddenTrap (0 or 1)
 /// [3..N*2+2]: row, col pairs
-var mise_vcf_seq_buffer: [256]u8 = .{0} ** 256;
+/// Mise-VCF手順バッファ（VCT同様、分岐情報を含むため大きめ）
+/// フォーマットは vct_seq_buffer と同一（writeVCTResult 参照）
+var mise_vcf_seq_buffer: [2048]u8 = .{0} ** 2048;
 
 export fn getMiseVCFSequenceBuffer() [*]u8 {
     return &mise_vcf_seq_buffer;
 }
 
 /// Mise-VCF手順を探索し結果を mise_vcf_seq_buffer に書き込む
-export fn findMiseVCFSequenceWasm(color: u8, time_limit_ms: u32, max_nodes: u32) void {
+export fn findMiseVCFSequenceWasm(color: u8, time_limit_ms: u32, max_nodes: u32, collect_branches: u8) void {
     const cell_color: board.Cell = switch (color) {
         1 => .black,
         2 => .white,
@@ -358,7 +360,7 @@ export fn findMiseVCFSequenceWasm(color: u8, time_limit_ms: u32, max_nodes: u32)
     };
 
     const cells = &board.board_cells;
-    const result = mise_vcf.findMiseVCFSequence(cells, cell_color, time_limit_ms, max_nodes);
+    const result = mise_vcf.findMiseVCFSequence(cells, cell_color, time_limit_ms, max_nodes, collect_branches != 0);
 
     mise_vcf_seq_buffer[0] = if (result.found) 1 else 0;
     mise_vcf_seq_buffer[1] = result.len;
@@ -368,6 +370,25 @@ export fn findMiseVCFSequenceWasm(color: u8, time_limit_ms: u32, max_nodes: u32)
         for (0..result.len) |i| {
             mise_vcf_seq_buffer[3 + i * 2] = result.sequence[i].row;
             mise_vcf_seq_buffer[3 + i * 2 + 1] = result.sequence[i].col;
+        }
+
+        // 分岐情報（VCT と同一フォーマット）
+        const offset = 3 + @as(usize, result.len) * 2;
+        mise_vcf_seq_buffer[offset] = result.branch_count;
+
+        var pos: usize = offset + 1;
+        for (0..result.branch_count) |bi| {
+            const branch = result.branches[bi];
+            mise_vcf_seq_buffer[pos] = branch.defense_index;
+            mise_vcf_seq_buffer[pos + 1] = branch.defense_move.row;
+            mise_vcf_seq_buffer[pos + 2] = branch.defense_move.col;
+            mise_vcf_seq_buffer[pos + 3] = branch.continuation_len;
+            pos += 4;
+            for (0..branch.continuation_len) |ci| {
+                mise_vcf_seq_buffer[pos] = branch.continuation[ci].row;
+                mise_vcf_seq_buffer[pos + 1] = branch.continuation[ci].col;
+                pos += 2;
+            }
         }
     }
 }
