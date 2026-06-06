@@ -47,10 +47,7 @@ function tabExtraClass(t: { id: string }): Record<string, boolean> {
   return { "is-loss": t.id === "loss" };
 }
 
-function branchAriaLabel(pvIdx: number): string {
-  const tab = topTabs.value.find((t) => t.id === activeTabId.value);
-  const baseItem = tab?.basePV[pvIdx];
-  const moveNum = baseItem?.moveNum ?? props.moveIndex + pvIdx;
+function branchAriaLabel(moveNum: number): string {
   return `${moveNum} 手目の代替手`;
 }
 </script>
@@ -148,8 +145,8 @@ function branchAriaLabel(pvIdx: number): string {
             <BranchOptions
               v-else
               :options="row.options"
-              :selected-id="getSelectedOptionId(row.pvIdx)"
-              :group-label="branchAriaLabel(row.pvIdx)"
+              :selected-id="getSelectedOptionId(row.selKey)"
+              :group-label="branchAriaLabel(row.moveNum)"
               :row-class="{
                 'is-played': i < step,
                 'is-current-row': i === step - 1,

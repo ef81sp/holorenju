@@ -10,14 +10,15 @@ import type { BoardState, Position } from "@/types/game";
 import { DIFFICULTY_PARAMS, type CpuDifficulty } from "@/types/cpu";
 
 import type { EvaluationOptions } from "../evaluation/patternScores";
-import type {
-  VCFSequenceResult,
-  VCTBranch,
-  VCTSequenceResult,
-} from "../search/types";
+import type { VCFSequenceResult, VCTSequenceResult } from "../search/types";
 import type { WasmModuleContext } from "./types";
 
 import { boardStateToWasm, colorToWasm } from "./boardAdapter";
+import {
+  buildForcedWinTreeFromArrays,
+  type WireDefense,
+  type WireNode,
+} from "./forcedWinTreeWire";
 
 /**
  * EvaluationOptions → WASM用ビットマスクにエンコード
@@ -284,39 +285,17 @@ export class WasmSearchEngine {
     color: "black" | "white",
     timeLimitMs: number,
     maxNodes: number,
-  ): VCFSequenceResult | null {
+    collectBranches: boolean,
+  ): VCTSequenceResult | null {
     boardStateToWasm(this.wasm, board);
     this.wasm.findMiseVCFSequenceWasm(
       colorToWasm(color),
       timeLimitMs,
       maxNodes,
+      collectBranches ? 1 : 0,
     );
-    return this.readMiseVCFSequenceResult();
-  }
-
-  private readMiseVCFSequenceResult(): VCFSequenceResult | null {
-    const ptr = this.wasm.getMiseVCFSequenceBuffer();
-    const { memory } = this.wasm;
-    const view = new DataView(memory.buffer);
-
-    const found = view.getUint8(ptr) === 1;
-    if (!found) {
-      return null;
-    }
-
-    const len = view.getUint8(ptr + 1);
-    const isForbiddenTrap = view.getUint8(ptr + 2) === 1;
-
-    const sequence: Position[] = [];
-    for (let i = 0; i < len; i++) {
-      sequence.push({
-        row: view.getUint8(ptr + 3 + i * 2),
-        col: view.getUint8(ptr + 3 + i * 2 + 1),
-      });
-    }
-
-    const firstMove = sequence[0] ?? { row: 0, col: 0 };
-    return { firstMove, sequence, isForbiddenTrap };
+    // Mise-VCF バッファは VCT と同一フォーマット（分岐情報を含む）
+    return this.readSequenceWithTree(this.wasm.getMiseVCFSequenceBuffer());
   }
 
   private readVCFSequenceResult(): VCFSequenceResult | null {
@@ -416,7 +395,23 @@ export class WasmSearchEngine {
   }
 
   private readVCTSequenceResult(): VCTSequenceResult | null {
-    const ptr = this.wasm.getVCTSequenceBuffer();
+    return this.readSequenceWithTree(this.wasm.getVCTSequenceBuffer());
+  }
+
+  /**
+   * 詰み木付きの手順バッファをデシリアライズする（VCT / Mise-VCF 共通、#22）。
+   *
+   * バッファフォーマット（Zig writeVCTResult / findMiseVCFSequenceWasm +
+   * writeForcedWinTree と一致）:
+   * [0] found, [1] seq_len, [2] isForbiddenTrap,
+   * [3..] row,col ペア（メインPV = 木の defenses[0] 連鎖）,
+   * offset = 3 + seq_len*2 以降: node_count(u16 LE), defense_count(u16 LE),
+   *   nodes(各6B: row,col,defense_start u16,defense_count u16),
+   *   defenses(各4B: row,col,child_node u16)。
+   *
+   * 木は `result.tree` に復元する（progressionModel が再帰展開する）。
+   */
+  private readSequenceWithTree(ptr: number): VCTSequenceResult | null {
     const { memory } = this.wasm;
     const view = new DataView(memory.buffer);
 
@@ -438,41 +433,47 @@ export class WasmSearchEngine {
 
     const firstMove = sequence[0] ?? { row: 0, col: 0 };
 
-    const branchOffset = ptr + 3 + len * 2;
-    const branchCount = view.getUint8(branchOffset);
-
     const result: VCTSequenceResult = {
       firstMove,
       sequence,
       isForbiddenTrap,
     };
 
-    if (branchCount > 0) {
-      const branches: VCTBranch[] = [];
-      let pos = branchOffset + 1;
-      for (let bi = 0; bi < branchCount; bi++) {
-        const defenseIndex = view.getUint8(pos);
-        const defRow = view.getUint8(pos + 1);
-        const defCol = view.getUint8(pos + 2);
-        const contLen = view.getUint8(pos + 3);
-        pos += 4;
+    // ─── 詰み木セクション ───
+    let pos = ptr + 3 + len * 2;
+    const nodeCount = view.getUint16(pos, true);
+    const defenseCount = view.getUint16(pos + 2, true);
+    pos += 4;
 
-        const continuation: Position[] = [];
-        for (let ci = 0; ci < contLen; ci++) {
-          continuation.push({
+    if (nodeCount > 0) {
+      const nodes: WireNode[] = [];
+      for (let i = 0; i < nodeCount; i++) {
+        nodes.push({
+          attacker: {
             row: view.getUint8(pos),
             col: view.getUint8(pos + 1),
-          });
-          pos += 2;
-        }
-
-        branches.push({
-          defenseIndex,
-          defenseMove: { row: defRow, col: defCol },
-          continuation,
+          },
+          defenseStart: view.getUint16(pos + 2, true),
+          defenseCount: view.getUint16(pos + 4, true),
         });
+        pos += 6;
       }
-      result.branches = branches;
+      const defenses: WireDefense[] = [];
+      for (let i = 0; i < defenseCount; i++) {
+        defenses.push({
+          defender: {
+            row: view.getUint8(pos),
+            col: view.getUint8(pos + 1),
+          },
+          childNode: view.getUint16(pos + 2, true),
+        });
+        pos += 4;
+      }
+
+      const tree = buildForcedWinTreeFromArrays(nodes, defenses);
+      if (tree) {
+        result.tree = tree;
+      }
     }
 
     return result;

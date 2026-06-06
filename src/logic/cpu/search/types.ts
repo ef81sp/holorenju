@@ -6,6 +6,7 @@
  */
 
 import type { BoardState, Position } from "@/types/game";
+import type { ForcedWinNode } from "@/types/review";
 
 import type { ProfilingCounters } from "../profiling/counters";
 
@@ -58,27 +59,18 @@ export interface VCTSearchOptions {
 }
 
 /** VCT手順内の分岐情報 */
-export interface VCTBranch {
-  /** 分岐点のsequence内インデックス（防御手の位置） */
-  defenseIndex: number;
-  /** 代替防御手 */
-  defenseMove: Position;
-  /** この防御後の継続手順 */
-  continuation: Position[];
-}
-
 /**
  * VCT手順の探索結果
  */
 export interface VCTSequenceResult {
   /** 最初の手 */
   firstMove: Position;
-  /** 手順 [攻撃1, 防御1, 攻撃2, ..., 攻撃N] */
+  /** 手順 [攻撃1, 防御1, 攻撃2, ..., 攻撃N]（= 木の defenses[0] 連鎖） */
   sequence: Position[];
   /** 禁手追い込みによる勝ちかどうか */
   isForbiddenTrap: boolean;
-  /** 分岐情報（collectBranches有効時のみ） */
-  branches?: VCTBranch[];
+  /** 追詰の再帰的詰み木（collectBranches有効時のみ。#22） */
+  tree?: ForcedWinNode;
 }
 
 /** VCT探索を有効にする石数の閾値（終盤のみ） */
@@ -96,6 +88,8 @@ export interface MiseVCFSearchOptions {
   vcfOptions?: VCFSearchOptions;
   /** 全体の時間制限（ミリ秒、デフォルト: 500） */
   timeLimit?: number;
+  /** 三の代替防御の分岐を収集するか（振り返り表示用、デフォルト: false） */
+  collectBranches?: boolean;
 }
 
 // =============================================================================

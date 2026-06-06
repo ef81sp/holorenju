@@ -126,7 +126,7 @@ export function buildEvaluatedMove(
     candidates,
     completedDepth: result.completedDepth,
     forcedWinType: result.forcedWinType,
-    forcedWinBranches: result.forcedWinBranches,
+    forcedWinTree: result.forcedWinTree,
     forcedLossType: result.forcedLossType,
     forcedLossSequence: result.forcedLossSequence,
     forcedLossBranches: result.forcedLossBranches,

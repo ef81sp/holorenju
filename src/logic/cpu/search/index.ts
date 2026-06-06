@@ -11,7 +11,6 @@ export type {
   VCFSequenceResult,
   VCTSearchOptions,
   VCTSequenceResult,
-  VCTBranch,
   MiseVCFSearchOptions,
   MoveScoreEntry,
   IterativeDeepingResult,
