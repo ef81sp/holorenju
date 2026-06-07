@@ -40,7 +40,6 @@ pnpm build         # 本番ビルド
 ### 状態管理（Pinia stores: `src/stores/`）
 
 - **appStore**: ナビゲーション状態（scenes: menu → difficulty → scenarioList → scenarioPlay/editor）
-- **gameStore**: ゲームロジック、ターン管理、勝利判定（盤面状態は boardStore に委譲）
 - **boardStore**: 盤面状態、石、マーク、ラインとアニメーションコールバック
 - **dialogStore**: キャラクター対話の表示状態
 - **progressStore**: 学習進捗の追跡

@@ -17,15 +17,6 @@ type BoardState = StoneColor[][];
 // ゲームモード
 type GameMode = "scenario" | "free-play";
 
-// ゲームの状態
-interface GameState {
-  board: BoardState;
-  currentTurn: StoneColor;
-  moveHistory: Position[];
-  isGameOver: boolean;
-  winner: StoneColor;
-}
-
 // 仮指定中の石
 interface PreviewStone {
   position: Position;
@@ -62,7 +53,6 @@ export type {
   Position,
   BoardState,
   GameMode,
-  GameState,
   PreviewStone,
   ForbiddenMoveType,
   ForbiddenMoveResult,
