@@ -10,7 +10,9 @@ import type { ForcedLossResult, ReviewCandidate } from "@/types/review";
 import type { VCFSearchOptions } from "../search/types";
 import type { WasmSearchEngine } from "../wasm/searchEngine";
 
-import { createsFour, createsOpenThree } from "../search/threatMoves";
+// #37 P3 PR3: 四/活三判定を Zig 単一ソース(vct.classifyThreat)経由に。
+// wasm 未ロード時は threatAdapter 内で TS createsFour/createsOpenThree にフォールバック。
+import { createsFour, createsOpenThree } from "../wasm/threatAdapter";
 import {
   checkCandidateForcedLoss,
   CANDIDATE_VERIFY_VCF_OPTIONS,
