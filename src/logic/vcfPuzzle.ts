@@ -11,8 +11,8 @@ import {
   findWinningMove,
   getFourDefensePosition,
 } from "@/logic/cpu/search/threatPatterns";
+import { isForbiddenForBlack } from "@/logic/cpu/wasm/forbiddenAdapter";
 import { checkFive } from "@/logic/renjuRules/core";
-import { checkForbiddenMove } from "@/logic/renjuRules/forbiddenMoves";
 
 const BOARD_SIZE = 15;
 
@@ -85,10 +85,9 @@ export function validateAttackMove(
     return { valid: true, type: "five" };
   }
 
-  // 4. 黒の場合: 禁手チェック（石配置前の元盤面で呼ぶ）
+  // 4. 黒の場合: 禁手チェック（石配置前の元盤面で呼ぶ。Zig thin wasm 経由 #37 P2）
   if (attackerColor === "black") {
-    const forbidden = checkForbiddenMove(board, row, col);
-    if (forbidden.isForbidden) {
+    if (isForbiddenForBlack(board, row, col)) {
       return { valid: false, reason: "forbidden" };
     }
   }
@@ -135,10 +134,9 @@ export function getDefenseResponse(
     return { type: "open-four", winPositions };
   }
 
-  // 3. 防御側が黒の場合、禁手チェック
+  // 3. 防御側が黒の場合、禁手チェック（Zig thin wasm 経由 #37 P2）
   if (opponentColor === "black") {
-    const forbidden = checkForbiddenMove(board, defensePos.row, defensePos.col);
-    if (forbidden.isForbidden) {
+    if (isForbiddenForBlack(board, defensePos.row, defensePos.col)) {
       return { type: "forbidden-trap" };
     }
   }
