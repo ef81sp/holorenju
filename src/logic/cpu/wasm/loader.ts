@@ -1,6 +1,6 @@
 import type { WasmModuleContext } from "./types";
 
-async function loadWasmBuffer(wasmUrl: URL): Promise<ArrayBuffer> {
+export async function loadWasmBuffer(wasmUrl: URL): Promise<ArrayBuffer> {
   // Node.js: use fs.readFileSync + fileURLToPath
   // Browser: use fetch
   if ("process" in globalThis) {

@@ -21,6 +21,20 @@ pub fn build(b: *std.Build) void {
 
     b.installArtifact(lib);
 
+    // 禁手専用 thin wasm（#37 P1。メインスレッド用。forbidden.zig を唯一の真実とする2つ目の出力）
+    const forbidden_module = b.createModule(.{
+        .root_source_file = b.path("src/forbidden_wasm.zig"),
+        .target = wasm_target,
+        .optimize = .ReleaseFast,
+    });
+    const forbidden_lib = b.addExecutable(.{
+        .name = "forbidden",
+        .root_module = forbidden_module,
+    });
+    forbidden_lib.entry = .disabled;
+    forbidden_lib.rdynamic = true;
+    b.installArtifact(forbidden_lib);
+
     // Native test step (runs on host, not WASM)
     const native_target = b.resolveTargetQuery(.{});
 
