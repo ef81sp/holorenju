@@ -15,6 +15,7 @@
 // 関数のみ（Zig のデッドコード削除で thin に保たれる）。
 const bitboard = @import("bitboard.zig");
 const board = @import("board.zig");
+const evaluate = @import("evaluate.zig");
 const threats = @import("threats.zig");
 const vct = @import("vct.zig");
 
@@ -41,6 +42,13 @@ export fn classifyThreatWasm(row: u8, col: u8, color: u8) u8 {
     if (r.creates_four) bits |= 1;
     if (r.creates_open_three) bits |= 2;
     return bits;
+}
+
+/// (row,col) が**空き**の盤面で、そこに color を打つと四三ができるか（黒は禁手考慮）。
+/// 内部で候補を仮置き・復元する（候補は空き前提）。事前に boardSet/syncBitboard で同期しておくこと。
+export fn createsFourThreeWasm(row: u8, col: u8, color: u8) u8 {
+    const c: board.Cell = @enumFromInt(color);
+    return if (evaluate.createsFourThree(&board.board_cells, row, col, c)) 1 else 0;
 }
 
 // === detectOpponentThreats（ThreatInfo）の wire（#37 P3 PR4）===
