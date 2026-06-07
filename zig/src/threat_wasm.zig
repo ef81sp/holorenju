@@ -15,6 +15,7 @@
 // 関数のみ（Zig のデッドコード削除で thin に保たれる）。
 const bitboard = @import("bitboard.zig");
 const board = @import("board.zig");
+const threats = @import("threats.zig");
 const vct = @import("vct.zig");
 
 export fn boardInit() void {
@@ -40,4 +41,40 @@ export fn classifyThreatWasm(row: u8, col: u8, color: u8) u8 {
     if (r.creates_four) bits |= 1;
     if (r.creates_open_three) bits |= 2;
     return bits;
+}
+
+// === detectOpponentThreats（ThreatInfo）の wire（#37 P3 PR4）===
+//
+// ThreatInfo = 5 リスト（open_fours/fours/open_threes/mises/double_threes、各 PositionList cap=64）。
+// バッファに [u8 count][count*(u8 row, u8 col)] を 5 回連結してシリアライズする。
+// 最大 5*(1 + 64*2) = 645 バイト。
+var threat_info_buffer: [768]u8 = undefined;
+
+export fn getThreatInfoBuffer() [*]u8 {
+    return &threat_info_buffer;
+}
+
+fn writeList(off: usize, list: *const threats.PositionList) usize {
+    var o = off;
+    threat_info_buffer[o] = list.len;
+    o += 1;
+    for (0..list.len) |i| {
+        threat_info_buffer[o] = list.items[i].row;
+        threat_info_buffer[o + 1] = list.items[i].col;
+        o += 2;
+    }
+    return o;
+}
+
+/// 相手(opponent_color)の脅威を検出し ThreatInfo をバッファにシリアライズする。
+/// 事前に boardSet で cells、syncBitboard で bitboard を同期しておくこと。
+export fn detectOpponentThreatsWasm(opponent_color: u8) void {
+    const c: board.Cell = @enumFromInt(opponent_color);
+    const info = threats.detectOpponentThreats(&board.board_cells, c);
+    var o: usize = 0;
+    o = writeList(o, &info.open_fours);
+    o = writeList(o, &info.fours);
+    o = writeList(o, &info.open_threes);
+    o = writeList(o, &info.mises);
+    o = writeList(o, &info.double_threes);
 }
