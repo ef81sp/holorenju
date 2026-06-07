@@ -22,13 +22,20 @@
 
 import { describe, expect, it } from "vitest";
 
-import type { ForcedWinNode } from "@/types/review";
+import type { BoardState, Position } from "@/types/game";
+import type { ForcedWinNode, ReviewCandidate } from "@/types/review";
 
 import { loadWasmModule } from "@/logic/cpu/wasm/loader";
 import { WasmSearchEngine } from "@/logic/cpu/wasm/searchEngine";
 import { createBoardFromRecord } from "@/logic/gameRecordParser";
 
+import { countStones } from "../core/boardUtils";
+import { detectOpponentThreats } from "../evaluation";
+import { findDoubleMiseMoves } from "../evaluation/tactics";
+import { hasFourThreeAvailable, hasOpenThree } from "../search/vctHelpers";
+import { annotateFukumiMoves } from "./candidateVerification";
 import {
+  checkCandidateForcedLoss,
   checkForcedLoss,
   FORCED_LOSS_VCT_OPTIONS,
   REVIEW_MISE_VCF_OPTIONS,
@@ -70,10 +77,65 @@ const CORPUS: { name: string; record: string; moveCount: number }[] = [
   },
 ];
 
+/** 決定的な候補手検証オプション（被必勝層を timeLimit=Infinity で node-bound 化） */
+const DETERMINISTIC_CANDIDATE_OPTIONS: ForcedLossCheckOptions = {
+  vcfOptions: { ...REVIEW_VCF_OPTIONS, timeLimit: Infinity },
+  miseVcfOptions: { ...REVIEW_MISE_VCF_OPTIONS, timeLimit: Infinity },
+  vctOptions: { ...FORCED_LOSS_VCT_OPTIONS, timeLimit: Infinity },
+};
+
 const sortPos = (
   a: { row: number; col: number },
   b: { row: number; col: number },
 ): number => a.row - b.row || a.col - b.col;
+
+/** 棋譜の1手（例 "H8"）を盤面座標へ変換（左下原点。fullEval と同じ規約） */
+function parseMove(token: string): Position {
+  const col = token.charCodeAt(0) - "A".charCodeAt(0);
+  const row = 15 - parseInt(token.slice(1), 10);
+  return { row, col };
+}
+
+/** ThreatInfo の全リストを座標昇順に正規化（探索順非依存化） */
+function normalizeThreatInfo(t: {
+  openFours: Position[];
+  fours: Position[];
+  openThrees: Position[];
+  mises: Position[];
+  doubleThrees: Position[];
+}): unknown {
+  return {
+    openFours: [...t.openFours].sort(sortPos),
+    fours: [...t.fours].sort(sortPos),
+    openThrees: [...t.openThrees].sort(sortPos),
+    mises: [...t.mises].sort(sortPos),
+    doubleThrees: [...t.doubleThrees].sort(sortPos),
+  };
+}
+
+/**
+ * 棋譜の moveCount 以降から `color` の着手候補を最大3点抽出する。
+ * board（moveCount 手前の局面）で空きのものだけを返す（決定的）。
+ */
+function candidatePositions(
+  board: BoardState,
+  moves: string[],
+  moveCount: number,
+): Position[] {
+  const result: Position[] = [];
+  // moveCount, +2, +4 は同色（color）の着手
+  for (const offset of [0, 2, 4]) {
+    const token = moves[moveCount + offset];
+    if (!token) {
+      continue;
+    }
+    const pos = parseMove(token);
+    if (board[pos.row]?.[pos.col] === null) {
+      result.push(pos);
+    }
+  }
+  return result;
+}
 
 /** 詰み木を分岐順非依存に正規化（defenses を defenderMove 座標でソート） */
 function normalizeTree(node: ForcedWinNode): unknown {
@@ -124,5 +186,106 @@ describe("review 戦術出力スナップショット (#37 P0)", () => {
       DETERMINISTIC_LOSS_OPTIONS,
     );
     expect(result ?? null).toMatchSnapshot();
+  });
+});
+
+/**
+ * P3 #42 で Zig へ移す戦術ヘルパーの**直接出力**を凍結する安全網。
+ *
+ * detectForcedWin / checkForcedLoss は上の describe が top-level（type/sequence）で凍結済だが、
+ * P3 の各 PR が置き換えるのは中の戦術プリミティブ（脅威検出・両ミセ・活三/四三・被必勝層）。
+ * これらは VCF/VCT と違い**時間非依存の純粋関数**（または timeLimit=Infinity で node-bound 化
+ * できる被必勝層）なので、ここで直接凍結すれば各移行 PR の「1ビット不変」を細粒度で検知できる。
+ *
+ * 対応する P3 PR:
+ *   detectOpponentThreats        → PR4（fullEval / forcedLossCheck の脅威検出）
+ *   findDoubleMiseMoves          → PR5（両ミセ）
+ *   hasOpenThree/hasFourThree    → PR6（filterByCounterThreats / VCT 安全性）
+ *   checkCandidateForcedLoss     → PR3/PR4（候補手の被必勝＝opponentForcedWin の出所）
+ *   annotateFukumiMoves          → PR3（createsFour/createsOpenThree を使う isFukumi 判定）
+ */
+describe("review 戦術プリミティブ出力スナップショット (#37 P3 安全網)", () => {
+  it.each(CORPUS)("detectOpponentThreats: $name", ({ record, moveCount }) => {
+    const { board, nextColor } = createBoardFromRecord(record, moveCount);
+    const opponentColor = nextColor === "black" ? "white" : "black";
+    const snapshot = {
+      // 手番側の脅威（fullEval の selfThreats 経路 / 着手後の自分の四判定）
+      self: normalizeThreatInfo(detectOpponentThreats(board, nextColor)),
+      // 相手の脅威（fullEval L385 / forcedLossCheck L324 の経路）
+      opponent: normalizeThreatInfo(
+        detectOpponentThreats(board, opponentColor),
+      ),
+    };
+    expect(snapshot).toMatchSnapshot();
+  });
+
+  it.each(CORPUS)("findDoubleMiseMoves: $name", ({ record, moveCount }) => {
+    const { board, nextColor } = createBoardFromRecord(record, moveCount);
+    const opponentColor = nextColor === "black" ? "white" : "black";
+    const snapshot = {
+      self: [...findDoubleMiseMoves(board, nextColor)].sort(sortPos),
+      opponent: [...findDoubleMiseMoves(board, opponentColor)].sort(sortPos),
+    };
+    expect(snapshot).toMatchSnapshot();
+  });
+
+  it.each(CORPUS)("counterThreatGuards: $name", ({ record, moveCount }) => {
+    const { board, nextColor } = createBoardFromRecord(record, moveCount);
+    const opponentColor = nextColor === "black" ? "white" : "black";
+    const snapshot = {
+      hasOpenThreeSelf: hasOpenThree(board, nextColor),
+      hasOpenThreeOpponent: hasOpenThree(board, opponentColor),
+      hasFourThreeSelf: hasFourThreeAvailable(board, nextColor),
+      hasFourThreeOpponent: hasFourThreeAvailable(board, opponentColor),
+    };
+    expect(snapshot).toMatchSnapshot();
+  });
+
+  it.each(CORPUS)(
+    "checkCandidateForcedLoss: $name",
+    ({ record, moveCount }) => {
+      const { board, nextColor } = createBoardFromRecord(record, moveCount);
+      const opponentColor = nextColor === "black" ? "white" : "black";
+      const moves = record.trim().split(/\s+/);
+      const stoneCount = countStones(board);
+      // moveCount 以降の手番側着手を候補に、被必勝（opponentForcedWin 相当）を凍結
+      const snapshot = candidatePositions(board, moves, moveCount).map(
+        (pos) => ({
+          position: pos,
+          loss:
+            checkCandidateForcedLoss(
+              board,
+              pos,
+              nextColor,
+              opponentColor,
+              stoneCount,
+              engine,
+              DETERMINISTIC_CANDIDATE_OPTIONS,
+            ) ?? null,
+        }),
+      );
+      expect(snapshot).toMatchSnapshot();
+    },
+  );
+
+  it.each(CORPUS)("annotateFukumiMoves: $name", ({ record, moveCount }) => {
+    const { board, nextColor } = createBoardFromRecord(record, moveCount);
+    const moves = record.trim().split(/\s+/);
+    const candidates: ReviewCandidate[] = candidatePositions(
+      board,
+      moves,
+      moveCount,
+    ).map((position) => ({ position, score: 0, searchScore: 0 }));
+    // timeLimit=Infinity を注入して node-bound 決定化
+    annotateFukumiMoves(candidates, board, nextColor, engine, {
+      ...REVIEW_VCF_OPTIONS,
+      timeLimit: Infinity,
+    });
+    const snapshot = candidates.map((c) => ({
+      position: c.position,
+      isFukumi: c.isFukumi ?? false,
+      fukumiDepth: c.fukumiDepth ?? null,
+    }));
+    expect(snapshot).toMatchSnapshot();
   });
 });
