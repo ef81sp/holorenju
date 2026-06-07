@@ -7,7 +7,8 @@
 import type { BoardState, Position } from "@/types/game";
 import type { ForcedWinDefense, ForcedWinNode } from "@/types/review";
 
-import { createsFourThree } from "../evaluation/winningPatterns";
+// #37 P3 PR5: 四三判定を Zig 単一ソース(evaluate.createsFourThree)経由に（合法局面で TS と一致、未ロード時 TS フォールバック）。
+import { createsFourThree } from "../wasm/threatAdapter";
 
 /**
  * 両ミセの詰み木を構築（#22）
