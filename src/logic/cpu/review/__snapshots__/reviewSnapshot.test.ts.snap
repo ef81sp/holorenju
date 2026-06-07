@@ -1,5 +1,276 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
+exports[`review 戦術プリミティブ出力スナップショット (#37 P3 安全網) > annotateFukumiMoves: 'mise-vcf-#18' 1`] = `[]`;
+
+exports[`review 戦術プリミティブ出力スナップショット (#37 P3 安全網) > annotateFukumiMoves: 'white29-m20' 1`] = `
+[
+  {
+    "fukumiDepth": null,
+    "isFukumi": false,
+    "position": {
+      "col": 9,
+      "row": 6,
+    },
+  },
+  {
+    "fukumiDepth": null,
+    "isFukumi": false,
+    "position": {
+      "col": 9,
+      "row": 7,
+    },
+  },
+  {
+    "fukumiDepth": 3,
+    "isFukumi": true,
+    "position": {
+      "col": 10,
+      "row": 7,
+    },
+  },
+]
+`;
+
+exports[`review 戦術プリミティブ出力スナップショット (#37 P3 安全網) > annotateFukumiMoves: 'white29-m24' 1`] = `
+[
+  {
+    "fukumiDepth": null,
+    "isFukumi": false,
+    "position": {
+      "col": 10,
+      "row": 7,
+    },
+  },
+  {
+    "fukumiDepth": null,
+    "isFukumi": false,
+    "position": {
+      "col": 8,
+      "row": 5,
+    },
+  },
+  {
+    "fukumiDepth": null,
+    "isFukumi": false,
+    "position": {
+      "col": 6,
+      "row": 3,
+    },
+  },
+]
+`;
+
+exports[`review 戦術プリミティブ出力スナップショット (#37 P3 安全網) > checkCandidateForcedLoss: 'mise-vcf-#18' 1`] = `[]`;
+
+exports[`review 戦術プリミティブ出力スナップショット (#37 P3 安全網) > checkCandidateForcedLoss: 'white29-m20' 1`] = `
+[
+  {
+    "loss": null,
+    "position": {
+      "col": 9,
+      "row": 6,
+    },
+  },
+  {
+    "loss": null,
+    "position": {
+      "col": 9,
+      "row": 7,
+    },
+  },
+  {
+    "loss": null,
+    "position": {
+      "col": 10,
+      "row": 7,
+    },
+  },
+]
+`;
+
+exports[`review 戦術プリミティブ出力スナップショット (#37 P3 安全網) > checkCandidateForcedLoss: 'white29-m24' 1`] = `
+[
+  {
+    "loss": null,
+    "position": {
+      "col": 10,
+      "row": 7,
+    },
+  },
+  {
+    "loss": {
+      "sequence": [
+        {
+          "col": 10,
+          "row": 11,
+        },
+        {
+          "col": 8,
+          "row": 9,
+        },
+        {
+          "col": 10,
+          "row": 8,
+        },
+      ],
+      "type": "vcf",
+    },
+    "position": {
+      "col": 8,
+      "row": 5,
+    },
+  },
+  {
+    "loss": {
+      "sequence": [
+        {
+          "col": 10,
+          "row": 11,
+        },
+        {
+          "col": 8,
+          "row": 9,
+        },
+        {
+          "col": 10,
+          "row": 8,
+        },
+      ],
+      "type": "vcf",
+    },
+    "position": {
+      "col": 6,
+      "row": 3,
+    },
+  },
+]
+`;
+
+exports[`review 戦術プリミティブ出力スナップショット (#37 P3 安全網) > counterThreatGuards: 'mise-vcf-#18' 1`] = `
+{
+  "hasFourThreeOpponent": false,
+  "hasFourThreeSelf": false,
+  "hasOpenThreeOpponent": false,
+  "hasOpenThreeSelf": false,
+}
+`;
+
+exports[`review 戦術プリミティブ出力スナップショット (#37 P3 安全網) > counterThreatGuards: 'white29-m20' 1`] = `
+{
+  "hasFourThreeOpponent": false,
+  "hasFourThreeSelf": false,
+  "hasOpenThreeOpponent": false,
+  "hasOpenThreeSelf": false,
+}
+`;
+
+exports[`review 戦術プリミティブ出力スナップショット (#37 P3 安全網) > counterThreatGuards: 'white29-m24' 1`] = `
+{
+  "hasFourThreeOpponent": true,
+  "hasFourThreeSelf": true,
+  "hasOpenThreeOpponent": false,
+  "hasOpenThreeSelf": false,
+}
+`;
+
+exports[`review 戦術プリミティブ出力スナップショット (#37 P3 安全網) > detectOpponentThreats: 'mise-vcf-#18' 1`] = `
+{
+  "opponent": {
+    "doubleThrees": [],
+    "fours": [],
+    "mises": [],
+    "openFours": [],
+    "openThrees": [],
+  },
+  "self": {
+    "doubleThrees": [
+      {
+        "col": 8,
+        "row": 11,
+      },
+    ],
+    "fours": [],
+    "mises": [],
+    "openFours": [],
+    "openThrees": [],
+  },
+}
+`;
+
+exports[`review 戦術プリミティブ出力スナップショット (#37 P3 安全網) > detectOpponentThreats: 'white29-m20' 1`] = `
+{
+  "opponent": {
+    "doubleThrees": [],
+    "fours": [],
+    "mises": [],
+    "openFours": [],
+    "openThrees": [],
+  },
+  "self": {
+    "doubleThrees": [],
+    "fours": [],
+    "mises": [],
+    "openFours": [],
+    "openThrees": [],
+  },
+}
+`;
+
+exports[`review 戦術プリミティブ出力スナップショット (#37 P3 安全網) > detectOpponentThreats: 'white29-m24' 1`] = `
+{
+  "opponent": {
+    "doubleThrees": [],
+    "fours": [],
+    "mises": [
+      {
+        "col": 10,
+        "row": 11,
+      },
+    ],
+    "openFours": [],
+    "openThrees": [],
+  },
+  "self": {
+    "doubleThrees": [],
+    "fours": [],
+    "mises": [
+      {
+        "col": 10,
+        "row": 7,
+      },
+    ],
+    "openFours": [],
+    "openThrees": [],
+  },
+}
+`;
+
+exports[`review 戦術プリミティブ出力スナップショット (#37 P3 安全網) > findDoubleMiseMoves: 'mise-vcf-#18' 1`] = `
+{
+  "opponent": [],
+  "self": [],
+}
+`;
+
+exports[`review 戦術プリミティブ出力スナップショット (#37 P3 安全網) > findDoubleMiseMoves: 'white29-m20' 1`] = `
+{
+  "opponent": [],
+  "self": [],
+}
+`;
+
+exports[`review 戦術プリミティブ出力スナップショット (#37 P3 安全網) > findDoubleMiseMoves: 'white29-m24' 1`] = `
+{
+  "opponent": [
+    {
+      "col": 5,
+      "row": 7,
+    },
+  ],
+  "self": [],
+}
+`;
+
 exports[`review 戦術出力スナップショット (#37 P0) > checkForcedLoss: 'mise-vcf-#18' 1`] = `
 {
   "sequence": [
