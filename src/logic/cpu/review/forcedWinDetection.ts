@@ -11,9 +11,10 @@ import type { VCTSearchOptions, VCTSequenceResult } from "../search/types";
 import type { WasmSearchEngine } from "../wasm/searchEngine";
 
 import { findDoubleMiseMoves } from "../evaluation/tactics";
-import { createsFourThree } from "../evaluation/winningPatterns";
 import { findThreatMoves } from "../search/vctHelpers";
 import { validateVCTSequence } from "../search/vctValidation";
+// #37 P3 PR5: 四三判定を Zig 単一ソース(evaluate.createsFourThree)経由に（合法局面で TS と一致、未ロード時 TS フォールバック）。
+import { createsFourThree } from "../wasm/threatAdapter";
 import {
   filterByCounterThreats,
   REVIEW_MISE_VCF_OPTIONS,

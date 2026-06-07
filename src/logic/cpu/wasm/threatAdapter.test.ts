@@ -11,6 +11,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { BoardState, Position, StoneColor } from "@/types/game";
 
 import { detectOpponentThreats as detectOpponentThreatsTs } from "@/logic/cpu/evaluation";
+import { createsFourThree as createsFourThreeTs } from "@/logic/cpu/evaluation/winningPatterns";
 import {
   createsFour as createsFourTs,
   createsOpenThree as createsOpenThreeTs,
@@ -20,6 +21,7 @@ import { createEmptyBoard } from "@/logic/renjuRules/core";
 
 import {
   classifyThreat,
+  createsFourThree,
   detectOpponentThreats,
   preloadThreatWasm,
   setThreatWasmForTest,
@@ -165,6 +167,40 @@ describe("threatAdapter (#37 P3 PR2)", () => {
           expect(w, `mc=${mc} color=${color}`).toEqual(ts);
         }
       }
+    },
+  );
+
+  it.each(LEGAL_RECORDS)(
+    "createsFourThree: wasm == TS（実戦棋譜 全手数前置・全空き点・両色）: %s",
+    async (record) => {
+      await preloadThreatWasm();
+      const moves = record.trim().split(/\s+/);
+      const mismatches: string[] = [];
+      // 計算量を抑えるため代表的な手数（中盤以降で四三が出やすい）を間引いて検査
+      for (let mc = 6; mc <= moves.length; mc += 3) {
+        const { board } = createBoardFromRecord(moves.slice(0, mc).join(" "));
+        for (let row = 0; row < 15; row++) {
+          const boardRow = board[row];
+          if (!boardRow) {
+            continue;
+          }
+          for (let col = 0; col < 15; col++) {
+            if (boardRow[col]) {
+              continue;
+            }
+            for (const color of COLORS) {
+              const w = createsFourThree(board, row, col, color);
+              const ts = createsFourThreeTs(board, row, col, color);
+              if (w !== ts) {
+                mismatches.push(
+                  `mc=${mc} (${row},${col},${color}) w=${w} ts=${ts}`,
+                );
+              }
+            }
+          }
+        }
+      }
+      expect(mismatches, mismatches.join("\n")).toEqual([]);
     },
   );
 

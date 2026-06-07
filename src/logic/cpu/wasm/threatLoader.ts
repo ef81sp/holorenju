@@ -11,6 +11,8 @@ export interface ThreatWasmContext {
   syncBitboard: () => void;
   /** bit0=createsFour（黒長連除外済）/ bit1=createsOpenThree。(row,col) に color 配置済み前提。 */
   classifyThreatWasm: (row: number, col: number, color: number) => number;
+  /** (row,col)（空き前提）に color を打つと四三ができるか。1/0。内部で仮置き・復元。 */
+  createsFourThreeWasm: (row: number, col: number, color: number) => number;
   /** opponent_color の脅威を検出し ThreatInfo をバッファにシリアライズする（#37 P3 PR4）。 */
   detectOpponentThreatsWasm: (opponentColor: number) => void;
   /** ThreatInfo シリアライズバッファの先頭オフセット（memory 内）を返す。 */
