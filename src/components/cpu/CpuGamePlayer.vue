@@ -34,7 +34,7 @@ import { useBoardStore, type Mark } from "@/stores/boardStore";
 import { useDialogStore } from "@/stores/dialogStore";
 import { usePreferencesStore } from "@/stores/preferencesStore";
 import { useAudioStore } from "@/stores/audioStore";
-import { checkForbiddenMove } from "@/logic/renjuRules";
+import { isForbiddenForBlack } from "@/logic/cpu/wasm/forbiddenAdapter";
 import { formatMove } from "@/logic/gameRecordParser";
 import type { BattleResult } from "@/types/cpu";
 import type { Position } from "@/types/game";
@@ -190,14 +190,9 @@ function handlePlaceStone(position: Position): void {
     return;
   }
 
-  // 黒番の場合は禁手チェック
+  // 黒番の場合は禁手チェック（Zig 単一ソースの thin wasm 経由。#37 P1）
   if (cpuGameStore.currentTurn === "black") {
-    const forbidden = checkForbiddenMove(
-      boardStore.board,
-      position.row,
-      position.col,
-    );
-    if (forbidden.isForbidden) {
+    if (isForbiddenForBlack(boardStore.board, position.row, position.col)) {
       // 禁手位置にcrossマークを表示
       showForbiddenMark(position);
       return;
