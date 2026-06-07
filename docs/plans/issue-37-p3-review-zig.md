@@ -82,12 +82,23 @@ review（振り返り）の戦術計算はすべて Zig。TS は「プレゼン�
 - **安全網**: 等価テストは**合法局面**で照合（非合法盤は review 非対象なので除外、classifyThreat の乱数照合は per-point なので維持）。**reviewSnapshot を threat wasm preload 付きに強化**＝本番(worker)と同じ Zig 経路で実戦コーパス（candidate 仮置き盤含む checkCandidateForcedLoss/annotateFukumiMoves）を golden(TS) と照合し**バイト不変を実証**（最強ガード）。
 - **ゲート結果**: vue-tsc 0 / oxlint 0 / zig build test 緑 / unit 1802 緑 / reviewSnapshot 不変。
 
-### PR5 — Mise系（`createsFourThree`/`findMiseTargets`/`findDoubleMiseMoves`）差分検証→委譲
+### PR5 — Mise系 → 2分割（着手時に判明: Zig 等価は `createsFourThree` のみ存在）
 
-- **Zigに移す**: `evaluate.createsFourThree`(既存)、`mise_vcf.findMiseTargetsLite`。**フル版 `findMiseTargets`(±2近傍走査) が Lite で足りるかの差分検証が前提**（不一致ならフル版 Zig 新規実装に分岐）
-- **触る**: `threat_wasm.zig`、`threatAdapter.ts`、`review/fullEval.ts`、`forcedWinDetection.ts`、`forcedLossCheck.ts`、`doubleMiseBranches.ts`
-- **利用点削減**: **−3〜4**（forbiddenMoves.ts 依存が外れる）
-- **リスク**: 高。先に差分 test で可視化してから実装。
+**発見**: Zig には `evaluate.createsFourThree` しか無い。`findMiseTargets`/`findMiseTargetsLite`/`findDoubleMiseMoves` の Zig 等価は**存在しない**（プランの `mise_vcf.findMiseTargetsLite` は誤り）。→ PR5 を分割。
+
+#### PR5a — `createsFourThree` を Zig 委譲（gap:none）【実装済】
+
+- **Zigに移す**: `evaluate.createsFourThree`（既存）を `threat_wasm` に export（`createsFourThreeWasm`、候補は空き前提で内部仮置き）。
+- **触る**: `threat_wasm.zig`/`threatLoader.ts`/`threatAdapter.ts`（`createsFourThree`、未ロード時TSフォールバック）/`threatAdapter.test.ts`（合法局面・全空き点・両色で Zig==TS）/`doubleMiseBranches.ts`(L90)/`forcedWinDetection.ts`(L140)。両 call site とも空き候補で contract 一致を確認。
+- **利用点削減**: **−2**（createsFourThree が winningPatterns→ を踏まなくなった）
+- **ゲート結果**: vue-tsc 0 / oxlint 0 / unit 1805 緑 / reviewSnapshot バイト不変。
+
+#### PR5b — `findMiseTargets`/`findDoubleMiseMoves` を Zig 新規実装【未着手・要新規Zig】
+
+- **Zigに移す**: 両関数の Zig 等価が無いため**新規実装**が必要（plan の「new-impl 分岐」）。`findMiseTargets`(±2近傍走査・達四点列挙)、`findDoubleMiseMoves`(全空き点で四三2つ以上)。
+- **触る（予定）**: `threat_wasm.zig`(新規fn+wire)/`threatAdapter.ts`/`fullEval.ts`(L647 findMiseTargets)/`forcedLossCheck.ts`(L185 findDoubleMiseMoves)/`forcedWinDetection.ts`(L113 findDoubleMiseMoves)。
+- **安全網**: 合法局面で Zig==TS（reviewSnapshot は doubleMiseTargets/missedDoubleMise を凍結済＝最終ガード）。
+- **リスク**: 高（新規Zig実装＋wire）。
 
 ### PR6 — VCT安全性ヘルパー（`hasFourThreeAvailable`/`hasOpenThree`/`findThreatMoves`）委譲
 
