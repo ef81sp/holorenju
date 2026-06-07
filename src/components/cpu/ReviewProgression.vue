@@ -12,7 +12,6 @@
 import { toRef } from "vue";
 
 import type { EvaluatedMove } from "@/types/review";
-import type { Position } from "@/types/game";
 import BranchOptions from "./BranchOptions.vue";
 import TabList from "./TabList.vue";
 import { useReviewProgression } from "./composables/useReviewProgression";
@@ -20,14 +19,6 @@ import { useReviewProgression } from "./composables/useReviewProgression";
 const props = defineProps<{
   evaluation: EvaluatedMove;
   moveIndex: number;
-}>();
-
-const emit = defineEmits<{
-  hoverPvMove: [
-    items: { position: Position; isSelf: boolean }[],
-    type: "best" | "played",
-  ];
-  leavePvMove: [];
 }>();
 
 const {
@@ -50,8 +41,6 @@ const {
 } = useReviewProgression({
   evaluation: toRef(() => props.evaluation as EvaluatedMove | null),
   moveIndex: toRef(() => props.moveIndex),
-  emitHover: (items, type) => emit("hoverPvMove", items, type),
-  emitLeave: () => emit("leavePvMove"),
 });
 
 function tabExtraClass(t: { id: string }): Record<string, boolean> {

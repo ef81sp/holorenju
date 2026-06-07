@@ -4,7 +4,7 @@
  *
  * 候補手をコンパクトなカードグリッドで表示。
  * 各カードのホバーで盤面に該当位置を 1 マークだけプレビューする
- * （hoverCandidate emit / leaveCandidate emit）。
+ * （reviewBoardPreviewStore を直接更新）。
  */
 
 import { computed } from "vue";
@@ -13,15 +13,13 @@ import type { EvaluatedMove, ReviewCandidate } from "@/types/review";
 import type { Position } from "@/types/game";
 import { SHORT_LABELS } from "@/logic/forcedTypeLabels";
 import { formatMove } from "@/logic/gameRecordParser";
+import { useReviewBoardPreviewStore } from "@/stores/reviewBoardPreviewStore";
 
 const props = defineProps<{
   evaluation: EvaluatedMove;
 }>();
 
-const emit = defineEmits<{
-  hoverCandidate: [position: Position];
-  leaveCandidate: [];
-}>();
+const previewStore = useReviewBoardPreviewStore();
 
 interface CandidateView {
   rank: number;
@@ -93,11 +91,11 @@ function formatDelta(delta: number): string {
 }
 
 function handleEnter(position: Position): void {
-  emit("hoverCandidate", position);
+  previewStore.setHoveredCandidate(position);
 }
 
 function handleLeave(): void {
-  emit("leaveCandidate");
+  previewStore.clearHoveredCandidate();
 }
 </script>
 

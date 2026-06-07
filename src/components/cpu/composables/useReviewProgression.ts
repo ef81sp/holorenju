@@ -2,14 +2,16 @@
  * 振り返り進行ツリー（最善・実際・被詰）の状態管理と emit
  *
  * - PV 構築・分岐正規化・行展開・可視手列の純粋ロジックは progressionModel に分離。
- *   このファイルは ref/computed/watch とプレビュー emit のみを担当する。
+ *   このファイルは ref/computed/watch とプレビュー発火のみを担当する。
  * - step / showAll でステップ送り、jumpTo / selectBranchOption で位置やブランチを切替。
+ * - プレビューの発火は reviewBoardPreviewStore を直接更新して行う（emit 中継は撤廃）。
  */
 
 import { type ComputedRef, type Ref, computed, ref, watch } from "vue";
 
-import type { Position } from "@/types/game";
 import type { EvaluatedMove } from "@/types/review";
+
+import { useReviewBoardPreviewStore } from "@/stores/reviewBoardPreviewStore";
 
 import {
   type ProgressionTab,
@@ -23,11 +25,6 @@ import {
 interface UseReviewProgressionParams {
   evaluation: Ref<EvaluatedMove | null>;
   moveIndex: Ref<number>;
-  emitHover: (
-    items: { position: Position; isSelf: boolean }[],
-    type: "best" | "played",
-  ) => void;
-  emitLeave: () => void;
 }
 
 interface UseReviewProgressionReturn {
@@ -54,7 +51,8 @@ interface UseReviewProgressionReturn {
 export function useReviewProgression(
   params: UseReviewProgressionParams,
 ): UseReviewProgressionReturn {
-  const { evaluation, moveIndex, emitHover, emitLeave } = params;
+  const { evaluation, moveIndex } = params;
+  const previewStore = useReviewBoardPreviewStore();
 
   const forcedLossLabel = computed(() =>
     evaluation.value ? forcedLossLabelOf(evaluation.value) : null,
@@ -98,10 +96,10 @@ export function useReviewProgression(
   function emitPreview(): void {
     const tab = activeTab.value;
     if (!tab || step.value <= 0) {
-      emitLeave();
+      previewStore.clearPvPreview();
       return;
     }
-    emitHover(
+    previewStore.setPvPreview(
       buildVisibleItems(rows.value, step.value, activeSelection()),
       tab.emitType,
     );
@@ -116,7 +114,7 @@ export function useReviewProgression(
     activeTabId.value = id;
     step.value = 0;
     showAll.value = false;
-    emitLeave();
+    previewStore.clearPvPreview();
   }
 
   function toggleShowAll(): void {
@@ -150,7 +148,7 @@ export function useReviewProgression(
     }
     step.value = 0;
     showAll.value = false;
-    emitLeave();
+    previewStore.clearPvPreview();
   }
 
   function jumpTo(rowIdx: number): void {
@@ -189,7 +187,7 @@ export function useReviewProgression(
     if (!tab) {
       return;
     }
-    emitHover(
+    previewStore.setPvPreview(
       buildVisibleItems(rows.value, rowIdx + 1, activeSelection()),
       tab.emitType,
     );
@@ -204,13 +202,13 @@ export function useReviewProgression(
     if (!row || row.type !== "branch") {
       return;
     }
-    // rowIdx までの可視手 + ホバー中のオプション1手を末尾に合成（emit 依存のため非純粋）
+    // rowIdx までの可視手 + ホバー中のオプション1手を末尾に合成（store 更新のため非純粋）
     const items = buildVisibleItems(rows.value, rowIdx, activeSelection());
     const opt = row.options.find((o) => o.id === optId);
     if (opt) {
       items.push({ position: opt.item.position, isSelf: opt.item.isSelf });
     }
-    emitHover(items, tab.emitType);
+    previewStore.setPvPreview(items, tab.emitType);
   }
 
   function previewLeave(): void {
