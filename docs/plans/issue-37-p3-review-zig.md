@@ -64,12 +64,14 @@ review（振り返り）の戦術計算はすべて Zig。TS は「プレゼン�
 - **利用者ゼロ**: 起動時 preload（main.ts）は **PR3 で配線**（PR2 は adapter 未呼び出し＝完全 no-op）。PR3 で preloadThreatWasm を忘れると TS フォールバックのまま（正しさは不変だが Zig 未使用）になる点に注意。
 - **ゲート結果**: vue-tsc 0 / oxlint 0 / zig build test 緑 / unit 1799 tests 緑。
 
-### PR3 — `createsFour`/`createsOpenThree` 利用点を adapter へ張替（patterns.ts 依存を最初に剥がす）
+### PR3 — `createsFour`/`createsOpenThree` 利用点を adapter へ張替（patterns.ts 依存を最初に剥がす）【実装済】
 
-- **触る**: `src/logic/cpu/review/candidateVerification.ts`、`src/logic/vcfPuzzle.ts`。import を threatAdapter に差替（各ファイル独立コミット可）
-- **利用点削減**: **−2**（review-live と puzzle-live を同時に救う）
-- **安全網**: PR0拡張 reviewSnapshot + threatAdapter.test + renjuParity
-- `threatMoves.ts` 本体はフォールバックとして当面残置（削除は P4）
+- **触る**: `candidateVerification.ts`（annotateFukumiMoves）/ `vcfPuzzle.ts`（L96 四判定）の import を threatAdapter へ差替。**preload 配線**: `main.ts`（vcfPuzzle 用・非ブロッキング）/ `review.worker.ts`（getWasmModule 内で await＝candidateVerification 実行前にロード）。
+- **利用点削減**: **−2**（candidateVerification + vcfPuzzle が threatMoves→patterns.ts を踏まなくなった。grep で直接 import 消滅を確認）
+- **preload 必須**: 未 preload だと TS フォールバックのまま＝Zig 未使用。両コンテキストで preloadThreatWasm を配線済。失敗時は TS フォールバックでクラッシュ回避。
+- **安全網**: reviewSnapshot **バイト不変**（test は preload せず TS フォールバック＝同値）/ threatAdapter.test（wasm==TS）/ renjuParity / vcfPuzzle.test 15 緑。
+- **ゲート結果**: vue-tsc 0 / oxlint 0 / unit 1799 緑。
+- `threatMoves.ts` 本体はフォールバックとして当面残置（削除は P4）。残る createsFour 利用点（threatPatterns/vcfCheck/vctValidation/search index export）は PR4+ 対象。
 
 ### PR4 — `detectOpponentThreats` を Zig 委譲（review 中核・最大の利用点削減）
 
