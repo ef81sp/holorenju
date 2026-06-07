@@ -21,7 +21,6 @@ import { createBoardFromRecord } from "@/logic/gameRecordParser";
 import type { WasmModuleContext } from "./wasm/types";
 
 import { countStones } from "./core/boardUtils";
-import { detectOpponentThreats } from "./evaluation";
 import { FORCED_LOSS_VCT_OPTIONS } from "./review/forcedLossCheck";
 import { detectForcedWin } from "./review/forcedWinDetection";
 import { executeFullEval } from "./review/fullEval";
@@ -29,7 +28,8 @@ import { wasmFindVCTSequence } from "./review/wasmAdapters";
 import { VCT_STONE_THRESHOLD } from "./search/types";
 import { loadWasmModule } from "./wasm/loader";
 import { WasmSearchEngine } from "./wasm/searchEngine";
-import { preloadThreatWasm } from "./wasm/threatAdapter";
+// #37 P3 PR4: 脅威検出も Zig 単一ソース経由に（合法局面で TS と一致、未ロード時 TS フォールバック）。
+import { detectOpponentThreats, preloadThreatWasm } from "./wasm/threatAdapter";
 
 /** WASM モジュール（初回ロード後にキャッシュ） */
 let cachedWasm: WasmModuleContext | null = null;

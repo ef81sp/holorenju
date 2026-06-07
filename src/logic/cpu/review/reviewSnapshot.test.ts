@@ -33,6 +33,7 @@ import { countStones } from "../core/boardUtils";
 import { detectOpponentThreats } from "../evaluation";
 import { findDoubleMiseMoves } from "../evaluation/tactics";
 import { hasFourThreeAvailable, hasOpenThree } from "../search/vctHelpers";
+import { preloadThreatWasm } from "../wasm/threatAdapter";
 import { annotateFukumiMoves } from "./candidateVerification";
 import {
   checkCandidateForcedLoss,
@@ -152,6 +153,9 @@ function normalizeTree(node: ForcedWinNode): unknown {
 
 // WASM は1回だけロードして全テストで使い回す
 const engine = new WasmSearchEngine(await loadWasmModule());
+// #37 P3: 脅威分類 thin wasm も preload し、本番(worker)と同じ Zig 経路で凍結する。
+// 合法な実戦コーパスなので Zig==TS（threatAdapter.test で検証済）→ golden は不変。
+await preloadThreatWasm();
 
 describe("review 戦術出力スナップショット (#37 P0)", () => {
   it.each(CORPUS)("detectForcedWin: $name", ({ record, moveCount }) => {
