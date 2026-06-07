@@ -49,19 +49,20 @@ review（振り返り）の戦術計算はすべて Zig。TS は「プレゼン�
 - **決定性検証**: 3回連続実行で snapshot 完全一致を確認済。コーパスは既存 P0 の forcing 局面（mise-vcf-#18 / white29-m20 / white29-m24）を流用。白29で `isFukumi:true/fukumiDepth:3`・`type:"vcf"` 被必勝列など実データを捕捉。
 - **ゲート結果**: vue-tsc 0 / oxlint 0 / review+parity 145 tests 緑（parity は wasm 再ビルド後）。
 
-### PR1 — `classifyPointWasm` 黒長連対応＋パリティ拡張（Zig only・本番未接続）
+### PR1 — ~~classifyPointWasm 黒長連対応~~【DROP（着手時に誤りと判明）】
 
-- **Zigに移す**: `classifyPointWasm` の four/jumpFour ビットに黒限定 overline 除外を組込。`vct.zig` の `isJumpFourOverline`/`isOverlineEnd` を pub 化して再利用
-- **触る**: `zig/src/main.zig`、`zig/src/vct.zig`(pub化)、`src/logic/renjuRules/renjuParity.test.ts`（Test A=黒跳び四overline / Test B=黒4連の先に黒石(checkEndsForFour) を追加、現状RED→Zig修正でGREEN）
-- **利用点削減**: ±0（#21 オラクル正確化のみ）
-- 目的は「本番で使うため」でなく **#21 オラクルの正確性向上**。橋本体は PR2。
+**取りやめ理由**: `classifyPointWasm` と TS オラクル `classifyPointTs` の bit は**生のパターンプリミティブ**（`four`/`jumpFour` は `checkJumpFour` 等をそのまま反映＝黒長連でも true、長連は別途 forbidden bit 24-25 で符号化）。#21 はこの**共有プリミティブの TS==Zig** を検証する設計で正しい。ここに黒長連除外を組み込むと (1) TS 側も変えないとパリティが壊れ (2) 生プリミティブ(checkJumpFour)と合成(createsFour)を混同させ #21 の粒度を下げる＝**有害**。`classifyPointWasm` は橋でもない（橋は `vct.classifyThreat`）ので触らない。
+**意図の受け皿**: 「vct.classifyThreat == TS createsFour を黒長連含め検証」は **PR2 の `threatAdapter.test`** が全空き点・両色・高密度局面で照合し内包済。既存 renjuParity が生プリミティブを、PR0 が createsFour 消費側 review 出力をガード済。
 
-### PR2 — threat 専用 thin wasm + adapter を新設（橋だけ・利用者ゼロ）
+### PR2 — threat 専用 thin wasm + adapter を新設（橋だけ・利用者ゼロ）【実装済】
 
-- **Zigに移す**: 新規 `zig/src/threat_wasm.zig`(thin)。export: `boardInit`/`boardSet`/`syncBitboard`(=`bitboard.initFromCells`) + `classifyThreatWasm(row,col,color)->u8`（bit0=four, bit1=openThree、内部で `vct.classifyThreat`）。依存を board+jump_patterns+threats+vct に限定
-- **触る**: `zig/src/threat_wasm.zig`(新)、`zig/build.zig`(3つ目の thin wasm target, forbidden 同型)、`src/logic/cpu/wasm/threatLoader.ts`(新)、`src/logic/cpu/wasm/threatAdapter.ts`(新, `createsFour`/`createsOpenThree` 委譲・未ロード時TSフォールバック)、`threatAdapter.test.ts`(新)
-- **安全網**: `threatAdapter.test.ts`（wasm == TS を全コーパス照合、**黒長連ケース必須**）。`bitboard.initFromCells` 忘れがパリティで即露見
-- **実装者向け注意**: classifyPointWasm を使わない旨をコメント明記
+- **Zigに移す**: 新規 `zig/src/threat_wasm.zig`(thin、**実測 27.9KB**)。export: `boardInit`/`boardSet`/`syncBitboard`(=`bitboard.initFromCells`) + `classifyThreatWasm(row,col,color)->u8`（bit0=four, bit1=openThree、内部で `vct.classifyThreat`、(r,c) 配置済前提）。vct.zig を import するが Zig のデッドコード削除で classifyThreat 到達グラフのみ＝thin。
+- **触る**: `zig/src/threat_wasm.zig`(新)、`zig/build.zig`(3つ目 thin wasm target `threat` + チェックリスト JSDoc)、`src/logic/cpu/wasm/threatLoader.ts`(新, `loadWasmBuffer` 再利用)、`src/logic/cpu/wasm/threatAdapter.ts`(新, `classifyThreat`/`createsFour`/`createsOpenThree`・未ロード時TSフォールバック)、`threatAdapter.test.ts`(新)、`.oxlintrc.json`(test の no-bitwise override 追加)
+- **API**: `classifyThreat(board,r,c,color)→{createsFour,createsOpenThree}` 一括（候補は配置済規約=TS createsFour と同一）。`createsFour`/`createsOpenThree` は一括の薄いラッパ。bit 展開は算術（`bits===1||bits===3` 等、no-bitwise 準拠）。
+- **安全網**: `threatAdapter.test.ts`（wasm == TS createsFour/createsOpenThree を全空き点・両色・決定的乱数局面 d=0.25/0.4/0.55＝**黒長連を踏む**で照合、27 tests 緑）。
+- **性能ノート（/review 反映）**: 1呼び出し=全盤同期 O(225)。PR3 の利用点（候補少数）は問題なし。盤面全走査用途（PR6）は基盤盤面を1度同期し wasm 内で各点評価する**バッチAPI**を別途用意し O(n²) を回避すること（ハッシュキャッシュは盤面が点ごとに変わるため無効＝採用せず、adapter にノート明記）。
+- **利用者ゼロ**: 起動時 preload（main.ts）は **PR3 で配線**（PR2 は adapter 未呼び出し＝完全 no-op）。PR3 で preloadThreatWasm を忘れると TS フォールバックのまま（正しさは不変だが Zig 未使用）になる点に注意。
+- **ゲート結果**: vue-tsc 0 / oxlint 0 / zig build test 緑 / unit 1799 tests 緑。
 
 ### PR3 — `createsFour`/`createsOpenThree` 利用点を adapter へ張替（patterns.ts 依存を最初に剥がす）
 

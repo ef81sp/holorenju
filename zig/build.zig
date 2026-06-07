@@ -35,6 +35,25 @@ pub fn build(b: *std.Build) void {
     forbidden_lib.rdynamic = true;
     b.installArtifact(forbidden_lib);
 
+    // 脅威分類専用 thin wasm（#37 P3 PR2。review/メイン用。vct.classifyThreat を唯一の真実とする3つ目の出力）
+    //
+    // 3つ目以降の thin wasm 追加チェックリスト:
+    //   1. 依存は board + 真実関数の到達グラフのみ（Zig のデッドコード削除で thin に保つ）
+    //   2. bitboard.global_bb に依存する関数（line_lookup 経由）を使うなら syncBitboard を export
+    //   3. TS 側 loader は src/logic/cpu/wasm/loader.ts:loadWasmBuffer を再利用（DRY）
+    const threat_module = b.createModule(.{
+        .root_source_file = b.path("src/threat_wasm.zig"),
+        .target = wasm_target,
+        .optimize = .ReleaseFast,
+    });
+    const threat_lib = b.addExecutable(.{
+        .name = "threat",
+        .root_module = threat_module,
+    });
+    threat_lib.entry = .disabled;
+    threat_lib.rdynamic = true;
+    b.installArtifact(threat_lib);
+
     // Native test step (runs on host, not WASM)
     const native_target = b.resolveTargetQuery(.{});
 
