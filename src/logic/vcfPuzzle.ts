@@ -6,12 +6,14 @@
 
 import type { BoardState, Position } from "@/types/game";
 
-import { createsFour } from "@/logic/cpu/search/threatMoves";
 import {
   findWinningMove,
   getFourDefensePosition,
 } from "@/logic/cpu/search/threatPatterns";
 import { isForbiddenForBlack } from "@/logic/cpu/wasm/forbiddenAdapter";
+// #37 P3 PR3: 四判定を Zig 単一ソース(vct.classifyThreat)経由に（禁手は P2 で Zig 化済）。
+// wasm 未ロード時は threatAdapter 内で TS createsFour にフォールバック。
+import { createsFour } from "@/logic/cpu/wasm/threatAdapter";
 import { checkFive } from "@/logic/renjuRules/core";
 
 const BOARD_SIZE = 15;

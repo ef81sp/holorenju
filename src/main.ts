@@ -5,6 +5,7 @@ import VueKonva from "vue-konva";
 
 import "./style.css";
 import { preloadForbiddenWasm } from "@/logic/cpu/wasm/forbiddenAdapter";
+import { preloadThreatWasm } from "@/logic/cpu/wasm/threatAdapter";
 
 import App from "./App.vue";
 
@@ -19,6 +20,12 @@ app.mount("#app");
 // 失敗しても isForbiddenForBlack が TS フォールバックするためクラッシュしない。
 preloadForbiddenWasm().catch((e: unknown) => {
   console.error("禁手 wasm のプリロードに失敗（TS フォールバックで継続）", e);
+});
+
+// 脅威分類 thin wasm（28KB）を非ブロッキングでプリロード（#37 P3。vcfPuzzle の四判定用）。
+// 失敗しても createsFour が TS フォールバックするためクラッシュしない。
+preloadThreatWasm().catch((e: unknown) => {
+  console.error("脅威 wasm のプリロードに失敗（TS フォールバックで継続）", e);
 });
 
 const updateSW = registerSW({
