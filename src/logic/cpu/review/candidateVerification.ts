@@ -7,6 +7,7 @@
 import type { BoardState } from "@/types/game";
 import type { ForcedLossResult, ReviewCandidate } from "@/types/review";
 
+import type { VCFSearchOptions } from "../search/types";
 import type { WasmSearchEngine } from "../wasm/searchEngine";
 
 import { createsFour, createsOpenThree } from "../search/threatMoves";
@@ -145,13 +146,15 @@ export function annotateFukumiMoves(
   board: BoardState,
   color: "black" | "white",
   wasmSearchEngine: WasmSearchEngine,
+  // テスト時に timeLimit=Infinity を注入し決定的にするためのフック（本番は既定値）。
+  vcfOptions: VCFSearchOptions = REVIEW_VCF_OPTIONS,
 ): void {
   // 置く前にVCFがあるならフクミ手は存在しない（既に強制勝ち局面）
   const existingVcf = wasmFindVCFSequence(
     wasmSearchEngine,
     board,
     color,
-    REVIEW_VCF_OPTIONS,
+    vcfOptions,
   );
   if (existingVcf) {
     return;
@@ -179,7 +182,7 @@ export function annotateFukumiMoves(
         wasmSearchEngine,
         board,
         color,
-        REVIEW_VCF_OPTIONS,
+        vcfOptions,
       );
       if (vcfResult) {
         cand.isFukumi = true;
