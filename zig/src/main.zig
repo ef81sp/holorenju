@@ -3,6 +3,7 @@ const board = @import("board.zig");
 const evaluate = @import("evaluate.zig");
 const forbidden = @import("forbidden.zig");
 const ft = @import("forced_win_tree.zig");
+const jump_patterns = @import("jump_patterns.zig");
 const patterns = @import("patterns.zig");
 const search = @import("search.zig");
 const position_eval = @import("position_eval.zig");
@@ -42,6 +43,58 @@ export fn wasmGetPatternScore(count: u8, end1: u8, end2: u8) i32 {
 }
 export fn wasmGetPatternType(count: u8, end1: u8, end2: u8) u8 {
     return patterns.wasmGetPatternType(count, end1, end2);
+}
+
+// === パリティテスト用 export（#21）===
+// TS (renjuRules/patterns.ts, forbiddenMoves.ts) と Zig の連珠判定が一致することを
+// CI で検証するためのオラクル。本番探索からは未使用。詳細: docs/plans/issue-21-forbidden-wasm.md
+//
+// 配置規約: 禁手判定は候補マスが「空き」の状態で呼ぶ（内部で黒を仮置きする）。
+// パターン判定は候補マスに color を「配置済み」で呼ぶ（checkJumpFour が生 cells の
+// 中心を same として読むため）。両規約を本関数内で吸収する。
+//
+// ビットレイアウト（u32）: dir d (0..3) が bit [d*6 .. d*6+5] を占有:
+//   +0 four / +1 open4 / +2 open3 / +3 straightFour / +4 jumpFour / +5 jumpThree
+// 禁手種別 (ForbiddenType 0..3, 黒のみ) は bit 24-25。
+export fn classifyPointWasm(row: u8, col: u8, color: u8) u32 {
+    const c: board.Cell = @enumFromInt(color);
+    var bits: u32 = 0;
+
+    // Phase A: 禁手（候補は空きのまま。黒のみ意味を持つ）
+    if (color == 1) {
+        const ftype = forbidden.checkForbiddenMove(&board.board_cells, row, col);
+        bits |= @as(u32, @intFromEnum(ftype)) << 24;
+    }
+
+    // Phase B: パターン（候補を配置して評価し、最後に復元）
+    const idx = @as(u16, row) * board.BOARD_SIZE + col;
+    const original = board.board_cells[idx];
+    board.board_cells[idx] = c;
+    var dir: u8 = 0;
+    while (dir < 4) : (dir += 1) {
+        const op = jump_patterns.checkOpenPattern(&board.board_cells, row, col, dir, c);
+        const sf = jump_patterns.checkStraightFour(&board.board_cells, row, col, dir, c);
+        const jf = jump_patterns.checkJumpFour(&board.board_cells, row, col, dir, c);
+        const jt = jump_patterns.checkJumpThree(&board.board_cells, row, col, dir, c);
+        const b: u5 = @intCast(dir * 6);
+        bits |= @as(u32, @intFromBool(op.four)) << b;
+        bits |= @as(u32, @intFromBool(op.open4)) << (b + 1);
+        bits |= @as(u32, @intFromBool(op.open3)) << (b + 2);
+        bits |= @as(u32, @intFromBool(sf)) << (b + 3);
+        bits |= @as(u32, @intFromBool(jf)) << (b + 4);
+        bits |= @as(u32, @intFromBool(jt)) << (b + 5);
+    }
+    board.board_cells[idx] = original;
+    return bits;
+}
+
+// 飛び三の達四点（0..1点）を返す。pack: bit0=found, bit8-15=row, bit16-23=col。
+// getLine が中心を内部設定するため配置非依存。
+export fn getJumpThreeStraightFourPointsWasm(row: u8, col: u8, dir_index: u8, color: u8) u32 {
+    const c: board.Cell = @enumFromInt(color);
+    const r = jump_patterns.getJumpThreeStraightFourPoints(&board.board_cells, row, col, dir_index, c);
+    if (!r.found) return 0;
+    return 1 | (@as(u32, r.point.row) << 8) | (@as(u32, r.point.col) << 16);
 }
 
 // Evaluate exports

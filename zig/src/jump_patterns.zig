@@ -1,3 +1,6 @@
+// ⚠️ 連珠ルールの二重実装: ここの活三/飛び四/飛び三/達四判定は TS 側
+// `src/logic/renjuRules/patterns.ts` の6関数と1:1対応する。片方だけ変更すると
+// サイレントに食い違う。変更すると `renjuParity.test.ts` が落ちる。両方を直すこと。
 const board_mod = @import("board.zig");
 const std = @import("std");
 

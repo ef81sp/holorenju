@@ -61,6 +61,12 @@
         "no-console": "off",
         "no-await-in-loop": "off"
       }
+    },
+    {
+      "files": ["**/renjuParity.test.ts"],
+      "rules": {
+        "no-bitwise": "off"
+      }
     }
   ],
   "ignorePatterns": ["node_modules/", "dist/", "build/", "coverage/", ".git/"]
