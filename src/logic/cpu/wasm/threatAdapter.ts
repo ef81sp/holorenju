@@ -23,6 +23,7 @@ import {
   detectOpponentThreats as detectOpponentThreatsTs,
   type ThreatInfo,
 } from "@/logic/cpu/evaluation";
+import { createsFourThree as createsFourThreeTs } from "@/logic/cpu/evaluation/winningPatterns";
 import {
   createsFour as createsFourTs,
   createsOpenThree as createsOpenThreeTs,
@@ -119,6 +120,30 @@ export function createsOpenThree(
   color: "black" | "white",
 ): boolean {
   return classifyThreat(board, row, col, color).createsOpenThree;
+}
+
+/**
+ * (row,col)（**空き**前提）に color を打つと四三ができるか（黒は禁手考慮）。
+ * wasm 経由は Zig `evaluate.createsFourThree`。未ロード時は TS にフォールバック。
+ * 契約は TS `createsFourThree` と同じく**候補は空き**（内部で仮置き・復元）。
+ */
+export function createsFourThree(
+  board: BoardState,
+  row: number,
+  col: number,
+  color: "black" | "white",
+): boolean {
+  if (wasm) {
+    syncBoard(wasm, board);
+    return (
+      wasm.createsFourThreeWasm(
+        row,
+        col,
+        color === "black" ? CELL.BLACK : CELL.WHITE,
+      ) !== 0
+    );
+  }
+  return createsFourThreeTs(board, row, col, color);
 }
 
 /** wasm バッファから ThreatInfo の1リスト（[count][count*(row,col)]）を読み出す。 */
