@@ -29,6 +29,7 @@ import { wasmFindVCTSequence } from "./review/wasmAdapters";
 import { VCT_STONE_THRESHOLD } from "./search/types";
 import { loadWasmModule } from "./wasm/loader";
 import { WasmSearchEngine } from "./wasm/searchEngine";
+import { preloadThreatWasm } from "./wasm/threatAdapter";
 
 /** WASM モジュール（初回ロード後にキャッシュ） */
 let cachedWasm: WasmModuleContext | null = null;
@@ -37,7 +38,10 @@ async function getWasmModule(): Promise<WasmModuleContext> {
   if (cachedWasm) {
     return cachedWasm;
   }
+  // #37 P3 PR3: 脅威分類 thin wasm も同時にロード（candidateVerification の四/活三判定用）。
+  // 未ロード時は threatAdapter が TS フォールバックするため、失敗してもクラッシュしない。
   cachedWasm = await loadWasmModule();
+  await preloadThreatWasm();
   return cachedWasm;
 }
 
