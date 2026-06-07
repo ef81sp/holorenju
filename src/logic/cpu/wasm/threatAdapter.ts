@@ -17,8 +17,12 @@
  * 点ごとに呼ぶ用途（PR6 の findThreatMoves 等）を Zig 化する際は、基盤盤面を 1 度同期して
  * wasm 内で各点を配置・評価する**バッチ API** を別途用意し、点ごとの全盤再同期 O(n²) を避けること。
  */
-import type { BoardState } from "@/types/game";
+import type { BoardState, Position } from "@/types/game";
 
+import {
+  detectOpponentThreats as detectOpponentThreatsTs,
+  type ThreatInfo,
+} from "@/logic/cpu/evaluation";
 import {
   createsFour as createsFourTs,
   createsOpenThree as createsOpenThreeTs,
@@ -115,4 +119,52 @@ export function createsOpenThree(
   color: "black" | "white",
 ): boolean {
   return classifyThreat(board, row, col, color).createsOpenThree;
+}
+
+/** wasm バッファから ThreatInfo の1リスト（[count][count*(row,col)]）を読み出す。 */
+function readPositionList(
+  mem: Uint8Array,
+  offset: number,
+): { positions: Position[]; next: number } {
+  const count = mem[offset] ?? 0;
+  let o = offset + 1;
+  const positions: Position[] = [];
+  for (let i = 0; i < count; i++) {
+    positions.push({ row: mem[o] ?? 0, col: mem[o + 1] ?? 0 });
+    o += 2;
+  }
+  return { positions, next: o };
+}
+
+/**
+ * opponentColor の脅威（活四/止め四/活三/ミセ/三三の各防御位置）を検出する（#37 P3 PR4）。
+ * wasm 経由は Zig `threats.detectOpponentThreats`。未ロード時は TS にフォールバック。
+ */
+export function detectOpponentThreats(
+  board: BoardState,
+  opponentColor: "black" | "white",
+): ThreatInfo {
+  if (wasm) {
+    syncBoard(wasm, board);
+    wasm.detectOpponentThreatsWasm(
+      opponentColor === "black" ? CELL.BLACK : CELL.WHITE,
+    );
+    const mem = new Uint8Array(wasm.memory.buffer);
+    let off = wasm.getThreatInfoBuffer();
+    const openFours = readPositionList(mem, off);
+    const fours = readPositionList(mem, openFours.next);
+    const openThrees = readPositionList(mem, fours.next);
+    const mises = readPositionList(mem, openThrees.next);
+    const doubleThrees = readPositionList(mem, mises.next);
+    off = doubleThrees.next;
+    return {
+      openFours: openFours.positions,
+      fours: fours.positions,
+      openThrees: openThrees.positions,
+      mises: mises.positions,
+      doubleThrees: doubleThrees.positions,
+    };
+  }
+  // フォールバック（wasm 未ロード時）
+  return detectOpponentThreatsTs(board, opponentColor);
 }

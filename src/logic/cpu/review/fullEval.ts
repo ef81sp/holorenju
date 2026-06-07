@@ -26,7 +26,6 @@ import type { WasmSearchEngine } from "../wasm/searchEngine";
 
 import { countStones } from "../core/boardUtils";
 import {
-  detectOpponentThreats,
   evaluatePositionWithBreakdown,
   evaluateBoardWithBreakdown,
   PATTERN_SCORES,
@@ -34,6 +33,9 @@ import {
 import { findMiseTargets } from "../evaluation/miseTactics";
 import { colorToWasm } from "../wasm/boardAdapter";
 import { linearTreeFromSequence } from "../wasm/forcedWinTreeWire";
+// #37 P3 PR4: 脅威検出を Zig 単一ソース(threats.detectOpponentThreats)経由に。
+// 合法局面で TS と一致（threatAdapter.test 検証済）。未ロード時は TS フォールバック。
+import { detectOpponentThreats } from "../wasm/threatAdapter";
 import {
   verifyCandidates,
   findSafeBest,
