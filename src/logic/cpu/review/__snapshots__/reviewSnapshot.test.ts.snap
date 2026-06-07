@@ -1,0 +1,516 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`review 戦術出力スナップショット (#37 P0) > checkForcedLoss: 'mise-vcf-#18' 1`] = `
+{
+  "sequence": [
+    {
+      "col": 6,
+      "row": 9,
+    },
+    {
+      "col": 8,
+      "row": 11,
+    },
+    {
+      "col": 4,
+      "row": 7,
+    },
+    {
+      "col": 3,
+      "row": 6,
+    },
+    {
+      "col": 4,
+      "row": 9,
+    },
+    {
+      "col": 3,
+      "row": 10,
+    },
+    {
+      "col": 4,
+      "row": 8,
+    },
+  ],
+  "type": "mise-vcf",
+}
+`;
+
+exports[`review 戦術出力スナップショット (#37 P0) > checkForcedLoss: 'white29-m20' 1`] = `
+{
+  "sequence": [
+    {
+      "col": 9,
+      "row": 6,
+    },
+    {
+      "col": 9,
+      "row": 5,
+    },
+    {
+      "col": 9,
+      "row": 7,
+    },
+    {
+      "col": 9,
+      "row": 10,
+    },
+    {
+      "col": 10,
+      "row": 7,
+    },
+    {
+      "col": 11,
+      "row": 7,
+    },
+    {
+      "col": 8,
+      "row": 5,
+    },
+  ],
+  "type": "vct",
+}
+`;
+
+exports[`review 戦術出力スナップショット (#37 P0) > checkForcedLoss: 'white29-m24' 1`] = `
+{
+  "sequence": [
+    {
+      "col": 10,
+      "row": 7,
+    },
+    {
+      "col": 11,
+      "row": 7,
+    },
+    {
+      "col": 8,
+      "row": 5,
+    },
+  ],
+  "type": "vcf",
+}
+`;
+
+exports[`review 戦術出力スナップショット (#37 P0) > detectForcedWin: 'mise-vcf-#18' 1`] = `
+{
+  "doubleMiseBestMove": null,
+  "doubleMiseMoves": [],
+  "forcedWin": {
+    "firstMove": {
+      "col": 6,
+      "row": 9,
+    },
+    "isForbiddenTrap": false,
+    "sequence": [
+      {
+        "col": 6,
+        "row": 9,
+      },
+      {
+        "col": 8,
+        "row": 11,
+      },
+      {
+        "col": 4,
+        "row": 7,
+      },
+      {
+        "col": 3,
+        "row": 6,
+      },
+      {
+        "col": 4,
+        "row": 9,
+      },
+      {
+        "col": 3,
+        "row": 10,
+      },
+      {
+        "col": 4,
+        "row": 8,
+      },
+    ],
+    "tree": {
+      "attackerMove": {
+        "col": 6,
+        "row": 9,
+      },
+      "defenses": [
+        {
+          "defenderMove": {
+            "col": 4,
+            "row": 7,
+          },
+          "next": {
+            "attackerMove": {
+              "col": 8,
+              "row": 11,
+            },
+            "defenses": [
+              {
+                "defenderMove": {
+                  "col": 9,
+                  "row": 12,
+                },
+                "next": {
+                  "attackerMove": {
+                    "col": 10,
+                    "row": 11,
+                  },
+                  "defenses": [],
+                },
+              },
+            ],
+          },
+        },
+        {
+          "defenderMove": {
+            "col": 8,
+            "row": 11,
+          },
+          "next": {
+            "attackerMove": {
+              "col": 4,
+              "row": 7,
+            },
+            "defenses": [
+              {
+                "defenderMove": {
+                  "col": 3,
+                  "row": 6,
+                },
+                "next": {
+                  "attackerMove": {
+                    "col": 4,
+                    "row": 9,
+                  },
+                  "defenses": [
+                    {
+                      "defenderMove": {
+                        "col": 3,
+                        "row": 10,
+                      },
+                      "next": {
+                        "attackerMove": {
+                          "col": 4,
+                          "row": 8,
+                        },
+                        "defenses": [],
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        },
+      ],
+    },
+  },
+  "forcedWinType": "mise-vcf",
+}
+`;
+
+exports[`review 戦術出力スナップショット (#37 P0) > detectForcedWin: 'white29-m20' 1`] = `
+{
+  "doubleMiseBestMove": null,
+  "doubleMiseMoves": [],
+  "forcedWin": {
+    "firstMove": {
+      "col": 9,
+      "row": 6,
+    },
+    "isForbiddenTrap": false,
+    "sequence": [
+      {
+        "col": 9,
+        "row": 6,
+      },
+      {
+        "col": 9,
+        "row": 5,
+      },
+      {
+        "col": 9,
+        "row": 7,
+      },
+      {
+        "col": 9,
+        "row": 10,
+      },
+      {
+        "col": 10,
+        "row": 7,
+      },
+      {
+        "col": 11,
+        "row": 7,
+      },
+      {
+        "col": 8,
+        "row": 5,
+      },
+    ],
+    "tree": {
+      "attackerMove": {
+        "col": 9,
+        "row": 6,
+      },
+      "defenses": [
+        {
+          "defenderMove": {
+            "col": 9,
+            "row": 5,
+          },
+          "next": {
+            "attackerMove": {
+              "col": 9,
+              "row": 7,
+            },
+            "defenses": [
+              {
+                "defenderMove": {
+                  "col": 9,
+                  "row": 10,
+                },
+                "next": {
+                  "attackerMove": {
+                    "col": 10,
+                    "row": 7,
+                  },
+                  "defenses": [
+                    {
+                      "defenderMove": {
+                        "col": 11,
+                        "row": 7,
+                      },
+                      "next": {
+                        "attackerMove": {
+                          "col": 8,
+                          "row": 5,
+                        },
+                        "defenses": [],
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        },
+        {
+          "defenderMove": {
+            "col": 9,
+            "row": 7,
+          },
+          "next": {
+            "attackerMove": {
+              "col": 6,
+              "row": 3,
+            },
+            "defenses": [
+              {
+                "defenderMove": {
+                  "col": 5,
+                  "row": 2,
+                },
+                "next": {
+                  "attackerMove": {
+                    "col": 7,
+                    "row": 3,
+                  },
+                  "defenses": [
+                    {
+                      "defenderMove": {
+                        "col": 7,
+                        "row": 5,
+                      },
+                      "next": {
+                        "attackerMove": {
+                          "col": 8,
+                          "row": 3,
+                        },
+                        "defenses": [
+                          {
+                            "defenderMove": {
+                              "col": 9,
+                              "row": 2,
+                            },
+                            "next": {
+                              "attackerMove": {
+                                "col": 5,
+                                "row": 3,
+                              },
+                              "defenses": [],
+                            },
+                          },
+                        ],
+                      },
+                    },
+                  ],
+                },
+              },
+              {
+                "defenderMove": {
+                  "col": 8,
+                  "row": 5,
+                },
+                "next": {
+                  "attackerMove": {
+                    "col": 7,
+                    "row": 3,
+                  },
+                  "defenses": [
+                    {
+                      "defenderMove": {
+                        "col": 7,
+                        "row": 5,
+                      },
+                      "next": {
+                        "attackerMove": {
+                          "col": 8,
+                          "row": 3,
+                        },
+                        "defenses": [
+                          {
+                            "defenderMove": {
+                              "col": 9,
+                              "row": 2,
+                            },
+                            "next": {
+                              "attackerMove": {
+                                "col": 5,
+                                "row": 3,
+                              },
+                              "defenses": [],
+                            },
+                          },
+                        ],
+                      },
+                    },
+                  ],
+                },
+              },
+              {
+                "defenderMove": {
+                  "col": 10,
+                  "row": 7,
+                },
+                "next": {
+                  "attackerMove": {
+                    "col": 7,
+                    "row": 3,
+                  },
+                  "defenses": [
+                    {
+                      "defenderMove": {
+                        "col": 7,
+                        "row": 5,
+                      },
+                      "next": {
+                        "attackerMove": {
+                          "col": 8,
+                          "row": 3,
+                        },
+                        "defenses": [
+                          {
+                            "defenderMove": {
+                              "col": 9,
+                              "row": 2,
+                            },
+                            "next": {
+                              "attackerMove": {
+                                "col": 5,
+                                "row": 3,
+                              },
+                              "defenses": [],
+                            },
+                          },
+                        ],
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        },
+        {
+          "defenderMove": {
+            "col": 9,
+            "row": 10,
+          },
+          "next": {
+            "attackerMove": {
+              "col": 9,
+              "row": 7,
+            },
+            "defenses": [
+              {
+                "defenderMove": {
+                  "col": 9,
+                  "row": 5,
+                },
+                "next": {
+                  "attackerMove": {
+                    "col": 10,
+                    "row": 7,
+                  },
+                  "defenses": [
+                    {
+                      "defenderMove": {
+                        "col": 11,
+                        "row": 7,
+                      },
+                      "next": {
+                        "attackerMove": {
+                          "col": 8,
+                          "row": 5,
+                        },
+                        "defenses": [],
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        },
+      ],
+    },
+  },
+  "forcedWinType": "vct",
+}
+`;
+
+exports[`review 戦術出力スナップショット (#37 P0) > detectForcedWin: 'white29-m24' 1`] = `
+{
+  "doubleMiseBestMove": null,
+  "doubleMiseMoves": [],
+  "forcedWin": {
+    "firstMove": {
+      "col": 10,
+      "row": 7,
+    },
+    "isForbiddenTrap": false,
+    "sequence": [
+      {
+        "col": 10,
+        "row": 7,
+      },
+      {
+        "col": 11,
+        "row": 7,
+      },
+      {
+        "col": 8,
+        "row": 5,
+      },
+    ],
+    "tree": undefined,
+  },
+  "forcedWinType": "vcf",
+}
+`;
