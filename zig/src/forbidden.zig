@@ -1,3 +1,6 @@
+// ⚠️ 連珠ルールの二重実装: 禁手判定は TS 側 `src/logic/renjuRules/forbiddenMoves.ts` と
+// 同義。片方だけ変更するとサイレントに食い違う（#19 で実害）。変更すると
+// `renjuParity.test.ts`（TS⇄Zig パリティテスト）が落ちる。両方を直すこと。
 const board_mod = @import("board.zig");
 const jp = @import("jump_patterns.zig");
 const std = @import("std");

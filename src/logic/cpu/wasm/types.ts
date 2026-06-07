@@ -23,6 +23,15 @@ export interface WasmModuleContext {
     color: number,
   ) => number;
 
+  // Parity oracle (#21): TS⇄Zig 連珠判定の一致検証用。本番探索からは未使用。
+  classifyPointWasm: (row: number, col: number, color: number) => number;
+  getJumpThreeStraightFourPointsWasm: (
+    row: number,
+    col: number,
+    dirIndex: number,
+    color: number,
+  ) => number;
+
   // Pattern scoring
   evaluateDirectionScores: (row: number, col: number, color: number) => number;
   wasmGetPatternScore: (count: number, end1: number, end2: number) => number;

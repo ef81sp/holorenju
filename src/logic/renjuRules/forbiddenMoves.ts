@@ -1,5 +1,9 @@
 /**
  * 禁手判定: 三三禁、四四禁、長連禁の検出
+ *
+ * ⚠️ 連珠ルールの二重実装: このロジックは Zig 側 `zig/src/forbidden.zig` と同義であり、
+ * 片方だけ変更するとサイレントに食い違う（#19 で実害）。変更すると
+ * `renjuParity.test.ts`（TS⇄Zig パリティテスト）が落ちる。両方を直すこと。
  */
 
 import type { BoardState, ForbiddenMoveResult, Position } from "@/types/game";

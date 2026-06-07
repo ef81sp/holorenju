@@ -131,6 +131,7 @@ pnpm build         # 本番ビルド
 
 ## 連珠の知識
 
+- **連珠ルール（禁手・パターン判定）は TS (`src/logic/renjuRules/`) と Zig (`zig/src/forbidden.zig`, `jump_patterns.zig`) に二重実装されている。どちらかを変更したら必ず両方を直し、`renjuParity.test.ts`（TS⇄Zig パリティテスト）が緑か確認すること。**
 - 連珠は15×15の盤で行う
 - 黒が先手で、禁手あり（三三、四四、長連）
 - 勝利条件: 横・縦・斜めに先に5つ石を並べること

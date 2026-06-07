@@ -1,5 +1,9 @@
 /**
  * パターン判定: 活三・活四・飛び三・飛び四・達四の検出
+ *
+ * ⚠️ 連珠ルールの二重実装: ここの6関数は Zig 側 `zig/src/jump_patterns.zig` と1:1対応する。
+ * 片方だけ変更するとサイレントに食い違う。変更すると `renjuParity.test.ts`
+ * （TS⇄Zig パリティテスト）が落ちる。両方を直すこと。
  */
 
 import type { BoardState, Position, StoneColor } from "@/types/game";
