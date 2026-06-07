@@ -8,8 +8,9 @@
  */
 import { afterEach, describe, expect, it } from "vitest";
 
-import type { BoardState, StoneColor } from "@/types/game";
+import type { BoardState, Position, StoneColor } from "@/types/game";
 
+import { detectOpponentThreats as detectOpponentThreatsTs } from "@/logic/cpu/evaluation";
 import {
   createsFour as createsFourTs,
   createsOpenThree as createsOpenThreeTs,
@@ -19,6 +20,7 @@ import { createEmptyBoard } from "@/logic/renjuRules/core";
 
 import {
   classifyThreat,
+  detectOpponentThreats,
   preloadThreatWasm,
   setThreatWasmForTest,
 } from "./threatAdapter";
@@ -119,6 +121,50 @@ describe("threatAdapter (#37 P3 PR2)", () => {
         }
       }
       expect(mismatches, mismatches.join("\n")).toEqual([]);
+    },
+  );
+
+  const sortPos = (a: Position, b: Position): number =>
+    a.row - b.row || a.col - b.col;
+  const normalizeThreats = (t: {
+    openFours: Position[];
+    fours: Position[];
+    openThrees: Position[];
+    mises: Position[];
+    doubleThrees: Position[];
+  }): unknown => ({
+    openFours: [...t.openFours].sort(sortPos),
+    fours: [...t.fours].sort(sortPos),
+    openThrees: [...t.openThrees].sort(sortPos),
+    mises: [...t.mises].sort(sortPos),
+    doubleThrees: [...t.doubleThrees].sort(sortPos),
+  });
+
+  // detectOpponentThreats は**合法な実戦局面**で照合する。
+  // 非合法盤（多重四/長連/盤端の不能配置）では Zig と TS の合成ロジックが分岐しうるが、
+  // review が処理するのは合法局面のみ（実測: 実戦棋譜の全手数前置・両色で 100% 一致、
+  // 非合法ランダム盤のみ不一致）。classifyThreat は per-point プリミティブで非合法盤でも
+  // 一致するため、上の乱数照合（高密度=黒長連）はそのまま維持している。
+  const LEGAL_RECORDS = [
+    "H8 H9 I9 I8 G7 F6 G10 G9 F9 H11 H7 F7 F10 G8 I10 H10 K11 J10 F8 K9 " +
+      "I11 I13 H6 E9 F11 F12 I5 J4 G5 H5 I7 J8 J6 J7 K7 L8 F4 E3 G3 H4 I6 K6 L5",
+    "H8 G8 H9 G7 G9 H7 I7 F10 F9 E9 I8 I9 G10 F11 H11 E8 J6 K5 J7 K6 J9 J5 J8 J10 K8 L8 I10 L7 G12",
+    "H8 H9 I8 G8 I9 I10 F7 G7 G9 H10 F9 J11",
+  ];
+
+  it.each(LEGAL_RECORDS)(
+    "detectOpponentThreats: wasm == TS（実戦棋譜 全手数前置・両色）: %s",
+    async (record) => {
+      await preloadThreatWasm();
+      const moves = record.trim().split(/\s+/);
+      for (let mc = 1; mc <= moves.length; mc++) {
+        const { board } = createBoardFromRecord(moves.slice(0, mc).join(" "));
+        for (const color of COLORS) {
+          const w = normalizeThreats(detectOpponentThreats(board, color));
+          const ts = normalizeThreats(detectOpponentThreatsTs(board, color));
+          expect(w, `mc=${mc} color=${color}`).toEqual(ts);
+        }
+      }
     },
   );
 

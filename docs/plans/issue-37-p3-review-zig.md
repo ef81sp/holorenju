@@ -73,12 +73,14 @@ review（振り返り）の戦術計算はすべて Zig。TS は「プレゼン�
 - **ゲート結果**: vue-tsc 0 / oxlint 0 / unit 1799 緑。
 - `threatMoves.ts` 本体はフォールバックとして当面残置（削除は P4）。残る createsFour 利用点（threatPatterns/vcfCheck/vctValidation/search index export）は PR4+ 対象。
 
-### PR4 — `detectOpponentThreats` を Zig 委譲（review 中核・最大の利用点削減）
+### PR4 — `detectOpponentThreats` を Zig 委譲（review 中核・最大の利用点削減）【実装済】
 
-- **Zigに移す**: `threats.detectOpponentThreats`(既存) を threat_wasm に export、ThreatInfo を wire 化（`forced_win_tree` の wire が前例）
-- **触る**: `zig/src/threat_wasm.zig`、`threatAdapter.ts`、`src/logic/cpu/review/fullEval.ts`、`forcedLossCheck.ts`。**main search の `moveOrdering.ts` は別系統＝触らない**（`detectOpponentThreatsFast` との混同注意）
-- **利用点削減**: **−3**
-- **安全網**: PR0拡張 reviewSnapshot + adapter test に ThreatInfo 全フィールド照合（各リスト座標ソート）
+- **重大な発見（着手時に検証）**: Zig `threats.detectOpponentThreats` と TS `detectOpponentThreats` は**非合法盤（多重四・長連・盤端の不能配置）で食い違う**（mises/openFours 等、合成ロジックの差）。が、**review が処理するのは合法な実戦局面のみ**で、実測で**実戦棋譜の全手数前置・両色 約168局面が 100% 一致**、不一致は非合法ランダム盤のみ。よって Zig 委譲は実戦で挙動同値＝安全。
+- **Zigに移す**: `threats.detectOpponentThreats`(既存) を threat_wasm に export。ThreatInfo(5リスト×PositionList cap=64) を `[u8 count][count*(row,col)]` でバッファ wire（`getThreatInfoBuffer` + `memory` 読み出し）。threat.wasm は 27.9KB→**113KB**（evaluate スタックを引く）。
+- **触る**: `zig/src/threat_wasm.zig`(export追加)、`threatLoader.ts`(memory/buffer)、`threatAdapter.ts`(detectOpponentThreats)、`threatAdapter.test.ts`(**合法局面ベース**の等価テスト)、`fullEval.ts`(L385/L407)、`forcedLossCheck.ts`(L324)、`review.worker.ts`(L79)。**main search の `moveOrdering.ts`/`detectOpponentThreatsFast` は不触**。
+- **利用点削減**: **−3**（fullEval/forcedLossCheck/worker が evaluation の detectOpponentThreats→patterns.ts を踏まなくなった）
+- **安全網**: 等価テストは**合法局面**で照合（非合法盤は review 非対象なので除外、classifyThreat の乱数照合は per-point なので維持）。**reviewSnapshot を threat wasm preload 付きに強化**＝本番(worker)と同じ Zig 経路で実戦コーパス（candidate 仮置き盤含む checkCandidateForcedLoss/annotateFukumiMoves）を golden(TS) と照合し**バイト不変を実証**（最強ガード）。
+- **ゲート結果**: vue-tsc 0 / oxlint 0 / zig build test 緑 / unit 1802 緑 / reviewSnapshot 不変。
 
 ### PR5 — Mise系（`createsFourThree`/`findMiseTargets`/`findDoubleMiseMoves`）差分検証→委譲
 
