@@ -172,6 +172,81 @@ pub fn createsFourThree(cells: []Cell, row: u8, col: u8, color: Cell) bool {
     return false;
 }
 
+/// ミセターゲット（四三点）を1点追加（空き・未追加・黒禁手除外・createsFourThree 検証）。
+/// TS miseTactics.ts findMiseTargets の tryAdd に対応。
+fn miseTryAdd(cells: []Cell, result: *threats.PositionList, seen: []bool, r: i16, c: i16, color: Cell) void {
+    if (!board_mod.isValid(r, c)) return;
+    const ur: u8 = @intCast(r);
+    const uc: u8 = @intCast(c);
+    const key: u16 = @as(u16, ur) * BOARD_SIZE + uc;
+    if (seen[key]) return;
+    if (cells[key] != .empty) return;
+    if (color == .black and forbidden.checkForbiddenMove(cells, ur, uc) != .none) return;
+    if (createsFourThree(cells, ur, uc, color)) {
+        seen[key] = true;
+        result.push(.{ .row = ur, .col = uc });
+    }
+}
+
+/// ミセターゲット（四三点）を検出（TS miseTactics.ts findMiseTargets full に対応）。
+/// (row,col) は color のミセ手を**配置済み**前提。各方向のライン延長点（飛び四 gap+1 含む）と
+/// ±2 近傍をスキャンする。呼び出し前に bitboard を cells と同期しておくこと。
+pub fn findMiseTargets(cells: []Cell, row: u8, col: u8, color: Cell) threats.PositionList {
+    var result = threats.PositionList.init();
+    var seen = [_]bool{false} ** CELL_COUNT;
+
+    // 1. 各方向のライン延長点（距離制限なし）
+    for (DIRECTIONS, 0..) |dir, di| {
+        const lut = ll.queryPatternByCell(row, col, di, color);
+        if (lut.count < 2) continue; // 2石未満 → 四三不可能
+
+        // 正方向の端
+        var r: i16 = @as(i16, row) + dir.dr;
+        var c: i16 = @as(i16, col) + dir.dc;
+        while (board_mod.isValid(r, c) and
+            cells[@intCast(@as(u16, @intCast(r)) * BOARD_SIZE + @as(u16, @intCast(c)))] == color)
+        {
+            r += dir.dr;
+            c += dir.dc;
+        }
+        if (board_mod.isValid(r, c) and
+            cells[@intCast(@as(u16, @intCast(r)) * BOARD_SIZE + @as(u16, @intCast(c)))] == .empty)
+        {
+            miseTryAdd(cells, &result, &seen, r, c, color);
+            // 飛び四ターゲット: ギャップの1つ先（miseTryAdd が空き判定）
+            miseTryAdd(cells, &result, &seen, r + dir.dr, c + dir.dc, color);
+        }
+
+        // 負方向の端
+        r = @as(i16, row) - dir.dr;
+        c = @as(i16, col) - dir.dc;
+        while (board_mod.isValid(r, c) and
+            cells[@intCast(@as(u16, @intCast(r)) * BOARD_SIZE + @as(u16, @intCast(c)))] == color)
+        {
+            r -= dir.dr;
+            c -= dir.dc;
+        }
+        if (board_mod.isValid(r, c) and
+            cells[@intCast(@as(u16, @intCast(r)) * BOARD_SIZE + @as(u16, @intCast(c)))] == .empty)
+        {
+            miseTryAdd(cells, &result, &seen, r, c, color);
+            miseTryAdd(cells, &result, &seen, r - dir.dr, c - dir.dc, color);
+        }
+    }
+
+    // 2. ±2 近傍スキャン（ライン外の四三点も検出）
+    var dr: i16 = -2;
+    while (dr <= 2) : (dr += 1) {
+        var dc: i16 = -2;
+        while (dc <= 2) : (dc += 1) {
+            if (dr == 0 and dc == 0) continue;
+            miseTryAdd(cells, &result, &seen, @as(i16, row) + dr, @as(i16, col) + dc, color);
+        }
+    }
+
+    return result;
+}
+
 /// 四三脅威スキャン
 pub fn scanFourThreeThreat(cells: []Cell, color: Cell, stone_count: u16) bool {
     if (stone_count < 5) return false;

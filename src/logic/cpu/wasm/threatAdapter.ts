@@ -23,6 +23,7 @@ import {
   detectOpponentThreats as detectOpponentThreatsTs,
   type ThreatInfo,
 } from "@/logic/cpu/evaluation";
+import { findMiseTargets as findMiseTargetsTs } from "@/logic/cpu/evaluation/miseTactics";
 import { createsFourThree as createsFourThreeTs } from "@/logic/cpu/evaluation/winningPatterns";
 import {
   createsFour as createsFourTs,
@@ -192,4 +193,29 @@ export function detectOpponentThreats(
   }
   // フォールバック（wasm 未ロード時）
   return detectOpponentThreatsTs(board, opponentColor);
+}
+
+/**
+ * (row,col) に color のミセ手を**配置済み**の盤面で、四三ターゲット点（空き）を列挙する（#37 P3 PR5b）。
+ * wasm 経由は Zig `evaluate.findMiseTargets`。未ロード時は TS にフォールバック。
+ * 契約は TS `findMiseTargets` と同じく石を置いた状態で渡す。
+ */
+export function findMiseTargets(
+  board: BoardState,
+  row: number,
+  col: number,
+  color: "black" | "white",
+): Position[] {
+  if (wasm) {
+    syncBoard(wasm, board);
+    wasm.findMiseTargetsWasm(
+      row,
+      col,
+      color === "black" ? CELL.BLACK : CELL.WHITE,
+    );
+    const mem = new Uint8Array(wasm.memory.buffer);
+    const { positions } = readPositionList(mem, wasm.getMiseBuffer());
+    return positions;
+  }
+  return findMiseTargetsTs(board, row, col, color);
 }

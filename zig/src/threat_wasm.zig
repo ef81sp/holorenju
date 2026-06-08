@@ -86,3 +86,27 @@ export fn detectOpponentThreatsWasm(opponent_color: u8) void {
     o = writeList(o, &info.mises);
     o = writeList(o, &info.double_threes);
 }
+
+// === findMiseTargets（#37 P3 PR5b）===
+//
+// (row,col) に color のミセ手を配置済みの盤面で、四三ターゲット点（空き）を列挙する。
+// [u8 count][count*(u8 row, u8 col)] を mise_buffer にシリアライズ（最大 1+64*2=129B）。
+var mise_buffer: [160]u8 = undefined;
+
+export fn getMiseBuffer() [*]u8 {
+    return &mise_buffer;
+}
+
+/// (row,col) にミセ手を配置済みの盤面で四三ターゲットを検出しバッファに書く。
+/// 事前に boardSet で cells（ミセ手含む）、syncBitboard で bitboard を同期しておくこと。
+export fn findMiseTargetsWasm(row: u8, col: u8, color: u8) void {
+    const c: board.Cell = @enumFromInt(color);
+    const list = evaluate.findMiseTargets(&board.board_cells, row, col, c);
+    mise_buffer[0] = list.len;
+    var o: usize = 1;
+    for (0..list.len) |i| {
+        mise_buffer[o] = list.items[i].row;
+        mise_buffer[o + 1] = list.items[i].col;
+        o += 2;
+    }
+}
