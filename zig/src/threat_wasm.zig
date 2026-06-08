@@ -110,3 +110,25 @@ export fn findMiseTargetsWasm(row: u8, col: u8, color: u8) void {
         o += 2;
     }
 }
+
+// === findDoubleMiseMoves（#37 P3 PR5b）===
+//
+// 盤面全空きセルから両ミセ手を列挙し [u8 count][count*(u8 row,u8 col)] をバッファに書く。
+var double_mise_buffer: [160]u8 = undefined;
+
+export fn getDoubleMiseBuffer() [*]u8 {
+    return &double_mise_buffer;
+}
+
+/// color の両ミセ手を列挙しバッファに書く。事前に boardSet/syncBitboard で同期しておくこと。
+export fn findDoubleMiseMovesWasm(color: u8) void {
+    const c: board.Cell = @enumFromInt(color);
+    const list = evaluate.findDoubleMiseMoves(&board.board_cells, c);
+    double_mise_buffer[0] = list.len;
+    var o: usize = 1;
+    for (0..list.len) |i| {
+        double_mise_buffer[o] = list.items[i].row;
+        double_mise_buffer[o + 1] = list.items[i].col;
+        o += 2;
+    }
+}

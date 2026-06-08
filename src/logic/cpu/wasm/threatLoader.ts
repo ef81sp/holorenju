@@ -21,6 +21,10 @@ export interface ThreatWasmContext {
   findMiseTargetsWasm: (row: number, col: number, color: number) => void;
   /** ミセターゲットバッファの先頭オフセット（memory 内）を返す。 */
   getMiseBuffer: () => number;
+  /** color の両ミセ手を列挙しバッファに書く（#37 P3 PR5b）。 */
+  findDoubleMiseMovesWasm: (color: number) => void;
+  /** 両ミセ手バッファの先頭オフセット（memory 内）を返す。 */
+  getDoubleMiseBuffer: () => number;
   /** wasm 線形メモリ（バッファ読み取り用）。 */
   memory: WebAssembly.Memory;
 }

@@ -247,6 +247,87 @@ pub fn findMiseTargets(cells: []Cell, row: u8, col: u8, color: Cell) threats.Pos
     return result;
 }
 
+/// ミセターゲットが存在しうるか安価に判定（プリフィルタ）。
+/// TS miseTactics.ts hasPotentialMiseTarget に対応（analyzeDirection の黒長連補正込み）。
+fn hasPotentialMiseTarget(cells: []const Cell, row: u8, col: u8, color: Cell) bool {
+    for (DIRECTIONS) |dir| {
+        const pos = board_mod.countInDirectionOnCells(cells, row, col, dir.dr, dir.dc, color);
+        const neg = board_mod.countInDirectionOnCells(cells, row, col, -dir.dr, -dir.dc, color);
+        const count = @as(u16, pos.count) + neg.count + 1;
+        if (count < 2) continue;
+        var e1 = pos.end_state;
+        var e2 = neg.end_state;
+        if (color == .black and count == 4) {
+            if (e1 == .empty and blackOverlineEnd(cells, row, col, dir.dr, dir.dc, pos.count)) {
+                e1 = .opponent;
+            }
+            if (e2 == .empty and blackOverlineEnd(cells, row, col, -dir.dr, -dir.dc, neg.count)) {
+                e2 = .opponent;
+            }
+        }
+        if (e1 == .empty or e2 == .empty) return true;
+    }
+    return false;
+}
+
+/// 両ミセ判定（近似）。TS miseTactics.ts isDoubleMise に対応。
+/// 各ターゲット T_i に相手石を仮置きし、残りターゲットのいずれかで四三が残るかを検証する。
+/// どの T_i を防いでも別ターゲットで四三が残る（=全防御を生き残る）なら両ミセ。
+/// targets は (row,col) にミセ手配置済みで得た四三点。cells/bitboard は同期済み前提。
+fn isDoubleMise(cells: []Cell, targets: *const threats.PositionList, color: Cell) bool {
+    if (targets.len < 2) return false;
+    const opponent = color.opposite();
+    for (0..targets.len) |i| {
+        const ti = targets.items[i];
+        const ti_idx = @as(u16, ti.row) * BOARD_SIZE + ti.col;
+        // T_i に相手石を仮配置（cells + bitboard）
+        cells[ti_idx] = opponent;
+        bitboard.placeStone(ti.row, ti.col, opponent);
+        var survived = false;
+        for (0..targets.len) |j| {
+            if (i == j) continue;
+            const tj = targets.items[j];
+            if (createsFourThree(cells, tj.row, tj.col, color)) {
+                survived = true;
+                break;
+            }
+        }
+        cells[ti_idx] = .empty;
+        bitboard.removeStone(ti.row, ti.col);
+        // いずれかの防御で全ターゲットが潰れる → 両ミセでない
+        if (!survived) return false;
+    }
+    return true;
+}
+
+/// 盤面上の全空きセルから両ミセ手を列挙する。TS miseTactics.ts findDoubleMiseMoves に対応。
+/// 各空きセルに color を仮置きし、hasPotentialMiseTarget → findMiseTargets(>=2) → isDoubleMise を満たす点を返す。
+/// 呼び出し前に bitboard を cells と同期しておくこと。
+pub fn findDoubleMiseMoves(cells: []Cell, color: Cell) threats.PositionList {
+    var result = threats.PositionList.init();
+    for (0..BOARD_SIZE) |r_usize| {
+        const r: u8 = @intCast(r_usize);
+        for (0..BOARD_SIZE) |c_usize| {
+            const c: u8 = @intCast(c_usize);
+            const idx = @as(u16, r) * BOARD_SIZE + c;
+            if (cells[idx] != .empty) continue;
+            // 仮置き（cells + bitboard）
+            cells[idx] = color;
+            bitboard.placeStone(r, c, color);
+            if (hasPotentialMiseTarget(cells, r, c, color)) {
+                const targets = findMiseTargets(cells, r, c, color);
+                if (targets.len >= 2 and isDoubleMise(cells, &targets, color)) {
+                    result.push(.{ .row = r, .col = c });
+                }
+            }
+            // 復元
+            cells[idx] = .empty;
+            bitboard.removeStone(r, c);
+        }
+    }
+    return result;
+}
+
 /// 四三脅威スキャン
 pub fn scanFourThreeThreat(cells: []Cell, color: Cell, stone_count: u16) bool {
     if (stone_count < 5) return false;
