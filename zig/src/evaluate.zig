@@ -74,6 +74,18 @@ fn hasFourThreePotential(cells: []const Cell, row: u8, col: u8, color: Cell) boo
     return false;
 }
 
+/// 黒の四の長連補正: empty 端の「gap の1つ先」(中心から run+2 マス先) が黒なら、
+/// その端へ伸ばすと6連(長連)になり五を作れないため塞がり扱いとする。
+/// TS analyzeDirection（directionAnalysis.ts）の count==4 オーバーライン補正に一致。
+fn blackOverlineEnd(cells: []const Cell, row: u8, col: u8, dr: i8, dc: i8, run: u8) bool {
+    const steps: i16 = @as(i16, run) + 2;
+    const r: i16 = @as(i16, row) + dr * steps;
+    const c: i16 = @as(i16, col) + dc * steps;
+    if (!board_mod.isValid(r, c)) return false;
+    const idx: u16 = @intCast(@as(u16, @intCast(r)) * BOARD_SIZE + @as(u16, @intCast(c)));
+    return cells[idx] == .black;
+}
+
 /// createsFourThree: 仮置きして四と活三が同時にできるかチェック（跳びパターン含む）
 /// TS版 analyzeJumpPatterns の hasFour && hasValidOpenThree に対応
 /// 呼び出し側で bitboard が cells と同期している前提。
@@ -111,9 +123,25 @@ pub fn createsFourThree(cells: []Cell, row: u8, col: u8, color: Cell) bool {
         const end1 = lutEnd(lut.end1);
         const end2 = lutEnd(lut.end2);
 
-        // 連続四（片端以上が空き）
-        if (lut.count == 4 and (end1 == .empty or end2 == .empty)) {
-            has_four = true;
+        // 連続四（片端以上が空き）。端はセル走査で求め、黒は長連補正を適用する
+        // （TS analyzeDirection と一致。LUT 端は黒長連補正を持たないため使わない）。
+        if (lut.count == 4) {
+            const dir = board_mod.DIRECTIONS[i];
+            const pos = board_mod.countInDirectionOnCells(cells, row, col, dir.dr, dir.dc, color);
+            const neg = board_mod.countInDirectionOnCells(cells, row, col, -dir.dr, -dir.dc, color);
+            var e1 = pos.end_state;
+            var e2 = neg.end_state;
+            if (color == .black) {
+                if (e1 == .empty and blackOverlineEnd(cells, row, col, dir.dr, dir.dc, pos.count)) {
+                    e1 = .opponent;
+                }
+                if (e2 == .empty and blackOverlineEnd(cells, row, col, -dir.dr, -dir.dc, neg.count)) {
+                    e2 = .opponent;
+                }
+            }
+            if (e1 == .empty or e2 == .empty) {
+                has_four = true;
+            }
         }
 
         // 連続三の有効性チェック（跳び四方向でなければ）
@@ -130,8 +158,10 @@ pub fn createsFourThree(cells: []Cell, row: u8, col: u8, color: Cell) bool {
             has_four = true;
         }
 
-        // 跳び三 (LUT版: 連続三がない場合のみ)
-        if (lut.count != 3 and lut.has_jump_three) {
+        // 跳び三 (LUT版: 連続三がなく、跳び四もない場合のみ)
+        // 跳び四と同方向の跳び三は同一スジの四と三であり、四三を構成しない。
+        // TS analyzeJumpPatterns の `!jumpFourDirections.has(i)` ガードに対応。
+        if (lut.count != 3 and !jump_four_dirs[i] and lut.has_jump_three) {
             if (patterns.isValidJumpThree(cells, row, col, dir_index, color)) {
                 has_valid_open_three = true;
             }
@@ -356,6 +386,31 @@ test "hasFourThreePotential basic" {
     cells[8 * BOARD_SIZE + 7] = .black;
 
     try std.testing.expect(hasFourThreePotential(&cells, 7, 7, .black));
+}
+
+// bug#2 回帰: 黒の四が長連方向に伸びる（伸ばすと6連）場合は四として数えない。
+// 縦 col7: (5,7)黒, (6,7)空, [cand(7,7)], (8,7)(9,7)(10,7)黒, (11,7)白。
+//   → 7-10 の連続四だが、下端(11,7)は白で塞がり、上端(6,7)空の先(5,7)が黒＝伸ばすと
+//      5-10 の6連(長連)。よって黒では「四」にならない（TS analyzeDirection 補正と一致）。
+// 横 row7: (7,5)(7,6)黒, [cand(7,7)], (7,8)空, (7,4)空 → 活三。
+// 四が成立しないので四三は false でなければならない。
+test "createsFourThree: 黒の長連方向の四は四三にしない (bug#2)" {
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[5 * BOARD_SIZE + 7] = .black;
+    cells[8 * BOARD_SIZE + 7] = .black;
+    cells[9 * BOARD_SIZE + 7] = .black;
+    cells[10 * BOARD_SIZE + 7] = .black;
+    cells[11 * BOARD_SIZE + 7] = .white;
+    cells[7 * BOARD_SIZE + 5] = .black;
+    cells[7 * BOARD_SIZE + 6] = .black;
+    bitboard.initFromCells(&cells);
+    try std.testing.expect(!createsFourThree(&cells, 7, 7, .black));
+
+    // 対照: 上端の長連石(5,7)を白にすると、(6,7)を埋めて 6-10 の五が作れる真の四
+    //       → 四三が成立し true。
+    cells[5 * BOARD_SIZE + 7] = .white;
+    bitboard.initFromCells(&cells);
+    try std.testing.expect(createsFourThree(&cells, 7, 7, .black));
 }
 
 // board_mod.isValid を公開するためにこのモジュール内で再宣言は不要。
