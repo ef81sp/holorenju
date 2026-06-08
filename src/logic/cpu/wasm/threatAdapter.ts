@@ -32,6 +32,11 @@ import {
   createsFour as createsFourTs,
   createsOpenThree as createsOpenThreeTs,
 } from "@/logic/cpu/search/threatMoves";
+import {
+  findThreatMoves as findThreatMovesTs,
+  hasFourThreeAvailable as hasFourThreeAvailableTs,
+  hasOpenThree as hasOpenThreeTs,
+} from "@/logic/cpu/search/vctHelpers";
 
 import { loadThreatWasm, type ThreatWasmContext } from "./threatLoader";
 import { CELL } from "./types";
@@ -239,4 +244,60 @@ export function findDoubleMiseMoves(
     return positions;
   }
   return findDoubleMiseMovesTs(board, color);
+}
+
+/**
+ * color が活三（連続三で両端空き／跳び三）を盤面上に持つか（#37 P3 PR6）。
+ * wasm 経由は Zig `vct.hasOpenThree`。未ロード時は TS にフォールバック。
+ * review 利用点（VCT 検証）は lineTable なしの全盤走査パスで呼ぶため、本アダプタも
+ * lineTable を受けない（Zig 版も全盤走査）。
+ */
+export function hasOpenThree(
+  board: BoardState,
+  color: "black" | "white",
+): boolean {
+  if (wasm) {
+    syncBoard(wasm, board);
+    return (
+      wasm.hasOpenThreeWasm(color === "black" ? CELL.BLACK : CELL.WHITE) !== 0
+    );
+  }
+  return hasOpenThreeTs(board, color);
+}
+
+/**
+ * color がミセ手（1手で四三を作れる手）を盤面上に持つか（#37 P3 PR6）。
+ * wasm 経由は Zig `vct.hasFourThreeAvailable`（黒は禁手考慮）。未ロード時は TS にフォールバック。
+ */
+export function hasFourThreeAvailable(
+  board: BoardState,
+  color: "black" | "white",
+): boolean {
+  if (wasm) {
+    syncBoard(wasm, board);
+    return (
+      wasm.hasFourThreeAvailableWasm(
+        color === "black" ? CELL.BLACK : CELL.WHITE,
+      ) !== 0
+    );
+  }
+  return hasFourThreeAvailableTs(board, color);
+}
+
+/**
+ * color の脅威手（四・活三を作れる空き点、四優先・row-major）を列挙する（#37 P3 PR6）。
+ * wasm 経由は Zig `vct.findThreatMoves`。未ロード時は TS にフォールバック。
+ */
+export function findThreatMoves(
+  board: BoardState,
+  color: "black" | "white",
+): Position[] {
+  if (wasm) {
+    syncBoard(wasm, board);
+    wasm.findThreatMovesWasm(color === "black" ? CELL.BLACK : CELL.WHITE);
+    const mem = new Uint8Array(wasm.memory.buffer);
+    const { positions } = readPositionList(mem, wasm.getThreatMovesBuffer());
+    return positions;
+  }
+  return findThreatMovesTs(board, color);
 }
