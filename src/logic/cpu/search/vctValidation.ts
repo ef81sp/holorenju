@@ -9,13 +9,14 @@ import type { BoardState, Position } from "@/types/game";
 
 import { checkFive } from "@/logic/renjuRules";
 
+// #37 P3 PR6: VCT検証ヘルパーを Zig 単一ソース経由に（合法局面で TS と一致、未ロード時 TS フォールバック）。
+import { hasFourThreeAvailable, hasOpenThree } from "../wasm/threatAdapter";
 import { createsFour } from "./threatMoves";
 import {
   checkDefenseCounterThreat,
   findFourMoves,
   getFourDefensePosition,
 } from "./threatPatterns";
-import { hasFourThreeAvailable, hasOpenThree } from "./vctHelpers";
 
 /**
  * VCT手順の事後検証
