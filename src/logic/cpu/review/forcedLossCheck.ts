@@ -16,11 +16,13 @@ import type {
 } from "../search/types";
 import type { WasmSearchEngine } from "../wasm/searchEngine";
 
-import { findDoubleMiseMoves } from "../evaluation/tactics";
 import { detectWhiteWinningPattern } from "../evaluation/winningPatterns";
 import { hasFourThreeAvailable, hasOpenThree } from "../search/vctHelpers";
-// #37 P3 PR4: 脅威検出を Zig 単一ソース経由に（合法局面で TS と一致、未ロード時 TS フォールバック）。
-import { detectOpponentThreats } from "../wasm/threatAdapter";
+// #37 P3 PR4/PR5b: 脅威検出・両ミセ手を Zig 単一ソース経由に（合法局面で TS と一致、未ロード時 TS フォールバック）。
+import {
+  detectOpponentThreats,
+  findDoubleMiseMoves,
+} from "../wasm/threatAdapter";
 import {
   wasmFindVCFSequence,
   wasmFindMiseVCFSequence,

@@ -899,3 +899,66 @@ test "countThreatDirections basic" {
     const count = countThreatDirections(&cells, 7, 7, .white);
     try std.testing.expect(count >= 1);
 }
+
+// === bitboard 不変性のリグレッション（#37 P3 PR5b 調査）===
+//
+// detectOpponentThreats は空き点ループ内で createsFourThree / createsDoubleThree を
+// 繰り返し呼ぶ。これらは候補を仮置き（cells + bitboard.placeStone）し defer で復元するが、
+// removeStone が黒白**両ビット**をクリアするため、候補が**空き点**である限り
+// （置く前のビットは 0 → 置いて消すと 0 に戻る）global_bb は完全復元される。
+// detectOpponentThreats は `cells[idx] != .empty` で空き点に限定しているので蓄積ドリフトは
+// 起きない。本テストはその不変性を凍結する（占有セルに createsFourThree を呼ぶ契約違反を
+// 別実装が犯すとここが落ちて気付ける）。
+fn bbEqual(a: bitboard.Bitboard, b: bitboard.Bitboard) bool {
+    for (0..bitboard.LINE_COUNT) |i| {
+        if (a.black[i] != b.black[i]) return false;
+        if (a.white[i] != b.white[i]) return false;
+    }
+    return true;
+}
+
+test "detectOpponentThreats: global_bb を不変に保つ（蓄積ドリフトなし）" {
+    // ミセ手（四三）と三三脅威が複数生じる多石の合法寄り局面
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    const whites = [_][2]u8{
+        .{ 7, 5 }, .{ 7, 6 }, .{ 8, 7 }, .{ 9, 7 },
+        .{ 6, 8 }, .{ 8, 9 }, .{ 9, 6 }, .{ 5, 5 },
+    };
+    const blacks = [_][2]u8{
+        .{ 7, 7 }, .{ 8, 8 }, .{ 9, 9 }, .{ 6, 6 },
+        .{ 10, 7 }, .{ 7, 10 }, .{ 6, 7 },
+    };
+    for (whites) |p| cells[@as(u16, p[0]) * BOARD_SIZE + p[1]] = .white;
+    for (blacks) |p| cells[@as(u16, p[0]) * BOARD_SIZE + p[1]] = .black;
+    bitboard.initFromCells(&cells);
+
+    const snapshot = bitboard.global_bb;
+    _ = detectOpponentThreats(&cells, .white);
+    try std.testing.expect(bbEqual(snapshot, bitboard.global_bb));
+    _ = detectOpponentThreats(&cells, .black);
+    try std.testing.expect(bbEqual(snapshot, bitboard.global_bb));
+
+    // cells 自体も不変（仮置きが全て復元されている）
+    var fresh = [_]Cell{.empty} ** CELL_COUNT;
+    for (whites) |p| fresh[@as(u16, p[0]) * BOARD_SIZE + p[1]] = .white;
+    for (blacks) |p| fresh[@as(u16, p[0]) * BOARD_SIZE + p[1]] = .black;
+    try std.testing.expect(std.mem.eql(Cell, &cells, &fresh));
+}
+
+test "createsFourThree: 空き候補なら global_bb 不変・占有候補なら破壊（契約の確認）" {
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[7 * BOARD_SIZE + 7] = .black;
+    cells[7 * BOARD_SIZE + 8] = .black;
+    cells[8 * BOARD_SIZE + 8] = .white;
+    bitboard.initFromCells(&cells);
+    const snapshot = bitboard.global_bb;
+
+    // 空き候補: 仮置き→defer 復元で global_bb は完全復元
+    _ = evaluate.createsFourThree(&cells, 9, 9, .black);
+    try std.testing.expect(bbEqual(snapshot, bitboard.global_bb));
+
+    // 占有セルに呼ぶと removeStone が既存石のビットを消し drift する（＝契約違反の証跡）。
+    // 呼び出し側は必ず空き点を渡すこと（detectOpponentThreats はガード済み）。
+    _ = evaluate.createsFourThree(&cells, 7, 7, .white);
+    try std.testing.expect(!bbEqual(snapshot, bitboard.global_bb));
+}

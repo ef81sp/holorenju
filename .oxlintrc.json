@@ -63,7 +63,13 @@
       }
     },
     {
-      "files": ["**/renjuParity.test.ts", "**/threatAdapter.test.ts"],
+      "files": [
+        "**/renjuParity.test.ts",
+        "**/threatAdapter.test.ts",
+        "**/createsFourThreeParity.test.ts",
+        "**/findMiseTargetsParity.test.ts",
+        "**/findDoubleMiseMovesParity.test.ts"
+      ],
       "rules": {
         "no-bitwise": "off"
       }

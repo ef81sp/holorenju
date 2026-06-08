@@ -74,6 +74,18 @@ fn hasFourThreePotential(cells: []const Cell, row: u8, col: u8, color: Cell) boo
     return false;
 }
 
+/// 黒の四の長連補正: empty 端の「gap の1つ先」(中心から run+2 マス先) が黒なら、
+/// その端へ伸ばすと6連(長連)になり五を作れないため塞がり扱いとする。
+/// TS analyzeDirection（directionAnalysis.ts）の count==4 オーバーライン補正に一致。
+fn blackOverlineEnd(cells: []const Cell, row: u8, col: u8, dr: i8, dc: i8, run: u8) bool {
+    const steps: i16 = @as(i16, run) + 2;
+    const r: i16 = @as(i16, row) + dr * steps;
+    const c: i16 = @as(i16, col) + dc * steps;
+    if (!board_mod.isValid(r, c)) return false;
+    const idx: u16 = @intCast(@as(u16, @intCast(r)) * BOARD_SIZE + @as(u16, @intCast(c)));
+    return cells[idx] == .black;
+}
+
 /// createsFourThree: 仮置きして四と活三が同時にできるかチェック（跳びパターン含む）
 /// TS版 analyzeJumpPatterns の hasFour && hasValidOpenThree に対応
 /// 呼び出し側で bitboard が cells と同期している前提。
@@ -111,9 +123,25 @@ pub fn createsFourThree(cells: []Cell, row: u8, col: u8, color: Cell) bool {
         const end1 = lutEnd(lut.end1);
         const end2 = lutEnd(lut.end2);
 
-        // 連続四（片端以上が空き）
-        if (lut.count == 4 and (end1 == .empty or end2 == .empty)) {
-            has_four = true;
+        // 連続四（片端以上が空き）。端はセル走査で求め、黒は長連補正を適用する
+        // （TS analyzeDirection と一致。LUT 端は黒長連補正を持たないため使わない）。
+        if (lut.count == 4) {
+            const dir = board_mod.DIRECTIONS[i];
+            const pos = board_mod.countInDirectionOnCells(cells, row, col, dir.dr, dir.dc, color);
+            const neg = board_mod.countInDirectionOnCells(cells, row, col, -dir.dr, -dir.dc, color);
+            var e1 = pos.end_state;
+            var e2 = neg.end_state;
+            if (color == .black) {
+                if (e1 == .empty and blackOverlineEnd(cells, row, col, dir.dr, dir.dc, pos.count)) {
+                    e1 = .opponent;
+                }
+                if (e2 == .empty and blackOverlineEnd(cells, row, col, -dir.dr, -dir.dc, neg.count)) {
+                    e2 = .opponent;
+                }
+            }
+            if (e1 == .empty or e2 == .empty) {
+                has_four = true;
+            }
         }
 
         // 連続三の有効性チェック（跳び四方向でなければ）
@@ -130,8 +158,10 @@ pub fn createsFourThree(cells: []Cell, row: u8, col: u8, color: Cell) bool {
             has_four = true;
         }
 
-        // 跳び三 (LUT版: 連続三がない場合のみ)
-        if (lut.count != 3 and lut.has_jump_three) {
+        // 跳び三 (LUT版: 連続三がなく、跳び四もない場合のみ)
+        // 跳び四と同方向の跳び三は同一スジの四と三であり、四三を構成しない。
+        // TS analyzeJumpPatterns の `!jumpFourDirections.has(i)` ガードに対応。
+        if (lut.count != 3 and !jump_four_dirs[i] and lut.has_jump_three) {
             if (patterns.isValidJumpThree(cells, row, col, dir_index, color)) {
                 has_valid_open_three = true;
             }
@@ -140,6 +170,162 @@ pub fn createsFourThree(cells: []Cell, row: u8, col: u8, color: Cell) bool {
         if (has_four and has_valid_open_three) return true;
     }
     return false;
+}
+
+/// ミセターゲット（四三点）を1点追加（空き・未追加・黒禁手除外・createsFourThree 検証）。
+/// TS miseTactics.ts findMiseTargets の tryAdd に対応。
+fn miseTryAdd(cells: []Cell, result: *threats.PositionList, seen: []bool, r: i16, c: i16, color: Cell) void {
+    if (!board_mod.isValid(r, c)) return;
+    const ur: u8 = @intCast(r);
+    const uc: u8 = @intCast(c);
+    const key: u16 = @as(u16, ur) * BOARD_SIZE + uc;
+    if (seen[key]) return;
+    if (cells[key] != .empty) return;
+    if (color == .black and forbidden.checkForbiddenMove(cells, ur, uc) != .none) return;
+    if (createsFourThree(cells, ur, uc, color)) {
+        seen[key] = true;
+        result.push(.{ .row = ur, .col = uc });
+    }
+}
+
+/// ミセターゲット（四三点）を検出（TS miseTactics.ts findMiseTargets full に対応）。
+/// (row,col) は color のミセ手を**配置済み**前提。各方向のライン延長点（飛び四 gap+1 含む）と
+/// ±2 近傍をスキャンする。呼び出し前に bitboard を cells と同期しておくこと。
+pub fn findMiseTargets(cells: []Cell, row: u8, col: u8, color: Cell) threats.PositionList {
+    var result = threats.PositionList.init();
+    var seen = [_]bool{false} ** CELL_COUNT;
+
+    // 1. 各方向のライン延長点（距離制限なし）
+    for (DIRECTIONS, 0..) |dir, di| {
+        const lut = ll.queryPatternByCell(row, col, di, color);
+        if (lut.count < 2) continue; // 2石未満 → 四三不可能
+
+        // 正方向の端
+        var r: i16 = @as(i16, row) + dir.dr;
+        var c: i16 = @as(i16, col) + dir.dc;
+        while (board_mod.isValid(r, c) and
+            cells[@intCast(@as(u16, @intCast(r)) * BOARD_SIZE + @as(u16, @intCast(c)))] == color)
+        {
+            r += dir.dr;
+            c += dir.dc;
+        }
+        if (board_mod.isValid(r, c) and
+            cells[@intCast(@as(u16, @intCast(r)) * BOARD_SIZE + @as(u16, @intCast(c)))] == .empty)
+        {
+            miseTryAdd(cells, &result, &seen, r, c, color);
+            // 飛び四ターゲット: ギャップの1つ先（miseTryAdd が空き判定）
+            miseTryAdd(cells, &result, &seen, r + dir.dr, c + dir.dc, color);
+        }
+
+        // 負方向の端
+        r = @as(i16, row) - dir.dr;
+        c = @as(i16, col) - dir.dc;
+        while (board_mod.isValid(r, c) and
+            cells[@intCast(@as(u16, @intCast(r)) * BOARD_SIZE + @as(u16, @intCast(c)))] == color)
+        {
+            r -= dir.dr;
+            c -= dir.dc;
+        }
+        if (board_mod.isValid(r, c) and
+            cells[@intCast(@as(u16, @intCast(r)) * BOARD_SIZE + @as(u16, @intCast(c)))] == .empty)
+        {
+            miseTryAdd(cells, &result, &seen, r, c, color);
+            miseTryAdd(cells, &result, &seen, r - dir.dr, c - dir.dc, color);
+        }
+    }
+
+    // 2. ±2 近傍スキャン（ライン外の四三点も検出）
+    var dr: i16 = -2;
+    while (dr <= 2) : (dr += 1) {
+        var dc: i16 = -2;
+        while (dc <= 2) : (dc += 1) {
+            if (dr == 0 and dc == 0) continue;
+            miseTryAdd(cells, &result, &seen, @as(i16, row) + dr, @as(i16, col) + dc, color);
+        }
+    }
+
+    return result;
+}
+
+/// ミセターゲットが存在しうるか安価に判定（プリフィルタ）。
+/// TS miseTactics.ts hasPotentialMiseTarget に対応（analyzeDirection の黒長連補正込み）。
+fn hasPotentialMiseTarget(cells: []const Cell, row: u8, col: u8, color: Cell) bool {
+    for (DIRECTIONS) |dir| {
+        const pos = board_mod.countInDirectionOnCells(cells, row, col, dir.dr, dir.dc, color);
+        const neg = board_mod.countInDirectionOnCells(cells, row, col, -dir.dr, -dir.dc, color);
+        const count = @as(u16, pos.count) + neg.count + 1;
+        if (count < 2) continue;
+        var e1 = pos.end_state;
+        var e2 = neg.end_state;
+        if (color == .black and count == 4) {
+            if (e1 == .empty and blackOverlineEnd(cells, row, col, dir.dr, dir.dc, pos.count)) {
+                e1 = .opponent;
+            }
+            if (e2 == .empty and blackOverlineEnd(cells, row, col, -dir.dr, -dir.dc, neg.count)) {
+                e2 = .opponent;
+            }
+        }
+        if (e1 == .empty or e2 == .empty) return true;
+    }
+    return false;
+}
+
+/// 両ミセ判定（近似）。TS miseTactics.ts isDoubleMise に対応。
+/// 各ターゲット T_i に相手石を仮置きし、残りターゲットのいずれかで四三が残るかを検証する。
+/// どの T_i を防いでも別ターゲットで四三が残る（=全防御を生き残る）なら両ミセ。
+/// targets は (row,col) にミセ手配置済みで得た四三点。cells/bitboard は同期済み前提。
+fn isDoubleMise(cells: []Cell, targets: *const threats.PositionList, color: Cell) bool {
+    if (targets.len < 2) return false;
+    const opponent = color.opposite();
+    for (0..targets.len) |i| {
+        const ti = targets.items[i];
+        const ti_idx = @as(u16, ti.row) * BOARD_SIZE + ti.col;
+        // T_i に相手石を仮配置（cells + bitboard）
+        cells[ti_idx] = opponent;
+        bitboard.placeStone(ti.row, ti.col, opponent);
+        var survived = false;
+        for (0..targets.len) |j| {
+            if (i == j) continue;
+            const tj = targets.items[j];
+            if (createsFourThree(cells, tj.row, tj.col, color)) {
+                survived = true;
+                break;
+            }
+        }
+        cells[ti_idx] = .empty;
+        bitboard.removeStone(ti.row, ti.col);
+        // いずれかの防御で全ターゲットが潰れる → 両ミセでない
+        if (!survived) return false;
+    }
+    return true;
+}
+
+/// 盤面上の全空きセルから両ミセ手を列挙する。TS miseTactics.ts findDoubleMiseMoves に対応。
+/// 各空きセルに color を仮置きし、hasPotentialMiseTarget → findMiseTargets(>=2) → isDoubleMise を満たす点を返す。
+/// 呼び出し前に bitboard を cells と同期しておくこと。
+pub fn findDoubleMiseMoves(cells: []Cell, color: Cell) threats.PositionList {
+    var result = threats.PositionList.init();
+    for (0..BOARD_SIZE) |r_usize| {
+        const r: u8 = @intCast(r_usize);
+        for (0..BOARD_SIZE) |c_usize| {
+            const c: u8 = @intCast(c_usize);
+            const idx = @as(u16, r) * BOARD_SIZE + c;
+            if (cells[idx] != .empty) continue;
+            // 仮置き（cells + bitboard）
+            cells[idx] = color;
+            bitboard.placeStone(r, c, color);
+            if (hasPotentialMiseTarget(cells, r, c, color)) {
+                const targets = findMiseTargets(cells, r, c, color);
+                if (targets.len >= 2 and isDoubleMise(cells, &targets, color)) {
+                    result.push(.{ .row = r, .col = c });
+                }
+            }
+            // 復元
+            cells[idx] = .empty;
+            bitboard.removeStone(r, c);
+        }
+    }
+    return result;
 }
 
 /// 四三脅威スキャン
@@ -356,6 +542,31 @@ test "hasFourThreePotential basic" {
     cells[8 * BOARD_SIZE + 7] = .black;
 
     try std.testing.expect(hasFourThreePotential(&cells, 7, 7, .black));
+}
+
+// bug#2 回帰: 黒の四が長連方向に伸びる（伸ばすと6連）場合は四として数えない。
+// 縦 col7: (5,7)黒, (6,7)空, [cand(7,7)], (8,7)(9,7)(10,7)黒, (11,7)白。
+//   → 7-10 の連続四だが、下端(11,7)は白で塞がり、上端(6,7)空の先(5,7)が黒＝伸ばすと
+//      5-10 の6連(長連)。よって黒では「四」にならない（TS analyzeDirection 補正と一致）。
+// 横 row7: (7,5)(7,6)黒, [cand(7,7)], (7,8)空, (7,4)空 → 活三。
+// 四が成立しないので四三は false でなければならない。
+test "createsFourThree: 黒の長連方向の四は四三にしない (bug#2)" {
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[5 * BOARD_SIZE + 7] = .black;
+    cells[8 * BOARD_SIZE + 7] = .black;
+    cells[9 * BOARD_SIZE + 7] = .black;
+    cells[10 * BOARD_SIZE + 7] = .black;
+    cells[11 * BOARD_SIZE + 7] = .white;
+    cells[7 * BOARD_SIZE + 5] = .black;
+    cells[7 * BOARD_SIZE + 6] = .black;
+    bitboard.initFromCells(&cells);
+    try std.testing.expect(!createsFourThree(&cells, 7, 7, .black));
+
+    // 対照: 上端の長連石(5,7)を白にすると、(6,7)を埋めて 6-10 の五が作れる真の四
+    //       → 四三が成立し true。
+    cells[5 * BOARD_SIZE + 7] = .white;
+    bitboard.initFromCells(&cells);
+    try std.testing.expect(createsFourThree(&cells, 7, 7, .black));
 }
 
 // board_mod.isValid を公開するためにこのモジュール内で再宣言は不要。
