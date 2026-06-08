@@ -55,6 +55,7 @@ interface CliOptions {
   sprtBeta: number;
   randomFactor?: number;
   verbose: boolean;
+  jobs: number;
 }
 
 function parseArgs(): CliOptions {
@@ -70,6 +71,7 @@ function parseArgs(): CliOptions {
     sprtAlpha: DEFAULT_SPRT_CONFIG.alpha,
     sprtBeta: DEFAULT_SPRT_CONFIG.beta,
     verbose: false,
+    jobs: 1,
   };
 
   for (const arg of args) {
@@ -111,6 +113,11 @@ function parseArgs(): CliOptions {
         );
         process.exit(1);
       }
+    } else if (arg.startsWith("--jobs=")) {
+      const value = parseInt(arg.slice("--jobs=".length), 10);
+      if (!isNaN(value) && value > 0) {
+        options.jobs = value;
+      }
     } else if (arg === "--verbose" || arg === "-v") {
       options.verbose = true;
     } else if (arg === "--help" || arg === "-h") {
@@ -138,6 +145,8 @@ Options:
   --elo0=<n>             SPRT帰無仮説Elo差 (default: 0)
   --elo1=<n>             SPRT対立仮説Elo差 (default: 30)
   --randomFactor=<n>     探索にゆらぎを加える (0〜1, default: なし)
+  --jobs=<n>             同時対局数（worker ペア組数, default: 1）。ターン制なので
+                         1ゲーム≈1コア。8コアなら6前後が目安
   --verbose, -v          詳細ログ
   --help, -h             ヘルプを表示
 
@@ -514,19 +523,18 @@ async function main(): Promise<void> {
 
   let worktreePathA: string | null = null;
   let worktreePathB: string | null = null;
-  let workerA: Worker | null = null;
-  let workerB: Worker | null = null;
+  // 並列実行用の worker ペア群（各ペア = A/B の bridge worker）。
+  // ゲームはターン制で実質1コアしか使わないため、ペアを複数組にして同時対局し
+  // 遊休コアを活用する（worktree の wasm は read-only なので複数 worker から共有可）。
+  const pairs: { a: Worker; b: Worker }[] = [];
 
   // クリーンアップ関数
   const cleanup = (): void => {
-    if (workerA) {
-      workerA.terminate();
-      workerA = null;
+    for (const pair of pairs) {
+      pair.a.terminate();
+      pair.b.terminate();
     }
-    if (workerB) {
-      workerB.terminate();
-      workerB = null;
-    }
+    pairs.length = 0;
     if (worktreePathA) {
       removeWorktree(worktreePathA);
       worktreePathA = null;
@@ -550,20 +558,26 @@ async function main(): Promise<void> {
     worktreePathA = createWorktree(commitA.sha, "A");
     worktreePathB = createWorktree(commitB.sha, "B");
 
-    // bridge workerを起動
-    console.log("Bridge workerを初期化中...");
-    [workerA, workerB] = await Promise.all([
-      createBridgeWorker(
-        worktreePathA,
-        options.difficulty,
-        options.randomFactor,
-      ),
-      createBridgeWorker(
-        worktreePathB,
-        options.difficulty,
-        options.randomFactor,
-      ),
-    ]);
+    // bridge workerを起動（--jobs 組のペアを並列初期化）
+    console.log(`Bridge workerを初期化中... (${options.jobs}並列)`);
+    const createdPairs = await Promise.all(
+      Array.from({ length: options.jobs }, async () => {
+        const [a, b] = await Promise.all([
+          createBridgeWorker(
+            worktreePathA!,
+            options.difficulty,
+            options.randomFactor,
+          ),
+          createBridgeWorker(
+            worktreePathB!,
+            options.difficulty,
+            options.randomFactor,
+          ),
+        ]);
+        return { a, b };
+      }),
+    );
+    pairs.push(...createdPairs);
     console.log("Bridge worker初期化完了\n");
 
     // 珠型タスクリスト生成（フラット化）
@@ -596,121 +610,140 @@ async function main(): Promise<void> {
       B: { depthSum: 0, timeSum: 0, count: 0, maxDepth: 0 },
     };
 
-    // 珠型セット制で逐次実行（同じworkerを使い回すため意図的な順次実行）
-    for (const { jushuName, positions, isABlack } of jushuTasks) {
-      const result = await runCommitGame(workerA, workerB, isABlack, {
-        verbose: options.verbose,
-        moveTimeoutMs: 30000,
-        openingMoves: positions,
-      });
-
-      // WDL更新（commitA = playerA 視点）
-      if (result.winner === "draw") {
-        wdl.draws++;
-      } else if (result.winner === "A") {
-        wdl.wins++;
-      } else {
-        wdl.losses++;
-      }
-
-      games.push({ ...result, jushuName });
-
-      completedGames++;
-
-      // 初回ゲーム後のサニティチェック
-      if (completedGames === 1) {
-        const avgTime =
-          result.moveHistory.reduce(
-            (s: number, m: { time: number }) => s + m.time,
-            0,
-          ) / result.moveHistory.length;
-        const maxTime = Math.max(
-          ...result.moveHistory.map((m: { time: number }) => m.time),
-        );
-        console.log(`\n[サニティチェック] 初回ゲーム完了`);
-        console.log(
-          `  手数: ${result.moves} | 勝者: ${result.winner} | 理由: ${result.reason}`,
-        );
-        console.log(
-          `  平均思考時間: ${Math.round(avgTime)}ms | 最大: ${Math.round(maxTime)}ms`,
-        );
-        console.log(`  duration: ${Math.round(result.duration)}ms`);
-        if (avgTime < 1) {
-          console.warn(
-            "  ⚠ 平均思考時間が1ms未満 — エンジンが正しくロードされていない可能性",
-          );
-        }
-      }
-
-      // この局のA/B統計を集計し、累積にも加算
-      const gameAcc = {
-        A: { depthSum: 0, timeSum: 0, count: 0, maxDepth: 0 },
-        B: { depthSum: 0, timeSum: 0, count: 0, maxDepth: 0 },
-      };
-      for (let i = 0; i < result.moveHistory.length; i++) {
-        const move = result.moveHistory[i]!;
-        if (move.isOpening) {
-          continue;
-        }
-        const isBlackMove = i % 2 === 0;
-        const player =
-          (isBlackMove && isABlack) || (!isBlackMove && !isABlack) ? "A" : "B";
-        const ga = gameAcc[player];
-        const ca = cumAcc[player];
-        if (move.depth !== undefined) {
-          ga.depthSum += move.depth;
-          ga.maxDepth = Math.max(ga.maxDepth, move.depth);
-          ca.depthSum += move.depth;
-          ca.maxDepth = Math.max(ca.maxDepth, move.depth);
-        }
-        ga.timeSum += move.time;
-        ga.count++;
-        ca.timeSum += move.time;
-        ca.count++;
-      }
-
-      // ステータス表示
-      const elapsed = ((performance.now() - startTime) / 1000).toFixed(0);
-      const elo = estimateEloDiff(wdl);
-      let statusMsg = `[${elapsed}s] ${completedGames}/${totalGames} ${jushuName} ${isABlack ? "A黒" : "A白"} +${wdl.wins}=${wdl.draws}-${wdl.losses} Elo:${elo.eloDiff > 0 ? "+" : ""}${elo.eloDiff}`;
-
-      if (sprtConfig) {
-        const sprt = updateSPRT(wdl, sprtConfig);
-        statusMsg += ` LLR:${sprt.llr.toFixed(2)}`;
-        if (sprt.decision !== "continue") {
-          writeStatus(statusMsg);
-          clearStatus();
-          console.log(
-            `SPRT判定: ${sprt.decision} (${completedGames}局目で停止)`,
-          );
+    // 珠型タスクを --jobs 組の worker ペアで並列消化する。
+    // ゲームはターン制で実質1コアしか使わないため、複数ペア同時対局で遊休コアを活用。
+    // 結果処理（WDL/統計/ステータス/SPRT）は await を挟まず同期実行されるため競合しない。
+    let nextTask = 0;
+    let stop = false;
+    const runPair = async (pair: { a: Worker; b: Worker }): Promise<void> => {
+      while (!stop) {
+        const taskIdx = nextTask;
+        nextTask += 1;
+        if (taskIdx >= jushuTasks.length) {
           break;
         }
+        const { jushuName, positions, isABlack } = jushuTasks[taskIdx]!;
+        const result = await runCommitGame(pair.a, pair.b, isABlack, {
+          verbose: options.verbose,
+          moveTimeoutMs: 30000,
+          openingMoves: positions,
+        });
+        if (stop) {
+          break;
+        }
+
+        // WDL更新（commitA = playerA 視点）
+        if (result.winner === "draw") {
+          wdl.draws++;
+        } else if (result.winner === "A") {
+          wdl.wins++;
+        } else {
+          wdl.losses++;
+        }
+
+        games.push({ ...result, jushuName });
+
+        completedGames++;
+
+        // 初回ゲーム後のサニティチェック
+        if (completedGames === 1) {
+          const avgTime =
+            result.moveHistory.reduce(
+              (s: number, m: { time: number }) => s + m.time,
+              0,
+            ) / result.moveHistory.length;
+          const maxTime = Math.max(
+            ...result.moveHistory.map((m: { time: number }) => m.time),
+          );
+          console.log(`\n[サニティチェック] 初回ゲーム完了`);
+          console.log(
+            `  手数: ${result.moves} | 勝者: ${result.winner} | 理由: ${result.reason}`,
+          );
+          console.log(
+            `  平均思考時間: ${Math.round(avgTime)}ms | 最大: ${Math.round(maxTime)}ms`,
+          );
+          console.log(`  duration: ${Math.round(result.duration)}ms`);
+          if (avgTime < 1) {
+            console.warn(
+              "  ⚠ 平均思考時間が1ms未満 — エンジンが正しくロードされていない可能性",
+            );
+          }
+        }
+
+        // この局のA/B統計を集計し、累積にも加算
+        const gameAcc = {
+          A: { depthSum: 0, timeSum: 0, count: 0, maxDepth: 0 },
+          B: { depthSum: 0, timeSum: 0, count: 0, maxDepth: 0 },
+        };
+        for (let i = 0; i < result.moveHistory.length; i++) {
+          const move = result.moveHistory[i]!;
+          if (move.isOpening) {
+            continue;
+          }
+          const isBlackMove = i % 2 === 0;
+          const player =
+            (isBlackMove && isABlack) || (!isBlackMove && !isABlack)
+              ? "A"
+              : "B";
+          const ga = gameAcc[player];
+          const ca = cumAcc[player];
+          if (move.depth !== undefined) {
+            ga.depthSum += move.depth;
+            ga.maxDepth = Math.max(ga.maxDepth, move.depth);
+            ca.depthSum += move.depth;
+            ca.maxDepth = Math.max(ca.maxDepth, move.depth);
+          }
+          ga.timeSum += move.time;
+          ga.count++;
+          ca.timeSum += move.time;
+          ca.count++;
+        }
+
+        // ステータス表示
+        const elapsed = ((performance.now() - startTime) / 1000).toFixed(0);
+        const elo = estimateEloDiff(wdl);
+        let statusMsg = `[${elapsed}s] ${completedGames}/${totalGames} ${jushuName} ${isABlack ? "A黒" : "A白"} +${wdl.wins}=${wdl.draws}-${wdl.losses} Elo:${elo.eloDiff > 0 ? "+" : ""}${elo.eloDiff}`;
+
+        if (sprtConfig) {
+          const sprt = updateSPRT(wdl, sprtConfig);
+          statusMsg += ` LLR:${sprt.llr.toFixed(2)}`;
+          if (sprt.decision !== "continue") {
+            writeStatus(statusMsg);
+            clearStatus();
+            console.log(
+              `SPRT判定: ${sprt.decision} (${completedGames}局目で停止)`,
+            );
+            stop = true;
+          }
+        }
+
+        writeStatus(statusMsg);
+
+        // 1局ごとの性能統計（改行で表示）
+        const fmtDepth = (a: {
+          depthSum: number;
+          timeSum: number;
+          count: number;
+        }): string =>
+          a.count > 0
+            ? `d=${(a.depthSum / a.count).toFixed(1)} t=${Math.round(a.timeSum / a.count)}ms`
+            : "n/a";
+        const fmtCum = (a: {
+          depthSum: number;
+          count: number;
+          maxDepth: number;
+          timeSum: number;
+        }): string =>
+          a.count > 0
+            ? `d=${(a.depthSum / a.count).toFixed(2)} max=${a.maxDepth} t=${Math.round(a.timeSum / a.count)}ms`
+            : "n/a";
+        console.log(
+          `\n  局: A[${fmtDepth(gameAcc.A)}] B[${fmtDepth(gameAcc.B)}] | 累計: A[${fmtCum(cumAcc.A)}] B[${fmtCum(cumAcc.B)}]`,
+        );
       }
+    };
 
-      writeStatus(statusMsg);
-
-      // 1局ごとの性能統計（改行で表示）
-      const fmtDepth = (a: {
-        depthSum: number;
-        timeSum: number;
-        count: number;
-      }): string =>
-        a.count > 0
-          ? `d=${(a.depthSum / a.count).toFixed(1)} t=${Math.round(a.timeSum / a.count)}ms`
-          : "n/a";
-      const fmtCum = (a: {
-        depthSum: number;
-        count: number;
-        maxDepth: number;
-        timeSum: number;
-      }): string =>
-        a.count > 0
-          ? `d=${(a.depthSum / a.count).toFixed(2)} max=${a.maxDepth} t=${Math.round(a.timeSum / a.count)}ms`
-          : "n/a";
-      console.log(
-        `\n  局: A[${fmtDepth(gameAcc.A)}] B[${fmtDepth(gameAcc.B)}] | 累計: A[${fmtCum(cumAcc.A)}] B[${fmtCum(cumAcc.B)}]`,
-      );
-    }
+    await Promise.all(pairs.map((p) => runPair(p)));
 
     clearStatus();
 
