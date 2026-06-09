@@ -13,16 +13,19 @@
  */
 import type { BoardState, Position } from "@/types/game";
 
-import {
-  checkJumpFour as checkJumpFourTs,
-  checkJumpThree as checkJumpThreeTs,
-  checkStraightFour as checkStraightFourTs,
-  getConsecutiveThreeStraightFourPoints as getConsecutiveTs,
-  getJumpThreeStraightFourPoints as getJumpThreeTs,
-} from "@/logic/renjuRules/patterns";
-
 import { getThreatWasm, type ThreatWasmContext } from "./threatLoader";
 import { CELL } from "./types";
+
+/** ロード済み threat wasm を返す。未ロード時は明示エラー（#43 PR-6 で pure-wasm 化）。 */
+function requireWasm(): ThreatWasmContext {
+  const w = getThreatWasm();
+  if (!w) {
+    throw new Error(
+      "threat wasm 未ロード: preloadThreatWasm() を起動時/テストsetupで呼ぶこと",
+    );
+  }
+  return w;
+}
 
 /** cells のみ同期（jump_patterns は bitboard を使わないため syncBitboard は不要）。 */
 function syncCells(w: ThreatWasmContext, board: BoardState): void {
@@ -69,12 +72,9 @@ export function checkJumpFour(
   dirIndex: number,
   color: "black" | "white",
 ): boolean {
-  const w = getThreatWasm();
-  if (w) {
-    syncCells(w, board);
-    return w.checkJumpFourWasm(row, col, dirIndex, colorEnum(color)) !== 0;
-  }
-  return checkJumpFourTs(board, row, col, dirIndex, color);
+  const w = requireWasm();
+  syncCells(w, board);
+  return w.checkJumpFourWasm(row, col, dirIndex, colorEnum(color)) !== 0;
 }
 
 /** (row,col,dir,color) で跳び三が成立するか。配置済み board 規約。 */
@@ -85,12 +85,9 @@ export function checkJumpThree(
   dirIndex: number,
   color: "black" | "white",
 ): boolean {
-  const w = getThreatWasm();
-  if (w) {
-    syncCells(w, board);
-    return w.checkJumpThreeWasm(row, col, dirIndex, colorEnum(color)) !== 0;
-  }
-  return checkJumpThreeTs(board, row, col, dirIndex, color);
+  const w = requireWasm();
+  syncCells(w, board);
+  return w.checkJumpThreeWasm(row, col, dirIndex, colorEnum(color)) !== 0;
 }
 
 /** (row,col,dir,color) で達四が成立するか。配置済み board 規約。 */
@@ -101,12 +98,9 @@ export function checkStraightFour(
   dirIndex: number,
   color: "black" | "white" = "black",
 ): boolean {
-  const w = getThreatWasm();
-  if (w) {
-    syncCells(w, board);
-    return w.checkStraightFourWasm(row, col, dirIndex, colorEnum(color)) !== 0;
-  }
-  return checkStraightFourTs(board, row, col, dirIndex, color);
+  const w = requireWasm();
+  syncCells(w, board);
+  return w.checkStraightFourWasm(row, col, dirIndex, colorEnum(color)) !== 0;
 }
 
 /** 連続三の達四点（最大2点）を列挙する。配置済み board 規約。 */
@@ -117,18 +111,15 @@ export function getConsecutiveThreeStraightFourPoints(
   dirIndex: number,
   color: "black" | "white" = "black",
 ): Position[] {
-  const w = getThreatWasm();
-  if (w) {
-    syncCells(w, board);
-    w.getConsecutiveThreeStraightFourPointsWasm(
-      row,
-      col,
-      dirIndex,
-      colorEnum(color),
-    );
-    return readPatternPoints(w);
-  }
-  return getConsecutiveTs(board, row, col, dirIndex, color);
+  const w = requireWasm();
+  syncCells(w, board);
+  w.getConsecutiveThreeStraightFourPointsWasm(
+    row,
+    col,
+    dirIndex,
+    colorEnum(color),
+  );
+  return readPatternPoints(w);
 }
 
 /** 跳び三の達四点（最大1点）を列挙する。配置済み board 規約。 */
@@ -139,11 +130,8 @@ export function getJumpThreeStraightFourPoints(
   dirIndex: number,
   color: "black" | "white" = "black",
 ): Position[] {
-  const w = getThreatWasm();
-  if (w) {
-    syncCells(w, board);
-    w.getJumpThreeStraightFourPointsWasm(row, col, dirIndex, colorEnum(color));
-    return readPatternPoints(w);
-  }
-  return getJumpThreeTs(board, row, col, dirIndex, color);
+  const w = requireWasm();
+  syncCells(w, board);
+  w.getJumpThreeStraightFourPointsWasm(row, col, dirIndex, colorEnum(color));
+  return readPatternPoints(w);
 }

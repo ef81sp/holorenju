@@ -27,6 +27,8 @@ export default defineConfig({
           exclude: ["src/**/*.browser.test.ts", "src/**/*.perf.test.ts"],
           environment: "node",
           includeSource: ["src/**/*.ts"],
+          // #43 PR-6: adapter pure-wasm 化に伴い、全ユニットテストで wasm を preload。
+          setupFiles: ["src/test-setup/wasm-preload.ts"],
         },
       },
       {

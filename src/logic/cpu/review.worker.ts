@@ -26,9 +26,10 @@ import { detectForcedWin } from "./review/forcedWinDetection";
 import { executeFullEval } from "./review/fullEval";
 import { wasmFindVCTSequence } from "./review/wasmAdapters";
 import { VCT_STONE_THRESHOLD } from "./search/types";
+import { preloadForbiddenWasm } from "./wasm/forbiddenAdapter";
 import { loadWasmModule } from "./wasm/loader";
 import { WasmSearchEngine } from "./wasm/searchEngine";
-// #37 P3 PR4: 脅威検出も Zig 単一ソース経由に（合法局面で TS と一致、未ロード時 TS フォールバック）。
+// #37 P3 PR4: 脅威検出も Zig 単一ソース経由に。#43 PR-6 で pure-wasm 化（フォールバックなし）。
 import { detectOpponentThreats, preloadThreatWasm } from "./wasm/threatAdapter";
 
 /** WASM モジュール（初回ロード後にキャッシュ） */
@@ -38,10 +39,10 @@ async function getWasmModule(): Promise<WasmModuleContext> {
   if (cachedWasm) {
     return cachedWasm;
   }
-  // #37 P3 PR3: 脅威分類 thin wasm も同時にロード（candidateVerification の四/活三判定用）。
-  // 未ロード時は threatAdapter が TS フォールバックするため、失敗してもクラッシュしない。
+  // #43 PR-6: 判定アダプタは pure-wasm 化済み。threat（四/活三/ミセ）と forbidden（禁手）の
+  // 両 thin wasm を mount/利用前に await でロードする（フォールバックが無いため必須）。
   cachedWasm = await loadWasmModule();
-  await preloadThreatWasm();
+  await Promise.all([preloadThreatWasm(), preloadForbiddenWasm()]);
   return cachedWasm;
 }
 

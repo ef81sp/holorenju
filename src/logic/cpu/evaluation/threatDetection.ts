@@ -23,7 +23,8 @@ import { checkJumpFour, checkJumpThree } from "../wasm/patternsAdapter";
 import { analyzeDirection } from "./directionAnalysis";
 import { isValidConsecutiveThree, isValidJumpThree } from "./jumpPatterns";
 import { type ThreatInfo, PATTERN_SCORES } from "./patternScores";
-import { createsDoubleThree, createsFourThree } from "./tactics";
+// #43 PR-6: tactics 再exportハブ廃止に伴い実体(winningPatterns)から直 import。
+import { createsDoubleThree, createsFourThree } from "./winningPatterns";
 
 /**
  * 配列に重複しない位置を追加するヘルパー関数

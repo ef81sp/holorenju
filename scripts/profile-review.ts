@@ -20,8 +20,10 @@ import {
   type BoardEvaluator,
   WasmBoardEvaluator,
 } from "@/logic/cpu/wasm/bridge";
+import { preloadForbiddenWasm } from "@/logic/cpu/wasm/forbiddenAdapter";
 import { loadWasmModule } from "@/logic/cpu/wasm/loader";
 import { WasmSearchEngine } from "@/logic/cpu/wasm/searchEngine";
+import { preloadThreatWasm } from "@/logic/cpu/wasm/threatAdapter";
 import { formatMove } from "@/logic/gameRecordParser";
 
 // ─── CLI 引数パース ─────────────────────────────────────
@@ -227,6 +229,9 @@ function profileMove(
 // ─── メイン実行 ──────────────────────────────────────
 
 async function main(): Promise<void> {
+  // #43 PR-6: 判定アダプタは pure-wasm 化済み。fullEval が使う threat/forbidden thin wasm を先にロード。
+  await Promise.all([preloadThreatWasm(), preloadForbiddenWasm()]);
+
   const moves = kifu.trim().split(/\s+/);
 
   console.log("=== 振り返り分析プロファイリング ===");

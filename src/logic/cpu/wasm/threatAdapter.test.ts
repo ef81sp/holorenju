@@ -6,7 +6,7 @@
  * 決定的乱数局面（高密度含む）で網羅する（renjuParity #21 と同方針）。wasm 未注入時の
  * TS フォールバックも検証。
  */
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import type { BoardState, Position, StoneColor } from "@/types/game";
 
@@ -24,7 +24,6 @@ import {
   createsFourThree,
   detectOpponentThreats,
   preloadThreatWasm,
-  setThreatWasmForTest,
 } from "./threatAdapter";
 
 /** 決定的 PRNG（mulberry32、外部依存なし） */
@@ -78,11 +77,6 @@ function kifuBoards(): { name: string; board: BoardState }[] {
 
 // wasm を1回ロード（テスト全体で共有）
 await preloadThreatWasm();
-
-afterEach(async () => {
-  // 各テスト後に wasm を復帰（fallback テストで未注入にするため）
-  await preloadThreatWasm();
-});
 
 const corpus = [...kifuBoards(), ...randomBoards()];
 const COLORS: StoneColor[] = ["black", "white"];
@@ -203,27 +197,4 @@ describe("threatAdapter (#37 P3 PR2)", () => {
       expect(mismatches, mismatches.join("\n")).toEqual([]);
     },
   );
-
-  it("wasm 未ロード時は TS フォールバックする", () => {
-    setThreatWasmForTest(undefined);
-    const { board } = kifuBoards()[0]!;
-    for (let row = 0; row < 15; row++) {
-      const boardRow = board[row];
-      if (!boardRow) {
-        continue;
-      }
-      for (let col = 0; col < 15; col++) {
-        if (boardRow[col]) {
-          continue;
-        }
-        boardRow[col] = "black";
-        const w = classifyThreat(board, row, col, "black");
-        expect(w.createsFour).toBe(createsFourTs(board, row, col, "black"));
-        expect(w.createsOpenThree).toBe(
-          createsOpenThreeTs(board, row, col, "black"),
-        );
-        boardRow[col] = null;
-      }
-    }
-  });
 });
