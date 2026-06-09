@@ -303,15 +303,20 @@ export const useVcfSolver = (
 
   // ===== リセット =====
 
+  /** VCF進行状態（着手フラグ・石IDカウンタ・保留中の勝ち手）を初期化する。 */
+  function clearProgressState(): void {
+    hasMoves.value = false;
+    vcfMoveCounter = 0;
+    pendingCounterFive = null;
+  }
+
   function resetVcf(): void {
     if (vcfBaseBoard) {
       boardStore.setBoard(cloneBoard(vcfBaseBoard), "question");
     }
     boardStore.clearMarks();
     boardStore.clearLines();
-    hasMoves.value = false;
-    vcfMoveCounter = 0;
-    pendingCounterFive = null;
+    clearProgressState();
   }
 
   /**
@@ -324,9 +329,7 @@ export const useVcfSolver = (
    */
   function resetSectionState(): void {
     vcfBaseBoard = null;
-    hasMoves.value = false;
-    vcfMoveCounter = 0;
-    pendingCounterFive = null;
+    clearProgressState();
   }
 
   return {
