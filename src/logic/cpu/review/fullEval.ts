@@ -5,7 +5,6 @@
  * vctCheckOnly / lightEval は Worker 側に残す（シンプルなため抽出不要）。
  */
 
-import type { ScoreBreakdown } from "@/types/cpu";
 import type { BoardState, Position } from "@/types/game";
 import type {
   ForcedLossType,
@@ -25,11 +24,9 @@ import type {
 import type { WasmSearchEngine } from "../wasm/searchEngine";
 
 import { countStones } from "../core/boardUtils";
-import {
-  evaluatePositionWithBreakdown,
-  evaluateBoardWithBreakdown,
-  PATTERN_SCORES,
-} from "../evaluation";
+// #43 PR-2: 表示内訳(breakdown)を廃止。評価内訳クラスタ(evaluation barrel)への依存を断ち、
+// 定数のみを patternScores から直 import する（barrel 経由の結合を残さない）。
+import { PATTERN_SCORES } from "../evaluation/patternScores";
 import { colorToWasm } from "../wasm/boardAdapter";
 import { linearTreeFromSequence } from "../wasm/forcedWinTreeWire";
 // #37 P3 PR4/PR5b: 脅威検出・ミセターゲットを Zig 単一ソース経由に。
@@ -178,10 +175,8 @@ export interface FullEvalResultWithTimings extends FullEvalResult {
 
 /** VCF初手を候補リストの先頭に追加/更新する */
 function promoteVcfCandidate(
-  board: BoardState,
   candidates: ReviewCandidate[],
   reVcf: VCFSequenceResult,
-  color: "black" | "white",
 ): void {
   const vcfIdx = candidates.findIndex(
     (c) =>
@@ -197,18 +192,9 @@ function promoteVcfCandidate(
       return;
     }
   }
-  const { score, breakdown } = evaluatePositionWithBreakdown(
-    board,
-    reVcf.firstMove.row,
-    reVcf.firstMove.col,
-    color,
-    REVIEW_SEARCH_PARAMS.evaluationOptions,
-  );
   candidates.unshift({
     position: reVcf.firstMove,
-    score: Math.round(score),
     searchScore: PATTERN_SCORES.FIVE,
-    breakdown: breakdown as ScoreBreakdown,
     principalVariation: reVcf.sequence,
   });
 }
@@ -259,7 +245,7 @@ function handleDemotion(ctx: DemotionContext): {
   }
 
   if (reVcf) {
-    promoteVcfCandidate(ctx.board, ctx.candidates, reVcf, ctx.color);
+    promoteVcfCandidate(ctx.candidates, reVcf);
     return {
       forcedWinType: "vcf",
       finalBestMove: reVcf.firstMove,
@@ -472,30 +458,12 @@ export function executeFullEval(
   }
   timings.vctRetry = performance.now() - t0;
 
-  // 候補手エントリから内訳付きデータを構築するヘルパー
-  const buildCandidate = (entry: MoveScoreEntry): ReviewCandidate => {
-    const { score: breakdownScore, breakdown } = evaluatePositionWithBreakdown(
-      board,
-      entry.move.row,
-      entry.move.col,
-      color,
-      REVIEW_SEARCH_PARAMS.evaluationOptions,
-    );
-
-    const leafEvaluation =
-      entry.pvLeafBoard && entry.pvLeafColor
-        ? evaluateBoardWithBreakdown(entry.pvLeafBoard, color)
-        : undefined;
-
-    return {
-      position: entry.move,
-      score: Math.round(breakdownScore),
-      searchScore: entry.score,
-      breakdown: breakdown as ScoreBreakdown,
-      principalVariation: entry.pv,
-      leafEvaluation,
-    };
-  };
+  // 候補手エントリから ReviewCandidate を構築するヘルパー
+  const buildCandidate = (entry: MoveScoreEntry): ReviewCandidate => ({
+    position: entry.move,
+    searchScore: entry.score,
+    principalVariation: entry.pv,
+  });
 
   // 実際の手の座標を解析
   const playedMoveStr = moves[moveIndex];
@@ -657,16 +625,6 @@ function buildForcedWinResult(
   // 候補手リスト構築
   const candidates: ReviewCandidate[] = [];
 
-  // 追い詰め開始手をFIVEスコアで追加
-  const { score: fwBreakdownScore, breakdown: fwBreakdown } =
-    evaluatePositionWithBreakdown(
-      board,
-      bestMove.row,
-      bestMove.col,
-      color,
-      REVIEW_SEARCH_PARAMS.evaluationOptions,
-    );
-
   // 両ミセ: targets から読み筋を構築
   let bestPV: Position[] = forcedWin.sequence;
   if (
@@ -681,9 +639,7 @@ function buildForcedWinResult(
 
   candidates.push({
     position: bestMove,
-    score: Math.round(fwBreakdownScore),
     searchScore: PATTERN_SCORES.FIVE,
-    breakdown: fwBreakdown as ScoreBreakdown,
     principalVariation: bestPV,
   });
 
@@ -708,19 +664,9 @@ function buildForcedWinResult(
         searchScore: PATTERN_SCORES.FIVE,
       };
     } else {
-      const { score: pScore, breakdown: pBreakdown } =
-        evaluatePositionWithBreakdown(
-          board,
-          playedRow,
-          playedCol,
-          color,
-          REVIEW_SEARCH_PARAMS.evaluationOptions,
-        );
       candidates.push({
         position: { row: playedRow, col: playedCol },
-        score: Math.round(pScore),
         searchScore: PATTERN_SCORES.FIVE,
-        breakdown: pBreakdown as ScoreBreakdown,
         principalVariation: playedForcedWinSequence,
       });
     }
@@ -743,19 +689,9 @@ function buildForcedWinResult(
         color,
         colorToWasm(color),
       );
-      const { score: pScore, breakdown: pBreakdown } =
-        evaluatePositionWithBreakdown(
-          board,
-          playedRow,
-          playedCol,
-          color,
-          REVIEW_SEARCH_PARAMS.evaluationOptions,
-        );
       candidates.push({
         position: { row: playedRow, col: playedCol },
-        score: Math.round(pScore),
         searchScore: playedScore,
-        breakdown: pBreakdown as ScoreBreakdown,
         principalVariation: pv.length > 1 ? pv : undefined,
       });
     }
@@ -1001,19 +937,9 @@ function buildNormalResult(
         color,
         colorToWasm(color),
       );
-      const { score: pScore, breakdown: pBreakdown } =
-        evaluatePositionWithBreakdown(
-          board,
-          playedRow,
-          playedCol,
-          color,
-          REVIEW_SEARCH_PARAMS.evaluationOptions,
-        );
       candidates.push({
         position: { row: playedRow, col: playedCol },
-        score: Math.round(pScore),
         searchScore: playedScore,
-        breakdown: pBreakdown as ScoreBreakdown,
         principalVariation: pv.length > 1 ? pv : undefined,
       });
     }

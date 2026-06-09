@@ -14,12 +14,7 @@ import type {
   SearchStats,
 } from "@/types/cpu";
 import { useBoardStore } from "@/stores/boardStore";
-import {
-  getNonZeroBreakdown as getNonZeroBreakdownFromBreakdown,
-  formatScore,
-  formatPatternScore,
-  getLeafBreakdownItems,
-} from "@/logic/cpu/evaluation/breakdownUtils";
+import { formatScore } from "@/logic/cpu/evaluation/breakdownUtils";
 
 const props = defineProps<{
   /** 最後のCPUレスポンス */
@@ -59,18 +54,6 @@ function formatPV(
   return pv.map(
     (pos, idx) => `${idx + 1}. ${formatPosition(pos.row, pos.col)}`,
   );
-}
-
-/**
- * CandidateMove用のgetNonZeroBreakdownラッパー
- */
-function getNonZeroBreakdown(
-  candidate: CandidateMove,
-): ReturnType<typeof getNonZeroBreakdownFromBreakdown> {
-  if (!candidate.breakdown) {
-    return { patterns: [], defense: [], bonuses: [] };
-  }
-  return getNonZeroBreakdownFromBreakdown(candidate.breakdown);
 }
 
 /**
@@ -264,66 +247,6 @@ function isDepthChanged(index: number): boolean {
                 探索: {{ formatScore(candidate.searchScore) }}
               </span>
             </div>
-            <div class="popover-eval-score">
-              即時評価: {{ formatScore(candidate.score) }}
-            </div>
-
-            <!-- スコア内訳 -->
-            <div
-              v-if="candidate.breakdown"
-              class="popover-breakdown"
-            >
-              <!-- 攻撃パターン内訳 -->
-              <template
-                v-if="getNonZeroBreakdown(candidate).patterns.length > 0"
-              >
-                <div class="popover-section-label">攻撃</div>
-                <div
-                  v-for="item in getNonZeroBreakdown(candidate).patterns"
-                  :key="`attack-${item.key}`"
-                  class="popover-row"
-                >
-                  <span class="popover-label">{{ item.label }}:</span>
-                  <span class="popover-value">
-                    {{ formatPatternScore(item.detail) }}
-                  </span>
-                </div>
-              </template>
-
-              <!-- 防御パターン内訳 -->
-              <template
-                v-if="getNonZeroBreakdown(candidate).defense.length > 0"
-              >
-                <div class="popover-section-label">防御</div>
-                <div
-                  v-for="item in getNonZeroBreakdown(candidate).defense"
-                  :key="`defense-${item.key}`"
-                  class="popover-row"
-                >
-                  <span class="popover-label">{{ item.label }}:</span>
-                  <span class="popover-value">
-                    {{ formatPatternScore(item.detail) }}
-                  </span>
-                </div>
-              </template>
-
-              <!-- ボーナス内訳 -->
-              <template
-                v-if="getNonZeroBreakdown(candidate).bonuses.length > 0"
-              >
-                <div class="popover-section-label">ボーナス</div>
-                <div
-                  v-for="item in getNonZeroBreakdown(candidate).bonuses"
-                  :key="`bonus-${item.key}`"
-                  class="popover-row"
-                >
-                  <span class="popover-label">{{ item.label }}:</span>
-                  <span class="popover-value">
-                    {{ formatScore(item.value) }}
-                  </span>
-                </div>
-              </template>
-            </div>
 
             <!-- 予想手順 (PV) -->
             <div
@@ -346,71 +269,6 @@ function isDepthChanged(index: number): boolean {
                 >
                   {{ move }}
                 </span>
-              </div>
-            </div>
-
-            <!-- 探索末端の評価 -->
-            <div
-              v-if="candidate.leafEvaluation"
-              class="popover-leaf"
-            >
-              <div class="popover-section-label">末端評価</div>
-              <div class="leaf-summary">
-                <span class="leaf-total">
-                  {{ formatScore(candidate.leafEvaluation.total) }}
-                </span>
-                <span class="leaf-calc">
-                  (自{{ formatScore(candidate.leafEvaluation.myScore) }} - 相{{
-                    formatScore(candidate.leafEvaluation.opponentScore)
-                  }})
-                </span>
-              </div>
-
-              <!-- 自分の内訳 -->
-              <div
-                v-if="
-                  getLeafBreakdownItems(candidate.leafEvaluation.myBreakdown)
-                    .length > 0
-                "
-                class="leaf-breakdown-section"
-              >
-                <div class="leaf-breakdown-header">自分</div>
-                <div
-                  v-for="item in getLeafBreakdownItems(
-                    candidate.leafEvaluation.myBreakdown,
-                  )"
-                  :key="`my-${item.key}`"
-                  class="leaf-breakdown-row"
-                >
-                  <span class="leaf-breakdown-label">{{ item.label }}:</span>
-                  <span class="leaf-breakdown-value">
-                    {{ formatScore(item.score) }}
-                  </span>
-                </div>
-              </div>
-
-              <!-- 相手の内訳 -->
-              <div
-                v-if="
-                  getLeafBreakdownItems(
-                    candidate.leafEvaluation.opponentBreakdown,
-                  ).length > 0
-                "
-                class="leaf-breakdown-section"
-              >
-                <div class="leaf-breakdown-header">相手</div>
-                <div
-                  v-for="item in getLeafBreakdownItems(
-                    candidate.leafEvaluation.opponentBreakdown,
-                  )"
-                  :key="`opp-${item.key}`"
-                  class="leaf-breakdown-row"
-                >
-                  <span class="leaf-breakdown-label">{{ item.label }}:</span>
-                  <span class="leaf-breakdown-value">
-                    {{ formatScore(item.score) }}
-                  </span>
-                </div>
               </div>
             </div>
 

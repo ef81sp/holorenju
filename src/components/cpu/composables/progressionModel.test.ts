@@ -31,7 +31,6 @@ const pos = (row: number, col: number): Position => ({ row, col });
 function candidate(overrides: Partial<ReviewCandidate>): ReviewCandidate {
   return {
     position: pos(7, 7),
-    score: 0,
     searchScore: 0,
     ...overrides,
   };

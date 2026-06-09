@@ -285,7 +285,7 @@ describe("review 戦術プリミティブ出力スナップショット (#37 P3 
       board,
       moves,
       moveCount,
-    ).map((position) => ({ position, score: 0, searchScore: 0 }));
+    ).map((position) => ({ position, searchScore: 0 }));
     // timeLimit=Infinity を注入して node-bound 決定化
     annotateFukumiMoves(candidates, board, nextColor, engine, {
       ...REVIEW_VCF_OPTIONS,

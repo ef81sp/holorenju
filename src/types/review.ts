@@ -2,7 +2,7 @@
  * 振り返り（棋譜評価）関連の型定義
  */
 
-import type { CpuBattleRecord, LeafEvaluation, ScoreBreakdown } from "./cpu";
+import type { CpuBattleRecord } from "./cpu";
 import type { Position } from "./game";
 
 /**
@@ -83,16 +83,10 @@ export interface ForcedWinDefense {
  */
 export interface ReviewCandidate {
   position: Position;
-  /** 即時評価スコア */
-  score: number;
   /** 探索スコア（順位の根拠） */
   searchScore: number;
-  /** 即時評価の内訳 */
-  breakdown?: ScoreBreakdown;
   /** 予想手順 */
   principalVariation?: Position[];
-  /** 探索末端の評価内訳 */
-  leafEvaluation?: LeafEvaluation;
   /** この手を打つと相手に強制勝ちを許す場合のタイプ */
   opponentForcedWin?: ForcedLossType;
   /** 相手の強制勝ち手順（Phase 3 深掘りチェックで取得） */
