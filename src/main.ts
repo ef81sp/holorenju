@@ -10,22 +10,17 @@ import { preloadThreatWasm } from "@/logic/cpu/wasm/threatAdapter";
 import App from "./App.vue";
 
 // 連珠ルール判定の thin wasm（禁手 41KB / 脅威 28KB）を mount 前に await でロードする
-// ブートゲート（#37 P4 #43）。これにより isForbiddenForBlack / createsFour 等の同期
-// adapter 呼び出しが「wasm 常時ロード済み」を前提にでき、TS フォールバック撤去（PR-6）の
-// 安全条件を満たす。ロード失敗は握りつぶし、フォールバックが残っている間は継続可能にする。
+// ブートゲート（#37 P4 #43）。アダプタは pure-wasm 化済（TS フォールバックなし）なので、
+// isForbiddenForBlack / createsFour 等の同期呼び出しが走る前に wasm をロード済みにする。
+// ロード失敗時は握りつぶして mount するが、その場合 wasm 依存の判定は実行時に例外となる
+// （degraded mode）。本番では発生しない想定。
 async function bootstrap(): Promise<void> {
   await Promise.all([
     preloadForbiddenWasm().catch((e: unknown) => {
-      console.error(
-        "禁手 wasm のプリロードに失敗（TS フォールバックで継続）",
-        e,
-      );
+      console.error("禁手 wasm のプリロードに失敗", e);
     }),
     preloadThreatWasm().catch((e: unknown) => {
-      console.error(
-        "脅威 wasm のプリロードに失敗（TS フォールバックで継続）",
-        e,
-      );
+      console.error("脅威 wasm のプリロードに失敗", e);
     }),
   ]);
 

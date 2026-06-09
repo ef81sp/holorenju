@@ -32,14 +32,13 @@ import { createEmptyBoard } from "@/logic/renjuRules";
 
 import { countStones } from "../core/boardUtils";
 import { detectOpponentThreats } from "../evaluation";
-import { findDoubleMiseMoves } from "../evaluation/tactics";
 import { detectWhiteWinningPattern } from "../evaluation/winningPatterns";
 import {
   findWinningMove,
   getFourDefensePosition,
 } from "../search/threatPatterns";
 import { hasFourThreeAvailable, hasOpenThree } from "../search/vctHelpers";
-import { preloadThreatWasm } from "../wasm/threatAdapter";
+import { findDoubleMiseMoves, preloadThreatWasm } from "../wasm/threatAdapter";
 import { annotateFukumiMoves } from "./candidateVerification";
 import {
   checkCandidateForcedLoss,

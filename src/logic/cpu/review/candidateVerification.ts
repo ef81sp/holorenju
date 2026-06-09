@@ -11,7 +11,7 @@ import type { VCFSearchOptions } from "../search/types";
 import type { WasmSearchEngine } from "../wasm/searchEngine";
 
 // #37 P3 PR3: 四/活三判定を Zig 単一ソース(vct.classifyThreat)経由に。
-// wasm 未ロード時は threatAdapter 内で TS createsFour/createsOpenThree にフォールバック。
+// #43 PR-6: threatAdapter は pure-wasm 化済（利用前に wasm preload 必須。本番は main.ts ブートゲート）。
 import { createsFour, createsOpenThree } from "../wasm/threatAdapter";
 import {
   checkCandidateForcedLoss,

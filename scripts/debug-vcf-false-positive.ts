@@ -21,10 +21,14 @@ import {
 } from "@/logic/cpu/search/threatPatterns";
 import { findVCFSequence } from "@/logic/cpu/search/vcf";
 import {
-  checkFive,
-  checkForbiddenMove,
-  createEmptyBoard,
-} from "@/logic/renjuRules";
+  getForbiddenType,
+  preloadForbiddenWasm,
+} from "@/logic/cpu/wasm/forbiddenAdapter";
+import { preloadThreatWasm } from "@/logic/cpu/wasm/threatLoader";
+import { checkFive, createEmptyBoard } from "@/logic/renjuRules";
+
+// #43 PR-6: 禁手(forbidden)/脅威(threat) はどちらも pure-wasm のため先にロード（top-level await）。
+await Promise.all([preloadForbiddenWasm(), preloadThreatWasm()]);
 
 interface MoveRecord {
   row: number;
@@ -112,11 +116,9 @@ function verifyVCFSequence(
     if (isAttack) {
       // 禁手チェック（黒攻撃の場合）
       if (moveColor === "black") {
-        const forbidden = checkForbiddenMove(testBoard, pos.row, pos.col);
-        if (forbidden.isForbidden) {
-          console.log(
-            `  *** ERROR: 黒の攻撃手が禁手 (${forbidden.reason}) ***`,
-          );
+        const forbiddenType = getForbiddenType(testBoard, pos.row, pos.col);
+        if (forbiddenType) {
+          console.log(`  *** ERROR: 黒の攻撃手が禁手 (${forbiddenType}) ***`);
           return;
         }
       }
@@ -155,14 +157,14 @@ function verifyVCFSequence(
 
       // 白攻撃の場合、黒の防御位置が禁手かチェック
       if (moveColor === "white") {
-        const forbidden = checkForbiddenMove(
+        const forbiddenType = getForbiddenType(
           testBoard,
           defensePos.row,
           defensePos.col,
         );
-        if (forbidden.isForbidden) {
+        if (forbiddenType) {
           console.log(
-            `  -> 防御位置が禁手 (${forbidden.reason})！ 禁手追い込み成功`,
+            `  -> 防御位置が禁手 (${forbiddenType})！ 禁手追い込み成功`,
           );
           return;
         }

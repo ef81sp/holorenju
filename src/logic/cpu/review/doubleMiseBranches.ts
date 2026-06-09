@@ -7,7 +7,8 @@
 import type { BoardState, Position } from "@/types/game";
 import type { ForcedWinDefense, ForcedWinNode } from "@/types/review";
 
-// #37 P3 PR5: 四三判定を Zig 単一ソース(evaluate.createsFourThree)経由に（合法局面で TS と一致、未ロード時 TS フォールバック）。
+// #37 P3 PR5: 四三判定を Zig 単一ソース(evaluate.createsFourThree)経由に。
+// #43 PR-6: pure-wasm 化済（利用前に wasm preload 必須。本番は main.ts ブートゲート）。
 import { createsFourThree } from "../wasm/threatAdapter";
 
 /**

@@ -1,7 +1,10 @@
 /**
  * 連珠のルール判定ロジック
  *
- * barrel re-export: 全51の利用側は `@/logic/renjuRules` のまま変更不要
+ * barrel re-export。
+ * #43 PR-6: 図形/禁手判定の TS 二重実装（patterns.ts/forbiddenMoves.ts/patternRecognition.ts）は
+ * 物理削除し Zig/WASM 単一ソース（patternsAdapter/forbiddenAdapter）へ一本化。
+ * ここでは core（五連・長連・盤面操作など Zig 化対象外のルール基盤）のみを公開する。
  */
 
 // core: 定数、位置判定、盤面操作、ライン解析、五連・長連検出
@@ -19,23 +22,3 @@ export {
   getLineLength,
   isValidPosition,
 } from "./core";
-
-// patterns: 活三・活四・飛び三・飛び四・達四の検出
-export {
-  checkJumpFour,
-  checkJumpThree,
-  checkOpenPattern,
-  checkStraightFour,
-  getConsecutiveThreeStraightFourPoints,
-  getJumpThreeStraightFourPoints,
-} from "./patterns";
-
-// forbiddenMoves: 禁手判定
-export {
-  checkForbiddenMove,
-  checkForbiddenMoveWithContext,
-  type ForbiddenCheckOptions,
-} from "./forbiddenMoves";
-
-// patternRecognition: パターン名称の認識
-export { recognizePattern } from "./patternRecognition";
