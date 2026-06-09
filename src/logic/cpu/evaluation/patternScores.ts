@@ -324,49 +324,6 @@ export interface PatternScoreDetail {
 }
 
 /**
- * パターン内訳
- */
-export interface PatternBreakdown {
-  five: PatternScoreDetail;
-  openFour: PatternScoreDetail;
-  four: PatternScoreDetail;
-  openThree: PatternScoreDetail;
-  three: PatternScoreDetail;
-  openTwo: PatternScoreDetail;
-  two: PatternScoreDetail;
-}
-
-/**
- * スコア内訳（デバッグ表示用）
- */
-export interface ScoreBreakdown {
-  /** 攻撃パターン内訳 */
-  pattern: PatternBreakdown;
-  /** 防御パターン内訳（相手のパターンを阻止） */
-  defense: PatternBreakdown;
-  /** 四三ボーナス */
-  fourThree: number;
-  /** フクミ手ボーナス */
-  fukumi: number;
-  /** ミセ手ボーナス */
-  mise: number;
-  /** ミセ手の種類（表示ラベル解決用） */
-  miseType: MiseType;
-  /** 中央ボーナス */
-  center: number;
-  /** 複数方向脅威ボーナス */
-  multiThreat: number;
-  /** 防御交差点ボーナス（相手が2方向以上の脅威を作る位置の防御価値） */
-  defenseMultiThreat: number;
-  /** 単発四ペナルティ（減点） */
-  singleFourPenalty: number;
-  /** 禁手追い込みボーナス（白番のみ） */
-  forbiddenTrap: number;
-  /** 禁手脆弱性ペナルティ（黒番のみ、減点） */
-  forbiddenVulnerability: number;
-}
-
-/**
  * 末端評価オプション
  */
 export interface LeafEvaluationOptions {
@@ -381,41 +338,6 @@ export interface LeafEvaluationOptions {
 }
 
 /**
- * ミセ手の種類
- */
-export type MiseType = "none" | "mise" | "double-mise";
-
-/**
- * パターンスコア内訳（探索末端用）
- */
-export interface LeafPatternScores {
-  five: number;
-  openFour: number;
-  four: number;
-  openThree: number;
-  three: number;
-  openTwo: number;
-  two: number;
-  total: number;
-}
-
-/**
- * 盤面評価の内訳（探索末端用）
- */
-export interface BoardEvaluationBreakdown {
-  /** 自分のパターンスコア合計 */
-  myScore: number;
-  /** 相手のパターンスコア合計 */
-  opponentScore: number;
-  /** 最終スコア（myScore - opponentScore） */
-  total: number;
-  /** 自分のパターンスコア内訳 */
-  myBreakdown: LeafPatternScores;
-  /** 相手のパターンスコア内訳 */
-  opponentBreakdown: LeafPatternScores;
-}
-
-/**
  * パターンタイプ
  */
 export type PatternType =
@@ -427,41 +349,3 @@ export type PatternType =
   | "openTwo"
   | "two"
   | null;
-
-/**
- * 空のパターンスコア詳細を作成
- */
-export function emptyScoreDetail(): PatternScoreDetail {
-  return { base: 0, diagonalBonus: 0, final: 0 };
-}
-
-/**
- * 空のパターンスコア内訳を作成
- */
-export function emptyLeafPatternScores(): LeafPatternScores {
-  return {
-    five: 0,
-    openFour: 0,
-    four: 0,
-    openThree: 0,
-    three: 0,
-    openTwo: 0,
-    two: 0,
-    total: 0,
-  };
-}
-
-/**
- * 空のパターン内訳を作成
- */
-export function emptyPatternBreakdown(): PatternBreakdown {
-  return {
-    five: emptyScoreDetail(),
-    openFour: emptyScoreDetail(),
-    four: emptyScoreDetail(),
-    openThree: emptyScoreDetail(),
-    three: emptyScoreDetail(),
-    openTwo: emptyScoreDetail(),
-    two: emptyScoreDetail(),
-  };
-}

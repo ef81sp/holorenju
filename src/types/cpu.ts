@@ -3,22 +3,12 @@
  */
 
 import type { EvaluationOptions } from "@/logic/cpu/evaluation";
-import type {
-  LeafPatternScores,
-  PatternBreakdown,
-  PatternScoreDetail,
-  ScoreBreakdown,
-} from "@/logic/cpu/evaluation/patternScores";
+import type { PatternScoreDetail } from "@/logic/cpu/evaluation/patternScores";
 
 import type { BoardState, Position, StoneColor } from "./game";
 
 // SSoT: patternScores.ts に定義された型を re-export
-export type {
-  LeafPatternScores,
-  PatternBreakdown,
-  PatternScoreDetail,
-  ScoreBreakdown,
-};
+export type { PatternScoreDetail };
 
 /**
  * CPU難易度
