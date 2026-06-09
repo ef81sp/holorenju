@@ -33,6 +33,43 @@ export interface ThreatWasmContext {
   findThreatMovesWasm: (color: number) => void;
   /** 脅威手バッファの先頭オフセット（memory 内）を返す。 */
   getThreatMovesBuffer: () => number;
+  /** (row,col,dir,color) で跳び四が成立するか（1/0）。配置済み cells 規約（#37 P4 PR-A）。 */
+  checkJumpFourWasm: (
+    row: number,
+    col: number,
+    dir: number,
+    color: number,
+  ) => number;
+  /** (row,col,dir,color) で跳び三が成立するか（1/0）。配置済み cells 規約。 */
+  checkJumpThreeWasm: (
+    row: number,
+    col: number,
+    dir: number,
+    color: number,
+  ) => number;
+  /** (row,col,dir,color) で達四が成立するか（1/0）。配置済み cells 規約。 */
+  checkStraightFourWasm: (
+    row: number,
+    col: number,
+    dir: number,
+    color: number,
+  ) => number;
+  /** 連続三の達四点（最大2点）を pattern points バッファに書く。 */
+  getConsecutiveThreeStraightFourPointsWasm: (
+    row: number,
+    col: number,
+    dir: number,
+    color: number,
+  ) => void;
+  /** 跳び三の達四点（最大1点）を pattern points バッファに書く。 */
+  getJumpThreeStraightFourPointsWasm: (
+    row: number,
+    col: number,
+    dir: number,
+    color: number,
+  ) => void;
+  /** pattern points バッファの先頭オフセット（memory 内）を返す。 */
+  getPatternPointsBuffer: () => number;
   /** wasm 線形メモリ（バッファ読み取り用）。 */
   memory: WebAssembly.Memory;
 }

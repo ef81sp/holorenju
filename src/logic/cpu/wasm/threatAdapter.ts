@@ -56,6 +56,14 @@ export function setThreatWasmForTest(w: ThreatWasmContext | undefined): void {
   wasm = w;
 }
 
+/**
+ * ロード済み threat wasm インスタンスを返す（未ロード時 undefined）。
+ * patternsAdapter（#37 P4）が同一インスタンスを共用し threat.wasm の二重ロードを避けるため。
+ */
+export function getThreatWasm(): ThreatWasmContext | undefined {
+  return wasm;
+}
+
 function syncBoard(w: ThreatWasmContext, board: BoardState): void {
   w.boardInit();
   for (let row = 0; row < 15; row++) {
