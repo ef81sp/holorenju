@@ -10,16 +10,12 @@
 
 // Re-export: patternScores（型・定数）
 export {
-  type BoardEvaluationBreakdown,
   DEFAULT_EVAL_OPTIONS,
   type EvaluationOptions,
   FULL_EVAL_OPTIONS,
   type LeafEvaluationOptions,
-  type LeafPatternScores,
-  type PatternBreakdown,
   PATTERN_SCORES,
   type PatternScoreDetail,
-  type ScoreBreakdown,
   type ThreatInfo,
 } from "./patternScores";
 
