@@ -1,5 +1,45 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
+exports[`review 図形プリミティブ出力スナップショット (#43 PR-3 安全網) > detectWhiteWinningPattern (全空き点): 'mise-vcf-#18' 1`] = `
+[
+  {
+    "col": 8,
+    "row": 11,
+    "type": "double-three",
+  },
+]
+`;
+
+exports[`review 図形プリミティブ出力スナップショット (#43 PR-3 安全網) > detectWhiteWinningPattern (全空き点): 'white29-m20' 1`] = `[]`;
+
+exports[`review 図形プリミティブ出力スナップショット (#43 PR-3 安全網) > detectWhiteWinningPattern (全空き点): 'white29-m24' 1`] = `[]`;
+
+exports[`review 図形プリミティブ出力スナップショット (#43 PR-3 安全網) > findWinningMove: 活四 1`] = `
+{
+  "black": {
+    "col": 4,
+    "row": 7,
+  },
+  "white": {
+    "col": 4,
+    "row": 7,
+  },
+}
+`;
+
+exports[`review 図形プリミティブ出力スナップショット (#43 PR-3 安全網) > getFourDefensePosition: 止め四・跳び四 1`] = `
+{
+  "closedFour": {
+    "col": 9,
+    "row": 7,
+  },
+  "jumpFour": {
+    "col": 6,
+    "row": 7,
+  },
+}
+`;
+
 exports[`review 戦術プリミティブ出力スナップショット (#37 P3 安全網) > annotateFukumiMoves: 'mise-vcf-#18' 1`] = `[]`;
 
 exports[`review 戦術プリミティブ出力スナップショット (#37 P3 安全網) > annotateFukumiMoves: 'white29-m20' 1`] = `

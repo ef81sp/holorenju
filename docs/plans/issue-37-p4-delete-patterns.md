@@ -1,102 +1,68 @@
 # #37 P4 (#43): patterns.ts / forbiddenMoves.ts 物理削除プラン
 
-> ステータス: **設計のみ**（2026-06-09）。実装は次セッション以降。本ドキュメントは /review 合意形成用。
+> ステータス: **実装中**（2026-06-09 改訂、Option C）。stacked PR で進行。
 
 ## Context
 
-#37 の最終目標は、連珠ルール（禁手・図形・パターン判定）の **TS 二重実装 `src/logic/renjuRules/patterns.ts` と `forbiddenMoves.ts` を物理削除**し、ダブルメンテを解消すること（= #43）。Zig 側（`forbidden.zig`/`jump_patterns.zig`/`patterns.zig`）に全関数の実装があり、対局CPU・VCF/VCT worker・禁手判定（forbiddenAdapter）は既に Zig 委譲済み。
+#37 の最終目標は、連珠ルール（禁手・図形・パターン判定）の **TS 二重実装 `src/logic/renjuRules/patterns.ts` と `forbiddenMoves.ts` を物理削除**し、ダブルメンテを解消すること（= #43）。Zig 側（`forbidden.zig`/`jump_patterns.zig`/`patterns.zig`/`vct.zig`/`threats.zig`）に全関数の実装があり、対局CPU・VCF/VCT worker・禁手判定（forbiddenAdapter）は既に Zig 委譲済み。
 
-### 唯一のブロッカー（調査で判明）
+### 調査で判明した現実
 
-**review 内訳表示の評価スコア計算**が、評価ヘルパー（`forbiddenTactics`/`jumpPatterns`/`miseTactics`/`threatDetection`/`winningPatterns`）と探索ヘルパー（`threatMoves`/`vctHelpers`/`threatPatterns`）を通じて、patterns.ts/forbiddenMoves.ts のプリミティブ（`checkForbiddenMove`/`checkJumpFour`/`checkJumpThree`/`checkStraightFour`/`checkOpenPattern`/`getConsecutiveThreeStraightFourPoints`/`getJumpThreeStraightFourPoints`）を**同期 TS 直呼び**している。さらに `forbiddenMoves.ts` 自身が patterns.ts を使う。
+patterns/forbidden を使う TS は **2クラスタ**に分かれる:
 
-評価関数（`evaluatePositionWithBreakdown` 等）は「#37 対象外＝別issue（ボス合意）」だが、それが patterns.ts を使う限り #43 を塞ぐ、というロードマップ上の矛盾。
+- **(a) 表示/評価クラスタ（ホット, 削除対象）**: `positionEvaluation`/`boardEvaluation` + eval helpers（jumpPatterns/forbiddenTactics/miseTactics/threatDetection(TS)/winningPatterns の一部/stonePatterns/followUpThreats/tactics/leafMiseThreat）。最終消費者は review の **breakdown 表示のみ**。
+- **(b) VCT/VCF 判定クラスタ（コールド, 存続＋プリミティブ張替）**: `search/` の `vctHelpers`/`threatMoves`/`threatPatterns`/`vctValidation`/`vcfCheck`、および review 判定が直接叩く `winningPatterns.detectWhiteWinningPattern`。review の被必勝・被詰判定（`forcedWinDetection`/`forcedLossCheck`/`candidateVerification`/`doubleMiseBranches`）と VCF パズル生成（`vcfPuzzle.ts`）が使う**生きた動作経路**（Zig 探索結果に対する TS 後検証）。
 
-## 方針（Option B: ルールプリミティブを Zig 委譲、評価スコア組み立ては TS 温存）
+確定事実:
 
-**#37 の真の目的は「連珠ルールの二重実装」解消**であり、評価のしきい値/ボーナス（ヒューリスティック）は「ルール」ではない。よって:
+- 対局CPUは完全 Zig（`cpu.worker`→`WasmSearchEngine`）で、`search/`・`evaluation/` の TS を一切使わない（`search/index.ts` 外部消費者ゼロ）。触る対象は **review と VCF パズルのみ**。
+- **breakdown/leafEvaluation/candidate.score は完全に表示専用**（`CpuDebugInfo.vue` だけが消費。判定・並び順・採点は全て Zig 由来の `searchScore`/`playedScore`/`bestScore`）。
+- ボス決定: 「**動作が変わらないことが重要、表示スコアが変わるのは構わない**」「**内訳パネルを簡素化/廃止**」。
 
-- **ルールプリミティブ**（禁手・図形判定）→ Zig 単一ソース（thin wasm + adapter）に一本化。
-- **評価スコアの組み立て**（evaluatePositionWithBreakdown の内訳合成・スコア定数）→ TS に温存（= 別issue。プレゼン/ヒューリスティック層）。ただし内部のルール判定は adapter 経由 Zig に切替。
+## 方針（Option C: 表示クラスタ削除 + 判定クラスタのプリミティブ張替 + 物理削除）
 
-これで patterns.ts/forbiddenMoves.ts の TS 消費者がゼロになり物理削除できる。評価関数の全 Zig 化（ScoreBreakdown を Zig が返す Option A）は不要（大規模・UI内訳パリティ риск回避）。
+旧 Option B（プリミティブ単位の adapter 委譲を評価ヘルパー全域に適用）は、**評価ホットループ**を per-call wasm 同期(O(225))で委譲しパリティテストがタイムアウトし頓挫。Option A（評価関数の全 Zig 化で ScoreBreakdown を Zig が返す faithful）は、breakdown が表示専用と判明したため過剰。
 
-### 既存資産（再利用）
+→ Option C:
 
-- `forbiddenAdapter.ts`（checkForbiddenMove の Zig 委譲、`forbidden_wasm.zig` の `checkForbiddenPointWasm`）— 既存。
-- `threat_wasm.zig` + `threatAdapter.ts`（classifyThreat/createsFourThree/detect/mise/hasOpenThree 等）— 既存パターン踏襲。
-- `renjuParity.test.ts` — TS==Zig 照合。patterns.ts プリミティブの Zig 同値を既にカバー（`checkJumpFour`/`checkStraightFour`/`getJumpThreeStraightFourPoints` 等）。移行中の安全網。**最終 PR で TS オラクル消失とともに用途終了**。
-- cpu-engine wasm は既に `getJumpThreeStraightFourPointsWasm` 等を export（`wasm/types.ts:28`）。Zig 実装存在の裏付け。
+> **(a) ホット表示クラスタは「削除」**（breakdown 表示を廃止して死蔵化）。
+> **(b) コールド判定クラスタは「TS オーケストレーションを残し、葉プリミティブだけアダプタへ張替」**。
 
-## 消費者マップ（patterns.ts プリミティブ → 移行対象）
+これにより:
 
-| プリミティブ                            | TS 消費者（test除く、forbiddenMoves.ts は共倒れ削除）                                   |
-| --------------------------------------- | --------------------------------------------------------------------------------------- |
-| `checkJumpFour`                         | threatMoves, vctHelpers, threatPatterns, threatDetection, winningPatterns, jumpPatterns |
-| `checkJumpThree`                        | 同上 + forbiddenTactics                                                                 |
-| `checkStraightFour`                     | jumpPatterns                                                                            |
-| `getConsecutiveThreeStraightFourPoints` | forbiddenTactics, jumpPatterns                                                          |
-| `getJumpThreeStraightFourPoints`        | forbiddenTactics, jumpPatterns（+ wasm/types.ts は型のみ）                              |
-| `checkOpenPattern`                      | patternRecognition                                                                      |
-| `checkForbiddenMove`(forbiddenMoves.ts) | 残 TS 直呼び3箇所（miseTactics 等）→ forbiddenAdapter へ                                |
+- (b) の TS 判定アルゴリズム（`isResilientToCounterFours`/`checkSequenceBreaksByCF`/`detectWhiteWinningPattern` 等）は**温存**。**高位 Zig 関数で置換しない**（TS と Zig で高位ロジックが意図的に異なる箇所があり、置換すると判定が変わる）。
+- 張替えるのは葉プリミティブのみ＝`checkJumpFour`/`checkJumpThree`/`checkStraightFour`/`get{Consecutive,Jump}*StraightFourPoints` → `patternsAdapter`、`checkForbiddenMove` → `forbiddenAdapter.isForbiddenForBlack`。これらは**パリティ検証済で出力等価**＝動作不変。
+- (b) は review 1クリック/着手駆動の**非ホットパス**なので per-call sync でも実害なし。盤面全走査を内包する関数（`hasOpenThree`/`findThreatMoves` 等）は **threatAdapter の関数粒度1コール**を使う（点ごと sync 禁止）。
 
-- `patternRecognition.ts`（`recognizePattern`）は **index.ts バレルからのみ参照（実消費者ゼロ＝死蔵）**。PR-C で patternRecognition.ts ごと削除。
-- `forbiddenMoves.ts` の `checkForbiddenMoveWithContext`（グローバルハッシュキャッシュ版）も **index.ts 再エクスポートのみ＝実消費者ゼロ**。forbiddenMoves.ts と共倒れ削除（Zig は単点版なので移行不要）。
-- `core.ts` の `checkFive`/`createEmptyBoard` 等は削除対象外（残存）。
+`forbiddenAdapter` は live（UI 禁手表示）→ 削除でなく **pure-wasm 化**。`patternsAdapter` は本プランで (b) に使い生かす。`PATTERN_SCORES` 定数は review が多用 → `patternScores.ts` は型を削り定数は残す。
 
-## PR 分解
+## PR 分解（stacked sub PR、依存順）
 
-### PR-A: patternsAdapter 敷設（新規 wasm export + adapter + parity）✅ 実装済み（本PR）
+各 PR ゲート＝`pnpm check-fix` 緑 + 全テスト緑 + **reviewSnapshot 不変** + 対局CPU無干渉 + `pnpm check:circular` 緑。
 
-- `threat_wasm.zig` に **5 プリミティブ**を export 追加（実体は jump_patterns.zig の既存関数。cells 直読み=bitboard非依存）:
-  - bool 返し（u8）: `checkJumpFourWasm` / `checkJumpThreeWasm` / `checkStraightFourWasm`（引数: row,col,dir,color。「配置済み」cells 規約）
-  - Position列返し: `getConsecutiveThreeStraightFourPointsWasm`（最大2点）/ `getJumpThreeStraightFourPointsWasm`（最大1点）→ `pattern_points_buffer`（`[u8 count][count*(row,col)]`）+ `getPatternPointsBuffer`
-  - **`checkOpenPattern` は省略**: 生存消費者が patternRecognition と forbiddenMoves のみで両方 PR-C/D で削除されるため adapter 不要。
-- `src/logic/cpu/wasm/patternsAdapter.ts` 新規（5関数。`getThreatWasm` で threatAdapter のインスタンス共用＝二重ロード回避。boardInit/boardSet のみ同期。未ロード時 TS フォールバック）。
-- faithful パリティ `patternsParity.test.ts` 新設（決定的合法自己対局40局、近傍空き点に候補配置、全8方向・両色で raw wasm==TS。点列は座標ソート正規化。+ adapter 配線 smoke）。
-- ゲート: check-fix / 新パリティ緑 / renjuParity 緑 / reviewSnapshot 不変。
+- **PR-0**: docs改訂 + reviewSnapshot CORPUS 拡充（`detectWhiteWinningPattern` double-three/four、`findWinningMove`/`getFourDefensePosition` を非自明値で固定）+ madge 導入（循環依存ゲート）。
+- **PR-1**: ブートゲート — `main.ts` の preload を `app.mount` 前に await。フォールバックは残すので動作完全不変。
+- **PR-2**: 表示内訳の除去 — `fullEval.ts` から `evaluatePositionWithBreakdown`/`evaluateBoardWithBreakdown` 呼び出し除去、`ReviewCandidate` を `{position,searchScore,principalVariation}` に縮約。`CpuDebugInfo.vue` の内訳描画除去。
+- **PR-3【本丸】**: 判定クラスタ(b) の葉プリミティブをアダプタ張替。先に循環依存を解消（adapter→search フォールバックを隔離、threatAdapter の evaluation barrel 依存を直import化）。高位 TS ロジックは温存。
+- **PR-4**: 死蔵ホット(a)クラスタの物理削除（`positionEvaluation`/`boardEvaluation`/`stonePatterns`/`leafMiseThreat`/`tactics`/`followUpThreats`、`breakdownUtils` は `formatScore` のみ残す）。`threatDetection(TS)`/`jumpPatterns`/`forbiddenTactics`/`miseTactics` は PR-6 まで残す。`winningPatterns`/`directionAnalysis` は live で残す。
+- **PR-5**: `patternScores.ts` トリミング（内訳型を削り定数は残す）。
+- **PR-6a**: パリティテストの Zig 回帰移植（`renjuParity` は削除、createsFourThree/vctHelpers/mise 系は Zig `test{}` ゴールデン化）。
+- **PR-6【#37完了】**: フォールバック撤去（adapter pure-wasm 化）+ `git rm patterns.ts/forbiddenMoves.ts/patternRecognition.ts` + 死蔵化 helper 削除 + barrel 更新。
 
-### PR-B: CPU/eval 利用点を adapter へ張替
+## 検証（動作不変）
 
-- 上表の CPU 探索/評価ヘルパー（threatMoves/vctHelpers/threatPatterns/threatDetection/winningPatterns/jumpPatterns/forbiddenTactics/miseTactics）の patterns.ts プリミティブ import を `patternsAdapter` へ、残 `checkForbiddenMove` 直呼びを `forbiddenAdapter` へ切替。
-- **同期性**: adapter は wasm ロード後同期。1呼び出しごと syncBoard(O(225))。review/worker パス（非ホットパス、1着手/クリック駆動）なので許容。ループ内多回呼びでボトルネックなら該当箇所のみバッチ export を検討（PR-B 内で判断）。
-- ゲート: reviewSnapshot バイト不変 / renjuParity 緑 / 全テスト緑 / review breakdown 実動作確認。
-- 完了時点で patterns.ts の消費者は forbiddenMoves.ts と patternRecognition.ts と index.ts のみ。
+1. `reviewSnapshot.test.ts`（全PRゲート, PR-0 拡充）— 判定出力が不変。
+2. 参照棋譜での fullEval 回帰（bestMove/searchScore/PV 一致、即時評価 score 消失のみ許容）。
+3. 対局CPU不変（同 seed ベンチで同一着手列）。
+4. VCF パズル不変（禁手判定含む）。
+5. 各PR `pnpm check-fix` + `pnpm check:circular`。
+6. `cd zig && zig build` + `zig build test` 緑（PR-3/6a/6）。
+7. ブラウザ E2E スモーク（対局禁手表示 / パズル / 振り返り、内訳ポップオーバー消滅）。
 
-### PR-C: renjuRules 内部の patterns 依存解消
+## リスク
 
-- `patternRecognition.ts`: 実利用なら checkOpenPattern を adapter へ、未使用なら recognizePattern ごと削除。
-- `wasm/types.ts` の型参照整理。
-- forbiddenMoves.ts の patterns 依存は PR-D で共倒れ削除のため触らない。
-
-### PR-D: フォールバック撤去 + 物理削除（capstone, #37 完了）
-
-- **起動ブートゲート追加（フォールバック撤去の前提・3観点レビュー指摘）**: 現状 main.ts の preload は非ブロッキング発火（`.catch`）でレースあり。フォールバック撤去後は未ロード同期呼びが例外になるため、**`app.mount` 前に `await Promise.all([preloadForbiddenWasm(), preloadThreatWasm()])` で完了保証**する init barrier を先に入れる。review.worker.ts は既に `await preloadThreatWasm()` 済み。テストは setup で preload。
-- 前提充足確認: 全同期呼び出し経路が wasm ロード後であることを保証（UI 直呼びは無いことを確認済みだが、forbiddenAdapter 経由の経路も含めて再確認）。
-- `forbiddenAdapter`/`patternsAdapter` の **TS フォールバック分岐を撤去**（wasm 必須化）。順序: ブートゲート merge → フォールバック撤去。
-- **`patterns.ts` / `forbiddenMoves.ts` を `git rm`**。`renjuRules/index.ts` の re-export 除去。
-- `renjuParity.test.ts`: TS オラクル消失 → 削除（Zig unit test が単一ソースの正しさを担保）。または Zig 出力の golden 化に再設計（要判断）。
-- ゲート: check-fix / 全テスト緑 / zig build test 緑 / reviewSnapshot 不変 / review breakdown 実動作 / 対局・パズルで禁手判定が従来通り（E2E）。
-
-## 技術判断・リスク
-
-- **同期 wasm の保証**: フォールバック撤去後、wasm 未ロードで同期呼びが走ると例外。main/worker の preload が**起動時必ず完了**しているか PR-D で厳密検証（非ブロッキング発火のレース確認）。必要なら preload を await するブートゲートを追加。
-- **パリティの維持**: PR-A〜C の間 renjuParity を緑に保ち、Zig プリミティブが TS と同値であることを移行前に保証。最終 PR-D でのみ TS を消す。
-- **非合法盤の扱い**: Zig⇄TS は非合法盤（多重四/長連/盤端不能）で食い違うが合法局面では一致（#37 既知）。パリティは**合法自己対局ベース**。点列 export は座標ソート/順序付きで正規化。
-- **patternRecognition の生死**: PR-A で要確定（index バレル経由の実利用調査）。
-- **評価関数は依然 TS**: 本プランは「評価スコア組み立て」を TS に残す（別issue）。#37 完了後も evaluatePositionWithBreakdown は TS だが、ルール判定は Zig 単一ソース。これがロードマップ「TS=プレゼン、戦術=Zig」の最終形。
-- **性能**: 触る箇所は review/worker（非対局ホットパス）。対局CPU(Zig)は無干渉。実害なし。
-
-## 工数見積り（粗）
-
-- PR-A: 中（wasm export 6 + adapter + パリティ）。点列バッファ2本の設計。
-- PR-B: 中〜大（8ファイルの import 切替 + 同期性検証 + reviewSnapshot ガード）。最大の地味作業。
-- PR-C: 小。
-- PR-D: 中（フォールバック撤去 + preload 保証検証 + 物理削除 + renjuParity 処理 + E2E）。
-- 合計: 複数セッション。各 PR は stacked（本体→main はボス動作確認後）。
-
-## 未解決の確認事項（実装前にボスへ）
-
-1. renjuParity.test.ts は **削除**でよいか（Zig 単一ソース化の帰結）、Zig golden 再設計が要るか。
-2. preload 未完レース対策として**起動ブートゲート（preload await）**を入れてよいか（わずかな初期化遅延）。
-3. patternRecognition.recognizePattern が未使用なら削除してよいか。
+- preload race: PR-1 を先行マージしてから PR-6。
+- 循環依存: PR-3 で search→adapter を足す前に adapter→search フォールバックを隔離。`check:circular` ゲート。
+- 高位ロジック乖離: `isResilientToCounterFours`/`detectWhiteWinningPattern` を高位 Zig に置換しない（葉プリミティブのみ張替）。
+- 全走査の点ごと sync 禁止: threatAdapter 関数粒度コールへ。
+- 巻き込み事故: フォールバック撤去（PR-6）まで死蔵化しない helper を PR-4 で消さない。
