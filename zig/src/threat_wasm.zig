@@ -16,6 +16,7 @@
 const bitboard = @import("bitboard.zig");
 const board = @import("board.zig");
 const evaluate = @import("evaluate.zig");
+const jp = @import("jump_patterns.zig");
 const threats = @import("threats.zig");
 const vct = @import("vct.zig");
 
@@ -171,5 +172,65 @@ export fn findThreatMovesWasm(color: u8) void {
         threat_moves_buffer[o] = buf[i].row;
         threat_moves_buffer[o + 1] = buf[i].col;
         o += 2;
+    }
+}
+
+// === patterns プリミティブ（#37 P4 PR-A）===
+//
+// patterns.ts の図形判定プリミティブを Zig 単一ソース化する橋（patternsAdapter 経由）。
+// 実体は jump_patterns.zig の既存関数。これらは cells を直読みする（bitboard 非依存）ため
+// boardInit/boardSet のみで同期可（syncBitboard 不要）。
+// 規約: (row,col) に color を**配置済み**の cells で評価する（renjuParity と同一規約）。
+// dir_index は 0-7（DIRECTIONS_8。TS の DIRECTIONS と一致）。
+
+/// (row,col,dir,color) で跳び四が成立するか（1/0）。
+export fn checkJumpFourWasm(row: u8, col: u8, dir_index: u8, color: u8) u8 {
+    const c: board.Cell = @enumFromInt(color);
+    return if (jp.checkJumpFour(&board.board_cells, row, col, dir_index, c)) 1 else 0;
+}
+
+/// (row,col,dir,color) で跳び三が成立するか（1/0）。
+export fn checkJumpThreeWasm(row: u8, col: u8, dir_index: u8, color: u8) u8 {
+    const c: board.Cell = @enumFromInt(color);
+    return if (jp.checkJumpThree(&board.board_cells, row, col, dir_index, c)) 1 else 0;
+}
+
+/// (row,col,dir,color) で達四（連続四で延ばすと五）が成立するか（1/0）。
+export fn checkStraightFourWasm(row: u8, col: u8, dir_index: u8, color: u8) u8 {
+    const c: board.Cell = @enumFromInt(color);
+    return if (jp.checkStraightFour(&board.board_cells, row, col, dir_index, c)) 1 else 0;
+}
+
+// 達四点（getConsecutive…/getJumpThree…）を [u8 count][count*(row,col)] でシリアライズ。
+// 連続三は最大2点なので 1+2*2=5 バイト。
+var pattern_points_buffer: [8]u8 = undefined;
+
+export fn getPatternPointsBuffer() [*]u8 {
+    return &pattern_points_buffer;
+}
+
+/// 連続三の達四点（最大2点）を pattern_points_buffer に書く。
+export fn getConsecutiveThreeStraightFourPointsWasm(row: u8, col: u8, dir_index: u8, color: u8) void {
+    const c: board.Cell = @enumFromInt(color);
+    const r = jp.getConsecutiveThreeStraightFourPoints(&board.board_cells, row, col, dir_index, c);
+    pattern_points_buffer[0] = r.count;
+    var o: usize = 1;
+    for (0..r.count) |i| {
+        pattern_points_buffer[o] = r.points[i].row;
+        pattern_points_buffer[o + 1] = r.points[i].col;
+        o += 2;
+    }
+}
+
+/// 跳び三の達四点（最大1点）を pattern_points_buffer に書く。
+export fn getJumpThreeStraightFourPointsWasm(row: u8, col: u8, dir_index: u8, color: u8) void {
+    const c: board.Cell = @enumFromInt(color);
+    const r = jp.getJumpThreeStraightFourPoints(&board.board_cells, row, col, dir_index, c);
+    if (r.found) {
+        pattern_points_buffer[0] = 1;
+        pattern_points_buffer[1] = r.point.row;
+        pattern_points_buffer[2] = r.point.col;
+    } else {
+        pattern_points_buffer[0] = 0;
     }
 }

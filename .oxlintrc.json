@@ -69,7 +69,8 @@
         "**/createsFourThreeParity.test.ts",
         "**/findMiseTargetsParity.test.ts",
         "**/findDoubleMiseMovesParity.test.ts",
-        "**/vctHelpersParity.test.ts"
+        "**/vctHelpersParity.test.ts",
+        "**/patternsParity.test.ts"
       ],
       "rules": {
         "no-bitwise": "off"
