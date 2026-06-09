@@ -38,23 +38,18 @@ import {
   hasOpenThree as hasOpenThreeTs,
 } from "@/logic/cpu/search/vctHelpers";
 
-import { loadThreatWasm, type ThreatWasmContext } from "./threatLoader";
+import {
+  getThreatWasm,
+  preloadThreatWasm,
+  setThreatWasmForTest,
+  type ThreatWasmContext,
+} from "./threatLoader";
 import { CELL } from "./types";
 
-let wasm: ThreatWasmContext | undefined = undefined;
-
-/** 起動時に1回プリロード（非ブロッキング発火を想定）。 */
-export async function preloadThreatWasm(): Promise<void> {
-  if (wasm) {
-    return;
-  }
-  wasm = await loadThreatWasm();
-}
-
-/** テスト用: wasm インスタンスを直接注入/解除する。 */
-export function setThreatWasmForTest(w: ThreatWasmContext | undefined): void {
-  wasm = w;
-}
+// wasm シングルトン管理は threatLoader（中立な低レベル）へ移設（#37 P4 #43）。
+// patternsAdapter は threatLoader.getThreatWasm を直接使うため、本モジュールへの
+// import 辺が消え judgment 層との循環依存が生じない。後方互換で re-export する。
+export { getThreatWasm, preloadThreatWasm, setThreatWasmForTest };
 
 function syncBoard(w: ThreatWasmContext, board: BoardState): void {
   w.boardInit();
@@ -91,6 +86,7 @@ export function classifyThreat(
   col: number,
   color: "black" | "white",
 ): ThreatClassification {
+  const wasm = getThreatWasm();
   if (wasm) {
     syncBoard(wasm, board);
     // bits ∈ {0,1,2,3}: bit0=four, bit1=openThree。算術で展開（no-bitwise 準拠）。
@@ -142,6 +138,7 @@ export function createsFourThree(
   col: number,
   color: "black" | "white",
 ): boolean {
+  const wasm = getThreatWasm();
   if (wasm) {
     syncBoard(wasm, board);
     return (
@@ -178,6 +175,7 @@ export function detectOpponentThreats(
   board: BoardState,
   opponentColor: "black" | "white",
 ): ThreatInfo {
+  const wasm = getThreatWasm();
   if (wasm) {
     syncBoard(wasm, board);
     wasm.detectOpponentThreatsWasm(
@@ -214,6 +212,7 @@ export function findMiseTargets(
   col: number,
   color: "black" | "white",
 ): Position[] {
+  const wasm = getThreatWasm();
   if (wasm) {
     syncBoard(wasm, board);
     wasm.findMiseTargetsWasm(
@@ -236,6 +235,7 @@ export function findDoubleMiseMoves(
   board: BoardState,
   color: "black" | "white",
 ): Position[] {
+  const wasm = getThreatWasm();
   if (wasm) {
     syncBoard(wasm, board);
     wasm.findDoubleMiseMovesWasm(color === "black" ? CELL.BLACK : CELL.WHITE);
@@ -256,6 +256,7 @@ export function hasOpenThree(
   board: BoardState,
   color: "black" | "white",
 ): boolean {
+  const wasm = getThreatWasm();
   if (wasm) {
     syncBoard(wasm, board);
     return (
@@ -273,6 +274,7 @@ export function hasFourThreeAvailable(
   board: BoardState,
   color: "black" | "white",
 ): boolean {
+  const wasm = getThreatWasm();
   if (wasm) {
     syncBoard(wasm, board);
     return (
@@ -292,6 +294,7 @@ export function findThreatMoves(
   board: BoardState,
   color: "black" | "white",
 ): Position[] {
+  const wasm = getThreatWasm();
   if (wasm) {
     syncBoard(wasm, board);
     wasm.findThreatMovesWasm(color === "black" ? CELL.BLACK : CELL.WHITE);

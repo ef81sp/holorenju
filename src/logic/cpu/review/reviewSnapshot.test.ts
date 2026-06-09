@@ -28,10 +28,16 @@ import type { ForcedWinNode, ReviewCandidate } from "@/types/review";
 import { loadWasmModule } from "@/logic/cpu/wasm/loader";
 import { WasmSearchEngine } from "@/logic/cpu/wasm/searchEngine";
 import { createBoardFromRecord } from "@/logic/gameRecordParser";
+import { createEmptyBoard } from "@/logic/renjuRules";
 
 import { countStones } from "../core/boardUtils";
 import { detectOpponentThreats } from "../evaluation";
 import { findDoubleMiseMoves } from "../evaluation/tactics";
+import { detectWhiteWinningPattern } from "../evaluation/winningPatterns";
+import {
+  findWinningMove,
+  getFourDefensePosition,
+} from "../search/threatPatterns";
 import { hasFourThreeAvailable, hasOpenThree } from "../search/vctHelpers";
 import { preloadThreatWasm } from "../wasm/threatAdapter";
 import { annotateFukumiMoves } from "./candidateVerification";
@@ -279,7 +285,7 @@ describe("review 戦術プリミティブ出力スナップショット (#37 P3 
       board,
       moves,
       moveCount,
-    ).map((position) => ({ position, score: 0, searchScore: 0 }));
+    ).map((position) => ({ position, searchScore: 0 }));
     // timeLimit=Infinity を注入して node-bound 決定化
     annotateFukumiMoves(candidates, board, nextColor, engine, {
       ...REVIEW_VCF_OPTIONS,
@@ -291,5 +297,132 @@ describe("review 戦術プリミティブ出力スナップショット (#37 P3 
       fukumiDepth: c.fukumiDepth ?? null,
     }));
     expect(snapshot).toMatchSnapshot();
+  });
+});
+
+/**
+ * 図形プリミティブ出力スナップショット（#43 PR-3 安全網）
+ *
+ * #43 では `search/`・`evaluation/winningPatterns` の判定ロジック本体は温存し、
+ * 内部の葉プリミティブ（checkJumpFour/checkJumpThree/checkStraightFour/checkForbiddenMove）
+ * のみを Zig アダプタへ張り替える。張替えが**出力不変**であることを純TS関数の現状出力を
+ * 凍結して検知する。realistic CORPUS で覆えない分岐（double-four / findWinningMove /
+ * getFourDefensePosition の跳び四・止め四経路）を手作り盤面で固定する。
+ *
+ * - detectWhiteWinningPattern: forcedLossCheck の live 依存。double-three は CORPUS
+ *   (mise-vcf-#18 @11,8) でカバー済。ここでは double-four と各盤面の全空き点を凍結。
+ * - findWinningMove / getFourDefensePosition: vcfPuzzle / vctValidation の live 依存。
+ */
+function boardFromStones(
+  white: [number, number][],
+  black: [number, number][],
+): BoardState {
+  const board = createEmptyBoard();
+  for (const [r, c] of white) {
+    const row = board[r];
+    if (row) {
+      row[c] = "white";
+    }
+  }
+  for (const [r, c] of black) {
+    const row = board[r];
+    if (row) {
+      row[c] = "black";
+    }
+  }
+  return board;
+}
+
+describe("review 図形プリミティブ出力スナップショット (#43 PR-3 安全網)", () => {
+  it.each(CORPUS)(
+    "detectWhiteWinningPattern (全空き点): $name",
+    ({ record, moveCount }) => {
+      const { board } = createBoardFromRecord(record, moveCount);
+      const hits: { row: number; col: number; type: string }[] = [];
+      for (let row = 0; row < 15; row++) {
+        for (let col = 0; col < 15; col++) {
+          if (board[row]?.[col] === null) {
+            const type = detectWhiteWinningPattern(board, row, col);
+            if (type) {
+              hits.push({ row, col, type });
+            }
+          }
+        }
+      }
+      expect(hits.sort(sortPos)).toMatchSnapshot();
+    },
+  );
+
+  it("detectWhiteWinningPattern: double-four", () => {
+    // 白が(7,8)に置くと横(7,5-8)と縦(5-8,8)で四四
+    const board = boardFromStones(
+      [
+        [7, 5],
+        [7, 6],
+        [7, 7],
+        [5, 8],
+        [6, 8],
+        [8, 8],
+      ],
+      [],
+    );
+    expect(detectWhiteWinningPattern(board, 7, 8)).toBe("double-four");
+  });
+
+  it("findWinningMove: 活四", () => {
+    // 白の活四(7,5-8) -> 両端どちらかで五
+    const whiteOpenFour = boardFromStones(
+      [
+        [7, 5],
+        [7, 6],
+        [7, 7],
+        [7, 8],
+      ],
+      [],
+    );
+    const blackOpenFour = boardFromStones(
+      [],
+      [
+        [7, 5],
+        [7, 6],
+        [7, 7],
+        [7, 8],
+      ],
+    );
+    expect({
+      white: findWinningMove(whiteOpenFour, "white"),
+      black: findWinningMove(blackOpenFour, "black"),
+    }).toMatchSnapshot();
+  });
+
+  it("getFourDefensePosition: 止め四・跳び四", () => {
+    // 止め四: 黒(7,5-8)連続四、片端(7,4)を白で塞ぐ -> 防御点(7,9)
+    const closedFour = boardFromStones(
+      [[7, 4]],
+      [
+        [7, 5],
+        [7, 6],
+        [7, 7],
+        [7, 8],
+      ],
+    );
+    // 跳び四: 黒 X_XXX (7,5 _ 7,7 7,8 7,9) -> 防御点(7,6)
+    const jumpFour = boardFromStones(
+      [],
+      [
+        [7, 5],
+        [7, 7],
+        [7, 8],
+        [7, 9],
+      ],
+    );
+    expect({
+      closedFour: getFourDefensePosition(
+        closedFour,
+        { row: 7, col: 8 },
+        "black",
+      ),
+      jumpFour: getFourDefensePosition(jumpFour, { row: 7, col: 9 }, "black"),
+    }).toMatchSnapshot();
   });
 });

@@ -33,6 +33,43 @@ export interface ThreatWasmContext {
   findThreatMovesWasm: (color: number) => void;
   /** 脅威手バッファの先頭オフセット（memory 内）を返す。 */
   getThreatMovesBuffer: () => number;
+  /** (row,col,dir,color) で跳び四が成立するか（1/0）。配置済み cells 規約（#37 P4 PR-A）。 */
+  checkJumpFourWasm: (
+    row: number,
+    col: number,
+    dir: number,
+    color: number,
+  ) => number;
+  /** (row,col,dir,color) で跳び三が成立するか（1/0）。配置済み cells 規約。 */
+  checkJumpThreeWasm: (
+    row: number,
+    col: number,
+    dir: number,
+    color: number,
+  ) => number;
+  /** (row,col,dir,color) で達四が成立するか（1/0）。配置済み cells 規約。 */
+  checkStraightFourWasm: (
+    row: number,
+    col: number,
+    dir: number,
+    color: number,
+  ) => number;
+  /** 連続三の達四点（最大2点）を pattern points バッファに書く。 */
+  getConsecutiveThreeStraightFourPointsWasm: (
+    row: number,
+    col: number,
+    dir: number,
+    color: number,
+  ) => void;
+  /** 跳び三の達四点（最大1点）を pattern points バッファに書く。 */
+  getJumpThreeStraightFourPointsWasm: (
+    row: number,
+    col: number,
+    dir: number,
+    color: number,
+  ) => void;
+  /** pattern points バッファの先頭オフセット（memory 内）を返す。 */
+  getPatternPointsBuffer: () => number;
   /** wasm 線形メモリ（バッファ読み取り用）。 */
   memory: WebAssembly.Memory;
 }
@@ -46,4 +83,32 @@ export async function loadThreatWasm(): Promise<ThreatWasmContext> {
   // threat.wasm は extern import を持たない（freestanding）
   const { instance } = await WebAssembly.instantiate(buffer, {});
   return instance.exports as unknown as ThreatWasmContext;
+}
+
+// ───────────────────────────────────────────────────────────────
+// 共有シングルトン（#37 P4 #43）
+// threatAdapter / patternsAdapter が同一 threat.wasm インスタンスを共用するための
+// 共有状態。中立な低レベルモジュール（threatLoader）に置くことで
+// patternsAdapter → threatAdapter の import 辺を消し、judgment 層 → adapter の
+// 張替えで循環依存が生じないようにする。
+// ───────────────────────────────────────────────────────────────
+
+let threatWasm: ThreatWasmContext | undefined = undefined;
+
+/** 起動時に1回プリロード（ブートゲートで mount 前に await）。 */
+export async function preloadThreatWasm(): Promise<void> {
+  if (threatWasm) {
+    return;
+  }
+  threatWasm = await loadThreatWasm();
+}
+
+/** テスト用: wasm インスタンスを直接注入/解除する。 */
+export function setThreatWasmForTest(w: ThreatWasmContext | undefined): void {
+  threatWasm = w;
+}
+
+/** ロード済み threat wasm インスタンスを返す（未ロード時 undefined）。 */
+export function getThreatWasm(): ThreatWasmContext | undefined {
+  return threatWasm;
 }

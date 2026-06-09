@@ -20,7 +20,7 @@ import { useReviewProgression } from "./useReviewProgression";
 const pos = (row: number, col: number): Position => ({ row, col });
 
 function candidate(overrides: Partial<ReviewCandidate>): ReviewCandidate {
-  return { position: pos(7, 7), score: 0, searchScore: 0, ...overrides };
+  return { position: pos(7, 7), searchScore: 0, ...overrides };
 }
 
 /** best と played の両タブが出る最小の EvaluatedMove */

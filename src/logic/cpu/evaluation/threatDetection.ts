@@ -7,11 +7,7 @@
 import type { BoardState, Position } from "@/types/game";
 
 import { incrementThreatDetectionCalls } from "@/logic/cpu/profiling/counters";
-import {
-  checkJumpFour,
-  checkJumpThree,
-  isValidPosition,
-} from "@/logic/renjuRules";
+import { isValidPosition } from "@/logic/renjuRules";
 
 import type { LineTable } from "../lineTable/lineTable";
 
@@ -21,6 +17,9 @@ import { getLineEnds } from "../core/lineAnalysis";
 import { getDirectionPattern } from "../lineTable/adapter";
 import { isNearExistingStone } from "../moveGenerator";
 import { findJumpGapPosition } from "../patterns/threatAnalysis";
+// #43 PR-3: 跳び四/三の図形判定を Zig アダプタへ委譲（patterns.ts 依存を断つ）。
+// getOpenThreeDefensePositions が vctHelpers（review judgment）から live のため存続。
+import { checkJumpFour, checkJumpThree } from "../wasm/patternsAdapter";
 import { analyzeDirection } from "./directionAnalysis";
 import { isValidConsecutiveThree, isValidJumpThree } from "./jumpPatterns";
 import { type ThreatInfo, PATTERN_SCORES } from "./patternScores";

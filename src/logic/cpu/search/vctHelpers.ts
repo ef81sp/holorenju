@@ -9,12 +9,7 @@
 import type { BoardState, Position } from "@/types/game";
 
 import { BOARD_SIZE } from "@/constants";
-import {
-  checkFive,
-  checkForbiddenMove,
-  checkJumpFour,
-  checkJumpThree,
-} from "@/logic/renjuRules";
+import { checkFive } from "@/logic/renjuRules";
 
 import type { DirectionPattern } from "../evaluation/patternScores";
 import type { LineTable } from "../lineTable/lineTable";
@@ -34,6 +29,10 @@ import {
   findJumpGapPosition,
   getJumpThreeDefensePositions,
 } from "../patterns/threatAnalysis";
+// #43 PR-3: 葉プリミティブ（図形/禁手判定）を Zig アダプタへ委譲。TS オーケストレーション
+// （本ファイルの VCT 検証ロジック）は温存し、patterns.ts/forbiddenMoves.ts への依存を断つ。
+import { isForbiddenForBlack } from "../wasm/forbiddenAdapter";
+import { checkJumpFour, checkJumpThree } from "../wasm/patternsAdapter";
 import { classifyThreat } from "./threatMoves";
 
 /**
@@ -80,11 +79,8 @@ export function hasFourThreeAvailable(
       if (!isNearExistingStone(board, row, col)) {
         continue;
       }
-      if (color === "black") {
-        const forbidden = checkForbiddenMove(board, row, col);
-        if (forbidden.isForbidden) {
-          continue;
-        }
+      if (color === "black" && isForbiddenForBlack(board, row, col)) {
+        continue;
       }
       if (createsFourThree(board, row, col, color)) {
         return true;
@@ -272,10 +268,7 @@ export function findThreatMoves(
       }
 
       // 禁手チェックは脅威を作る手だけに限定
-      if (
-        color === "black" &&
-        checkForbiddenMove(board, row, col).isForbidden
-      ) {
+      if (color === "black" && isForbiddenForBlack(board, row, col)) {
         continue;
       }
 
@@ -390,7 +383,7 @@ function findThreatMovesFast(
     }
 
     // 禁手チェックは脅威を作る手だけに限定
-    if (color === "black" && checkForbiddenMove(board, row, col).isForbidden) {
+    if (color === "black" && isForbiddenForBlack(board, row, col)) {
       continue;
     }
 

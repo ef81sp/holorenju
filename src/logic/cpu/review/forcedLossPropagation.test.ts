@@ -113,13 +113,11 @@ describe("propagateForcedLossBackward", () => {
       candidates: [
         {
           position: { row: 0, col: 0 },
-          score: 100,
           searchScore: 100,
           opponentForcedWin: "vct",
         },
         {
           position: { row: 1, col: 0 },
-          score: 90,
           searchScore: 90,
           opponentForcedWin: "vcf",
         },
@@ -140,13 +138,11 @@ describe("propagateForcedLossBackward", () => {
       candidates: [
         {
           position: { row: 0, col: 0 },
-          score: 100,
           searchScore: 100,
           opponentForcedWin: "vct",
         },
         {
           position: { row: 1, col: 0 },
-          score: 90,
           searchScore: 90,
           // opponentForcedWin なし = 生存候補
         },
@@ -181,7 +177,6 @@ describe("propagateForcedLossBackward", () => {
       candidates: [
         {
           position: { row: 0, col: 0 },
-          score: 100,
           searchScore: 100,
           opponentForcedWin: "vct",
         },
@@ -202,7 +197,6 @@ describe("propagateForcedLossToCandidates", () => {
     const moves = ["H8", "I9", "F7", "G8", "I7"];
     const candidate: ReviewCandidate = {
       position: { row: 8, col: 8 }, // I7
-      score: 100,
       searchScore: 100,
     };
     const result = fullEval(4, {
@@ -221,7 +215,6 @@ describe("propagateForcedLossToCandidates", () => {
     const moves = ["H8", "I9", "F7", "G8", "I7"];
     const candidate = {
       position: { row: 8, col: 8 },
-      score: 100,
       searchScore: 100,
       opponentForcedWin: "vcf" as const,
     };
@@ -247,7 +240,6 @@ describe("propagateForcedLossToCandidates", () => {
     const moves = ["H8", "I9", "F7", "G8", "I7"];
     const candidate: ReviewCandidate = {
       position: { row: 8, col: 8 },
-      score: 100,
       searchScore: 100,
     };
     const result = fullEval(4, { candidates: [candidate] });

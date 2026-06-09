@@ -3,22 +3,12 @@
  */
 
 import type { EvaluationOptions } from "@/logic/cpu/evaluation";
-import type {
-  LeafPatternScores,
-  PatternBreakdown,
-  PatternScoreDetail,
-  ScoreBreakdown,
-} from "@/logic/cpu/evaluation/patternScores";
+import type { PatternScoreDetail } from "@/logic/cpu/evaluation/patternScores";
 
 import type { BoardState, Position, StoneColor } from "./game";
 
 // SSoT: patternScores.ts に定義された型を re-export
-export type {
-  LeafPatternScores,
-  PatternBreakdown,
-  PatternScoreDetail,
-  ScoreBreakdown,
-};
+export type { PatternScoreDetail };
 
 /**
  * CPU難易度
@@ -193,39 +183,17 @@ export interface CpuRequest {
 }
 
 /**
- * 探索末端の評価内訳（デバッグ表示用）
- */
-export interface LeafEvaluation {
-  /** 自分のパターンスコア合計 */
-  myScore: number;
-  /** 相手のパターンスコア合計 */
-  opponentScore: number;
-  /** 最終スコア（myScore - opponentScore） */
-  total: number;
-  /** 自分のパターンスコア内訳 */
-  myBreakdown: LeafPatternScores;
-  /** 相手のパターンスコア内訳 */
-  opponentBreakdown: LeafPatternScores;
-}
-
-/**
  * 候補手情報（デバッグ表示用）
  */
 export interface CandidateMove {
   /** 着手位置 */
   position: Position;
-  /** 即時評価スコア（内訳の合計） */
-  score: number;
   /** 探索スコア（複数手先読みの結果、順位の根拠） */
   searchScore: number;
   /** 順位（1始まり、探索スコア順） */
   rank: number;
-  /** 即時評価の内訳 */
-  breakdown?: ScoreBreakdown;
   /** Principal Variation（探索で予想される手順） */
   principalVariation?: Position[];
-  /** 探索末端での評価内訳 */
-  leafEvaluation?: LeafEvaluation;
 }
 
 /**
