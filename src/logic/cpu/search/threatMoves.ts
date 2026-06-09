@@ -6,14 +6,12 @@
 
 import type { BoardState } from "@/types/game";
 
-import {
-  checkJumpFour,
-  checkJumpThree,
-  isValidPosition,
-} from "@/logic/renjuRules";
+import { isValidPosition } from "@/logic/renjuRules";
 
 import { DIRECTION_INDICES, DIRECTIONS } from "../core/constants";
 import { checkEnds, checkEndsForFour, countLine } from "../core/lineAnalysis";
+// #43 PR-3: 跳び四/三の図形判定を Zig アダプタへ委譲（patterns.ts 依存を断つ）。
+import { checkJumpFour, checkJumpThree } from "../wasm/patternsAdapter";
 
 /**
  * 指定位置に石を置くと四ができるかチェック

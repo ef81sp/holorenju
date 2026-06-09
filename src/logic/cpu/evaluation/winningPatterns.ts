@@ -8,8 +8,6 @@
 
 import type { BoardState } from "@/types/game";
 
-import { checkJumpFour, checkJumpThree } from "@/logic/renjuRules";
-
 import type { DirectionPattern } from "./patternScores";
 
 import { DIRECTION_INDICES, DIRECTIONS } from "../core/constants";
@@ -20,6 +18,9 @@ import {
   removeStone,
   type LineTable,
 } from "../lineTable/lineTable";
+// #43 PR-3: 跳び四/三の図形判定を Zig アダプタへ委譲（patterns.ts 依存を断つ）。
+// detectWhiteWinningPattern は forcedLossCheck から live なため本ファイルは存続。
+import { checkJumpFour, checkJumpThree } from "../wasm/patternsAdapter";
 import { analyzeDirection } from "./directionAnalysis";
 import {
   analyzeJumpPatterns,

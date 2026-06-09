@@ -9,12 +9,7 @@
 import type { BoardState, Position } from "@/types/game";
 
 import { BOARD_SIZE } from "@/constants";
-import {
-  checkFive,
-  checkForbiddenMove,
-  checkJumpFour,
-  checkJumpThree,
-} from "@/logic/renjuRules";
+import { checkFive } from "@/logic/renjuRules";
 
 import { DIRECTION_INDICES, DIRECTIONS } from "../core/constants";
 import {
@@ -25,6 +20,9 @@ import {
 } from "../core/lineAnalysis";
 import { isNearExistingStone } from "../moveGenerator";
 import { findJumpGapPosition } from "../patterns/threatAnalysis";
+// #43 PR-3: 図形/禁手の葉プリミティブを Zig アダプタへ委譲（patterns.ts/forbiddenMoves.ts 依存を断つ）。
+import { isForbiddenForBlack } from "../wasm/forbiddenAdapter";
+import { checkJumpFour, checkJumpThree } from "../wasm/patternsAdapter";
 import { createsFour, isJumpFourOverline } from "./threatMoves";
 
 /**
@@ -113,11 +111,8 @@ export function findFourMoves(
       }
 
       // 禁手チェックは四を作る手だけに限定
-      if (color === "black") {
-        const forbidden = checkForbiddenMove(board, row, col);
-        if (forbidden.isForbidden) {
-          continue;
-        }
+      if (color === "black" && isForbiddenForBlack(board, row, col)) {
+        continue;
       }
 
       moves.push({ row, col });

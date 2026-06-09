@@ -5,7 +5,7 @@
  * （jump_patterns.zig、threat_wasm 経由）に委譲する橋。最終的に TS 二重実装
  * `src/logic/renjuRules/patterns.ts` を物理削除（#43）するための布石。
  *
- * - wasm インスタンスは threatAdapter のものを共用（`getThreatWasm`）。二重ロード回避。
+ * - wasm インスタンスは threatLoader の共有シングルトン（`getThreatWasm`）を共用。二重ロード回避。
  * - これらの Zig 関数は cells 直読み（bitboard 非依存）なので boardInit/boardSet のみ同期
  *   （syncBitboard 不要）。
  * - 契約は TS 版と同じく (row,col) に color を**配置済み**の board を渡す。
@@ -21,9 +21,7 @@ import {
   getJumpThreeStraightFourPoints as getJumpThreeTs,
 } from "@/logic/renjuRules/patterns";
 
-import type { ThreatWasmContext } from "./threatLoader";
-
-import { getThreatWasm } from "./threatAdapter";
+import { getThreatWasm, type ThreatWasmContext } from "./threatLoader";
 import { CELL } from "./types";
 
 /** cells のみ同期（jump_patterns は bitboard を使わないため syncBitboard は不要）。 */

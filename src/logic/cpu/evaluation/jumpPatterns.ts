@@ -6,16 +6,17 @@
 
 import type { BoardState } from "@/types/game";
 
+import { DIRECTION_INDICES, DIRECTIONS } from "../core/constants";
+// #43 PR-3: 図形/禁手の葉プリミティブを Zig アダプタへ委譲（patterns.ts/forbiddenMoves.ts 依存を断つ）。
+// 本ファイルは vctHelpers/winningPatterns（review judgment）から live のため存続。
+import { isForbiddenForBlack } from "../wasm/forbiddenAdapter";
 import {
-  checkForbiddenMove,
   checkJumpFour,
   checkJumpThree,
   checkStraightFour,
   getConsecutiveThreeStraightFourPoints,
   getJumpThreeStraightFourPoints,
-} from "@/logic/renjuRules";
-
-import { DIRECTION_INDICES, DIRECTIONS } from "../core/constants";
+} from "../wasm/patternsAdapter";
 import { analyzeDirection } from "./directionAnalysis";
 import {
   type DirectionPattern,
@@ -53,11 +54,8 @@ export function isValidConsecutiveThree(
 
   for (const pos of straightFourPoints) {
     // 白には禁手がないのでチェック不要
-    if (color === "black") {
-      const result = checkForbiddenMove(board, pos.row, pos.col);
-      if (result.isForbidden) {
-        continue;
-      }
+    if (color === "black" && isForbiddenForBlack(board, pos.row, pos.col)) {
+      continue;
     }
     if (checkStraightFour(board, pos.row, pos.col, dirIndex, color)) {
       return true;
@@ -96,11 +94,8 @@ export function isValidJumpThree(
 
   for (const pos of straightFourPoints) {
     // 白には禁手がないのでチェック不要
-    if (color === "black") {
-      const result = checkForbiddenMove(board, pos.row, pos.col);
-      if (result.isForbidden) {
-        continue;
-      }
+    if (color === "black" && isForbiddenForBlack(board, pos.row, pos.col)) {
+      continue;
     }
     if (checkStraightFour(board, pos.row, pos.col, dirIndex, color)) {
       return true;

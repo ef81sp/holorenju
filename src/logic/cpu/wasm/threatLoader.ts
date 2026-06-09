@@ -84,3 +84,31 @@ export async function loadThreatWasm(): Promise<ThreatWasmContext> {
   const { instance } = await WebAssembly.instantiate(buffer, {});
   return instance.exports as unknown as ThreatWasmContext;
 }
+
+// ───────────────────────────────────────────────────────────────
+// 共有シングルトン（#37 P4 #43）
+// threatAdapter / patternsAdapter が同一 threat.wasm インスタンスを共用するための
+// 共有状態。中立な低レベルモジュール（threatLoader）に置くことで
+// patternsAdapter → threatAdapter の import 辺を消し、judgment 層 → adapter の
+// 張替えで循環依存が生じないようにする。
+// ───────────────────────────────────────────────────────────────
+
+let threatWasm: ThreatWasmContext | undefined = undefined;
+
+/** 起動時に1回プリロード（ブートゲートで mount 前に await）。 */
+export async function preloadThreatWasm(): Promise<void> {
+  if (threatWasm) {
+    return;
+  }
+  threatWasm = await loadThreatWasm();
+}
+
+/** テスト用: wasm インスタンスを直接注入/解除する。 */
+export function setThreatWasmForTest(w: ThreatWasmContext | undefined): void {
+  threatWasm = w;
+}
+
+/** ロード済み threat wasm インスタンスを返す（未ロード時 undefined）。 */
+export function getThreatWasm(): ThreatWasmContext | undefined {
+  return threatWasm;
+}
