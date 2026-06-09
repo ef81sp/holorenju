@@ -24,10 +24,11 @@ import {
   getForbiddenType,
   preloadForbiddenWasm,
 } from "@/logic/cpu/wasm/forbiddenAdapter";
+import { preloadThreatWasm } from "@/logic/cpu/wasm/threatLoader";
 import { checkFive, createEmptyBoard } from "@/logic/renjuRules";
 
-// #43 PR-6: 禁手判定は pure-wasm のため先にロード（top-level await）。
-await preloadForbiddenWasm();
+// #43 PR-6: 禁手(forbidden)/脅威(threat) はどちらも pure-wasm のため先にロード（top-level await）。
+await Promise.all([preloadForbiddenWasm(), preloadThreatWasm()]);
 
 interface MoveRecord {
   row: number;

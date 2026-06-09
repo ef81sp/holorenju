@@ -9,7 +9,7 @@
  * - これらの Zig 関数は cells 直読み（bitboard 非依存）なので boardInit/boardSet のみ同期
  *   （syncBitboard 不要）。
  * - 契約は TS 版と同じく (row,col) に color を**配置済み**の board を渡す。
- * - 未ロード時は TS `patterns.ts` にフォールバック（移行期の保険。#43 PR-D で撤去）。
+ * - #43 PR-6: pure-wasm 化済（patterns.ts 物理削除）。未ロード時は throw（利用前に preload 必須）。
  */
 import type { BoardState, Position } from "@/types/game";
 

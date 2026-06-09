@@ -40,6 +40,7 @@ import {
   isForbiddenForBlack,
   preloadForbiddenWasm,
 } from "../src/logic/cpu/wasm/forbiddenAdapter.ts";
+import { preloadThreatWasm } from "../src/logic/cpu/wasm/threatLoader.ts";
 import {
   DRAW_MOVE_LIMIT,
   checkDraw,
@@ -146,8 +147,9 @@ export async function runCommitGame(
     openingMoves?: [Position, Position, Position];
   } = {},
 ): Promise<GameResult> {
-  // #43 PR-6: 禁手判定は pure-wasm のため先にロード。
-  await preloadForbiddenWasm();
+  // #43 PR-6: 禁手判定(forbidden) と脅威検出(detectOpponentThreats→threat) はどちらも
+  // pure-wasm のため、両 thin wasm を先にロードする。
+  await Promise.all([preloadForbiddenWasm(), preloadThreatWasm()]);
   const { verbose = false, moveTimeoutMs = 30000 } = options;
 
   let board: BoardState = createEmptyBoard();

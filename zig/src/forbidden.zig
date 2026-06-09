@@ -412,6 +412,37 @@ test "checkForbiddenMove: XXXX_X 配置はウソの四を含むため四四で�
     try std.testing.expect(result != .overline);
 }
 
+test "checkForbiddenMove: 三三禁" {
+    const CELL_COUNT = board_mod.CELL_COUNT;
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    // 横: (7,5),(7,6) + 縦: (5,7),(6,7) → (7,7) で両方向に活三（両端空き）= 三三
+    cells[7 * BOARD_SIZE + 5] = .black;
+    cells[7 * BOARD_SIZE + 6] = .black;
+    cells[5 * BOARD_SIZE + 7] = .black;
+    cells[6 * BOARD_SIZE + 7] = .black;
+    try std.testing.expectEqual(checkForbiddenMove(&cells, 7, 7), .double_three);
+}
+
+test "checkForbiddenMove: 盤端付近の三三禁（例外・誤判定なし）" {
+    const CELL_COUNT = board_mod.CELL_COUNT;
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    // 横: (1,2),(1,3) + 斜め: (3,2),(2,3) → (1,4) で両方向に活三 = 三三。盤端でも走ること。
+    cells[1 * BOARD_SIZE + 2] = .black;
+    cells[1 * BOARD_SIZE + 3] = .black;
+    cells[3 * BOARD_SIZE + 2] = .black;
+    cells[2 * BOARD_SIZE + 3] = .black;
+    try std.testing.expectEqual(checkForbiddenMove(&cells, 1, 4), .double_three);
+}
+
+test "checkForbiddenMove: 単独の活三は禁手ではない" {
+    const CELL_COUNT = board_mod.CELL_COUNT;
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    // 横の活三のみ → 三三ではない（none）
+    cells[7 * BOARD_SIZE + 5] = .black;
+    cells[7 * BOARD_SIZE + 6] = .black;
+    try std.testing.expectEqual(checkForbiddenMove(&cells, 7, 7), .none);
+}
+
 test "checkForbiddenMove: 五連は禁手ではない" {
     const CELL_COUNT = board_mod.CELL_COUNT;
     var cells = [_]Cell{.empty} ** CELL_COUNT;

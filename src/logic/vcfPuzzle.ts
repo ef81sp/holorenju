@@ -12,7 +12,7 @@ import {
 } from "@/logic/cpu/search/threatPatterns";
 import { isForbiddenForBlack } from "@/logic/cpu/wasm/forbiddenAdapter";
 // #37 P3 PR3: 四判定を Zig 単一ソース(vct.classifyThreat)経由に（禁手は P2 で Zig 化済）。
-// wasm 未ロード時は threatAdapter 内で TS createsFour にフォールバック。
+// #43 PR-6: pure-wasm 化済（利用前に wasm preload 必須。本番は main.ts ブートゲート）。
 import { createsFour } from "@/logic/cpu/wasm/threatAdapter";
 import { checkFive } from "@/logic/renjuRules/core";
 
