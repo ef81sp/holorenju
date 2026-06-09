@@ -14,7 +14,6 @@
 import type { StoneColor } from "../src/types/game.ts";
 
 import { countStones } from "../src/logic/cpu/core/boardUtils.ts";
-import { findDoubleMiseMoves } from "../src/logic/cpu/evaluation/tactics.ts";
 import { findMiseVCFSequence } from "../src/logic/cpu/search/miseVcf.ts";
 import { findFourMoves } from "../src/logic/cpu/search/threatPatterns.ts";
 import { findVCFSequence } from "../src/logic/cpu/search/vcf.ts";
@@ -23,8 +22,15 @@ import {
   VCT_STONE_THRESHOLD,
 } from "../src/logic/cpu/search/vct.ts";
 import { hasOpenThree } from "../src/logic/cpu/search/vctHelpers.ts";
+// #43 PR-6: 判定は Zig/WASM 単一ソース。両ミセは threatAdapter、judgment は pure-wasm のため preload 必須。
+import { preloadForbiddenWasm } from "../src/logic/cpu/wasm/forbiddenAdapter.ts";
+import { findDoubleMiseMoves } from "../src/logic/cpu/wasm/threatAdapter.ts";
+import { preloadThreatWasm } from "../src/logic/cpu/wasm/threatLoader.ts";
 import { formatMove } from "../src/logic/gameRecordParser.ts";
 import { formatPositionSummary, loadPosition } from "./lib/positionLoader.ts";
+
+// pure-wasm アダプタの前提: 判定 wasm を先にロード
+await Promise.all([preloadThreatWasm(), preloadForbiddenWasm()]);
 
 // === CLI引数解析 ===
 

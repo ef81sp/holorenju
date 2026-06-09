@@ -16,23 +16,21 @@ import type {
   Tag,
 } from "../types/analysis.ts";
 
-import {
-  createsFourThree,
-  evaluateForbiddenTrap,
-  findDoubleMiseMoves,
-  findMiseTargets,
-  isDoubleMise,
-} from "../../src/logic/cpu/evaluation/tactics.ts";
 import { detectOpponentThreats } from "../../src/logic/cpu/evaluation/threatDetection.ts";
 import { getOpeningPatternInfo } from "../../src/logic/cpu/opening.ts";
 import {
   createsFour,
   createsOpenThree,
 } from "../../src/logic/cpu/search/threatMoves.ts";
+// #43 PR-6: 連珠ルール判定は Zig/WASM 単一ソースへ。tactics.ts/renjuRules patterns/forbidden は削除済。
+import { getForbiddenType } from "../../src/logic/cpu/wasm/forbiddenAdapter.ts";
+import {
+  createsFourThree,
+  findDoubleMiseMoves,
+} from "../../src/logic/cpu/wasm/threatAdapter.ts";
 import { formatMove } from "../../src/logic/gameRecordParser.ts";
 import {
   checkFive,
-  checkForbiddenMove,
   createEmptyBoard,
 } from "../../src/logic/renjuRules/index.ts";
 
@@ -57,19 +55,9 @@ export function analyzeMove(
 
   // 禁手チェック（黒のみ）
   if (color === "black") {
-    const forbiddenResult = checkForbiddenMove(
-      board,
-      position.row,
-      position.col,
-    );
-    if (forbiddenResult.isForbidden) {
-      if (forbiddenResult.type === "double-three") {
-        tags.push("double-three");
-      } else if (forbiddenResult.type === "double-four") {
-        tags.push("double-four");
-      } else if (forbiddenResult.type === "overline") {
-        tags.push("overline");
-      }
+    const forbiddenType = getForbiddenType(board, position.row, position.col);
+    if (forbiddenType) {
+      tags.push(forbiddenType);
     }
   }
 
@@ -84,14 +72,17 @@ export function analyzeMove(
     tags.push("four-three");
   }
 
-  // 両ミセ見逃し検出（石を置く前の盤面で判定）
-  // 四三を打った手や五連は見逃しチェック不要（それらは両ミセより強い）
+  // 両ミセ検出（石を置く前の盤面で判定。四三を打った手や五連は両ミセより強いので不要）
+  // #43 PR-6: findMiseTargets+isDoubleMise の代わりに、盤面の両ミセ手集合(Zig)へ position が
+  // 含まれるかで判定する（isDoubleMise の TS 実装削除に伴う等価置換）。
   let isMissedDoubleMise = false;
+  let isDoubleMiseMove = false;
   if (!isFourThree) {
     const dmMoves = findDoubleMiseMoves(board, color);
-    if (dmMoves.length > 0) {
-      isMissedDoubleMise = true;
-    }
+    isMissedDoubleMise = dmMoves.length > 0;
+    isDoubleMiseMove = dmMoves.some(
+      (m) => m.row === position.row && m.col === position.col,
+    );
   }
 
   // === 手を打つ ===
@@ -123,25 +114,12 @@ export function analyzeMove(
     tags.push("open-three");
   }
 
-  // 禁手追い込み（白がこの手で禁手追い込みを作った）
-  if (color === "white") {
-    const trapScore = evaluateForbiddenTrap(board, position.row, position.col);
-    if (trapScore > 0) {
-      tags.push("forbidden-trap");
-    }
-  }
+  // #43 PR-6: 「禁手追い込み(forbidden-trap)」タグは evaluateForbiddenTrap（TS, 削除・Zig露出なし）に
+  // 依存していたため廃止（分析専用ヒューリスティックで他タグへの影響なし）。
 
-  // 両ミセ検出（四三でない場合のみ）
-  let isDoubleMiseMove = false;
-  if (!isFourThree) {
-    const targets = findMiseTargets(board, position.row, position.col, color);
-    if (
-      targets.length >= 2 &&
-      isDoubleMise(board, position.row, position.col, color, targets)
-    ) {
-      tags.push("double-mise");
-      isDoubleMiseMove = true;
-    }
+  // 両ミセタグ（上で算出済みの isDoubleMiseMove を反映）
+  if (isDoubleMiseMove) {
+    tags.push("double-mise");
   }
 
   // 両ミセ見逃しタグ付与（自分が両ミセを打っておらず、五連でもない場合）
@@ -178,25 +156,7 @@ function detectForbiddenTrapType(board: BoardState): Tag | null {
     return null;
   }
 
-  const forbiddenResult = checkForbiddenMove(
-    board,
-    defensePos.row,
-    defensePos.col,
-  );
-  if (!forbiddenResult.isForbidden) {
-    return null;
-  }
-
-  switch (forbiddenResult.type) {
-    case "double-three":
-      return "double-three";
-    case "double-four":
-      return "double-four";
-    case "overline":
-      return "overline";
-    default:
-      return null;
-  }
+  return getForbiddenType(board, defensePos.row, defensePos.col);
 }
 
 /**

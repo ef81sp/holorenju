@@ -20,7 +20,12 @@ import type {
   Tag,
 } from "./types/analysis.ts";
 
+import { preloadForbiddenWasm } from "../src/logic/cpu/wasm/forbiddenAdapter.ts";
+import { preloadThreatWasm } from "../src/logic/cpu/wasm/threatLoader.ts";
 import { analyzeBenchmarkFile } from "./lib/gameAnalyzer.ts";
+
+// #43 PR-6: gameAnalyzer は pure-wasm 判定アダプタを使うため、判定 wasm を先にロードする。
+await Promise.all([preloadThreatWasm(), preloadForbiddenWasm()]);
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, "..");

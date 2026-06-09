@@ -36,9 +36,13 @@ export interface GameResult {
 import { applyMove } from "../src/logic/cpu/core/boardUtils.ts";
 import { detectOpponentThreats } from "../src/logic/cpu/evaluation/threatDetection.ts";
 import {
+  getForbiddenType,
+  isForbiddenForBlack,
+  preloadForbiddenWasm,
+} from "../src/logic/cpu/wasm/forbiddenAdapter.ts";
+import {
   DRAW_MOVE_LIMIT,
   checkDraw,
-  checkForbiddenMove,
   checkWin,
   createEmptyBoard,
 } from "../src/logic/renjuRules/index.ts";
@@ -142,6 +146,8 @@ export async function runCommitGame(
     openingMoves?: [Position, Position, Position];
   } = {},
 ): Promise<GameResult> {
+  // #43 PR-6: 禁手判定は pure-wasm のため先にロード。
+  await preloadForbiddenWasm();
   const { verbose = false, moveTimeoutMs = 30000 } = options;
 
   let board: BoardState = createEmptyBoard();
@@ -206,10 +212,10 @@ export async function runCommitGame(
 
     // 黒の禁手チェック
     if (currentColor === "black") {
-      const forbidden = checkForbiddenMove(board, move.row, move.col);
-      if (forbidden.isForbidden) {
+      const forbiddenType = getForbiddenType(board, move.row, move.col);
+      if (forbiddenType) {
         log(
-          `Move ${moveCount + 1}: forbidden at (${move.row}, ${move.col}) - ${forbidden.type}`,
+          `Move ${moveCount + 1}: forbidden at (${move.row}, ${move.col}) - ${forbiddenType}`,
         );
         moveHistory.push({
           row: move.row,
@@ -272,12 +278,7 @@ export async function runCommitGame(
 
       const [defensePos] = defensePosArray;
       if (defensePos) {
-        const forbiddenResult = checkForbiddenMove(
-          board,
-          defensePos.row,
-          defensePos.col,
-        );
-        if (forbiddenResult.isForbidden) {
+        if (isForbiddenForBlack(board, defensePos.row, defensePos.col)) {
           log(`white wins by forbidden trap!`);
           const lastMove = moveHistory[moveHistory.length - 1];
           const updatedHistory = lastMove

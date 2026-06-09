@@ -14,13 +14,13 @@ import type { WasmModuleContext } from "@/logic/cpu/wasm/types";
 import type { BoardState, Position, StoneColor } from "@/types/game";
 
 import { getAllJushuNames, getJushuPositions } from "@/logic/cpu/opening";
+import {
+  isForbiddenForBlack,
+  preloadForbiddenWasm,
+} from "@/logic/cpu/wasm/forbiddenAdapter";
 import { loadWasmModule } from "@/logic/cpu/wasm/loader";
 import { WasmSearchEngine } from "@/logic/cpu/wasm/searchEngine";
-import {
-  checkForbiddenMove,
-  checkWin,
-  createEmptyBoard,
-} from "@/logic/renjuRules";
+import { checkWin, createEmptyBoard } from "@/logic/renjuRules";
 
 const DRAW_MOVE_LIMIT = 70;
 
@@ -86,12 +86,9 @@ function playGame(
     const elapsed = performance.now() - start;
     const pos = result.position;
 
-    if (color === "black") {
-      const forbidden = checkForbiddenMove(board, pos.row, pos.col);
-      if (forbidden.isForbidden) {
-        winner = "white";
-        break;
-      }
+    if (color === "black" && isForbiddenForBlack(board, pos.row, pos.col)) {
+      winner = "white";
+      break;
     }
 
     board[pos.row]![pos.col] = color;
@@ -123,6 +120,8 @@ function playGame(
 }
 
 async function main(): Promise<void> {
+  // #43 PR-6: 禁手判定は pure-wasm のため先にロード。
+  await preloadForbiddenWasm();
   const maxGames = parseInt(
     process.argv.find((a) => a.startsWith("--games="))?.slice(8) ?? "4",
     10,

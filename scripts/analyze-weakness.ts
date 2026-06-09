@@ -20,6 +20,8 @@ import type {
 } from "../src/logic/cpu/benchmark/headless.ts";
 import type { BenchmarkResultFile } from "./types/analysis.ts";
 
+import { preloadForbiddenWasm } from "../src/logic/cpu/wasm/forbiddenAdapter.ts";
+import { preloadThreatWasm } from "../src/logic/cpu/wasm/threatLoader.ts";
 import {
   analyzeWeaknesses,
   formatWeaknessReport,
@@ -296,6 +298,9 @@ async function runSelfPlay(options: CliOptions): Promise<BenchmarkResultFile> {
  * メイン処理
  */
 async function main(): Promise<void> {
+  // #43 PR-6: weaknessAnalyzer→gameAnalyzer は pure-wasm 判定アダプタを使うため先に wasm をロード。
+  await Promise.all([preloadThreatWasm(), preloadForbiddenWasm()]);
+
   const options = parseArgs();
 
   let benchData: BenchmarkResultFile | undefined = undefined;
