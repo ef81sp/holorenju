@@ -7,10 +7,12 @@
 
 import type { BoardState } from "@/types/game";
 
-import { checkFive, checkForbiddenMove } from "@/logic/renjuRules";
+import { checkFive } from "@/logic/renjuRules";
 
 import type { VCFSearchOptions } from "./types";
 
+// #43 PR-3: 禁手判定を Zig アダプタへ委譲（forbiddenMoves.ts 依存を断つ）。
+import { isForbiddenForBlack } from "../wasm/forbiddenAdapter";
 import { createsFour } from "./threatMoves";
 import { findFourMoves, getFourDefensePosition } from "./threatPatterns";
 import {
@@ -98,12 +100,7 @@ export function hasVCF(
 
     // 白番の場合、黒の防御位置が禁手ならVCF成立
     if (color === "white") {
-      const forbiddenResult = checkForbiddenMove(
-        board,
-        defensePos.row,
-        defensePos.col,
-      );
-      if (forbiddenResult.isForbidden) {
+      if (isForbiddenForBlack(board, defensePos.row, defensePos.col)) {
         // 元に戻す（Undo）
         if (moveRow) {
           moveRow[move.col] = null;
