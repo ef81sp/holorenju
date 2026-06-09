@@ -9,23 +9,36 @@ import { preloadThreatWasm } from "@/logic/cpu/wasm/threatAdapter";
 
 import App from "./App.vue";
 
-const app = createApp(App);
-const pinia = createPinia();
+// 連珠ルール判定の thin wasm（禁手 41KB / 脅威 28KB）を mount 前に await でロードする
+// ブートゲート（#37 P4 #43）。これにより isForbiddenForBlack / createsFour 等の同期
+// adapter 呼び出しが「wasm 常時ロード済み」を前提にでき、TS フォールバック撤去（PR-6）の
+// 安全条件を満たす。ロード失敗は握りつぶし、フォールバックが残っている間は継続可能にする。
+async function bootstrap(): Promise<void> {
+  await Promise.all([
+    preloadForbiddenWasm().catch((e: unknown) => {
+      console.error(
+        "禁手 wasm のプリロードに失敗（TS フォールバックで継続）",
+        e,
+      );
+    }),
+    preloadThreatWasm().catch((e: unknown) => {
+      console.error(
+        "脅威 wasm のプリロードに失敗（TS フォールバックで継続）",
+        e,
+      );
+    }),
+  ]);
 
-app.use(pinia);
-app.use(VueKonva);
-app.mount("#app");
+  const app = createApp(App);
+  const pinia = createPinia();
 
-// 禁手専用 thin wasm（41KB）を非ブロッキングでプリロード（#37 P1）。
-// 失敗しても isForbiddenForBlack が TS フォールバックするためクラッシュしない。
-preloadForbiddenWasm().catch((e: unknown) => {
-  console.error("禁手 wasm のプリロードに失敗（TS フォールバックで継続）", e);
-});
+  app.use(pinia);
+  app.use(VueKonva);
+  app.mount("#app");
+}
 
-// 脅威分類 thin wasm（28KB）を非ブロッキングでプリロード（#37 P3。vcfPuzzle の四判定用）。
-// 失敗しても createsFour が TS フォールバックするためクラッシュしない。
-preloadThreatWasm().catch((e: unknown) => {
-  console.error("脅威 wasm のプリロードに失敗（TS フォールバックで継続）", e);
+bootstrap().catch((e: unknown) => {
+  console.error("アプリの初期化に失敗しました", e);
 });
 
 const updateSW = registerSW({
