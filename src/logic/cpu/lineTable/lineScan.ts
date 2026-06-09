@@ -10,8 +10,7 @@
  *
  * 呼び出し元:
  * - evaluateBoard（リーフ評価）
- * - detectOpponentThreatsFast（sortMoves 内、内部ノード）
- * いずれも呼び出し直後にバッファを読み切り、他の precomputeLineFeatures
+ * 呼び出し直後にバッファを読み切り、他の precomputeLineFeatures
  * 呼び出しと同一スタック上で競合しない。
  */
 
