@@ -10,10 +10,13 @@ import type { ForcedWinNode, ForcedWinType } from "@/types/review";
 import type { VCTSearchOptions, VCTSequenceResult } from "../search/types";
 import type { WasmSearchEngine } from "../wasm/searchEngine";
 
-import { findThreatMoves } from "../search/vctHelpers";
 import { validateVCTSequence } from "../search/vctValidation";
-// #37 P3 PR5/PR5b: 四三判定・両ミセ手を Zig 単一ソース経由に（合法局面で TS と一致、未ロード時 TS フォールバック）。
-import { createsFourThree, findDoubleMiseMoves } from "../wasm/threatAdapter";
+// #37 P3 PR5/PR5b/PR6: 四三判定・両ミセ手・脅威手列挙を Zig 単一ソース経由に（合法局面で TS と一致、未ロード時 TS フォールバック）。
+import {
+  createsFourThree,
+  findDoubleMiseMoves,
+  findThreatMoves,
+} from "../wasm/threatAdapter";
 import {
   filterByCounterThreats,
   REVIEW_MISE_VCF_OPTIONS,

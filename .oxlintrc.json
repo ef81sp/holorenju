@@ -68,7 +68,8 @@
         "**/threatAdapter.test.ts",
         "**/createsFourThreeParity.test.ts",
         "**/findMiseTargetsParity.test.ts",
-        "**/findDoubleMiseMovesParity.test.ts"
+        "**/findDoubleMiseMovesParity.test.ts",
+        "**/vctHelpersParity.test.ts"
       ],
       "rules": {
         "no-bitwise": "off"

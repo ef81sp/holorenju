@@ -17,11 +17,12 @@ import type {
 import type { WasmSearchEngine } from "../wasm/searchEngine";
 
 import { detectWhiteWinningPattern } from "../evaluation/winningPatterns";
-import { hasFourThreeAvailable, hasOpenThree } from "../search/vctHelpers";
-// #37 P3 PR4/PR5b: 脅威検出・両ミセ手を Zig 単一ソース経由に（合法局面で TS と一致、未ロード時 TS フォールバック）。
+// #37 P3 PR4/PR5b/PR6: 脅威検出・両ミセ手・VCT検証ヘルパーを Zig 単一ソース経由に（合法局面で TS と一致、未ロード時 TS フォールバック）。
 import {
   detectOpponentThreats,
   findDoubleMiseMoves,
+  hasFourThreeAvailable,
+  hasOpenThree,
 } from "../wasm/threatAdapter";
 import {
   wasmFindVCFSequence,

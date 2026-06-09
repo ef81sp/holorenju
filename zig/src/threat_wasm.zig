@@ -132,3 +132,44 @@ export fn findDoubleMiseMovesWasm(color: u8) void {
         o += 2;
     }
 }
+
+// === vctHelpers（#37 P3 PR6）===
+//
+// VCT 検証ヘルパー3関数（review 専用パス: validateVCTSequence / filterByCounterThreats /
+// findVCTByFirstMoveIteration）を Zig 単一ソース経由にする橋。実体は vct.zig の既存関数。
+// いずれも盤面全走査を内包するバッチ API なので、1 回の sync で 1 回呼ぶ（点ごと再同期は不要）。
+// 事前に boardSet で cells、syncBitboard で bitboard を同期しておくこと。
+
+/// color が活三を持つか（1/0）。
+export fn hasOpenThreeWasm(color: u8) u8 {
+    const c: board.Cell = @enumFromInt(color);
+    return if (vct.hasOpenThree(&board.board_cells, c)) 1 else 0;
+}
+
+/// color がミセ手（1手で四三）を持つか（1/0）。内部で空き点を仮置き・復元する。
+export fn hasFourThreeAvailableWasm(color: u8) u8 {
+    const c: board.Cell = @enumFromInt(color);
+    return if (vct.hasFourThreeAvailable(&board.board_cells, c)) 1 else 0;
+}
+
+// 四・活三を作れる手（四優先・row-major）を [u8 count][count*(row,col)] でシリアライズ。
+// 最大 225 手なので 1 + 225*2 = 451 バイト。
+var threat_moves_buffer: [512]u8 = undefined;
+
+export fn getThreatMovesBuffer() [*]u8 {
+    return &threat_moves_buffer;
+}
+
+/// color の脅威手を列挙しバッファに書く。内部で各空き点を仮置き・復元する。
+export fn findThreatMovesWasm(color: u8) void {
+    const c: board.Cell = @enumFromInt(color);
+    var buf: [225]threats.Position = undefined;
+    const n = vct.findThreatMoves(&board.board_cells, c, &buf);
+    threat_moves_buffer[0] = @intCast(n);
+    var o: usize = 1;
+    for (0..n) |i| {
+        threat_moves_buffer[o] = buf[i].row;
+        threat_moves_buffer[o + 1] = buf[i].col;
+        o += 2;
+    }
+}

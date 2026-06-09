@@ -25,6 +25,14 @@ export interface ThreatWasmContext {
   findDoubleMiseMovesWasm: (color: number) => void;
   /** 両ミセ手バッファの先頭オフセット（memory 内）を返す。 */
   getDoubleMiseBuffer: () => number;
+  /** color が活三を持つか（1/0）。盤面全走査（#37 P3 PR6）。 */
+  hasOpenThreeWasm: (color: number) => number;
+  /** color がミセ手（1手で四三）を持つか（1/0）。盤面全走査（#37 P3 PR6）。 */
+  hasFourThreeAvailableWasm: (color: number) => number;
+  /** color の脅威手（四・活三、四優先）を列挙しバッファに書く（#37 P3 PR6）。 */
+  findThreatMovesWasm: (color: number) => void;
+  /** 脅威手バッファの先頭オフセット（memory 内）を返す。 */
+  getThreatMovesBuffer: () => number;
   /** wasm 線形メモリ（バッファ読み取り用）。 */
   memory: WebAssembly.Memory;
 }
