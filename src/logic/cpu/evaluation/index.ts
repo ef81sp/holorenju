@@ -33,10 +33,7 @@ export {
 } from "./stonePatterns";
 
 // Re-export: positionEvaluation
-export {
-  evaluatePosition,
-  evaluatePositionWithBreakdown,
-} from "./positionEvaluation";
+export { evaluatePositionWithBreakdown } from "./positionEvaluation";
 
 // Re-export: boardEvaluation
 export { evaluateBoard, evaluateBoardWithBreakdown } from "./boardEvaluation";

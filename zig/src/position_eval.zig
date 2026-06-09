@@ -771,3 +771,213 @@ test "getCenterBonus" {
     try std.testing.expect(center > corner);
     try std.testing.expectEqual(center, scores.CENTER_BONUS);
 }
+
+// === 必須防御ルール / カウンターフォー テスト（TS threatDetection.test.ts / tactics.test.ts 移植） ===
+
+const SENTINEL: i32 = -1000000;
+
+test "evaluatePosition: mandatory defense - 相手の活四を止めない手は除外" {
+    // 白の活四: row=7, col=[3,4,5,6] 両端空き
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[7 * BOARD_SIZE + 3] = .white;
+    cells[7 * BOARD_SIZE + 4] = .white;
+    cells[7 * BOARD_SIZE + 5] = .white;
+    cells[7 * BOARD_SIZE + 6] = .white;
+    bitboard.initFromCells(&cells);
+
+    const opts = EvalOptions{ .enable_mandatory_defense = true };
+
+    // (0,0) は活四を止めていない → SENTINEL
+    const non_defense = evaluatePosition(&cells, 0, 0, .black, opts);
+    try std.testing.expectEqual(@as(i32, SENTINEL), non_defense);
+
+    // (7,7) は活四を止める位置 → 有効
+    const defense = evaluatePosition(&cells, 7, 7, .black, opts);
+    try std.testing.expect(defense > SENTINEL);
+}
+
+test "evaluatePosition: mandatory defense - 相手の活三を止めない手は除外" {
+    // 白の活三: row=7, col=[4,5,6] 両端空き
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[7 * BOARD_SIZE + 4] = .white;
+    cells[7 * BOARD_SIZE + 5] = .white;
+    cells[7 * BOARD_SIZE + 6] = .white;
+    bitboard.initFromCells(&cells);
+
+    const opts = EvalOptions{ .enable_mandatory_defense = true };
+
+    // (0,0) は活三を止めていない → SENTINEL
+    const non_defense = evaluatePosition(&cells, 0, 0, .black, opts);
+    try std.testing.expectEqual(@as(i32, SENTINEL), non_defense);
+
+    // (7,7) は活三を止める位置 → 有効
+    const defense = evaluatePosition(&cells, 7, 7, .black, opts);
+    try std.testing.expect(defense > SENTINEL);
+}
+
+test "evaluatePosition: mandatory defense - 四三を作れても相手に止め四があれば防御必須" {
+    // 白の止め四（盤端 x○○○○-）+ 黒の四三準備
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    // 白の止め四: 盤端から4連
+    cells[7 * BOARD_SIZE + 0] = .white;
+    cells[7 * BOARD_SIZE + 1] = .white;
+    cells[7 * BOARD_SIZE + 2] = .white;
+    cells[7 * BOARD_SIZE + 3] = .white;
+    // 黒の四三準備: 横止め三（白で塞がれた）+ 縦二
+    cells[10 * BOARD_SIZE + 6] = .white; // 横の止め三を作る塞ぎ
+    cells[10 * BOARD_SIZE + 7] = .black;
+    cells[10 * BOARD_SIZE + 8] = .black;
+    cells[10 * BOARD_SIZE + 9] = .black;
+    cells[8 * BOARD_SIZE + 10] = .black;
+    cells[9 * BOARD_SIZE + 10] = .black;
+    bitboard.initFromCells(&cells);
+
+    const opts = EvalOptions{ .enable_mandatory_defense = true };
+
+    // (10,10) は四三を作る手だが、相手に止め四があるので防御必須 → SENTINEL
+    const four_three = evaluatePosition(&cells, 10, 10, .black, opts);
+    try std.testing.expectEqual(@as(i32, SENTINEL), four_three);
+
+    // 止め四を防御する手 (7,4) は有効
+    const defense = evaluatePosition(&cells, 7, 4, .black, opts);
+    try std.testing.expect(defense > SENTINEL);
+}
+
+test "evaluatePosition: mandatory defense - 相手の止め四を止めない手は除外" {
+    // 黒の止め四（盤端 x●●●●-）、白番が止める必要
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[7 * BOARD_SIZE + 0] = .black;
+    cells[7 * BOARD_SIZE + 1] = .black;
+    cells[7 * BOARD_SIZE + 2] = .black;
+    cells[7 * BOARD_SIZE + 3] = .black;
+    bitboard.initFromCells(&cells);
+
+    const opts = EvalOptions{ .enable_mandatory_defense = true };
+
+    // (10,10) は止め四を止めていない → SENTINEL
+    const non_defense = evaluatePosition(&cells, 10, 10, .white, opts);
+    try std.testing.expectEqual(@as(i32, SENTINEL), non_defense);
+
+    // (7,4) は止め四を止める位置 → 有効
+    const defense = evaluatePosition(&cells, 7, 4, .white, opts);
+    try std.testing.expect(defense > SENTINEL);
+}
+
+test "evaluatePosition: mandatory defense - 止め四防御（実戦棋譜）黒の止め四を白は防御" {
+    // 棋譜 43手目後の盤面（createBoardFromRecord(record, 43) を TS で展開して抽出）
+    // 黒の止め四の防御位置は (7,10) のみ。白の H5=(10,7) は防御位置でない → SENTINEL。
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    const black_stones = [_][2]u8{
+        .{ 3, 4 },   .{ 4, 5 },  .{ 4, 6 },  .{ 5, 3 },  .{ 5, 5 },  .{ 5, 7 },
+        .{ 6, 5 },   .{ 6, 7 },  .{ 7, 3 },  .{ 7, 4 },  .{ 7, 5 },  .{ 7, 7 },
+        .{ 7, 8 },   .{ 7, 9 },  .{ 7, 11 }, .{ 8, 3 },  .{ 8, 8 },  .{ 9, 0 },
+        .{ 9, 4 },   .{ 9, 6 },  .{ 10, 8 }, .{ 10, 9 },
+    };
+    const white_stones = [_][2]u8{
+        .{ 3, 5 },  .{ 3, 7 },  .{ 4, 4 },  .{ 4, 7 },  .{ 5, 4 },  .{ 5, 6 },
+        .{ 6, 3 },  .{ 6, 4 },  .{ 6, 6 },  .{ 7, 2 },  .{ 7, 6 },  .{ 8, 1 },
+        .{ 8, 4 },  .{ 8, 5 },  .{ 8, 6 },  .{ 8, 7 },  .{ 8, 9 },  .{ 9, 7 },
+        .{ 9, 8 },  .{ 11, 7 }, .{ 11, 10 },
+    };
+    for (black_stones) |s| cells[@as(usize, s[0]) * BOARD_SIZE + s[1]] = .black;
+    for (white_stones) |s| cells[@as(usize, s[0]) * BOARD_SIZE + s[1]] = .white;
+    bitboard.initFromCells(&cells);
+
+    // 黒の止め四を確認（防御位置 (7,10)）
+    const threats = threats_mod.detectOpponentThreats(&cells, .black);
+    try std.testing.expect(threats.fours.len > 0);
+    try std.testing.expect(threats.fours.contains(7, 10));
+
+    const opts = EvalOptions{ .enable_mandatory_defense = true };
+
+    // 白 H5=(10,7) は防御位置でない → SENTINEL
+    const h5 = evaluatePosition(&cells, 10, 7, .white, opts);
+    try std.testing.expectEqual(@as(i32, SENTINEL), h5);
+
+    // 止め四の防御位置は有効
+    const defense = evaluatePosition(&cells, 7, 10, .white, opts);
+    try std.testing.expect(defense > SENTINEL);
+}
+
+test "evaluatePosition: mise threat - 相手のミセ手を止めない手は除外" {
+    // 横: 白で止められた止め三 ○●●●- (7行 col 3=白, 4,5,6=黒) + 縦: -●●- (col 7, row 5,6=黒)
+    // → (7,7) に置くと横に止め四、縦に活三 = 四三（＝ミセ手）
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[7 * BOARD_SIZE + 3] = .white;
+    cells[7 * BOARD_SIZE + 4] = .black;
+    cells[7 * BOARD_SIZE + 5] = .black;
+    cells[7 * BOARD_SIZE + 6] = .black;
+    cells[5 * BOARD_SIZE + 7] = .black;
+    cells[6 * BOARD_SIZE + 7] = .black;
+    bitboard.initFromCells(&cells);
+
+    const opts = EvalOptions{ .enable_mandatory_defense = true, .enable_mise_threat = true };
+
+    // 白 (0,0) はミセ手を止めていない → SENTINEL
+    const non_defense = evaluatePosition(&cells, 0, 0, .white, opts);
+    try std.testing.expectEqual(@as(i32, SENTINEL), non_defense);
+
+    // 白 (7,7) はミセ手を止める位置 → 有効
+    const defense = evaluatePosition(&cells, 7, 7, .white, opts);
+    try std.testing.expect(defense > SENTINEL);
+}
+
+test "evaluatePosition: double-three threat - 白の三三脅威を阻止しない手は除外" {
+    // 白が (7,8) に置くと横活三+縦活三=三三
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[7 * BOARD_SIZE + 6] = .white;
+    cells[7 * BOARD_SIZE + 7] = .white;
+    cells[6 * BOARD_SIZE + 8] = .white;
+    cells[5 * BOARD_SIZE + 8] = .white;
+    bitboard.initFromCells(&cells);
+
+    const opts = EvalOptions{ .enable_mandatory_defense = true, .enable_double_three_threat = true };
+
+    // 黒 (0,0) は三三脅威を阻止していない → SENTINEL
+    const non_defense = evaluatePosition(&cells, 0, 0, .black, opts);
+    try std.testing.expectEqual(@as(i32, SENTINEL), non_defense);
+
+    // 黒 (7,8) は三三脅威を阻止 → 有効
+    const defense = evaluatePosition(&cells, 7, 8, .black, opts);
+    try std.testing.expect(defense > SENTINEL);
+}
+
+test "evaluatePosition: double-three threat - 活三がある場合は三三脅威防御が発動せず活三防御で除外" {
+    // 白の三三脅威 + 白の活三（活三が優先）
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    // 三三脅威
+    cells[7 * BOARD_SIZE + 6] = .white;
+    cells[7 * BOARD_SIZE + 7] = .white;
+    cells[6 * BOARD_SIZE + 8] = .white;
+    cells[5 * BOARD_SIZE + 8] = .white;
+    // 活三
+    cells[12 * BOARD_SIZE + 4] = .white;
+    cells[12 * BOARD_SIZE + 5] = .white;
+    cells[12 * BOARD_SIZE + 6] = .white;
+    bitboard.initFromCells(&cells);
+
+    const opts = EvalOptions{ .enable_mandatory_defense = true, .enable_double_three_threat = true };
+
+    // 活三がある → 活三の必須防御で (0,0) は SENTINEL
+    const score = evaluatePosition(&cells, 0, 0, .black, opts);
+    try std.testing.expectEqual(@as(i32, SENTINEL), score);
+}
+
+test "evaluatePosition: counter four - 防御しながら四を作る手の防御スコアが1.5倍" {
+    // 白の活三 (5,5)(5,6)(5,7) + 黒の三 (5,9)(5,10)(5,11)
+    // → 黒 (5,8) に置くと四を作りつつ白活三を防御 = カウンターフォー
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[5 * BOARD_SIZE + 5] = .white;
+    cells[5 * BOARD_SIZE + 6] = .white;
+    cells[5 * BOARD_SIZE + 7] = .white;
+    cells[5 * BOARD_SIZE + 9] = .black;
+    cells[5 * BOARD_SIZE + 10] = .black;
+    cells[5 * BOARD_SIZE + 11] = .black;
+    bitboard.initFromCells(&cells);
+
+    const with_counter = evaluatePosition(&cells, 5, 8, .black, EvalOptions{ .enable_counter_four = true });
+    const without_counter = evaluatePosition(&cells, 5, 8, .black, EvalOptions{ .enable_counter_four = false });
+
+    // カウンターフォー有効時の方が高スコア（防御スコアが1.5倍）
+    try std.testing.expect(with_counter > without_counter);
+}

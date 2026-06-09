@@ -6,7 +6,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import type { BoardState } from "@/types/game";
+import type { BoardState, StoneColor } from "@/types/game";
 
 import { createBoardFromRecord } from "@/logic/gameRecordParser";
 import {
@@ -16,12 +16,26 @@ import {
 } from "@/logic/renjuRules";
 
 import {
-  evaluatePosition,
   evaluatePositionWithBreakdown,
   evaluateStonePatterns,
 } from "../evaluation";
 import { createBoardWithStones } from "../testUtils";
-import { PATTERN_SCORES } from "./patternScores";
+import { type EvaluationOptions, PATTERN_SCORES } from "./patternScores";
+
+/**
+ * 旧 evaluatePosition（対局Zig化で死蔵となり削除）の薄いラッパ。
+ * 生存している evaluatePositionWithBreakdown の score を返し、評価スコア挙動の
+ * 既存テストを生存スコアラーに向け直す。
+ */
+function evaluatePosition(
+  board: BoardState,
+  row: number,
+  col: number,
+  color: StoneColor,
+  options?: EvaluationOptions,
+): number {
+  return evaluatePositionWithBreakdown(board, row, col, color, options).score;
+}
 import {
   canContinueFourAfterDefense,
   computeMiseBonus,
@@ -334,108 +348,6 @@ describe("複数方向脅威ボーナス", () => {
 
     // 1方向のみなので差がほぼ0
     expect(scoreWithBonus).toBe(scoreWithoutBonus);
-  });
-});
-
-describe("カウンターフォー", () => {
-  it("防御しながら四を作る手の防御スコアが1.5倍になる", () => {
-    // 相手（白）が活三を持っている
-    // 自分（黒）がその防御位置で四を作れる状況
-    const board = createBoardWithStones([
-      // 白の活三
-      { row: 5, col: 5, color: "white" },
-      { row: 5, col: 6, color: "white" },
-      { row: 5, col: 7, color: "white" },
-      // 黒の三（5,8に置くと四になる）
-      { row: 5, col: 9, color: "black" },
-      { row: 5, col: 10, color: "black" },
-      { row: 5, col: 11, color: "black" },
-    ]);
-
-    // enableCounterFour有効時のスコア
-    const scoreWithCounter = evaluatePosition(board, 5, 8, "black", {
-      enableFukumi: false,
-      enableMise: false,
-      enableForbiddenTrap: false,
-      enableMultiThreat: false,
-      enableCounterFour: true,
-      enableVCT: false,
-      enableMandatoryDefense: false,
-      enableSingleFourPenalty: false,
-      singleFourPenaltyMultiplier: 1.0,
-      enableMiseThreat: false,
-      enableDoubleThreeThreat: false,
-      enableNullMovePruning: false,
-      enableFutilityPruning: false,
-      enableForbiddenVulnerability: false,
-    });
-
-    // enableCounterFour無効時のスコア
-    const scoreWithoutCounter = evaluatePosition(board, 5, 8, "black", {
-      enableFukumi: false,
-      enableMise: false,
-      enableForbiddenTrap: false,
-      enableMultiThreat: false,
-      enableCounterFour: false,
-      enableVCT: false,
-      enableMandatoryDefense: false,
-      enableSingleFourPenalty: false,
-      singleFourPenaltyMultiplier: 1.0,
-      enableMiseThreat: false,
-      enableDoubleThreeThreat: false,
-      enableNullMovePruning: false,
-      enableFutilityPruning: false,
-      enableForbiddenVulnerability: false,
-    });
-
-    // カウンターフォー有効時の方が高スコア（防御スコアが1.5倍）
-    expect(scoreWithCounter).toBeGreaterThan(scoreWithoutCounter);
-  });
-
-  it("自分が四を作らない場合はカウンターフォーなし", () => {
-    // 相手が活三、自分は普通の防御
-    const board = createBoardWithStones([
-      { row: 5, col: 5, color: "white" },
-      { row: 5, col: 6, color: "white" },
-      { row: 5, col: 7, color: "white" },
-    ]);
-
-    const scoreWithCounter = evaluatePosition(board, 5, 8, "black", {
-      enableFukumi: false,
-      enableMise: false,
-      enableForbiddenTrap: false,
-      enableMultiThreat: false,
-      enableCounterFour: true,
-      enableVCT: false,
-      enableMandatoryDefense: false,
-      enableSingleFourPenalty: false,
-      singleFourPenaltyMultiplier: 1.0,
-      enableMiseThreat: false,
-      enableDoubleThreeThreat: false,
-      enableNullMovePruning: false,
-      enableFutilityPruning: false,
-      enableForbiddenVulnerability: false,
-    });
-
-    const scoreWithoutCounter = evaluatePosition(board, 5, 8, "black", {
-      enableFukumi: false,
-      enableMise: false,
-      enableForbiddenTrap: false,
-      enableMultiThreat: false,
-      enableCounterFour: false,
-      enableVCT: false,
-      enableMandatoryDefense: false,
-      enableSingleFourPenalty: false,
-      singleFourPenaltyMultiplier: 1.0,
-      enableMiseThreat: false,
-      enableDoubleThreeThreat: false,
-      enableNullMovePruning: false,
-      enableFutilityPruning: false,
-      enableForbiddenVulnerability: false,
-    });
-
-    // 自分が四を作らないのでスコアは同じ
-    expect(scoreWithCounter).toBe(scoreWithoutCounter);
   });
 });
 

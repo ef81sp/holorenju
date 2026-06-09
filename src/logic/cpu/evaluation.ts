@@ -11,7 +11,6 @@ export {
   detectOpponentThreats,
   evaluateBoard,
   evaluateBoardWithBreakdown,
-  evaluatePosition,
   evaluatePositionWithBreakdown,
   evaluateStonePatterns,
   evaluateStonePatternsWithBreakdown,
