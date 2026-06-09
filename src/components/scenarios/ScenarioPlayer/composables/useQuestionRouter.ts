@@ -37,6 +37,7 @@ export const useQuestionRouter = (
     isSectionCompleted: boolean,
   ) => void;
   resetPuzzle: (questionSection: QuestionSection) => void;
+  resetForSectionChange: () => void;
   isResetAvailable: ComputedRef<boolean>;
   isVctUnsupported: (section: QuestionSection) => boolean;
 } => {
@@ -108,6 +109,16 @@ export const useQuestionRouter = (
     }
   }
 
+  /**
+   * セクション（問題）切り替え時に VCF の進行状態を破棄する。
+   * vcfActive（router 側）と hasMoves（solver 側）はどちらも「VCFで着手が始まったか」を
+   * 表す状態のため、セクションをまたぐ際は両方をまとめてリセットする（#80）。
+   */
+  function resetForSectionChange(): void {
+    vcfSolver.resetSectionState();
+    vcfActive.value = false;
+  }
+
   function isVctUnsupported(section: QuestionSection): boolean {
     return hasVctCondition(section);
   }
@@ -116,6 +127,7 @@ export const useQuestionRouter = (
     handlePlaceStone,
     submitAnswer,
     resetPuzzle,
+    resetForSectionChange,
     isResetAvailable,
     isVctUnsupported,
   };

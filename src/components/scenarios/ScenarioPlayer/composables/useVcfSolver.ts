@@ -57,6 +57,7 @@ export const useVcfSolver = (
     isSectionCompleted: boolean,
   ) => Promise<void>;
   resetVcf: () => void;
+  resetSectionState: () => void;
   isResetAvailable: ComputedRef<boolean>;
 } => {
   const boardStore = useBoardStore();
@@ -313,9 +314,25 @@ export const useVcfSolver = (
     pendingCounterFive = null;
   }
 
+  /**
+   * セクション（問題）切り替え時に内部状態を破棄する。
+   *
+   * `vcfBaseBoard` は初回着手時にのみキャプチャされるため、これをクリアしないと
+   * 別の問題に移っても前問の基準盤面が残り、「やり直す」で前問へ戻ってしまう（#80）。
+   * 盤面自体は useScenarioNavigation がセクションロード時に再構築するため、
+   * resetVcf（ユーザーの「やり直す」）と違い、ここでは盤面・マークには触れない。
+   */
+  function resetSectionState(): void {
+    vcfBaseBoard = null;
+    hasMoves.value = false;
+    vcfMoveCounter = 0;
+    pendingCounterFive = null;
+  }
+
   return {
     handleVcfPlaceStone,
     resetVcf,
+    resetSectionState,
     isResetAvailable,
   };
 };

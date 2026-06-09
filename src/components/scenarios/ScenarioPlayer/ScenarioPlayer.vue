@@ -146,6 +146,11 @@ watch(
       return;
     }
 
+    // 問題が切り替わったらVCFの進行状態を破棄する。
+    // これをしないと前問の基準盤面が残り、新しい問題で「やり直す」を押すと
+    // 前問に戻ってしまう（#80）。盤面自体は下のセクションロードが再構築する。
+    questionRouter.resetForSectionChange();
+
     const sections = scenarioNav.scenario.value?.sections;
     if (!sections) {
       return;
