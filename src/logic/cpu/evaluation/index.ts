@@ -25,15 +25,3 @@ export {
 
 // Re-export: threatDetection
 export { detectOpponentThreats } from "./threatDetection";
-
-// Re-export: stonePatterns
-export {
-  evaluateStonePatterns,
-  evaluateStonePatternsWithBreakdown,
-} from "./stonePatterns";
-
-// Re-export: positionEvaluation
-export { evaluatePositionWithBreakdown } from "./positionEvaluation";
-
-// Re-export: boardEvaluation
-export { evaluateBoard, evaluateBoardWithBreakdown } from "./boardEvaluation";

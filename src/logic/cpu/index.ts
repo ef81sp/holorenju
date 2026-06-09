@@ -5,7 +5,7 @@
  * TS側は評価関数、開局パターン、候補手生成を提供する。
  */
 
-export { evaluateBoard, PATTERN_SCORES } from "./evaluation";
+export { PATTERN_SCORES } from "./evaluation";
 export { isNearExistingStone } from "./moveGenerator";
 export {
   getOpeningMove,
