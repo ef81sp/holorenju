@@ -435,4 +435,56 @@ describe("useVcfSolver", () => {
       expect(isResetAvailable.value).toBe(false);
     });
   });
+
+  describe("resetSectionState", () => {
+    it("セクション切り替え後はリセット不可（着手前状態）に戻る", async () => {
+      mockValidateAttackMove.mockReturnValue({ valid: true, type: "four" });
+      mockGetDefenseResponse.mockReturnValue({
+        type: "blocked",
+        position: { row: 7, col: 8 },
+      });
+
+      const { handleVcfPlaceStone, resetSectionState, isResetAvailable } =
+        useVcfSolver("scenario-1", onSectionComplete);
+      const section = createVcfQuestionSection();
+
+      await handleVcfPlaceStone({ row: 7, col: 7 }, section, false);
+      expect(isResetAvailable.value).toBe(true);
+
+      resetSectionState();
+      expect(isResetAvailable.value).toBe(false);
+    });
+
+    it("セクション切り替え後は次のセクションの盤面を基準として取り直す", async () => {
+      mockValidateAttackMove.mockReturnValue({ valid: true, type: "four" });
+      mockGetDefenseResponse.mockReturnValue({
+        type: "blocked",
+        position: { row: 7, col: 8 },
+      });
+
+      const { handleVcfPlaceStone, resetSectionState, resetVcf } = useVcfSolver(
+        "scenario-1",
+        onSectionComplete,
+      );
+      const sectionA = createVcfQuestionSection({ id: "q-a" });
+
+      // セクションA で着手 → セクションA の盤面が基準としてキャプチャされる
+      await handleVcfPlaceStone({ row: 7, col: 7 }, sectionA, false);
+
+      // セクション切り替え: ナビゲーションが盤面を別物に差し替えたとみなす
+      mockBoard[0][0] = "white";
+      resetSectionState();
+
+      // セクションB で着手 → セクションB の盤面が新たな基準になる
+      const sectionB = createVcfQuestionSection({ id: "q-b" });
+      await handleVcfPlaceStone({ row: 7, col: 7 }, sectionB, false);
+
+      mockSetBoard.mockClear();
+      resetVcf();
+
+      // 「やり直す」で復元される盤面は セクションB の基準（marker あり）であること
+      const restored = mockSetBoard.mock.calls[0]?.[0] as BoardState;
+      expect(restored[0]?.[0]).toBe("white");
+    });
+  });
 });

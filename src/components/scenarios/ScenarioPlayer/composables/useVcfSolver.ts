@@ -57,6 +57,7 @@ export const useVcfSolver = (
     isSectionCompleted: boolean,
   ) => Promise<void>;
   resetVcf: () => void;
+  resetSectionState: () => void;
   isResetAvailable: ComputedRef<boolean>;
 } => {
   const boardStore = useBoardStore();
@@ -302,20 +303,39 @@ export const useVcfSolver = (
 
   // ===== リセット =====
 
+  /** VCF進行状態（着手フラグ・石IDカウンタ・保留中の勝ち手）を初期化する。 */
+  function clearProgressState(): void {
+    hasMoves.value = false;
+    vcfMoveCounter = 0;
+    pendingCounterFive = null;
+  }
+
   function resetVcf(): void {
     if (vcfBaseBoard) {
       boardStore.setBoard(cloneBoard(vcfBaseBoard), "question");
     }
     boardStore.clearMarks();
     boardStore.clearLines();
-    hasMoves.value = false;
-    vcfMoveCounter = 0;
-    pendingCounterFive = null;
+    clearProgressState();
+  }
+
+  /**
+   * セクション（問題）切り替え時に内部状態を破棄する。
+   *
+   * `vcfBaseBoard` は初回着手時にのみキャプチャされるため、これをクリアしないと
+   * 別の問題に移っても前問の基準盤面が残り、「やり直す」で前問へ戻ってしまう（#80）。
+   * 盤面自体は useScenarioNavigation がセクションロード時に再構築するため、
+   * resetVcf（ユーザーの「やり直す」）と違い、ここでは盤面・マークには触れない。
+   */
+  function resetSectionState(): void {
+    vcfBaseBoard = null;
+    clearProgressState();
   }
 
   return {
     handleVcfPlaceStone,
     resetVcf,
+    resetSectionState,
     isResetAvailable,
   };
 };
