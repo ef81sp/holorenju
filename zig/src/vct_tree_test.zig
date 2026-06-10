@@ -70,7 +70,7 @@ test "ISSUE22: VCT詰み木 - 既定経路がsequenceと一致し深いside分�
     bitboard.initFromCells(&cells);
 
     // レビュー実設定（REVIEW_VCT_OPTIONS_WITH_BRANCHES）に合わせた depth=6
-    const result = vct.findVCTSequence(&cells, B, 6, 0, 500000, true);
+    const result = vct.findVCTSequence(&cells, B, 6, 0, 500000, true, .lenient);
     try testing.expect(result.found);
     try testing.expect(result.tree_root != ft.TREE_TERMINAL);
 

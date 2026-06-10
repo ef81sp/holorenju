@@ -575,6 +575,14 @@ fn checkSequenceBreaksByCF(
     return breaks;
 }
 
+/// カウンターフォー耐性検証の厳格度。
+/// - lenient: main 既定。攻めの追い詰め探索で使用（真正VCTを取りこぼさない）。
+/// - strict: 防御側の被詰み判定で使用。相手の四(Tier1)がノリ手で先手を奪い
+///   ブロック自体が四以上の先手にならない場合も手順崩壊として棄却する。
+///   攻守両用パスに strict を流すと真正VCTまで棄却され弱体化するため、
+///   minimax の防御ノード(!is_maximizing)経由でのみ strict を渡すこと。
+pub const ResilienceMode = enum { lenient, strict };
+
 /// 攻撃手（活三のみ）の段階で、相手のカウンターフォーが残り手順を破壊するか検査
 ///
 /// TS版 hasBreakingCounterFour を移植・拡張。
@@ -585,6 +593,7 @@ fn hasBreakingCounterFour(
     color: Cell,
     sequence: []const Position,
     attack_index: usize,
+    mode: ResilienceMode,
 ) bool {
     const opponent = color.opposite();
 
@@ -617,6 +626,25 @@ fn hasBreakingCounterFour(
 
         cells[bp_idx] = color;
         bitboard.placeStone(bp.row, bp.col, color);
+
+        // ノリ手Tierゲート（strict時のみ・連珠テンポ理論）:
+        // この攻撃手は三(Tier2)のみ（呼び出し元 isResilientToCounterFours が
+        // 四/五の攻撃手を除外済み）。相手の四(Tier1)はノリ手で先手を奪い、
+        // 攻撃側は四をブロックさせられる。そのブロック自体が四以上の先手
+        // （= 再逆転のノリ手）でなければテンポは相手に渡り手順は崩壊する。
+        // 攻めの探索(lenient)ではこのゲートで真正VCTまで棄却され弱体化するため、
+        // 防御側の被詰み判定(strict)でのみ発火させる。
+        if (mode == .strict) {
+            const block_makes_five = forbidden.checkFive(cells, bp.row, bp.col, color);
+            const block_makes_four = quiescence.createsFour(cells, bp.row, bp.col, color);
+            if (!block_makes_five and !block_makes_four) {
+                cells[bp_idx] = .empty;
+                bitboard.removeStone(bp.row, bp.col);
+                cells[cf_idx] = .empty;
+                bitboard.removeStone(cf.row, cf.col);
+                return true;
+            }
+        }
 
         // CF+ブロック後に相手が即時勝ち手段を持つか（4-3/活四/VCF/白の三三）
         // 元手順は相手が "受け身の防御" を打つ前提だが、CF後に強力な攻撃が生まれるなら
@@ -665,6 +693,7 @@ pub fn isResilientToCounterFours(
     cells: []Cell,
     color: Cell,
     sequence: []const Position,
+    mode: ResilienceMode,
 ) bool {
     const opponent = color.opposite();
 
@@ -694,7 +723,7 @@ pub fn isResilientToCounterFours(
             const is_five = forbidden.checkFive(cells, pos.row, pos.col, color);
             const is_four = quiescence.createsFour(cells, pos.row, pos.col, color);
             if (!is_five and !is_four) {
-                if (hasBreakingCounterFour(cells, color, sequence, i)) {
+                if (hasBreakingCounterFour(cells, color, sequence, i, mode)) {
                     resilient = false;
                     break;
                 }
@@ -949,7 +978,18 @@ pub fn findVCTMove(cells: []Cell, color: Cell, max_depth: u8, time_limit: u32) ?
 /// findVCTSequence にはカウンターフォー耐性検証が含まれるため、
 /// VCT手順が相手のカウンターフォーで崩壊するケースを除外できる。
 pub fn findVCTMoveWithBudget(cells: []Cell, color: Cell, max_depth: u8, time_limit: u32, max_nodes: u32) ?Position {
-    const seq_result = findVCTSequence(cells, color, max_depth, time_limit, max_nodes, false);
+    const seq_result = findVCTSequence(cells, color, max_depth, time_limit, max_nodes, false, .lenient);
+    if (seq_result.found and seq_result.len > 0) {
+        return seq_result.sequence[0];
+    }
+    return null;
+}
+
+/// 防御側（被詰み判定）専用の VCT 探索。strict 耐性検証で相手のノリ手による
+/// 手順崩壊（偽の追い詰め＝幻の被詰み）を棄却する。攻めには使わないこと。
+/// findVCTSequence 内部の耐性検証を strict で一度だけ実行するため二重検証は無い。
+pub fn findVCTMoveWithBudgetStrict(cells: []Cell, color: Cell, max_depth: u8, time_limit: u32, max_nodes: u32) ?Position {
+    const seq_result = findVCTSequence(cells, color, max_depth, time_limit, max_nodes, false, .strict);
     if (seq_result.found and seq_result.len > 0) {
         return seq_result.sequence[0];
     }
@@ -1015,6 +1055,7 @@ pub fn findVCTSequence(
     time_limit: u32,
     max_nodes: u32,
     collect_branches: bool,
+    mode: ResilienceMode,
 ) VCTSequenceResult {
     // トップレベルエントリ: bitboard を cells と同期
     bitboard.initFromCells(cells);
@@ -1079,7 +1120,7 @@ pub fn findVCTSequence(
             // 残り手順を破壊するならVCT不成立扱い → VCF-onlyにフォールバック
             //
             // 深い反復に進んでも先頭の活三は同じで再度棄却されるため早期終了する。
-            if (!isResilientToCounterFours(cells, color, result.sequence[0..seq_len])) {
+            if (!isResilientToCounterFours(cells, color, result.sequence[0..seq_len], mode)) {
                 var fallback = VCTSequenceResult{
                     .sequence = undefined,
                     .len = 0,
@@ -1924,7 +1965,7 @@ pub fn findVCTSequenceFromFirstMove(
         } else {
             // ct=none: 通常のVCT探索
             _ = collect_branches;
-            const sub = findVCTSequence(cells, color, max_depth, time_limit, max_nodes, false);
+            const sub = findVCTSequence(cells, color, max_depth, time_limit, max_nodes, false, .lenient);
             if (sub.found) {
                 var si: u8 = 0;
                 while (si < sub.len) : (si += 1) {
@@ -2254,7 +2295,7 @@ test "findVCTSequence: immediate five via VCF" {
     cells[7 * BOARD_SIZE + 6] = .black;
     cells[7 * BOARD_SIZE + 7] = .black;
 
-    const result = findVCTSequence(&cells, .black, VCT_MAX_DEPTH, 0, 0, false);
+    const result = findVCTSequence(&cells, .black, VCT_MAX_DEPTH, 0, 0, false, .lenient);
     try testing.expect(result.found);
     try testing.expect(result.len >= 1);
 }
@@ -2263,7 +2304,7 @@ test "findVCTSequence: no VCT" {
     var cells = [_]Cell{.empty} ** CELL_COUNT;
     cells[7 * BOARD_SIZE + 7] = .black;
 
-    const result = findVCTSequence(&cells, .black, VCT_MAX_DEPTH, 0, 0, false);
+    const result = findVCTSequence(&cells, .black, VCT_MAX_DEPTH, 0, 0, false, .lenient);
     try testing.expect(!result.found);
 }
 
@@ -2334,7 +2375,7 @@ test "findVCTSequence: 5-stone opening should not find VCT for white" {
     cells[6 * BOARD_SIZE + 8] = .white;
     cells[8 * BOARD_SIZE + 6] = .black;
 
-    const result = findVCTSequence(&cells, .white, VCT_MAX_DEPTH, 5000, 500000, false);
+    const result = findVCTSequence(&cells, .white, VCT_MAX_DEPTH, 5000, 500000, false, .lenient);
     try testing.expect(!result.found);
 }
 
@@ -2393,7 +2434,7 @@ test "findVCTSequence: rejects sequence broken by counter-four (issue #27)" {
     bitboard.initFromCells(&cells);
 
     // 手順自体が見つからないこと（VCF-onlyフォールバック含めて勝ち手順なし）
-    const result = findVCTSequence(&cells, .black, VCT_MAX_DEPTH, 0, 50000, false);
+    const result = findVCTSequence(&cells, .black, VCT_MAX_DEPTH, 0, 50000, false, .lenient);
     try testing.expect(!result.found);
 }
 
@@ -2420,7 +2461,7 @@ test "isResilientToCounterFours: J10 sequence rejected by counter-four (issue #2
         .{ .row = 5, .col = 8 }, // I10 (黒)
     };
 
-    try testing.expect(!isResilientToCounterFours(&cells, .black, &seq));
+    try testing.expect(!isResilientToCounterFours(&cells, .black, &seq, .lenient));
 }
 
 test "isResilientToCounterFours: empty sequence is trivially resilient" {
@@ -2429,7 +2470,7 @@ test "isResilientToCounterFours: empty sequence is trivially resilient" {
     bitboard.initFromCells(&cells);
 
     const seq = [_]Position{};
-    try testing.expect(isResilientToCounterFours(&cells, .black, &seq));
+    try testing.expect(isResilientToCounterFours(&cells, .black, &seq, .lenient));
 }
 
 test "isResilientToCounterFours: VCF (four-only) sequence is resilient" {
@@ -2447,5 +2488,27 @@ test "isResilientToCounterFours: VCF (four-only) sequence is resilient" {
         .{ .row = 7, .col = 8 }, // I8 (五連完成)
     };
 
-    try testing.expect(isResilientToCounterFours(&cells, .black, &seq));
+    try testing.expect(isResilientToCounterFours(&cells, .black, &seq, .lenient));
+}
+
+test "phantom: 偽の追い詰め(VCT)を防御側strictのみ棄却・攻めlenientは検出（非対称ゲート）" {
+    // 実コーパス局面（hard★4 game4 ply13 相当）。黒の追い詰めは白のカウンター四
+    // （ノリ手＝先手を奪う四）でテンポを奪われ崩壊する＝偽の追い詰め。
+    // Rapfi-15s では白 -269〜-413（詰まない）ため我々の被詰み判定は偽陽性。
+    //
+    // 非対称の核心:
+    //   lenient（攻めの探索）= 従来どおり検出（真正VCTを取りこぼさないため改変しない）
+    //   strict（防御の被詰み判定）= ノリ手Tierゲートで棄却（幻の被詰みを解消）
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    const blacks = [_][2]u8{ .{ 6, 9 }, .{ 5, 8 }, .{ 7, 10 }, .{ 7, 9 }, .{ 9, 7 }, .{ 5, 9 }, .{ 7, 7 } };
+    const whites = [_][2]u8{ .{ 9, 6 }, .{ 9, 5 }, .{ 4, 7 }, .{ 9, 4 }, .{ 10, 4 }, .{ 8, 9 }, .{ 7, 8 } };
+    for (blacks) |b| cells[@as(usize, b[0]) * BOARD_SIZE + b[1]] = .black;
+    for (whites) |w| cells[@as(usize, w[0]) * BOARD_SIZE + w[1]] = .white;
+    bitboard.initFromCells(&cells);
+
+    // lenient（攻め）は手を返す＝攻めの探索力は不変
+    try testing.expect(findVCTMoveWithBudget(&cells, .black, 4, 0, 500) != null);
+    // strict（防御）は null ＝幻の被詰みを棄却
+    try testing.expect(findVCTMoveWithBudgetStrict(&cells, .black, 4, 0, 500) == null);
 }
