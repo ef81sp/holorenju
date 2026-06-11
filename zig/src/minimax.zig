@@ -280,10 +280,13 @@ fn threatProbe(
     color: Cell,
     minimax_depth: u8,
     no_time_limit: bool,
+    // 防御ノード（相手の被詰み判定）では strict 耐性検証で偽の追い詰め
+    // （幻の被詰み）を棄却する。攻めノードは lenient で真正VCTを取りこぼさない。
+    defensive: bool,
 ) ?Position {
     const budget = getThreatBudget(minimax_depth);
 
-    // VCF探索（軽量・常にチェック）
+    // VCF探索（軽量・常にチェック）。VCFは受け一意で偽陽性が出にくいため常に lenient。
     const vcf_time: u32 = if (no_time_limit) 0 else 20;
     const vcf_move = vcf_mod.findVCFMoveWithBudget(
         cells,
@@ -297,13 +300,22 @@ fn threatProbe(
     // VCT探索（予算が許す場合のみ）
     if (budget.vct_depth > 0) {
         const vct_time: u32 = if (no_time_limit) 0 else 50;
-        const vct_move = vct_mod.findVCTMoveWithBudget(
-            cells,
-            color,
-            budget.vct_depth,
-            vct_time,
-            budget.vct_nodes,
-        );
+        const vct_move = if (defensive)
+            vct_mod.findVCTMoveWithBudgetStrict(
+                cells,
+                color,
+                budget.vct_depth,
+                vct_time,
+                budget.vct_nodes,
+            )
+        else
+            vct_mod.findVCTMoveWithBudget(
+                cells,
+                color,
+                budget.vct_depth,
+                vct_time,
+                budget.vct_nodes,
+            );
         if (vct_move) |m| return m;
     }
 
@@ -407,11 +419,13 @@ pub fn minimaxWithTT(
     // VCFがあれば勝ちスコア(FIVE-1)でカットオフ
     // =========================================================================
     if (depth >= 3) {
+        // !is_maximizing = 相手手番ノード = 自分の被詰み判定 → strict で幻を棄却。
         const threat_result = threatProbe(
             cells,
             current_color,
             depth,
             ctx.no_time_limit,
+            !is_maximizing,
         );
         if (threat_result) |threat_move| {
             ctx.stats.threat_probe_cutoffs += 1;
