@@ -58,8 +58,13 @@ export const PATTERN_SCORES = {
   OPEN_TWO: 50,
   /** 止め二 — 発展性が限られた素材 */
   TWO: 10,
-  /** 中央寄りボーナス — 中央ほど多方向に展開できるため有利 */
-  CENTER_BONUS: 5,
+  /**
+   * 中央寄りボーナス — 0（無効化）。
+   * Gate0 実測: CENTER_BONUS↑は弱化(-83 Elo)、5→0 は ≈+18 Elo の改善(624局プール,
+   * 一貫だがCI[-45,+9]で非有意)。方向は確実で害のある特徴のため除去。
+   * 詳細: docs/plans/gate0-eval-lever-results.md
+   */
+  CENTER_BONUS: 0,
   /** 禁じ手誘導ボーナス（白番・旧定数、後方互換） */
   FORBIDDEN_TRAP: 100,
   /** 複数方向脅威ボーナス（2方向以上の先手脅威に追加）— evaluatePosition() のみ */

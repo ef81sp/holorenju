@@ -235,12 +235,13 @@ describe("getCenterBonus", () => {
     expect(bonus).toBe(0);
   });
 
-  it("中央に近いほどボーナスが高い", () => {
+  it("中央に近いほどボーナスは小さくならない（CENTER_BONUS=0 で無効化時は一律0）", () => {
     const center = getCenterBonus(7, 7);
     const far = getCenterBonus(7, 12);
     const corner = getCenterBonus(0, 0);
 
-    expect(center).toBeGreaterThan(far);
-    expect(far).toBeGreaterThan(corner);
+    // CENTER_BONUS=0 で中央ボーナスは無効。値非依存の不変条件で検証。
+    expect(center).toBeGreaterThanOrEqual(far);
+    expect(far).toBeGreaterThanOrEqual(corner);
   });
 });

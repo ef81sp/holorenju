@@ -6,7 +6,7 @@ pub const OPEN_THREE: i32 = 1000;
 pub const THREE: i32 = 30;
 pub const OPEN_TWO: i32 = 50;
 pub const TWO: i32 = 10;
-pub const CENTER_BONUS: i32 = 5;
+pub const CENTER_BONUS: i32 = 0;
 
 /// 末端評価定数
 pub const LEAF_FOUR_THREE_THREAT: i32 = 2000;
