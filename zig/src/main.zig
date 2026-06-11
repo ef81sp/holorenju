@@ -517,7 +517,8 @@ export fn findVCTSequenceWasm(color: u8, max_depth: u8, time_limit_ms: u32, max_
     };
 
     const cells = &board.board_cells;
-    const result = vct.findVCTSequence(cells, cell_color, max_depth, time_limit_ms, max_nodes, collect_branches != 0);
+    // 振り返り(review)用エントリは攻めの追い詰め手順提示なので lenient（main 挙動）。
+    const result = vct.findVCTSequence(cells, cell_color, max_depth, time_limit_ms, max_nodes, collect_branches != 0, .lenient);
     writeVCTResult(result);
 }
 
