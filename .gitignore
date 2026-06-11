@@ -49,3 +49,6 @@ zig/bench-results/
 .claude/settings.local.json
 .claude/worktrees/
 tools/oracle/
+
+# GPL の外部解析エンジン(Rapfi)クライアント置き場。コミット禁止。
+scripts/rapfi/

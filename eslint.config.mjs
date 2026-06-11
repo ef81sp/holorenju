@@ -17,6 +17,9 @@ export default [
       "**/*.d.ts",
       ".oxlint_cache",
       ".eslint_cache",
+      // GPL の外部解析エンジン（Rapfi）置き場。コミット禁止・lint対象外。
+      "scripts/rapfi/**",
+      "tools/oracle/**",
     ],
   },
 
