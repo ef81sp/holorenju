@@ -25,6 +25,8 @@ import { parentPort, workerData } from "node:worker_threads";
 import type { DifficultyParams } from "../src/types/cpu.ts";
 import type { BoardState, Position } from "../src/types/game.ts";
 
+import { EVAL_PARAM_IDS } from "./lib/evalParams.ts";
+
 // ============================================================================
 // 型定義
 // ============================================================================
@@ -33,6 +35,12 @@ interface BridgeWorkerData {
   worktreePath: string;
   difficulty: string;
   customParams?: Partial<DifficultyParams>;
+  /**
+   * eval 形系重みの実行時注入（weight-bench 用）。キー名は EVAL_PARAM_IDS。
+   * wasm が setEvalParam を export していれば適用、無ければ warn してスキップ
+   * （setEvalParam 非対応の古い commit を読む commit-bench と後方互換）。
+   */
+  evalWeights?: Record<string, number>;
 }
 
 interface MoveRequest {
@@ -121,6 +129,10 @@ interface WasmModuleExports {
   getResultBuffer: () => number;
   getStatsBuffer?: () => number;
   ttClear: () => void;
+  // eval 重み実行時注入（新しい wasm のみ。古い commit には存在しない＝optional）
+  setEvalParam?: (id: number, value: number) => void;
+  getEvalParam?: (id: number) => number;
+  resetEvalParams?: () => void;
 }
 
 /** WASM探索のハンドラ */
@@ -396,6 +408,38 @@ function callTsFindBestMove(
   );
 }
 
+/**
+ * eval 形系重みを wasm に注入する（純粋関数）。
+ * setEvalParam export があれば resetEvalParams→各 setEvalParam を適用、無ければ
+ * warn してスキップ（setEvalParam 非対応の古い commit を読む commit-bench と後方互換）。
+ * baseline 側（weights 空）でも resetEvalParams を呼びクリーンな既定を保証する。
+ */
+function applyEvalWeights(
+  wasm: WasmModuleExports,
+  weights: Record<string, number> | undefined,
+): void {
+  if (
+    typeof wasm.setEvalParam !== "function" ||
+    typeof wasm.resetEvalParams !== "function"
+  ) {
+    if (weights && Object.keys(weights).length > 0) {
+      console.warn(
+        "[cpu-bridge-worker] この wasm は setEvalParam 非対応。evalWeights を無視します。",
+      );
+    }
+    return;
+  }
+  wasm.resetEvalParams();
+  for (const [name, value] of Object.entries(weights ?? {})) {
+    const id = (EVAL_PARAM_IDS as Record<string, number>)[name];
+    if (id === undefined) {
+      console.warn(`[cpu-bridge-worker] 不明な eval 重みキー: ${name}（無視）`);
+      continue;
+    }
+    wasm.setEvalParam(id, value);
+  }
+}
+
 async function main(): Promise<void> {
   const { worktreePath } = data;
 
@@ -409,6 +453,8 @@ async function main(): Promise<void> {
 
   if (wasm) {
     wasmHandler = createWasmSearchHandler(wasm);
+    // eval 形系重みを注入（baseline は weights 空＝reset のみでクリーン既定）
+    applyEvalWeights(wasm, data.evalWeights);
     console.log(`[cpu-bridge-worker] WASM engine loaded for ${worktreePath}`);
   } else {
     tsFindBestMove = await loadTsCpuFromWorktree(worktreePath);
