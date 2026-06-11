@@ -175,6 +175,13 @@ pub fn build(b: *std.Build) void {
         }),
     });
 
+    const test_scores = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/scores.zig"),
+            .target = native_target,
+        }),
+    });
+
     const test_bitboard = b.addTest(.{
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/bitboard.zig"),
@@ -228,6 +235,7 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&b.addRunArtifact(test_vcf).step);
     test_step.dependOn(&b.addRunArtifact(test_vct).step);
     test_step.dependOn(&b.addRunArtifact(test_incremental_eval).step);
+    test_step.dependOn(&b.addRunArtifact(test_scores).step);
     test_step.dependOn(&b.addRunArtifact(test_bitboard).step);
     test_step.dependOn(&b.addRunArtifact(test_line_lookup).step);
     test_step.dependOn(&b.addRunArtifact(test_line_potential).step);
