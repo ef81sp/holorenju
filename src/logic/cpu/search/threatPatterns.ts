@@ -18,6 +18,8 @@ import {
   countLine,
   getLineEnds,
 } from "../core/lineAnalysis";
+// 夏止め済み判定（受け点の基準と活三判定を一致させる SSoT）
+import { getOpenThreeDefensePositions } from "../evaluation/threatDetection";
 import { isNearExistingStone } from "../moveGenerator";
 import { findJumpGapPosition } from "../patterns/threatAnalysis";
 // #43 PR-3: 図形/禁手の葉プリミティブを Zig アダプタへ委譲（patterns.ts/forbiddenMoves.ts 依存を断つ）。
@@ -274,7 +276,9 @@ export function checkDefenseCounterThreat(
     }
 
     // 連続活三
-    if (count === 3) {
+    // 夏止め済み（両外側ブロックで活四にできない三）は本物のカウンター脅威でないため除外。
+    // 受け点の基準（getOpenThreeDefensePositions: 空リスト=夏止め済み）と揃える（classifyThreat と同基準）。
+    if (!hasThree && count === 3) {
       const { end1Open, end2Open } = checkEnds(
         board,
         row,
@@ -283,7 +287,12 @@ export function checkDefenseCounterThreat(
         dc,
         opponentColor,
       );
-      if (end1Open && end2Open) {
+      if (
+        end1Open &&
+        end2Open &&
+        getOpenThreeDefensePositions(board, row, col, dr, dc, opponentColor)
+          .length > 0
+      ) {
         hasThree = true;
       }
     }
