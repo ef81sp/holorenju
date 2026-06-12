@@ -135,6 +135,11 @@ pub const SearchContext = struct {
     /// 時間制限なしモード
     no_time_limit: bool = false,
 
+    /// 探索打ち切り（時間切れ/ノード上限/絶対時間制限）が発生しているか
+    pub inline fn isAborted(self: *const SearchContext) bool {
+        return self.timeout_flag or self.node_count_exceeded or self.absolute_deadline_exceeded;
+    }
+
     pub fn init(
         tt: *tt_mod.TranspositionTable,
         history: *move_order.HistoryTable,
@@ -375,7 +380,7 @@ pub fn minimaxWithTT(
     }
 
     // タイムアウト/ノード上限時は静的評価を返す（インクリメンタル評価を使用）
-    if (ctx.timeout_flag or ctx.node_count_exceeded or ctx.absolute_deadline_exceeded) {
+    if (ctx.isAborted()) {
         return incremental_eval.getEvaluation(cells, perspective, ctx.board_eval_options, false);
     }
 
@@ -494,6 +499,11 @@ pub fn minimaxWithTT(
             false, // 連続NMP防止
             extensions,
         );
+        // NMP子探索中の打ち切り検出: nmp_score には static eval が混入している可能性があり、
+        // 偽の beta-cutoff で汚染値を返さないよう、冒頭の早期 latch と同じ形で静的評価に落とす。
+        if (ctx.isAborted()) {
+            return incremental_eval.getEvaluation(cells, perspective, ctx.board_eval_options, false);
+        }
         if (if (is_maximizing) nmp_score >= beta else nmp_score <= alpha) {
             ctx.stats.null_move_cutoffs += 1;
             return nmp_score;
@@ -532,6 +542,8 @@ pub fn minimaxWithTT(
     var best_move: ?Position = null;
     var best_score: i32 = if (is_maximizing) -scores.INFINITY else scores.INFINITY;
     var score_type: tt_mod.ScoreType = if (is_maximizing) .upper_bound else .lower_bound;
+    // 打ち切りフラグ: abort 後に不完全スコアを TT に書かないために使う
+    var aborted = false;
 
     var move_index: u16 = 0;
     while (move_index < moves.len) : (move_index += 1) {
@@ -644,6 +656,15 @@ pub fn minimaxWithTT(
         // 石を元に戻す
         incremental_eval.removeStone(cells, move.row, move.col);
 
+        // 打ち切り検出: 子の再帰中に abort が発生した場合、子の子孫が static eval を
+        // 返しているため子スコアが汚染されている（間接汚染）。そのスコアを best_score に
+        // 取り込む前に脱出し、上位への汚染伝播を防ぐ。
+        // quiescence.zig の同等箇所（"打ち切り（ノード予算/時間切れ）が起きたら…"）と同じ意味論。
+        if (ctx.isAborted()) {
+            aborted = true;
+            break;
+        }
+
         // スコア更新
         if (is_maximizing) {
             if (score > best_score) {
@@ -671,6 +692,17 @@ pub fn minimaxWithTT(
             score_type = if (is_maximizing) .lower_bound else .upper_bound;
             break;
         }
+    }
+
+    // 打ち切り時は不完全な best_score を TT に書かない（TT汚染防止）。
+    // static eval が混入したスコアをフル depth クレジット付きで保存すると、
+    // 後続探索で exact cutoff として誤用される。quiescence.zig の同等処理と揃える。
+    if (aborted) {
+        // 1手も完了せず best_score が初期値のままなら static eval にフォールバック
+        if (best_score == scores.INFINITY or best_score == -scores.INFINITY) {
+            return incremental_eval.getEvaluation(cells, perspective, ctx.board_eval_options, false);
+        }
+        return best_score;
     }
 
     // スコアタイプを決定
@@ -833,7 +865,7 @@ pub fn findBestMoveWithTT(
 
     for (0..moves.len) |mi| {
         // タイムアウトチェック
-        if (ctx.timeout_flag or ctx.node_count_exceeded or ctx.absolute_deadline_exceeded) {
+        if (ctx.isAborted()) {
             break;
         }
 
@@ -1017,4 +1049,100 @@ test "LMR table values" {
     try testing.expectEqual(getLMRReduction(0, 5), 0);
     // moveIndex=0 → 0
     try testing.expectEqual(getLMRReduction(5, 0), 0);
+}
+
+/// 序盤の均衡局面（minimax テスト用）。
+/// 黒白が互い違いに散在し VCF/VCT がすぐには成立しない構造にする。
+/// threat probe が早期に切らないため depth 3 探索で多数のノードが展開される。
+fn setupMinimaxTacticalPosition(cells: *[board_mod.CELL_COUNT]Cell) void {
+    @memset(cells, .empty);
+    // 黒白が交互に配置された序盤局面 (天元周辺)。
+    // initFromBoard 呼び出し元が bitboard/ll の初期化も行うため、ここでは cells の値設定のみ。
+    cells[7 * BOARD_SIZE + 7] = .black;
+    cells[7 * BOARD_SIZE + 8] = .white;
+    cells[8 * BOARD_SIZE + 7] = .white;
+    cells[8 * BOARD_SIZE + 8] = .black;
+    cells[6 * BOARD_SIZE + 7] = .black;
+    cells[7 * BOARD_SIZE + 6] = .white;
+}
+
+test "minimaxWithTT: ノード上限到達後は不完全スコアをTTに保存しない" {
+    const ll = @import("line_lookup.zig");
+    ll.init();
+
+    const CELL_COUNT = board_mod.CELL_COUNT;
+    var cells: [CELL_COUNT]Cell = undefined;
+    setupMinimaxTacticalPosition(&cells);
+    incremental_eval.initFromBoard(&cells, scores.CONNECTIVITY_BONUS, 100);
+
+    var tt = tt_mod.TranspositionTable{
+        .entries = &tt_mod.global_tt_storage,
+        .current_generation = 0,
+    };
+
+    // 共通のコンテキスト設定
+    const eval_opts = position_eval.DEFAULT_EVAL_OPTIONS;
+    const board_eval_opts = evaluate.EvalOptions{
+        .enable_leaf_mise = false,
+        .last_mover_is_perspective = .unset,
+        .single_four_penalty_multiplier = 100,
+        .connectivity_bonus = scores.CONNECTIVITY_BONUS,
+    };
+
+    // --- (a) 無制限で depth 3 探索: 総ノード数を測定 ---
+    tt.clear();
+    var history_full = move_order.HistoryTable.init();
+    var killers_full = move_order.KillerMoves.init();
+    var counter_moves_full = initCounterMoveTable();
+    var ctx_full = SearchContext.init(&tt, &history_full, &killers_full, &counter_moves_full, eval_opts, board_eval_opts);
+    ctx_full.no_time_limit = true;
+
+    const root_hash = zobrist.computeBoardHash(&cells);
+    _ = minimaxWithTT(
+        &cells,
+        root_hash,
+        3,
+        true,
+        .black,
+        -scores.INFINITY,
+        scores.INFINITY,
+        null,
+        &ctx_full,
+        true,
+        0,
+    );
+    const full_nodes = ctx_full.stats.nodes;
+    // 前提: 戦術局面で十分なノードを展開している（少なすぎると打ち切り経路を踏まない）
+    try testing.expect(full_nodes > 50);
+
+    // --- (b) ノード上限 = 全体の 1/4 で再探索: abort が確実に起きる ---
+    tt.clear();
+    var history_cap = move_order.HistoryTable.init();
+    var killers_cap = move_order.KillerMoves.init();
+    var counter_moves_cap = initCounterMoveTable();
+    var ctx_cap = SearchContext.init(&tt, &history_cap, &killers_cap, &counter_moves_cap, eval_opts, board_eval_opts);
+    ctx_cap.no_time_limit = true;
+    ctx_cap.max_nodes = full_nodes / 4;
+
+    _ = minimaxWithTT(
+        &cells,
+        root_hash,
+        3,
+        true,
+        .black,
+        -scores.INFINITY,
+        scores.INFINITY,
+        null,
+        &ctx_cap,
+        true,
+        0,
+    );
+
+    // ノード上限に達したことを確認
+    try testing.expect(ctx_cap.node_count_exceeded);
+
+    // ルート局面の TT エントリが存在しないこと（不完全スコアが保存されていない）。
+    // abort 後は store をスキップするため、クリア後のエントリは null のまま。
+    const entry = tt.probe(root_hash);
+    try testing.expect(entry == null);
 }
