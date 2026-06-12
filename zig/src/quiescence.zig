@@ -27,6 +27,48 @@ pub const Position = @import("threats.zig").Position;
 /// Quiescence Search の最大深度（四+ブロック 2往復分）
 pub const MAX_QUIESCENCE_DEPTH: u8 = 4;
 
+/// quiescence の打ち切り制御。
+///
+/// **設計方針（ハードウェア非依存の決定的強度）**:
+/// 強さは「総ノード数」という決定的な予算で縛る。同じノード予算なら CPU 性能に依らず
+/// 同じ着手＝強さが一定。これがハングの根治でもある（旧来 `max_nodes` は minimax ノードのみ
+/// 計上し quiescence ノードを数えず、q探索が実質無制限になって暴走していた＝監査の欠陥C）。
+///
+/// **打ち切りポリシー（2層）**:
+/// - ノード予算超過 → **ローカル**打ち切り（static eval 返却のみ・フラグは立てない）。
+///   探索全体の停止確定は次の minimax ノード入口の `node_count_exceeded` 判定が担う。
+/// - 壁時計超過 → 共有 `timeout_flag` をセット（時間切れはグローバル事象のため）。
+///
+/// **出荷構成での整理**: hard(timeLimit=10s, maxNodes=1M) では典型ハードで時間が先に
+/// bind し、ノード予算は病的な q爆発を決定的に頭打ちにする安全網として効く。
+/// 完全に決定的な強度（計測・リプレイ用途）は timeLimit=0 のノード予算のみで運用する。
+///
+/// - `node_counter`: 探索全体で共有する総ノードカウンタ（`ctx.stats.nodes` を指す）。
+///   minimax ノードと quiescence ノードの両方をここに計上し、`max_nodes` で**決定的に**打ち切る。
+/// - `max_nodes`: グローバル総ノード上限（0 = 無制限）。これが主たる打ち切り条件。
+/// - `deadline` / `absolute_deadline` / `no_time_limit` / `timeout_flag`:
+///   壁時計の**安全天井**（出荷時の応答性用）。`no_time_limit=true`（計測時）では一切効かず、
+///   強度は純粋にノード予算のみで決まる＝再現可能・ハードウェア非依存。
+///   `no_time_limit` にデフォルトは与えない（設定し忘れで天井が黙って消えるのを防ぐ）。
+pub const QLimits = struct {
+    node_counter: *u32,
+    max_nodes: u32 = 0,
+    deadline: u32 = 0,
+    absolute_deadline: u32 = 0,
+    no_time_limit: bool,
+    timeout_flag: *bool,
+};
+
+extern fn getTimestampMsExternal() u32;
+
+/// 壁時計（ms）。ネイティブ（テスト）では 0 を返し時間制限なし。
+fn getTimestampMs() u32 {
+    if (@import("builtin").cpu.arch == .wasm32) {
+        return getTimestampMsExternal();
+    }
+    return 0;
+}
+
 /// 四を作るかチェック（石配置済み前提、bitboard も同期済み前提）
 /// TS版 threatMoves.ts の createsFour に対応
 pub fn createsFour(cells: []const Cell, row: u8, col: u8, color: Cell) bool {
@@ -286,7 +328,7 @@ pub fn quiescenceSearch(
     eval_options: evaluate.EvalOptions,
     q_depth: u8,
     stats: *QSearchStats,
-    timeout_flag: *const bool,
+    limits: QLimits,
     tt: *tt_mod.TranspositionTable,
 ) i32 {
     stats.nodes += 1;
@@ -316,8 +358,26 @@ pub fn quiescenceSearch(
         .connectivity_bonus = eval_options.connectivity_bonus,
     };
 
-    // 時間/ノード制限チェック
-    if (timeout_flag.*) {
+    // 総ノード数を共有カウンタに計上（minimax と同じカウンタ）。
+    limits.node_counter.* += 1;
+
+    // 決定的ノード上限（主たる打ち切り条件・ハードウェア非依存）。
+    // q探索ノードも総予算に計上されるため、密局面での q爆発が決定的に頭打ちになる。
+    if (limits.max_nodes > 0 and limits.node_counter.* >= limits.max_nodes) {
+        return incremental_eval.getEvaluation(cells, perspective, eval_opts, false);
+    }
+
+    // 壁時計の安全天井（出荷時の応答性用）。`no_time_limit` 時は無効＝計測は決定的。
+    // 共有カウンタ基準なので部分木境界に依らず一定間隔で発火する（旧来の取りこぼしを修正）。
+    if (!limits.no_time_limit and (limits.node_counter.* & 1023) == 0) {
+        const now = getTimestampMs();
+        const time_up = (limits.deadline > 0 and now >= limits.deadline) or
+            (limits.absolute_deadline > 0 and now >= limits.absolute_deadline);
+        if (time_up) {
+            limits.timeout_flag.* = true;
+        }
+    }
+    if (limits.timeout_flag.*) {
         return incremental_eval.getEvaluation(cells, perspective, eval_opts, false);
     }
 
@@ -351,6 +411,7 @@ pub fn quiescenceSearch(
     }
 
     var best_score = stand_pat;
+    var aborted = false;
 
     for (0..move_count) |mi| {
         const move = move_buf[mi];
@@ -370,12 +431,21 @@ pub fn quiescenceSearch(
             eval_options,
             q_depth - 1,
             stats,
-            timeout_flag,
+            limits,
             tt,
         );
 
         // 石を除去
         incremental_eval.removeStone(cells, move.row, move.col);
+
+        // 打ち切り（ノード予算/時間切れ）が起きたら弟ノードの走査も止める。
+        // これがないと打切り後も幅方向の走査が続き「眠い崩壊」で予算を大きく超過する。
+        if (limits.timeout_flag.* or
+            (limits.max_nodes > 0 and limits.node_counter.* >= limits.max_nodes))
+        {
+            aborted = true;
+            break;
+        }
 
         // Alpha-beta更新
         if (is_maximizing) {
@@ -387,6 +457,11 @@ pub fn quiescenceSearch(
             if (score < beta) beta = score;
             if (alpha >= beta) break;
         }
+    }
+
+    // 打ち切り時は不完全な best_score を TT に書かない（TT汚染防止）。
+    if (aborted) {
+        return best_score;
     }
 
     // TT保存: 負の可変depthで本探索と分離
@@ -466,6 +541,7 @@ test "quiescenceSearch stand-pat on empty" {
     incremental_eval.initFromBoard(&cells, scores.CONNECTIVITY_BONUS, 100);
     var stats = QSearchStats{};
     var timeout_flag = false;
+    var node_counter: u32 = 0;
     var tt = tt_mod.TranspositionTable{
         .entries = &tt_mod.global_tt_storage,
         .current_generation = 0,
@@ -488,10 +564,181 @@ test "quiescenceSearch stand-pat on empty" {
         },
         MAX_QUIESCENCE_DEPTH,
         &stats,
-        &timeout_flag,
+        .{ .node_counter = &node_counter, .no_time_limit = true, .timeout_flag = &timeout_flag },
         &tt,
     );
     try std.testing.expectEqual(score, 0);
+}
+
+/// 戦術手のある局面を作る（黒が四を複数作れる）。返り値は手番色。
+fn setupTacticalPosition(cells: *[CELL_COUNT]Cell) void {
+    @memset(cells, .empty);
+    // 横3連 (7,3)(7,4)(7,5) → (7,2)/(7,6) で四
+    cells[7 * BOARD_SIZE + 3] = .black;
+    cells[7 * BOARD_SIZE + 4] = .black;
+    cells[7 * BOARD_SIZE + 5] = .black;
+    // 縦3連 (5,8)(6,8)(7,8) → (4,8)/(8,8) で四
+    cells[5 * BOARD_SIZE + 8] = .black;
+    cells[6 * BOARD_SIZE + 8] = .black;
+    cells[7 * BOARD_SIZE + 8] = .black;
+    bitboard.initFromCells(cells);
+}
+
+test "quiescenceSearch: 総ノード上限=1 は最初の1ノードで打ち切る" {
+    ll.init();
+    var cells: [CELL_COUNT]Cell = undefined;
+    setupTacticalPosition(&cells);
+    incremental_eval.initFromBoard(&cells, scores.CONNECTIVITY_BONUS, 100);
+    var stats = QSearchStats{};
+    var timeout_flag = false;
+    var node_counter: u32 = 0;
+    var tt = tt_mod.TranspositionTable{
+        .entries = &tt_mod.global_tt_storage,
+        .current_generation = 0,
+    };
+    tt.clear();
+
+    _ = quiescenceSearch(
+        &cells,
+        0,
+        true,
+        .black,
+        -scores.INFINITY,
+        scores.INFINITY,
+        null,
+        .{
+            .enable_leaf_mise = false,
+            .last_mover_is_perspective = .unset,
+            .single_four_penalty_multiplier = 100,
+            .connectivity_bonus = scores.CONNECTIVITY_BONUS,
+        },
+        MAX_QUIESCENCE_DEPTH,
+        &stats,
+        .{ .node_counter = &node_counter, .max_nodes = 1, .no_time_limit = true, .timeout_flag = &timeout_flag },
+        &tt,
+    );
+    // 総ノード上限=1 → ルートノードのみ訪問して即打ち切り。再帰しない。
+    try std.testing.expectEqual(@as(u32, 1), stats.nodes);
+    try std.testing.expectEqual(@as(u32, 1), node_counter);
+    // ノード上限による打ち切りはグローバル flag を立てない（時間切れではない）。
+    try std.testing.expectEqual(false, timeout_flag);
+}
+
+test "quiescenceSearch: 既定上限では戦術局面で再帰する（>1ノード）" {
+    ll.init();
+    var cells: [CELL_COUNT]Cell = undefined;
+    setupTacticalPosition(&cells);
+    incremental_eval.initFromBoard(&cells, scores.CONNECTIVITY_BONUS, 100);
+    var stats = QSearchStats{};
+    var timeout_flag = false;
+    var node_counter: u32 = 0;
+    var tt = tt_mod.TranspositionTable{
+        .entries = &tt_mod.global_tt_storage,
+        .current_generation = 0,
+    };
+    tt.clear();
+
+    _ = quiescenceSearch(
+        &cells,
+        0,
+        true,
+        .black,
+        -scores.INFINITY,
+        scores.INFINITY,
+        null,
+        .{
+            .enable_leaf_mise = false,
+            .last_mover_is_perspective = .unset,
+            .single_four_penalty_multiplier = 100,
+            .connectivity_bonus = scores.CONNECTIVITY_BONUS,
+        },
+        MAX_QUIESCENCE_DEPTH,
+        &stats,
+        .{ .node_counter = &node_counter, .no_time_limit = true, .timeout_flag = &timeout_flag },
+        &tt,
+    );
+    // 四が作れる戦術局面なので脅威手を展開して複数ノード訪問する。
+    try std.testing.expect(stats.nodes > 1);
+}
+
+/// 密な戦術局面を作る（黒の独立した三×4本 → 四を作る手が8つ、
+/// 四→受け→四… の連鎖で q木が大きく育つ）。木の途中打切りテスト用。
+fn setupDenseTacticalPosition(cells: *[CELL_COUNT]Cell) void {
+    @memset(cells, .empty);
+    const rows = [_]u8{ 2, 5, 8, 11 };
+    for (rows) |r| {
+        cells[@as(u16, r) * BOARD_SIZE + 3] = .black;
+        cells[@as(u16, r) * BOARD_SIZE + 4] = .black;
+        cells[@as(u16, r) * BOARD_SIZE + 5] = .black;
+    }
+    bitboard.initFromCells(cells);
+}
+
+test "quiescenceSearch: 木の途中でノード予算が尽きても安全に巻き戻り早期停止する" {
+    ll.init();
+    var cells: [CELL_COUNT]Cell = undefined;
+    setupDenseTacticalPosition(&cells);
+    incremental_eval.initFromBoard(&cells, scores.CONNECTIVITY_BONUS, 100);
+    var tt = tt_mod.TranspositionTable{
+        .entries = &tt_mod.global_tt_storage,
+        .current_generation = 0,
+    };
+
+    const eval_options = evaluate.EvalOptions{
+        .enable_leaf_mise = false,
+        .last_mover_is_perspective = .unset,
+        .single_four_penalty_multiplier = 100,
+        .connectivity_bonus = scores.CONNECTIVITY_BONUS,
+    };
+
+    // 無制限で全木サイズを測る
+    tt.clear();
+    var stats_full = QSearchStats{};
+    var timeout_full = false;
+    var counter_full: u32 = 0;
+    _ = quiescenceSearch(
+        &cells,
+        0,
+        true,
+        .black,
+        -scores.INFINITY,
+        scores.INFINITY,
+        null,
+        eval_options,
+        MAX_QUIESCENCE_DEPTH,
+        &stats_full,
+        .{ .node_counter = &counter_full, .no_time_limit = true, .timeout_flag = &timeout_full },
+        &tt,
+    );
+    // 前提: 戦術局面で木がある程度広がる（広がらないなら局面を強化すべき）
+    try std.testing.expect(counter_full > 8);
+
+    // 半分の予算で再帰の途中から打ち切られ、全木より早く停止すること
+    tt.clear();
+    var stats_cap = QSearchStats{};
+    var timeout_cap = false;
+    var counter_cap: u32 = 0;
+    const cap = counter_full / 2;
+    _ = quiescenceSearch(
+        &cells,
+        0,
+        true,
+        .black,
+        -scores.INFINITY,
+        scores.INFINITY,
+        null,
+        eval_options,
+        MAX_QUIESCENCE_DEPTH,
+        &stats_cap,
+        .{ .node_counter = &counter_cap, .max_nodes = cap, .no_time_limit = true, .timeout_flag = &timeout_cap },
+        &tt,
+    );
+    // 予算には到達した（cap未満で終わる＝打切り経路を踏んでいないテストを防ぐ）
+    try std.testing.expect(counter_cap >= cap);
+    // 巻き戻り中の弟ノード訪問分は超過しうるが、全木探索よりは確実に少ない
+    try std.testing.expect(counter_cap < counter_full);
+    // ノード予算打切りはローカル: グローバル flag は立てない
+    try std.testing.expectEqual(false, timeout_cap);
 }
 
 test "getFourDefensePosition: black four with overline should not be open four" {
