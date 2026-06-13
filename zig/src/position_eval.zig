@@ -768,7 +768,9 @@ test "evaluatePosition: basic scoring" {
 test "getCenterBonus" {
     const center = getCenterBonus(7, 7);
     const corner = getCenterBonus(0, 0);
-    try std.testing.expect(center > corner);
+    // 中央は隅以上（CENTER_BONUS=0 で無効化時は両方0で等しい）
+    try std.testing.expect(center >= corner);
+    // 厳密中央のボーナスは CENTER_BONUS そのもの
     try std.testing.expectEqual(center, scores.CENTER_BONUS);
 }
 

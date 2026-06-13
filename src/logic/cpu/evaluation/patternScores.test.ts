@@ -16,7 +16,7 @@ describe("PATTERN_SCORES", () => {
     expect(PATTERN_SCORES.THREE).toBe(30);
     expect(PATTERN_SCORES.OPEN_TWO).toBe(50);
     expect(PATTERN_SCORES.TWO).toBe(10);
-    expect(PATTERN_SCORES.CENTER_BONUS).toBe(5);
+    expect(PATTERN_SCORES.CENTER_BONUS).toBe(0);
     expect(PATTERN_SCORES.FORBIDDEN_TRAP).toBe(100);
   });
 
