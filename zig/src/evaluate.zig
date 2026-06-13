@@ -32,10 +32,20 @@ pub fn decodeOptions(flags: u32) EvalOptions {
     // bit 1-2: lastMoverIsPerspective (0=unset, 1=true, 2=false)
     const last_mover_bits: u8 = @intCast((flags >> 1) & 0x03);
 
+    // multiplier_raw エンコード規則（TS bridge.ts encodeEvalOptions と対称）:
+    //   0   = 未指定 → デフォルト 100（ペナルティなし）
+    //   255 = センチネル → 0（完全ペナルティ: 単発四100%打ち消し）
+    //   1-254 = そのまま使用
+    const multiplier: i32 = switch (multiplier_raw) {
+        0 => 100,
+        255 => 0,
+        else => @as(i32, multiplier_raw),
+    };
+
     return .{
         .enable_leaf_mise = (flags & 1) != 0,
         .last_mover_is_perspective = @enumFromInt(if (last_mover_bits > 2) 0 else last_mover_bits),
-        .single_four_penalty_multiplier = if (multiplier_raw == 0) 100 else @as(i32, multiplier_raw),
+        .single_four_penalty_multiplier = multiplier,
         .connectivity_bonus = if (connectivity_raw == 0) scores.CONNECTIVITY_BONUS else if (connectivity_raw == 255) 0 else @as(i32, connectivity_raw),
     };
 }
@@ -572,3 +582,64 @@ test "createsFourThree: 黒の長連方向の四は四三にしない (bug#2)" {
 // board_mod.isValid を公開するためにこのモジュール内で再宣言は不要。
 // evaluate.zig 側で board_mod.isValid を直接使えないのは private のため。
 // → isNearExistingStone 内で直接実装済み。
+
+// バグA回帰テスト: decodeOptions のセンチネル規則
+// 修正前: multiplier_raw == 0 → 100（OK）、multiplier_raw == 255 → 255（バグ: センチネルを値として使用）
+// 修正後: multiplier_raw == 0 → 100、multiplier_raw == 255 → 0、それ以外 → そのまま
+test "decodeOptions: multiplier_raw=0 は未指定 → 100（デフォルト）" {
+    const opts = decodeOptions(0);
+    try std.testing.expectEqual(@as(i32, 100), opts.single_four_penalty_multiplier);
+}
+
+test "decodeOptions: multiplier_raw=255（bits 8-15）はセンチネル → 0（完全ペナルティ）" {
+    // flags: bit[8..15] = 255 → multiplier_raw = 255 → sentinel → 0
+    const flags: u32 = @as(u32, 255) << 8;
+    const opts = decodeOptions(flags);
+    try std.testing.expectEqual(@as(i32, 0), opts.single_four_penalty_multiplier);
+}
+
+test "decodeOptions: multiplier_raw=50（bits 8-15）は 50 をそのまま使用" {
+    // flags: bit[8..15] = 50 → multiplier_raw = 50 → 50
+    const flags: u32 = @as(u32, 50) << 8;
+    const opts = decodeOptions(flags);
+    try std.testing.expectEqual(@as(i32, 50), opts.single_four_penalty_multiplier);
+}
+
+test "decodeOptions: singleFourPenalty が multiplier=0 のとき四スコアを完全打ち消し" {
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    // 黒の止め四: row=7, col=[4,5,6,7]（左端 col=3 が白、右端 col=8 が空き）
+    cells[7 * BOARD_SIZE + 4] = .black;
+    cells[7 * BOARD_SIZE + 5] = .black;
+    cells[7 * BOARD_SIZE + 6] = .black;
+    cells[7 * BOARD_SIZE + 7] = .black;
+    cells[7 * BOARD_SIZE + 3] = .white;
+    bitboard.initFromCells(&cells);
+
+    // multiplier=100（ペナルティなし）
+    const opts_no_penalty = EvalOptions{
+        .enable_leaf_mise = false,
+        .last_mover_is_perspective = .unset,
+        .single_four_penalty_multiplier = 100,
+        .connectivity_bonus = scores.CONNECTIVITY_BONUS,
+    };
+    const score_no_penalty = evaluateBoardOnCells(&cells, .black, opts_no_penalty);
+
+    // multiplier=0（完全ペナルティ）
+    const opts_full_penalty = EvalOptions{
+        .enable_leaf_mise = false,
+        .last_mover_is_perspective = .unset,
+        .single_four_penalty_multiplier = 0,
+        .connectivity_bonus = scores.CONNECTIVITY_BONUS,
+    };
+    const score_full_penalty = evaluateBoardOnCells(&cells, .black, opts_full_penalty);
+
+    // 完全ペナルティ時は四スコアが打ち消されるためスコアが低い
+    try std.testing.expect(score_full_penalty < score_no_penalty);
+}
+
+test "decodeOptions: flags=0 の全体が DEFAULT_EVAL_OPTIONS 相当" {
+    const opts = decodeOptions(0);
+    try std.testing.expectEqual(false, opts.enable_leaf_mise);
+    try std.testing.expectEqual(@as(i32, 100), opts.single_four_penalty_multiplier);
+}

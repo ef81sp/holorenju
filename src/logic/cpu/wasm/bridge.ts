@@ -47,7 +47,14 @@ function encodeEvalOptions(options?: LeafEvaluationOptions): number {
   }
 
   if (options.singleFourPenaltyMultiplier !== undefined) {
-    const raw = Math.round(options.singleFourPenaltyMultiplier * 100);
+    // センチネル規則（Zig evaluate.zig decodeOptions と対称）:
+    //   undefined → 0（未指定 = デフォルト 100、ペナルティなし）
+    //   0.0 → 255（センチネル: 完全ペナルティ）
+    //   その他 → Math.round(m * 100)（1-254）
+    const raw =
+      options.singleFourPenaltyMultiplier === 0
+        ? 255
+        : Math.round(options.singleFourPenaltyMultiplier * 100);
     flags |= (raw & 0xff) << 8;
   }
 

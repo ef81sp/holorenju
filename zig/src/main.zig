@@ -147,10 +147,31 @@ export fn findBestMove(color: u8, max_depth: u8, time_limit_ms: u32, max_nodes: 
     };
 
     const cells = &board.board_cells;
+    // bits 0-8: position_eval.EvalOptions（手の評価・ムーブオーダリング用）
     const eval_options = if (eval_options_flags == 0)
         position_eval.DEFAULT_EVAL_OPTIONS
     else
         position_eval.decodeEvalOptions(eval_options_flags);
+
+    // bits 9-16: 葉評価 single_four_penalty_multiplier
+    //   0   = 未指定 → デフォルト 100（ペナルティなし）
+    //   255 = センチネル → 0（完全ペナルティ）
+    //   1-254 = そのまま使用
+    // bit 17: enable_leaf_mise
+    const leaf_multiplier_raw: u8 = @intCast((eval_options_flags >> 9) & 0xFF);
+    const leaf_multiplier: i32 = switch (leaf_multiplier_raw) {
+        0 => 100,
+        255 => 0,
+        else => @as(i32, leaf_multiplier_raw),
+    };
+    const enable_leaf_mise = ((eval_options_flags >> 17) & 1) != 0;
+
+    const board_eval_options = evaluate.EvalOptions{
+        .enable_leaf_mise = enable_leaf_mise,
+        .last_mover_is_perspective = .unset,
+        .single_four_penalty_multiplier = leaf_multiplier,
+        .connectivity_bonus = @import("scores.zig").CONNECTIVITY_BONUS,
+    };
 
     const result = search.findBestMoveIterative(cells, cell_color, .{
         .max_depth = max_depth,
@@ -159,6 +180,7 @@ export fn findBestMove(color: u8, max_depth: u8, time_limit_ms: u32, max_nodes: 
         .absolute_time_limit = if (absolute_time_limit_ms == 0) 10000 else absolute_time_limit_ms,
         .aspiration_mode = aspiration_mode,
         .eval_options = eval_options,
+        .board_eval_options = board_eval_options,
     });
 
     writeResult(result.position.row, result.position.col, result.score, result.completed_depth, &result.top_candidates, result.top_candidate_count);

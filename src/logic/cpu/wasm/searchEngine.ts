@@ -20,12 +20,22 @@ import {
   type WireNode,
 } from "./forcedWinTreeWire";
 
+/* eslint-disable no-bitwise -- WASM オプションビットフィールドエンコード */
+
 /**
  * EvaluationOptions → WASM用ビットマスクにエンコード
  *
  * ビットの順序は Zig の position_eval.decodeEvalOptions と一致させる。
  * enableNullMovePruning / enableFutilityPruning は Zig 側で
  * enable_counter_four フラグに統合されている。
+ *
+ * ビットレイアウト（u32）:
+ *   bits 0-8:   position_eval.EvalOptions（ムーブオーダリング用フラグ）
+ *   bits 9-16:  葉評価 single_four_penalty_multiplier
+ *               （0=未指定→100、255=センチネル→0、1-254=そのまま）
+ *   bit 17:     enable_leaf_mise（現在は未使用、将来拡張用）
+ *
+ * Zig 側: main.zig findBestMove が bits 9-17 をデコードして board_eval_options を構築する。
  */
 function encodeEvalOptions(opts: EvaluationOptions): number {
   // ビット位置: Zig position_eval.decodeEvalOptions と一致
@@ -42,8 +52,23 @@ function encodeEvalOptions(opts: EvaluationOptions): number {
     opts.enableDoubleThreeThreat, // bit 7
     opts.enableForbiddenVulnerability, // bit 8
   ];
-  return bits.reduce((flags, bit, i) => flags + (bit ? 2 ** i : 0), 0);
+  let flags = bits.reduce((acc, bit, i) => acc + (bit ? 2 ** i : 0), 0);
+
+  // bits 9-16: 葉評価 singleFourPenaltyMultiplier
+  // センチネル規則（Zig main.zig findBestMove と対称）:
+  //   enableSingleFourPenalty が false → 0（未指定 = デフォルト 100）
+  //   multiplier === 0 → 255（センチネル: 完全ペナルティ）
+  //   その他 → Math.round(m * 100)（1-254）
+  if (opts.enableSingleFourPenalty) {
+    const m = opts.singleFourPenaltyMultiplier;
+    const raw = m === 0 ? 255 : Math.round(m * 100);
+    flags |= (raw & 0xff) << 9;
+  }
+
+  return flags;
 }
+
+/* eslint-enable no-bitwise */
 
 const PV_MAX_LENGTH = 10;
 
