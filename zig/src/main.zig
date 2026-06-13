@@ -41,6 +41,20 @@ export fn evaluateDirectionScores(row: u8, col: u8, color: u8) i32 {
 export fn wasmGetPatternScore(count: u8, end1: u8, end2: u8) i32 {
     return patterns.wasmGetPatternScore(count, end1, end2);
 }
+
+// --- eval 重み実行時注入（bench 専用。重みごとリビルド不要にする） ---
+export fn setEvalParam(id: u32, value: i32) void {
+    scores_mod.setEvalParam(id, value);
+}
+export fn getEvalParam(id: u32) i32 {
+    return scores_mod.getEvalParam(id);
+}
+export fn resetEvalParams() void {
+    scores_mod.resetEvalParams();
+}
+export fn getEvalParamName(id: u32) [*:0]const u8 {
+    return scores_mod.getEvalParamName(id);
+}
 export fn wasmGetPatternType(count: u8, end1: u8, end2: u8) u8 {
     return patterns.wasmGetPatternType(count, end1, end2);
 }
