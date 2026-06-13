@@ -17,6 +17,11 @@ import {
   type FullEvalTimings,
 } from "@/logic/cpu/review/fullEval";
 import {
+  REVIEW_PROFILE_FAST,
+  REVIEW_PROFILE_PRECISE,
+  REVIEW_SEARCH_PARAMS,
+} from "@/logic/cpu/review/reviewConstants";
+import {
   type BoardEvaluator,
   WasmBoardEvaluator,
 } from "@/logic/cpu/wasm/bridge";
@@ -25,6 +30,7 @@ import { loadWasmModule } from "@/logic/cpu/wasm/loader";
 import { WasmSearchEngine } from "@/logic/cpu/wasm/searchEngine";
 import { preloadThreatWasm } from "@/logic/cpu/wasm/threatAdapter";
 import { formatMove } from "@/logic/gameRecordParser";
+import { buildEvaluatedMove } from "@/logic/reviewLogic";
 
 // ─── CLI 引数パース ─────────────────────────────────────
 
@@ -34,6 +40,9 @@ function parseArgs(): {
   precise: boolean;
   verbose: boolean;
   useWasm: boolean;
+  timeLimitOverride: number | undefined;
+  maxNodesOverride: number | undefined;
+  depthOverride: number | undefined;
 } {
   const args = process.argv.slice(2);
   let kifu = "";
@@ -41,6 +50,9 @@ function parseArgs(): {
   let precise = false;
   let verbose = false;
   let useWasm = false;
+  let timeLimitOverride: number | undefined = undefined;
+  let maxNodesOverride: number | undefined = undefined;
+  let depthOverride: number | undefined = undefined;
 
   for (const arg of args) {
     if (arg.startsWith("--kifu=")) {
@@ -56,6 +68,21 @@ function parseArgs(): {
       verbose = true;
     } else if (arg === "--wasm") {
       useWasm = true;
+    } else if (arg.startsWith("--time-limit=")) {
+      const val = parseInt(arg.slice("--time-limit=".length), 10);
+      if (!isNaN(val)) {
+        timeLimitOverride = val;
+      }
+    } else if (arg.startsWith("--max-nodes=")) {
+      const val = parseInt(arg.slice("--max-nodes=".length), 10);
+      if (!isNaN(val)) {
+        maxNodesOverride = val;
+      }
+    } else if (arg.startsWith("--depth=")) {
+      const val = parseInt(arg.slice("--depth=".length), 10);
+      if (!isNaN(val)) {
+        depthOverride = val;
+      }
     } else if (!arg.startsWith("--")) {
       kifu = arg;
     }
@@ -63,15 +90,33 @@ function parseArgs(): {
 
   if (!kifu) {
     console.error(
-      '使用法: pnpm profile:review "H8 H9 ..." [--perspective=white] [--precise] [--verbose] [--wasm]',
+      '使用法: pnpm profile:review "H8 H9 ..." [--perspective=white] [--precise] [--verbose] [--wasm] [--time-limit=N] [--max-nodes=N] [--depth=N]',
     );
     process.exit(1);
   }
 
-  return { kifu, perspective, precise, verbose, useWasm };
+  return {
+    kifu,
+    perspective,
+    precise,
+    verbose,
+    useWasm,
+    timeLimitOverride,
+    maxNodesOverride,
+    depthOverride,
+  };
 }
 
-const { kifu, perspective, precise, verbose, useWasm } = parseArgs();
+const {
+  kifu,
+  perspective,
+  precise,
+  verbose,
+  useWasm,
+  timeLimitOverride,
+  maxNodesOverride,
+  depthOverride,
+} = parseArgs();
 
 // ─── WASM 初期化 ─────────────────────────────────────
 
@@ -126,6 +171,9 @@ interface MoveProfile {
   candidateCount: number;
   timings: FullEvalTimings;
   subPhases: SubPhaseDetail[];
+  playedScore: number;
+  scoreDiff: number;
+  quality: string;
 }
 
 // ─── ログ出力ヘルパー ──────────────────────────────────
@@ -188,7 +236,7 @@ function profileMove(
     });
   }
 
-  // 候補ごとの検証結果を記録
+  // 候補ごとの検証結果を記録（buildEvaluatedMove より前に行う）
   const candDetails: string[] = [];
   for (const c of result.candidates) {
     const pos = formatMove(c.position);
@@ -211,6 +259,18 @@ function profileMove(
     });
   }
 
+  // candidates を浅いコピーして渡す（buildEvaluatedMove は破壊的ソートをする可能性がある）
+  const resultForEval = {
+    ...result,
+    candidates: result.candidates.map((c) => ({ ...c })),
+  };
+  const evaluatedMove = buildEvaluatedMove(
+    resultForEval,
+    moveHistory,
+    true,
+    true,
+  );
+
   return {
     moveIndex,
     moveStr: moves[moveIndex] ?? "?",
@@ -223,12 +283,38 @@ function profileMove(
     candidateCount: result.candidates.length,
     timings,
     subPhases,
+    playedScore: evaluatedMove.playedScore,
+    scoreDiff: evaluatedMove.scoreDiff,
+    quality: evaluatedMove.quality,
   };
 }
 
 // ─── メイン実行 ──────────────────────────────────────
 
 async function main(): Promise<void> {
+  // CLI オーバーライド適用（as const オブジェクトのプロパティを実行時に書き換え）
+  const activeProfile = precise
+    ? (REVIEW_PROFILE_PRECISE as { timeLimit?: number; maxNodes?: number })
+    : (REVIEW_PROFILE_FAST as { timeLimit?: number; maxNodes?: number });
+  const searchParams = REVIEW_SEARCH_PARAMS as { depth: number };
+
+  const overrideParts: string[] = [];
+  if (timeLimitOverride !== undefined) {
+    activeProfile.timeLimit = timeLimitOverride;
+    overrideParts.push(`timeLimit=${timeLimitOverride}`);
+  }
+  if (maxNodesOverride !== undefined) {
+    activeProfile.maxNodes = maxNodesOverride;
+    overrideParts.push(`maxNodes=${maxNodesOverride}`);
+  }
+  if (depthOverride !== undefined) {
+    searchParams.depth = depthOverride;
+    overrideParts.push(`depth=${depthOverride}`);
+  }
+  if (overrideParts.length > 0) {
+    console.log(`Override: ${overrideParts.join(", ")}`);
+  }
+
   // #43 PR-6: 判定アダプタは pure-wasm 化済み。fullEval が使う threat/forbidden thin wasm を先にロード。
   await Promise.all([preloadThreatWasm(), preloadForbiddenWasm()]);
 
@@ -394,6 +480,9 @@ async function main(): Promise<void> {
       "PV検証".padStart(10),
       "勝ち筋",
       "負け筋",
+      "quality".padEnd(11),
+      "実手score".padStart(10),
+      "scoreDiff".padStart(10),
     ].join(" | ");
     console.log(header);
     console.log("-".repeat(header.length));
@@ -415,6 +504,9 @@ async function main(): Promise<void> {
         String(Math.round(t.pvVerification)).padStart(10),
         (p.forcedWinType ?? "-").padEnd(6),
         (p.forcedLossType ?? "-").padEnd(6),
+        p.quality.padEnd(11),
+        String(p.playedScore).padStart(10),
+        String(p.scoreDiff).padStart(10),
       ].join(" | ");
       console.log(row);
     }
