@@ -24,14 +24,26 @@ export const REVIEW_REDUCED_NODES = 500_000;
  * 高速モード: main 相当の時間制限ベース探索
  * 精密モード: ノード数制限 + Aspiration Window 段階的拡大 + PV 事後検証
  */
+/**
+ * 高速モード時間上限の根拠（2026-06-14, profile-review 実測）:
+ * - eval=hard 配線(A1)とセットで運用する前提で 5_000ms。
+ * - 旧 15_000 比で 1局解析時間 -約47%。
+ * - 白14 F11 のような中盤深度感受性手は eval=hard が depth6 で実スコア(-2588)を見せるため、
+ *   tl=5000 でも判定品質を維持できる（実測 excellent）。
+ * - eval=hard を切ると(検証時の evalOptionsOverride=0)、tl=5000 では深度不足で判定崩壊する。
+ *   A1 と A4 は必ずセット。
+ */
 export const REVIEW_PROFILE_FAST = {
   maxNodes: 2_000_000,
-  timeLimit: 15_000 as number | undefined,
-  absoluteTimeLimit: 20_000 as number | undefined,
+  timeLimit: 5_000 as number | undefined,
+  absoluteTimeLimit: 10_000 as number | undefined,
   aspirationWidths: undefined as number[] | undefined,
   verifyCandidatesBudget: "dynamic" as "dynamic" | number,
   enablePVVerification: false,
   clearTT: true,
+  // 評価オプションフラグの上書き（profile-review の --eval=none 検証用）。
+  // undefined のとき REVIEW_SEARCH_PARAMS.evaluationOptions（hard 相当）が使われる。
+  evalOptionsOverride: undefined as number | undefined,
 };
 
 export const REVIEW_PROFILE_PRECISE = {
@@ -42,6 +54,7 @@ export const REVIEW_PROFILE_PRECISE = {
   verifyCandidatesBudget: Infinity as "dynamic" | number,
   enablePVVerification: true,
   clearTT: false,
+  evalOptionsOverride: undefined as number | undefined,
 };
 
 /** 振り返り用VCT探索パラメータ（forcedWin表示用、分岐収集あり） */
