@@ -43,6 +43,7 @@ function parseArgs(): {
   timeLimitOverride: number | undefined;
   maxNodesOverride: number | undefined;
   depthOverride: number | undefined;
+  evalMode: "hard" | "none" | undefined;
 } {
   const args = process.argv.slice(2);
   let kifu = "";
@@ -53,6 +54,7 @@ function parseArgs(): {
   let timeLimitOverride: number | undefined = undefined;
   let maxNodesOverride: number | undefined = undefined;
   let depthOverride: number | undefined = undefined;
+  let evalMode: "hard" | "none" | undefined = undefined;
 
   for (const arg of args) {
     if (arg.startsWith("--kifu=")) {
@@ -83,6 +85,11 @@ function parseArgs(): {
       if (!isNaN(val)) {
         depthOverride = val;
       }
+    } else if (arg.startsWith("--eval=")) {
+      const val = arg.slice("--eval=".length);
+      if (val === "hard" || val === "none") {
+        evalMode = val;
+      }
     } else if (!arg.startsWith("--")) {
       kifu = arg;
     }
@@ -90,7 +97,7 @@ function parseArgs(): {
 
   if (!kifu) {
     console.error(
-      '使用法: pnpm profile:review "H8 H9 ..." [--perspective=white] [--precise] [--verbose] [--wasm] [--time-limit=N] [--max-nodes=N] [--depth=N]',
+      '使用法: pnpm profile:review "H8 H9 ..." [--perspective=white] [--precise] [--verbose] [--wasm] [--time-limit=N] [--max-nodes=N] [--depth=N] [--eval=hard|none]',
     );
     process.exit(1);
   }
@@ -104,6 +111,7 @@ function parseArgs(): {
     timeLimitOverride,
     maxNodesOverride,
     depthOverride,
+    evalMode,
   };
 }
 
@@ -116,6 +124,7 @@ const {
   timeLimitOverride,
   maxNodesOverride,
   depthOverride,
+  evalMode,
 } = parseArgs();
 
 // ─── WASM 初期化 ─────────────────────────────────────
@@ -294,8 +303,16 @@ function profileMove(
 async function main(): Promise<void> {
   // CLI オーバーライド適用（as const オブジェクトのプロパティを実行時に書き換え）
   const activeProfile = precise
-    ? (REVIEW_PROFILE_PRECISE as { timeLimit?: number; maxNodes?: number })
-    : (REVIEW_PROFILE_FAST as { timeLimit?: number; maxNodes?: number });
+    ? (REVIEW_PROFILE_PRECISE as {
+        timeLimit?: number;
+        maxNodes?: number;
+        evalOptionsOverride?: number;
+      })
+    : (REVIEW_PROFILE_FAST as {
+        timeLimit?: number;
+        maxNodes?: number;
+        evalOptionsOverride?: number;
+      });
   const searchParams = REVIEW_SEARCH_PARAMS as { depth: number };
 
   const overrideParts: string[] = [];
@@ -310,6 +327,13 @@ async function main(): Promise<void> {
   if (depthOverride !== undefined) {
     searchParams.depth = depthOverride;
     overrideParts.push(`depth=${depthOverride}`);
+  }
+  if (evalMode === "none") {
+    activeProfile.evalOptionsOverride = 0;
+    overrideParts.push("eval=none");
+  } else if (evalMode === "hard") {
+    activeProfile.evalOptionsOverride = undefined;
+    overrideParts.push("eval=hard");
   }
   if (overrideParts.length > 0) {
     console.log(`Override: ${overrideParts.join(", ")}`);

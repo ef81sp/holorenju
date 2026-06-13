@@ -21,7 +21,6 @@ import type {
   MoveScoreEntry,
   VCFSequenceResult,
 } from "../search/types";
-import type { WasmSearchEngine } from "../wasm/searchEngine";
 
 import { countStones } from "../core/boardUtils";
 // #43 PR-2: 表示内訳(breakdown)を廃止。評価内訳クラスタ(evaluation barrel)への依存を断ち、
@@ -29,6 +28,7 @@ import { countStones } from "../core/boardUtils";
 import { PATTERN_SCORES } from "../evaluation/patternScores";
 import { colorToWasm } from "../wasm/boardAdapter";
 import { linearTreeFromSequence } from "../wasm/forcedWinTreeWire";
+import { encodeEvalOptions, type WasmSearchEngine } from "../wasm/searchEngine";
 // #37 P3 PR4/PR5b: 脅威検出・ミセターゲットを Zig 単一ソース経由に。
 // 合法局面で TS と一致（threatAdapter.test / findMiseTargetsParity.test 検証済）。
 // 未ロード時は TS フォールバック。
@@ -65,6 +65,17 @@ import { wasmFindVCFSequence, wasmFindVCTSequence } from "./wasmAdapters";
 type ReviewProfile = typeof REVIEW_PROFILE_FAST;
 
 /**
+ * 振り返り探索の評価オプションフラグ（hard 相当）
+ *
+ * REVIEW_SEARCH_PARAMS.evaluationOptions（= DIFFICULTY_PARAMS.hard.evaluationOptions）を
+ * WASM ビット表現にエンコードしたもの。findBestMoveForReview に渡して必須防御/ミセ脅威/
+ * 禁手脆弱性/葉 single-four ペナルティ等の hard 評価を有効化する。
+ */
+const REVIEW_EVAL_FLAGS = encodeEvalOptions(
+  REVIEW_SEARCH_PARAMS.evaluationOptions,
+);
+
+/**
  * WASM 探索エンジンで minimax 探索を実行し、TS 版と同じ結果型に変換する
  */
 function executeWasmSearch(
@@ -75,6 +86,10 @@ function executeWasmSearch(
   profile: ReviewProfile,
 ): IterativeDeepingResult {
   const aspirationMode = profile.aspirationWidths ? 1 : 0;
+  // hard 相当の評価オプション（必須防御/ミセ脅威/禁手脆弱性/single-four ペナルティ等）を
+  // WASM 探索本体に配線する。ここを 0 にするとレビュー探索は素 eval で読み、
+  // 白14 F11 のような深度感受性手の判定で精度を落とす。
+  const evalOptionsFlags = profile.evalOptionsOverride ?? REVIEW_EVAL_FLAGS;
   const wasmResult = engine.findBestMoveForReview(
     board,
     color,
@@ -83,6 +98,7 @@ function executeWasmSearch(
     maxNodes,
     profile.absoluteTimeLimit ?? 0,
     aspirationMode,
+    evalOptionsFlags,
   );
 
   // WASM 候補手を MoveScoreEntry[] に変換

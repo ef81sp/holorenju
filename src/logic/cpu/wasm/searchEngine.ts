@@ -37,7 +37,7 @@ import {
  *
  * Zig 側: main.zig findBestMove が bits 9-17 をデコードして board_eval_options を構築する。
  */
-function encodeEvalOptions(opts: EvaluationOptions): number {
+export function encodeEvalOptions(opts: EvaluationOptions): number {
   // ビット位置: Zig position_eval.decodeEvalOptions と一致
   const bits: boolean[] = [
     opts.enableMise, // bit 0
@@ -171,6 +171,11 @@ export class WasmSearchEngine {
    *
    * aspiration_mode=1 で段階的拡大幅 [75, 200, 500] を使用。
    * 探索後に各候補手の PV を TT から抽出する。
+   *
+   * evalOptionsFlags: encodeEvalOptions で生成した hard 相当のフラグ。
+   * 0 を渡すと WASM 側は必須防御/ミセ脅威/禁手脆弱性などを切った素 eval で読むため、
+   * 呼び出し側で必ず hard 相当（または検証用 0）を明示する。デフォルト引数を持たせない
+   * のは、新規呼び出し経路で配線を忘れて素 eval に落ちる silent regression を防ぐため。
    */
   findBestMoveForReview(
     board: BoardState,
@@ -180,6 +185,7 @@ export class WasmSearchEngine {
     maxNodes: number,
     absoluteTimeLimitMs: number,
     aspirationMode: number,
+    evalOptionsFlags: number,
   ): WasmSearchResultWithCandidates {
     const wasmColor = colorToWasm(color);
     boardStateToWasm(this.wasm, board);
@@ -191,7 +197,7 @@ export class WasmSearchEngine {
       maxNodes,
       absoluteTimeLimitMs,
       aspirationMode,
-      0,
+      evalOptionsFlags,
     );
     const result = this.readResultWithCandidates();
 
