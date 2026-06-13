@@ -326,6 +326,20 @@ fn threatProbe(
 // Minimax探索本体
 // =============================================================================
 
+/// SearchContext から quiescence の打ち切り制御を構築する。
+/// 制限のセマンティクス（deadline/ノード予算の意味）の SSoT は SearchContext 側にあり、
+/// フィールド転記をここに一本化して呼び出し側とのドリフトを防ぐ。
+fn qLimitsFrom(ctx: *SearchContext) quiescence.QLimits {
+    return .{
+        .node_counter = &ctx.stats.nodes,
+        .max_nodes = ctx.max_nodes,
+        .deadline = ctx.deadline,
+        .absolute_deadline = ctx.absolute_deadline,
+        .no_time_limit = ctx.no_time_limit,
+        .timeout_flag = &ctx.timeout_flag,
+    };
+}
+
 /// Minimax探索（TT/Move Ordering統合版）
 pub fn minimaxWithTT(
     cells: []Cell,
@@ -440,7 +454,6 @@ pub fn minimaxWithTT(
     // 探索深度が0になった場合はQuiescence Search
     if (depth == 0) {
         var q_stats = quiescence.QSearchStats{};
-        const timeout_ptr: *const bool = &ctx.timeout_flag;
         const score = quiescence.quiescenceSearch(
             cells,
             hash,
@@ -452,7 +465,7 @@ pub fn minimaxWithTT(
             ctx.board_eval_options,
             quiescence.MAX_QUIESCENCE_DEPTH,
             &q_stats,
-            timeout_ptr,
+            qLimitsFrom(ctx),
             ctx.tt,
         );
         ctx.stats.q_search_nodes += q_stats.q_search_nodes;
