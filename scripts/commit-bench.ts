@@ -17,8 +17,7 @@ import { fileURLToPath } from "node:url";
 import { Worker } from "node:worker_threads";
 
 import type { CpuDifficulty } from "../src/types/cpu.ts";
-import type { Position } from "../src/types/game.ts";
-import type { SPRTConfig, WDLCount } from "./types/ab.ts";
+import type { SPRTConfig } from "./types/ab.ts";
 import type {
   CommitBenchResult,
   CommitGameResult,
@@ -26,12 +25,13 @@ import type {
   PlayerPerformanceStats,
 } from "./types/commit-bench.ts";
 
-import {
-  getAllJushuNames,
-  getJushuPositions,
-} from "../src/logic/cpu/opening.ts";
-import { runCommitGame } from "./commit-game-runner.ts";
 import { estimateEloDiff, formatEloDiff } from "./lib/eloDiff.ts";
+import {
+  buildJushuTasks,
+  createBridgeWorker,
+  gamesPerSet as computeGamesPerSet,
+  runMatch,
+} from "./lib/match.ts";
 import { DEFAULT_SPRT_CONFIG, formatSPRT, updateSPRT } from "./lib/sprt.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -289,10 +289,6 @@ function aggregateSearchStats(
 // ステータス表示
 // ============================================================================
 
-function writeStatus(message: string): void {
-  process.stdout.write(`\r${message.padEnd(100)}`);
-}
-
 function clearStatus(): void {
   process.stdout.write(`\r${" ".repeat(100)}\r`);
 }
@@ -422,60 +418,6 @@ function removeWorktree(worktreePath: string): void {
 }
 
 // ============================================================================
-// Bridge Worker管理
-// ============================================================================
-
-function createBridgeWorker(
-  worktreePath: string,
-  difficulty: string,
-  randomFactor?: number,
-): Promise<Worker> {
-  return new Promise<Worker>((resolve, reject) => {
-    const workerPath = path.join(__dirname, "cpu-bridge-worker.ts");
-
-    const customParams =
-      randomFactor === undefined ? undefined : { randomFactor };
-
-    const worker = new Worker(workerPath, {
-      workerData: { worktreePath, difficulty, customParams },
-      execArgv: [
-        "--experimental-strip-types",
-        "--disable-warning=ExperimentalWarning",
-        "--import",
-        path.join(worktreePath, "scripts", "register-loader.mjs"),
-      ],
-    });
-
-    const initTimeout = setTimeout(() => {
-      worker.terminate();
-      reject(
-        new Error(`Bridge worker initialization timed out for ${worktreePath}`),
-      );
-    }, 60000);
-
-    const readyHandler = (msg: unknown): void => {
-      if (
-        typeof msg === "object" &&
-        msg !== null &&
-        "ready" in msg &&
-        (msg as { ready: unknown }).ready === true
-      ) {
-        clearTimeout(initTimeout);
-        worker.off("message", readyHandler);
-        resolve(worker);
-      }
-    };
-
-    worker.on("message", readyHandler);
-
-    worker.on("error", (err) => {
-      clearTimeout(initTimeout);
-      reject(err);
-    });
-  });
-}
-
-// ============================================================================
 // メイン処理
 // ============================================================================
 
@@ -496,8 +438,7 @@ async function main(): Promise<void> {
       }
     : null;
 
-  const jushuNames = getAllJushuNames();
-  const gamesPerSet = jushuNames.length * 2; // 26珠型 × 2色
+  const gamesPerSet = computeGamesPerSet(); // 全珠型 × 2色
   const totalGames = options.sets * gamesPerSet;
 
   console.log(`\n=== コミット間CPU強度比較ベンチマーク ===`);
@@ -559,20 +500,22 @@ async function main(): Promise<void> {
     worktreePathB = createWorktree(commitB.sha, "B");
 
     // bridge workerを起動（--jobs 組のペアを並列初期化）
+    const workerPath = path.join(__dirname, "cpu-bridge-worker.ts");
+    const makeWorker = (worktreePath: string): Promise<Worker> =>
+      createBridgeWorker({
+        workerPath,
+        loaderPath: path.join(worktreePath, "scripts", "register-loader.mjs"),
+        worktreePath,
+        difficulty: options.difficulty,
+        randomFactor: options.randomFactor,
+      });
+
     console.log(`Bridge workerを初期化中... (${options.jobs}並列)`);
     const createdPairs = await Promise.all(
       Array.from({ length: options.jobs }, async () => {
         const [a, b] = await Promise.all([
-          createBridgeWorker(
-            worktreePathA!,
-            options.difficulty,
-            options.randomFactor,
-          ),
-          createBridgeWorker(
-            worktreePathB!,
-            options.difficulty,
-            options.randomFactor,
-          ),
+          makeWorker(worktreePathA!),
+          makeWorker(worktreePathB!),
         ]);
         return { a, b };
       }),
@@ -580,172 +523,18 @@ async function main(): Promise<void> {
     pairs.push(...createdPairs);
     console.log("Bridge worker初期化完了\n");
 
-    // 珠型タスクリスト生成（フラット化）
-    interface CommitJushuTask {
-      jushuName: string;
-      positions: [Position, Position, Position];
-      isABlack: boolean;
-    }
-    const jushuTasks: CommitJushuTask[] = [];
-    for (let set = 0; set < options.sets; set++) {
-      for (const jn of jushuNames) {
-        const pos = getJushuPositions(jn, true);
-        if (!pos) {
-          continue;
-        }
-        for (const ab of [true, false]) {
-          jushuTasks.push({ jushuName: jn, positions: pos, isABlack: ab });
-        }
-      }
-    }
-
-    // WDL集計（commitA視点）
-    const wdl: WDLCount = { wins: 0, draws: 0, losses: 0 };
-    const games: CommitGameResult[] = [];
-    let completedGames = 0;
-
-    // 累積性能統計アキュムレータ
-    const cumAcc = {
-      A: { depthSum: 0, timeSum: 0, count: 0, maxDepth: 0 },
-      B: { depthSum: 0, timeSum: 0, count: 0, maxDepth: 0 },
-    };
-
-    // 珠型タスクを --jobs 組の worker ペアで並列消化する。
-    // ゲームはターン制で実質1コアしか使わないため、複数ペア同時対局で遊休コアを活用。
-    // 結果処理（WDL/統計/ステータス/SPRT）は await を挟まず同期実行されるため競合しない。
-    let nextTask = 0;
-    let stop = false;
-    const runPair = async (pair: { a: Worker; b: Worker }): Promise<void> => {
-      while (!stop) {
-        const taskIdx = nextTask;
-        nextTask += 1;
-        if (taskIdx >= jushuTasks.length) {
-          break;
-        }
-        const { jushuName, positions, isABlack } = jushuTasks[taskIdx]!;
-        const result = await runCommitGame(pair.a, pair.b, isABlack, {
-          verbose: options.verbose,
-          moveTimeoutMs: 30000,
-          openingMoves: positions,
-        });
-        if (stop) {
-          break;
-        }
-
-        // WDL更新（commitA = playerA 視点）
-        if (result.winner === "draw") {
-          wdl.draws++;
-        } else if (result.winner === "A") {
-          wdl.wins++;
-        } else {
-          wdl.losses++;
-        }
-
-        games.push({ ...result, jushuName });
-
-        completedGames++;
-
-        // 初回ゲーム後のサニティチェック
-        if (completedGames === 1) {
-          const avgTime =
-            result.moveHistory.reduce(
-              (s: number, m: { time: number }) => s + m.time,
-              0,
-            ) / result.moveHistory.length;
-          const maxTime = Math.max(
-            ...result.moveHistory.map((m: { time: number }) => m.time),
-          );
-          console.log(`\n[サニティチェック] 初回ゲーム完了`);
-          console.log(
-            `  手数: ${result.moves} | 勝者: ${result.winner} | 理由: ${result.reason}`,
-          );
-          console.log(
-            `  平均思考時間: ${Math.round(avgTime)}ms | 最大: ${Math.round(maxTime)}ms`,
-          );
-          console.log(`  duration: ${Math.round(result.duration)}ms`);
-          if (avgTime < 1) {
-            console.warn(
-              "  ⚠ 平均思考時間が1ms未満 — エンジンが正しくロードされていない可能性",
-            );
-          }
-        }
-
-        // この局のA/B統計を集計し、累積にも加算
-        const gameAcc = {
-          A: { depthSum: 0, timeSum: 0, count: 0, maxDepth: 0 },
-          B: { depthSum: 0, timeSum: 0, count: 0, maxDepth: 0 },
-        };
-        for (let i = 0; i < result.moveHistory.length; i++) {
-          const move = result.moveHistory[i]!;
-          if (move.isOpening) {
-            continue;
-          }
-          const isBlackMove = i % 2 === 0;
-          const player =
-            (isBlackMove && isABlack) || (!isBlackMove && !isABlack)
-              ? "A"
-              : "B";
-          const ga = gameAcc[player];
-          const ca = cumAcc[player];
-          if (move.depth !== undefined) {
-            ga.depthSum += move.depth;
-            ga.maxDepth = Math.max(ga.maxDepth, move.depth);
-            ca.depthSum += move.depth;
-            ca.maxDepth = Math.max(ca.maxDepth, move.depth);
-          }
-          ga.timeSum += move.time;
-          ga.count++;
-          ca.timeSum += move.time;
-          ca.count++;
-        }
-
-        // ステータス表示
-        const elapsed = ((performance.now() - startTime) / 1000).toFixed(0);
-        const elo = estimateEloDiff(wdl);
-        let statusMsg = `[${elapsed}s] ${completedGames}/${totalGames} ${jushuName} ${isABlack ? "A黒" : "A白"} +${wdl.wins}=${wdl.draws}-${wdl.losses} Elo:${elo.eloDiff > 0 ? "+" : ""}${elo.eloDiff}`;
-
-        if (sprtConfig) {
-          const sprt = updateSPRT(wdl, sprtConfig);
-          statusMsg += ` LLR:${sprt.llr.toFixed(2)}`;
-          if (sprt.decision !== "continue") {
-            writeStatus(statusMsg);
-            clearStatus();
-            console.log(
-              `SPRT判定: ${sprt.decision} (${completedGames}局目で停止)`,
-            );
-            stop = true;
-          }
-        }
-
-        writeStatus(statusMsg);
-
-        // 1局ごとの性能統計（改行で表示）
-        const fmtDepth = (a: {
-          depthSum: number;
-          timeSum: number;
-          count: number;
-        }): string =>
-          a.count > 0
-            ? `d=${(a.depthSum / a.count).toFixed(1)} t=${Math.round(a.timeSum / a.count)}ms`
-            : "n/a";
-        const fmtCum = (a: {
-          depthSum: number;
-          count: number;
-          maxDepth: number;
-          timeSum: number;
-        }): string =>
-          a.count > 0
-            ? `d=${(a.depthSum / a.count).toFixed(2)} max=${a.maxDepth} t=${Math.round(a.timeSum / a.count)}ms`
-            : "n/a";
-        console.log(
-          `\n  局: A[${fmtDepth(gameAcc.A)}] B[${fmtDepth(gameAcc.B)}] | 累計: A[${fmtCum(cumAcc.A)}] B[${fmtCum(cumAcc.B)}]`,
-        );
-      }
-    };
-
-    await Promise.all(pairs.map((p) => runPair(p)));
-
-    clearStatus();
+    // 珠型タスクを生成し、共有の対局ループ（runMatch）で消化する。
+    // commit-bench は recreatePair を渡さない＝従来どおりエラーは伝播（出力同一）。
+    const tasks = buildJushuTasks(options.sets);
+    const { wdl, games, completedGames } = await runMatch({
+      pairs,
+      tasks,
+      totalGames,
+      sprtConfig,
+      moveTimeoutMs: 30000,
+      verbose: options.verbose,
+      startTime,
+    });
 
     const elapsedSeconds = (performance.now() - startTime) / 1000;
 
