@@ -73,8 +73,12 @@ pub fn classifyThreat(cells: []const Cell, row: u8, col: u8, color: Cell) Threat
         }
 
         // 連続活三
-        if (result.count == 3 and result.end1 == 0 and result.end2 == 0) {
-            has_open_three = true;
+        // 夏止め済み（両外側ブロックで活四にできない三）は脅威でないため除外。
+        // 受け点の基準（getOpenThreeDefensePositions: 空リスト=夏止め済み）と揃え、
+        // 「受けが要る三＝本物の脅威」で意味を一致させる（SSoT）。
+        if (!has_open_three and result.count == 3 and result.end1 == 0 and result.end2 == 0) {
+            const open_three_def = threats.getOpenThreeDefensePositions(cells, row, col, DIRECTIONS[i].dr, DIRECTIONS[i].dc, color);
+            has_open_three = open_three_def.len > 0;
         }
 
         // 跳び三
@@ -362,10 +366,11 @@ pub fn getThreatDefensePositions(cells: []const Cell, row: u8, col: u8, color: C
         }
 
         // 活三をチェック（同方向に跳び四がある場合は不要：跳び四の防御が優先）
+        // 両端＋夏止め位置を返す getOpenThreeDefensePositions を使用（getLineEnds は両端のみで不足）
         if (!has_jump_four and result.count == 3 and result.end1 == 0 and result.end2 == 0) {
-            const ends = threats.getLineEnds(cells, row, col, dir.dr, dir.dc, color);
-            for (0..ends.len) |j| {
-                defense_positions.addUnique(ends.items[j]);
+            const open_three_def = threats.getOpenThreeDefensePositions(cells, row, col, dir.dr, dir.dc, color);
+            for (0..open_three_def.len) |j| {
+                defense_positions.addUnique(open_three_def.items[j]);
             }
         }
 
@@ -424,8 +429,11 @@ pub fn checkDefenseCounterThreat(cells: []const Cell, row: u8, col: u8, opponent
         }
 
         // 連続活三
-        if (result.count == 3 and result.end1 == 0 and result.end2 == 0) {
-            has_three = true;
+        // 夏止め済み（両外側ブロックで活四にできない三）は本物のカウンター脅威でないため除外。
+        // 受け点の基準（getOpenThreeDefensePositions: 空リスト=夏止め済み）と揃える（classifyThreat と同基準）。
+        if (!has_three and result.count == 3 and result.end1 == 0 and result.end2 == 0) {
+            const open_three_def = threats.getOpenThreeDefensePositions(cells, row, col, DIRECTIONS[i].dr, DIRECTIONS[i].dc, opponent_color);
+            has_three = open_three_def.len > 0;
         }
 
         // 跳び三
@@ -2511,4 +2519,113 @@ test "phantom: 偽の追い詰め(VCT)を防御側strictのみ棄却・攻めlen
     try testing.expect(findVCTMoveWithBudget(&cells, .black, 4, 0, 500) != null);
     // strict（防御）は null ＝幻の被詰みを棄却
     try testing.expect(findVCTMoveWithBudgetStrict(&cells, .black, 4, 0, 500) == null);
+}
+
+test "getThreatDefensePositions: 活三の受けに夏止め位置を含む（片側ブロック）" {
+    // 盤面: (7,5)(7,6)(7,7) 横並び活三（方向 dr=0,dc=+1: 正方向=col増加）
+    // 負方向外側(7,3)に白石でブロック → 夏止めは正方向(7,9)側のみ
+    // 受け点は: 端(7,4)、端(7,8)、夏止め(7,9) の3点
+    // （旧 getLineEnds 使用時は端の2点しか返らなかった）
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[7 * BOARD_SIZE + 5] = .black;
+    cells[7 * BOARD_SIZE + 6] = .black;
+    cells[7 * BOARD_SIZE + 7] = .black;
+    cells[7 * BOARD_SIZE + 3] = .white; // 負方向外側をブロック → 正方向(7,9)に夏止めが発生
+    bitboard.initFromCells(&cells);
+
+    const defense = getThreatDefensePositions(&cells, 7, 6, .black);
+    // 端 (7,4) と (7,8) は必ず含む
+    var has_end1 = false;
+    var has_end2 = false;
+    // 夏止め (7,9) を含む（負方向外側がブロックされたため正方向に夏止め）
+    var has_natsudome = false;
+    for (0..defense.len) |i| {
+        const p = defense.items[i];
+        if (p.row == 7 and p.col == 4) has_end1 = true;
+        if (p.row == 7 and p.col == 8) has_end2 = true;
+        if (p.row == 7 and p.col == 9) has_natsudome = true;
+    }
+    try testing.expect(has_end1);
+    try testing.expect(has_end2);
+    try testing.expect(has_natsudome);
+}
+
+test "getThreatDefensePositions: 夏止め済みの活三は緊急の受け不要" {
+    // 盤面: 両外側(7,3)(7,9)に白石を置いた形（X_●●●_X）
+    // 活三は活四にできないため、この方向からの受け点が追加されない
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[7 * BOARD_SIZE + 5] = .black;
+    cells[7 * BOARD_SIZE + 6] = .black;
+    cells[7 * BOARD_SIZE + 7] = .black;
+    cells[7 * BOARD_SIZE + 3] = .white; // 正方向の夏止め済み
+    cells[7 * BOARD_SIZE + 9] = .white; // 負方向の夏止め済み
+    bitboard.initFromCells(&cells);
+
+    // getOpenThreeDefensePositions は空リストを返す（夏止め済み）
+    // → この方向から受け点が追加されないことを確認
+    // 他方向（縦・斜め）に活三がないため defense.len == 0
+    const defense = getThreatDefensePositions(&cells, 7, 6, .black);
+    try testing.expectEqual(@as(u8, 0), defense.len);
+}
+
+test "checkDefenseCounterThreat: 夏止め済みの三のみを作る石は .none" {
+    // 盤面: X_●●●_X（白(7,3)(7,9)、黒(7,5)(7,6)(7,7)）
+    // ブロック石が「夏止め済みの三」のみを作る場合、活四にできない＝本物の
+    // カウンター脅威でないため .three でなく .none を返すべき。
+    // .three のままだと processBlockDefenses で受け点空リスト→偽勝ちの残存経路になる。
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[7 * BOARD_SIZE + 5] = .black;
+    cells[7 * BOARD_SIZE + 6] = .black;
+    cells[7 * BOARD_SIZE + 7] = .black; // ブロック石（夏止め済み三のみを作る）
+    cells[7 * BOARD_SIZE + 3] = .white;
+    cells[7 * BOARD_SIZE + 9] = .white;
+    bitboard.initFromCells(&cells);
+
+    const ct = checkDefenseCounterThreat(&cells, 7, 7, .black);
+    try testing.expect(ct == .none);
+}
+
+test "classifyThreat: 夏止め済みの三は活三でない（脅威手に含まれない）" {
+    // 盤面: X_●●●_X（白(7,3)(7,9)、黒(7,5)(7,6)(7,7)）
+    // 両外側がブロックされた三は活四にできないため脅威ではない。
+    // creates_open_three=true のままだと受け点が空リスト（夏止め済み）と組み合わさり
+    // 「防御不能＝VCT成立」と誤断定される（偽VCT）。
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[7 * BOARD_SIZE + 5] = .black;
+    cells[7 * BOARD_SIZE + 6] = .black;
+    cells[7 * BOARD_SIZE + 7] = .black; // 黒が最後の1石を置いた形
+    cells[7 * BOARD_SIZE + 3] = .white; // 負方向外側ブロック
+    cells[7 * BOARD_SIZE + 9] = .white; // 正方向外側ブロック
+    bitboard.initFromCells(&cells);
+
+    const result = classifyThreat(&cells, 7, 7, .black);
+    try testing.expect(!result.creates_open_three);
+    try testing.expect(!result.creates_four);
+}
+
+test "hasVCT: 夏止め済みの三しか作れない局面で偽VCTが成立しない" {
+    // 盤面: X_●●_._X（白(7,3)(7,9)、黒(7,5)(7,6)）
+    // 黒の唯一の「三を作る手」は(7,7)だが、できる三は夏止め済み（X_●●●_X）で
+    // 活四にできない＝脅威でない。受け点が空リストでも「防御不能＝勝ち」と
+    // 誤断定してはならない。
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[7 * BOARD_SIZE + 5] = .black;
+    cells[7 * BOARD_SIZE + 6] = .black;
+    cells[7 * BOARD_SIZE + 3] = .white;
+    cells[7 * BOARD_SIZE + 9] = .white;
+    bitboard.initFromCells(&cells);
+
+    var limiter = TimeLimiter{
+        .start_time = 0,
+        .time_limit = 0,
+        .nodes = 0,
+        .max_nodes = 0,
+    };
+
+    try testing.expect(!hasVCT(&cells, .black, 0, &limiter, VCT_MAX_DEPTH));
 }

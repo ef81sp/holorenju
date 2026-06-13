@@ -10,6 +10,8 @@ import { isValidPosition } from "@/logic/renjuRules";
 
 import { DIRECTION_INDICES, DIRECTIONS } from "../core/constants";
 import { checkEnds, checkEndsForFour, countLine } from "../core/lineAnalysis";
+// 夏止め済み判定（受け点の基準と活三判定を一致させる SSoT）
+import { getOpenThreeDefensePositions } from "../evaluation/threatDetection";
 // #43 PR-3: 跳び四/三の図形判定を Zig アダプタへ委譲（patterns.ts 依存を断つ）。
 import { checkJumpFour, checkJumpThree } from "../wasm/patternsAdapter";
 
@@ -96,10 +98,16 @@ export function createsOpenThree(
     const [dr, dc] = direction;
 
     // 連続三をチェック
+    // 夏止め済み（両外側ブロックで活四にできない三）は脅威でないため除外。
+    // 受け点の基準（getOpenThreeDefensePositions: 空リスト=夏止め済み）と揃える。
     const count = countLine(board, row, col, dr, dc, color);
     if (count === 3) {
       const { end1Open, end2Open } = checkEnds(board, row, col, dr, dc, color);
-      if (end1Open && end2Open) {
+      if (
+        end1Open &&
+        end2Open &&
+        getOpenThreeDefensePositions(board, row, col, dr, dc, color).length > 0
+      ) {
         return true;
       }
     }
@@ -178,9 +186,14 @@ export function classifyThreat(
     }
 
     // 連続三をチェック
-    if (count === 3) {
+    // 夏止め済み（両外側ブロックで活四にできない三）は脅威でないため除外（createsOpenThree と同基準）
+    if (!hasOpenThree && count === 3) {
       const { end1Open, end2Open } = checkEnds(board, row, col, dr, dc, color);
-      if (end1Open && end2Open) {
+      if (
+        end1Open &&
+        end2Open &&
+        getOpenThreeDefensePositions(board, row, col, dr, dc, color).length > 0
+      ) {
         hasOpenThree = true;
       }
     }
