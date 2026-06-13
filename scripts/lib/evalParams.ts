@@ -36,9 +36,13 @@ export const EVAL_PARAM_DEFAULTS: Record<EvalParamName, number> = {
   LINE_POTENTIAL_4: 60,
 };
 
-/** "OPEN_TWO:25,OPEN_THREE:600" 形式をパースし [id, value][] に。未知キーは例外。 */
-export function parseWeightOverrides(str: string): [number, number][] {
-  const out: [number, number][] = [];
+/**
+ * "OPEN_TWO:25,OPEN_THREE:600" 形式を **名前キーの Record** にパースする。
+ * キー名は EVAL_PARAM_IDS で検証（未知キー/非数値は例外）。
+ * 名前→id 変換は setEvalParam を呼ぶ箇所（bridge worker 等）で行う。
+ */
+export function parseWeightOverrides(str: string): Record<string, number> {
+  const out: Record<string, number> = {};
   for (const pair of str.split(",")) {
     const trimmed = pair.trim();
     if (!trimmed) {
@@ -48,17 +52,17 @@ export function parseWeightOverrides(str: string): [number, number][] {
     if (!k || v === undefined) {
       continue;
     }
-    const id = (EVAL_PARAM_IDS as Record<string, number>)[k.trim()];
-    if (id === undefined) {
+    const name = k.trim();
+    if (!(name in EVAL_PARAM_IDS)) {
       throw new Error(
-        `不明な eval 重みキー "${k.trim()}"。有効: ${Object.keys(EVAL_PARAM_IDS).join(", ")}`,
+        `不明な eval 重みキー "${name}"。有効: ${Object.keys(EVAL_PARAM_IDS).join(", ")}`,
       );
     }
     const num = Number(v.trim());
     if (Number.isNaN(num)) {
-      throw new Error(`"${k.trim()}" の値が数値でない: "${v}"`);
+      throw new Error(`"${name}" の値が数値でない: "${v}"`);
     }
-    out.push([id, num]);
+    out[name] = num;
   }
   return out;
 }
