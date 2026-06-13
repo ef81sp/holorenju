@@ -146,7 +146,13 @@ interface WasmSearchHandler {
 
 /**
  * EvaluationOptions → WASM用ビットマスク
- * Zig position_eval.decodeEvalOptions と一致させる
+ * Zig main.zig findBestMove のビットレイアウトと一致させる。
+ *
+ * ビットレイアウト（u32）:
+ *   bits 0-8:   position_eval.EvalOptions（ムーブオーダリング用フラグ）
+ *   bits 9-16:  葉評価 single_four_penalty_multiplier
+ *               （0=未指定→100、255=センチネル→0、1-254=そのまま）
+ *   bit 17:     enable_leaf_mise（現在は未使用）
  */
 function encodeEvalOptionsForWasm(opts: {
   enableMise?: boolean;
@@ -157,6 +163,7 @@ function encodeEvalOptionsForWasm(opts: {
   enableFutilityPruning?: boolean;
   enableMandatoryDefense?: boolean;
   enableSingleFourPenalty?: boolean;
+  singleFourPenaltyMultiplier?: number;
   enableMiseThreat?: boolean;
   enableDoubleThreeThreat?: boolean;
   enableForbiddenVulnerability?: boolean;
@@ -174,7 +181,20 @@ function encodeEvalOptionsForWasm(opts: {
     opts.enableDoubleThreeThreat ?? false,
     opts.enableForbiddenVulnerability ?? false,
   ];
-  return bits.reduce((flags, bit, i) => flags + (bit ? 2 ** i : 0), 0);
+  let flags = bits.reduce((acc, bit, i) => acc + (bit ? 2 ** i : 0), 0);
+
+  // bits 9-16: 葉評価 singleFourPenaltyMultiplier
+  // センチネル規則（Zig main.zig findBestMove と対称）:
+  //   enableSingleFourPenalty が false → 0（未指定 = デフォルト 100）
+  //   multiplier === 0 → 255（センチネル: 完全ペナルティ）
+  //   その他 → Math.round(m * 100)（1-254）
+  if (opts.enableSingleFourPenalty) {
+    const m = opts.singleFourPenaltyMultiplier ?? 1.0;
+    const raw = m === 0 ? 255 : Math.round(m * 100);
+    flags |= (raw & 0xff) << 9;
+  }
+
+  return flags;
 }
 
 // WASM cell constants (matching Zig Cell enum)

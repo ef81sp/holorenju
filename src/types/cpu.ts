@@ -159,7 +159,11 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
       enableVCT: true,
       enableMandatoryDefense: true,
       enableSingleFourPenalty: true,
-      singleFourPenaltyMultiplier: 0.0, // 100%減点（単独四は完全に無価値）
+      // 配線修正に伴い実態値へ修正（0.0 の採否は別途ベンチで判断）。
+      // 修正前: 0.0 がエンコード衝突（0=未指定と同じ扱い）で実際は 1.0（ペナルティなし）として動作。
+      // 修正後: 0.0 が正しくセンチネル(255)でエンコードされるため 0.0 のまま渡すと全ペナルティが有効。
+      // この PR は純粋な配線修正（挙動不変）のため、修正前の実態に合わせて 1.0 に設定する。
+      singleFourPenaltyMultiplier: 1.0,
       enableMiseThreat: true,
       enableDoubleThreeThreat: true,
       enableNullMovePruning: true, // depth 4 の中断率削減
