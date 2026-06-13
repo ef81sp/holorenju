@@ -39,7 +39,10 @@ import {
   annotateFukumiMoves,
 } from "./candidateVerification";
 import { buildDoubleMiseTree } from "./doubleMiseBranches";
-import { evaluatePlayedForcedWin } from "./evaluatePlayedMove";
+import {
+  evaluatePlayedForcedWin,
+  probePlayedMoveScore,
+} from "./evaluatePlayedMove";
 import {
   checkForcedLoss,
   FORCED_LOSS_VCT_OPTIONS,
@@ -911,7 +914,18 @@ function buildNormalResult(
     if (played) {
       playedScore = played.score;
     } else {
-      playedScore = result.score - 2000;
+      // 実手が候補(top5)外: 実手局面を追加探索して実スコアを推定する。
+      // 従来の -2000 固定は候補外の手を一律 blunder と誤判定していた（B1）。
+      const probed = wasmSearchEngine
+        ? probePlayedMoveScore(
+            board,
+            playedRow,
+            playedCol,
+            color,
+            wasmSearchEngine,
+          )
+        : null;
+      playedScore = probed ?? result.score - 2000;
     }
   }
 

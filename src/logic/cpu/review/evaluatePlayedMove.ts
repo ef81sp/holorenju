@@ -23,6 +23,50 @@ export interface PlayedForcedWinResult {
   playedForcedWinSequence: Position[] | undefined;
 }
 
+/** 実手スコア推定の追加探索パラメータ（attachPVFromWasm のプローブと同一値） */
+const PLAYED_PROBE_DEPTH = 3;
+const PLAYED_PROBE_TIME_MS = 2000;
+const PLAYED_PROBE_MAX_NODES = 200000;
+
+/**
+ * 実手が minimax 候補(top5)外のとき、実手局面を浅く追加探索して実スコアを推定する。
+ *
+ * 実手を置いた後の局面（相手手番）を探索し、相手視点のベストスコアを符号反転して
+ * 実手側(color)視点のスコアを得る（negamax 規則）。従来の `bestScore - 2000` 固定
+ * フォールバックを置き換え、候補外の手を一律 blunder と誤判定する問題を解消する。
+ *
+ * NoTTClear で探索するため、後続の attachPVFromWasm が同一局面の PV を TT から再利用でき、
+ * 追加探索の重複を抑える。
+ *
+ * @returns 実手側視点のスコア。実手座標が盤外/既石なら null（呼び出し側でフォールバック）。
+ */
+export function probePlayedMoveScore(
+  board: BoardState,
+  playedRow: number,
+  playedCol: number,
+  color: "black" | "white",
+  engine: WasmSearchEngine,
+): number | null {
+  const row = board[playedRow];
+  if (!row || row[playedCol] !== null) {
+    return null;
+  }
+  const opponentColor = color === "black" ? "white" : "black";
+  row[playedCol] = color;
+  try {
+    const probe = engine.findBestMoveWithParamsNoTTClear(
+      board,
+      opponentColor,
+      PLAYED_PROBE_DEPTH,
+      PLAYED_PROBE_TIME_MS,
+      PLAYED_PROBE_MAX_NODES,
+    );
+    return -probe.score;
+  } finally {
+    row[playedCol] = null;
+  }
+}
+
 /**
  * 実際に打った手が追い詰め開始手かチェックし、スコアとシーケンスを返す
  */
@@ -106,8 +150,19 @@ export function evaluatePlayedForcedWin(
   const minimaxEntry = result.candidates?.find(
     (c) => c.move.row === playedRow && c.move.col === playedCol,
   );
+  // 候補外なら実手局面を追加探索して実スコアを推定（-2000固定の誤blunderを回避）
+  const playedScore =
+    minimaxEntry?.score ??
+    probePlayedMoveScore(
+      board,
+      playedRow,
+      playedCol,
+      color,
+      wasmSearchEngine,
+    ) ??
+    result.score - 2000;
   return {
-    playedScore: minimaxEntry?.score ?? result.score - 2000,
+    playedScore,
     playedForcedWinSequence: undefined,
   };
 }
