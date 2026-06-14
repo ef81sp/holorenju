@@ -5,6 +5,7 @@ import { useProgressStore } from "@/stores/progressStore";
 import { useAudioStore } from "@/stores/audioStore";
 // oxlint-disable-next-line consistent-type-imports
 import ConfirmDialog from "./ConfirmDialog.vue";
+import IconButton from "./IconButton.vue";
 import CloseIcon from "@/assets/icons/close.svg?component";
 import { useLightDismiss } from "@/composables/useLightDismiss";
 
@@ -81,14 +82,14 @@ defineExpose({
     <div class="dialog-content">
       <div class="dialog-header">
         <h2 class="dialog-title">設定</h2>
-        <button
-          type="button"
-          class="close-button"
+        <IconButton
+          size="md"
+          variant="ghost"
+          label="閉じる"
           @click="dialogRef?.close()"
         >
-          <CloseIcon class="close-button__icon" />
-          <span class="close-button__label">閉じる</span>
-        </button>
+          <CloseIcon />
+        </IconButton>
       </div>
 
       <div class="dialog-body">
@@ -471,42 +472,6 @@ defineExpose({
   font-size: var(--size-20);
   font-weight: 500;
   color: var(--color-text-primary);
-}
-
-.close-button {
-  width: var(--size-32);
-  height: var(--size-32);
-  padding: var(--size-2);
-  background: transparent;
-  border: none;
-  border-radius: var(--size-6);
-  cursor: pointer;
-  color: var(--color-text-secondary);
-  transition: all 0.15s ease;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--size-1);
-
-  &:hover {
-    background: var(--color-bg-gray);
-    color: var(--color-text-primary);
-  }
-}
-
-.close-button__icon {
-  display: block;
-  width: var(--size-14);
-  height: var(--size-14);
-  flex-shrink: 0;
-}
-
-.close-button__label {
-  font-size: var(--size-8);
-  line-height: 1;
-  font-weight: 500;
-  white-space: nowrap;
 }
 
 .dialog-body {

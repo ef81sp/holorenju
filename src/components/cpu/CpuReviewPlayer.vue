@@ -10,6 +10,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import InfoIcon from "@/assets/icons/info.svg?component";
 import RefreshIcon from "@/assets/icons/refresh.svg?component";
 import UploadFileIcon from "@/assets/icons/upload_file.svg?component";
+import IconButton from "@/components/common/IconButton.vue";
 import BackButton from "@/components/common/BackButton.vue";
 import RenjuBoard from "@/components/game/RenjuBoard/RenjuBoard.vue";
 import SettingsControl from "@/components/common/SettingsControl.vue";
@@ -326,28 +327,31 @@ function handleLayoutClick(event: MouseEvent): void {
       </template>
 
       <template #header-controls>
-        <button
-          class="header-icon-button"
+        <IconButton
+          size="lg"
+          variant="toolbar"
+          label="ヘルプ"
           @click="openHelp"
         >
-          <InfoIcon class="header-icon-button__icon" />
-          <span class="header-icon-button__label">ヘルプ</span>
-        </button>
-        <button
-          class="header-icon-button"
+          <InfoIcon />
+        </IconButton>
+        <IconButton
+          size="lg"
+          variant="toolbar"
+          label="読込"
           @click="importDialogRef?.showModal()"
         >
-          <UploadFileIcon class="header-icon-button__icon" />
-          <span class="header-icon-button__label">読込</span>
-        </button>
-        <button
-          class="header-icon-button"
+          <UploadFileIcon />
+        </IconButton>
+        <IconButton
+          size="lg"
+          variant="toolbar"
+          label="再分析"
           :disabled="evaluator.isEvaluating.value"
           @click="handleReanalyze"
         >
-          <RefreshIcon class="header-icon-button__icon" />
-          <span class="header-icon-button__label">再分析</span>
-        </button>
+          <RefreshIcon />
+        </IconButton>
         <SettingsControl />
       </template>
 
@@ -456,48 +460,6 @@ function handleLayoutClick(event: MouseEvent): void {
   :deep(.dialog-section-slot) {
     grid-column: 1 / span 2;
   }
-}
-
-.header-icon-button {
-  width: var(--size-40);
-  height: var(--size-40);
-  padding: var(--size-3);
-  background: rgba(255, 255, 255, 0.9);
-  border: var(--size-2) solid var(--color-border);
-  border-radius: var(--size-8);
-  cursor: pointer;
-  transition: all 0.2s ease;
-  color: var(--color-text-secondary);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--size-2);
-
-  &:hover:not(:disabled) {
-    background: white;
-    border-color: var(--color-border-heavy);
-    color: var(--color-text-primary);
-  }
-
-  &:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-  }
-}
-
-.header-icon-button__icon {
-  display: block;
-  width: var(--size-20);
-  height: var(--size-20);
-  flex-shrink: 0;
-}
-
-.header-icon-button__label {
-  font-size: var(--size-9);
-  line-height: 1;
-  font-weight: 500;
-  white-space: nowrap;
 }
 
 .control-info-content {

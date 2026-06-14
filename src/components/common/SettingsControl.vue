@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from "vue";
-import SettingsButton from "./SettingsButton.vue";
+import IconButton from "./IconButton.vue";
+import SettingsIcon from "@/assets/icons/settings.svg?component";
 // oxlint-disable-next-line consistent-type-imports
 import PreferencesDialog from "./PreferencesDialog.vue";
 
@@ -13,7 +14,14 @@ const handleClick = (): void => {
 
 <template>
   <div class="settings-control">
-    <SettingsButton @click="handleClick" />
+    <IconButton
+      size="lg"
+      variant="toolbar"
+      label="設定"
+      @click="handleClick"
+    >
+      <SettingsIcon />
+    </IconButton>
     <PreferencesDialog ref="dialogRef" />
   </div>
 </template>
