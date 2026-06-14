@@ -4,15 +4,13 @@
  *
  * - size: lg=40 / md=32 / sm=28 / xs=24（px は --size-* に解決）
  * - variant: toolbar（白背景・枠線あり）/ ghost（透明・枠線なし）
- * - label: アイコン下に表示する短いラベル（最大 5 文字。xs では非表示）
- *   フォントサイズは文字数に応じて自動で決まる
- *   （長文ほど縮小して 40/32/28 px の枠に収める）
+ * - label: アイコン下に表示する短いラベル（最大 5 文字を想定。xs では非表示）
+ *   フォントサイズは `clamp(floor, 内寸 / 文字数, デフォルト)` で連続的に
+ *   自動算出される（短いと既定サイズで止まり、長いと縮小して枠に収まる）
  * - tone: 'accent' で fubuki カラーに着色（コピー成功表示など）
  *
  * label を渡さない場合は呼び出し側で aria-label を付与してアクセシブル名を確保すること。
  */
-import { computed } from "vue";
-
 type IconButtonSize = "lg" | "md" | "sm" | "xs";
 type IconButtonVariant = "toolbar" | "ghost";
 type IconButtonTone = "default" | "accent";
@@ -25,7 +23,7 @@ interface Props {
   tone?: IconButtonTone;
 }
 
-const props = withDefaults(defineProps<Props>(), {
+withDefaults(defineProps<Props>(), {
   label: undefined,
   disabled: undefined,
   tone: "default",
@@ -34,11 +32,6 @@ const props = withDefaults(defineProps<Props>(), {
 defineEmits<{
   click: [MouseEvent];
 }>();
-
-// data-length は文字数（最大 5）。CSS 側で属性セレクタで font-size を切替
-const labelLength = computed(() =>
-  props.label ? Math.min(props.label.length, 5) : undefined,
-);
 </script>
 
 <template>
@@ -58,7 +51,7 @@ const labelLength = computed(() =>
     <span
       v-if="label"
       class="icon-button__label"
-      :data-length="labelLength"
+      :style="{ '--char-count': label.length }"
     >
       {{ label }}
     </span>
@@ -92,7 +85,15 @@ const labelLength = computed(() =>
   height: 100%;
 }
 
+/* ラベル：文字数（--char-count）と各 size が定義する
+   --label-max-width / --label-default-size から font-size を連続算出。
+   floor は --size-5 で可読性を担保 */
 .icon-button__label {
+  font-size: clamp(
+    var(--size-5),
+    calc(var(--label-max-width) / var(--char-count)),
+    var(--label-default-size)
+  );
   line-height: 1;
   font-weight: 500;
   white-space: nowrap;
@@ -104,6 +105,11 @@ const labelLength = computed(() =>
   height: var(--size-40);
   padding: var(--size-3);
   gap: var(--size-2);
+  /* 枠線(--size-2)とパディング(--size-3)を差し引いた内寸を最大幅とする */
+  --label-max-width: calc(
+    var(--size-40) - 2 * var(--size-2) - 2 * var(--size-3)
+  );
+  --label-default-size: var(--size-9);
 
   & .icon-button__icon {
     width: var(--size-20);
@@ -116,6 +122,9 @@ const labelLength = computed(() =>
   height: var(--size-32);
   padding: var(--size-2);
   gap: var(--size-1);
+  /* ghost variant は枠線なし */
+  --label-max-width: calc(var(--size-32) - 2 * var(--size-2));
+  --label-default-size: var(--size-8);
 
   & .icon-button__icon {
     width: var(--size-14);
@@ -128,6 +137,8 @@ const labelLength = computed(() =>
   height: var(--size-28);
   padding: var(--size-2);
   gap: var(--size-1);
+  --label-max-width: calc(var(--size-28) - 2 * var(--size-2));
+  --label-default-size: var(--size-8);
 
   & .icon-button__icon {
     width: var(--size-14);
@@ -144,37 +155,6 @@ const labelLength = computed(() =>
     width: 100%;
     height: 100%;
   }
-}
-
-/* Label font-size: デフォルト（〜3 文字） */
-.icon-button--lg .icon-button__label {
-  font-size: var(--size-9);
-}
-.icon-button--md .icon-button__label,
-.icon-button--sm .icon-button__label {
-  font-size: var(--size-8);
-}
-
-/* Label font-size: 4 文字 */
-.icon-button--lg .icon-button__label[data-length="4"] {
-  font-size: var(--size-7);
-}
-.icon-button--md .icon-button__label[data-length="4"] {
-  font-size: var(--size-6);
-}
-.icon-button--sm .icon-button__label[data-length="4"] {
-  font-size: var(--size-5);
-}
-
-/* Label font-size: 5 文字 */
-.icon-button--lg .icon-button__label[data-length="5"] {
-  font-size: var(--size-6);
-}
-.icon-button--md .icon-button__label[data-length="5"] {
-  font-size: var(--size-5);
-}
-.icon-button--sm .icon-button__label[data-length="5"] {
-  font-size: var(--size-5);
 }
 
 /* Variants */
