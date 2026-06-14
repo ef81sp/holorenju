@@ -36,7 +36,6 @@ const toggle = async (): Promise<void> => {
     size="lg"
     variant="toolbar"
     :label="isFullscreen ? '画面縮小' : '全画面'"
-    label-size="small"
     @click="toggle"
   >
     <FullscreenExitIcon v-if="isFullscreen" />
