@@ -15,6 +15,8 @@ import {
   DIFFICULTY_LABELS,
   type BattleResult,
 } from "@/types/cpu";
+import IconButton from "@/components/common/IconButton.vue";
+import CloseIcon from "@/assets/icons/close.svg?component";
 
 const appStore = useAppStore();
 const cpuRecordStore = useCpuRecordStore();
@@ -72,13 +74,14 @@ defineExpose({
     <div class="dialog-content">
       <header class="dialog-header">
         <h2 class="dialog-title">対戦記録</h2>
-        <button
-          type="button"
-          class="close-button"
+        <IconButton
+          size="sm"
+          variant="ghost"
+          label="閉じる"
           @click="handleClose"
         >
-          ×
-        </button>
+          <CloseIcon />
+        </IconButton>
       </header>
 
       <section class="stats-section">
@@ -225,21 +228,6 @@ defineExpose({
   font-size: var(--size-20);
   font-weight: 500;
   color: var(--color-text-primary);
-}
-
-.close-button {
-  background: none;
-  border: none;
-  font-size: var(--size-24);
-  cursor: pointer;
-  color: var(--color-text-secondary);
-  padding: var(--size-4);
-  line-height: 1;
-  transition: color 0.2s;
-
-  &:hover {
-    color: var(--color-text-primary);
-  }
 }
 
 .section-title {

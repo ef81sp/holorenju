@@ -7,6 +7,8 @@ import {
 } from "@/types/character";
 import CharacterSprite from "@/components/character/CharacterSprite.vue";
 import { useLightDismiss } from "@/composables/useLightDismiss";
+import IconButton from "@/components/common/IconButton.vue";
+import CloseIcon from "@/assets/icons/close.svg?component";
 
 interface Props {
   character: CharacterType;
@@ -54,13 +56,14 @@ const characterName = computed(() =>
     <div class="dialog-wrapper">
       <div class="dialog-header">
         <h2>{{ characterName }}の表情を選択</h2>
-        <button
-          class="close-button"
-          aria-label="ダイアログを閉じる"
+        <IconButton
+          size="sm"
+          variant="ghost"
+          label="閉じる"
           @click="dialogRef?.close()"
         >
-          ✕
-        </button>
+          <CloseIcon />
+        </IconButton>
       </div>
 
       <div class="dialog-content">
@@ -125,25 +128,6 @@ const characterName = computed(() =>
   margin: 0;
   font-size: 1.2rem;
   font-weight: 500;
-}
-
-.close-button {
-  background: none;
-  border: none;
-  font-size: 1.5rem;
-  cursor: pointer;
-  color: var(--color-text-secondary);
-
-  &:hover {
-    color: var(--color-text-primary);
-  }
-  overflow-y: auto;
-  flex: 1;
-  .active {
-    border-bottom-color: var(--color-primary);
-    color: var(--color-text-primary);
-    font-weight: 500;
-  }
 }
 
 .emotion-grid {

@@ -4,6 +4,8 @@ import { useLightDismiss } from "@/composables/useLightDismiss";
 import { useGameBrowser } from "@/editor/composables/useGameBrowser";
 import GameListPanel from "./GameListPanel.vue";
 import GamePlaybackPanel from "./GamePlaybackPanel.vue";
+import IconButton from "@/components/common/IconButton.vue";
+import CloseIcon from "@/assets/icons/close.svg?component";
 
 const dialogRef = ref<HTMLDialogElement | null>(null);
 useLightDismiss(dialogRef);
@@ -61,12 +63,14 @@ defineExpose({ showModal, close });
     <div class="dialog-inner">
       <div class="dialog-header">
         <h2>棋譜ブラウザ</h2>
-        <button
-          class="close-button"
+        <IconButton
+          size="sm"
+          variant="ghost"
+          label="閉じる"
           @click="close"
         >
-          ✕
-        </button>
+          <CloseIcon />
+        </IconButton>
       </div>
 
       <div
@@ -162,19 +166,6 @@ defineExpose({ showModal, close });
 .dialog-header h2 {
   margin: 0;
   font-size: 16px;
-}
-
-.close-button {
-  background: none;
-  border: none;
-  font-size: 18px;
-  cursor: pointer;
-  padding: 4px 8px;
-  color: #666;
-}
-
-.close-button:hover {
-  color: #333;
 }
 
 .loading,

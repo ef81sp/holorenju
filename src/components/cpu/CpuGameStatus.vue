@@ -9,6 +9,9 @@ import { computed, ref } from "vue";
 
 import { useCpuGameStore } from "@/stores/cpuGameStore";
 import { DIFFICULTY_ARIA_LABELS, DIFFICULTY_LABELS } from "@/types/cpu";
+import IconButton from "@/components/common/IconButton.vue";
+import ContentCopyIcon from "@/assets/icons/content_copy.svg?component";
+import CheckIcon from "@/assets/icons/check.svg?component";
 
 // 座標を棋譜形式に変換
 function formatPosition(row: number, col: number): string {
@@ -109,13 +112,17 @@ async function handleCopy(): Promise<void> {
   <div class="move-history-card">
     <div class="section-header">
       <h4 class="section-title">棋譜</h4>
-      <button
+      <IconButton
         v-if="cpuGameStore.moveHistory.length > 0"
-        class="copy-button"
+        size="xs"
+        variant="ghost"
+        :tone="isCopied ? 'accent' : 'default'"
+        aria-label="棋譜をコピー"
         @click="handleCopy"
       >
-        {{ isCopied ? "✓" : "コピー" }}
-      </button>
+        <CheckIcon v-if="isCopied" />
+        <ContentCopyIcon v-else />
+      </IconButton>
     </div>
     <div
       v-if="cpuGameStore.moveHistory.length === 0"
@@ -229,20 +236,6 @@ async function handleCopy(): Promise<void> {
   font-weight: 500;
   color: var(--color-text-secondary);
   margin: 0;
-}
-
-.copy-button {
-  font-size: var(--size-10);
-  padding: var(--size-2) var(--size-6);
-  background: var(--color-background-tertiary);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--size-4);
-  cursor: pointer;
-  transition: background 0.2s;
-}
-
-.copy-button:hover {
-  background: var(--color-background-hover);
 }
 
 .empty-history {
