@@ -44,7 +44,7 @@ const toggle = async (): Promise<void> => {
       class="fullscreen-button__icon"
     />
     <span class="fullscreen-button__label">
-      {{ isFullscreen ? "終了" : "全画面" }}
+      {{ isFullscreen ? "画面縮小" : "全画面" }}
     </span>
   </button>
 </template>
@@ -81,7 +81,8 @@ const toggle = async (): Promise<void> => {
 }
 
 .fullscreen-button__label {
-  font-size: var(--size-9);
+  /* 「画面縮小」が 40px ボタン枠に収まるよう他ボタン(9px)より小さく */
+  font-size: var(--size-7);
   line-height: 1;
   font-weight: 500;
   white-space: nowrap;
