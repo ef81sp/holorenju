@@ -203,6 +203,7 @@
   --size-4: clamp(3px, calc(var(--effective-vw) * 0.00417), 5px); /* 4px */
   --size-5: clamp(3px, calc(var(--effective-vw) * 0.00521), 7px); /* 5px */
   --size-6: clamp(4px, calc(var(--effective-vw) * 0.00625), 8px); /* 6px */
+  --size-7: clamp(4.5px, calc(var(--effective-vw) * 0.00729), 9.5px); /* 7px */
   --size-8: clamp(5px, calc(var(--effective-vw) * 0.00833), 11px); /* 8px */
   --size-9: clamp(6px, calc(var(--effective-vw) * 0.00938), 12px); /* 9px */
   --size-10: clamp(7px, calc(var(--effective-vw) * 0.01042), 14px); /* 10px */

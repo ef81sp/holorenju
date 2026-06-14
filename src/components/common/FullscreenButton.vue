@@ -33,11 +33,19 @@ const toggle = async (): Promise<void> => {
   <button
     v-if="isSupported"
     class="fullscreen-button"
-    :aria-label="isFullscreen ? '全画面を終了' : '全画面表示'"
     @click="toggle"
   >
-    <FullscreenExitIcon v-if="isFullscreen" />
-    <FullscreenIcon v-else />
+    <FullscreenExitIcon
+      v-if="isFullscreen"
+      class="fullscreen-button__icon"
+    />
+    <FullscreenIcon
+      v-else
+      class="fullscreen-button__icon"
+    />
+    <span class="fullscreen-button__label">
+      {{ isFullscreen ? "画面縮小" : "全画面" }}
+    </span>
   </button>
 </template>
 
@@ -45,25 +53,38 @@ const toggle = async (): Promise<void> => {
 .fullscreen-button {
   width: var(--size-40);
   height: var(--size-40);
-  padding: var(--size-8);
+  padding: var(--size-3);
   background: rgba(255, 255, 255, 0.9);
   border: var(--size-2) solid var(--color-border);
   border-radius: var(--size-8);
   cursor: pointer;
   transition: all 0.2s ease;
   color: var(--color-text-secondary);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--size-2);
 
   &:hover {
     background: white;
     border-color: var(--color-border-heavy);
     color: var(--color-text-primary);
   }
+}
 
-  svg {
-    display: block;
-    width: 100%;
-    height: 100%;
-    margin: auto;
-  }
+.fullscreen-button__icon {
+  display: block;
+  width: var(--size-20);
+  height: var(--size-20);
+  flex-shrink: 0;
+}
+
+.fullscreen-button__label {
+  /* 「画面縮小」が 40px ボタン枠に収まるよう他ボタン(9px)より小さく */
+  font-size: var(--size-7);
+  line-height: 1;
+  font-weight: 500;
+  white-space: nowrap;
 }
 </style>
