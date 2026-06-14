@@ -84,10 +84,10 @@ defineExpose({
         <button
           type="button"
           class="close-button"
-          aria-label="閉じる"
           @click="dialogRef?.close()"
         >
-          <CloseIcon />
+          <CloseIcon class="close-button__icon" />
+          <span class="close-button__label">閉じる</span>
         </button>
       </div>
 
@@ -476,23 +476,37 @@ defineExpose({
 .close-button {
   width: var(--size-32);
   height: var(--size-32);
-  padding: var(--size-6);
+  padding: var(--size-2);
   background: transparent;
   border: none;
   border-radius: var(--size-6);
   cursor: pointer;
   color: var(--color-text-secondary);
   transition: all 0.15s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--size-1);
 
   &:hover {
     background: var(--color-bg-gray);
     color: var(--color-text-primary);
   }
+}
 
-  svg {
-    width: 100%;
-    height: 100%;
-  }
+.close-button__icon {
+  display: block;
+  width: var(--size-14);
+  height: var(--size-14);
+  flex-shrink: 0;
+}
+
+.close-button__label {
+  font-size: var(--size-8);
+  line-height: 1;
+  font-weight: 500;
+  white-space: nowrap;
 }
 
 .dialog-body {

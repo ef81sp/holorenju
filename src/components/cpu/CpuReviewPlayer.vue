@@ -328,25 +328,25 @@ function handleLayoutClick(event: MouseEvent): void {
       <template #header-controls>
         <button
           class="header-icon-button"
-          aria-label="評価の読み方ヘルプ"
           @click="openHelp"
         >
-          <InfoIcon />
+          <InfoIcon class="header-icon-button__icon" />
+          <span class="header-icon-button__label">ヘルプ</span>
         </button>
         <button
           class="header-icon-button"
-          aria-label="棋譜を読み込む"
           @click="importDialogRef?.showModal()"
         >
-          <UploadFileIcon />
+          <UploadFileIcon class="header-icon-button__icon" />
+          <span class="header-icon-button__label">読込</span>
         </button>
         <button
           class="header-icon-button"
-          aria-label="再分析"
           :disabled="evaluator.isEvaluating.value"
           @click="handleReanalyze"
         >
-          <RefreshIcon />
+          <RefreshIcon class="header-icon-button__icon" />
+          <span class="header-icon-button__label">再分析</span>
         </button>
         <SettingsControl />
       </template>
@@ -461,13 +461,18 @@ function handleLayoutClick(event: MouseEvent): void {
 .header-icon-button {
   width: var(--size-40);
   height: var(--size-40);
-  padding: var(--size-8);
+  padding: var(--size-3);
   background: rgba(255, 255, 255, 0.9);
   border: var(--size-2) solid var(--color-border);
   border-radius: var(--size-8);
   cursor: pointer;
   transition: all 0.2s ease;
   color: var(--color-text-secondary);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--size-2);
 
   &:hover:not(:disabled) {
     background: white;
@@ -479,13 +484,20 @@ function handleLayoutClick(event: MouseEvent): void {
     opacity: 0.4;
     cursor: not-allowed;
   }
+}
 
-  svg {
-    display: block;
-    width: 100%;
-    height: 100%;
-    margin: auto;
-  }
+.header-icon-button__icon {
+  display: block;
+  width: var(--size-20);
+  height: var(--size-20);
+  flex-shrink: 0;
+}
+
+.header-icon-button__label {
+  font-size: var(--size-9);
+  line-height: 1;
+  font-weight: 500;
+  white-space: nowrap;
 }
 
 .control-info-content {
