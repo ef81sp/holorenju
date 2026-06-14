@@ -23,11 +23,14 @@ interface Props {
   tone?: IconButtonTone;
 }
 
-withDefaults(defineProps<Props>(), {
-  label: undefined,
-  disabled: undefined,
-  tone: "default",
-});
+// Vue 3.5+ reactive props destructuring（withDefaults 不要）
+const {
+  size,
+  variant,
+  label = undefined,
+  disabled = undefined,
+  tone = "default",
+} = defineProps<Props>();
 
 defineEmits<{
   click: [MouseEvent];
