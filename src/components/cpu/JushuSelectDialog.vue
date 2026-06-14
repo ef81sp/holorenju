@@ -10,6 +10,8 @@ import { ref, watch } from "vue";
 
 import { useLightDismiss } from "@/composables/useLightDismiss";
 import { DIAGONAL_PATTERNS, ORTHOGONAL_PATTERNS } from "@/logic/cpu/opening";
+import IconButton from "@/components/common/IconButton.vue";
+import CloseIcon from "@/assets/icons/close.svg?component";
 
 type TabType = "orthogonal" | "diagonal";
 
@@ -89,13 +91,14 @@ defineExpose({
     <div class="dialog-content">
       <header class="dialog-header">
         <h2 class="dialog-title">珠型を選択</h2>
-        <button
-          type="button"
-          class="close-button"
+        <IconButton
+          size="sm"
+          variant="ghost"
+          label="閉じる"
           @click="handleClose"
         >
-          ×
-        </button>
+          <CloseIcon />
+        </IconButton>
       </header>
 
       <!-- タブ切替 -->
@@ -302,21 +305,6 @@ defineExpose({
   font-size: var(--size-16);
   font-weight: 500;
   color: var(--color-text-primary);
-}
-
-.close-button {
-  background: none;
-  border: none;
-  font-size: var(--size-24);
-  cursor: pointer;
-  color: var(--color-text-secondary);
-  padding: var(--size-4);
-  line-height: 1;
-  transition: color 0.2s;
-
-  &:hover {
-    color: var(--color-text-primary);
-  }
 }
 
 .tab-bar {
