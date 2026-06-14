@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from "vue";
-import InfoButton from "./InfoButton.vue";
+import IconButton from "./IconButton.vue";
+import InfoIcon from "@/assets/icons/info.svg?component";
 // oxlint-disable-next-line consistent-type-imports
 import InfoDialog from "./InfoDialog.vue";
 
@@ -13,7 +14,14 @@ const handleClick = (): void => {
 
 <template>
   <div class="info-control">
-    <InfoButton @click="handleClick" />
+    <IconButton
+      size="lg"
+      variant="toolbar"
+      label="情報"
+      @click="handleClick"
+    >
+      <InfoIcon />
+    </IconButton>
     <InfoDialog ref="dialogRef" />
   </div>
 </template>

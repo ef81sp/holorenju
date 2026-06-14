@@ -7,6 +7,7 @@
 
 import { ref } from "vue";
 import { usePreferencesStore } from "@/stores/preferencesStore";
+import IconButton from "@/components/common/IconButton.vue";
 import ContentCopyIcon from "@/assets/icons/content_copy.svg?component";
 import CheckIcon from "@/assets/icons/check.svg?component";
 import {
@@ -58,16 +59,18 @@ async function copyMoveHistory(): Promise<void> {
       </span>
       <span class="info-item">{{ props.playerFirst ? "先手" : "後手" }}</span>
       <span class="info-item">{{ props.moveCount }}手</span>
-      <button
+      <IconButton
         v-if="props.moveHistory"
-        class="copy-button"
-        :class="{ copied }"
+        class="copy-button-position"
+        size="xs"
+        variant="ghost"
+        :tone="copied ? 'accent' : 'default'"
         aria-label="棋譜をコピー"
         @click.stop="copyMoveHistory"
       >
         <ContentCopyIcon v-if="!copied" />
         <CheckIcon v-else />
-      </button>
+      </IconButton>
     </div>
 
     <!-- 評価中 -->
@@ -134,35 +137,8 @@ async function copyMoveHistory(): Promise<void> {
   border-radius: var(--size-4);
 }
 
-.copy-button {
+.copy-button-position {
   margin-left: auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--size-24);
-  height: var(--size-24);
-  padding: var(--size-4);
-  background: transparent;
-  border: none;
-  border-radius: var(--size-4);
-  cursor: pointer;
-  color: var(--color-text-secondary);
-  transition: all 0.15s ease;
-  box-sizing: border-box;
-
-  &:hover {
-    background: var(--color-background-secondary);
-    color: var(--color-text-primary);
-  }
-
-  &.copied {
-    color: var(--color-fubuki-primary);
-  }
-
-  svg {
-    width: 100%;
-    height: 100%;
-  }
 }
 
 .evaluating {

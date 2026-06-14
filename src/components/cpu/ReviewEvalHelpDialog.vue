@@ -4,6 +4,7 @@
  */
 
 import { ref } from "vue";
+import IconButton from "@/components/common/IconButton.vue";
 import CloseIcon from "@/assets/icons/close.svg?component";
 import { useLightDismiss } from "@/composables/useLightDismiss";
 
@@ -24,14 +25,14 @@ defineExpose({
     <div class="help-content">
       <div class="help-header">
         <h2 class="help-title">評価の読み方</h2>
-        <button
-          type="button"
-          class="close-button"
+        <IconButton
+          size="sm"
+          variant="ghost"
+          label="閉じる"
           @click="dialogRef?.close()"
         >
-          <CloseIcon class="close-button__icon" />
-          <span class="close-button__label">閉じる</span>
-        </button>
+          <CloseIcon />
+        </IconButton>
       </div>
       <div class="help-body">
         <section class="help-section">
@@ -194,42 +195,6 @@ defineExpose({
   font-size: var(--size-16);
   font-weight: 500;
   color: var(--color-text-primary);
-}
-
-.close-button {
-  width: var(--size-28);
-  height: var(--size-28);
-  padding: var(--size-2);
-  background: transparent;
-  border: none;
-  border-radius: var(--size-6);
-  cursor: pointer;
-  color: var(--color-text-secondary);
-  transition: all 0.15s ease;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--size-1);
-
-  &:hover {
-    background: var(--color-bg-gray);
-    color: var(--color-text-primary);
-  }
-}
-
-.close-button__icon {
-  display: block;
-  width: var(--size-14);
-  height: var(--size-14);
-  flex-shrink: 0;
-}
-
-.close-button__label {
-  font-size: var(--size-8);
-  line-height: 1;
-  font-weight: 500;
-  white-space: nowrap;
 }
 
 .help-body {
