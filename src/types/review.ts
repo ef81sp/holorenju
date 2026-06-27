@@ -29,6 +29,8 @@ export type ForcedWinType = Exclude<
 export interface ForcedLossResult {
   type: ForcedLossType;
   sequence: Position[];
+  /** 相手の必勝手順の詰み木（#26。VCT 被詰のみ。VCF/Mise-VCF 等の線形ケースでは無し） */
+  tree?: ForcedWinNode;
 }
 
 /**
@@ -56,10 +58,14 @@ export interface ForcedWinBranch {
 }
 
 /**
- * 追詰（VCT / Mise-VCF / 両ミセ）の再帰的詰み木ノード（#22）。
+ * 詰み木の再帰的ノード（#22 / #26）。
  *
  * AND-OR 木の攻め手ノード。`defenses` が空なら終端（この攻め手で勝ち確定:
  * 五 / 達四 / VCF 完了）。`defenses[0]` 連鎖が既存 `sequence`（既定経路）に一致する。
+ *
+ * 追詰文脈（#22）では `attackerMove` はプレイヤーの攻め手・`defenderMove` は相手の防御手。
+ * 被詰文脈（#26）では `attackerMove` は相手の攻め手・`defenderMove` はプレイヤーの防御手。
+ * 構造は同一で、役割の違いは表示側で `ProgressionTab.attackerIsSelf` により切り替える。
  */
 export interface ForcedWinNode {
   /** この局面での攻め手（OR を1つに固定） */
@@ -141,6 +147,8 @@ export interface EvaluatedMove {
   forcedLossSequence?: Position[];
   /** 相手の必勝手順の分岐（Phase 3 遡及で構築） */
   forcedLossBranches?: ForcedWinBranch[];
+  /** 相手の必勝手順の詰み木（#26。被詰タブの分岐表示の出所。VCT 被詰のみ） */
+  forcedLossTree?: ForcedWinNode;
   /** 軽量評価（minimax省略、強制勝ち検出のみ） */
   isLightEval?: boolean;
   /** 両ミセ手の見逃し（打つ前の盤面で両ミセ手が存在した） */
@@ -213,6 +221,8 @@ export interface VCTCheckResult extends ReviewWorkerResultBase {
   forcedLossType?: ForcedLossType;
   /** 相手の必勝手順のシーケンス */
   forcedLossSequence?: Position[];
+  /** 相手の必勝手順の詰み木（#26。VCT 被詰のみ） */
+  forcedLossTree?: ForcedWinNode;
 }
 
 /**
@@ -251,6 +261,8 @@ export interface FullEvalResult extends ReviewWorkerResultBase {
   forcedLossSequence?: Position[];
   /** 相手の必勝手順の分岐（Phase 3 遡及で構築） */
   forcedLossBranches?: ForcedWinBranch[];
+  /** 相手の必勝手順の詰み木（#26。VCT 被詰のみ、Phase 2 VCTチェック結果から伝搬） */
+  forcedLossTree?: ForcedWinNode;
   /** 両ミセ手の見逃し（打つ前の盤面で両ミセ手が存在した） */
   missedDoubleMise?: Position[];
   /** 両ミセのターゲット位置（四三を作る位置） */

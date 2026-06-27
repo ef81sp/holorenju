@@ -10,6 +10,7 @@
 import type { Position } from "@/types/game";
 import type {
   ForcedLossType,
+  ForcedWinNode,
   FullEvalResult,
   LightEvalResult,
   ReviewEvalRequest,
@@ -87,6 +88,7 @@ self.onmessage = async (event: MessageEvent<ReviewEvalRequest>) => {
 
       let forcedLossType: ForcedLossType | undefined = undefined;
       let forcedLossSequence: Position[] | undefined = undefined;
+      let forcedLossTree: ForcedWinNode | undefined = undefined;
       if (
         !selfHasFour &&
         (skipStoneThreshold || stoneCountAfter >= VCT_STONE_THRESHOLD)
@@ -100,6 +102,7 @@ self.onmessage = async (event: MessageEvent<ReviewEvalRequest>) => {
         if (oppVCT) {
           forcedLossType = oppVCT.isForbiddenTrap ? "forbidden-trap" : "vct";
           forcedLossSequence = oppVCT.sequence;
+          forcedLossTree = oppVCT.tree;
         }
       }
 
@@ -108,6 +111,7 @@ self.onmessage = async (event: MessageEvent<ReviewEvalRequest>) => {
         moveIndex,
         forcedLossType,
         forcedLossSequence,
+        forcedLossTree,
       };
       self.postMessage(response);
       return;

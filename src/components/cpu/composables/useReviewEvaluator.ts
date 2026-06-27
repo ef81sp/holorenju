@@ -187,6 +187,7 @@ export function useReviewEvaluator(): UseReviewEvaluatorReturn {
           if (data.forcedLossType) {
             item.forcedLossType = data.forcedLossType;
             item.forcedLossSequence = data.forcedLossSequence;
+            item.forcedLossTree = data.forcedLossTree;
             onVCTResult?.(item.moveIndex, data);
           }
         },
@@ -234,6 +235,8 @@ export function useReviewEvaluator(): UseReviewEvaluatorReturn {
               ) {
                 data.forcedLossType = oldResult.forcedLossType;
                 data.forcedLossSequence = oldResult.forcedLossSequence;
+                data.forcedLossBranches = oldResult.forcedLossBranches;
+                data.forcedLossTree = oldResult.forcedLossTree;
               }
               results[idx] = data;
             }

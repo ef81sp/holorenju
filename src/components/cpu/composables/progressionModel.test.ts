@@ -346,6 +346,103 @@ describe("buildRows (詰み木モード #22)", () => {
   });
 });
 
+describe("buildRows 被詰タブ詰み木モード (#26)", () => {
+  /**
+   * 被詰タブ用の eval を組み立てる:
+   * - moveIndex=10: プレイヤー実着手 pos(5,5) で被詰確定
+   * - 相手攻め手 pos(0,0) → 防御2件: 主筋 pos(1,1)→pos(2,2)終端 / 代替 pos(8,8)→pos(9,9)終端
+   */
+  function tabWithLossTree(): ProgressionTab {
+    return buildTopTabs(
+      evaluatedMove({
+        moveIndex: 10,
+        position: pos(5, 5),
+        forcedLossType: "vct",
+        forcedLossSequence: [pos(0, 0), pos(1, 1), pos(2, 2)],
+        forcedLossTree: {
+          attackerMove: pos(0, 0),
+          defenses: [
+            {
+              defenderMove: pos(1, 1),
+              next: { attackerMove: pos(2, 2), defenses: [] },
+            },
+            {
+              defenderMove: pos(8, 8),
+              next: { attackerMove: pos(9, 9), defenses: [] },
+            },
+          ],
+        },
+      }),
+      10,
+    ).find((t) => t.id === "loss")!;
+  }
+
+  it("被詰タブに tree が乗り、attackerIsSelf=false / leadingPlayerMove が前置される", () => {
+    const tab = tabWithLossTree();
+    expect(tab.tree).toBeDefined();
+    expect(tab.attackerIsSelf).toBe(false);
+    expect(tab.leadingPlayerMove?.position).toEqual(pos(5, 5));
+    expect(tab.leadingPlayerMove?.isSelf).toBe(true);
+    // tree モードでは flat 経路を抑制
+    expect(tab.branches).toEqual([]);
+  });
+
+  it("先頭の実着手・攻め手の isSelf 反転・分岐行の挿入を行う", () => {
+    const rows = buildRows(tabWithLossTree(), {});
+    // [leading(self), attacker(opp), branch, defender(self)] のはず（既定 best 選択で末端も入る）
+    expect(rows.map((r) => r.type)).toEqual(["move", "move", "branch", "move"]);
+    // leading: 実着手 pos(5,5) で自分・moveNum=10
+    expect(rows[0]?.type === "move" && rows[0].item.position).toEqual(
+      pos(5, 5),
+    );
+    expect(rows[0]?.type === "move" && rows[0].item.isSelf).toBe(true);
+    expect(rows[0]?.type === "move" && rows[0].item.moveNum).toBe(10);
+    // 攻め手: 相手 pos(0,0)・moveNum=11
+    expect(rows[1]?.type === "move" && rows[1].item.position).toEqual(
+      pos(0, 0),
+    );
+    expect(rows[1]?.type === "move" && rows[1].item.isSelf).toBe(false);
+    expect(rows[1]?.type === "move" && rows[1].item.moveNum).toBe(11);
+    // 分岐行: 防御2件・moveNum=12（プレイヤー視点で自分の手）
+    expect(
+      rows[2]?.type === "branch" && rows[2].options.map((o) => o.id),
+    ).toEqual(["best", "1"]);
+    expect(rows[2]?.type === "branch" && rows[2].moveNum).toBe(12);
+    expect(rows[2]?.type === "branch" && rows[2].options[0]?.item.isSelf).toBe(
+      true,
+    );
+    // 主筋末端: 相手の攻め pos(2,2)・moveNum=13
+    expect(rows[3]?.type === "move" && rows[3].item.position).toEqual(
+      pos(2, 2),
+    );
+    expect(rows[3]?.type === "move" && rows[3].item.isSelf).toBe(false);
+    expect(rows[3]?.type === "move" && rows[3].item.moveNum).toBe(13);
+  });
+
+  it("代替防御を選択すると別の継続に切り替わる", () => {
+    const rows = buildRows(tabWithLossTree(), { "": "1" });
+    const last = rows[rows.length - 1];
+    expect(last?.type === "move" && last.item.position).toEqual(pos(9, 9));
+    expect(last?.type === "move" && last.item.isSelf).toBe(false);
+  });
+
+  it("forcedLossTree が無い被詰は従来通り flat 経路で表示される（回帰）", () => {
+    const eval_ = evaluatedMove({
+      moveIndex: 0,
+      position: pos(2, 2),
+      forcedLossType: "vcf",
+      forcedLossSequence: [pos(3, 3), pos(4, 4)],
+    });
+    const tab = buildTopTabs(eval_, 0).find((t) => t.id === "loss")!;
+    expect(tab.tree).toBeUndefined();
+    expect(tab.attackerIsSelf).toBeUndefined();
+    expect(tab.leadingPlayerMove).toBeUndefined();
+    // flat 経路: basePV から行が組み立てられる
+    const rows = buildRows(tab, {});
+    expect(rows.length).toBeGreaterThan(0);
+  });
+});
+
 describe("buildVisibleItems", () => {
   it("move 行と branch 行の選択オプションを upToRowIdx まで集める", () => {
     const tab = buildTopTabs(
