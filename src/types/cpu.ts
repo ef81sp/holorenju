@@ -58,6 +58,13 @@ export interface DifficultyParams {
   timeLimit: number;
   /** ランダム要素（0-1、0で完全決定論的） */
   randomFactor: number;
+  /**
+   * |wasmResult.score| >= この閾値ならランダム化をスキップする。
+   * 活三 OPEN_THREE=1000、止め四 FOUR=1500 を基準に決める。
+   * undefined のときは脅威があってもランダム化される（Lv1 = 三を見逃しうる）。
+   * Lv2 以上はここを設定して「ランダムが発動しても活三以上の脅威は防ぐ」状態にする。
+   */
+  randomCriticalScoreThreshold?: number;
   /** ノード数上限（探索の打ち切り条件） */
   maxNodes: number;
   /** 評価オプション（重い機能の有効/無効） */
@@ -77,9 +84,15 @@ export interface DifficultyParams {
  */
 export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
   beginner: {
-    depth: 2, // depth 2 で easyとの差はrandomFactor/機能で付ける
-    timeLimit: 1500,
-    randomFactor: 0.25, // 25%で悪手
+    // 「初心者でほぼ毎回勝てる」想定。詰みが正確すぎたため弱体化:
+    // - depth 1: 1手読みで四追いの連続詰みを発見できなくする
+    // - randomFactor 0.3: 30% の確率で近傍空き点からランダム選択（三も時々見逃す）
+    // - randomCriticalScoreThreshold: 未設定（脅威があってもランダム化される）
+    // - enableMandatoryDefense: true: 評価関数が中央付近に寄り、辺境への bestMove を防ぐ
+    //   （防御を切ると bestMove 自体が辺境に飛ぶ → ランダム近傍化が無意味化する）
+    depth: 1,
+    timeLimit: 1000,
+    randomFactor: 0.3,
     maxNodes: 30000,
     evaluationOptions: {
       enableFukumi: false,
@@ -88,34 +101,41 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
       enableMultiThreat: false,
       enableCounterFour: false,
       enableVCT: false,
-      enableMandatoryDefense: true, // 活四/活三への最低限の防御（強化）
-      enableSingleFourPenalty: true, // 無駄な四を減らす（強化）
-      singleFourPenaltyMultiplier: 0.6, // 40%減点
+      enableMandatoryDefense: true,
+      enableSingleFourPenalty: true,
+      singleFourPenaltyMultiplier: 0.6,
       enableMiseThreat: false,
       enableDoubleThreeThreat: false,
       enableNullMovePruning: false,
       enableFutilityPruning: false,
       enableForbiddenVulnerability: false,
     },
-    scoreThreshold: 400, // ランダム選択幅（easyより広め）
+    scoreThreshold: 400, // 現状未配線（将来的に候補手フィルタを実装する場合に使う）
   },
   easy: {
-    depth: 2,
-    timeLimit: 2000,
-    randomFactor: 0.12, // 12%で悪手
-    maxNodes: 100000, // 探索予算倍増
+    // depth 1: 連続四（四追い）を読めなくする。
+    // Lv1 との差別化は randomCriticalScoreThreshold / enableDoubleThreeThreat 等で確保。
+    depth: 1,
+    timeLimit: 1500,
+    randomFactor: 0.18, // 18%で近傍ランダム（活三以上の脅威時はスキップされる）
+    randomCriticalScoreThreshold: 800, // 活三 OPEN_THREE=1000 以上の脅威はランダム時もスキップ
+    maxNodes: 60000,
     evaluationOptions: {
       enableFukumi: false,
-      enableMise: true, // 計算コスト低で戦術認識向上（medium-easy格差対策）
+      // 追詰／禁手追込を能動的に使わせない:
+      // - enableMise: false（ミセ=四三・連続四の起点）
+      // - enableCounterFour: false（四返しの攻撃起点）
+      // - enableVCT/enableForbiddenTrap: false（直接機能。元から無効）
+      enableMise: false,
       enableForbiddenTrap: false,
-      enableMultiThreat: true, // 計算コスト低で戦術認識向上（medium-easy格差対策）
-      enableCounterFour: true, // カウンターフォー認識（強化）
+      enableMultiThreat: true, // 複数方向脅威の認識（配置評価。攻撃起点ではない）
+      enableCounterFour: false,
       enableVCT: false,
-      enableMandatoryDefense: true, // 致命的ミスを減らす
-      enableSingleFourPenalty: true, // 無駄な四を減らす
-      singleFourPenaltyMultiplier: 0.4, // 60%減点（より厳しく）
-      enableMiseThreat: true, // ミセ手脅威への防御（強化）
-      enableDoubleThreeThreat: true, // 三三脅威への防御（強化）
+      enableMandatoryDefense: true, // 致命的ミスを減らす（活四/活三防御は維持）
+      enableSingleFourPenalty: true,
+      singleFourPenaltyMultiplier: 0.4, // 60%減点。四は打つが優先度は低め
+      enableMiseThreat: false, // ミセ手脅威への防御は切る（攻撃トラップに引っかかる余地）
+      enableDoubleThreeThreat: true, // 三三脅威への防御（致命的なので維持）
       enableNullMovePruning: false,
       enableFutilityPruning: false,
       enableForbiddenVulnerability: false,
@@ -125,15 +145,17 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
   medium: {
     depth: 3,
     timeLimit: 5000, // TPE対策
-    randomFactor: 0.08, // 8%で悪手
+    randomFactor: 0.1, // 10%で悪手（Lv4 との差別化のため微増）
+    randomCriticalScoreThreshold: 800, // 活三以上の脅威はランダム時もスキップ
     maxNodes: 200000,
     evaluationOptions: {
       enableFukumi: false, // 探索効率を優先
-      enableMise: true,
+      // 追詰関連を切る（Lv4 との差別化）
+      enableMise: false,
       enableForbiddenTrap: false,
       enableMultiThreat: true,
       enableCounterFour: true,
-      enableVCT: true,
+      enableVCT: false,
       enableMandatoryDefense: true,
       enableSingleFourPenalty: true,
       singleFourPenaltyMultiplier: 0.3, // 70%減点に緩和（単独四にも価値を認める）
