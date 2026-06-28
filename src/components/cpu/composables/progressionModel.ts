@@ -47,8 +47,18 @@ export interface ProgressionTab {
   baseMoveNum: number;
   basePV: PVDisplayItem[];
   branches: InlineBranch[];
-  /** 詰み木（#22）。あれば buildRows は木を再帰的に展開する */
+  /** 詰み木（#22 / #26）。あれば buildRows は木を再帰的に展開する */
   tree?: ForcedWinNode;
+  /**
+   * 木モードでの攻め手の役割。`true` = 攻め=自分（追詰）、`false` = 攻め=相手（被詰）。
+   * 未指定時は `true`（追詰タブの既定）。
+   */
+  attackerIsSelf?: boolean;
+  /**
+   * 木モード時、ルート前に 1 行差し込むプレイヤー実着手（#26 被詰タブ用）。
+   * 例: 被詰タブの先頭にプレイヤー実着手を置き、その次から相手攻め手の木を展開する。
+   */
+  leadingPlayerMove?: PVDisplayItem;
 }
 
 export type Row =
@@ -287,19 +297,43 @@ export function buildTopTabs(
 
   const forcedLossPV = buildForcedLossPV(eval_, moveIndex);
   if (forcedLossPV.length > 0) {
-    result.push({
-      id: "loss",
-      label: forcedLossLabelOf(eval_) ?? "被詰",
-      sub: formatMove(eval_.position),
-      emitType: "played",
-      baseMoveNum: moveIndex,
-      basePV: forcedLossPV,
-      branches: buildInlineBranches(
-        eval_.forcedLossBranches ?? [],
-        moveIndex,
-        "loss",
-      ),
-    });
+    if (eval_.forcedLossTree) {
+      // 木モード（#26）: 先頭にプレイヤー実着手を前置し、ルートから相手攻め手を展開。
+      // baseMoveNum は moveIndex+1（実着手の次手 = 相手攻め手の手番）。
+      const leading: PVDisplayItem = {
+        isSelf: true,
+        position: eval_.position,
+        coord: formatMove(eval_.position),
+        moveNum: moveIndex,
+      };
+      result.push({
+        id: "loss",
+        label: forcedLossLabelOf(eval_) ?? "被詰",
+        sub: formatMove(eval_.position),
+        emitType: "played",
+        baseMoveNum: moveIndex + 1,
+        basePV: forcedLossPV,
+        branches: [],
+        tree: eval_.forcedLossTree,
+        attackerIsSelf: false,
+        leadingPlayerMove: leading,
+      });
+    } else {
+      // フラット経路（VCF 被詰など線形ケース、または木が無い場合のフォールバック）
+      result.push({
+        id: "loss",
+        label: forcedLossLabelOf(eval_) ?? "被詰",
+        sub: formatMove(eval_.position),
+        emitType: "played",
+        baseMoveNum: moveIndex,
+        basePV: forcedLossPV,
+        branches: buildInlineBranches(
+          eval_.forcedLossBranches ?? [],
+          moveIndex,
+          "loss",
+        ),
+      });
+    }
   }
 
   return result;
@@ -322,7 +356,16 @@ export function buildRows(
   selection: Record<string, string>,
 ): Row[] {
   if (tab.tree) {
-    return walkTree(tab, tab.tree, selection);
+    const rows: Row[] = [];
+    if (tab.leadingPlayerMove) {
+      rows.push({
+        type: "move",
+        key: `${tab.id}-lead`,
+        item: tab.leadingPlayerMove,
+      });
+    }
+    rows.push(...walkTree(tab, tab.tree, selection));
+    return rows;
   }
   return buildRowsFlat(tab, selection);
 }
@@ -349,6 +392,8 @@ function walkTree(
   selection: Record<string, string>,
 ): Row[] {
   const rows: Row[] = [];
+  const attackerIsSelf = tab.attackerIsSelf ?? true;
+  const defenderIsSelf = !attackerIsSelf;
 
   const walk = (
     node: ForcedWinNode,
@@ -359,11 +404,11 @@ function walkTree(
     if (depth >= MAX_WALK_DEPTH) {
       return;
     }
-    // 攻め手（ply 偶数 = self）
+    // 攻め手（ply 偶数 = 攻め手番）。isSelf は tab.attackerIsSelf で反転可。
     rows.push({
       type: "move",
       key: `${tab.id}-m-${pathKey}-${ply}`,
-      item: moveItem(node.attackerMove, ply % 2 === 0, tab.baseMoveNum + ply),
+      item: moveItem(node.attackerMove, attackerIsSelf, tab.baseMoveNum + ply),
     });
     if (node.defenses.length === 0) {
       return;
@@ -374,7 +419,11 @@ function walkTree(
       rows.push({
         type: "move",
         key: `${tab.id}-m-${pathKey}-${defPly}`,
-        item: moveItem(d.defenderMove, false, tab.baseMoveNum + defPly),
+        item: moveItem(
+          d.defenderMove,
+          defenderIsSelf,
+          tab.baseMoveNum + defPly,
+        ),
       });
       walk(d.next, pathKey, ply + 2, depth + 1);
       return;
@@ -382,7 +431,7 @@ function walkTree(
     // 分岐: 防御2件以上
     const options = node.defenses.map((d, idx) => ({
       id: idx === 0 ? "best" : String(idx),
-      item: moveItem(d.defenderMove, false, tab.baseMoveNum + defPly),
+      item: moveItem(d.defenderMove, defenderIsSelf, tab.baseMoveNum + defPly),
     }));
     rows.push({
       type: "branch",

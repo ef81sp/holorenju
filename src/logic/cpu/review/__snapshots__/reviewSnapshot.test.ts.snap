@@ -379,6 +379,233 @@ exports[`review 戦術出力スナップショット (#37 P0) > checkForcedLoss:
       "row": 5,
     },
   ],
+  "tree": {
+    "attackerMove": {
+      "col": 9,
+      "row": 6,
+    },
+    "defenses": [
+      {
+        "defenderMove": {
+          "col": 9,
+          "row": 5,
+        },
+        "next": {
+          "attackerMove": {
+            "col": 9,
+            "row": 7,
+          },
+          "defenses": [
+            {
+              "defenderMove": {
+                "col": 9,
+                "row": 10,
+              },
+              "next": {
+                "attackerMove": {
+                  "col": 10,
+                  "row": 7,
+                },
+                "defenses": [
+                  {
+                    "defenderMove": {
+                      "col": 11,
+                      "row": 7,
+                    },
+                    "next": {
+                      "attackerMove": {
+                        "col": 8,
+                        "row": 5,
+                      },
+                      "defenses": [],
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      },
+      {
+        "defenderMove": {
+          "col": 9,
+          "row": 7,
+        },
+        "next": {
+          "attackerMove": {
+            "col": 6,
+            "row": 3,
+          },
+          "defenses": [
+            {
+              "defenderMove": {
+                "col": 5,
+                "row": 2,
+              },
+              "next": {
+                "attackerMove": {
+                  "col": 7,
+                  "row": 3,
+                },
+                "defenses": [
+                  {
+                    "defenderMove": {
+                      "col": 7,
+                      "row": 5,
+                    },
+                    "next": {
+                      "attackerMove": {
+                        "col": 8,
+                        "row": 3,
+                      },
+                      "defenses": [
+                        {
+                          "defenderMove": {
+                            "col": 9,
+                            "row": 2,
+                          },
+                          "next": {
+                            "attackerMove": {
+                              "col": 5,
+                              "row": 3,
+                            },
+                            "defenses": [],
+                          },
+                        },
+                      ],
+                    },
+                  },
+                ],
+              },
+            },
+            {
+              "defenderMove": {
+                "col": 8,
+                "row": 5,
+              },
+              "next": {
+                "attackerMove": {
+                  "col": 7,
+                  "row": 3,
+                },
+                "defenses": [
+                  {
+                    "defenderMove": {
+                      "col": 7,
+                      "row": 5,
+                    },
+                    "next": {
+                      "attackerMove": {
+                        "col": 8,
+                        "row": 3,
+                      },
+                      "defenses": [
+                        {
+                          "defenderMove": {
+                            "col": 9,
+                            "row": 2,
+                          },
+                          "next": {
+                            "attackerMove": {
+                              "col": 5,
+                              "row": 3,
+                            },
+                            "defenses": [],
+                          },
+                        },
+                      ],
+                    },
+                  },
+                ],
+              },
+            },
+            {
+              "defenderMove": {
+                "col": 10,
+                "row": 7,
+              },
+              "next": {
+                "attackerMove": {
+                  "col": 7,
+                  "row": 3,
+                },
+                "defenses": [
+                  {
+                    "defenderMove": {
+                      "col": 7,
+                      "row": 5,
+                    },
+                    "next": {
+                      "attackerMove": {
+                        "col": 8,
+                        "row": 3,
+                      },
+                      "defenses": [
+                        {
+                          "defenderMove": {
+                            "col": 9,
+                            "row": 2,
+                          },
+                          "next": {
+                            "attackerMove": {
+                              "col": 5,
+                              "row": 3,
+                            },
+                            "defenses": [],
+                          },
+                        },
+                      ],
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      },
+      {
+        "defenderMove": {
+          "col": 9,
+          "row": 10,
+        },
+        "next": {
+          "attackerMove": {
+            "col": 9,
+            "row": 7,
+          },
+          "defenses": [
+            {
+              "defenderMove": {
+                "col": 9,
+                "row": 5,
+              },
+              "next": {
+                "attackerMove": {
+                  "col": 10,
+                  "row": 7,
+                },
+                "defenses": [
+                  {
+                    "defenderMove": {
+                      "col": 11,
+                      "row": 7,
+                    },
+                    "next": {
+                      "attackerMove": {
+                        "col": 8,
+                        "row": 5,
+                      },
+                      "defenses": [],
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      },
+    ],
+  },
   "type": "vct",
 }
 `;

@@ -130,6 +130,7 @@ export function buildEvaluatedMove(
     forcedLossType: result.forcedLossType,
     forcedLossSequence: result.forcedLossSequence,
     forcedLossBranches: result.forcedLossBranches,
+    forcedLossTree: result.forcedLossTree,
     missedDoubleMise: result.missedDoubleMise,
     doubleMiseTargets: result.doubleMiseTargets,
   };
@@ -149,6 +150,7 @@ export function applyVCTResult(
     ...existing,
     forcedLossType: result.forcedLossType,
     forcedLossSequence: result.forcedLossSequence,
+    forcedLossTree: result.forcedLossTree,
   };
 }
 

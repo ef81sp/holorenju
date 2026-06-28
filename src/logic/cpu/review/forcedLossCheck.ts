@@ -56,7 +56,9 @@ export const FORCED_LOSS_VCT_OPTIONS: VCTSearchOptions = {
   timeLimit: 10_000, // 10秒上限（VCT内部のVCFがノードカウントを共有しないため maxNodes だけでは不十分）
   maxNodes: 500_000,
   vcfOptions: { maxDepth: 16, timeLimit: 3_000, maxNodes: 100_000 },
-  collectBranches: false,
+  // 被詰タブで防御分岐を木展開するための詰み木を収集する（#26）。
+  // Zig の collect-mode は時刻ベース timeLimit (vct.zig:1116/1187) で打ち切るため bulk 完走を阻害しない。
+  collectBranches: true,
 };
 
 /** 候補手検証用（verifyCandidates / verifyCandidatePVs） */
@@ -262,6 +264,7 @@ export function checkForcedLoss(
       return {
         type: oppVCT.isForbiddenTrap ? "forbidden-trap" : "vct",
         sequence: oppVCT.sequence,
+        tree: oppVCT.tree,
       };
     }
   }
