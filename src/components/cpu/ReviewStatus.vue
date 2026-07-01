@@ -20,6 +20,7 @@ interface Props {
   isEvaluating: boolean;
   completedCount: number;
   totalCount: number;
+  failedCount: number;
   accuracy: number | null;
   criticalErrors: number;
   difficulty?: CpuDifficulty;
@@ -95,6 +96,12 @@ async function copyMoveHistory(): Promise<void> {
           解析中
         </span>
         ({{ props.completedCount }}/{{ props.totalCount }})
+        <span
+          v-if="props.failedCount > 0"
+          class="failed-inline"
+        >
+          / 失敗 {{ props.failedCount }}
+        </span>
       </span>
     </div>
 
@@ -112,6 +119,13 @@ async function copyMoveHistory(): Promise<void> {
         class="errors"
       >
         ミス {{ props.criticalErrors }}回
+      </div>
+      <div
+        v-if="props.failedCount > 0"
+        class="failed"
+        role="status"
+      >
+        解析失敗 {{ props.failedCount }}手
       </div>
     </div>
   </div>
@@ -248,5 +262,17 @@ async function copyMoveHistory(): Promise<void> {
   padding: var(--size-2) var(--size-6);
   background: var(--color-background-secondary);
   border-radius: var(--size-4);
+}
+
+.failed {
+  font-size: var(--size-12);
+  color: var(--color-miko-primary);
+  padding: var(--size-2) var(--size-6);
+  background: var(--color-background-secondary);
+  border-radius: var(--size-4);
+}
+
+.failed-inline {
+  color: var(--color-miko-primary);
 }
 </style>

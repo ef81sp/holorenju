@@ -60,7 +60,10 @@ export const REVIEW_PROFILE_PRECISE = {
 /** 振り返り用VCT探索パラメータ（forcedWin表示用、分岐収集あり） */
 export const REVIEW_VCT_OPTIONS_WITH_BRANCHES: VCTSearchOptions = {
   maxDepth: 6,
-  timeLimit: Infinity,
+  // timeLimit を Infinity にすると、maxNodes 500_000 が消化されない密局面で
+  // 単発タスクが 60-120s に伸び、pool のスループットを潰す。#104
+  // 10s を超える場合は VCT を表示しない（forcedWin sequence は minimax PV にフォールバック）。
+  timeLimit: 10_000,
   maxNodes: 500_000,
   vcfOptions: {
     maxDepth: 16,

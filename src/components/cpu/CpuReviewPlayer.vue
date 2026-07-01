@@ -362,6 +362,7 @@ function handleLayoutClick(event: MouseEvent): void {
             :is-evaluating="evaluator.isEvaluating.value"
             :completed-count="evaluator.completedCount.value"
             :total-count="evaluator.totalCount.value"
+            :failed-count="evaluator.failedCount.value"
             :accuracy="reviewStore.playerAccuracy"
             :critical-errors="reviewStore.criticalErrors"
             :difficulty="reviewStore.currentRecord?.difficulty"

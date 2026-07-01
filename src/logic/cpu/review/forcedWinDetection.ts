@@ -73,7 +73,10 @@ function findVCTByFirstMoveIteration(
   const threats = findThreatMoves(board, color);
   const perMoveOptions: VCTSearchOptions = {
     ...options,
-    timeLimit: Infinity,
+    // 元は Infinity。密局面で maxNodes が消化されず単発タスクが 60-120s に伸びる
+    // 問題の対策 (#104)。fallback iteration 全体では複数手ぶん時間が積み上がるので、
+    // 1 手あたりは短めに切る。
+    timeLimit: 5_000,
     maxNodes: VCT_FALLBACK_MAX_NODES,
     vcfOptions: {
       ...options.vcfOptions,
