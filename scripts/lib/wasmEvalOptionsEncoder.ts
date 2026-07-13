@@ -8,6 +8,10 @@
  * ビットレイアウトと食い違う事故になる。scripts/lib/ 配下のファイルは常に現行
  * リポジトリのファイルとして解決されるため、相対 import であればこの事故が起きない。
  *
+ * ただし `EvalBasis` 型（下記 import）は **type-only**（`import type`）なので実行時に
+ * 消える。register-loader の worktree 張り替えは実行時の値解決にのみ影響するため、
+ * 型だけを `@/` 経由で共有してもこの事故は起きない（値を import する場合と区別すること）。
+ *
  * src/logic/cpu/wasm/searchEngine.ts の `encodeEvalOptions` と同じビットレイアウトを
  * 維持すること。等価性は scripts/lib/wasmEvalOptionsEncoder.test.ts で固定している。
  *
@@ -18,6 +22,8 @@
  *   bit 17:     enable_leaf_mise（現在は未使用）
  *   bit 18:     eval_basis（evalBasis === "prospect" のとき1、それ以外0=legacy）
  */
+import type { EvalBasis } from "@/logic/cpu/evaluation/patternScores";
+
 export interface WasmEvalOptionsInput {
   enableMise?: boolean;
   enableForbiddenTrap?: boolean;
@@ -31,7 +37,7 @@ export interface WasmEvalOptionsInput {
   enableMiseThreat?: boolean;
   enableDoubleThreeThreat?: boolean;
   enableForbiddenVulnerability?: boolean;
-  evalBasis?: "legacy" | "prospect";
+  evalBasis?: EvalBasis;
 }
 
 export function encodeEvalOptionsForWasm(opts: WasmEvalOptionsInput): number {

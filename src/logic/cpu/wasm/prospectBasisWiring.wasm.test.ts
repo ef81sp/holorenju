@@ -196,21 +196,41 @@ describe("クロスレイアウト整合性: findBestMove(abort) と evaluateBoa
    * abortEvalOptions 経由）がそのままスコアとして返る（実挙動を検証済み、
    * 候補手はムーブオーダリング依存だが result.position から読み取れる）。
    *
-   * このとき is_maximizing=false（探索候補手を打った側=black の相手番）で abort する
-   * ため、last_mover_is_perspective は .yes（= 直前に black=perspective が着手した）
-   * になる。よって「候補手を反映した局面」に対して
-   * evaluateBoard(black, { lastMoverIsPerspective: true, evalBasis }) を呼べば
-   * 探索経路の timeout スコアと厳密に一致するはずである（legacy/prospect 両方で検証）。
+   * このとき is_maximizing=false（探索候補手を打った側=black の相手番）で abort する。
+   *
+   * **legacy と prospect で stm 供給が非対称**（minimax.zig abortEvalOptions の仕様）:
+   *   - prospect: is_maximizing=false から last_mover_is_perspective=.yes を導出する
+   *     （= 直前に black=perspective が着手した）。
+   *   - legacy: abortEvalOptions は ctx.board_eval_options を無変更で返すため、
+   *     実際には既定値の .unset のまま評価される（legacy の TEMPO 割引を新規発火
+   *     させないための意図的な仕様。Elo を変えないことが目的）。
+   * buildFourHeavyBoard は活三（openThree）を持たない TEMPO-neutral な局面
+   * （死四のみ・open_three_score=0）のため、.unset で評価しても .yes と数値上
+   * 一致してしまう可能性があるが、テストは「実際に供給される stm」である
+   * .unset（lastMoverIsPerspective: undefined）を legacy 側の期待値として明示する
+   * （.yes を渡すと TEMPO-neutral な局面でのみ偶然一致する脆いテストになるため）。
    */
-  it.each(["legacy", "prospect"] as const)(
-    "%s: findBestMove(maxNodes=1) のスコアは、候補手を反映した局面への evaluateBoard(lastMover=yes) と一致する",
-    async (evalBasis) => {
+  it.each([
+    {
+      evalBasis: "legacy" as const,
+      flags: 0,
+      // legacy の abort 経路は stm 未供給（.unset）のまま評価される。
+      expectedLastMoverIsPerspective: undefined,
+    },
+    {
+      evalBasis: "prospect" as const,
+      flags: 1 << 18,
+      // prospect のみ is_maximizing=false から .yes を導出する。
+      expectedLastMoverIsPerspective: true,
+    },
+  ])(
+    "$evalBasis: findBestMove(maxNodes=1) のスコアは、候補手を反映した局面への evaluateBoard と一致する",
+    async ({ evalBasis, flags, expectedLastMoverIsPerspective }) => {
       const wasm = await loadWasmModule();
       const engine = new WasmSearchEngine(wasm);
       const evaluator = new WasmBoardEvaluator(wasm);
       const board = buildFourHeavyBoard();
 
-      const flags = evalBasis === "prospect" ? 1 << 18 : 0;
       engine.clearTT();
       const result = engine.findBestMoveWithParams(
         board,
@@ -229,7 +249,7 @@ describe("クロスレイアウト整合性: findBestMove(abort) と evaluateBoa
         boardAfterCandidateMove,
         "black",
         {
-          lastMoverIsPerspective: true,
+          lastMoverIsPerspective: expectedLastMoverIsPerspective,
           evalBasis: evalBasis === "prospect" ? "prospect" : undefined,
         },
       );

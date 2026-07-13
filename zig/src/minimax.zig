@@ -336,6 +336,15 @@ fn threatProbe(
 /// last_mover_is_perspective を上書きする（prospect は stm 供給が仕様のため）。
 /// legacy のときは ctx.board_eval_options を無変更で返す — legacy パスの
 /// 挙動・Elo を一切変えないため（TEMPO 割引が新たに発火してはならない）。
+///
+/// **stm 供給ルールの非対称性（quiescence.zig と対比）**: quiescence.zig の
+/// quiescenceSearch は legacy/prospect どちらでも常時 is_maximizing から
+/// last_mover_is_perspective を導出する（既存挙動・変更なし）。一方この
+/// abortEvalOptions は **prospect のみ** stm を供給し、legacy は常に
+/// ctx.board_eval_options（既定 .unset）のまま――legacy の TEMPO 割引を
+/// minimax の abort 経路で新規発火させないための P1 実装決定。同じ「静的評価」
+/// でも呼び出し元（minimax の abort 分岐 / quiescence の stand-pat）で stm 供給
+/// ルールが異なる点に注意。
 fn abortEvalOptions(ctx: *SearchContext, is_maximizing: bool) evaluate.EvalOptions {
     if (ctx.board_eval_options.eval_basis != .prospect) return ctx.board_eval_options;
     var opts = ctx.board_eval_options;

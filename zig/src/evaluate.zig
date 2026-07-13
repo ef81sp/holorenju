@@ -401,7 +401,8 @@ pub fn evaluateBoardOnCells(
     options: EvalOptions,
 ) i32 {
     if (options.eval_basis == .prospect) {
-        prospect.ensureTables();
+        // evaluateFull が冒頭で ensureTables() を呼ぶため、ここでは呼ばない
+        // （incremental_eval.getEvaluation の switch ディスパッチャと呼び出し規約を揃える）。
         return prospect.evaluateFull(cells, perspective, stmModeFromLastMover(options.last_mover_is_perspective));
     }
 
@@ -707,12 +708,12 @@ test "stmModeFromLastMover: yes/no/unset の変換" {
 }
 
 test "evaluateBoardOnCells: eval_basis=.prospect のとき prospect.evaluateFull と一致する" {
-    ll.init();
+    // prospect 経路は cells のみを読み bitboard 同期を前提としないため
+    // bitboard.initFromCells は不要（evaluateFull のドキュメント参照）。
     var cells = [_]Cell{.empty} ** CELL_COUNT;
     cells[7 * BOARD_SIZE + 6] = .black;
     cells[7 * BOARD_SIZE + 7] = .black;
     cells[7 * BOARD_SIZE + 8] = .black;
-    bitboard.initFromCells(&cells);
 
     const opts = EvalOptions{
         .enable_leaf_mise = false,

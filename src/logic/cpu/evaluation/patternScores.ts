@@ -180,6 +180,14 @@ export function registerRebuildPackedTables(fn: () => void): void {
 }
 
 /**
+ * 葉評価の基底（デフォルト: undefined=legacy、後方互換）。
+ * "prospect" = 空点プロスペクト基底（docs/plans/eval-basis-prospect-2026-07-13.md）。
+ * EvaluationOptions.evalBasis / LeafEvaluationOptions.evalBasis /
+ * scripts/lib/wasmEvalOptionsEncoder.ts の3箇所が参照する単一の型（SSoT）。
+ */
+export type EvalBasis = "legacy" | "prospect";
+
+/**
  * 評価オプション
  * 重い評価処理を難易度に応じて有効/無効化する
  */
@@ -221,11 +229,8 @@ export interface EvaluationOptions {
   precomputedThreats?: ThreatInfo;
   /** パターンスコアのオーバーライド値（SPSAチューニング用） */
   patternScoreOverrides?: Partial<PatternScoreValues>;
-  /**
-   * 葉評価の基底（デフォルト: undefined=legacy、後方互換）。
-   * "prospect" = 空点プロスペクト基底（docs/plans/eval-basis-prospect-2026-07-13.md）。
-   */
-  evalBasis?: "legacy" | "prospect";
+  /** 葉評価の基底（デフォルト: undefined=legacy、後方互換）。EvalBasis 参照。 */
+  evalBasis?: EvalBasis;
 }
 
 /**
@@ -345,11 +350,8 @@ export interface LeafEvaluationOptions {
   lastMoverIsPerspective?: boolean;
   /** 末端ミセ手脅威検出を有効にするか（デフォルト: false、後方互換） */
   enableLeafMise?: boolean;
-  /**
-   * 葉評価の基底（デフォルト: undefined=legacy、後方互換）。
-   * "prospect" = 空点プロスペクト基底（docs/plans/eval-basis-prospect-2026-07-13.md）。
-   */
-  evalBasis?: "legacy" | "prospect";
+  /** 葉評価の基底（デフォルト: undefined=legacy、後方互換）。EvalBasis 参照。 */
+  evalBasis?: EvalBasis;
 }
 
 /**

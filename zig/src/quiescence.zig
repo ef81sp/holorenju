@@ -353,6 +353,12 @@ pub fn quiescenceSearch(
     // フィールドコピー（旧: 手動リテラル）ではなく eval_options を丸ごと引き継いで
     // last_mover_is_perspective だけ上書きする。これにより eval_basis 等の新規
     // フィールドが将来追加されても取りこぼさない（§3.3 の「手動コピーの罠」対応）。
+    //
+    // stm 供給ルール: ここは legacy/prospect どちらでも常時 is_maximizing から
+    // last_mover_is_perspective を導出する（既存挙動、変更なし）。minimax.zig の
+    // abortEvalOptions（打ち切り時の静的評価）は prospect のみ stm を供給し legacy は
+    // .unset のまま――同じ「静的評価」でも呼び出し元によって stm 供給ルールが非対称な
+    // ことに注意（minimax.zig の abortEvalOptions のコメント参照）。
     var eval_opts = eval_options;
     eval_opts.last_mover_is_perspective = if (!is_maximizing) .yes else .no;
 
