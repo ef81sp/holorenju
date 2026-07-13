@@ -40,6 +40,16 @@ export interface WasmModuleContext {
   // Board evaluation
   evaluateBoard: (perspective: number, optionsFlags: number) => number;
 
+  // eval 重み実行時注入（id 0-8=legacy, 100〜=prospect。bench/回帰スクリプト用）
+  getEvalParam: (id: number) => number;
+
+  // 空点プロスペクト特徴ベクトル抽出（P3 の Texel 回帰用特徴ダンプ）
+  extractProspectFeatures: (
+    perspective: number,
+    stmIsPerspective: number,
+  ) => number;
+  getProspectFeatureBuffer: () => number;
+
   // Search
   findBestMove: (
     color: number,

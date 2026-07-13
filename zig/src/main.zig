@@ -5,6 +5,7 @@ const forbidden = @import("forbidden.zig");
 const ft = @import("forced_win_tree.zig");
 const jump_patterns = @import("jump_patterns.zig");
 const patterns = @import("patterns.zig");
+const prospect = @import("prospect.zig");
 const search = @import("search.zig");
 const position_eval = @import("position_eval.zig");
 const scores_mod = @import("scores.zig");
@@ -43,17 +44,70 @@ export fn wasmGetPatternScore(count: u8, end1: u8, end2: u8) i32 {
 }
 
 // --- eval 重み実行時注入（bench 専用。重みごとリビルド不要にする） ---
+//
+// id 空間: 0-8 は legacy（scores.EvalParamId）、100〜100+PROSPECT_PARAM_COUNT-1 は
+// 空点プロスペクト基底の重み（prospect.setProspectParam/getProspectParam、
+// id-100 = offset = カテゴリ*2+手番か）。id>=100 は prospect 側にルーティングする。
+const PROSPECT_PARAM_ID_BASE: u32 = 100;
+
 export fn setEvalParam(id: u32, value: i32) void {
+    if (id >= PROSPECT_PARAM_ID_BASE) {
+        prospect.setProspectParam(id - PROSPECT_PARAM_ID_BASE, value);
+        return;
+    }
     scores_mod.setEvalParam(id, value);
 }
 export fn getEvalParam(id: u32) i32 {
+    if (id >= PROSPECT_PARAM_ID_BASE) {
+        return prospect.getProspectParam(id - PROSPECT_PARAM_ID_BASE);
+    }
     return scores_mod.getEvalParam(id);
 }
 export fn resetEvalParams() void {
     scores_mod.resetEvalParams();
+    prospect.resetProspectScores();
 }
 export fn getEvalParamName(id: u32) [*:0]const u8 {
+    if (id >= PROSPECT_PARAM_ID_BASE) {
+        return prospect.getProspectParamName(id - PROSPECT_PARAM_ID_BASE);
+    }
     return scores_mod.getEvalParamName(id);
+}
+
+// --- 空点プロスペクト特徴ベクトル抽出（P3 の Texel 回帰用特徴ダンプ） ---
+
+/// 特徴ベクトルバッファ（PROSPECT_PARAM_COUNT 個 × i32、リトルエンディアン）。
+var prospect_feature_buffer: [prospect.PROSPECT_PARAM_COUNT * 4]u8 = .{0} ** (prospect.PROSPECT_PARAM_COUNT * 4);
+
+export fn getProspectFeatureBuffer() [*]u8 {
+    return &prospect_feature_buffer;
+}
+
+/// 現在の盤面(board_cells)について空点プロスペクト特徴ベクトルを抽出し、
+/// getProspectFeatureBuffer() に little-endian i32 × PROSPECT_PARAM_COUNT で書き込む。
+/// 返り値は要素数(PROSPECT_PARAM_COUNT)。
+///
+/// stm_is_perspective: 1=perspective手番、0=相手手番の2値のみ対応。
+/// evaluate.EvalOptions.last_mover_is_perspective の unset（両手番平均）に相当する
+/// stm は本 export では非対応（回帰時は教師局面ごとに手番既知が前提のため。
+/// 必要なら stm_is_perspective=1/0 の2回呼び出しを呼び出し側で平均する）。
+export fn extractProspectFeatures(perspective: u8, stm_is_perspective: u8) u32 {
+    var features: [prospect.PROSPECT_PARAM_COUNT]i32 = undefined;
+    prospect.extractFeatures(
+        &board.board_cells,
+        @enumFromInt(perspective),
+        stm_is_perspective != 0,
+        &features,
+    );
+    for (features, 0..) |val, i| {
+        const bytes: [4]u8 = @bitCast(val);
+        const base = i * 4;
+        prospect_feature_buffer[base] = bytes[0];
+        prospect_feature_buffer[base + 1] = bytes[1];
+        prospect_feature_buffer[base + 2] = bytes[2];
+        prospect_feature_buffer[base + 3] = bytes[3];
+    }
+    return prospect.PROSPECT_PARAM_COUNT;
 }
 export fn wasmGetPatternType(count: u8, end1: u8, end2: u8) u8 {
     return patterns.wasmGetPatternType(count, end1, end2);

@@ -13,6 +13,7 @@ import { describe, expect, it } from "vitest";
 
 import type { BoardState } from "@/types/game";
 
+import { boardStateToWasm } from "./boardAdapter";
 import { WasmBoardEvaluator } from "./bridge";
 import { loadWasmModule } from "./loader";
 import { WasmSearchEngine } from "./searchEngine";
@@ -236,6 +237,52 @@ describe("クロスレイアウト整合性: findBestMove(abort) と evaluateBoa
       expect(result.score).toBe(directScore);
     },
   );
+});
+
+// ────────────────────────────────────────────────
+// extractProspectFeatures（P1-d、P3 特徴ダンプ用 export のスモークテスト）
+// ────────────────────────────────────────────────
+
+describe("extractProspectFeatures: 特徴ベクトルの内積が evaluateBoard(prospect) と一致する", () => {
+  it.each([
+    { stmIsPerspective: 1, lastMoverIsPerspective: false },
+    { stmIsPerspective: 0, lastMoverIsPerspective: true },
+  ])(
+    "stmIsPerspective=$stmIsPerspective のとき内積とevaluateBoardが一致する",
+    async ({ stmIsPerspective, lastMoverIsPerspective }) => {
+      const wasm = await loadWasmModule();
+      const evaluator = new WasmBoardEvaluator(wasm);
+      const board = buildFourThreeBoard();
+
+      boardStateToWasm(wasm, board);
+      const count = wasm.extractProspectFeatures(1, stmIsPerspective);
+      expect(count).toBe(34);
+
+      const ptr = wasm.getProspectFeatureBuffer();
+      const view = new DataView(wasm.memory.buffer);
+      let dot = 0;
+      for (let i = 0; i < count; i++) {
+        const x = view.getInt32(ptr + i * 4, true);
+        const w = wasm.getEvalParam(100 + i);
+        dot += x * w;
+      }
+
+      const prospectScore = evaluator.evaluateBoard(board, "black", {
+        evalBasis: "prospect",
+        lastMoverIsPerspective,
+      });
+
+      expect(dot).toBe(prospectScore);
+      expect(Math.abs(dot)).toBeLessThan(PROSPECT_EVAL_CLAMP);
+    },
+  );
+
+  it("要素数(34)はCAT_COUNT(17)*2と一致する", async () => {
+    const wasm = await loadWasmModule();
+    boardStateToWasm(wasm, buildFourThreeBoard());
+    const count = wasm.extractProspectFeatures(1, 1);
+    expect(count).toBe(34);
+  });
 });
 
 /* eslint-enable no-bitwise */

@@ -35,6 +35,7 @@ const std = @import("std");
 const board_mod = @import("board.zig");
 const bitboard = @import("bitboard.zig");
 const ll = @import("line_lookup.zig");
+const scores = @import("scores.zig");
 
 const Cell = board_mod.Cell;
 const BOARD_SIZE = board_mod.BOARD_SIZE;
@@ -376,8 +377,9 @@ pub fn initProspectTables() void {
     prospect_initialized = true;
 }
 
-/// カテゴリの正準名（null終端）。P1 で wasm export される前提（回帰スクリプト照合用）。
-pub fn getProspectCategoryName(cat: CellCat) [*:0]const u8 {
+/// カテゴリの正準名（sentinel終端スライス）。SSoT: getProspectCategoryName と
+/// getProspectParamName（setEvalParam の prospect id 空間用）の両方がここから名前を取る。
+fn categoryNameSlice(cat: CellCat) [:0]const u8 {
     return switch (cat) {
         .none => "NONE",
         .weak => "WEAK",
@@ -397,6 +399,11 @@ pub fn getProspectCategoryName(cat: CellCat) [*:0]const u8 {
         .double_four_white => "DOUBLE_FOUR_WHITE",
         .win => "WIN",
     };
+}
+
+/// カテゴリの正準名（null終端）。P1 で wasm export される前提（回帰スクリプト照合用）。
+pub fn getProspectCategoryName(cat: CellCat) [*:0]const u8 {
+    return categoryNameSlice(cat).ptr;
 }
 
 // ============================================================================
@@ -515,6 +522,25 @@ fn colorIndex(color: Cell) usize {
     };
 }
 
+/// 空点1点について persp 色・opp 色それぞれのセルカテゴリを求める。
+/// evaluateFull と extractFeatures が共有する（二重実装防止）。
+fn cellCategoryPair(
+    cells: []const Cell,
+    r: u8,
+    c: u8,
+    perspective: Cell,
+    opponent: Cell,
+    persp_idx: usize,
+    opp_idx: usize,
+) struct { cat_persp: usize, cat_opp: usize } {
+    const codes_persp = computeCellCodes(cells, r, c, perspective);
+    const codes_opp = computeCellCodes(cells, r, c, opponent);
+    return .{
+        .cat_persp = CELL_CAT[packCodes(codes_persp)][persp_idx],
+        .cat_opp = CELL_CAT[packCodes(codes_opp)][opp_idx],
+    };
+}
+
 /// 空点プロスペクト基底でのフル計算評価（perspective 視点）。
 ///
 /// 全空点について computeCellCodes → CELL_CAT でカテゴリを求め、
@@ -542,13 +568,10 @@ pub fn evaluateFull(cells: []const Cell, perspective: Cell, stm: StmMode) i32 {
             const c: u8 = @intCast(c_usize);
             if (cells[@as(u16, r) * BOARD_SIZE + c] != .empty) continue;
 
-            const codes_persp = computeCellCodes(cells, r, c, perspective);
-            const codes_opp = computeCellCodes(cells, r, c, opponent);
-            const cat_persp: usize = CELL_CAT[packCodes(codes_persp)][persp_idx];
-            const cat_opp: usize = CELL_CAT[packCodes(codes_opp)][opp_idx];
+            const pair = cellCategoryPair(cells, r, c, perspective, opponent, persp_idx, opp_idx);
 
-            raw_when_persp_to_move += PROSPECT_SCORE[cat_persp][1] - PROSPECT_SCORE[cat_opp][0];
-            raw_when_opp_to_move += PROSPECT_SCORE[cat_persp][0] - PROSPECT_SCORE[cat_opp][1];
+            raw_when_persp_to_move += PROSPECT_SCORE[pair.cat_persp][1] - PROSPECT_SCORE[pair.cat_opp][0];
+            raw_when_opp_to_move += PROSPECT_SCORE[pair.cat_persp][0] - PROSPECT_SCORE[pair.cat_opp][1];
         }
     }
 
@@ -559,6 +582,84 @@ pub fn evaluateFull(cells: []const Cell, perspective: Cell, stm: StmMode) i32 {
     };
 
     return std.math.clamp(raw, -PROSPECT_EVAL_CLAMP, PROSPECT_EVAL_CLAMP);
+}
+
+// ============================================================================
+// setEvalParam の prospect id 空間（id 100〜）と extractProspectFeatures 用
+// ============================================================================
+
+/// prospect パラメータの総数（CAT_COUNT × 2、[カテゴリ][手番か] のフラット総数）。
+/// main.zig の setEvalParam/getEvalParam は id>=100 をここに `id-100` でルーティングする
+/// （id 100〜100+PROSPECT_PARAM_COUNT-1）。
+pub const PROSPECT_PARAM_COUNT: u32 = @intCast(CAT_COUNT * 2);
+
+/// offset(0-based, = id-100) から [カテゴリ][手番か] のフラット名テーブル。
+/// 書式: PROSPECT_<CAT名>_TURN（手番=1）/ PROSPECT_<CAT名>_WAIT（非手番=0）。
+const PROSPECT_PARAM_NAMES: [CAT_COUNT][2][*:0]const u8 = blk: {
+    var names: [CAT_COUNT][2][*:0]const u8 = undefined;
+    for (@typeInfo(CellCat).@"enum".fields) |field| {
+        const cat: CellCat = @enumFromInt(field.value);
+        const cat_name = categoryNameSlice(cat);
+        names[field.value][0] = std.fmt.comptimePrint("PROSPECT_{s}_WAIT", .{cat_name});
+        names[field.value][1] = std.fmt.comptimePrint("PROSPECT_{s}_TURN", .{cat_name});
+    }
+    break :blk names;
+};
+
+/// offset(=id-100) の重みを設定する。範囲外は無視。
+pub fn setProspectParam(offset: u32, value: i32) void {
+    if (offset >= PROSPECT_PARAM_COUNT) return;
+    PROSPECT_SCORE[offset / 2][offset % 2] = value;
+}
+
+/// offset(=id-100) の重みを取得する。範囲外は scores.EVAL_PARAM_UNKNOWN。
+pub fn getProspectParam(offset: u32) i32 {
+    if (offset >= PROSPECT_PARAM_COUNT) return scores.EVAL_PARAM_UNKNOWN;
+    return PROSPECT_SCORE[offset / 2][offset % 2];
+}
+
+/// offset(=id-100) の正準名（null終端）。範囲外は空文字列。
+pub fn getProspectParamName(offset: u32) [*:0]const u8 {
+    if (offset >= PROSPECT_PARAM_COUNT) return "";
+    return PROSPECT_PARAM_NAMES[offset / 2][offset % 2];
+}
+
+/// 空点プロスペクト特徴ベクトルを抽出する（P3 の Texel 回帰・extractProspectFeatures export 用）。
+///
+/// out[cat*2+turn] は「カテゴリ cat・手番 turn のセルが何個あるか」の符号付き計数。
+/// persp 側の空点は該当カテゴリの turn=(stm_is_persp?1:0) を +1、opp 側の空点は
+/// turn=(stm_is_persp?0:1) を -1 する。この定義により
+/// `Σ out[i] * PROSPECT_SCORE_flat[i] == evaluateFull の対応する stm のクランプ前 raw`
+/// が成立する（stm=perspective なら stm_is_persp=true、stm=opponent なら false。
+/// average は本関数の対象外＝呼び出し側で2回呼んで平均する）。
+pub fn extractFeatures(
+    cells: []const Cell,
+    perspective: Cell,
+    stm_is_persp: bool,
+    out: *[PROSPECT_PARAM_COUNT]i32,
+) void {
+    ensureTables();
+
+    const opponent = perspective.opposite();
+    const persp_idx = colorIndex(perspective);
+    const opp_idx = colorIndex(opponent);
+    const persp_turn: usize = if (stm_is_persp) 1 else 0;
+    const opp_turn: usize = if (stm_is_persp) 0 else 1;
+
+    @memset(out, 0);
+
+    for (0..BOARD_SIZE) |r_usize| {
+        const r: u8 = @intCast(r_usize);
+        for (0..BOARD_SIZE) |c_usize| {
+            const c: u8 = @intCast(c_usize);
+            if (cells[@as(u16, r) * BOARD_SIZE + c] != .empty) continue;
+
+            const pair = cellCategoryPair(cells, r, c, perspective, opponent, persp_idx, opp_idx);
+
+            out[pair.cat_persp * 2 + persp_turn] += 1;
+            out[pair.cat_opp * 2 + opp_turn] -= 1;
+        }
+    }
 }
 
 // ============================================================================
@@ -1089,4 +1190,110 @@ test "resetProspectScores: PROSPECT_SCOREを既定値に復元する" {
     PROSPECT_SCORE[0] = .{ 9999, 9999 };
     resetProspectScores();
     try std.testing.expectEqual(PROSPECT_SCORE_DEFAULT, PROSPECT_SCORE);
+}
+
+// --- 8. setProspectParam / getProspectParam / getProspectParamName（id 100〜） ---
+
+test "setProspectParam/getProspectParam: 往復（境界 offset=0, offset=PROSPECT_PARAM_COUNT-1）" {
+    defer resetProspectScores();
+    setProspectParam(0, 12345);
+    try std.testing.expectEqual(@as(i32, 12345), getProspectParam(0));
+
+    setProspectParam(PROSPECT_PARAM_COUNT - 1, -777);
+    try std.testing.expectEqual(@as(i32, -777), getProspectParam(PROSPECT_PARAM_COUNT - 1));
+}
+
+test "getProspectParam: 範囲外(offset>=PROSPECT_PARAM_COUNT)はEVAL_PARAM_UNKNOWN" {
+    try std.testing.expectEqual(scores.EVAL_PARAM_UNKNOWN, getProspectParam(PROSPECT_PARAM_COUNT));
+}
+
+test "setProspectParam: 範囲外は無視されクラッシュしない（既存値は無傷）" {
+    defer resetProspectScores();
+    setProspectParam(PROSPECT_PARAM_COUNT, 999);
+    try std.testing.expectEqual(PROSPECT_SCORE_DEFAULT, PROSPECT_SCORE);
+}
+
+test "getProspectParamName: four_three/win の手番(TURN)・非手番(WAIT)名" {
+    const four_three_offset: u32 = @as(u32, @intFromEnum(CellCat.four_three)) * 2;
+    try std.testing.expectEqualStrings(
+        "PROSPECT_FOUR_THREE_WAIT",
+        std.mem.span(getProspectParamName(four_three_offset)),
+    );
+    try std.testing.expectEqualStrings(
+        "PROSPECT_FOUR_THREE_TURN",
+        std.mem.span(getProspectParamName(four_three_offset + 1)),
+    );
+
+    const win_offset: u32 = @as(u32, @intFromEnum(CellCat.win)) * 2;
+    try std.testing.expectEqualStrings(
+        "PROSPECT_WIN_WAIT",
+        std.mem.span(getProspectParamName(win_offset)),
+    );
+    try std.testing.expectEqualStrings(
+        "PROSPECT_WIN_TURN",
+        std.mem.span(getProspectParamName(win_offset + 1)),
+    );
+}
+
+test "getProspectParamName: 範囲外は空文字列" {
+    try std.testing.expectEqualStrings("", std.mem.span(getProspectParamName(PROSPECT_PARAM_COUNT)));
+}
+
+test "resetProspectScores: setProspectParamで汚した後も既定値に復元する" {
+    setProspectParam(0, 424242);
+    resetProspectScores();
+    try std.testing.expectEqual(PROSPECT_SCORE_DEFAULT, PROSPECT_SCORE);
+}
+
+test "setProspectParam の注入が evaluateFull に反映される（注入→評価→reset）" {
+    defer resetProspectScores();
+    var cells = [_]Cell{.empty} ** board_mod.CELL_COUNT;
+
+    // weak(手番列)を巨大化 → 空盤(全空点weak)で反映確認、かつクランプに掛かることも確認。
+    const weak_turn_offset: u32 = @as(u32, @intFromEnum(CellCat.weak)) * 2 + 1;
+    setProspectParam(weak_turn_offset, 1_000_000);
+    try std.testing.expectEqual(PROSPECT_EVAL_CLAMP, evaluateFull(&cells, .black, .perspective));
+}
+
+// --- 9. extractFeatures（P3 特徴ダンプ用） ---
+
+fn dotProduct(features: [PROSPECT_PARAM_COUNT]i32) i32 {
+    var dot: i32 = 0;
+    for (features, 0..) |x, i| {
+        dot += x * PROSPECT_SCORE[i / 2][i % 2];
+    }
+    return dot;
+}
+
+test "extractFeatures: 内積がevaluateFullのクランプ前rawと一致する（stm両値、four_threeフィクスチャ）" {
+    var cells: [board_mod.CELL_COUNT]Cell = undefined;
+    setupFourThreeFixture(&cells);
+
+    var features: [PROSPECT_PARAM_COUNT]i32 = undefined;
+
+    extractFeatures(&cells, .black, true, &features);
+    try std.testing.expectEqual(evaluateFull(&cells, .black, .perspective), dotProduct(features));
+
+    extractFeatures(&cells, .black, false, &features);
+    try std.testing.expectEqual(evaluateFull(&cells, .black, .opponent), dotProduct(features));
+}
+
+test "extractFeatures: 空盤でも内積がevaluateFullと一致する（stm両値）" {
+    var cells = [_]Cell{.empty} ** board_mod.CELL_COUNT;
+    var features: [PROSPECT_PARAM_COUNT]i32 = undefined;
+
+    extractFeatures(&cells, .black, true, &features);
+    try std.testing.expectEqual(evaluateFull(&cells, .black, .perspective), dotProduct(features));
+
+    extractFeatures(&cells, .black, false, &features);
+    try std.testing.expectEqual(evaluateFull(&cells, .black, .opponent), dotProduct(features));
+}
+
+test "extractFeatures: 白視点でも内積が一致する（反対称性の間接確認）" {
+    var cells: [board_mod.CELL_COUNT]Cell = undefined;
+    setupFourThreeFixture(&cells);
+
+    var features: [PROSPECT_PARAM_COUNT]i32 = undefined;
+    extractFeatures(&cells, .white, true, &features);
+    try std.testing.expectEqual(evaluateFull(&cells, .white, .perspective), dotProduct(features));
 }
