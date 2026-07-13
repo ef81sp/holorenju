@@ -110,6 +110,11 @@ pub const IncrementalEvalState = struct {
 
 pub var eval_state: IncrementalEvalState = .{};
 
+/// initFromBoard 時に捕捉した現在アクティブな基底。placeStone/removeStone が
+/// legacy 集計 or prospect.ProspectState のどちらを差分更新するか判定するのに使う
+/// （非アクティブ基底の差分更新はスキップし、NPS 税を回避する。P2 §3.3）。
+var active_eval_basis: evaluate.EvalBasis = .legacy;
+
 /// initFromBoard のオプション（旧: 位置引数2つ）。
 pub const InitOptions = struct {
     connectivity_bonus: i32,
@@ -117,33 +122,42 @@ pub const InitOptions = struct {
     eval_basis: evaluate.EvalBasis = .legacy,
 };
 
-/// 全石を走査してキャッシュと集計値を構築
+/// 全石を走査してキャッシュと集計値を構築。
+///
+/// `ll.init()` / `bitboard.initFromCells` は eval_basis に関わらず常に呼ぶ
+/// （move ordering・VCF/VCT・禁手判定など eval_basis に依存しない探索コンポーネントが
+/// これらのグローバル状態に依存しているため。grep で外部参照を確認済み — 詳細は
+/// P2-b の完了報告参照）。legacy 集計（cache/aggregates/line_potential）と
+/// prospect.ProspectState は**アクティブな基底のみ**構築する。
 pub fn initFromBoard(cells: []Cell, opts: InitOptions) void {
     eval_state = .{
         .connectivity_bonus = opts.connectivity_bonus,
         .single_four_penalty_multiplier = opts.single_four_penalty_multiplier,
     };
+    active_eval_basis = opts.eval_basis;
 
-    // LUT版 evaluateStonePatternsLightOnCells が bitboard を使うため同期
     ll.init();
     bitboard.initFromCells(cells);
 
-    if (opts.eval_basis == .prospect) {
-        prospect.ensureTables();
+    switch (opts.eval_basis) {
+        .prospect => {
+            prospect.ensureTables();
+            prospect.initStateFromBoard(cells);
+        },
+        .legacy => {
+            for (0..CELL_COUNT) |i| {
+                const idx: u16 = @intCast(i);
+                if (cells[idx] == .empty) continue;
+
+                eval_state.reEvaluateStone(idx, cells);
+                eval_state.addToAggregates(idx);
+            }
+
+            // Phase B: ラインポテンシャル初期化（全ライン一括集計）
+            eval_state.line_potential_black = line_potential.computeTotalGlobal(.black);
+            eval_state.line_potential_white = line_potential.computeTotalGlobal(.white);
+        },
     }
-
-    // legacy 集計の構築は基底に関わらず常に行う（スキップ最適化は P2）。
-    for (0..CELL_COUNT) |i| {
-        const idx: u16 = @intCast(i);
-        if (cells[idx] == .empty) continue;
-
-        eval_state.reEvaluateStone(idx, cells);
-        eval_state.addToAggregates(idx);
-    }
-
-    // Phase B: ラインポテンシャル初期化（全ライン一括集計）
-    eval_state.line_potential_black = line_potential.computeTotalGlobal(.black);
-    eval_state.line_potential_white = line_potential.computeTotalGlobal(.white);
 }
 
 /// 4方向 × 距離5以内の非空マスを収集（自身も含む）
@@ -183,78 +197,103 @@ pub fn collectAffectedPositions(cells: []const Cell, row: u8, col: u8, buf: *[41
     return count;
 }
 
-/// 石を配置し、影響範囲の石を差分更新
+/// 石を配置し、影響範囲を差分更新（active_eval_basis に応じて legacy 集計 or
+/// prospect.ProspectState のどちらか一方のみ更新する。cells/bitboard の更新は
+/// 基底に関わらず必須のためどちらの分岐にも含まれる）。
 pub fn placeStone(cells: []Cell, row: u8, col: u8, color: Cell) void {
     const self_idx = @as(u16, row) * BOARD_SIZE + col;
     if (VERIFY_INCREMENTAL) {
         std.debug.assert(cells[self_idx] == .empty);
     }
 
-    var buf: [41]u16 = undefined;
+    switch (active_eval_basis) {
+        .legacy => {
+            var buf: [41]u16 = undefined;
 
-    // 配置前: 既存石リストを取得（配置先は空なので含まれない）
-    const affected_count = collectAffectedPositions(cells, row, col, &buf);
+            // 配置前: 既存石リストを取得（配置先は空なので含まれない）
+            const affected_count = collectAffectedPositions(cells, row, col, &buf);
 
-    // 既存石の old scores を subtract
-    for (buf[0..affected_count]) |idx| {
-        eval_state.subtractFromAggregates(idx);
-    }
+            // 既存石の old scores を subtract
+            for (buf[0..affected_count]) |idx| {
+                eval_state.subtractFromAggregates(idx);
+            }
 
-    // Phase B: 影響を受ける 4 ラインの変更前ポテンシャルを差し引く
-    const lines_info = bitboard.CELL_LINES[self_idx];
-    subtractLinePotential(lines_info);
+            // Phase B: 影響を受ける 4 ラインの変更前ポテンシャルを差し引く
+            const lines_info = bitboard.CELL_LINES[self_idx];
+            subtractLinePotential(lines_info);
 
-    // 盤面更新
-    cells[self_idx] = color;
-    bitboard.placeStone(row, col, color);
+            // 盤面更新
+            cells[self_idx] = color;
+            bitboard.placeStone(row, col, color);
 
-    // Phase B: 変更後ポテンシャルを加える
-    addLinePotential(lines_info);
+            // Phase B: 変更後ポテンシャルを加える
+            addLinePotential(lines_info);
 
-    // 新石自身を affected リストに追加
-    buf[affected_count] = self_idx;
-    const total_count = affected_count + 1;
+            // 新石自身を affected リストに追加
+            buf[affected_count] = self_idx;
+            const total_count = affected_count + 1;
 
-    // 全 affected 石を re-eval & add
-    for (buf[0..total_count]) |idx| {
-        eval_state.reEvaluateStone(idx, cells);
-        eval_state.addToAggregates(idx);
+            // 全 affected 石を re-eval & add
+            for (buf[0..total_count]) |idx| {
+                eval_state.reEvaluateStone(idx, cells);
+                eval_state.addToAggregates(idx);
+            }
+        },
+        .prospect => {
+            // 盤面更新（prospect.updateOnPlace は更新済みの cells/bitboard を前提とする）
+            cells[self_idx] = color;
+            bitboard.placeStone(row, col, color);
+
+            prospect.updateOnPlace(cells, row, col, color);
+        },
     }
 }
 
-/// 石を除去し、影響範囲の石を差分更新
+/// 石を除去し、影響範囲を差分更新（active_eval_basis に応じて legacy 集計 or
+/// prospect.ProspectState のどちらか一方のみ更新する）。
 pub fn removeStone(cells: []Cell, row: u8, col: u8) void {
-    var buf: [41]u16 = undefined;
-
-    // 除去前: 影響石リストを取得（除去石含む）
-    const affected_count = collectAffectedPositions(cells, row, col, &buf);
-
-    // old scores を subtract
-    for (buf[0..affected_count]) |idx| {
-        eval_state.subtractFromAggregates(idx);
-    }
-
-    // 盤面更新
     const self_idx = @as(u16, row) * BOARD_SIZE + col;
 
-    // Phase B: 影響を受ける 4 ラインの変更前ポテンシャルを差し引く
-    const lines_info = bitboard.CELL_LINES[self_idx];
-    subtractLinePotential(lines_info);
+    switch (active_eval_basis) {
+        .legacy => {
+            var buf: [41]u16 = undefined;
 
-    cells[self_idx] = .empty;
-    bitboard.removeStone(row, col);
+            // 除去前: 影響石リストを取得（除去石含む）
+            const affected_count = collectAffectedPositions(cells, row, col, &buf);
 
-    // Phase B: 変更後ポテンシャルを加える
-    addLinePotential(lines_info);
+            // old scores を subtract
+            for (buf[0..affected_count]) |idx| {
+                eval_state.subtractFromAggregates(idx);
+            }
 
-    // 除去石のキャッシュをクリア
-    eval_state.cache[self_idx] = .{};
+            // Phase B: 影響を受ける 4 ラインの変更前ポテンシャルを差し引く
+            const lines_info = bitboard.CELL_LINES[self_idx];
+            subtractLinePotential(lines_info);
 
-    // 残存石を re-eval & add（除去石は skip）
-    for (buf[0..affected_count]) |idx| {
-        if (idx == self_idx) continue;
-        eval_state.reEvaluateStone(idx, cells);
-        eval_state.addToAggregates(idx);
+            // 盤面更新
+            cells[self_idx] = .empty;
+            bitboard.removeStone(row, col);
+
+            // Phase B: 変更後ポテンシャルを加える
+            addLinePotential(lines_info);
+
+            // 除去石のキャッシュをクリア
+            eval_state.cache[self_idx] = .{};
+
+            // 残存石を re-eval & add（除去石は skip）
+            for (buf[0..affected_count]) |idx| {
+                if (idx == self_idx) continue;
+                eval_state.reEvaluateStone(idx, cells);
+                eval_state.addToAggregates(idx);
+            }
+        },
+        .prospect => {
+            // 盤面更新（prospect.updateOnRemove は更新済みの cells/bitboard を前提とする）
+            cells[self_idx] = .empty;
+            bitboard.removeStone(row, col);
+
+            prospect.updateOnRemove(cells, row, col);
+        },
     }
 }
 
@@ -281,12 +320,30 @@ fn addLinePotential(lines: [4]bitboard.CellLineInfo) void {
 }
 
 /// 集計値から評価値を計算（evaluateBoardOnCells と同等のロジック）。
-/// eval_basis で legacy（インクリメンタル集計）/ prospect（フル計算、P2でインクリメンタル化）を切り替える。
+/// eval_basis で legacy（インクリメンタル集計）/ prospect（ProspectState、P2でインクリメンタル化済み）を切り替える。
 pub fn getEvaluation(cells: []Cell, perspective: Cell, options: evaluate.EvalOptions) i32 {
     return switch (options.eval_basis) {
         .legacy => getEvaluationLegacy(cells, perspective, options),
-        .prospect => prospect.evaluateFull(cells, perspective, evaluate.stmModeFromLastMover(options.last_mover_is_perspective)),
+        .prospect => getEvaluationProspect(cells, perspective, options),
     };
+}
+
+/// prospect（空点プロスペクト基底）でのインクリメンタル評価値計算。
+/// Debug ビルドでは VERIFY_INCREMENTAL と同じ流儀で prospect.evaluateFull（全空点走査）と
+/// 一致するか assert する。
+fn getEvaluationProspect(cells: []Cell, perspective: Cell, options: evaluate.EvalOptions) i32 {
+    const stm = evaluate.stmModeFromLastMover(options.last_mover_is_perspective);
+    const result = prospect.getStateEval(perspective, stm);
+
+    if (VERIFY_INCREMENTAL) {
+        const full_result = prospect.evaluateFull(cells, perspective, stm);
+        if (result != full_result) {
+            std.debug.print("PROSPECT INCREMENTAL MISMATCH: incremental={d}, full={d}\n", .{ result, full_result });
+            std.debug.assert(result == full_result);
+        }
+    }
+
+    return result;
 }
 
 /// legacy（石ベース）基底での評価値計算。旧 getEvaluation 本体。
@@ -610,4 +667,93 @@ test "getEvaluation: eval_basis=.prospect は prospect.evaluateFull と一致す
     const via_dispatch = getEvaluation(&cells, .black, options);
     const direct = prospect.evaluateFull(&cells, .black, evaluate.stmModeFromLastMover(options.last_mover_is_perspective));
     try std.testing.expectEqual(direct, via_dispatch);
+}
+
+// --- P2-b: prospect インクリメンタル差分更新の配線 ---
+
+test "placeStone/removeStone(prospect): 複数手の対局列で毎手インクリメンタル≡evaluateFull" {
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    const options = evaluate.EvalOptions{
+        .enable_leaf_mise = false,
+        .last_mover_is_perspective = .unset,
+        .single_four_penalty_multiplier = 100,
+        .connectivity_bonus = scores.CONNECTIVITY_BONUS,
+        .eval_basis = .prospect,
+    };
+    initFromBoard(&cells, .{
+        .connectivity_bonus = options.connectivity_bonus,
+        .single_four_penalty_multiplier = options.single_four_penalty_multiplier,
+        .eval_basis = .prospect,
+    });
+
+    // legacy の "multiple place and remove sequence" テストと同一の手順（P1のsequenceテスト流儀）
+    const moves = [_]struct { r: u8, c: u8, color: Cell }{
+        .{ .r = 7, .c = 7, .color = .black },
+        .{ .r = 7, .c = 8, .color = .white },
+        .{ .r = 8, .c = 7, .color = .black },
+        .{ .r = 6, .c = 8, .color = .white },
+        .{ .r = 9, .c = 7, .color = .black },
+        .{ .r = 5, .c = 8, .color = .white },
+        .{ .r = 6, .c = 6, .color = .black },
+        .{ .r = 4, .c = 8, .color = .white },
+    };
+
+    for (moves) |m| {
+        placeStone(&cells, m.r, m.c, m.color);
+
+        // getEvaluation 内部の VERIFY_INCREMENTAL assert に加え、外部からも直接確認する
+        const inc_b = getEvaluation(&cells, .black, options);
+        const full_b = evaluate.evaluateBoardOnCells(&cells, .black, options);
+        try std.testing.expectEqual(inc_b, full_b);
+
+        const inc_w = getEvaluation(&cells, .white, options);
+        const full_w = evaluate.evaluateBoardOnCells(&cells, .white, options);
+        try std.testing.expectEqual(inc_w, full_w);
+    }
+
+    var i: usize = moves.len;
+    while (i > 0) {
+        i -= 1;
+        removeStone(&cells, moves[i].r, moves[i].c);
+
+        const inc_b = getEvaluation(&cells, .black, options);
+        const full_b = evaluate.evaluateBoardOnCells(&cells, .black, options);
+        try std.testing.expectEqual(inc_b, full_b);
+    }
+}
+
+test "eval_basis=.legacy のとき placeStone/removeStone は prospect_state を一切更新しない（基底別スキップ）" {
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    initFromBoard(&cells, .{
+        .connectivity_bonus = scores.CONNECTIVITY_BONUS,
+        .single_four_penalty_multiplier = 100,
+        .eval_basis = .legacy,
+    });
+    const prospect_sum_before = prospect.prospect_state.sum;
+
+    placeStone(&cells, 7, 7, .black);
+    placeStone(&cells, 7, 8, .white);
+    removeStone(&cells, 7, 8);
+
+    try std.testing.expectEqual(prospect_sum_before, prospect.prospect_state.sum);
+}
+
+test "eval_basis=.prospect のとき placeStone/removeStone は legacy 集計(eval_state)を一切更新しない（基底別スキップ）" {
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    initFromBoard(&cells, .{
+        .connectivity_bonus = scores.CONNECTIVITY_BONUS,
+        .single_four_penalty_multiplier = 100,
+        .eval_basis = .prospect,
+    });
+    // legacy 集計はビルド時にスキップされるため black/white は既定値(0)のまま
+    try std.testing.expectEqual(@as(u16, 0), eval_state.black.stone_count);
+    try std.testing.expectEqual(@as(u16, 0), eval_state.white.stone_count);
+
+    placeStone(&cells, 7, 7, .black);
+    placeStone(&cells, 7, 8, .white);
+    removeStone(&cells, 7, 8);
+
+    // placeStone/removeStone を経ても legacy 集計は無傷（stone_count が増減しない）
+    try std.testing.expectEqual(@as(u16, 0), eval_state.black.stone_count);
+    try std.testing.expectEqual(@as(u16, 0), eval_state.white.stone_count);
 }
