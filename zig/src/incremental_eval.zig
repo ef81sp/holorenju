@@ -4,6 +4,7 @@ const evaluate = @import("evaluate.zig");
 const line_potential = @import("line_potential.zig");
 const ll = @import("line_lookup.zig");
 const patterns = @import("patterns.zig");
+const prospect = @import("prospect.zig");
 const scores = @import("scores.zig");
 const std = @import("std");
 
@@ -113,6 +114,7 @@ pub var eval_state: IncrementalEvalState = .{};
 pub const InitOptions = struct {
     connectivity_bonus: i32,
     single_four_penalty_multiplier: i32 = 100,
+    eval_basis: evaluate.EvalBasis = .legacy,
 };
 
 /// 全石を走査してキャッシュと集計値を構築
@@ -126,6 +128,11 @@ pub fn initFromBoard(cells: []Cell, opts: InitOptions) void {
     ll.init();
     bitboard.initFromCells(cells);
 
+    if (opts.eval_basis == .prospect) {
+        prospect.ensureTables();
+    }
+
+    // legacy 集計の構築は基底に関わらず常に行う（スキップ最適化は P2）。
     for (0..CELL_COUNT) |i| {
         const idx: u16 = @intCast(i);
         if (cells[idx] == .empty) continue;
@@ -273,9 +280,13 @@ fn addLinePotential(lines: [4]bitboard.CellLineInfo) void {
     }
 }
 
-/// 集計値から評価値を計算（evaluateBoardOnCells と同等のロジック）
+/// 集計値から評価値を計算（evaluateBoardOnCells と同等のロジック）。
+/// eval_basis で legacy（インクリメンタル集計）/ prospect（フル計算、P2でインクリメンタル化）を切り替える。
 pub fn getEvaluation(cells: []Cell, perspective: Cell, options: evaluate.EvalOptions) i32 {
-    return getEvaluationLegacy(cells, perspective, options);
+    return switch (options.eval_basis) {
+        .legacy => getEvaluationLegacy(cells, perspective, options),
+        .prospect => prospect.evaluateFull(cells, perspective, evaluate.stmModeFromLastMover(options.last_mover_is_perspective)),
+    };
 }
 
 /// legacy（石ベース）基底での評価値計算。旧 getEvaluation 本体。
@@ -549,4 +560,54 @@ test "collectAffectedPositions basic" {
 
     // Should find: (7,7), (7,8), (7,10) — all within distance 5 on horizontal
     try std.testing.expect(count >= 3);
+}
+
+// --- eval_basis ディスパッチャ ---
+
+test "getEvaluation: eval_basis=.legacy は getEvaluationLegacy と一致する" {
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[7 * BOARD_SIZE + 6] = .black;
+    cells[7 * BOARD_SIZE + 7] = .black;
+    cells[7 * BOARD_SIZE + 8] = .black;
+
+    const options = evaluate.EvalOptions{
+        .enable_leaf_mise = false,
+        .last_mover_is_perspective = .unset,
+        .single_four_penalty_multiplier = 100,
+        .connectivity_bonus = scores.CONNECTIVITY_BONUS,
+        .eval_basis = .legacy,
+    };
+    initFromBoard(&cells, .{
+        .connectivity_bonus = options.connectivity_bonus,
+        .single_four_penalty_multiplier = options.single_four_penalty_multiplier,
+        .eval_basis = .legacy,
+    });
+
+    const via_dispatch = getEvaluation(&cells, .black, options);
+    const direct = getEvaluationLegacy(&cells, .black, options);
+    try std.testing.expectEqual(direct, via_dispatch);
+}
+
+test "getEvaluation: eval_basis=.prospect は prospect.evaluateFull と一致する" {
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[7 * BOARD_SIZE + 6] = .black;
+    cells[7 * BOARD_SIZE + 7] = .black;
+    cells[7 * BOARD_SIZE + 8] = .black;
+
+    const options = evaluate.EvalOptions{
+        .enable_leaf_mise = false,
+        .last_mover_is_perspective = .yes,
+        .single_four_penalty_multiplier = 100,
+        .connectivity_bonus = scores.CONNECTIVITY_BONUS,
+        .eval_basis = .prospect,
+    };
+    initFromBoard(&cells, .{
+        .connectivity_bonus = options.connectivity_bonus,
+        .single_four_penalty_multiplier = options.single_four_penalty_multiplier,
+        .eval_basis = .prospect,
+    });
+
+    const via_dispatch = getEvaluation(&cells, .black, options);
+    const direct = prospect.evaluateFull(&cells, .black, evaluate.stmModeFromLastMover(options.last_mover_is_perspective));
+    try std.testing.expectEqual(direct, via_dispatch);
 }

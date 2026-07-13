@@ -158,6 +158,7 @@ export fn findBestMove(color: u8, max_depth: u8, time_limit_ms: u32, max_nodes: 
     //   255 = センチネル → 0（完全ペナルティ）
     //   1-254 = そのまま使用
     // bit 17: enable_leaf_mise
+    // bit 18: eval_basis (0=legacy, 1=prospect)
     const leaf_multiplier_raw: u8 = @intCast((eval_options_flags >> 9) & 0xFF);
     const leaf_multiplier: i32 = switch (leaf_multiplier_raw) {
         0 => 100,
@@ -165,12 +166,14 @@ export fn findBestMove(color: u8, max_depth: u8, time_limit_ms: u32, max_nodes: 
         else => @as(i32, leaf_multiplier_raw),
     };
     const enable_leaf_mise = ((eval_options_flags >> 17) & 1) != 0;
+    const eval_basis: evaluate.EvalBasis = if (((eval_options_flags >> 18) & 1) != 0) .prospect else .legacy;
 
     const board_eval_options = evaluate.EvalOptions{
         .enable_leaf_mise = enable_leaf_mise,
         .last_mover_is_perspective = .unset,
         .single_four_penalty_multiplier = leaf_multiplier,
         .connectivity_bonus = @import("scores.zig").CONNECTIVITY_BONUS,
+        .eval_basis = eval_basis,
     };
 
     const result = search.findBestMoveIterative(cells, cell_color, .{

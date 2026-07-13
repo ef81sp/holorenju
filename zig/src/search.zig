@@ -342,6 +342,7 @@ pub fn findBestMoveIterative(
     incremental_eval.initFromBoard(cells, .{
         .connectivity_bonus = params.board_eval_options.connectivity_bonus,
         .single_four_penalty_multiplier = params.board_eval_options.single_four_penalty_multiplier,
+        .eval_basis = params.board_eval_options.eval_basis,
     });
 
     // =========================================================================

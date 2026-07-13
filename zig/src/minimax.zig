@@ -330,6 +330,21 @@ fn threatProbe(
 // Minimax探索本体
 // =============================================================================
 
+/// 打ち切り時の静的評価に使う EvalOptions を返す。
+///
+/// eval_basis==.prospect のときのみ、その場の手番（is_maximizing）から
+/// last_mover_is_perspective を上書きする（prospect は stm 供給が仕様のため）。
+/// legacy のときは ctx.board_eval_options を無変更で返す — legacy パスの
+/// 挙動・Elo を一切変えないため（TEMPO 割引が新たに発火してはならない）。
+fn abortEvalOptions(ctx: *SearchContext, is_maximizing: bool) evaluate.EvalOptions {
+    if (ctx.board_eval_options.eval_basis != .prospect) return ctx.board_eval_options;
+    var opts = ctx.board_eval_options;
+    // is_maximizing=true  → 現在手番は perspective → 最後の着手は相手 → .no
+    // is_maximizing=false → 現在手番は相手         → 最後の着手は perspective → .yes
+    opts.last_mover_is_perspective = if (is_maximizing) .no else .yes;
+    return opts;
+}
+
 /// SearchContext から quiescence の打ち切り制御を構築する。
 /// 制限のセマンティクス（deadline/ノード予算の意味）の SSoT は SearchContext 側にあり、
 /// フィールド転記をここに一本化して呼び出し側とのドリフトを防ぐ。
@@ -380,7 +395,7 @@ pub fn minimaxWithTT(
 
     // タイムアウト/ノード上限時は静的評価を返す（インクリメンタル評価を使用）
     if (ctx.isAborted()) {
-        return incremental_eval.getEvaluation(cells, perspective, ctx.board_eval_options);
+        return incremental_eval.getEvaluation(cells, perspective, abortEvalOptions(ctx, is_maximizing));
     }
 
     // 現在の手番を決定
@@ -501,7 +516,7 @@ pub fn minimaxWithTT(
         // NMP子探索中の打ち切り検出: nmp_score には static eval が混入している可能性があり、
         // 偽の beta-cutoff で汚染値を返さないよう、冒頭の早期 latch と同じ形で静的評価に落とす。
         if (ctx.isAborted()) {
-            return incremental_eval.getEvaluation(cells, perspective, ctx.board_eval_options);
+            return incremental_eval.getEvaluation(cells, perspective, abortEvalOptions(ctx, is_maximizing));
         }
         if (if (is_maximizing) nmp_score >= beta else nmp_score <= alpha) {
             ctx.stats.null_move_cutoffs += 1;
@@ -699,7 +714,7 @@ pub fn minimaxWithTT(
     if (aborted) {
         // 1手も完了せず best_score が初期値のままなら static eval にフォールバック
         if (best_score == scores.INFINITY or best_score == -scores.INFINITY) {
-            return incremental_eval.getEvaluation(cells, perspective, ctx.board_eval_options);
+            return incremental_eval.getEvaluation(cells, perspective, abortEvalOptions(ctx, is_maximizing));
         }
         return best_score;
     }

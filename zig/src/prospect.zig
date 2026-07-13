@@ -421,6 +421,147 @@ pub fn computeCellCodes(cells: []const Cell, row: u8, col: u8, color: Cell) [4]D
 }
 
 // ============================================================================
+// 第3段: スコアテーブルと集計（P1: フル計算のみ。差分更新は P2）
+// ============================================================================
+
+/// CellCat の有効値数。PROSPECT_SCORE の第1次元・setEvalParam 拡張時の id 空間算出に使う。
+pub const CAT_COUNT: usize = @typeInfo(CellCat).@"enum".fields.len;
+
+// CellCat の宣言順（0..CAT_COUNT-1 と一致）を固定する。下記 PROSPECT_SCORE_DEFAULT は
+// この順序に依存した配列リテラルなので、enum に手を加えたらここも見直すこと。
+comptime {
+    const order = [_]CellCat{
+        .none,
+        .weak,
+        .solo_b2,
+        .solo_f2,
+        .double_f2,
+        .solo_b3,
+        .b4_f2,
+        .solo_f3,
+        .f3_f2,
+        .f3_b3,
+        .solo_b4,
+        .double_three_black_risk,
+        .double_three_white,
+        .four_three,
+        .solo_f4,
+        .double_four_white,
+        .win,
+    };
+    for (order, 0..) |cat, i| {
+        std.debug.assert(@intFromEnum(cat) == i);
+    }
+}
+
+/// [カテゴリ][手番か(0=非手番,1=手番)] -> スコア。
+///
+/// 既定値は P3 の Texel 流回帰で置換される暫定シード値（単調性のみ担保。
+/// docs/plans/eval-basis-prospect-2026-07-13.md §4 参照）。four_three は
+/// legacy の LEAF_FOUR_THREE_THREAT(2000)+FOUR_THREE_BONUS(5000)=7000 より
+/// 控えめに置く（アンカリングは P3）。
+pub const PROSPECT_SCORE_DEFAULT: [CAT_COUNT][2]i32 = .{
+    .{ 0, 0 }, // none
+    .{ 1, 2 }, // weak
+    .{ 4, 6 }, // solo_b2
+    .{ 12, 20 }, // solo_f2
+    .{ 28, 45 }, // double_f2
+    .{ 18, 30 }, // solo_b3
+    .{ 140, 240 }, // b4_f2
+    .{ 200, 350 }, // solo_f3
+    .{ 250, 420 }, // f3_f2
+    .{ 230, 400 }, // f3_b3
+    .{ 120, 200 }, // solo_b4
+    .{ -40, -60 }, // double_three_black_risk
+    .{ 700, 1200 }, // double_three_white
+    .{ 1600, 3000 }, // four_three
+    .{ 2500, 4500 }, // solo_f4
+    .{ 2600, 4800 }, // double_four_white
+    .{ 5000, 9000 }, // win
+};
+
+pub var PROSPECT_SCORE: [CAT_COUNT][2]i32 = PROSPECT_SCORE_DEFAULT;
+
+/// PROSPECT_SCORE を既定値へ復元する（scores.resetEvalParams と対の運用を想定）。
+pub fn resetProspectScores() void {
+    PROSPECT_SCORE = PROSPECT_SCORE_DEFAULT;
+}
+
+/// 評価総和のクランプ上限。OPEN_FOUR(10000) 級とし、FIVE−5000=95000 の
+/// 詰み判定帯（minimax.zig の threatProbe マーカー等）と構造的に干渉しないことを保証する。
+pub const PROSPECT_EVAL_CLAMP: i32 = 10000;
+
+var prospect_tables_ready = false;
+
+/// DIR_PROSPECT_BLACK/WHITE・CELL_CAT の初期化を冪等に保証する。
+/// initProspectTables 自身も冪等だが、prospect パスの入口（evaluate.zig /
+/// incremental_eval.zig）から呼ぶ名前をここに揃える。
+pub fn ensureTables() void {
+    if (prospect_tables_ready) return;
+    initProspectTables();
+    prospect_tables_ready = true;
+}
+
+/// 評価時にどちらの手番列（PROSPECT_SCORE の第2次元）を使うか。
+/// evaluate.EvalOptions.last_mover_is_perspective（3値）から変換する
+/// （変換ロジックは evaluate.zig 側に集約し prospect.zig からは型のみ参照する）。
+pub const StmMode = enum { perspective, opponent, average };
+
+fn colorIndex(color: Cell) usize {
+    return switch (color) {
+        .black => 0,
+        .white => 1,
+        .empty => unreachable,
+    };
+}
+
+/// 空点プロスペクト基底でのフル計算評価（perspective 視点）。
+///
+/// 全空点について computeCellCodes → CELL_CAT でカテゴリを求め、
+/// PROSPECT_SCORE[カテゴリ][手番か] の総和差を取る（§2.3）。
+/// computeCellCodes は bitboard 同期を前提としない（cells 配列のみを読む）ため、
+/// 本関数の呼び出しにも bitboard 同期は不要。
+///
+/// P1 はインクリメンタル化前の正しさ確認用実装であり、毎回全空点を
+/// 走査する（早期skip等の最適化は P2）。
+pub fn evaluateFull(cells: []const Cell, perspective: Cell, stm: StmMode) i32 {
+    ensureTables();
+
+    const opponent = perspective.opposite();
+    const persp_idx = colorIndex(perspective);
+    const opp_idx = colorIndex(opponent);
+
+    // stm=perspective（perspective 手番）と stm=opponent（相手手番）の
+    // 両変種を1パスで集計する（average はこの2つの平均）。
+    var raw_when_persp_to_move: i32 = 0;
+    var raw_when_opp_to_move: i32 = 0;
+
+    for (0..BOARD_SIZE) |r_usize| {
+        const r: u8 = @intCast(r_usize);
+        for (0..BOARD_SIZE) |c_usize| {
+            const c: u8 = @intCast(c_usize);
+            if (cells[@as(u16, r) * BOARD_SIZE + c] != .empty) continue;
+
+            const codes_persp = computeCellCodes(cells, r, c, perspective);
+            const codes_opp = computeCellCodes(cells, r, c, opponent);
+            const cat_persp: usize = CELL_CAT[packCodes(codes_persp)][persp_idx];
+            const cat_opp: usize = CELL_CAT[packCodes(codes_opp)][opp_idx];
+
+            raw_when_persp_to_move += PROSPECT_SCORE[cat_persp][1] - PROSPECT_SCORE[cat_opp][0];
+            raw_when_opp_to_move += PROSPECT_SCORE[cat_persp][0] - PROSPECT_SCORE[cat_opp][1];
+        }
+    }
+
+    const raw: i32 = switch (stm) {
+        .perspective => raw_when_persp_to_move,
+        .opponent => raw_when_opp_to_move,
+        .average => @divTrunc(raw_when_persp_to_move + raw_when_opp_to_move, 2),
+    };
+
+    return std.math.clamp(raw, -PROSPECT_EVAL_CLAMP, PROSPECT_EVAL_CLAMP);
+}
+
+// ============================================================================
 // Tests
 // ============================================================================
 
@@ -834,4 +975,118 @@ test "getProspectCategoryName: 全カテゴリでnull終端文字列を返す" {
         const name = getProspectCategoryName(cat);
         try std.testing.expect(name[0] != 0);
     }
+}
+
+// --- 7. evaluateFull（第3段: フル計算パス） ---
+
+/// four_three フィクスチャ（既存 "computeCellCodes: 四三点で..." テストと同一局面）。
+/// (7,7) が黒の四三点（横 dir0=b4, 縦 dir1=f3）になる非対称局面。
+fn setupFourThreeFixture(cells: *[board_mod.CELL_COUNT]Cell) void {
+    @memset(cells, .empty);
+    cells[7 * BOARD_SIZE + 3] = .white;
+    cells[7 * BOARD_SIZE + 4] = .black;
+    cells[7 * BOARD_SIZE + 5] = .black;
+    cells[7 * BOARD_SIZE + 6] = .black;
+    cells[5 * BOARD_SIZE + 7] = .black;
+    cells[6 * BOARD_SIZE + 7] = .black;
+}
+
+test "evaluateFull: 空盤はaverageで0（weak寄与が両手番列で打ち消し合う）" {
+    var cells = [_]Cell{.empty} ** board_mod.CELL_COUNT;
+    try std.testing.expectEqual(@as(i32, 0), evaluateFull(&cells, .black, .average));
+    try std.testing.expectEqual(@as(i32, 0), evaluateFull(&cells, .white, .average));
+}
+
+test "evaluateFull: 空盤でも perspective/opponent は非ゼロ（全空点が着手候補=weakとして評価される設計上の帰結）" {
+    // 空盤では黒白ともに全空点が f1×4→weak に分類され、cat_persp==cat_opp となる。
+    // このとき raw(persp手番) と raw(相手手番) は厳密に符号反転の関係になり、
+    // 平均のみ0（上のテスト）。個別の stm 値は「手番側が有利」という設計上、非ゼロになる。
+    var cells = [_]Cell{.empty} ** board_mod.CELL_COUNT;
+    const persp_to_move = evaluateFull(&cells, .black, .perspective);
+    const opp_to_move = evaluateFull(&cells, .black, .opponent);
+    try std.testing.expect(persp_to_move != 0);
+    try std.testing.expectEqual(persp_to_move, -opp_to_move);
+}
+
+test "evaluateFull: 反対称性 eval(persp)==-eval(opp)（stm 3値すべて）" {
+    var cells: [board_mod.CELL_COUNT]Cell = undefined;
+    setupFourThreeFixture(&cells);
+
+    // stm=black-to-move の視点: black.perspective ⇔ white.opponent
+    try std.testing.expectEqual(
+        evaluateFull(&cells, .black, .perspective),
+        -evaluateFull(&cells, .white, .opponent),
+    );
+    // stm=white-to-move の視点: black.opponent ⇔ white.perspective
+    try std.testing.expectEqual(
+        evaluateFull(&cells, .black, .opponent),
+        -evaluateFull(&cells, .white, .perspective),
+    );
+    // average は手番に依らず対称
+    try std.testing.expectEqual(
+        evaluateFull(&cells, .black, .average),
+        -evaluateFull(&cells, .white, .average),
+    );
+}
+
+test "evaluateFull: stm(手番)によって評価値が変わる局面" {
+    var cells: [board_mod.CELL_COUNT]Cell = undefined;
+    setupFourThreeFixture(&cells);
+
+    const when_black_to_move = evaluateFull(&cells, .black, .perspective);
+    const when_white_to_move = evaluateFull(&cells, .black, .opponent);
+    try std.testing.expect(when_black_to_move != when_white_to_move);
+}
+
+test "evaluateFull: averageはperspective/opponentの平均（切り捨て）と一致" {
+    var cells: [board_mod.CELL_COUNT]Cell = undefined;
+    setupFourThreeFixture(&cells);
+
+    const persp = evaluateFull(&cells, .black, .perspective);
+    const opp = evaluateFull(&cells, .black, .opponent);
+    const avg = evaluateFull(&cells, .black, .average);
+    // クランプに掛からない前提（four_three フィクスチャは小規模なので範囲内）
+    try std.testing.expectEqual(@divTrunc(persp + opp, 2), avg);
+}
+
+test "evaluateFull: 四三点(four_three)を持つ局面は同等の縦三が無い局面より黒視点で有意に高評価" {
+    var with_vertical: [board_mod.CELL_COUNT]Cell = undefined;
+    setupFourThreeFixture(&with_vertical);
+
+    // 縦の2石を置かないバリアント: (7,7)は四(b4)単独カテゴリ(solo_b4)に留まる
+    var without_vertical = [_]Cell{.empty} ** board_mod.CELL_COUNT;
+    without_vertical[7 * BOARD_SIZE + 3] = .white;
+    without_vertical[7 * BOARD_SIZE + 4] = .black;
+    without_vertical[7 * BOARD_SIZE + 5] = .black;
+    without_vertical[7 * BOARD_SIZE + 6] = .black;
+
+    const codes_at_77 = computeCellCodes(&with_vertical, 7, 7, .black);
+    try std.testing.expectEqual(CellCat.four_three, cellCategory(codes_at_77, .black));
+    const codes_at_77_no_vertical = computeCellCodes(&without_vertical, 7, 7, .black);
+    try std.testing.expectEqual(CellCat.solo_b4, cellCategory(codes_at_77_no_vertical, .black));
+
+    const eval_with = evaluateFull(&with_vertical, .black, .average);
+    const eval_without = evaluateFull(&without_vertical, .black, .average);
+    // four_three と solo_b4 の平均重み差（(3000+1600)/2 - (200+120)/2 = 2140）に近い差が出る前提。
+    // 周辺空点の分類変化ノイズを許容してマージンは控えめに取る。
+    try std.testing.expect(eval_with - eval_without > 1000);
+}
+
+test "evaluateFull: 評価総和はPROSPECT_EVAL_CLAMPで上下限にクランプされる" {
+    var cells = [_]Cell{.empty} ** board_mod.CELL_COUNT;
+    defer resetProspectScores();
+
+    // weak は空盤の全225空点が持つカテゴリ。stm列だけ巨大化して総和を溢れさせる。
+    PROSPECT_SCORE[@intFromEnum(CellCat.weak)] = .{ 0, 2_000_000 };
+    try std.testing.expectEqual(PROSPECT_EVAL_CLAMP, evaluateFull(&cells, .black, .perspective));
+
+    PROSPECT_SCORE[@intFromEnum(CellCat.weak)] = .{ 2_000_000, 0 };
+    try std.testing.expectEqual(-PROSPECT_EVAL_CLAMP, evaluateFull(&cells, .black, .perspective));
+}
+
+test "resetProspectScores: PROSPECT_SCOREを既定値に復元する" {
+    defer resetProspectScores();
+    PROSPECT_SCORE[0] = .{ 9999, 9999 };
+    resetProspectScores();
+    try std.testing.expectEqual(PROSPECT_SCORE_DEFAULT, PROSPECT_SCORE);
 }

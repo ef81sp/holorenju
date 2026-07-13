@@ -350,12 +350,11 @@ pub fn quiescenceSearch(
         }
     }
 
-    const eval_opts = evaluate.EvalOptions{
-        .enable_leaf_mise = eval_options.enable_leaf_mise,
-        .last_mover_is_perspective = if (!is_maximizing) .yes else .no,
-        .single_four_penalty_multiplier = eval_options.single_four_penalty_multiplier,
-        .connectivity_bonus = eval_options.connectivity_bonus,
-    };
+    // フィールドコピー（旧: 手動リテラル）ではなく eval_options を丸ごと引き継いで
+    // last_mover_is_perspective だけ上書きする。これにより eval_basis 等の新規
+    // フィールドが将来追加されても取りこぼさない（§3.3 の「手動コピーの罠」対応）。
+    var eval_opts = eval_options;
+    eval_opts.last_mover_is_perspective = if (!is_maximizing) .yes else .no;
 
     // 総ノード数を共有カウンタに計上（minimax と同じカウンタ）。
     limits.node_counter.* += 1;
