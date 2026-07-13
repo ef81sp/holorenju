@@ -32,7 +32,33 @@ pub fn init() void {
     initialized = true;
 }
 
-fn computePattern(own: u9, block: u9) PatternResult {
+/// 中心(bit4)から positive（bits 5..8）/ negative（bits 3..0）方向への連続自石数を数える。
+/// computePattern の内部カウントと prospect.zig の分類（オーバーライン補正・達四空間
+/// 判定）が共有する（SSoT: run カウントの意味論を1箇所に保つ）。
+pub fn countRun(own: u9, block: u9, comptime positive: bool) u4 {
+    var count: u4 = 0;
+    if (positive) {
+        for (5..9) |bit| {
+            if (own & (@as(u9, 1) << @intCast(bit)) != 0 and block & (@as(u9, 1) << @intCast(bit)) == 0) {
+                count += 1;
+            } else break;
+        }
+    } else {
+        var neg_pos: i8 = 3;
+        while (neg_pos >= 0) : (neg_pos -= 1) {
+            const bit: u4 = @intCast(neg_pos);
+            if (own & (@as(u9, 1) << bit) != 0 and block & (@as(u9, 1) << bit) == 0) {
+                count += 1;
+            } else break;
+        }
+    }
+    return count;
+}
+
+/// own/block の9bit窓から PatternResult を直接計算する（PATTERN_TABLE の初期化ロジック本体）。
+/// pub化理由: prospect.zig の方向プロスペクト分類が「パターン知識の一次ソース」として
+/// このロジックを再利用するため（SSoT: 独立実装を禁止し、ここから派生生成する）。
+pub fn computePattern(own: u9, block: u9) PatternResult {
     // Center is bit 4
     const center_bit: u9 = 1 << 4;
 
@@ -52,28 +78,16 @@ fn computePattern(own: u9, block: u9) PatternResult {
     // (caller should ensure this, but be defensive)
 
     // Count consecutive stones from center in positive direction (bits 5,6,7,8)
-    var count_pos: u4 = 0;
-    for (5..9) |bit| {
-        if (own & (@as(u9, 1) << @intCast(bit)) != 0 and block & (@as(u9, 1) << @intCast(bit)) == 0) {
-            count_pos += 1;
-        } else break;
-    }
+    const count_pos = countRun(own, block, true);
 
     // End state in positive direction
     const end1_bit = @as(u5, 4) + 1 + count_pos;
     const end1: u2 = if (end1_bit > 8) 1 // beyond window = wall
-    else if (block & (@as(u9, 1) << @intCast(end1_bit)) != 0) 1 // blocked
-    else 0; // empty
+        else if (block & (@as(u9, 1) << @intCast(end1_bit)) != 0) 1 // blocked
+        else 0; // empty
 
     // Count consecutive stones from center in negative direction (bits 3,2,1,0)
-    var count_neg: u4 = 0;
-    var neg_pos: i8 = 3;
-    while (neg_pos >= 0) : (neg_pos -= 1) {
-        const bit: u4 = @intCast(neg_pos);
-        if (own & (@as(u9, 1) << bit) != 0 and block & (@as(u9, 1) << bit) == 0) {
-            count_neg += 1;
-        } else break;
-    }
+    const count_neg = countRun(own, block, false);
 
     // End state in negative direction
     const end2: u2 = blk: {
@@ -289,12 +303,11 @@ pub fn queryPatternByCell(row: u8, col: u8, dir_index: usize, color: Cell) Patte
     return queryPattern(info.line_index, info.bit_pos, color);
 }
 
-/// Query pattern directly from cells array (no bitboard sync needed).
-/// dir_index: 0=横, 1=縦, 2=右下斜め, 3=右上斜め (board.zig DIRECTIONS 順)
-/// Useful for temporary probe positions where bitboard is not updated (VCT/VCF等).
-pub fn queryPatternFromCells(cells: []const Cell, row: u8, col: u8, dir_index: usize, color: Cell) PatternResult {
-    if (!initialized) init();
-
+/// cells 配列から (row,col) を中心とする dir_index 方向の9マス窓を抽出する
+/// （bitboard 同期不要版）。盤外は block 扱い。中心セルもそのまま読む
+/// （空なら own/block とも 0）。queryPatternFromCells と
+/// prospect.computeCellCodes が共有する。
+pub fn extractWindowFromCells(cells: []const Cell, row: u8, col: u8, dir_index: usize, color: Cell) struct { own: u9, block: u9 } {
     const dir = board_mod.DIRECTIONS[dir_index];
     const dr: i8 = dir.dr;
     const dc: i8 = dir.dc;
@@ -320,7 +333,16 @@ pub fn queryPatternFromCells(cells: []const Cell, row: u8, col: u8, dir_index: u
         }
     }
 
-    return PATTERN_TABLE[own_window][block_window];
+    return .{ .own = own_window, .block = block_window };
+}
+
+/// Query pattern directly from cells array (no bitboard sync needed).
+/// dir_index: 0=横, 1=縦, 2=右下斜め, 3=右上斜め (board.zig DIRECTIONS 順)
+/// Useful for temporary probe positions where bitboard is not updated (VCT/VCF等).
+pub fn queryPatternFromCells(cells: []const Cell, row: u8, col: u8, dir_index: usize, color: Cell) PatternResult {
+    if (!initialized) init();
+    const w = extractWindowFromCells(cells, row, col, dir_index, color);
+    return PATTERN_TABLE[w.own][w.block];
 }
 
 // ============================================================
