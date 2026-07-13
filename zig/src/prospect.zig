@@ -663,6 +663,221 @@ pub fn extractFeatures(
 }
 
 // ============================================================================
+// 第4段: インクリメンタル状態（P2、未配線）
+// ============================================================================
+
+/// 空点プロスペクト基底のインクリメンタル状態。
+///
+/// 不変条件: **占有セルの dir_code/contrib エントリは stale**（空点のときのみ有効）。
+/// これは P0/P1 の DirCode 設計（占有セルは分類対象外）と一致する。呼び出し規約:
+/// updateOnPlace/updateOnRemove は **cells（および bitboard）が既に更新済み**の
+/// 状態で呼ぶこと（先に置石/除石し、その後に本関数を呼ぶ。legacy の
+/// incremental_eval.placeStone/removeStone と同じ順序）。
+pub const ProspectState = struct {
+    /// [空点idx][色(0=黒,1=白)] -> packCodes(4方向コード)。
+    dir_code: [board_mod.CELL_COUNT][2]u16 = undefined,
+    /// [空点idx][色] -> PROSPECT_SCORE[cat][*]（[手番か] の2値をそのままコピー）。
+    /// cat = CELL_CAT[dir_code[idx][色]][色] から都度導出するため cat 自体は保持しない
+    /// （§ 実装判断: 下記コメント参照）。
+    contrib: [board_mod.CELL_COUNT][2][2]i32 = undefined,
+    /// [色][手番か] の総和（全空点）。差分更新時に両手番変種とも更新する。
+    sum: [2][2]i32 = .{ .{ 0, 0 }, .{ 0, 0 } },
+};
+
+/// 実装判断（P2-a、報告済み）: cat を dir_code と別配列でキャッシュしない。
+/// cat は常に「dir_code[idx][色] を CELL_CAT に1回引く」だけで求まり、その参照コストは
+/// キャッシュ済み配列を読むコストと同等（どちらも1回のメモリロード）。別配列で持つと
+/// dir_code と cat の同期ポイントが増えるだけでリターンがないため、素直に都度導出する。
+pub var prospect_state: ProspectState = .{};
+
+fn subtractContribAt(idx: u16) void {
+    prospect_state.sum[0][0] -= prospect_state.contrib[idx][0][0];
+    prospect_state.sum[0][1] -= prospect_state.contrib[idx][0][1];
+    prospect_state.sum[1][0] -= prospect_state.contrib[idx][1][0];
+    prospect_state.sum[1][1] -= prospect_state.contrib[idx][1][1];
+}
+
+fn addContribAt(idx: u16) void {
+    prospect_state.sum[0][0] += prospect_state.contrib[idx][0][0];
+    prospect_state.sum[0][1] += prospect_state.contrib[idx][0][1];
+    prospect_state.sum[1][0] += prospect_state.contrib[idx][1][0];
+    prospect_state.sum[1][1] += prospect_state.contrib[idx][1][1];
+}
+
+/// idx の dir_code から contrib（[色][手番か]）を再計算して書き込む（sum への加減算はしない）。
+fn refreshContribAt(idx: u16) void {
+    const cat_black: usize = CELL_CAT[prospect_state.dir_code[idx][0]][0];
+    const cat_white: usize = CELL_CAT[prospect_state.dir_code[idx][1]][1];
+    prospect_state.contrib[idx] = .{ PROSPECT_SCORE[cat_black], PROSPECT_SCORE[cat_white] };
+}
+
+/// idx（空点）の4方向コードを両色フルで再計算し dir_code/contrib に書き込む
+/// （sum への加減算はしない。initStateFromBoard・updateOnRemove の自セルで使う）。
+fn refreshFullAt(cells: []const Cell, idx: u16) void {
+    const r: u8 = @intCast(idx / BOARD_SIZE);
+    const c: u8 = @intCast(idx % BOARD_SIZE);
+    const codes_black = computeCellCodes(cells, r, c, .black);
+    const codes_white = computeCellCodes(cells, r, c, .white);
+    prospect_state.dir_code[idx] = .{ packCodes(codes_black), packCodes(codes_white) };
+    refreshContribAt(idx);
+}
+
+/// 全空点を走査してインクリメンタル状態をフル構築する（initFromBoard 相当）。
+pub fn initStateFromBoard(cells: []const Cell) void {
+    ensureTables();
+    prospect_state.sum = .{ .{ 0, 0 }, .{ 0, 0 } };
+
+    for (0..BOARD_SIZE) |r_usize| {
+        const r: u8 = @intCast(r_usize);
+        for (0..BOARD_SIZE) |c_usize| {
+            const c: u8 = @intCast(c_usize);
+            const idx: u16 = @as(u16, r) * BOARD_SIZE + c;
+            if (cells[idx] != .empty) continue;
+
+            refreshFullAt(cells, idx);
+            addContribAt(idx);
+        }
+    }
+}
+
+/// (row,col) を通る4ライン上、距離1〜4の空点とその方向インデックスを収集する
+/// （updateOnPlace/updateOnRemove の周辺差分更新用。最大 4方向×2符号×距離4 = 32点）。
+const AffectedEmptyCell = struct { idx: u16, dir_idx: u8 };
+
+fn collectAffectedEmptyCells(cells: []const Cell, row: u8, col: u8, buf: *[32]AffectedEmptyCell) u8 {
+    var count: u8 = 0;
+    for (board_mod.DIRECTIONS, 0..) |dir, dir_idx_usize| {
+        const dir_idx: u8 = @intCast(dir_idx_usize);
+        inline for (.{ @as(i8, 1), @as(i8, -1) }) |sign| {
+            const dr: i8 = dir.dr * sign;
+            const dc: i8 = dir.dc * sign;
+            var r: i16 = @as(i16, row) + dr;
+            var c: i16 = @as(i16, col) + dc;
+            var dist: u8 = 0;
+            while (dist < 4 and board_mod.isValid(r, c)) : (dist += 1) {
+                const idx: u16 = @intCast(@as(u16, @intCast(r)) * BOARD_SIZE + @as(u16, @intCast(c)));
+                if (cells[idx] == .empty) {
+                    buf[count] = .{ .idx = idx, .dir_idx = dir_idx };
+                    count += 1;
+                }
+                r += dr;
+                c += dc;
+            }
+        }
+    }
+    return count;
+}
+
+/// 中心 (row,col) の dir_index 方向の9マス窓から、黒視点・白視点の DirCode を
+/// **1回のセル走査で同時に**求める（perf レビュー指摘S1対応: 抽出回数半減）。
+/// own/block の定義は line_lookup.extractWindowFromCells と同一
+/// （block = 盤外 または 相手色）にすること。等価性はテストで固定する。
+/// 呼び出し前提: (row,col) は空点であること（Debug ビルドで assert）。
+fn classifyDirectionDual(cells: []const Cell, row: u8, col: u8, dir_index: usize) struct { black: DirCode, white: DirCode } {
+    std.debug.assert(cells[@as(u16, row) * BOARD_SIZE + col] == .empty);
+
+    const dir = board_mod.DIRECTIONS[dir_index];
+    const dr: i8 = dir.dr;
+    const dc: i8 = dir.dc;
+
+    var black_bits: u9 = 0;
+    var white_bits: u9 = 0;
+    var edge_bits: u9 = 0;
+
+    for (0..9) |w| {
+        const offset: i8 = @as(i8, @intCast(w)) - 4;
+        const r: i16 = @as(i16, row) + @as(i16, dr) * offset;
+        const c: i16 = @as(i16, col) + @as(i16, dc) * offset;
+        const w_bit: u4 = @intCast(w);
+
+        if (!board_mod.isValid(r, c)) {
+            edge_bits |= @as(u9, 1) << w_bit;
+        } else {
+            const cell = cells[@intCast(@as(u16, @intCast(r)) * BOARD_SIZE + @as(u16, @intCast(c)))];
+            if (cell == .black) {
+                black_bits |= @as(u9, 1) << w_bit;
+            } else if (cell == .white) {
+                white_bits |= @as(u9, 1) << w_bit;
+            }
+        }
+    }
+
+    return .{
+        .black = classifyDirection(black_bits, white_bits | edge_bits, .black),
+        .white = classifyDirection(white_bits, black_bits | edge_bits, .white),
+    };
+}
+
+/// packed u16 の dir_idx 番目のニブルを new_code に置き換える。
+fn replaceNibble(packed_val: u16, dir_idx: u8, new_code: DirCode) u16 {
+    const shift: u4 = @intCast(@as(u16, dir_idx) * 4);
+    const mask: u16 = ~(@as(u16, 0xF) << shift);
+    return (packed_val & mask) | (@as(u16, @intFromEnum(new_code)) << shift);
+}
+
+/// (row,col) に石が置かれた/除かれたことで影響を受ける周辺空点（距離1〜4、該当1方向のみ）
+/// の dir_code/contrib/sum を差分更新する。updateOnPlace と updateOnRemove が共有する
+/// （変わるのは自セルの扱いのみで、周辺差分ロジックは同一）。
+fn updateNeighborDirections(cells: []const Cell, row: u8, col: u8) void {
+    var buf: [32]AffectedEmptyCell = undefined;
+    const count = collectAffectedEmptyCells(cells, row, col, &buf);
+    for (buf[0..count]) |aff| {
+        subtractContribAt(aff.idx);
+
+        const ar: u8 = @intCast(aff.idx / BOARD_SIZE);
+        const ac: u8 = @intCast(aff.idx % BOARD_SIZE);
+        const dual = classifyDirectionDual(cells, ar, ac, aff.dir_idx);
+
+        prospect_state.dir_code[aff.idx][0] = replaceNibble(prospect_state.dir_code[aff.idx][0], aff.dir_idx, dual.black);
+        prospect_state.dir_code[aff.idx][1] = replaceNibble(prospect_state.dir_code[aff.idx][1], aff.dir_idx, dual.white);
+        refreshContribAt(aff.idx);
+
+        addContribAt(aff.idx);
+    }
+}
+
+/// 石を配置した後に呼ぶ（cells/bitboard は既に更新済みの前提）。
+/// 1. 置点自身: 空点でなくなるため寄与を除去する（entry は stale のまま残す）。
+/// 2. 周辺空点: 該当1方向×2色のみ再分類する（updateNeighborDirections）。
+pub fn updateOnPlace(cells: []const Cell, row: u8, col: u8, color: Cell) void {
+    const self_idx: u16 = @as(u16, row) * BOARD_SIZE + col;
+    std.debug.assert(cells[self_idx] == color);
+
+    subtractContribAt(self_idx);
+    updateNeighborDirections(cells, row, col);
+}
+
+/// 石を除去した後に呼ぶ（cells/bitboard は既に更新済みの前提）。
+/// 1. 置点自身: 再び空点になるため4方向×2色をフル再計算する（stale値の再利用禁止）。
+/// 2. 周辺空点: 該当1方向×2色のみ再分類する（updateNeighborDirections）。
+pub fn updateOnRemove(cells: []const Cell, row: u8, col: u8) void {
+    const self_idx: u16 = @as(u16, row) * BOARD_SIZE + col;
+    std.debug.assert(cells[self_idx] == .empty);
+
+    refreshFullAt(cells, self_idx);
+    addContribAt(self_idx);
+    updateNeighborDirections(cells, row, col);
+}
+
+/// prospect_state.sum から評価値を計算する（evaluateFull と同じ §2.3 の式・クランプ）。
+pub fn getStateEval(perspective: Cell, stm: StmMode) i32 {
+    const opponent = perspective.opposite();
+    const persp_idx = colorIndex(perspective);
+    const opp_idx = colorIndex(opponent);
+
+    const raw_when_persp_to_move = prospect_state.sum[persp_idx][1] - prospect_state.sum[opp_idx][0];
+    const raw_when_opp_to_move = prospect_state.sum[persp_idx][0] - prospect_state.sum[opp_idx][1];
+
+    const raw: i32 = switch (stm) {
+        .perspective => raw_when_persp_to_move,
+        .opponent => raw_when_opp_to_move,
+        .average => @divTrunc(raw_when_persp_to_move + raw_when_opp_to_move, 2),
+    };
+
+    return std.math.clamp(raw, -PROSPECT_EVAL_CLAMP, PROSPECT_EVAL_CLAMP);
+}
+
+// ============================================================================
 // Tests
 // ============================================================================
 
@@ -1296,4 +1511,127 @@ test "extractFeatures: 白視点でも内積が一致する（反対称性の間
     var features: [PROSPECT_PARAM_COUNT]i32 = undefined;
     extractFeatures(&cells, .white, true, &features);
     try std.testing.expectEqual(evaluateFull(&cells, .white, .perspective), dotProduct(features));
+}
+
+// --- 10. ProspectState（P2-a インクリメンタル状態） ---
+
+const STM_MODE_VALUES = [_]StmMode{ .perspective, .opponent, .average };
+
+test "classifyDirectionDual: 1回走査版がextractWindowFromCells二回呼びと一致する（複数局面×4方向、盤端含む）" {
+    var cells: [board_mod.CELL_COUNT]Cell = undefined;
+    setupFourThreeFixture(&cells);
+
+    const positions = [_]struct { r: u8, c: u8 }{
+        .{ .r = 7, .c = 7 }, // four_three フィクスチャの四三点（空点）
+        .{ .r = 0, .c = 0 }, // 盤端（edge_bits が立つ）
+        .{ .r = 0, .c = 7 },
+        .{ .r = 14, .c = 14 },
+    };
+    for (positions) |pos| {
+        if (cells[@as(u16, pos.r) * BOARD_SIZE + pos.c] != .empty) continue;
+        for (0..4) |dir_idx| {
+            const dual = classifyDirectionDual(&cells, pos.r, pos.c, dir_idx);
+            const wb = ll.extractWindowFromCells(&cells, pos.r, pos.c, dir_idx, .black);
+            const ww = ll.extractWindowFromCells(&cells, pos.r, pos.c, dir_idx, .white);
+            try std.testing.expectEqual(classifyDirection(wb.own, wb.block, .black), dual.black);
+            try std.testing.expectEqual(classifyDirection(ww.own, ww.block, .white), dual.white);
+        }
+    }
+}
+
+test "replaceNibble: 指定ニブルのみ置換し他ニブルは不変" {
+    const original: u16 = packCodes(.{ .f2, .b3, .dead, .f4 });
+    const replaced = replaceNibble(original, 1, .f5);
+    try std.testing.expectEqual(packCodes(.{ .f2, .f5, .dead, .f4 }), replaced);
+    // 他のニブルは元のまま
+    try std.testing.expectEqual(@as(u16, @intFromEnum(DirCode.f2)), replaced & 0xF);
+}
+
+test "initStateFromBoard: フル構築はevaluateFullと一致する（複数局面・両視点・3値stm）" {
+    // 空盤
+    {
+        var cells = [_]Cell{.empty} ** board_mod.CELL_COUNT;
+        initStateFromBoard(&cells);
+        for (STM_MODE_VALUES) |stm| {
+            try std.testing.expectEqual(evaluateFull(&cells, .black, stm), getStateEval(.black, stm));
+            try std.testing.expectEqual(evaluateFull(&cells, .white, stm), getStateEval(.white, stm));
+        }
+    }
+
+    // four_three フィクスチャ（非対称局面）
+    {
+        var cells: [board_mod.CELL_COUNT]Cell = undefined;
+        setupFourThreeFixture(&cells);
+        initStateFromBoard(&cells);
+        for (STM_MODE_VALUES) |stm| {
+            try std.testing.expectEqual(evaluateFull(&cells, .black, stm), getStateEval(.black, stm));
+            try std.testing.expectEqual(evaluateFull(&cells, .white, stm), getStateEval(.white, stm));
+        }
+    }
+}
+
+test "updateOnPlace→updateOnRemove: sumが完全に復元する（four_threeフィクスチャ＋離れた1手）" {
+    var cells: [board_mod.CELL_COUNT]Cell = undefined;
+    setupFourThreeFixture(&cells);
+    initStateFromBoard(&cells);
+    const sum_before = prospect_state.sum;
+
+    const r: u8 = 3;
+    const c: u8 = 3;
+    cells[@as(u16, r) * BOARD_SIZE + c] = .black;
+    updateOnPlace(&cells, r, c, .black);
+    try std.testing.expect(!std.meta.eql(sum_before, prospect_state.sum)); // 何かは変化するはず
+
+    cells[@as(u16, r) * BOARD_SIZE + c] = .empty;
+    updateOnRemove(&cells, r, c);
+
+    try std.testing.expectEqual(sum_before, prospect_state.sum);
+}
+
+test "updateOnPlace/updateOnRemove: 複数手の対局列で毎手インクリメンタル≡evaluateFull（P1のsequenceテスト流儀）" {
+    var cells = [_]Cell{.empty} ** board_mod.CELL_COUNT;
+    initStateFromBoard(&cells);
+
+    const moves = [_]struct { r: u8, c: u8, color: Cell }{
+        .{ .r = 7, .c = 7, .color = .black },
+        .{ .r = 7, .c = 8, .color = .white },
+        .{ .r = 8, .c = 7, .color = .black },
+        .{ .r = 6, .c = 8, .color = .white },
+        .{ .r = 9, .c = 7, .color = .black },
+        .{ .r = 5, .c = 8, .color = .white },
+        .{ .r = 6, .c = 6, .color = .black },
+        .{ .r = 4, .c = 8, .color = .white },
+    };
+
+    for (moves) |m| {
+        cells[@as(u16, m.r) * BOARD_SIZE + m.c] = m.color;
+        updateOnPlace(&cells, m.r, m.c, m.color);
+
+        for (STM_MODE_VALUES) |stm| {
+            try std.testing.expectEqual(evaluateFull(&cells, .black, stm), getStateEval(.black, stm));
+            try std.testing.expectEqual(evaluateFull(&cells, .white, stm), getStateEval(.white, stm));
+        }
+    }
+
+    var i: usize = moves.len;
+    while (i > 0) {
+        i -= 1;
+        const m = moves[i];
+        cells[@as(u16, m.r) * BOARD_SIZE + m.c] = .empty;
+        updateOnRemove(&cells, m.r, m.c);
+
+        for (STM_MODE_VALUES) |stm| {
+            try std.testing.expectEqual(evaluateFull(&cells, .black, stm), getStateEval(.black, stm));
+        }
+    }
+}
+
+test "getStateEval: 反対称性 eval(persp)==-eval(opp)（stm 3値、インクリメンタル経由）" {
+    var cells: [board_mod.CELL_COUNT]Cell = undefined;
+    setupFourThreeFixture(&cells);
+    initStateFromBoard(&cells);
+
+    try std.testing.expectEqual(getStateEval(.black, .perspective), -getStateEval(.white, .opponent));
+    try std.testing.expectEqual(getStateEval(.black, .opponent), -getStateEval(.white, .perspective));
+    try std.testing.expectEqual(getStateEval(.black, .average), -getStateEval(.white, .average));
 }
