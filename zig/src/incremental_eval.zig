@@ -142,7 +142,7 @@ pub fn initFromBoard(cells: []Cell, opts: InitOptions) void {
     switch (opts.eval_basis) {
         .prospect => {
             prospect.ensureTables();
-            prospect.initStateFromBoard(cells);
+            prospect.initFromBoard(cells);
         },
         .legacy => {
             for (0..CELL_COUNT) |i| {
@@ -322,6 +322,13 @@ fn addLinePotential(lines: [4]bitboard.CellLineInfo) void {
 /// 集計値から評価値を計算（evaluateBoardOnCells と同等のロジック）。
 /// eval_basis で legacy（インクリメンタル集計）/ prospect（ProspectState、P2でインクリメンタル化済み）を切り替える。
 pub fn getEvaluation(cells: []Cell, perspective: Cell, options: evaluate.EvalOptions) i32 {
+    // 呼び出し元が initFromBoard で構築した基底と options.eval_basis がずれていないかを
+    // 固定する（将来 call site が増えた際、片方だけ eval_basis を差し替えるドリフトを
+    // Debug ビルドで即座に検出するガード）。initFromBoard を経ずに直接呼ぶ経路は
+    // 想定していない。
+    if (VERIFY_INCREMENTAL) {
+        std.debug.assert(active_eval_basis == options.eval_basis);
+    }
     return switch (options.eval_basis) {
         .legacy => getEvaluationLegacy(cells, perspective, options),
         .prospect => getEvaluationProspect(cells, perspective, options),

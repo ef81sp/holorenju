@@ -303,17 +303,20 @@ pub fn queryPatternByCell(row: u8, col: u8, dir_index: usize, color: Cell) Patte
     return queryPattern(info.line_index, info.bit_pos, color);
 }
 
-/// cells 配列から (row,col) を中心とする dir_index 方向の9マス窓を抽出する
-/// （bitboard 同期不要版）。盤外は block 扱い。中心セルもそのまま読む
-/// （空なら own/block とも 0）。queryPatternFromCells と
-/// prospect.computeCellCodes が共有する。
-pub fn extractWindowFromCells(cells: []const Cell, row: u8, col: u8, dir_index: usize, color: Cell) struct { own: u9, block: u9 } {
+/// cells 配列から (row,col) を中心とする dir_index 方向の9マス窓を、黒視点・白視点の
+/// 生ビット（own 相当）と盤外ビットに**1回のセル走査で同時に**分解する
+/// （bitboard 同期不要版）。窓生成則（盤外→edge、色ごとの own 分類）の一次ソース
+/// （SSoT）。中心セルもそのまま読む（空なら黒白どちらの own にも入らない）。
+/// `extractWindowFromCells`（thin wrapper）と `prospect.classifyDirectionDual` が
+/// 本関数を共有する（P2 レビュー対応: 窓生成則の二実装解消・抽出回数半減）。
+pub fn extractWindowFromCellsDual(cells: []const Cell, row: u8, col: u8, dir_index: usize) struct { black_own: u9, white_own: u9, edge: u9 } {
     const dir = board_mod.DIRECTIONS[dir_index];
     const dr: i8 = dir.dr;
     const dc: i8 = dir.dc;
 
-    var own_window: u9 = 0;
-    var block_window: u9 = 0;
+    var black_own: u9 = 0;
+    var white_own: u9 = 0;
+    var edge: u9 = 0;
 
     for (0..9) |w| {
         const offset: i8 = @as(i8, @intCast(w)) - 4;
@@ -322,18 +325,32 @@ pub fn extractWindowFromCells(cells: []const Cell, row: u8, col: u8, dir_index: 
         const w_bit: u4 = @intCast(w);
 
         if (!board_mod.isValid(r, c)) {
-            block_window |= @as(u9, 1) << w_bit;
+            edge |= @as(u9, 1) << w_bit;
         } else {
             const cell = cells[@intCast(@as(u16, @intCast(r)) * BOARD_SIZE + @as(u16, @intCast(c)))];
-            if (cell == color) {
-                own_window |= @as(u9, 1) << w_bit;
-            } else if (cell != .empty) {
-                block_window |= @as(u9, 1) << w_bit;
+            if (cell == .black) {
+                black_own |= @as(u9, 1) << w_bit;
+            } else if (cell == .white) {
+                white_own |= @as(u9, 1) << w_bit;
             }
         }
     }
 
-    return .{ .own = own_window, .block = block_window };
+    return .{ .black_own = black_own, .white_own = white_own, .edge = edge };
+}
+
+/// cells 配列から (row,col) を中心とする dir_index 方向の9マス窓を抽出する
+/// （bitboard 同期不要版）。盤外は block 扱い。中心セルもそのまま読む
+/// （空なら own/block とも 0）。queryPatternFromCells と
+/// prospect.computeCellCodes が共有する。`extractWindowFromCellsDual`（SSoT）の
+/// 結果を color 視点で選ぶだけの thin wrapper。
+pub fn extractWindowFromCells(cells: []const Cell, row: u8, col: u8, dir_index: usize, color: Cell) struct { own: u9, block: u9 } {
+    const dual = extractWindowFromCellsDual(cells, row, col, dir_index);
+    return switch (color) {
+        .black => .{ .own = dual.black_own, .block = dual.white_own | dual.edge },
+        .white => .{ .own = dual.white_own, .block = dual.black_own | dual.edge },
+        .empty => unreachable,
+    };
 }
 
 /// Query pattern directly from cells array (no bitboard sync needed).

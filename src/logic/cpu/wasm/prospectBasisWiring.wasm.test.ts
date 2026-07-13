@@ -257,6 +257,31 @@ describe("クロスレイアウト整合性: findBestMove(abort) と evaluateBoa
       expect(result.score).toBe(directScore);
     },
   );
+
+  /**
+   * 上記クロスレイアウトテストの legacy 脚は「buildFourHeavyBoard が TEMPO-neutral
+   * （活三を持たず open_three_score=0）だから .unset と .yes が数値上一致する」という
+   * 前提に依存している。この前提が崩れると legacy 脚は静かに壊れる（.unset を渡している
+   * つもりでも実際は TEMPO 割引の有無で値が変わってしまう）ため、前提そのものを
+   * 明示的にロックする。fixture が変わって活三を持つようになった場合、このテストが
+   * 真っ先に落ちて検出できる。
+   */
+  it("前提固定: buildFourHeavyBoardはTEMPO-neutral（legacy評価がlastMover未指定/true/falseで同値）", async () => {
+    const wasm = await loadWasmModule();
+    const evaluator = new WasmBoardEvaluator(wasm);
+    const board = buildFourHeavyBoard();
+
+    const unset = evaluator.evaluateBoard(board, "black");
+    const yes = evaluator.evaluateBoard(board, "black", {
+      lastMoverIsPerspective: true,
+    });
+    const no = evaluator.evaluateBoard(board, "black", {
+      lastMoverIsPerspective: false,
+    });
+
+    expect(yes).toBe(unset);
+    expect(no).toBe(unset);
+  });
 });
 
 // ────────────────────────────────────────────────
