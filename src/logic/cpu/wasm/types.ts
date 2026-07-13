@@ -63,6 +63,13 @@ export interface WasmModuleContext {
   getResultBuffer: () => number;
   ttClear: () => void;
 
+  // 探索統計バッファ（12フィールド×u32=48バイト。レイアウトは main.zig writeStats 参照）
+  getStatsBuffer: () => number;
+
+  // Gate 0 計測用（docs/plans/eval-basis-prospect-2026-07-13.md §5）
+  setThreatProbeEnabled: (enabled: number) => void;
+  getAspirationResearchCount: () => number;
+
   // PV extraction
   extractPV: (
     bestRow: number,

@@ -203,6 +203,13 @@ const ASPIRATION_WIDTHS = minimax.ASPIRATION_WIDTHS;
 /// 固定幅モード（mode 0）: 最初の1要素のみ使用
 const ASPIRATION_WIDTHS_FIXED = [1]i32{ASPIRATION_WIDTHS[0]};
 
+/// aspiration window fail による再探索回数（Gate 0 計測用）。
+/// 1深度あたり最初の1回の探索は数えず、幅を広げた再試行・フルウィンドウ
+/// フォールバックの追加探索回数のみを数える。findBestMoveIterative の開始時に
+/// リセットする（main.zig の getAspirationResearchCount export で読み出す。
+/// stats_buffer のレイアウトは commit-bench 互換のため変更しない＝独立 export）。
+pub var aspiration_research_count: u32 = 0;
+
 /// Score Verification の閾値
 const VERIFICATION_THRESHOLD: i32 = 1500;
 
@@ -312,6 +319,7 @@ pub fn findBestMoveIterative(
     params: IterativeDeepeningParams,
 ) IterativeDeepingResult {
     const start_time = getTimestampMs();
+    aspiration_research_count = 0;
 
     // Aspiration Windowsの幅を選択
     const effective_widths: []const i32 = if (params.aspiration_mode == 1)
@@ -514,7 +522,10 @@ pub fn findBestMoveIterative(
         // Aspiration Windowsで探索
         var result = best_result;
         var search_complete = false;
-        for (effective_widths) |width| {
+        for (effective_widths, 0..) |width, width_index| {
+            // 1深度目の最初の探索（width_index==0）はaspiration failによる再探索ではない。
+            if (width_index > 0) aspiration_research_count += 1;
+
             result = minimax.findBestMoveWithTT(
                 cells,
                 color,
@@ -540,6 +551,7 @@ pub fn findBestMoveIterative(
 
         // 全段階でウィンドウ外 → フルウィンドウで再探索
         if (!search_complete and !ctx.timeout_flag and !ctx.node_count_exceeded and !ctx.absolute_deadline_exceeded) {
+            aspiration_research_count += 1;
             result = minimax.findBestMoveWithTT(
                 cells,
                 color,
@@ -707,6 +719,26 @@ test "findBestMoveIterative basic" {
     try testing.expect(result.position.col < BOARD_SIZE);
     try testing.expect(result.completed_depth >= 1);
     try testing.expect(result.stats.nodes > 0);
+}
+
+test "aspiration_research_count: findBestMoveIterativeの呼び出しごとにリセットされる（累積しない）" {
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[7 * BOARD_SIZE + 7] = .black;
+    cells[7 * BOARD_SIZE + 8] = .white;
+    cells[6 * BOARD_SIZE + 7] = .black;
+    cells[8 * BOARD_SIZE + 8] = .white;
+
+    tt_mod.global_tt.clear();
+    _ = findBestMoveIterative(&cells, .black, .{ .max_depth = 3, .aspiration_mode = 1 });
+    const first = aspiration_research_count;
+
+    tt_mod.global_tt.clear();
+    _ = findBestMoveIterative(&cells, .black, .{ .max_depth = 3, .aspiration_mode = 1 });
+    const second = aspiration_research_count;
+
+    // リセットされていれば同一局面・同一パラメータで毎回同じ値になる
+    // （リセットされず累積するなら2回目は1回目の約2倍になり不一致となる）。
+    try testing.expectEqual(first, second);
 }
 
 test "findBestMoveIterative finds winning move" {

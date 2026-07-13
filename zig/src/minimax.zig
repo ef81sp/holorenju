@@ -261,6 +261,12 @@ fn isThreatExtensionCandidate(cells: []const Cell, row: u8, col: u8, color: Cell
 // Threat Probe（脅威プローブ）
 // =============================================================================
 
+/// threatProbe の実行時トグル（Gate 0 計測用）。
+/// probe 込み NPS は eval 退行を隠すため、probe 無効構成で NPS/time-to-depth を
+/// 測る必要がある（docs/plans/eval-basis-prospect-2026-07-13.md §5 Gate 0）。
+/// 既定 true なので既存の探索挙動・commit-bench 互換は不変。
+pub var threat_probe_enabled: bool = true;
+
 /// 深度適応型バジェット（TS版 threatProbe.ts の getThreatBudget に対応）
 const ThreatBudget = struct {
     vcf_depth: u8,
@@ -460,7 +466,7 @@ pub fn minimaxWithTT(
     // Threat Probe: 手番側のVCFをチェック
     // VCFがあれば勝ちスコア(FIVE-1)でカットオフ
     // =========================================================================
-    if (depth >= 3) {
+    if (threat_probe_enabled and depth >= 3) {
         // !is_maximizing = 相手手番ノード = 自分の被詰み判定 → strict で幻を棄却。
         const threat_result = threatProbe(
             cells,
@@ -975,6 +981,56 @@ fn getTimestampMs() u32 {
 // === Tests ===
 
 const testing = std.testing;
+
+test "threat_probe_enabled=false: threatProbeによるcutoffが発生しない（深さ3以上、VCFがある局面）" {
+    defer threat_probe_enabled = true;
+
+    var cells = [_]Cell{.empty} ** board_mod.CELL_COUNT;
+    // 黒の活四: (7,4)(7,5)(7,6)(7,7)。threatProbeのVCF検出が確実に発火する局面
+    // （findVCFMove: immediate five と同一フィクスチャ）。
+    cells[7 * BOARD_SIZE + 4] = .black;
+    cells[7 * BOARD_SIZE + 5] = .black;
+    cells[7 * BOARD_SIZE + 6] = .black;
+    cells[7 * BOARD_SIZE + 7] = .black;
+
+    incremental_eval.initFromBoard(&cells, .{ .connectivity_bonus = scores.CONNECTIVITY_BONUS, .single_four_penalty_multiplier = 100 });
+
+    var tt = tt_mod.TranspositionTable{
+        .entries = &tt_mod.global_tt_storage,
+        .current_generation = 0,
+    };
+
+    const board_eval_options = evaluate.EvalOptions{
+        .enable_leaf_mise = false,
+        .last_mover_is_perspective = .unset,
+        .single_four_penalty_multiplier = 100,
+        .connectivity_bonus = scores.CONNECTIVITY_BONUS,
+    };
+
+    threat_probe_enabled = true;
+    {
+        tt.clear();
+        var history = move_order.HistoryTable.init();
+        var killers = move_order.KillerMoves.init();
+        var counter_moves = initCounterMoveTable();
+        var ctx = SearchContext.init(&tt, &history, &killers, &counter_moves, position_eval.DEFAULT_EVAL_OPTIONS, board_eval_options);
+        ctx.no_time_limit = true;
+        _ = minimaxWithTT(&cells, 0, 3, true, .black, -scores.INFINITY, scores.INFINITY, null, &ctx, true, 0);
+        try testing.expect(ctx.stats.threat_probe_cutoffs > 0);
+    }
+
+    threat_probe_enabled = false;
+    {
+        tt.clear();
+        var history = move_order.HistoryTable.init();
+        var killers = move_order.KillerMoves.init();
+        var counter_moves = initCounterMoveTable();
+        var ctx = SearchContext.init(&tt, &history, &killers, &counter_moves, position_eval.DEFAULT_EVAL_OPTIONS, board_eval_options);
+        ctx.no_time_limit = true;
+        _ = minimaxWithTT(&cells, 0, 3, true, .black, -scores.INFINITY, scores.INFINITY, null, &ctx, true, 0);
+        try testing.expectEqual(@as(u32, 0), ctx.stats.threat_probe_cutoffs);
+    }
+}
 
 test "minimaxWithTT basic: empty board" {
     const CELL_COUNT = board_mod.CELL_COUNT;

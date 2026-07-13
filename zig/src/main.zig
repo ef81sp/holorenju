@@ -283,6 +283,19 @@ export fn ttClear() void {
 
 const minimax = @import("minimax.zig");
 
+/// threatProbe の実行時トグル（Gate 0 計測用。既定 true=有効、既存挙動不変）。
+export fn setThreatProbeEnabled(enabled: u8) void {
+    minimax.threat_probe_enabled = enabled != 0;
+}
+
+/// aspiration window fail による再探索回数を返す（Gate 0 計測用）。
+/// search.findBestMoveIterative の開始時にリセットされるため、直前の
+/// findBestMove 呼び出し1回分の値になる。stats_buffer とは独立の export
+/// （レイアウト変更禁止のため既存バッファには含めない）。
+export fn getAspirationResearchCount() u32 {
+    return search.aspiration_research_count;
+}
+
 // ─── PV抽出 ─────────────────────────────────────────
 
 /// PV バッファ
