@@ -109,11 +109,17 @@ pub const IncrementalEvalState = struct {
 
 pub var eval_state: IncrementalEvalState = .{};
 
+/// initFromBoard のオプション（旧: 位置引数2つ）。
+pub const InitOptions = struct {
+    connectivity_bonus: i32,
+    single_four_penalty_multiplier: i32 = 100,
+};
+
 /// 全石を走査してキャッシュと集計値を構築
-pub fn initFromBoard(cells: []Cell, connectivity_bonus: i32, multiplier: i32) void {
+pub fn initFromBoard(cells: []Cell, opts: InitOptions) void {
     eval_state = .{
-        .connectivity_bonus = connectivity_bonus,
-        .single_four_penalty_multiplier = multiplier,
+        .connectivity_bonus = opts.connectivity_bonus,
+        .single_four_penalty_multiplier = opts.single_four_penalty_multiplier,
     };
 
     // LUT版 evaluateStonePatternsLightOnCells が bitboard を使うため同期
@@ -268,7 +274,12 @@ fn addLinePotential(lines: [4]bitboard.CellLineInfo) void {
 }
 
 /// 集計値から評価値を計算（evaluateBoardOnCells と同等のロジック）
-pub fn getEvaluation(cells: []Cell, perspective: Cell, options: evaluate.EvalOptions, skip_four_three: bool) i32 {
+pub fn getEvaluation(cells: []Cell, perspective: Cell, options: evaluate.EvalOptions) i32 {
+    return getEvaluationLegacy(cells, perspective, options);
+}
+
+/// legacy（石ベース）基底での評価値計算。旧 getEvaluation 本体。
+fn getEvaluationLegacy(cells: []Cell, perspective: Cell, options: evaluate.EvalOptions) i32 {
     const my_agg = switch (perspective) {
         .black => eval_state.black,
         .white => eval_state.white,
@@ -290,19 +301,14 @@ pub fn getEvaluation(cells: []Cell, perspective: Cell, options: evaluate.EvalOpt
         opp_score -= @divTrunc(opp_agg.open_three_score * scores.TEMPO_OPEN_THREE_DISCOUNT_NUM, scores.TEMPO_OPEN_THREE_DISCOUNT_DEN);
     }
 
-    // 四三脅威スキャン（skip_four_three=true のときは省略）
-    var my_has_four_three = false;
-    var opp_has_four_three = false;
+    // 四三脅威スキャン
+    const opponent = perspective.opposite();
+    const my_has_four_three = evaluate.scanFourThreeThreat(cells, perspective, my_agg.stone_count);
+    const opp_has_four_three = evaluate.scanFourThreeThreat(cells, opponent, opp_agg.stone_count);
 
-    if (!skip_four_three) {
-        const opponent = perspective.opposite();
-        my_has_four_three = evaluate.scanFourThreeThreat(cells, perspective, my_agg.stone_count);
-        opp_has_four_three = evaluate.scanFourThreeThreat(cells, opponent, opp_agg.stone_count);
-
-        if (scores.LEAF_FOUR_THREE_THREAT > 0) {
-            if (my_has_four_three) my_score += scores.LEAF_FOUR_THREE_THREAT;
-            if (opp_has_four_three) opp_score += scores.LEAF_FOUR_THREE_THREAT;
-        }
+    if (scores.LEAF_FOUR_THREE_THREAT > 0) {
+        if (my_has_four_three) my_score += scores.LEAF_FOUR_THREE_THREAT;
+        if (opp_has_four_three) opp_score += scores.LEAF_FOUR_THREE_THREAT;
     }
 
     // ミセ手脅威推定
@@ -335,7 +341,7 @@ pub fn getEvaluation(cells: []Cell, perspective: Cell, options: evaluate.EvalOpt
 
     const result = my_score - opp_score;
 
-    if (VERIFY_INCREMENTAL and !skip_four_three) {
+    if (VERIFY_INCREMENTAL) {
         const full_result = evaluate.evaluateBoardOnCells(cells, perspective, options);
         if (result != full_result) {
             std.debug.print("INCREMENTAL MISMATCH: incremental={d}, full={d}\n", .{ result, full_result });
@@ -356,8 +362,8 @@ test "initFromBoard matches evaluateBoardOnCells on empty board" {
         .single_four_penalty_multiplier = 100,
         .connectivity_bonus = scores.CONNECTIVITY_BONUS,
     };
-    initFromBoard(&cells, options.connectivity_bonus, options.single_four_penalty_multiplier);
-    const inc_result = getEvaluation(&cells, .black, options, false);
+    initFromBoard(&cells, .{ .connectivity_bonus = options.connectivity_bonus, .single_four_penalty_multiplier = options.single_four_penalty_multiplier });
+    const inc_result = getEvaluation(&cells, .black, options);
     const full_result = evaluate.evaluateBoardOnCells(&cells, .black, options);
     try std.testing.expectEqual(inc_result, full_result);
 }
@@ -379,13 +385,13 @@ test "initFromBoard matches evaluateBoardOnCells with stones" {
         .single_four_penalty_multiplier = 100,
         .connectivity_bonus = scores.CONNECTIVITY_BONUS,
     };
-    initFromBoard(&cells, options.connectivity_bonus, options.single_four_penalty_multiplier);
+    initFromBoard(&cells, .{ .connectivity_bonus = options.connectivity_bonus, .single_four_penalty_multiplier = options.single_four_penalty_multiplier });
 
-    const inc_black = getEvaluation(&cells, .black, options, false);
+    const inc_black = getEvaluation(&cells, .black, options);
     const full_black = evaluate.evaluateBoardOnCells(&cells, .black, options);
     try std.testing.expectEqual(inc_black, full_black);
 
-    const inc_white = getEvaluation(&cells, .white, options, false);
+    const inc_white = getEvaluation(&cells, .white, options);
     const full_white = evaluate.evaluateBoardOnCells(&cells, .white, options);
     try std.testing.expectEqual(inc_white, full_white);
 }
@@ -403,12 +409,12 @@ test "placeStone then getEvaluation matches full evaluation" {
         .single_four_penalty_multiplier = 100,
         .connectivity_bonus = scores.CONNECTIVITY_BONUS,
     };
-    initFromBoard(&cells, options.connectivity_bonus, options.single_four_penalty_multiplier);
+    initFromBoard(&cells, .{ .connectivity_bonus = options.connectivity_bonus, .single_four_penalty_multiplier = options.single_four_penalty_multiplier });
 
     // Place a new black stone
     placeStone(&cells, 7, 9, .black);
 
-    const inc_result = getEvaluation(&cells, .black, options, false);
+    const inc_result = getEvaluation(&cells, .black, options);
     const full_result = evaluate.evaluateBoardOnCells(&cells, .black, options);
     try std.testing.expectEqual(inc_result, full_result);
 }
@@ -426,14 +432,14 @@ test "removeStone restores evaluation" {
         .single_four_penalty_multiplier = 100,
         .connectivity_bonus = scores.CONNECTIVITY_BONUS,
     };
-    initFromBoard(&cells, options.connectivity_bonus, options.single_four_penalty_multiplier);
-    const before = getEvaluation(&cells, .black, options, false);
+    initFromBoard(&cells, .{ .connectivity_bonus = options.connectivity_bonus, .single_four_penalty_multiplier = options.single_four_penalty_multiplier });
+    const before = getEvaluation(&cells, .black, options);
 
     // Place then remove
     placeStone(&cells, 7, 10, .black);
     removeStone(&cells, 7, 10);
 
-    const after = getEvaluation(&cells, .black, options, false);
+    const after = getEvaluation(&cells, .black, options);
     try std.testing.expectEqual(before, after);
 }
 
@@ -451,11 +457,11 @@ test "placeStone with tempo correction matches" {
         .single_four_penalty_multiplier = 80,
         .connectivity_bonus = scores.CONNECTIVITY_BONUS,
     };
-    initFromBoard(&cells, options.connectivity_bonus, options.single_four_penalty_multiplier);
+    initFromBoard(&cells, .{ .connectivity_bonus = options.connectivity_bonus, .single_four_penalty_multiplier = options.single_four_penalty_multiplier });
 
     placeStone(&cells, 3, 8, .white);
 
-    const inc_result = getEvaluation(&cells, .black, options, false);
+    const inc_result = getEvaluation(&cells, .black, options);
     const full_result = evaluate.evaluateBoardOnCells(&cells, .black, options);
     try std.testing.expectEqual(inc_result, full_result);
 }
@@ -479,9 +485,9 @@ test "placeStone with leaf mise threat matches" {
         .single_four_penalty_multiplier = 100,
         .connectivity_bonus = scores.CONNECTIVITY_BONUS,
     };
-    initFromBoard(&cells, options.connectivity_bonus, options.single_four_penalty_multiplier);
+    initFromBoard(&cells, .{ .connectivity_bonus = options.connectivity_bonus, .single_four_penalty_multiplier = options.single_four_penalty_multiplier });
 
-    const inc_result = getEvaluation(&cells, .black, options, false);
+    const inc_result = getEvaluation(&cells, .black, options);
     const full_result = evaluate.evaluateBoardOnCells(&cells, .black, options);
     try std.testing.expectEqual(inc_result, full_result);
 }
@@ -494,7 +500,7 @@ test "multiple place and remove sequence" {
         .single_four_penalty_multiplier = 70,
         .connectivity_bonus = scores.CONNECTIVITY_BONUS,
     };
-    initFromBoard(&cells, options.connectivity_bonus, options.single_four_penalty_multiplier);
+    initFromBoard(&cells, .{ .connectivity_bonus = options.connectivity_bonus, .single_four_penalty_multiplier = options.single_four_penalty_multiplier });
 
     // Simulate a game sequence
     const moves = [_]struct { r: u8, c: u8, color: Cell }{
@@ -511,11 +517,11 @@ test "multiple place and remove sequence" {
     for (moves) |m| {
         placeStone(&cells, m.r, m.c, m.color);
 
-        const inc_b = getEvaluation(&cells, .black, options, false);
+        const inc_b = getEvaluation(&cells, .black, options);
         const full_b = evaluate.evaluateBoardOnCells(&cells, .black, options);
         try std.testing.expectEqual(inc_b, full_b);
 
-        const inc_w = getEvaluation(&cells, .white, options, false);
+        const inc_w = getEvaluation(&cells, .white, options);
         const full_w = evaluate.evaluateBoardOnCells(&cells, .white, options);
         try std.testing.expectEqual(inc_w, full_w);
     }
@@ -526,7 +532,7 @@ test "multiple place and remove sequence" {
         i -= 1;
         removeStone(&cells, moves[i].r, moves[i].c);
 
-        const inc_b = getEvaluation(&cells, .black, options, false);
+        const inc_b = getEvaluation(&cells, .black, options);
         const full_b = evaluate.evaluateBoardOnCells(&cells, .black, options);
         try std.testing.expectEqual(inc_b, full_b);
     }

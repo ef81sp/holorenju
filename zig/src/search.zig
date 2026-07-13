@@ -2,7 +2,6 @@
 ///
 /// Iterative Deepening + Aspiration Windows + 事前チェック（VCF/脅威防御）
 /// TS版 iterativeDeepening.ts + preSearch.ts に対応
-
 const bitboard = @import("bitboard.zig");
 const board_mod = @import("board.zig");
 const evaluate = @import("evaluate.zig");
@@ -340,7 +339,10 @@ pub fn findBestMoveIterative(
     // ビットボード・LUT・インクリメンタル評価状態の初期化
     // initFromBoard は内部で ll.init() / bitboard.initFromCells を呼ぶ
     ll.init();
-    incremental_eval.initFromBoard(cells, params.board_eval_options.connectivity_bonus, params.board_eval_options.single_four_penalty_multiplier);
+    incremental_eval.initFromBoard(cells, .{
+        .connectivity_bonus = params.board_eval_options.connectivity_bonus,
+        .single_four_penalty_multiplier = params.board_eval_options.single_four_penalty_multiplier,
+    });
 
     // =========================================================================
     // 事前チェック

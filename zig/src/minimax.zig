@@ -2,7 +2,6 @@
 ///
 /// Alpha-Beta + NMP/LMR/Futility/PVS/Threat Extension
 /// TS版 minimaxCore.ts に対応
-
 const bitboard = @import("bitboard.zig");
 const board_mod = @import("board.zig");
 const evaluate = @import("evaluate.zig");
@@ -381,7 +380,7 @@ pub fn minimaxWithTT(
 
     // タイムアウト/ノード上限時は静的評価を返す（インクリメンタル評価を使用）
     if (ctx.isAborted()) {
-        return incremental_eval.getEvaluation(cells, perspective, ctx.board_eval_options, false);
+        return incremental_eval.getEvaluation(cells, perspective, ctx.board_eval_options);
     }
 
     // 現在の手番を決定
@@ -502,7 +501,7 @@ pub fn minimaxWithTT(
         // NMP子探索中の打ち切り検出: nmp_score には static eval が混入している可能性があり、
         // 偽の beta-cutoff で汚染値を返さないよう、冒頭の早期 latch と同じ形で静的評価に落とす。
         if (ctx.isAborted()) {
-            return incremental_eval.getEvaluation(cells, perspective, ctx.board_eval_options, false);
+            return incremental_eval.getEvaluation(cells, perspective, ctx.board_eval_options);
         }
         if (if (is_maximizing) nmp_score >= beta else nmp_score <= alpha) {
             ctx.stats.null_move_cutoffs += 1;
@@ -700,7 +699,7 @@ pub fn minimaxWithTT(
     if (aborted) {
         // 1手も完了せず best_score が初期値のままなら static eval にフォールバック
         if (best_score == scores.INFINITY or best_score == -scores.INFINITY) {
-            return incremental_eval.getEvaluation(cells, perspective, ctx.board_eval_options, false);
+            return incremental_eval.getEvaluation(cells, perspective, ctx.board_eval_options);
         }
         return best_score;
     }
@@ -959,7 +958,7 @@ test "minimaxWithTT basic: empty board" {
     // 天元に黒石
     cells[7 * BOARD_SIZE + 7] = .black;
 
-    incremental_eval.initFromBoard(&cells, scores.CONNECTIVITY_BONUS, 100);
+    incremental_eval.initFromBoard(&cells, .{ .connectivity_bonus = scores.CONNECTIVITY_BONUS, .single_four_penalty_multiplier = 100 });
 
     var tt = tt_mod.TranspositionTable{
         .entries = &tt_mod.global_tt_storage,
@@ -1073,7 +1072,7 @@ test "minimaxWithTT: ノード上限到達後は不完全スコアをTTに保存
     const CELL_COUNT = board_mod.CELL_COUNT;
     var cells: [CELL_COUNT]Cell = undefined;
     setupMinimaxTacticalPosition(&cells);
-    incremental_eval.initFromBoard(&cells, scores.CONNECTIVITY_BONUS, 100);
+    incremental_eval.initFromBoard(&cells, .{ .connectivity_bonus = scores.CONNECTIVITY_BONUS, .single_four_penalty_multiplier = 100 });
 
     var tt = tt_mod.TranspositionTable{
         .entries = &tt_mod.global_tt_storage,
