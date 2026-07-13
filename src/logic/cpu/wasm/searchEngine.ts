@@ -34,8 +34,9 @@ import {
  *   bits 9-16:  葉評価 single_four_penalty_multiplier
  *               （0=未指定→100、255=センチネル→0、1-254=そのまま）
  *   bit 17:     enable_leaf_mise（現在は未使用、将来拡張用）
+ *   bit 18:     eval_basis（evalBasis === "prospect" のとき1、それ以外0=legacy）
  *
- * Zig 側: main.zig findBestMove が bits 9-17 をデコードして board_eval_options を構築する。
+ * Zig 側: main.zig findBestMove が bits 9-18 をデコードして board_eval_options を構築する。
  */
 export function encodeEvalOptions(opts: EvaluationOptions): number {
   // ビット位置: Zig position_eval.decodeEvalOptions と一致
@@ -63,6 +64,10 @@ export function encodeEvalOptions(opts: EvaluationOptions): number {
     const m = opts.singleFourPenaltyMultiplier;
     const raw = m === 0 ? 255 : Math.round(m * 100);
     flags |= (raw & 0xff) << 9;
+  }
+
+  if (opts.evalBasis === "prospect") {
+    flags |= 1 << 18;
   }
 
   return flags;

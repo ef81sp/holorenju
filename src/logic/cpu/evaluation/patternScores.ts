@@ -221,6 +221,11 @@ export interface EvaluationOptions {
   precomputedThreats?: ThreatInfo;
   /** パターンスコアのオーバーライド値（SPSAチューニング用） */
   patternScoreOverrides?: Partial<PatternScoreValues>;
+  /**
+   * 葉評価の基底（デフォルト: undefined=legacy、後方互換）。
+   * "prospect" = 空点プロスペクト基底（docs/plans/eval-basis-prospect-2026-07-13.md）。
+   */
+  evalBasis?: "legacy" | "prospect";
 }
 
 /**
@@ -340,6 +345,11 @@ export interface LeafEvaluationOptions {
   lastMoverIsPerspective?: boolean;
   /** 末端ミセ手脅威検出を有効にするか（デフォルト: false、後方互換） */
   enableLeafMise?: boolean;
+  /**
+   * 葉評価の基底（デフォルト: undefined=legacy、後方互換）。
+   * "prospect" = 空点プロスペクト基底（docs/plans/eval-basis-prospect-2026-07-13.md）。
+   */
+  evalBasis?: "legacy" | "prospect";
 }
 
 /**
