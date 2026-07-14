@@ -735,9 +735,9 @@ fn refreshFullAt(cells: []const Cell, idx: u16) void {
     var black_codes: [4]DirCode = undefined;
     var white_codes: [4]DirCode = undefined;
     for (0..4) |dir_idx| {
-        const w = ll.extractWindowFromCellsDual(cells, r, c, dir_idx);
-        black_codes[dir_idx] = classifyDirection(w.black_own, w.white_own | w.edge, .black);
-        white_codes[dir_idx] = classifyDirection(w.white_own, w.black_own | w.edge, .white);
+        const dual = classifyDirectionDual(cells, r, c, dir_idx);
+        black_codes[dir_idx] = dual.black;
+        white_codes[dir_idx] = dual.white;
     }
 
     prospect_state.dir_code[idx] = .{ packCodes(black_codes), packCodes(white_codes) };
@@ -794,14 +794,20 @@ fn collectAffectedEmptyCells(cells: []const Cell, row: u8, col: u8, buf: *[32]Af
 /// **1回のセル走査で同時に**求める（perf レビュー指摘S1対応: 抽出回数半減）。
 /// 窓生成則（own/block の定義）は `ll.extractWindowFromCellsDual`（SSoT）に委譲する
 /// （P2 レビュー対応: 窓生成則の二実装解消。等価性はテストで固定する）。
-/// 呼び出し前提: (row,col) は空点であること（Debug ビルドで assert）。
+/// 分類は DIR_PROSPECT_BLACK/WHITE テーブル参照で行う（Gate 0 対応:
+/// classifyDirection 直呼びだと computePattern の跳び形検出ループが探索ホット
+/// パスに乗り、prospect 実行時間の約38%を占めていた。テーブルとの全512×512
+/// 一致は「テーブル整合」テストで固定済み）。
+/// 呼び出し前提: (row,col) は空点（Debug で assert）・ensureTables 済みであること
+/// （initFromBoard が探索開始前に必ず呼ぶ）。
 fn classifyDirectionDual(cells: []const Cell, row: u8, col: u8, dir_index: usize) struct { black: DirCode, white: DirCode } {
     std.debug.assert(cells[@as(u16, row) * BOARD_SIZE + col] == .empty);
+    std.debug.assert(prospect_initialized);
 
     const w = ll.extractWindowFromCellsDual(cells, row, col, dir_index);
     return .{
-        .black = classifyDirection(w.black_own, w.white_own | w.edge, .black),
-        .white = classifyDirection(w.white_own, w.black_own | w.edge, .white),
+        .black = @enumFromInt(DIR_PROSPECT_BLACK[w.black_own][w.white_own | w.edge]),
+        .white = @enumFromInt(DIR_PROSPECT_WHITE[w.white_own][w.black_own | w.edge]),
     };
 }
 
@@ -1511,6 +1517,9 @@ const STM_MODE_VALUES = [_]StmMode{ .perspective, .opponent, .average };
 
 test "classifyDirectionDual: 全225空点×4方向でextractWindowFromCells二回呼びと一致する（石を散らした非対称局面、盤端含む）" {
     // イシュー指摘対応: 特定セルだけでなく全空点×全方向を網羅する（SSoT化後の等価性保証）。
+    // classifyDirectionDual は DIR_PROSPECT テーブルを参照するため、他テストの実行順に
+    // 依存せず自己完結するようここで初期化する（レビュー指摘対応）。
+    initProspectTables();
     var cells: [board_mod.CELL_COUNT]Cell = undefined;
     @memset(&cells, .empty);
 
