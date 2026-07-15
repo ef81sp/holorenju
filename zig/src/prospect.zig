@@ -463,41 +463,46 @@ comptime {
 
 /// [カテゴリ][手番か(0=非手番,1=手番)] -> スコア。
 ///
-/// P3-d（2026-07-15）で **Rapfi 教師 Texel 回帰 + スケールアンカリング**により
-/// 焼き込み済み（`bench-results/prospect-anchor-*.json`、
+/// P6（2026-07-15、**texel-r2**）で **序盤入りコーパスによる Rapfi 教師 Texel 再学習 +
+/// スケールアンカリング**により焼き込み済み（`bench-results/prospect-anchor-2026-07-15T14-23-51-900Z.json`、
 /// `scripts/prospect-anchor.ts`、`docs/plans/prospect-texel-p3-2026-07-15.md`）。
 ///
-/// - 「texel-r1 回帰」: サポート（コーパスでの非ゼロ行数）≥100 の重み。
-///   9,873 quiet 局面に対する rapfi eval への MSE 最小化解を、コーパスの
-///   raw_fit 分布標準偏差が legacy 葉評価に一致する係数 s=3.600189 で
+/// - コーパス: 12,437 局面（うち ply4-7 の序盤 624 局面を追加。P3-d の 9,873 から +2,564）。
+/// - r1 → r2 の変化: 序盤帯を含めたことで F3/F2/B3 系や double_f2 の重みが総じて微増、
+///   NONE_TURN は -59 → -55 と絶対値が微減（空点ペナルティが弱まる）。34重み中 26 を更新、
+///   8 は据え置き（アンカー維持 6 セルすべて + 偶然一致した回帰 2 セル）。
+///
+/// - 「texel-r2 回帰」: サポート（コーパスでの非ゼロ行数）≥100 の重み。
+///   12,437 quiet 局面に対する rapfi eval への MSE 最小化解を、コーパスの
+///   raw_fit 分布標準偏差が legacy 葉評価に一致する係数 s=3.619345 で
 ///   スケール正規化し四捨五入。
 /// - 「アンカー維持（サポート<100）」: quiet フィルタで戦術局面が抜けるため
-///   回帰値が信頼できないカテゴリ。P3-d 直前の暫定既定値をそのまま維持する。
+///   回帰値が信頼できないカテゴリ。r1 の暫定既定値をそのまま維持する。
 ///   勝ち級（WIN / DOUBLE_FOUR_WHITE / SOLO_F4 / FOUR_THREE の TURN 系）が
 ///   ここに落ちる（プラン §4 と P3-c の申し送りどおり）。
 ///
 /// アンカー: four_three（TURN=アンカー維持 3000）と legacy の
 /// LEAF_FOUR_THREE_THREAT(2000)+FOUR_THREE_BONUS(5000)=7000 の比は 0.43。
-/// 分布一致（コーパス std: legacy 776.3 vs prospect final 807.2）が達成されている。
+/// 分布一致（コーパス std: legacy 807.7 vs prospect final 832.8、比 1.03）が達成されている。
 ///
 /// 序列の sanity（勝ち級 TURN 単調性）:
 ///   WIN(9000) > DOUBLE_FOUR_WHITE(4800) > SOLO_F4(4500) > FOUR_THREE(3000)
 pub const PROSPECT_SCORE_DEFAULT: [CAT_COUNT][2]i32 = .{
-    .{ -23, -59 }, // none (texel-r1 回帰)
-    .{ -12, -9 }, // weak (texel-r1 回帰)
-    .{ 22, 25 }, // solo_b2 (texel-r1 回帰)
-    .{ 14, 19 }, // solo_f2 (texel-r1 回帰)
-    .{ 55, 86 }, // double_f2 (texel-r1 回帰)
-    .{ 64, 56 }, // solo_b3 (texel-r1 回帰)
-    .{ 276, 380 }, // b4_f2 (texel-r1 回帰)
-    .{ 94, 133 }, // solo_f3 (texel-r1 回帰)
-    .{ 168, 230 }, // f3_f2 (texel-r1 回帰)
-    .{ 149, 179 }, // f3_b3 (texel-r1 回帰)
-    .{ 116, 144 }, // solo_b4 (texel-r1 回帰)
-    .{ -16, -216 }, // double_three_black_risk (texel-r1 回帰)
-    .{ 407, 493 }, // double_three_white (texel-r1 回帰)
-    .{ 598, 3000 }, // four_three (WAIT=texel-r1 回帰 / TURN=アンカー維持: サポート<100)
-    .{ 623, 4500 }, // solo_f4 (WAIT=texel-r1 回帰 / TURN=アンカー維持: サポート<100)
+    .{ -23, -55 }, // none (texel-r2 回帰: 序盤入りコーパス)
+    .{ -11, -8 }, // weak (texel-r2 回帰)
+    .{ 22, 26 }, // solo_b2 (texel-r2 回帰)
+    .{ 20, 26 }, // solo_f2 (texel-r2 回帰)
+    .{ 76, 106 }, // double_f2 (texel-r2 回帰)
+    .{ 78, 75 }, // solo_b3 (texel-r2 回帰)
+    .{ 296, 392 }, // b4_f2 (texel-r2 回帰)
+    .{ 106, 141 }, // solo_f3 (texel-r2 回帰)
+    .{ 184, 254 }, // f3_f2 (texel-r2 回帰)
+    .{ 164, 207 }, // f3_b3 (texel-r2 回帰)
+    .{ 129, 156 }, // solo_b4 (texel-r2 回帰)
+    .{ 13, -246 }, // double_three_black_risk (texel-r2 回帰)
+    .{ 422, 545 }, // double_three_white (texel-r2 回帰)
+    .{ 585, 3000 }, // four_three (WAIT=texel-r2 回帰 / TURN=アンカー維持: サポート<100)
+    .{ 646, 4500 }, // solo_f4 (WAIT=texel-r2 回帰 / TURN=アンカー維持: サポート<100)
     .{ 2600, 4800 }, // double_four_white (アンカー維持: サポート<100)
     .{ 5000, 9000 }, // win (アンカー維持: サポート<100)
 };
@@ -1396,8 +1401,8 @@ test "evaluateFull: 四三点(four_three)を持つ局面は同等の縦三が無
 
     const eval_with = evaluateFull(&with_vertical, .black, .average);
     const eval_without = evaluateFull(&without_vertical, .black, .average);
-    // four_three と solo_b4 の平均重み差（P3-d 焼き込み後:
-    // (598+3000)/2 - (116+144)/2 = 1669）に近い差が出る前提。
+    // four_three と solo_b4 の平均重み差（P6 texel-r2 焼き込み後:
+    // (585+3000)/2 - (129+156)/2 = 1650）に近い差が出る前提。
     // 周辺空点の分類変化ノイズを許容してマージンは控えめに取る。
     try std.testing.expect(eval_with - eval_without > 1000);
 }
