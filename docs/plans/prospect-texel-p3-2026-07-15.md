@@ -302,3 +302,130 @@ commit-bench を回すと legacy vs legacy を測る silent 事故になる（�
     aspiration 再探索/手 9.79→6.00（減少）、lmr 再探索率 8.23%→0.72%（大幅減）。
     混成非対称による re-search 爆発なし。avgDepth 4.90 vs legacy 4.96（微差、MAX_NODES 上限到達数局面）。
     結果: `bench-results/gate0-2026-07-15T01-06-32-751Z.json`
+
+## P5-a: hard 配線切替完了（2026-07-15）
+
+`DIFFICULTY_PARAMS.hard.evaluationOptions`（`src/types/cpu.ts`）に `evalBasis: "prospect"`
+を追加（beginner/easy/medium は未変更＝legacy のまま）。`cpu.worker.ts` の実対局と
+`reviewConstants.ts` の `REVIEW_SEARCH_PARAMS.evaluationOptions`（hard を直参照）が
+自動追随し、bit18（`encodeEvalOptions` レイアウトB）が実機フラグで立つことを確認
+（新規一時テストで検証・削除済み。恒久カバレッジは既存の `prospectBasisWiring.wasm.test.ts` /
+`reviewEvalWiring.test.ts`）。監査で `scripts/lib/match.test.ts` の3ケースが
+「customParams 未指定 = legacy」という P5-a 以前の前提を固定していたため、
+明示 `evalBasis:"legacy"` override を使う形に更新（意図は保持: override の独立性検証）。
+`pnpm check-fix` 緑・`pnpm test` 全緑（93ファイル/1601テスト）。
+変更ファイル: `src/types/cpu.ts`, `scripts/lib/match.test.ts`。
+
+## Gate 3 結果（2026-07-15）: 実用チェック — **暫定PASS（1件要人間確認）**
+
+プラン §5 Gate 3（振り返り解析の品質チェック + 対局体感 + 10秒予算内の深度確認 +
+`reviewEvalWiring.test.ts` 緑）を実施。テスト棋譜は振り返り解析のベンチマーク・
+リグレッションテスト用棋譜（白番29手、精度15%・ミス9回・敗着あり・被追い詰め多数の重い棋譜）:
+`H8 G8 H9 G7 G9 H7 I7 F10 F9 E9 I8 I9 G10 F11 H11 E8 J6 K5 J7 K6 J9 J5 J8 J10 K8 L8 I10 L7 G12`
+
+### 1. 振り返り解析の品質比較（legacy vs prospect）
+
+新規スクリプト `scripts/gate3-review-compare.ts`（fullEval を legacy/prospect 双方の
+evalOptionsFlags で実行し、`buildEvaluatedMove`/`buildGameReview` で品質判定まで
+再現する）で全29手を両基底で解析。REVIEW_PROFILE_FAST（timeLimit=5000ms,
+absoluteTimeLimit=10000ms, hard 相当の評価オプション）を使用。
+
+| 指標                             | legacy    | prospect         |
+| -------------------------------- | --------- | ---------------- |
+| accuracy                         | 52%       | 62%              |
+| criticalErrors (mistake+blunder) | 11        | 9                |
+| 敗着（losingMove）判定           | 手17      | 手17（一致）     |
+| 総所要時間（29手）               | 178,862ms | 163,045ms（-9%） |
+| 平均到達深度                     | 3.24      | 3.52             |
+
+手11（I8、被追い詰めの決定的 blunder、scoreDiff≈99646）は両基底で完全一致。
+最重要の破局的ミス判定は基底に依らず安定している。
+
+**quality/scoreDiff が有意に異なった手（7件）:**
+
+| 手             | legacy            | prospect           | 所見                                           |
+| -------------- | ----------------- | ------------------ | ---------------------------------------------- |
+| 手2 G8（白）   | mistake / 463     | good / -54         | prospect が改善（従来の過剰mistake判定を解消） |
+| 手3 H9（黒）   | inaccuracy / 203  | inaccuracy / 130   | 同カテゴリ・微差。中立                         |
+| 手6 H7（白）   | **excellent / 0** | **mistake / -618** | ⚠️ **要人間確認**（下記）                      |
+| 手7 I7（黒）   | blunder / 1927    | excellent / 0      | prospect が改善（従来の過剰blunder判定を解消） |
+| 手10 E9（白）  | blunder / 2152    | excellent / 0      | prospect が改善（同上）                        |
+| 手14 F11（白） | inaccuracy / 110  | excellent / 0      | prospect が改善                                |
+| 手16 E8（白）  | excellent / 0     | good / 53          | 閾値内の微差（good条件 ≤80）。実害なし         |
+
+**総括**: 7件中5件は prospect が legacy の過剰な mistake/blunder 判定を解消する方向
+（accuracy 改善・criticalErrors 減少と整合）。1件（手16）は閾値内の軽微な差で実害なし。
+**1件（手6）のみ legacy=excellent → prospect=mistake という劣化方向の差**があり、
+再現性は確認済み（同一条件で2回実行し両方とも scoreDiff=-618 で一致、ノイズではない）。
+
+手6局面（"H8 G8 H9 G7 G9" 後、白番6手目）を手動確認: 黒は H8-H9（縦列）と
+H8-G9（斜め）の2方向に伸びる石を持つ二立ての局面。legacy の最善手 H7 は縦列を、
+prospect の最善手 F10 は斜めを止める手で、どちらも連珠的に合理性がある一手。
+`scripts/analyze-position.ts` が Zig移植に伴う TS 探索モジュール削除（#37/#43）で
+依存先 `search/miseVcf.ts` が欠落しており実行不可だったため、自動検証で優劣を
+断定できなかった。
+
+**→ Rapfi オラクルで追検証済み（2026-07-15、3秒思考）: prospect の判定が正**。
+
+- 手6局面の Rapfi 評価は白視点 −431（白が既に不利）、最善手は I9（H7 でも F10 でもない）
+- H7 の後（黒の最善応手 F9 まで進めて実探索）: 白視点 −679 = **H7 は約250点の追加損失**
+- 結論: legacy の「excellent（下落0）」の方が損失を見えておらず、prospect の
+  「mistake」は方向として Rapfi と一致（下落幅 −618 はやや過大だが順当な検出）。
+  F10 の筋は Rapfi の定石ブック内（既知の妥当進行）で厳密比較不能だった点は留意。
+- **判定を「劣化」から「検出力向上」に訂正。Gate 3 の要人間確認は解消**
+  （1/29手・Gate 2 の Elo +181 を覆す規模でないことも変わらず）。
+
+### 2. 10秒予算内の深度確認（代表局面: 序盤/中盤/終盤）
+
+| 局面                           | legacy depth | legacy minimax時間 | legacy total | prospect depth | prospect minimax時間 | prospect total |
+| ------------------------------ | ------------ | ------------------ | ------------ | -------------- | -------------------- | -------------- |
+| 手6 H7（序盤）                 | 4            | 3,572ms            | 3,790ms      | 5              | 3,544ms              | 4,324ms        |
+| 手15 H11（中盤・重い戦術局面） | 5            | 4,094ms            | 71,470ms     | 5              | 5,048ms              | 63,525ms       |
+| 手25 K8（終盤・決着済）        | 0            | 2ms                | 6ms          | 0              | 4ms                  | 7ms            |
+
+- Minimax探索本体は両基底とも timeLimit=5000ms 前後で完了しており、10秒予算を超えない。
+- 手15 のように total が数十秒に達するケースがあるが、内訳を見ると forcedWinDetection
+  （VCF/VCT探索、`REVIEW_VCT_OPTIONS_WITH_BRANCHES.timeLimit=Infinity`）が支配的
+  （legacy 61,861ms / prospect 51,354ms）。これは **legacy でも同様に発生する既存の特性**
+  であり、prospect 固有の劣化ではない（むしろこのケースでは prospect の方が13%速い）。
+  Gate 3 の範囲では新規の問題として扱わない。
+- 序盤局面（手6）では prospect が legacy より1段深く到達（depth5 vs 4）しつつ時間は同等。
+
+### 3. ヘッドレス対局スモーク
+
+- `pnpm test:browser:headless`: **この環境では実行不可**（Playwright の
+  `chrome-headless-shell` バイナリ未インストール。`pnpm exec playwright install` が必要）。
+  worktree 環境の制約でありコード起因ではない。
+- 代替として新規スクリプト `scripts/gate3-headless-smoke.ts` で
+  `WasmSearchEngine.findBestMove(board, color, "hard")`（cpu.worker.ts の実対局と同一経路、
+  prospect 配線込み）を空盤面から20手自己対局。**結果: クラッシュ・盤外着手・占有マスへの
+  着手なし、全手成功**（1手あたり最大10,048ms、timeLimit 内）。
+- `pnpm vitest run src/logic/cpu/review/reviewEvalWiring.test.ts`: **3/3 パス**。
+- 併せて `prospectBasisWiring.wasm.test.ts` / `evalOptionsWiring.wasm.test.ts`: **16/16 パス**。
+
+### 補足: FAST プロファイルの再現性について
+
+初回実行時（他の重い処理と並行実行し system 負荷がかかった状態）は同一手・同一基底でも
+quality 判定が run 間で変動するケースが見られた（例: 手2 legacy が good/-67 と mistake/463
+の間で変動）。これは `REVIEW_PROFILE_FAST` の探索が壁時計時間ベース（timeLimit=5000ms）
+であるため、system 負荷次第で反復深化の打ち切り深度が変わる既知の特性であり、
+legacy/prospect 双方に共通する（basis 差ではない）。本節の数値は system 負荷を排除した
+クリーンな実行（単独プロセス実行）の結果を採用している。手6 の prospect 判定は
+このクリーン実行を含む2回とも一致しており、この再現性懸念の対象外。
+
+### ベンチ・診断スクリプトへの注意（P5-a 以降の新常態）
+
+`DIFFICULTY_PARAMS.hard` を直読みするスクリプト（time-to-depth-bench / profile-search /
+weak-bench の hard 指定時、commit-bench の既定経路）は、P5-a 以降**既定で prospect を測る**。
+legacy ベースラインが必要な場合は `evalBasis: "legacy"` の明示 override が必須
+（gate0-bench / prospect-anchor / commit-bench --eval-options-a|b は明示指定に対応済み）。
+
+### Gate 3 判定: **PASS**
+
+- **合格**: accuracy 52%→62% / criticalErrors 11→9 / 敗着判定一致 / 破局的blunder判定一致。
+  minimax探索は10秒予算内（序盤はむしろ1段深い）。ヘッドレス自己対局（WASM経由）は
+  クラッシュ・不正着手なし。関連テストは全緑。
+- **要人間確認だった1件（手6 H7）は Rapfi オラクル追検証で解消**: prospect の
+  mistake 判定の方が Rapfi と整合（上記「1. 振り返り品質比較」参照）。劣化ではなく検出力向上。
+- **環境起因で未実施**: `pnpm test:browser:headless`（Playwright ブラウザ未インストール）。
+  WASM経由のヘッドレス自己対局で代替済み。ブラウザ実機の体感確認はボスのプレイに委ねる。

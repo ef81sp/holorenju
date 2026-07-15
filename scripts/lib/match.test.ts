@@ -55,20 +55,39 @@ describe("evalBasis 配線の end-to-end（silent 事故防止）", () => {
     expect(flags & (1 << 18)).not.toBe(0);
   });
 
-  it("evaluationOptions 未指定なら bit18 は立たない（legacy = 既定挙動）", () => {
+  it("evaluationOptions 未指定なら base(hard)の evalBasis がそのまま伝播する（P5-a以降は既定でprospect）", () => {
+    // P5-a（docs/plans/eval-basis-prospect-2026-07-13.md §5, Gate 2採用）で
+    // DIFFICULTY_PARAMS.hard.evaluationOptions.evalBasis が既定 "prospect" になった。
+    // customParams 未指定時は mergeDifficultyParams が baseParams をそのまま返す
+    // （customParams.evaluationOptions で上書きしない）ため、base の値がそのまま伝播する。
     const customParams = buildBridgeCustomParams(undefined, undefined);
     const merged = mergeDifficultyParams(DIFFICULTY_PARAMS.hard, customParams);
     const flags = encodeEvalOptionsForWasm(merged.evaluationOptions);
 
-    expect(merged.evaluationOptions.evalBasis).toBeUndefined();
+    expect(merged.evaluationOptions.evalBasis).toBe("prospect");
+    expect(flags & (1 << 18)).not.toBe(0);
+  });
+
+  it("evaluationOptions={evalBasis:'legacy'} を明示指定するとbit18は立たない（legacy比較ベースラインの取得経路）", () => {
+    // P5-a以降、hard自体がprospect既定のため、legacyとの比較には明示的な
+    // override（evalBasis:"legacy"）が必要（未指定では得られない）。
+    const customParams = buildBridgeCustomParams(undefined, {
+      evalBasis: "legacy",
+    });
+    const merged = mergeDifficultyParams(DIFFICULTY_PARAMS.hard, customParams);
+    const flags = encodeEvalOptionsForWasm(merged.evaluationOptions);
+
+    expect(merged.evaluationOptions.evalBasis).toBe("legacy");
     expect(flags & (1 << 18)).toBe(0);
   });
 
-  it("A側=prospect / B側=legacy を同時指定しても互いに干渉しない（プレイヤー別独立性）", () => {
+  it("A側=prospect(未指定) / B側=legacy(明示指定) を同時指定しても互いに干渉しない（プレイヤー別独立性）", () => {
     const customParamsA = buildBridgeCustomParams(undefined, {
       evalBasis: "prospect",
     });
-    const customParamsB = buildBridgeCustomParams(undefined, undefined);
+    const customParamsB = buildBridgeCustomParams(undefined, {
+      evalBasis: "legacy",
+    });
 
     const mergedA = mergeDifficultyParams(
       DIFFICULTY_PARAMS.hard,

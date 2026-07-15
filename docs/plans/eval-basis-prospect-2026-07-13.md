@@ -208,6 +208,11 @@ P3 着手時に **Rapfi ラベリングのスループット見積り**（局面
 
 難易度: 当面 **hard（★4）のみ** prospect に切り替え、beginner〜medium は legacy 維持（難易度カーブを壊さない）。hard 採用確定後に下位への展開を別途判断。
 
+**ゲート消化状況（2026-07-15）**: Gate 0 PASS（`gate0-prospect-results-2026-07-13.md`）、
+Gate 1 スキップ（Gate 2 決定的 PASS により先行反証の目的消滅）、Gate 2 PASS（Elo +181
+[145,221]）、Gate 3 PASS（振り返り品質・深度・スモーク）。いずれの詳細も
+`prospect-texel-p3-2026-07-15.md` を参照。P5-a で hard・振り返り解析の配線切替済み。
+
 ## 6. フェーズ分割（stacked PR・各フェーズでコミット）
 
 | フェーズ | 内容                                                                                                                                                                                                        | 成果物                 |
