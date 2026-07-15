@@ -8,6 +8,20 @@
  *   pnpm commit:bench --commitA=HEAD~1 --commitB=HEAD --games=10
  *   pnpm commit:bench --commitA=abc1234 --commitB=def5678 --sprt
  *   pnpm commit:bench --games=200 --difficulty=medium
+ *
+ * Gate 2（評価基底の対決）: --eval-options-a / --eval-options-b で A/B 側それぞれに
+ * evaluationOptions（JSON、EvaluationOptions の部分オブジェクト）を注入できる。
+ * commitA と commitB を同一コミットに指定すれば、同一 worktree 内で基底違いのみを
+ * 比較できる（例: A=prospect / B=legacy）:
+ *   pnpm commit:bench --commitA=HEAD --commitB=HEAD --sets=1 \
+ *     --eval-options-a='{"evalBasis":"prospect"}'
+ * 省略時（--eval-options-a/b 未指定）は従来どおり legacy 同士（挙動不変）。
+ *
+ * worktree 内（.git がファイル=gitlink）からの実行にも対応: WORKTREES_DIR は
+ * `git rev-parse --git-common-dir` で解決した「実 git ディレクトリ」（= 常に
+ * メインリポジトリ側の .git）配下に置く。そのため **WORKTREES_DIR は全 worktree
+ * 間で共有**であり、既存の「commit-bench の複数プロセス同時起動は不可（worktree
+ * パスが競合）」制約は維持される（どの worktree から実行しても衝突しうる）。
  */
 
 import { execSync } from "node:child_process";
@@ -16,6 +30,7 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Worker } from "node:worker_threads";
 
+import type { EvaluationOptions } from "../src/logic/cpu/evaluation/patternScores.ts";
 import type { CpuDifficulty } from "../src/types/cpu.ts";
 import type { SPRTConfig } from "./types/ab.ts";
 import type {
@@ -37,7 +52,33 @@ import { DEFAULT_SPRT_CONFIG, formatSPRT, updateSPRT } from "./lib/sprt.ts";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, "..");
 const OUTPUT_DIR = path.join(PROJECT_ROOT, "bench-results");
-const WORKTREES_DIR = path.join(PROJECT_ROOT, ".git", "worktrees-bench");
+
+/**
+ * 実 git ディレクトリ（.git-common-dir）を解決する。
+ *
+ * `.git` は通常リポジトリでは実ディレクトリだが、linked worktree（`git worktree add`
+ * で作られた worktree）では「gitdir: <実パス>」を指すテキストファイル（gitlink）。
+ * `path.join(PROJECT_ROOT, ".git", "worktrees-bench")` は後者で ENOTDIR になり
+ * worktree 内から commit-bench を実行できなかった。`git rev-parse --git-common-dir`
+ * は worktree 間で共有される実 git ディレクトリ（常にメインリポジトリ側 .git）を
+ * 返すため、これを使えば通常リポジトリ・linked worktree のどちらでも正しく解決できる
+ * （通常リポジトリでは相対パス ".git" が返るため PROJECT_ROOT 基準で絶対化する）。
+ */
+function resolveGitCommonDir(): string {
+  try {
+    const out = execSync("git rev-parse --git-common-dir", {
+      cwd: PROJECT_ROOT,
+      encoding: "utf-8",
+    }).trim();
+    return path.isAbsolute(out) ? out : path.resolve(PROJECT_ROOT, out);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`Error: git ディレクトリの解決に失敗しました: ${msg}`);
+    process.exit(1);
+  }
+}
+
+const WORKTREES_DIR = path.join(resolveGitCommonDir(), "worktrees-bench");
 
 // ============================================================================
 // CLI引数パース
@@ -56,6 +97,9 @@ interface CliOptions {
   randomFactor?: number;
   verbose: boolean;
   jobs: number;
+  /** Gate 2: A/B 側それぞれの evaluationOptions オーバーライド（例: evalBasis=prospect）。 */
+  evalOptionsA?: Partial<EvaluationOptions>;
+  evalOptionsB?: Partial<EvaluationOptions>;
 }
 
 function parseArgs(): CliOptions {
@@ -118,6 +162,16 @@ function parseArgs(): CliOptions {
       if (!isNaN(value) && value > 0) {
         options.jobs = value;
       }
+    } else if (arg.startsWith("--eval-options-a=")) {
+      options.evalOptionsA = parseEvalOptionsJson(
+        arg.slice("--eval-options-a=".length),
+        "--eval-options-a",
+      );
+    } else if (arg.startsWith("--eval-options-b=")) {
+      options.evalOptionsB = parseEvalOptionsJson(
+        arg.slice("--eval-options-b=".length),
+        "--eval-options-b",
+      );
     } else if (arg === "--verbose" || arg === "-v") {
       options.verbose = true;
     } else if (arg === "--help" || arg === "-h") {
@@ -127,6 +181,37 @@ function parseArgs(): CliOptions {
   }
 
   return options;
+}
+
+/**
+ * --eval-options-a / --eval-options-b の JSON 文字列をパースする。
+ * EvaluationOptions の部分オブジェクト（evalBasis 等の string enum を含む）を
+ * そのまま受け取れる（ab-bench の --eval-option は boolean/number 専用でこの用途に
+ * 使えないため、こちらは JSON 一発指定にしている）。
+ */
+function parseJsonOrExit(str: string, flagName: string): unknown {
+  try {
+    return JSON.parse(str);
+  } catch {
+    console.error(
+      `Error: ${flagName} は正しいJSON文字列で指定してください (got: ${str})`,
+    );
+    process.exit(1);
+  }
+}
+
+function parseEvalOptionsJson(
+  str: string,
+  flagName: string,
+): Partial<EvaluationOptions> {
+  const parsed = parseJsonOrExit(str, flagName);
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    console.error(
+      `Error: ${flagName} はJSONオブジェクトで指定してください (got: ${str})`,
+    );
+    process.exit(1);
+  }
+  return parsed as Partial<EvaluationOptions>;
 }
 
 function printHelp(): void {
@@ -147,12 +232,18 @@ Options:
   --randomFactor=<n>     探索にゆらぎを加える (0〜1, default: なし)
   --jobs=<n>             同時対局数（worker ペア組数, default: 1）。ターン制なので
                          1ゲーム≈1コア。8コアなら6前後が目安
+  --eval-options-a=<json> A側 evaluationOptions オーバーライド（JSON。例: '{"evalBasis":"prospect"}'）
+  --eval-options-b=<json> B側 evaluationOptions オーバーライド（JSON。省略時は legacy 既定）
   --verbose, -v          詳細ログ
   --help, -h             ヘルプを表示
 
 Examples:
   pnpm commit:bench --commitA=HEAD~1 --commitB=HEAD --sets=1
   pnpm commit:bench --commitA=abc1234 --commitB=def5678 --sprt --elo0=0 --elo1=30
+
+  # Gate 2: 同一コミット内で evalBasis=prospect vs legacy を対決させる
+  pnpm commit:bench --commitA=HEAD --commitB=HEAD --sets=8 --randomFactor=0.02 \\
+    --eval-options-a='{"evalBasis":"prospect"}'
 `);
 }
 
@@ -454,6 +545,14 @@ async function main(): Promise<void> {
   console.log(
     `セット数: ${options.sets} (${gamesPerSet}局/セット, 計${totalGames}局)`,
   );
+  if (options.evalOptionsA || options.evalOptionsB) {
+    console.log(
+      `evalOptions A: ${options.evalOptionsA ? JSON.stringify(options.evalOptionsA) : "(既定=legacy)"}`,
+    );
+    console.log(
+      `evalOptions B: ${options.evalOptionsB ? JSON.stringify(options.evalOptionsB) : "(既定=legacy)"}`,
+    );
+  }
   if (sprtConfig) {
     console.log(
       `SPRT: elo0=${sprtConfig.elo0}, elo1=${sprtConfig.elo1}, ` +
@@ -501,21 +600,25 @@ async function main(): Promise<void> {
 
     // bridge workerを起動（--jobs 組のペアを並列初期化）
     const workerPath = path.join(__dirname, "cpu-bridge-worker.ts");
-    const makeWorker = (worktreePath: string): Promise<Worker> =>
+    const makeWorker = (
+      worktreePath: string,
+      evaluationOptions: Partial<EvaluationOptions> | undefined,
+    ): Promise<Worker> =>
       createBridgeWorker({
         workerPath,
         loaderPath: path.join(worktreePath, "scripts", "register-loader.mjs"),
         worktreePath,
         difficulty: options.difficulty,
         randomFactor: options.randomFactor,
+        evaluationOptions,
       });
 
     console.log(`Bridge workerを初期化中... (${options.jobs}並列)`);
     const createdPairs = await Promise.all(
       Array.from({ length: options.jobs }, async () => {
         const [a, b] = await Promise.all([
-          makeWorker(worktreePathA!),
-          makeWorker(worktreePathB!),
+          makeWorker(worktreePathA!, options.evalOptionsA),
+          makeWorker(worktreePathB!, options.evalOptionsB),
         ]);
         return { a, b };
       }),
@@ -600,6 +703,8 @@ async function main(): Promise<void> {
         gamesPerSet,
         randomFactor: options.randomFactor,
         sprt: sprtConfig,
+        evalOptionsA: options.evalOptionsA,
+        evalOptionsB: options.evalOptionsB,
       },
       totalGames: completedGames,
       wdl,

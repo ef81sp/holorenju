@@ -25,6 +25,7 @@ import { parentPort, workerData } from "node:worker_threads";
 import type { DifficultyParams } from "../src/types/cpu.ts";
 import type { BoardState, Position } from "../src/types/game.ts";
 
+import { mergeDifficultyParams } from "./lib/difficultyParamsMerge.ts";
 import { EVAL_PARAM_IDS } from "./lib/evalParams.ts";
 import { encodeEvalOptionsForWasm } from "./lib/wasmEvalOptionsEncoder.ts";
 
@@ -299,17 +300,7 @@ async function loadDifficultyParams(
     );
   }
 
-  const { customParams } = data;
-  return customParams
-    ? {
-        ...baseParams,
-        ...customParams,
-        evaluationOptions: {
-          ...baseParams.evaluationOptions,
-          ...customParams.evaluationOptions,
-        },
-      }
-    : baseParams;
+  return mergeDifficultyParams(baseParams, data.customParams);
 }
 
 /**
@@ -423,7 +414,18 @@ async function main(): Promise<void> {
     wasmHandler = createWasmSearchHandler(wasm);
     // eval 形系重みを注入（baseline は weights 空＝reset のみでクリーン既定）
     applyEvalWeights(wasm, data.evalWeights);
-    console.log(`[cpu-bridge-worker] WASM engine loaded for ${worktreePath}`);
+    // evalBasis 配線の silent 事故防止: 実際に search に渡る evaluationOptions を
+    // エンコードした flags と bit18 (eval_basis) の状態を必ず1行ログに出す。
+    // worktreePath のディレクトリ名（A-<sha>/B-<sha>）で A/B 側を判別できる。
+    // search 経路（createWasmSearchHandler）と同じく evaluationOptions 未定義を許容する
+    const evalFlags = params.evaluationOptions
+      ? encodeEvalOptionsForWasm(params.evaluationOptions)
+      : 0;
+    const basis = params.evaluationOptions?.evalBasis ?? "legacy";
+    const bit18 = (evalFlags & (1 << 18)) === 0 ? "legacy" : "prospect";
+    console.log(
+      `[cpu-bridge-worker] WASM engine loaded for ${worktreePath} | evalBasis=${basis} evalFlags=${evalFlags} bit18=${bit18}`,
+    );
   } else {
     tsFindBestMove = await loadTsCpuFromWorktree(worktreePath);
     console.log(
