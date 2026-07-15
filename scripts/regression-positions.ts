@@ -23,13 +23,15 @@
  *     scripts/regression-positions.ts --only=p6-white-j6-collapse
  */
 
-import type { BoardState, Position, StoneColor } from "@/types/game";
+import type { StoneColor } from "@/types/game";
 
 import { preloadForbiddenWasm } from "@/logic/cpu/wasm/forbiddenAdapter";
 import { loadWasmModule } from "@/logic/cpu/wasm/loader";
 import { WasmSearchEngine } from "@/logic/cpu/wasm/searchEngine";
 import { preloadThreatWasm } from "@/logic/cpu/wasm/threatAdapter";
-import { createBoardFromRecord, formatMove } from "@/logic/gameRecordParser";
+import { createBoardFromRecord } from "@/logic/gameRecordParser";
+
+import { checkForcedWin } from "./lib/forcedWinCheck";
 
 type Side = Exclude<StoneColor, null>;
 
@@ -64,14 +66,6 @@ const REGRESSION_POSITIONS: RegressionPosition[] = [
   },
 ];
 
-// investigate-white-collapse.ts の調査時に使用した予算と同等（十分な探索深度・時間）
-const VCF_MAX_DEPTH = 16;
-const VCF_TIME_LIMIT_MS = 5000;
-const VCF_MAX_NODES = 500_000;
-const VCT_MAX_DEPTH = 6;
-const VCT_TIME_LIMIT_MS = 5000;
-const VCT_MAX_NODES = 500_000;
-
 function parseArgs(): { only: string | null } {
   const args = process.argv.slice(2);
   let only: string | null = null;
@@ -81,20 +75,6 @@ function parseArgs(): { only: string | null } {
     }
   }
   return { only };
-}
-
-function opponentOf(color: Side): Side {
-  return color === "black" ? "white" : "black";
-}
-
-function applyMove(board: BoardState, pos: Position, color: Side): BoardState {
-  const next = board.map((row) => [...row]) as BoardState;
-  const targetRow = next[pos.row];
-  if (!targetRow) {
-    throw new Error(`invalid row: ${pos.row}`);
-  }
-  targetRow[pos.col] = color;
-  return next;
 }
 
 interface CheckResult {
@@ -109,7 +89,6 @@ function checkPosition(
   engine: WasmSearchEngine,
   pos: RegressionPosition,
 ): CheckResult {
-  const start = Date.now();
   const { board, nextColor } = createBoardFromRecord(pos.kifuPrefix);
   if (nextColor !== pos.sideToMove) {
     throw new Error(
@@ -119,46 +98,14 @@ function checkPosition(
   }
 
   // 実機経路・実機時間: DIFFICULTY_PARAMS.hard の depth/timeLimit/maxNodes/evaluationOptions を使用
-  const result = engine.findBestMove(board, pos.sideToMove, "hard");
-  const chosenMove = formatMove(result.position);
+  const result = checkForcedWin(engine, board, pos.sideToMove);
 
-  const opponent = opponentOf(pos.sideToMove);
-  const afterMove = applyMove(board, result.position, pos.sideToMove);
-
-  const vcf = engine.findVCFSequence(
-    afterMove,
-    opponent,
-    VCF_MAX_DEPTH,
-    VCF_TIME_LIMIT_MS,
-    VCF_MAX_NODES,
-  );
-  const forcedWin =
-    vcf ??
-    engine.findVCTSequence(
-      afterMove,
-      opponent,
-      VCT_MAX_DEPTH,
-      VCT_TIME_LIMIT_MS,
-      VCT_MAX_NODES,
-      false,
-    );
-
-  const elapsedMs = Date.now() - start;
-  if (!forcedWin) {
-    return {
-      pass: true,
-      chosenMove,
-      forcedWinKind: null,
-      forcedWinSequence: null,
-      elapsedMs,
-    };
-  }
   return {
-    pass: false,
-    chosenMove,
-    forcedWinKind: vcf ? "VCF" : "VCT",
-    forcedWinSequence: forcedWin.sequence.map(formatMove).join(" "),
-    elapsedMs,
+    pass: result.forcedWinKind === null,
+    chosenMove: result.chosenMoveStr,
+    forcedWinKind: result.forcedWinKind,
+    forcedWinSequence: result.forcedWinSequenceStr,
+    elapsedMs: result.elapsedMs,
   };
 }
 
