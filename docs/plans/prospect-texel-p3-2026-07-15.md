@@ -101,9 +101,183 @@
 - 微小（issue）: |eval|≤3000 キャップは K=200 では sigmoid がほぼ飽和する帯
   （実効 ±800 級と同等）。害はないので現状維持。
 
+## P3-d 実績（2026-07-15、rapfi 教師・min-support=100）
+
+- スクリプト: `scripts/prospect-anchor.ts`（コーパスから legacy 葉評価を再計算し、
+  スケール s = std(legacy) / std(regressed-only raw_fit) を決めて焼き込みスニペットを生成）。
+- 結果 JSON: `bench-results/prospect-anchor-2026-07-15T00-50-45-555Z.json`
+
+### スケールと由来別重み表
+
+- **s = 3.600189**（legacy std=776.27 / raw_fit(regressed only) std=215.62）
+- min-support=100（プランの機械的基準）。34重み中 **28 が回帰採用・6 がアンカー維持**。
+
+| #   | 名前                                  | サポート | 由来             | 焼き込み値 |
+| --- | ------------------------------------- | -------- | ---------------- | ---------- |
+| 0   | PROSPECT_NONE_WAIT                    | 472      | 回帰             | −23        |
+| 1   | PROSPECT_NONE_TURN                    | 509      | 回帰             | −59        |
+| 2   | PROSPECT_WEAK_WAIT                    | 9873     | 回帰             | −12        |
+| 3   | PROSPECT_WEAK_TURN                    | 9873     | 回帰             | −9         |
+| 4   | PROSPECT_SOLO_B2_WAIT                 | 9787     | 回帰             | 22         |
+| 5   | PROSPECT_SOLO_B2_TURN                 | 9794     | 回帰             | 25         |
+| 6   | PROSPECT_SOLO_F2_WAIT                 | 9777     | 回帰             | 14         |
+| 7   | PROSPECT_SOLO_F2_TURN                 | 9772     | 回帰             | 19         |
+| 8   | PROSPECT_DOUBLE_F2_WAIT               | 6102     | 回帰             | 55         |
+| 9   | PROSPECT_DOUBLE_F2_TURN               | 5763     | 回帰             | 86         |
+| 10  | PROSPECT_SOLO_B3_WAIT                 | 9167     | 回帰             | 64         |
+| 11  | PROSPECT_SOLO_B3_TURN                 | 9234     | 回帰             | 56         |
+| 12  | PROSPECT_B4_F2_WAIT                   | 2965     | 回帰             | 276        |
+| 13  | PROSPECT_B4_F2_TURN                   | 2070     | 回帰             | 380        |
+| 14  | PROSPECT_SOLO_F3_WAIT                 | 8030     | 回帰             | 94         |
+| 15  | PROSPECT_SOLO_F3_TURN                 | 6856     | 回帰             | 133        |
+| 16  | PROSPECT_F3_F2_WAIT                   | 4683     | 回帰             | 168        |
+| 17  | PROSPECT_F3_F2_TURN                   | 3744     | 回帰             | 230        |
+| 18  | PROSPECT_F3_B3_WAIT                   | 1955     | 回帰             | 149        |
+| 19  | PROSPECT_F3_B3_TURN                   | 1437     | 回帰             | 179        |
+| 20  | PROSPECT_SOLO_B4_WAIT                 | 8004     | 回帰             | 116        |
+| 21  | PROSPECT_SOLO_B4_TURN                 | 7008     | 回帰             | 144        |
+| 22  | PROSPECT_DOUBLE_THREE_BLACK_RISK_WAIT | 411      | 回帰             | −16        |
+| 23  | PROSPECT_DOUBLE_THREE_BLACK_RISK_TURN | 253      | 回帰             | −216       |
+| 24  | PROSPECT_DOUBLE_THREE_WHITE_WAIT      | 237      | 回帰             | 407        |
+| 25  | PROSPECT_DOUBLE_THREE_WHITE_TURN      | 107      | 回帰             | 493        |
+| 26  | PROSPECT_FOUR_THREE_WAIT              | 665      | 回帰             | 598        |
+| 27  | PROSPECT_FOUR_THREE_TURN              | 25       | **アンカー維持** | 3000       |
+| 28  | PROSPECT_SOLO_F4_WAIT                 | 3076     | 回帰             | 623        |
+| 29  | PROSPECT_SOLO_F4_TURN                 | 0        | **アンカー維持** | 4500       |
+| 30  | PROSPECT_DOUBLE_FOUR_WHITE_WAIT       | 19       | **アンカー維持** | 2600       |
+| 31  | PROSPECT_DOUBLE_FOUR_WHITE_TURN       | 0        | **アンカー維持** | 4800       |
+| 32  | PROSPECT_WIN_WAIT                     | 0        | **アンカー維持** | 5000       |
+| 33  | PROSPECT_WIN_TURN                     | 1        | **アンカー維持** | 9000       |
+
+- 予想どおり、勝ち級（FOUR_THREE / SOLO_F4 / DOUBLE_FOUR_WHITE / WIN の各 TURN）と
+  DOUBLE_FOUR_WHITE_WAIT が quiet フィルタで抜けてアンカー維持側に落ちる。
+  それ以外の28重みは回帰値を採用。
+
+### アンカー検証（§4.3）
+
+- legacy 参照: LEAF_FOUR_THREE_THREAT(2000) + FOUR_THREE_BONUS(5000) = **7000**
+- 焼き込み後の四三点（final）:
+  - PROSPECT_FOUR_THREE_WAIT = 598（**回帰**、比 0.085）
+  - PROSPECT_FOUR_THREE_TURN = 3000（**アンカー維持**、比 0.429）
+- 解釈: WAIT 側（相手番の四三＝perspective 側は次に守れる）が回帰結果として legacy より控えめに評価された。
+  TURN 側（自番の四三＝勝ち近似）はサポート不足のためアンカー維持で 3000（P3-d 直前既定値。プランの
+  「LEAF_FOUR_THREE_THREAT+FOUR_THREE_BONUS 級より控えめに置く」意図と合致）。
+- **アンカー前提の限界（/review issue 指摘）**: legacy 7000 は「四三が既に成立している」
+  全盤ブースト、prospect の four_three は「打てば四三が作れる空点」（potential）で量が別物。
+  §4.3 の「四三点 ≈ legacy 7000」はカテゴリ差で厳密には成り立たない。
+  **スケール確定の主機構は std マッチであり、四三比は参考値**と役割を切り分ける。
+- 序列 sanity（勝ち級 TURN 単調性、焼き込み後）:
+  WIN(9000) > DOUBLE_FOUR_WHITE(4800) > SOLO_F4(4500) > FOUR_THREE(3000)。**monotonic=true**。
+
+### 分布比較（コーパス 9,873 行、stm 視点 raw eval、クランプ後）
+
+| 分布                                    | std        | p95Abs   | maxAbs    |
+| --------------------------------------- | ---------- | -------- | --------- |
+| legacy 葉評価（hard 相当）              | 776.27     | 2041     | 5853      |
+| prospect baseline（P3-d 直前）          | 2298.65    | 4973     | 9763      |
+| prospect regressed（fit 生値）          | 215.95     | 433      | 839       |
+| **prospect final（混成 = 焼き込み後）** | **807.21** | **1619** | **10000** |
+
+- 焼き込み後の std 807 は legacy 776 と近似一致（比 1.04）。**分布アンカリング成功**。
+- max|eval|=10000 は PROSPECT_EVAL_CLAMP でのクリップ発生を示す（数十件のアンカー起点局面）。
+  勝ちスコア帯（FIVE−5000=95000）とは構造的に干渉しない（クランプが直接保証）。
+- **mean は非一致**（legacy −329 vs final +224。std のみ合わせた帰結）。minimax は大域
+  オフセットに概ね不変だが futility margin は絶対閾値のため、焼き込み後の Gate 0 再測で
+  挙動確認する（/review perf 指摘）。
+- **混成ペアの TURN/WAIT 非対称**（four_three 5.0倍・solo_f4 7.2倍。他カテゴリは1.3〜1.5倍）:
+  WAIT=回帰 / TURN=アンカーの別ソース混成の副産物。決定的な点では大きな非対称が本来正しい
+  面もあるが、テンポ反転で eval が跳ね aspiration fail が増えるリスクがある。
+  **焼き込み後の Gate 0 再測（aspirationResearches/move・lmr 再探索率）で先に確認**し、
+  膨れていれば solo_f4/four_three の両側アンカー化を検討（/review issue 指摘）。
+
+### 損失検証（K=200, MSE over 9873 行）
+
+| 重み                                        | 損失         |
+| ------------------------------------------- | ------------ |
+| baseline (P3-d 直前 PROSPECT_SCORE_DEFAULT) | 0.184348     |
+| raw regressed weights (fit 生値)            | 0.086888     |
+| **final (混成、スケール後 = 焼き込み値)**   | **0.126017** |
+
+- **焼き込み後の baseline 損失 0.126017 は P3-d 前の 0.184348 を大幅改善**（sigmoid 越しに
+  スケール s を掛けているため raw fit の 0.087 まで下がらないのは想定内）。
+- P3-c と同条件（rapfi 教師・K=200・group 5-fold）で prospect-texel.ts を再実行し、
+  再学習の余地が大きく縮まっていることも確認（新 baseline=0.126017、再 fit 収束後 0.086888、
+  fold 平均 val=0.088044）。
+
+### §4.3 スケール依存定数の棚卸し完了確認
+
+分布一致（std: legacy 776 vs prospect final 807、比 1.04）により、以下の legacy スケール
+依存定数が prospect パスでも当面そのまま意味を保つ:
+
+- `FUTILITY_MARGINS_SELF` / `FUTILITY_MARGINS_OPPONENT`（`zig/src/minimax.zig:57-60`）
+  — 深さ別 futility margin。マージン単位（数百〜千）は legacy 分布 p95=2041 と整合し、
+  final prospect p95=1619 でも同帯域で機能する。
+- `PLAIN_FOUR_PREFERENCE_MARGIN = 200`（`zig/src/search.zig:225,271`）
+  — ルート単独四優先マージン。legacy 分布のばらつき200と同じ絶対値で解釈でき、
+  prospect final でも意味が保たれる。
+- Aspiration window `{75, 200, 500}`（`zig/src/search.zig` および
+  `src/logic/cpu/review/reviewConstants.ts` の REVIEW_PROFILE_PRECISE.aspirationWidths）
+  — 段階的 window 幅。分布 std がほぼ一致するため fail-high/fail-low 頻度は
+  legacy と同オーダで推移する見込み。実測は Gate 0 で確認。
+- 振り返り解析の blunder 閾値（`verifiedDrop ≥ 600`、review 系）
+  — evaluatedDrop の絶対値判定。legacy と std が近いため同じ閾値で同オーダの検出率になる。
+
+margin 類の再チューンは Gate 2 採用後の P5 に純化される（プラン §4.3）。
+
+### /review 対応・実装判断メモ
+
+- 既存 Zig テストへの影響: `zig/src/prospect.zig:1384` の「four_three vs solo_b4」平均重み差の
+  マージン計算コメントを新値（(598+3000)/2 − (116+144)/2 = 1669）に更新。
+  `try std.testing.expect(eval_with - eval_without > 1000)` のアサーション自体は据え置き
+  （1669 > 1000 でパスする性質ベーステスト）。
+- その他の Zig/TS テストは既定値の具体値に依存する箇所がなく（性質ベース＝反対称性/内積一致/
+  クランプ/名前検索）、変更不要。`pnpm test` 全1589件パス。
+
+## 再現手順（パイプライン全体）
+
+worktree ルートから（wasm ビルド済み前提）:
+
+```bash
+# 1. コーパス抽出（commit-bench 棋譜のあるディレクトリを指定）
+node --experimental-strip-types --import ./scripts/register-loader.mjs \
+  scripts/prospect-corpus.ts --input=<main>/bench-results --out=bench-results/prospect-corpus.jsonl
+
+# 2. Rapfi ラベリング（main リポジトリから実行。scripts/rapfi/ と tools/oracle/ は
+#    gitignore 対象のローカル運用 = GPL 隔離。バイナリ入手は scripts/rapfi/setup.sh）
+node --experimental-strip-types --import ./scripts/register-loader.mjs \
+  scripts/rapfi/labelCorpus.ts --in=<worktree>/bench-results/prospect-corpus.jsonl \
+  --out=<worktree>/bench-results/prospect-corpus-labeled.jsonl --procs=4
+#    入出力仕様: 入力行に {key, black[], white[], stm} 必須。出力は入力行+{rapfiEval}、
+#    破棄行は {key, dropped: "evalUnseen"|"evalCap"}。timeout_turn=100ms、|eval|≤3000、resume 可。
+
+# 3. 回帰
+node --experimental-strip-types --import ./scripts/register-loader.mjs \
+  scripts/prospect-texel.ts --in=bench-results/prospect-corpus-labeled.jsonl --k=5 --teacher=both --K=200
+
+# 4. アンカリング量子化（fit JSON を指定）→ 出力スニペットを prospect.zig に焼き込み
+node --experimental-strip-types --import ./scripts/register-loader.mjs \
+  scripts/prospect-anchor.ts --in=bench-results/prospect-corpus-labeled.jsonl \
+  --fit=bench-results/texel-fit-2026-07-15T00-34-46-965Z.json
+```
+
+**注意**: 中間 JSONL（bench-results/）は gitignore 対象。コーパスを消すと再ラベリングが
+必要になる（Rapfi 100ms×1万局面 ≈ 4並列5分）。
+
 ## 進捗
 
 - [x] P3-a スループット見積り（2026-07-15）
 - [x] P3-b コーパス抽出 + ラベリング（10,537 → 9,873 局面）
 - [x] P3-c 回帰（k-fold・教師2系統）— 実装 + 本番実行済み
-- [ ] P3-d アンカリング量子化・焼き込み
+- [x] P3-d アンカリング量子化・焼き込み（s=3.60、28 回帰 + 6 アンカー、baseline 損失 0.184 → 0.126）
+
+## P4 への申し送り（/review issue 指摘のブロッカー）
+
+**Gate 2 の対局ハーネスに evalBasis=prospect を注入する経路が未配線**。このまま
+commit-bench を回すと legacy vs legacy を測る silent 事故になる（プラン §3.3 の警告どおり）:
+
+- `scripts/lib/match.ts:119-120` の customParams が `{ randomFactor }` 固定。
+  `cpu-bridge-worker` 側は `customParams.evaluationOptions` をマージできる（:307-309）ので、
+  match.ts から evaluationOptions を通す小配線 + ワイヤリング確認が P4 冒頭タスク。
+- `ab-bench` の parseEvalOptions は boolean/number のみで evalBasis（string enum）を reject する。
+- Gate 2 の前に、焼き込み後重みでの **Gate 0 再測**（NPS / aspiration fail / lmr 再探索率）を行う
+  （上記の混成非対称・mean シフトの安価な先行確認）。
