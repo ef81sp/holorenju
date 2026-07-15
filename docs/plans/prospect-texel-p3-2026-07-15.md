@@ -270,6 +270,23 @@ node --experimental-strip-types --import ./scripts/register-loader.mjs \
 - [x] P3-c 回帰（k-fold・教師2系統）— 実装 + 本番実行済み
 - [x] P3-d アンカリング量子化・焼き込み（s=3.60、28 回帰 + 6 アンカー、baseline 損失 0.184 → 0.126）
 
+## Gate 2 結果（2026-07-15）: **PASS — 決定的有意勝ち**
+
+commit-bench r0.02 × 8セット（416局）、commitA==commitB=8a752f4、
+A=prospect（--eval-options-a、config JSON に記録済み）/ B=legacy:
+
+- **WDL（prospect 視点）: +305 =5 −106、Elo +181 [145, 220.9]（95%CI）、勝率 73.9%**
+- CI 全域が正で、過去の全レバー（CI幅 ~67 Elo で中立続き）と桁違いの有意差。
+  プラン §5 Gate 2 の「legacy 比有意勝ち」を大差で満たす。
+- 性能: A 平均深度 3.90 / NPS 17,654 vs B 4.20 / 13,588（prospect は per-node 速いが
+  探索木の形が異なり深度はやや浅い。それでも +181）。
+- Gate 1（評価盲目率）は「安い先行反証」の位置づけのためスキップした
+  （Gate 2 が決定的 PASS のため反証目的は消滅。/review issue 観点も直行を許容済み）。
+- 結果: `bench-results/commit-bench-2026-07-15T03-45-26-782Z.json`
+
+**次: 採用判定はボスレビュー**。採用時は P5（hard の difficulty 配線を prospect に切替、
+Gate 3=振り返り品質・対局体感・10秒予算の深度確認、margin 再チューン検討、ドキュメント）。
+
 ## P4 への申し送り（/review issue 指摘のブロッカー）
 
 **Gate 2 の対局ハーネスに evalBasis=prospect を注入する経路が未配線**。このまま
