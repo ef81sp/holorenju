@@ -281,3 +281,7 @@ commit-bench を回すと legacy vs legacy を測る silent 事故になる（�
 - `ab-bench` の parseEvalOptions は boolean/number のみで evalBasis（string enum）を reject する。
 - Gate 2 の前に、焼き込み後重みでの **Gate 0 再測**（NPS / aspiration fail / lmr 再探索率）を行う
   （上記の混成非対称・mean シフトの安価な先行確認）。
+  - **→ 実施済み（2026-07-15、fixed・depth5・70局面）: 懸念は否定**。NPS 比 122.1%（PASS 維持）、
+    aspiration 再探索/手 9.79→6.00（減少）、lmr 再探索率 8.23%→0.72%（大幅減）。
+    混成非対称による re-search 爆発なし。avgDepth 4.90 vs legacy 4.96（微差、MAX_NODES 上限到達数局面）。
+    結果: `bench-results/gate0-2026-07-15T01-06-32-751Z.json`
