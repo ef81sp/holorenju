@@ -42,6 +42,9 @@ export interface WasmModuleContext {
 
   // eval 重み実行時注入（id 0-8=legacy, 100〜=prospect。bench/回帰スクリプト用）
   getEvalParam: (id: number) => number;
+  // id の正準名（[*:0]const u8 ポインタ。呼び出し側で null 終端文字列として読む。
+  // SSoT: scores.zig(legacy id) / prospect.zig(prospect id、getProspectParamName)）
+  getEvalParamName: (id: number) => number;
 
   // 空点プロスペクト特徴ベクトル抽出（P3 の Texel 回帰用特徴ダンプ）
   extractProspectFeatures: (
