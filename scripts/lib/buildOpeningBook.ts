@@ -406,6 +406,19 @@ export interface OpeningBookAsset {
   dumpMetadata: BookDumpMetadata;
   stats: BuildOpeningBookStats;
   entries: Record<string, OpeningBookEntry>;
+  /**
+   * 黒番トラップの個別対応（opening-book-2026-07-16.md 黒対応・最小構成）の由来記録。
+   * 黒ダンプ全体は焼き込まず、severity-A のトラップノードだけを個別抽出して
+   * マージしているため、その由来をここに残す。黒対応が無い資産では省略される。
+   */
+  blackTrapProvenance?: {
+    sourceDump: string;
+    dumpMetadata: BookDumpMetadata;
+    /** 抽出元の黒トラップノード数（= 個別対応した severity-A 局面数）。 */
+    nodeCount: number;
+    /** 実際に資産へ追加されたエントリ数。 */
+    entryCount: number;
+  };
 }
 
 export function buildOpeningBookAsset(params: {
@@ -514,4 +527,132 @@ export function applyPatches(
   }
 
   return { entries: result, appliedCount };
+}
+
+// ─── 黒番トラップ個別対応（opening-book-2026-07-16.md 黒対応・最小構成） ──────
+//
+// 黒番採掘（--dump-book --side=black 相当）は白番と役割が反転する
+// （黒がhard・白が攻め側フィルタ）ため、ダンプの生スキーマは `hardMove` ではなく
+// `blackMove` を持つ。事前登録の判定基準（severity-A 1〜4件=個別対応）に従い、
+// 黒ダンプ全体は資産へ焼き込まず、トラップノード（forcedWinKind有り・
+// survivorMoves非空）だけを抽出して既存資産へマージする。
+
+/** 黒ダンプの生ノード（blackMoveスキーマ）。 */
+export interface BlackDumpRawNode {
+  canonicalKey: string;
+  route: string;
+  ply: number;
+  movesUpToHere: string[];
+  blackMove: string;
+  forcedWinKind: "VCF" | "VCT" | null;
+  forcedWinSequenceStr: string | null;
+  survivorMoves: string[] | null;
+}
+
+/**
+ * 黒ダンプの生ノードから「トラップノード（forcedWinKind!==null かつ
+ * survivorMoves非空）」だけを BookDumpNode 形式（`blackMove` → `hardMove`
+ * へマッピング）に変換して抽出する。彗星型（survivorMoves空）・非トラップ
+ * ノードは対象外（黒ダンプ全体は焼き込まない方針）。
+ */
+export function extractBlackTrapNodes(
+  rawNodes: BlackDumpRawNode[],
+): BookDumpNode[] {
+  return rawNodes
+    .filter(
+      (n) => n.forcedWinKind !== null && (n.survivorMoves?.length ?? 0) > 0,
+    )
+    .map((n) => ({
+      canonicalKey: n.canonicalKey,
+      route: n.route,
+      ply: n.ply as BookDumpNode["ply"],
+      movesUpToHere: n.movesUpToHere,
+      hardMove: n.blackMove,
+      forcedWinKind: n.forcedWinKind,
+      forcedWinSequenceStr: n.forcedWinSequenceStr,
+      survivorMoves: n.survivorMoves,
+    }));
+}
+
+/**
+ * 黒ダンプ JSONL（メタデータ行 + blackMoveスキーマのノード行）をパースし、
+ * トラップノードのみを抽出する。
+ */
+export function parseBlackTrapDumpJsonl(text: string): {
+  metadata: BookDumpMetadata;
+  trapNodes: BookDumpNode[];
+} {
+  const lines = text.split("\n").filter((line) => line.trim().length > 0);
+  if (lines.length === 0) {
+    throw new Error("黒ダンプが空です（メタデータ行がありません）");
+  }
+  const [metadataLine, ...nodeLines] = lines;
+  const metadata = JSON.parse(metadataLine!) as BookDumpMetadata;
+  if (metadata.type !== "metadata") {
+    throw new Error(
+      `先頭行がメタデータ行ではありません（type=${String((metadata as { type?: unknown }).type)}）`,
+    );
+  }
+  const rawNodes = nodeLines.map(
+    (line) => JSON.parse(line) as BlackDumpRawNode,
+  );
+  return { metadata, trapNodes: extractBlackTrapNodes(rawNodes) };
+}
+
+/**
+ * 既存資産（通常は白由来）に、黒トラップ抽出済みノードから構築したエントリを
+ * マージする。白由来の canonicalKey は必ず "|white"、黒由来は必ず "|black" で
+ * 終わるため、キー衝突は構造的に起きない。
+ */
+export function mergeBlackTrapIntoAsset(
+  asset: OpeningBookAsset,
+  params: {
+    sourceDump: string;
+    dumpMetadata: BookDumpMetadata;
+    trapNodes: BookDumpNode[];
+  },
+): OpeningBookAsset {
+  const { entries: blackEntries, stats: blackStats } = buildOpeningBookEntries(
+    params.trapNodes,
+  );
+
+  // randomPoolサイズ分布はキー単位で件数を加算する（プールサイズごとの内訳統計）。
+  const randomPoolSizeDistribution: Record<number, number> = {
+    ...asset.stats.randomPoolSizeDistribution,
+  };
+  for (const [sizeStr, count] of Object.entries(
+    blackStats.randomPoolSizeDistribution,
+  )) {
+    const size = Number(sizeStr);
+    randomPoolSizeDistribution[size] =
+      (randomPoolSizeDistribution[size] ?? 0) + count;
+  }
+
+  return {
+    ...asset,
+    entries: { ...asset.entries, ...blackEntries },
+    stats: {
+      // 挙動不変レポートの読み手を誤らせないよう、全フィールドを黒分と合算する
+      // （entryCount = nonTrapEntryCount + trapEntryCount の整合を維持する）。
+      totalDumpNodes: asset.stats.totalDumpNodes + blackStats.totalDumpNodes,
+      mergedNodes: asset.stats.mergedNodes + blackStats.mergedNodes,
+      trapNodes: asset.stats.trapNodes + blackStats.trapNodes,
+      cometNodesSkipped:
+        asset.stats.cometNodesSkipped + blackStats.cometNodesSkipped,
+      inconsistentNodesSkipped:
+        asset.stats.inconsistentNodesSkipped +
+        blackStats.inconsistentNodesSkipped,
+      entryCount: asset.stats.entryCount + blackStats.entryCount,
+      nonTrapEntryCount:
+        asset.stats.nonTrapEntryCount + blackStats.nonTrapEntryCount,
+      trapEntryCount: asset.stats.trapEntryCount + blackStats.trapEntryCount,
+      randomPoolSizeDistribution,
+    },
+    blackTrapProvenance: {
+      sourceDump: params.sourceDump,
+      dumpMetadata: params.dumpMetadata,
+      nodeCount: params.trapNodes.length,
+      entryCount: blackStats.entryCount,
+    },
+  };
 }

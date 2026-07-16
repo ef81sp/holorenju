@@ -15,6 +15,13 @@
  *     scripts/build-opening-book.ts --dump=bench-results/opening-book-dump.jsonl \
  *     --patch=bench-results/comet-patch.jsonl \
  *     --out=src/assets/opening-book-hard.json --weight-gen=texel-r2
+ *
+ *   # 黒番トラップ個別対応（最小構成）: 黒ダンプからトラップノードだけを抽出して
+ *   # マージする（黒ダンプ全体は焼き込まない）
+ *   node --experimental-strip-types --import ./scripts/register-loader.mjs \
+ *     scripts/build-opening-book.ts --dump=bench-results/opening-book-dump.jsonl \
+ *     --black-traps-only=bench-results/opening-book-dump-black.jsonl \
+ *     --out=src/assets/opening-book-hard.json --weight-gen=texel-r2
  */
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -24,6 +31,8 @@ import { getGitRev } from "./lib/bookDumpMetadata";
 import {
   applyPatches,
   buildOpeningBookAsset,
+  mergeBlackTrapIntoAsset,
+  parseBlackTrapDumpJsonl,
   parseDumpJsonl,
   parsePatchJsonl,
 } from "./lib/buildOpeningBook";
@@ -33,6 +42,7 @@ interface CliOptions {
   outPath: string;
   weightGeneration: string;
   patchPath: string | null;
+  blackTrapsOnlyPath: string | null;
 }
 
 function parseArgs(): CliOptions {
@@ -41,6 +51,7 @@ function parseArgs(): CliOptions {
   let outPath = "src/assets/opening-book-hard.json";
   let weightGeneration = "unknown";
   let patchPath: string | null = null;
+  let blackTrapsOnlyPath: string | null = null;
   for (const arg of args) {
     if (arg.startsWith("--dump=")) {
       dumpPath = arg.slice("--dump=".length);
@@ -50,12 +61,14 @@ function parseArgs(): CliOptions {
       weightGeneration = arg.slice("--weight-gen=".length);
     } else if (arg.startsWith("--patch=")) {
       patchPath = arg.slice("--patch=".length);
+    } else if (arg.startsWith("--black-traps-only=")) {
+      blackTrapsOnlyPath = arg.slice("--black-traps-only=".length);
     }
   }
   if (!dumpPath) {
     throw new Error("--dump=<path> は必須です");
   }
-  return { dumpPath, outPath, weightGeneration, patchPath };
+  return { dumpPath, outPath, weightGeneration, patchPath, blackTrapsOnlyPath };
 }
 
 function main(): void {
@@ -69,12 +82,15 @@ function main(): void {
   if (opts.patchPath) {
     console.log(`patch: ${opts.patchPath}`);
   }
+  if (opts.blackTrapsOnlyPath) {
+    console.log(`black-traps-only: ${opts.blackTrapsOnlyPath}`);
+  }
 
   const dumpText = readFileSync(opts.dumpPath, "utf-8");
   const { metadata, nodes } = parseDumpJsonl(dumpText);
   console.log(`ダンプノード数: ${nodes.length}`);
 
-  const asset = buildOpeningBookAsset({
+  let asset = buildOpeningBookAsset({
     dumpMetadata: metadata,
     nodes,
     sourceDump: opts.dumpPath,
@@ -92,6 +108,18 @@ function main(): void {
     patchAppliedCount = applied.appliedCount;
     // patch適用後の実際のエントリ数に更新する（新規追加分もあり得るため）。
     asset.stats.entryCount = Object.keys(asset.entries).length;
+  }
+
+  if (opts.blackTrapsOnlyPath) {
+    const blackDumpText = readFileSync(opts.blackTrapsOnlyPath, "utf-8");
+    const { metadata: blackMetadata, trapNodes } =
+      parseBlackTrapDumpJsonl(blackDumpText);
+    console.log(`黒トラップノード数: ${trapNodes.length}`);
+    asset = mergeBlackTrapIntoAsset(asset, {
+      sourceDump: opts.blackTrapsOnlyPath,
+      dumpMetadata: blackMetadata,
+      trapNodes,
+    });
   }
 
   const json = JSON.stringify(asset);
@@ -112,6 +140,12 @@ function main(): void {
   console.log(`  エントリ数:             ${asset.stats.entryCount}`);
   if (opts.patchPath) {
     console.log(`  patch適用数:            ${patchAppliedCount}`);
+  }
+  if (asset.blackTrapProvenance) {
+    console.log(
+      `  黒トラップ個別対応:     ${asset.blackTrapProvenance.entryCount}件` +
+        `（由来: ${asset.blackTrapProvenance.sourceDump}）`,
+    );
   }
   console.log("");
   console.log("── 挙動不変レポート（ゲート3: Elo中立の静的保証） ──");

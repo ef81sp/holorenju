@@ -32,8 +32,8 @@ export interface TrapRecordForVerify {
 }
 
 export interface BookLookup {
-  /** board（白番）のブック候補（実盤座標、棋譜表記）を全列挙する。ヒットなしは null。 */
-  candidateMoves(board: BoardState): string[] | null;
+  /** board（color番）のブック候補（実盤座標、棋譜表記）を全列挙する。ヒットなしは null。 */
+  candidateMoves(board: BoardState, color: "black" | "white"): string[] | null;
 }
 
 export interface ForcedWinChecker {
@@ -101,7 +101,9 @@ export function verifyRecordBlocked(
   board = applyMove(board, white2, "white");
   board = applyMove(board, black3, "black");
 
-  const white4Candidates = book.candidateMoves(board) ?? [recordedWhite4Str!];
+  const white4Candidates = book.candidateMoves(board, "white") ?? [
+    recordedWhite4Str!,
+  ];
 
   const branches: VerifyBranch[] = [];
 
@@ -109,7 +111,7 @@ export function verifyRecordBlocked(
     const boardAfterWhite4 = applyMove(board, parseMove(white4Str), "white");
     const boardAfterBlack5 = applyMove(boardAfterWhite4, black5, "black");
 
-    const white6Candidates = book.candidateMoves(boardAfterBlack5) ?? [
+    const white6Candidates = book.candidateMoves(boardAfterBlack5, "white") ?? [
       recordedWhite6Str!,
     ];
 
@@ -137,7 +139,7 @@ export function verifyRecordBlocked(
         continue;
       }
 
-      const white8Candidates = book.candidateMoves(boardAfterBlack7);
+      const white8Candidates = book.candidateMoves(boardAfterBlack7, "white");
       if (!white8Candidates || white8Candidates.length === 0) {
         branches.push({
           white4: white4Str,
@@ -173,6 +175,144 @@ export function verifyRecordBlocked(
   return {
     route: record.route,
     canonicalKeyPly8: record.canonicalKeyPly8,
+    blocked: branches.every((b) => b.blocked),
+    branches,
+  };
+}
+
+// ─── 黒番トラップ個別対応（opening-book-2026-07-16.md 黒対応） ───────────────
+//
+// 黒番採掘は白番と役割が反転する: 黒（黒5・黒7）がブック対象（hard）、
+// 白（白4・白6）は攻め側フィルタとして記録どおり固定して進める。
+// 黒7がトラップ対象の着手（severity-A レコードは黒7着手前の局面を記録する）。
+
+export interface BlackTrapRecordForVerify {
+  route: string;
+  /** 黒7着手前・黒番の局面の canonicalKey（severity-A レコードの主キー）。 */
+  canonicalKeyBeforeBlack7: string;
+  /** [黒1, 白2, 黒3, 白4, 黒5, 白6]（棋譜表記、6手）。 */
+  moves: string[];
+}
+
+export interface BlackVerifyBranch {
+  black5: string;
+  white6: string;
+  /** 記録の黒7着手前局面から乖離した場合は null（未検証）。 */
+  black7: string | null;
+  /** black5 がブックにより記録と異なり、記録の黒7着手前局面に到達しなかった。 */
+  diverged: boolean;
+  /** diverged=false なのに黒7着手前局面にブックのエントリが無い（異常。要調査）。 */
+  bookMissingAtPly7: boolean;
+  forcedWinKind: "VCF" | "VCT" | null;
+  /** このブランチが安全か。 */
+  blocked: boolean;
+}
+
+export interface BlackVerifyRecordResult {
+  route: string;
+  canonicalKeyBeforeBlack7: string;
+  /** 全ブランチが安全なら true。 */
+  blocked: boolean;
+  branches: BlackVerifyBranch[];
+}
+
+/**
+ * 1件の黒番severity-Aレコードを検証する。white4/white6 は記録どおり固定し、
+ * black5/black7（ブック対象）はブックにヒットすればブックの候補（randomPool
+ * があれば全候補）を、ヒットしなければ記録された手を使う。
+ */
+export function verifyBlackRecordBlocked(
+  record: BlackTrapRecordForVerify,
+  book: BookLookup,
+  checker: ForcedWinChecker,
+): BlackVerifyRecordResult {
+  if (record.moves.length !== 6) {
+    throw new Error(
+      `不正なレコード: moves は6手必要（route=${record.route}, 実際=${record.moves.length}）`,
+    );
+  }
+  const [
+    black1Str,
+    white2Str,
+    black3Str,
+    recordedWhite4Str,
+    recordedBlack5Str,
+    recordedWhite6Str,
+  ] = record.moves;
+
+  const black1 = parseMove(black1Str!);
+  const white2 = parseMove(white2Str!);
+  const black3 = parseMove(black3Str!);
+  const white4 = parseMove(recordedWhite4Str!);
+  const white6 = parseMove(recordedWhite6Str!);
+
+  let board = createEmptyBoard();
+  board = applyMove(board, black1, "black");
+  board = applyMove(board, white2, "white");
+  board = applyMove(board, black3, "black");
+  board = applyMove(board, white4, "white");
+
+  const black5Candidates = book.candidateMoves(board, "black") ?? [
+    recordedBlack5Str!,
+  ];
+
+  const branches: BlackVerifyBranch[] = [];
+
+  for (const black5Str of black5Candidates) {
+    const boardAfterBlack5 = applyMove(board, parseMove(black5Str), "black");
+    const boardAfterWhite6 = applyMove(boardAfterBlack5, white6, "white");
+
+    const reachedKey = canonicalKey(boardAfterWhite6, "black");
+    const diverged = reachedKey !== record.canonicalKeyBeforeBlack7;
+
+    if (diverged) {
+      branches.push({
+        black5: black5Str,
+        white6: recordedWhite6Str!,
+        black7: null,
+        diverged: true,
+        bookMissingAtPly7: false,
+        forcedWinKind: null,
+        blocked: true,
+      });
+      continue;
+    }
+
+    const black7Candidates = book.candidateMoves(boardAfterWhite6, "black");
+    if (!black7Candidates || black7Candidates.length === 0) {
+      branches.push({
+        black5: black5Str,
+        white6: recordedWhite6Str!,
+        black7: null,
+        diverged: false,
+        bookMissingAtPly7: true,
+        forcedWinKind: null,
+        blocked: false,
+      });
+      continue;
+    }
+
+    for (const black7Str of black7Candidates) {
+      const forcedWinKind = checker.check(
+        boardAfterWhite6,
+        "black",
+        parseMove(black7Str),
+      );
+      branches.push({
+        black5: black5Str,
+        white6: recordedWhite6Str!,
+        black7: black7Str,
+        diverged: false,
+        bookMissingAtPly7: false,
+        forcedWinKind,
+        blocked: forcedWinKind === null,
+      });
+    }
+  }
+
+  return {
+    route: record.route,
+    canonicalKeyBeforeBlack7: record.canonicalKeyBeforeBlack7,
     blocked: branches.every((b) => b.blocked),
     branches,
   };

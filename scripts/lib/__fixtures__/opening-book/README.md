@@ -17,6 +17,11 @@
   `dump.jsonl` の2トラップノードと同一の canonicalKeyPly8 を持つ
   （= このフィクスチャから構築したブックで `verify-book-blocks-traps.ts` を
   実行すると封鎖できるはず、という対応関係がある）。
+- `dump-black.jsonl`: 黒番採掘の権威実行（`bench-results/opening-book-dump-black.jsonl`、
+  非公開）から、severity-A になった1トラップノードだけを抜粋したもの
+  （黒ダンプ全体は焼き込まない方針のため、フィクスチャも最小限に絞っている）。
+- `severity-a-black.jsonl`: 対応する黒番severity-Aレコード1件
+  （`bench-results/opening-traps-black-run1.jsonl` のコピー）。
 
 ## 再生成コマンド
 
@@ -30,3 +35,8 @@ node --experimental-strip-types --import ./scripts/register-loader.mjs \
 シードは `trap-mining.ts` の既定値（20260716）固定だが、hard の探索結果自体は
 wasm ビルドやコード変更で変わり得るため、完全な再現性は保証しない
 （テストは特定の手の値ではなく構造的な性質を検証している）。
+
+`dump-black.jsonl` / `severity-a-black.jsonl` は黒番採掘の権威実行（マシン専有・
+数時間）の成果物からの抜粋のため、同じ手順で軽量に再生成することはできない。
+黒番採掘スクリプト自体が再実行された場合は、新しい severity-A レコードと
+対応するダンプノードを手動で抜粋し直すこと。

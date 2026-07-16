@@ -158,7 +158,7 @@ self.onmessage = async (event: MessageEvent<ReviewEvalRequest>) => {
     });
 
     // オープニングブック注釈（§3）: 着手選択には使わない。打たれた手が
-    // ブック手（対象は白番 ply4〜8）と一致するかどうかだけを判定する。
+    // ブック手（対象は白番 ply4〜8・黒番 ply5〜7）と一致するかどうかだけを判定する。
     const moveColor = moveIndex % 2 === 0 ? "black" : "white";
     let isBookMoveAnnotation: boolean | undefined = undefined;
     if (isWithinBookRange(moveColor, moveIndex) && moves[moveIndex]) {
@@ -167,7 +167,7 @@ self.onmessage = async (event: MessageEvent<ReviewEvalRequest>) => {
         moves.slice(0, moveIndex).join(" "),
       );
       const played = parseMove(moves[moveIndex]!);
-      isBookMoveAnnotation = isBookMove(boardBeforeMove, "white", played);
+      isBookMoveAnnotation = isBookMove(boardBeforeMove, moveColor, played);
     }
 
     // timings は Worker の結果には不要なので除外

@@ -76,11 +76,11 @@ self.onmessage = async (event: MessageEvent<CpuRequest>) => {
       }
     }
 
-    // オープニングブック（hard・白番・ply4〜8）: ヒット時はブック手を返す。
+    // オープニングブック（hard・白番ply4〜8/黒番ply5〜7）: ヒット時はブック手を返す。
     // ミス（未ロード/未生成/ヒットなし）なら従来のWASM探索にフォールバックする。
     if (isBookEligible(request.difficulty, currentTurn, moveCount)) {
       await preloadOpeningBook();
-      const bookMove = getBookMove(request.board, "white");
+      const bookMove = getBookMove(request.board, currentTurn);
       if (bookMove) {
         const endTime = performance.now();
         const response: CpuResponse = {

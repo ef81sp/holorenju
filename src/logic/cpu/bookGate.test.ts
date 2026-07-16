@@ -27,6 +27,10 @@ describe("isBookEligible", () => {
     },
   );
 
+  it.each([4, 6])("hard・黒番・moveCount=%i（ply5/7）は true", (moveCount) => {
+    expect(isBookEligible("hard", "black", moveCount)).toBe(true);
+  });
+
   it.each(["beginner", "easy", "medium"] as const)(
     "%s（hard以外）は白番でも false",
     (difficulty) => {
@@ -34,8 +38,16 @@ describe("isBookEligible", () => {
     },
   );
 
-  it("hard でも黒番は false", () => {
+  it.each(["beginner", "easy", "medium"] as const)(
+    "%s（hard以外）は黒番でも false",
+    (difficulty) => {
+      expect(isBookEligible(difficulty, "black", 4)).toBe(false);
+    },
+  );
+
+  it("hard・黒番でもレンジ外（moveCount3/7）は false（黒は4〜6の範囲のみ）", () => {
     expect(isBookEligible("hard", "black", 3)).toBe(false);
+    expect(isBookEligible("hard", "black", 7)).toBe(false);
   });
 
   it("hard・白番でも ply4未満（moveCount<3）は false（opening.ts の領域）", () => {
@@ -45,6 +57,11 @@ describe("isBookEligible", () => {
   it("hard・白番でも ply8超（moveCount>7）は false", () => {
     expect(isBookEligible("hard", "white", 8)).toBe(false);
     expect(isBookEligible("hard", "white", 9)).toBe(false);
+  });
+
+  it("hard・黒番でも ply5未満/ply7超は false", () => {
+    expect(isBookEligible("hard", "black", 2)).toBe(false);
+    expect(isBookEligible("hard", "black", 8)).toBe(false);
   });
 });
 
@@ -56,12 +73,25 @@ describe("isWithinBookRange", () => {
     },
   );
 
-  it("黒番は false", () => {
-    expect(isWithinBookRange("black", 3)).toBe(false);
+  it.each([4, 6])("黒番・moveCount=%i（ply5/7）は true", (mc) => {
+    expect(isWithinBookRange("black", mc)).toBe(true);
   });
 
-  it("範囲外（moveCount<3 or >7）は false", () => {
+  it("黒番はレンジ外（moveCount3/7）では false", () => {
+    expect(isWithinBookRange("black", 3)).toBe(false);
+    expect(isWithinBookRange("black", 7)).toBe(false);
+  });
+
+  it("白番は黒のレンジ（moveCount4/6）では true（白のレンジにも含まれるため）", () => {
+    // 白のレンジは3〜7なので4/6も含まれる。黒固有ではないことの確認。
+    expect(isWithinBookRange("white", 4)).toBe(true);
+    expect(isWithinBookRange("white", 6)).toBe(true);
+  });
+
+  it("範囲外（白: moveCount<3 or >7、黒: moveCount<4 or >6）は false", () => {
     expect(isWithinBookRange("white", 2)).toBe(false);
     expect(isWithinBookRange("white", 8)).toBe(false);
+    expect(isWithinBookRange("black", 3)).toBe(false);
+    expect(isWithinBookRange("black", 7)).toBe(false);
   });
 });

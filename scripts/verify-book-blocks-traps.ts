@@ -10,6 +10,11 @@
  * 使用例:
  *   node --experimental-strip-types --import ./scripts/register-loader.mjs \
  *     scripts/verify-book-blocks-traps.ts --records=bench-results/opening-traps-run2.jsonl
+ *
+ *   # 黒番severity-Aレコードも合わせて検証する
+ *   node --experimental-strip-types --import ./scripts/register-loader.mjs \
+ *     scripts/verify-book-blocks-traps.ts --records=bench-results/opening-traps-run2.jsonl \
+ *     --black-records=bench-results/opening-traps-black-run1.jsonl
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -27,7 +32,9 @@ import { formatMove } from "@/logic/gameRecordParser";
 
 import { checkForcedWinAfterMove } from "./lib/forcedWinCheck";
 import {
+  verifyBlackRecordBlocked,
   verifyRecordBlocked,
+  type BlackTrapRecordForVerify,
   type BookLookup,
   type ForcedWinChecker,
   type TrapRecordForVerify,
@@ -41,15 +48,30 @@ interface TrapMiningRecordFile {
   forcedWinKind: "VCF" | "VCT";
 }
 
-function parseArgs(): { recordsPath: string; bookPath: string } {
+interface BlackTrapMiningRecordFile {
+  canonicalKeyBeforeBlack7: string;
+  route: string;
+  moves: string[];
+  severity: "A";
+  forcedWinKind: "VCF" | "VCT";
+}
+
+function parseArgs(): {
+  recordsPath: string;
+  bookPath: string;
+  blackRecordsPath: string | null;
+} {
   const args = process.argv.slice(2);
   let recordsPath: string | null = null;
   let bookPath = "src/assets/opening-book-hard.json";
+  let blackRecordsPath: string | null = null;
   for (const arg of args) {
     if (arg.startsWith("--records=")) {
       recordsPath = arg.slice("--records=".length);
     } else if (arg.startsWith("--book=")) {
       bookPath = arg.slice("--book=".length);
+    } else if (arg.startsWith("--black-records=")) {
+      blackRecordsPath = arg.slice("--black-records=".length);
     }
   }
   if (!recordsPath) {
@@ -57,23 +79,36 @@ function parseArgs(): { recordsPath: string; bookPath: string } {
       "--records=<path> は必須です（trap-mining.ts --out の severity-A JSONL）",
     );
   }
-  return { recordsPath, bookPath };
+  return { recordsPath, bookPath, blackRecordsPath };
 }
 
 async function main(): Promise<void> {
-  const { recordsPath, bookPath } = parseArgs();
+  const { recordsPath, bookPath, blackRecordsPath } = parseArgs();
 
   console.log("========================================");
   console.log(" ゲート1: ブックによるトラップ封鎖検証");
   console.log("========================================");
   console.log(`records: ${recordsPath}`);
   console.log(`book:    ${bookPath}`);
+  if (blackRecordsPath) {
+    console.log(`black-records: ${blackRecordsPath}`);
+  }
 
   const lines = readFileSync(recordsPath, "utf-8")
     .split("\n")
     .filter((line) => line.trim().length > 0);
   const records = lines.map((line) => JSON.parse(line) as TrapMiningRecordFile);
-  console.log(`レコード数: ${records.length}`);
+  console.log(`レコード数（白）: ${records.length}`);
+
+  const blackRecords = blackRecordsPath
+    ? readFileSync(blackRecordsPath, "utf-8")
+        .split("\n")
+        .filter((line) => line.trim().length > 0)
+        .map((line) => JSON.parse(line) as BlackTrapMiningRecordFile)
+    : [];
+  if (blackRecordsPath) {
+    console.log(`レコード数（黒）: ${blackRecords.length}`);
+  }
 
   const bookAsset = JSON.parse(
     readFileSync(path.resolve(bookPath), "utf-8"),
@@ -86,8 +121,8 @@ async function main(): Promise<void> {
   const engine = new WasmSearchEngine(wasm);
 
   const book: BookLookup = {
-    candidateMoves(board) {
-      const candidates = getBookMoveCandidates(board, "white");
+    candidateMoves(board, color) {
+      const candidates = getBookMoveCandidates(board, color);
       return candidates ? candidates.map(formatMove) : null;
     },
   };
@@ -101,8 +136,9 @@ async function main(): Promise<void> {
   let passCount = 0;
   let failCount = 0;
   const failures: {
+    color: "white" | "black";
     route: string;
-    canonicalKeyPly8: string;
+    canonicalKey: string;
     branches: unknown;
   }[] = [];
 
@@ -118,16 +154,38 @@ async function main(): Promise<void> {
     } else {
       failCount++;
       failures.push({
+        color: "white",
         route: result.route,
-        canonicalKeyPly8: result.canonicalKeyPly8,
+        canonicalKey: result.canonicalKeyPly8,
         branches: result.branches.filter((b) => !b.blocked),
       });
     }
   }
 
+  for (const record of blackRecords) {
+    const verifyRecord: BlackTrapRecordForVerify = {
+      route: record.route,
+      canonicalKeyBeforeBlack7: record.canonicalKeyBeforeBlack7,
+      moves: record.moves,
+    };
+    const result = verifyBlackRecordBlocked(verifyRecord, book, checker);
+    if (result.blocked) {
+      passCount++;
+    } else {
+      failCount++;
+      failures.push({
+        color: "black",
+        route: result.route,
+        canonicalKey: result.canonicalKeyBeforeBlack7,
+        branches: result.branches.filter((b) => !b.blocked),
+      });
+    }
+  }
+
+  const totalRecords = records.length + blackRecords.length;
   console.log("");
-  console.log(`PASS: ${passCount} / ${records.length}`);
-  console.log(`FAIL: ${failCount} / ${records.length}`);
+  console.log(`PASS: ${passCount} / ${totalRecords}`);
+  console.log(`FAIL: ${failCount} / ${totalRecords}`);
   if (failures.length > 0) {
     console.log("");
     console.log("── 失敗レコード ──────────────────────");

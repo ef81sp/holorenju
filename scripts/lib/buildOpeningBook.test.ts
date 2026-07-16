@@ -26,12 +26,16 @@ import {
   assertHardMoveInvariant,
   buildOpeningBookAsset,
   buildOpeningBookEntries,
+  extractBlackTrapNodes,
   findConsistentTransform,
+  mergeBlackTrapIntoAsset,
   nodeToCanonicalEntry,
+  parseBlackTrapDumpJsonl,
   parseDumpJsonl,
   parsePatchJsonl,
   reconstructNodeBoard,
   resolveCanonicalEntry,
+  type BlackDumpRawNode,
   type OpeningBookPatchEntry,
 } from "./buildOpeningBook";
 
@@ -578,5 +582,140 @@ describe("parsePatchJsonl / applyPatches（opening-book-2026-07-16.md §4 彗星
     const { entries, appliedCount } = applyPatches({}, [patch1, patch2]);
     expect(appliedCount).toBe(2);
     expect(Object.keys(entries)).toHaveLength(2);
+  });
+});
+
+describe("黒番トラップ個別対応（opening-book-2026-07-16.md 黒対応最小構成）", () => {
+  function blackRawNode(
+    overrides: Partial<BlackDumpRawNode> = {},
+  ): BlackDumpRawNode {
+    const movesUpToHere = overrides.movesUpToHere ?? [
+      "H8",
+      "I9",
+      "F6",
+      "J9",
+      "F7",
+      "I8",
+    ];
+    const { board } = createBoardFromRecord(movesUpToHere.join(" "));
+    const canonicalKey =
+      overrides.canonicalKey ?? canonicalKeyWithTransform(board, "black").key;
+    return {
+      canonicalKey,
+      route: "彗星",
+      ply: 7,
+      movesUpToHere,
+      blackMove: "I7",
+      forcedWinKind: "VCT" as const,
+      forcedWinSequenceStr: "K9 L9 G9 H9 K10 L11 G6",
+      survivorMoves: ["F9"],
+      ...overrides,
+    };
+  }
+
+  it("extractBlackTrapNodes: トラップノード（生存手あり）だけを BookDumpNode 形式で抽出する", () => {
+    const trap = blackRawNode();
+    const nonTrap = blackRawNode({
+      movesUpToHere: ["A1", "B2", "C3", "D4"],
+      ply: 5,
+      blackMove: "E5",
+      forcedWinKind: null,
+      forcedWinSequenceStr: null,
+      survivorMoves: null,
+    });
+    const comet = blackRawNode({
+      movesUpToHere: ["A1", "B2", "C3", "D4", "E5", "F6"],
+      blackMove: "G7",
+      survivorMoves: [],
+    });
+
+    const extracted = extractBlackTrapNodes([trap, nonTrap, comet]);
+    expect(extracted).toHaveLength(1);
+    expect(extracted[0]?.hardMove).toBe("I7"); // blackMove → hardMove へマッピング
+    expect(extracted[0]?.forcedWinKind).toBe("VCT");
+    expect(extracted[0]?.survivorMoves).toEqual(["F9"]);
+  });
+
+  it("parseBlackTrapDumpJsonl: メタデータ行 + 黒ノード行をパースし、トラップのみ抽出する", () => {
+    const metadata: BookDumpMetadata = {
+      type: "metadata",
+      timestamp: "2026-07-16T00:00:00.000Z",
+      gitRev: "abc",
+      wasmBuildTime: "w",
+      seed: 20260716,
+      roots: null,
+      b5: 12,
+      b7: 20,
+      hardTimeMs: null,
+    };
+    const trap = blackRawNode();
+    const text = `${JSON.stringify(metadata)}\n${JSON.stringify(trap)}\n`;
+
+    const result = parseBlackTrapDumpJsonl(text);
+    expect(result.metadata).toEqual(metadata);
+    expect(result.trapNodes).toHaveLength(1);
+    expect(result.trapNodes[0]?.canonicalKey.endsWith("|black")).toBe(true);
+  });
+
+  it("mergeBlackTrapIntoAsset: 白由来資産に黒エントリを追加し、由来をメタデータへ記録する", () => {
+    const whiteMetadata: BookDumpMetadata = {
+      type: "metadata",
+      timestamp: "2026-07-16T00:00:00.000Z",
+      gitRev: "white-rev",
+      wasmBuildTime: "w",
+      seed: 20260716,
+      roots: null,
+      b5: 12,
+      b7: 20,
+      hardTimeMs: null,
+    };
+    const whiteNode = withRealCanonicalKey(plainNode());
+    const asset = buildOpeningBookAsset({
+      dumpMetadata: whiteMetadata,
+      nodes: [whiteNode],
+      sourceDump: "white-dump.jsonl",
+      buildGitRev: "rev1",
+      weightGeneration: "texel-r2",
+    });
+    const originalEntryCount = Object.keys(asset.entries).length;
+
+    const blackMetadata: BookDumpMetadata = {
+      ...whiteMetadata,
+      gitRev: "black-rev",
+    };
+    const trapNodes = extractBlackTrapNodes([blackRawNode()]);
+
+    const merged = mergeBlackTrapIntoAsset(asset, {
+      sourceDump: "black-dump.jsonl",
+      dumpMetadata: blackMetadata,
+      trapNodes,
+    });
+
+    // 白由来のエントリは維持されたまま、黒エントリが追加される（キー衝突なし）。
+    expect(Object.keys(merged.entries)).toHaveLength(originalEntryCount + 1);
+    expect(merged.entries[whiteNode.canonicalKey]).toBeDefined();
+    const blackKey = trapNodes[0]!.canonicalKey;
+    expect(merged.entries[blackKey]?.randomPool).toEqual(
+      nodeToCanonicalEntry(trapNodes[0]!)?.randomPool,
+    );
+
+    expect(merged.blackTrapProvenance).toEqual({
+      sourceDump: "black-dump.jsonl",
+      dumpMetadata: blackMetadata,
+      nodeCount: 1,
+      entryCount: 1,
+    });
+
+    // stats整合（実装レビューS suggestion）: entryCount = nonTrap+trap の和が
+    // 黒エントリ加算後も保たれること。ビルドログの挙動不変レポートの読み手を
+    // 誤らせないための固定テスト。
+    expect(merged.stats.entryCount).toBe(Object.keys(merged.entries).length);
+    expect(merged.stats.entryCount).toBe(
+      merged.stats.nonTrapEntryCount + merged.stats.trapEntryCount,
+    );
+    // 黒トラップ1件分がtrapEntryCount/trapNodesへ正しく加算されている。
+    expect(merged.stats.trapEntryCount).toBe(asset.stats.trapEntryCount + 1);
+    expect(merged.stats.trapNodes).toBe(asset.stats.trapNodes + 1);
+    expect(merged.stats.nonTrapEntryCount).toBe(asset.stats.nonTrapEntryCount);
   });
 });

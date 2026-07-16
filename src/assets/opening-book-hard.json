@@ -1,8 +1,8 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-16T05:48:25.382Z",
+  "generatedAt": "2026-07-16T12:13:18.128Z",
   "sourceDump": "bench-results/opening-book-dump-reverified.jsonl",
-  "buildGitRev": "f51200c4b094221e1afe1892b993d357bdae2b89",
+  "buildGitRev": "8de1f2130f825c427f464ce5182c85940667c861",
   "weightGeneration": "texel-r2",
   "dumpMetadata": {
     "type": "metadata",
@@ -16,15 +16,15 @@
     "hardTimeMs": null
   },
   "stats": {
-    "totalDumpNodes": 6859,
-    "mergedNodes": 5951,
-    "trapNodes": 51,
+    "totalDumpNodes": 6860,
+    "mergedNodes": 5952,
+    "trapNodes": 52,
     "cometNodesSkipped": 1,
     "inconsistentNodesSkipped": 0,
-    "entryCount": 5950,
+    "entryCount": 5951,
     "nonTrapEntryCount": 5900,
-    "trapEntryCount": 50,
-    "randomPoolSizeDistribution": { "1": 6, "2": 20, "3": 20, "4": 3, "5": 1 }
+    "trapEntryCount": 51,
+    "randomPoolSizeDistribution": { "1": 7, "2": 20, "3": 20, "4": 3, "5": 1 }
   },
   "entries": {
     "................................................................................................................B...............W...............B................................................................................|white": {
@@ -17926,6 +17926,27 @@
     },
     ".................................................................................................W.W............BW.B.................................................B...........................................B...............|white": {
       "move": "J7"
+    },
+    "..................................................................................................WW............BW...........B..............B....................................................................................|black": {
+      "move": "F9",
+      "randomPool": ["F9"]
     }
+  },
+  "blackTrapProvenance": {
+    "sourceDump": "bench-results/opening-book-dump-black.jsonl",
+    "dumpMetadata": {
+      "type": "metadata",
+      "timestamp": "2026-07-16T11:39:03.370Z",
+      "gitRev": "8de1f2130f825c427f464ce5182c85940667c861",
+      "wasmBuildTime": "2026-07-15T14:37:08.513Z",
+      "seed": 20260716,
+      "roots": null,
+      "b5": 12,
+      "b7": 20,
+      "hardTimeMs": null,
+      "side": "black"
+    },
+    "nodeCount": 1,
+    "entryCount": 1
   }
 }

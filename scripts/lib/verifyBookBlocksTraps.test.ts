@@ -23,9 +23,15 @@ import {
   parseMove,
 } from "@/logic/gameRecordParser";
 
-import { buildOpeningBookEntries, parseDumpJsonl } from "./buildOpeningBook";
 import {
+  buildOpeningBookEntries,
+  parseBlackTrapDumpJsonl,
+  parseDumpJsonl,
+} from "./buildOpeningBook";
+import {
+  verifyBlackRecordBlocked,
   verifyRecordBlocked,
+  type BlackTrapRecordForVerify,
   type BookLookup,
   type ForcedWinChecker,
   type TrapRecordForVerify,
@@ -66,7 +72,7 @@ function stoneCountKey(board: BoardState): string {
 
 function fakeBook(entries: Record<string, string[]>): BookLookup {
   return {
-    candidateMoves(board) {
+    candidateMoves(board, _color) {
       return entries[stoneCountKey(board)] ?? null;
     },
   };
@@ -198,8 +204,8 @@ describe("実データフィクスチャ（scripts/lib/__fixtures__/opening-book
     // ——採掘プロセス自体が生存手を VCF/VCT 検証済みのため、ここでの目的は
     // 「実データの canonicalKey/変換パイプラインで正しくヒットするか」の確認。
     const book: BookLookup = {
-      candidateMoves(board) {
-        const candidates = getBookMoveCandidates(board, "white");
+      candidateMoves(board, color) {
+        const candidates = getBookMoveCandidates(board, color);
         return candidates ? candidates.map(formatMove) : null;
       },
     };
@@ -218,6 +224,134 @@ describe("実データフィクスチャ（scripts/lib/__fixtures__/opening-book
       expect(missing).toBe(false);
       expect(result.blocked).toBe(true);
     }
+
+    setOpeningBookAsset(null);
+  });
+});
+
+/** 黒1天元・白2・黒3・白4・黒5・白6（6手）の黒番トラップ記録。 */
+const BLACK_RECORD_MOVES = ["H8", "I9", "F6", "J9", "F7", "I8"] as const;
+
+/** BLACK_RECORD_MOVES を実際に盤面へ再現して真の canonicalKey（黒7着手前局面）を計算する。 */
+function realCanonicalKeyBeforeBlack7(): string {
+  const { board } = createBoardFromRecord(BLACK_RECORD_MOVES.join(" "));
+  return canonicalKey(board, "black");
+}
+
+function makeBlackRecord(
+  overrides: Partial<BlackTrapRecordForVerify> = {},
+): BlackTrapRecordForVerify {
+  return {
+    route: "彗星",
+    canonicalKeyBeforeBlack7: realCanonicalKeyBeforeBlack7(),
+    moves: [...BLACK_RECORD_MOVES],
+    ...overrides,
+  };
+}
+
+describe("verifyBlackRecordBlocked", () => {
+  it("moves が6手でなければ例外を投げる", () => {
+    expect(() =>
+      verifyBlackRecordBlocked(
+        makeBlackRecord({ moves: ["H8", "I9"] }),
+        fakeBook({}),
+        fakeChecker({}),
+      ),
+    ).toThrow();
+  });
+
+  it("黒7着手前局面にブックのエントリが無い場合、bookMissingAtPly7=trueで検証不能として blocked=false", () => {
+    const book = fakeBook({}); // 常にヒットなし
+    const checker = fakeChecker({});
+    const result = verifyBlackRecordBlocked(makeBlackRecord(), book, checker);
+    expect(result.blocked).toBe(false);
+    expect(result.branches).toHaveLength(1);
+    expect(result.branches[0]?.bookMissingAtPly7).toBe(true);
+    expect(result.branches[0]?.diverged).toBe(false);
+  });
+
+  it("黒7着手前局面にブックの既定手があり、それが強制勝ちを許さなければ blocked=true", () => {
+    const book = fakeBook({ n6: ["F9"] });
+    const checker = fakeChecker({}); // 全て null（強制勝ちなし）
+    const result = verifyBlackRecordBlocked(makeBlackRecord(), book, checker);
+    expect(result.blocked).toBe(true);
+    expect(result.branches).toHaveLength(1);
+    expect(result.branches[0]?.black7).toBe("F9");
+    expect(result.branches[0]?.forcedWinKind).toBeNull();
+  });
+
+  it("randomPoolのうち1つでも強制勝ちを許せば blocked=false（その分岐を特定できる）", () => {
+    const book = fakeBook({ n6: ["F9", "E9"] });
+    const checker = fakeChecker({
+      [keyForMove("E9")]: "VCF", // E9 だけ危険
+    });
+    const result = verifyBlackRecordBlocked(makeBlackRecord(), book, checker);
+    expect(result.blocked).toBe(false);
+    const badBranch = result.branches.find((b) => b.black7 === "E9");
+    expect(badBranch?.forcedWinKind).toBe("VCF");
+    expect(badBranch?.blocked).toBe(false);
+    const goodBranch = result.branches.find((b) => b.black7 === "F9");
+    expect(goodBranch?.blocked).toBe(true);
+  });
+
+  it("black5でブックが記録と異なる手を選ぶと、記録の黒7着手前局面から外れて diverged=true・blocked=true になる", () => {
+    // black5: E9(記録のF7とは別の手)。以降は別局面になるため記録の
+    // canonicalKeyBeforeBlack7には到達しない。
+    const book = fakeBook({ n4: ["E9"] });
+    const checker = fakeChecker({});
+    const result = verifyBlackRecordBlocked(makeBlackRecord(), book, checker);
+    expect(result.branches).toHaveLength(1);
+    expect(result.branches[0]?.diverged).toBe(true);
+    expect(result.branches[0]?.blocked).toBe(true);
+    expect(result.branches[0]?.black7).toBeNull();
+    expect(result.branches[0]?.bookMissingAtPly7).toBe(false);
+  });
+});
+
+describe("実データフィクスチャ（黒番、scripts/lib/__fixtures__/opening-book/）による統合確認", () => {
+  const __dirname = path.dirname(fileURLToPath(import.meta.url));
+  const fixtureDir = path.join(__dirname, "__fixtures__/opening-book");
+
+  interface FixtureBlackSeverityARecord {
+    canonicalKeyBeforeBlack7: string;
+    route: string;
+    moves: string[];
+  }
+
+  it("黒フィクスチャダンプから構築したブックで、対応する黒severity-Aレコードを封鎖できる", () => {
+    const dumpText = readFileSync(
+      path.join(fixtureDir, "dump-black.jsonl"),
+      "utf-8",
+    );
+    const { trapNodes } = parseBlackTrapDumpJsonl(dumpText);
+    expect(trapNodes.length).toBeGreaterThan(0);
+    const { entries } = buildOpeningBookEntries(trapNodes);
+    setOpeningBookAsset({ entries });
+
+    const record = JSON.parse(
+      readFileSync(
+        path.join(fixtureDir, "severity-a-black.jsonl"),
+        "utf-8",
+      ).trim(),
+    ) as FixtureBlackSeverityARecord;
+
+    const book: BookLookup = {
+      candidateMoves(board, color) {
+        const candidates = getBookMoveCandidates(board, color);
+        return candidates ? candidates.map(formatMove) : null;
+      },
+    };
+    const checker: ForcedWinChecker = { check: () => null };
+
+    const verifyRecord: BlackTrapRecordForVerify = {
+      route: record.route,
+      canonicalKeyBeforeBlack7: record.canonicalKeyBeforeBlack7,
+      moves: record.moves,
+    };
+    const result = verifyBlackRecordBlocked(verifyRecord, book, checker);
+    const missing = result.branches.some((b) => b.bookMissingAtPly7);
+    expect(missing).toBe(false);
+    expect(result.blocked).toBe(true);
 
     setOpeningBookAsset(null);
   });
