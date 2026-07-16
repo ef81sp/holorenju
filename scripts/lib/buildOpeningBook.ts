@@ -234,47 +234,45 @@ export function assertHardMoveInvariant(
 }
 
 // ─── 重複（transposition）のマージ ─────────────────────────
+//
+// 重要（実装レビューで発覚した実データ不具合の修正）: 同一 canonicalKey に
+// 複数ノード（別ルートからの合流=transposition）が集まる場合、各ノードは
+// 一般に「異なる実盤の向き」（別の変換で canonical 化される）で記録されている。
+// 生存手などの実盤座標の文字列を先にマージしてから1つの変換をまとめて適用すると、
+// 一部のノードの座標が「間違った向きの変換」で canonical 化され、検証されていない
+// 出鱈目なセルがブックに混入する（ゲート1実行時に実データで発覚: 3ルートが
+// 同一canonicalKeyへ合流するケースで、別ルートの生存手座標が誤って混ざり、
+// その結果生成された候補手が実際には強制勝ちを許していた）。
+//
+// 正しい手順は「各ノードを個別に canonical 化してから、canonical 空間で
+// マージする」こと（このファイルの buildOpeningBookEntries を参照）。
+
+interface ResolvedGroupMember {
+  node: BookDumpNode;
+  entry: OpeningBookEntry;
+}
 
 /**
- * 同一 canonicalKey の複数ノード（別ルートからの合流=transposition）をマージする。
- * - いずれかがトラップ検出（forcedWinKind !== null）ならトラップとして扱い、
- *   生存手は全行の和集合（重複除去）を取る。
- * - トラップなし行のみなら最初の行を採用する（同一局面なので hardMove は
- *   決定的に一致するはず）。
+ * 同一 canonicalKey の解決済みエントリ群（canonical 空間、既に個々の向きで
+ * 正しく変換済み）を1つにマージする。
+ * - いずれかがトラップ由来なら、canonical 空間の生存手プールの和集合
+ *   （重複除去）を採用する。
+ * - トラップ由来が無ければ、先頭のエントリを採用する（同一局面なので
+ *   canonical 空間の move は決定的に一致するはず）。
  */
-export function mergeNodesByCanonicalKey(
-  nodes: BookDumpNode[],
-): BookDumpNode[] {
-  const byKey = new Map<string, BookDumpNode[]>();
-  for (const node of nodes) {
-    const list = byKey.get(node.canonicalKey);
-    if (list) {
-      list.push(node);
-    } else {
-      byKey.set(node.canonicalKey, [node]);
+function mergeResolvedGroup(group: ResolvedGroupMember[]): OpeningBookEntry {
+  const trapGroup = group.filter((g) => g.node.forcedWinKind !== null);
+  if (trapGroup.length === 0) {
+    return group[0]!.entry;
+  }
+  const survivors = new Set<string>();
+  for (const g of trapGroup) {
+    for (const s of g.entry.randomPool ?? [g.entry.move]) {
+      survivors.add(s);
     }
   }
-
-  const merged: BookDumpNode[] = [];
-  for (const group of byKey.values()) {
-    if (group.length === 1) {
-      merged.push(group[0]!);
-      continue;
-    }
-    const trapNodes = group.filter((n) => n.forcedWinKind !== null);
-    if (trapNodes.length === 0) {
-      merged.push(group[0]!);
-      continue;
-    }
-    const survivors = new Set<string>();
-    for (const n of trapNodes) {
-      for (const s of n.survivorMoves ?? []) {
-        survivors.add(s);
-      }
-    }
-    merged.push({ ...trapNodes[0]!, survivorMoves: [...survivors] });
-  }
-  return merged;
+  const survivorsArr = [...survivors];
+  return { move: survivorsArr[0]!, randomPool: survivorsArr };
 }
 
 // ─── ノード集合 → エントリ辞書 + 統計 ───────────────────────
@@ -307,7 +305,19 @@ export function buildOpeningBookEntries(nodes: BookDumpNode[]): {
   entries: Record<string, OpeningBookEntry>;
   stats: BuildOpeningBookStats;
 } {
-  const merged = mergeNodesByCanonicalKey(nodes);
+  // 生の（実盤座標のままの）ノードを canonicalKey でグループ化する。
+  // マージ（生存手プールの統合）はこの後、各ノードを個別に canonical 化してから
+  // 行う（実盤座標のまま先にマージしてはいけない。このファイル冒頭のコメント参照）。
+  const byKey = new Map<string, BookDumpNode[]>();
+  for (const node of nodes) {
+    const list = byKey.get(node.canonicalKey);
+    if (list) {
+      list.push(node);
+    } else {
+      byKey.set(node.canonicalKey, [node]);
+    }
+  }
+
   const entries: Record<string, OpeningBookEntry> = {};
   let trapNodes = 0;
   let cometNodesSkipped = 0;
@@ -316,43 +326,64 @@ export function buildOpeningBookEntries(nodes: BookDumpNode[]): {
   let trapEntryCount = 0;
   const randomPoolSizeDistribution: Record<number, number> = {};
 
-  for (const node of merged) {
-    const isTrap = node.forcedWinKind !== null;
-    if (isTrap) {
+  for (const [canonicalKey, group] of byKey) {
+    // distinct 局面数で数える（transposition で複数ルートが同一 canonicalKey に
+    // 合流していても1件とカウントする。生のノード出現回数ではない）。
+    if (group.some((n) => n.forcedWinKind !== null)) {
       trapNodes++;
     }
-    const resolved = resolveCanonicalEntry(node);
-    if (resolved === null) {
-      if (isTrap && (node.survivorMoves?.length ?? 0) === 0) {
-        cometNodesSkipped++;
-      } else {
-        inconsistentNodesSkipped++;
+
+    // グループ内の各ノードを「自身の向き」で個別に canonical 化する。
+    const resolvedGroup: ResolvedGroupMember[] = [];
+    for (const node of group) {
+      const resolved = resolveCanonicalEntry(node);
+      if (resolved === null) {
+        continue;
       }
-      continue;
+      // ゲート3（実装レビュー B1）: 非トラップ由来は hardMove と完全一致するはず。
+      // 1件でも違えばビルドを失敗させる（挙動不変の静的保証）。
+      assertHardMoveInvariant(node, resolved.entry, resolved.transformName);
+      resolvedGroup.push({ node, entry: resolved.entry });
     }
-    const { entry, transformName } = resolved;
 
-    // ゲート3（実装レビュー B1）: 非トラップ由来は hardMove と完全一致するはず。
-    // 1件でも違えばビルドを失敗させる（挙動不変の静的保証）。
-    assertHardMoveInvariant(node, entry, transformName);
+    const trapResolved = resolvedGroup.filter(
+      (r) => r.node.forcedWinKind !== null,
+    );
 
-    if (isTrap) {
+    if (trapResolved.length > 0) {
+      // resolveCanonicalEntry のトラップ分岐は randomPool を必ず非空で返すため
+      // （空なら null を返す）、ここでの和集合が空になることはない。
+      const entry = mergeResolvedGroup(trapResolved);
+      entries[canonicalKey] = entry;
       trapEntryCount++;
       const poolSize = entry.randomPool?.length ?? 1;
       randomPoolSizeDistribution[poolSize] =
         (randomPoolSizeDistribution[poolSize] ?? 0) + 1;
-    } else {
-      nonTrapEntryCount++;
+      continue;
     }
 
-    entries[node.canonicalKey] = entry;
+    if (group.some((n) => n.forcedWinKind !== null)) {
+      // トラップノードは存在したが、誰も生存手を解決できなかった
+      // （彗星型、または全滅）。非掲載。
+      cometNodesSkipped++;
+      continue;
+    }
+
+    const [nonTrapResolved] = resolvedGroup;
+    if (!nonTrapResolved) {
+      // 非トラップノードのみのグループで、誰も変換を解決できなかった。
+      inconsistentNodesSkipped++;
+      continue;
+    }
+    entries[canonicalKey] = nonTrapResolved.entry;
+    nonTrapEntryCount++;
   }
 
   return {
     entries,
     stats: {
       totalDumpNodes: nodes.length,
-      mergedNodes: merged.length,
+      mergedNodes: byKey.size,
       trapNodes,
       cometNodesSkipped,
       inconsistentNodesSkipped,
@@ -396,4 +427,91 @@ export function buildOpeningBookAsset(params: {
     stats,
     entries,
   };
+}
+
+// ─── 彗星ルート個別対応（§4）: パッチ（white6差し替え）の適用 ────────────────
+
+/**
+ * 彗星型 ply8 ノード（生存手ゼロ）の回避策として、white6 を代替手へ差し替える
+ * パッチ1件（opening-book-2026-07-16.md §4）。
+ *
+ * white6 自体は直接の VCF/VCT トラップではない（forcedWinKind を持たない）ため、
+ * 通常の BookDumpNode の invariant 検証だけでは安全性を証明できない。代わりに
+ * 「配下の黒7（攻め側フィルタ ≤20本）×white8 チェックのいずれにも生存手ゼロの
+ * ply8（彗星）が無い」ことをミニ採掘（comet-mini-mining.ts）で確認し、
+ * その検証記録を verifiedSubtree に残す。
+ */
+export interface OpeningBookPatchEntry {
+  type: "patch";
+  /** パッチ対象局面（白番）の canonicalKey。 */
+  canonicalKey: string;
+  route: string;
+  /** この白番手番の着手前の手順（実盤座標）。 */
+  movesUpToHere: string[];
+  /** 代替手（実盤座標、棋譜表記）。 */
+  replacementMove: string;
+  reason: string;
+  /** ミニ採掘での検証記録（invariant相当）。 */
+  verifiedSubtree: {
+    black7: string;
+    status: "safe-no-forced-win" | "safe-has-survivors";
+    forcedWinKind?: "VCF" | "VCT";
+    survivorCount?: number;
+  }[];
+}
+
+/** comet-mini-mining.ts が出力した patch JSONL をパースする。 */
+export function parsePatchJsonl(text: string): OpeningBookPatchEntry[] {
+  return text
+    .split("\n")
+    .filter((line) => line.trim().length > 0)
+    .map((line) => JSON.parse(line) as OpeningBookPatchEntry);
+}
+
+/**
+ * patch エントリを既存のエントリ辞書へ適用する。
+ *
+ * 各 patch を「非トラップの通常ノード」（forcedWinKind: null, hardMove:
+ * replacementMove）として表現し、既存の resolveCanonicalEntry /
+ * assertHardMoveInvariant をそのまま再利用する（§4: 新しい変換ロジックを
+ * 持たず、既存パイプラインに乗せることで invariant 相当の検証を維持する）。
+ * canonicalKey が盤面と矛盾する patch は例外を投げる（安全側フォールバック）。
+ */
+export function applyPatches(
+  entries: Record<string, OpeningBookEntry>,
+  patches: OpeningBookPatchEntry[],
+): { entries: Record<string, OpeningBookEntry>; appliedCount: number } {
+  const result = { ...entries };
+  let appliedCount = 0;
+
+  for (const patch of patches) {
+    const syntheticNode: BookDumpNode = {
+      canonicalKey: patch.canonicalKey,
+      route: patch.route,
+      ply: 6,
+      movesUpToHere: patch.movesUpToHere,
+      hardMove: patch.replacementMove,
+      forcedWinKind: null,
+      forcedWinSequenceStr: null,
+      survivorMoves: null,
+    };
+
+    const resolved = resolveCanonicalEntry(syntheticNode);
+    if (!resolved) {
+      throw new Error(
+        `patch適用失敗: canonicalKeyが盤面と矛盾します（route=${patch.route}, ` +
+          `canonicalKey=${patch.canonicalKey}）`,
+      );
+    }
+    assertHardMoveInvariant(
+      syntheticNode,
+      resolved.entry,
+      resolved.transformName,
+    );
+
+    result[patch.canonicalKey] = resolved.entry;
+    appliedCount++;
+  }
+
+  return { entries: result, appliedCount };
 }

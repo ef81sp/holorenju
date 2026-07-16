@@ -7,22 +7,32 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-import { canonicalKeyWithTransform } from "@/logic/boardSymmetry";
-import { createBoardFromRecord } from "@/logic/gameRecordParser";
+import {
+  D4_TRANSFORMS,
+  canonicalKeyWithTransform,
+  inverseTransformPosition,
+} from "@/logic/boardSymmetry";
+import {
+  createBoardFromRecord,
+  formatMove,
+  parseMove,
+} from "@/logic/gameRecordParser";
 
 import type { BookDumpMetadata } from "./bookDumpMetadata";
 import type { BookDumpNode } from "./trapPipeline";
 
 import {
+  applyPatches,
   assertHardMoveInvariant,
   buildOpeningBookAsset,
   buildOpeningBookEntries,
   findConsistentTransform,
-  mergeNodesByCanonicalKey,
   nodeToCanonicalEntry,
   parseDumpJsonl,
+  parsePatchJsonl,
   reconstructNodeBoard,
   resolveCanonicalEntry,
+  type OpeningBookPatchEntry,
 } from "./buildOpeningBook";
 
 function plainNode(overrides: Partial<BookDumpNode> = {}): BookDumpNode {
@@ -183,21 +193,7 @@ describe("nodeToCanonicalEntry", () => {
   });
 });
 
-describe("mergeNodesByCanonicalKey", () => {
-  it("重複しないノードはそのまま通す", () => {
-    // H8(=天元、全変換の不動点)を含む局面と、天元に石が無い局面は、
-    // どの D4 変換でも同一canonicalKeyになり得ない（構造的に非対称）。
-    const a = withRealCanonicalKey(
-      plainNode({ movesUpToHere: ["H8", "I9", "I8"] }),
-    );
-    const b = withRealCanonicalKey(
-      plainNode({ movesUpToHere: ["A1", "B2", "C3"], hardMove: "D4" }),
-    );
-    expect(a.canonicalKey).not.toBe(b.canonicalKey);
-    const merged = mergeNodesByCanonicalKey([a, b]);
-    expect(merged).toHaveLength(2);
-  });
-
+describe("同一canonicalKeyへのtransposition（別ルート合流）のマージ", () => {
   it("同一canonicalKeyでトラップ行と非トラップ行が両方あれば、トラップとしてマージする", () => {
     const base = withRealCanonicalKey(
       plainNode({
@@ -213,13 +209,13 @@ describe("mergeNodesByCanonicalKey", () => {
       forcedWinSequenceStr: "F11 ...",
       survivorMoves: ["E12"],
     };
-    const merged = mergeNodesByCanonicalKey([nonTrap, trap]);
-    expect(merged).toHaveLength(1);
-    expect(merged[0]?.forcedWinKind).toBe("VCT");
-    expect(merged[0]?.survivorMoves).toEqual(["E12"]);
+    const { entries } = buildOpeningBookEntries([nonTrap, trap]);
+    expect(entries[base.canonicalKey]?.randomPool).toEqual(
+      nodeToCanonicalEntry(trap)?.randomPool,
+    );
   });
 
-  it("同一canonicalKeyの複数トラップ行は生存手の和集合を取る（重複除去）", () => {
+  it("同一canonicalKey・同一向きの複数トラップ行は生存手の和集合を取る（重複除去）", () => {
     const base = withRealCanonicalKey(
       plainNode({
         ply: 8,
@@ -239,11 +235,94 @@ describe("mergeNodesByCanonicalKey", () => {
       forcedWinSequenceStr: "F11 ...",
       survivorMoves: ["D13", "C14"],
     };
-    const merged = mergeNodesByCanonicalKey([trap1, trap2]);
-    expect(merged).toHaveLength(1);
-    expect(new Set(merged[0]?.survivorMoves)).toEqual(
-      new Set(["E12", "D13", "C14"]),
+    const { entries } = buildOpeningBookEntries([trap1, trap2]);
+    const expectedUnion = new Set([
+      ...nodeToCanonicalEntry(trap1)!.randomPool!,
+      ...nodeToCanonicalEntry(trap2)!.randomPool!,
+    ]);
+    expect(new Set(entries[base.canonicalKey]?.randomPool)).toEqual(
+      expectedUnion,
     );
+  });
+
+  /**
+   * 回帰テスト（実装レビューで発覚した実データ不具合）: 同一canonicalKeyに
+   * 「異なる実盤の向き」で到達する2ノードをマージする場合、それぞれの
+   * 生存手は各ノード自身の変換で canonical 化してから合成しなければならない。
+   * 先に実盤座標の文字列だけをマージしてから1つの変換をまとめて適用すると、
+   * 一方のノードの座標がもう一方の変換で誤って canonical 化され、
+   * 検証されていない出鱈目なセルがブックに混入する。
+   */
+  it("異なる向きの2ノードが同一canonicalKeyに合流する場合、各ノード自身の変換で生存手を変換してからマージする", () => {
+    const movesA = ["C3", "D4", "E5", "F6", "G7", "H8", "I9"];
+    const { board: boardA } = createBoardFromRecord(movesA.join(" "));
+
+    const rotate90 = D4_TRANSFORMS.find(
+      (t) => t.name === "rotate90",
+    )!.transform;
+    // movesB は movesA を rotate90 しただけの「同一局面の別の向き」。
+    const movesB = movesA.map((m) =>
+      formatMove(rotate90(parseMove(m).row, parseMove(m).col)),
+    );
+    const { board: boardB } = createBoardFromRecord(movesB.join(" "));
+    expect(canonicalKeyWithTransform(boardA, "white").key).toBe(
+      canonicalKeyWithTransform(boardB, "white").key,
+    );
+    const sharedCanonicalKey = canonicalKeyWithTransform(boardA, "white").key;
+
+    // P はボードA上の空きマス。Q も同様（Pとは別のもう1つの空きマス）。
+    const survivorP = "A1"; // boardA視点での生存手（実盤座標）
+    const survivorQ = "B1"; // boardA側だけが持つ、もう1つの生存手
+    // survivorPRotated は「boardA視点のPと同一の canonical セル」を
+    // boardB視点の実盤座標で表したもの（rotate90を適用）。
+    const pPos = parseMove(survivorP);
+    const survivorPInB = formatMove(rotate90(pPos.row, pPos.col));
+
+    const nodeA: BookDumpNode = {
+      canonicalKey: sharedCanonicalKey,
+      route: "routeA",
+      ply: 8,
+      movesUpToHere: movesA,
+      hardMove: "N14",
+      forcedWinKind: "VCT",
+      forcedWinSequenceStr: "dummy",
+      survivorMoves: [survivorP, survivorQ],
+    };
+    const nodeB: BookDumpNode = {
+      canonicalKey: sharedCanonicalKey,
+      route: "routeB",
+      ply: 8,
+      movesUpToHere: movesB,
+      hardMove: "N13",
+      forcedWinKind: "VCT",
+      forcedWinSequenceStr: "dummy",
+      // boardB視点で見ると、これは boardA の P と同一の canonical セルを指す
+      // （routeB は独立に P を「再発見」した、という想定）。
+      survivorMoves: [survivorPInB],
+    };
+
+    const { entries } = buildOpeningBookEntries([nodeA, nodeB]);
+    const pool = entries[sharedCanonicalKey]?.randomPool ?? [];
+
+    // 正しい実装なら、P（boardA視点）と P（boardB視点、rotate90表記）は
+    // 同一の canonical セルに解決されるため重複除去され、Q と合わせて
+    // ちょうど2件になる（3件になっていたら、向きを間違えて別セルとして
+    // カウントしてしまっている＝バグの再発）。
+    expect(pool).toHaveLength(2);
+
+    // 更に、pool の各要素をノードAの向きへ逆変換した結果が、実際に
+    // boardA上の空きマスであること（＝出鱈目な座標が混入していないこと）を
+    // 直接確認する。
+    const boardSize = boardA.length;
+    for (const canonicalMove of pool) {
+      const realOnA = inverseTransformPosition(
+        parseMove(canonicalMove),
+        canonicalKeyWithTransform(boardA, "white").transformName,
+      );
+      expect(boardA[realOnA.row]?.[realOnA.col]).toBeNull();
+      expect(realOnA.row).toBeGreaterThanOrEqual(0);
+      expect(realOnA.row).toBeLessThan(boardSize);
+    }
   });
 });
 
@@ -415,5 +494,89 @@ describe("実データフィクスチャ（scripts/lib/__fixtures__/opening-book
     expect(trapNodesInDump.length).toBeGreaterThan(0);
     expect(stats.trapEntryCount).toBeGreaterThan(0);
     expect(metadata.roots).toBe("浦月");
+  });
+});
+
+describe("parsePatchJsonl / applyPatches（opening-book-2026-07-16.md §4 彗星ルート個別対応）", () => {
+  function makePatch(
+    overrides: Partial<OpeningBookPatchEntry> = {},
+  ): OpeningBookPatchEntry {
+    const movesUpToHere = ["H8", "I9", "I8", "J8", "H9"]; // 5手（この白6着手前）
+    const { board } = createBoardFromRecord(movesUpToHere.join(" "));
+    const canonicalKey = canonicalKeyWithTransform(board, "white").key;
+    return {
+      type: "patch",
+      canonicalKey,
+      route: "彗星",
+      movesUpToHere,
+      replacementMove: "H10",
+      reason: "彗星型ply8ノードの回避（white6差し替え）",
+      verifiedSubtree: [
+        { black7: "K9", status: "safe-has-survivors", survivorCount: 2 },
+      ],
+      ...overrides,
+    };
+  }
+
+  it("parsePatchJsonl: patch行をパースし空行を無視する", () => {
+    const patch = makePatch();
+    const text = `${JSON.stringify(patch)}\n\n`;
+    const parsed = parsePatchJsonl(text);
+    expect(parsed).toEqual([patch]);
+  });
+
+  it("applyPatches: 既存エントリを patch の代替手（canonical空間へ変換済み）で上書きする", () => {
+    const patch = makePatch();
+    const original: Record<string, { move: string }> = {
+      [patch.canonicalKey]: { move: "H9-original-placeholder" },
+    };
+    const { entries, appliedCount } = applyPatches(original, [patch]);
+    expect(appliedCount).toBe(1);
+    expect(entries[patch.canonicalKey]).toBeDefined();
+    expect(entries[patch.canonicalKey]?.move).not.toBe(
+      "H9-original-placeholder",
+    );
+    // 逆変換で実盤に戻すと replacementMove と一致する（invariant相当）はず。
+    // ここでは resolveCanonicalEntry と同じ変換ロジックを経由していることを
+    // nodeToCanonicalEntry 経由の結果と突き合わせて確認する。
+    const syntheticNode = {
+      canonicalKey: patch.canonicalKey,
+      route: patch.route,
+      ply: 6 as const,
+      movesUpToHere: patch.movesUpToHere,
+      hardMove: patch.replacementMove,
+      forcedWinKind: null,
+      forcedWinSequenceStr: null,
+      survivorMoves: null,
+    };
+    expect(entries[patch.canonicalKey]).toEqual(
+      nodeToCanonicalEntry(syntheticNode),
+    );
+  });
+
+  it("applyPatches: 既存エントリが無い canonicalKey にも新規追加できる", () => {
+    const patch = makePatch();
+    const { entries, appliedCount } = applyPatches({}, [patch]);
+    expect(appliedCount).toBe(1);
+    expect(entries[patch.canonicalKey]).toBeDefined();
+  });
+
+  it("applyPatches: canonicalKey が盤面と矛盾する patch は例外を投げる", () => {
+    const patch = makePatch({ canonicalKey: `${"B".repeat(225)}|white` });
+    expect(() => applyPatches({}, [patch])).toThrow();
+  });
+
+  it("applyPatches: 複数patchをまとめて適用できる", () => {
+    const patch1 = makePatch();
+    const movesUpToHere2 = ["A1", "B2", "C3", "D4", "E5"];
+    const { board: board2 } = createBoardFromRecord(movesUpToHere2.join(" "));
+    const patch2 = makePatch({
+      canonicalKey: canonicalKeyWithTransform(board2, "white").key,
+      movesUpToHere: movesUpToHere2,
+      replacementMove: "F6",
+    });
+    const { entries, appliedCount } = applyPatches({}, [patch1, patch2]);
+    expect(appliedCount).toBe(2);
+    expect(Object.keys(entries)).toHaveLength(2);
   });
 });

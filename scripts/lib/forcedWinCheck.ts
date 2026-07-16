@@ -6,8 +6,12 @@
  * その直後の局面で相手に強制勝ち（VCF∪VCT）が生じるか」を判定する処理を
  * 一本化する。判定基準がドリフトしないよう、別実装を持たないこと。
  *
- * VCF/VCT の探索予算は investigate-white-collapse.ts の調査時に使用した値と同等
- * （十分な探索深度・時間）: VCF(depth16/5s/500k) ∪ VCT(depth6/5s/500k)。
+ * VCF/VCT の探索予算はノード数優位（決定的）にする（opening-book-2026-07-16.md
+ * §5 ゲート1 実行時に発覚: 並列負荷下で timeLimit=5s が実効探索量不足になり、
+ * 生存手判定が非決定的になっていた。corpus フィルタ（prospect-corpus.ts の
+ * hasVCF）や gate0-bench.ts と同じ方針で、timeLimit は十分大きく（安全弁）
+ * 設定し、maxNodes を実質的な上限として使う）: VCF(depth16/60s/500k) ∪
+ * VCT(depth6/60s/500k)。
  */
 import type { BoardState, Position } from "@/types/game";
 
@@ -22,10 +26,12 @@ import { DIFFICULTY_PARAMS } from "@/types/cpu";
 export type Side = "black" | "white";
 
 export const VCF_MAX_DEPTH = 16;
-export const VCF_TIME_LIMIT_MS = 5000;
+/** 安全弁。maxNodes（下記）が実質的な上限になるよう十分大きく設定する。 */
+export const VCF_TIME_LIMIT_MS = 60_000;
 export const VCF_MAX_NODES = 500_000;
 export const VCT_MAX_DEPTH = 6;
-export const VCT_TIME_LIMIT_MS = 5000;
+/** 安全弁。maxNodes（下記）が実質的な上限になるよう十分大きく設定する。 */
+export const VCT_TIME_LIMIT_MS = 60_000;
 export const VCT_MAX_NODES = 500_000;
 
 export interface ForcedWinAfterMoveResult {

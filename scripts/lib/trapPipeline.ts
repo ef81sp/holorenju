@@ -140,7 +140,11 @@ function recordBookDumpNode(
   });
 }
 
-function candidateRanking(
+/**
+ * 候補ランキング（FASTプロファイル）。彗星ルート個別対応（comet-mini-mining.ts）でも
+ * 黒7の攻め側フィルタ入力として再利用するため export する。
+ */
+export function candidateRanking(
   engine: WasmSearchEngine,
   board: BoardState,
   color: "black" | "white",

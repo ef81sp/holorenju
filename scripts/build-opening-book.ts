@@ -9,18 +9,30 @@
  *   node --experimental-strip-types --import ./scripts/register-loader.mjs \
  *     scripts/build-opening-book.ts --dump=bench-results/opening-book-dump.jsonl \
  *     --out=src/assets/opening-book-hard.json --weight-gen=texel-r2
+ *
+ *   # 彗星ルート個別対応（§4）: comet-mini-mining.ts が出力した patch を適用
+ *   node --experimental-strip-types --import ./scripts/register-loader.mjs \
+ *     scripts/build-opening-book.ts --dump=bench-results/opening-book-dump.jsonl \
+ *     --patch=bench-results/comet-patch.jsonl \
+ *     --out=src/assets/opening-book-hard.json --weight-gen=texel-r2
  */
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { gzipSync } from "node:zlib";
 
 import { getGitRev } from "./lib/bookDumpMetadata";
-import { buildOpeningBookAsset, parseDumpJsonl } from "./lib/buildOpeningBook";
+import {
+  applyPatches,
+  buildOpeningBookAsset,
+  parseDumpJsonl,
+  parsePatchJsonl,
+} from "./lib/buildOpeningBook";
 
 interface CliOptions {
   dumpPath: string;
   outPath: string;
   weightGeneration: string;
+  patchPath: string | null;
 }
 
 function parseArgs(): CliOptions {
@@ -28,6 +40,7 @@ function parseArgs(): CliOptions {
   let dumpPath: string | null = null;
   let outPath = "src/assets/opening-book-hard.json";
   let weightGeneration = "unknown";
+  let patchPath: string | null = null;
   for (const arg of args) {
     if (arg.startsWith("--dump=")) {
       dumpPath = arg.slice("--dump=".length);
@@ -35,12 +48,14 @@ function parseArgs(): CliOptions {
       outPath = arg.slice("--out=".length);
     } else if (arg.startsWith("--weight-gen=")) {
       weightGeneration = arg.slice("--weight-gen=".length);
+    } else if (arg.startsWith("--patch=")) {
+      patchPath = arg.slice("--patch=".length);
     }
   }
   if (!dumpPath) {
     throw new Error("--dump=<path> は必須です");
   }
-  return { dumpPath, outPath, weightGeneration };
+  return { dumpPath, outPath, weightGeneration, patchPath };
 }
 
 function main(): void {
@@ -51,6 +66,9 @@ function main(): void {
   console.log("========================================");
   console.log(`dump: ${opts.dumpPath}`);
   console.log(`out:  ${opts.outPath}`);
+  if (opts.patchPath) {
+    console.log(`patch: ${opts.patchPath}`);
+  }
 
   const dumpText = readFileSync(opts.dumpPath, "utf-8");
   const { metadata, nodes } = parseDumpJsonl(dumpText);
@@ -63,6 +81,18 @@ function main(): void {
     buildGitRev: getGitRev(),
     weightGeneration: opts.weightGeneration,
   });
+
+  let patchAppliedCount = 0;
+  if (opts.patchPath) {
+    const patchText = readFileSync(opts.patchPath, "utf-8");
+    const patches = parsePatchJsonl(patchText);
+    console.log(`patchエントリ数: ${patches.length}`);
+    const applied = applyPatches(asset.entries, patches);
+    asset.entries = applied.entries;
+    patchAppliedCount = applied.appliedCount;
+    // patch適用後の実際のエントリ数に更新する（新規追加分もあり得るため）。
+    asset.stats.entryCount = Object.keys(asset.entries).length;
+  }
 
   const json = JSON.stringify(asset);
   mkdirSync(path.dirname(opts.outPath), { recursive: true });
@@ -80,6 +110,9 @@ function main(): void {
     `  変換矛盾で除外:         ${asset.stats.inconsistentNodesSkipped}`,
   );
   console.log(`  エントリ数:             ${asset.stats.entryCount}`);
+  if (opts.patchPath) {
+    console.log(`  patch適用数:            ${patchAppliedCount}`);
+  }
   console.log("");
   console.log("── 挙動不変レポート（ゲート3: Elo中立の静的保証） ──");
   console.log(

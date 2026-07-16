@@ -46,7 +46,20 @@ async function loadAsset(): Promise<OpeningBookAsset | null> {
       (mod): OpeningBookAsset | null =>
         (mod.default as OpeningBookAsset | undefined) ?? null,
     )
-    .catch((): null => null);
+    .catch((error: unknown): null => {
+      // ロード失敗を握りつぶさない（実装レビューで発覚: サイレントに null
+      // フォールバックすると「ブックが常にヒットしない」状態が検知できないまま
+      // 本番運用されるリスクがある）。cpu.worker.ts / review.worker.ts は
+      // これを try/catch で包んでおり、ここで throw すると探索フォールバックの
+      // 前に処理全体が失敗しうるため、throw ではなく明示的なログに留める。
+      console.error(
+        "[openingBook] 資産のロードに失敗しました。ブックなしで探索へ" +
+          "フォールバックします（Node生スクリプトからは preloadOpeningBook ではなく" +
+          " setOpeningBookAsset を使ってください）:",
+        error,
+      );
+      return null;
+    });
   cachedAsset = await loadPromise;
   return cachedAsset;
 }

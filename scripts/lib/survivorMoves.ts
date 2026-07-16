@@ -46,7 +46,12 @@ export interface SurvivorMovesResult {
   survivors: string[];
 }
 
-function candidateRankingPrecise(
+/**
+ * 候補ランキング（PRECISEプロファイル・aspirationMode=1）。
+ * 彗星ルート個別対応（comet-mini-mining.ts）で white6 の代替候補取得にも
+ * 再利用するため export する。
+ */
+export function candidateRankingPrecise(
   engine: WasmSearchEngine,
   board: BoardState,
   color: "black" | "white",
