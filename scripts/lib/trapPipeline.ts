@@ -10,6 +10,7 @@
  */
 import type { BoardState, Position } from "@/types/game";
 
+import { canonicalKey } from "@/logic/boardSymmetry";
 import { applyMove } from "@/logic/cpu/core/boardUtils";
 import {
   REVIEW_PROFILE_FAST,
@@ -24,7 +25,8 @@ import { createEmptyBoard } from "@/logic/renjuRules";
 
 import type { RouteRoot } from "./trapRoutes";
 
-import { chooseHardMove } from "./forcedWinCheck";
+import { checkForcedWin, chooseHardMove } from "./forcedWinCheck";
+import { findSurvivorMoves } from "./survivorMoves";
 import {
   type AttackerMoveProvenance,
   selectAttackerMoves,
@@ -52,6 +54,90 @@ export interface CheckLineTask {
   black7Provenance: AttackerMoveProvenance;
   /** black7 着手後・白番の局面（= hard が敗着を打つ直前の局面）。 */
   boardAfterBlack7: BoardState;
+}
+
+/**
+ * ブックダンプ用の1ノード（opening-book-2026-07-16.md §1）。
+ * white4/white6/white8 いずれかの手番ノードに対応する
+ * （white8 は trap-mining.ts 側で Phase3 の結果から構築する）。
+ */
+export interface BookDumpNode {
+  canonicalKey: string;
+  route: string;
+  ply: 4 | 6 | 8;
+  /** このノードの局面に至るまでの手順（このノードの白の着手は含まない）。 */
+  movesUpToHere: string[];
+  hardMove: string;
+  forcedWinKind: "VCF" | "VCT" | null;
+  forcedWinSequenceStr: string | null;
+  /** トラップ検出時のみ非null。空配列なら生存手ゼロ（彗星型）。 */
+  survivorMoves: string[] | null;
+}
+
+interface WhiteNodeResolution {
+  position: Position;
+  positionStr: string;
+  forcedWinKind: "VCF" | "VCT" | null;
+  forcedWinSequenceStr: string | null;
+}
+
+/**
+ * white4/white6 ノードの hard 選択を解決する。
+ * dumpBook（強制勝ちチェックが必要）でなければ chooseHardMove のみ（軽量・従来挙動）。
+ * dumpBook 時は checkForcedWin で選択と同時に VCF/VCT 判定まで行う。
+ */
+function resolveWhiteNode(
+  engine: WasmSearchEngine,
+  board: BoardState,
+  hardTimeMs: number | undefined,
+  needsForcedWinCheck: boolean,
+): WhiteNodeResolution {
+  if (!needsForcedWinCheck) {
+    const choice = chooseHardMove(engine, board, "white", hardTimeMs);
+    return {
+      position: choice.position,
+      positionStr: choice.positionStr,
+      forcedWinKind: null,
+      forcedWinSequenceStr: null,
+    };
+  }
+  const result = checkForcedWin(engine, board, "white", hardTimeMs);
+  return {
+    position: result.chosenMove,
+    positionStr: result.chosenMoveStr,
+    forcedWinKind: result.forcedWinKind,
+    forcedWinSequenceStr: result.forcedWinSequenceStr,
+  };
+}
+
+/** dumpBookSink が渡されていれば、white ノードの情報を1件記録する。 */
+function recordBookDumpNode(
+  sink: BookDumpNode[] | undefined,
+  engine: WasmSearchEngine,
+  board: BoardState,
+  route: string,
+  ply: 4 | 6 | 8,
+  movesUpToHere: string[],
+  resolution: WhiteNodeResolution,
+): void {
+  if (!sink) {
+    return;
+  }
+  const survivorMoves =
+    resolution.forcedWinKind === null
+      ? null
+      : findSurvivorMoves(engine, board, "white", resolution.position)
+          .survivors;
+  sink.push({
+    canonicalKey: canonicalKey(board, "white"),
+    route,
+    ply,
+    movesUpToHere,
+    hardMove: resolution.positionStr,
+    forcedWinKind: resolution.forcedWinKind,
+    forcedWinSequenceStr: resolution.forcedWinSequenceStr,
+    survivorMoves,
+  });
 }
 
 function candidateRanking(
@@ -89,10 +175,17 @@ export function buildCheckTasks(
     black7Budget: AttackerFilterBudget;
     hardTimeMs?: number;
     randomSeed: number;
+    /**
+     * 指定すると white4/white6 ノードについても強制勝ちチェック（VCF/VCT）を行い、
+     * トラップ検出時は生存手導出まで実行して収集する（opening-book §1）。
+     * 未指定時は従来どおり chooseHardMove のみ（軽量）。
+     */
+    dumpBookSink?: BookDumpNode[];
   },
 ): CheckLineTask[] {
   const tasks: CheckLineTask[] = [];
   let taskId = 0;
+  const dumpBook = opts.dumpBookSink !== undefined;
 
   for (const route of routes) {
     const [black1, white2, black3] = route.positions;
@@ -101,7 +194,16 @@ export function buildCheckTasks(
     board0[white2.row]![white2.col] = "white";
     board0[black3.row]![black3.col] = "black";
 
-    const white4 = chooseHardMove(engine, board0, "white", opts.hardTimeMs);
+    const white4 = resolveWhiteNode(engine, board0, opts.hardTimeMs, dumpBook);
+    recordBookDumpNode(
+      opts.dumpBookSink,
+      engine,
+      board0,
+      route.name,
+      4,
+      [formatMove(black1), formatMove(white2), formatMove(black3)],
+      white4,
+    );
     const boardAfterWhite4 = applyMove(board0, white4.position, "white");
 
     const candidates4 = candidateRanking(engine, boardAfterWhite4, "black");
@@ -122,11 +224,26 @@ export function buildCheckTasks(
         "black",
       );
 
-      const white6 = chooseHardMove(
+      const white6 = resolveWhiteNode(
         engine,
         boardAfterBlack5,
-        "white",
         opts.hardTimeMs,
+        dumpBook,
+      );
+      recordBookDumpNode(
+        opts.dumpBookSink,
+        engine,
+        boardAfterBlack5,
+        route.name,
+        6,
+        [
+          formatMove(black1),
+          formatMove(white2),
+          formatMove(black3),
+          white4.positionStr,
+          formatMove(black5Entry.position),
+        ],
+        white6,
       );
       const boardAfterWhite6 = applyMove(
         boardAfterBlack5,

@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "generatedAt": "2026-07-16T00:00:00.000Z",
+  "sourceDump": "(none: placeholder pending authoritative --dump-book run)",
+  "buildGitRev": "unknown",
+  "weightGeneration": "placeholder-empty",
+  "dumpMetadata": {
+    "type": "metadata",
+    "timestamp": "2026-07-16T00:00:00.000Z",
+    "gitRev": "unknown",
+    "wasmBuildTime": "unknown",
+    "seed": 0,
+    "roots": null,
+    "b5": 0,
+    "b7": 0,
+    "hardTimeMs": null
+  },
+  "stats": {
+    "totalDumpNodes": 0,
+    "mergedNodes": 0,
+    "trapNodes": 0,
+    "cometNodesSkipped": 0,
+    "inconsistentNodesSkipped": 0,
+    "entryCount": 0,
+    "nonTrapEntryCount": 0,
+    "trapEntryCount": 0,
+    "randomPoolSizeDistribution": {}
+  },
+  "entries": {}
+}

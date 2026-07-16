@@ -11,11 +11,10 @@
 import type { Position } from "@/types/game";
 
 import { BOARD_SIZE, TENGEN } from "@/constants";
+import { canonicalKey } from "@/logic/boardSymmetry";
 import { isNearExistingStone } from "@/logic/cpu/moveGenerator";
 import { getAllJushuNames, getJushuPositions } from "@/logic/cpu/opening";
 import { createEmptyBoard } from "@/logic/renjuRules";
-
-import { canonicalKey } from "./boardSymmetry";
 
 export interface RouteRoot {
   name: string;

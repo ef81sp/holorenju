@@ -4,10 +4,10 @@
 import { describe, expect, it } from "vitest";
 
 import { BOARD_SIZE, TENGEN } from "@/constants";
+import { canonicalKey } from "@/logic/boardSymmetry";
 import { getAllJushuNames } from "@/logic/cpu/opening";
 import { createEmptyBoard } from "@/logic/renjuRules";
 
-import { canonicalKey } from "./boardSymmetry";
 import {
   buildAllRoots,
   buildJushuRoots,

@@ -17,8 +17,10 @@ import {
 
 import type { WasmModuleContext } from "./wasm/types";
 
+import { isBookEligible } from "./bookGate";
 import { countStones } from "./core/boardUtils";
 import { getOpeningMove, isOpeningPhase } from "./opening";
+import { getBookMove, preloadOpeningBook } from "./openingBook";
 import {
   listChebyshevNeighbors,
   selectMoveWithRandomization,
@@ -69,6 +71,24 @@ self.onmessage = async (event: MessageEvent<CpuRequest>) => {
           depth: 0, // 探索なし
         };
 
+        self.postMessage(response);
+        return;
+      }
+    }
+
+    // オープニングブック（hard・白番・ply4〜8）: ヒット時はブック手を返す。
+    // ミス（未ロード/未生成/ヒットなし）なら従来のWASM探索にフォールバックする。
+    if (isBookEligible(request.difficulty, currentTurn, moveCount)) {
+      await preloadOpeningBook();
+      const bookMove = getBookMove(request.board, "white");
+      if (bookMove) {
+        const endTime = performance.now();
+        const response: CpuResponse = {
+          position: bookMove,
+          score: 0, // ブックの手は評価スコアなし
+          thinkingTime: Math.round(endTime - startTime),
+          depth: 0, // 探索なし
+        };
         self.postMessage(response);
         return;
       }

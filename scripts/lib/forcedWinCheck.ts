@@ -28,16 +28,19 @@ export const VCT_MAX_DEPTH = 6;
 export const VCT_TIME_LIMIT_MS = 5000;
 export const VCT_MAX_NODES = 500_000;
 
-export interface ForcedWinCheckResult {
-  /** hard が選んだ手 */
-  chosenMove: Position;
-  chosenMoveStr: string;
-  /** chosenMove を打った後の局面 */
+export interface ForcedWinAfterMoveResult {
+  /** move を打った後の局面 */
   afterMoveBoard: BoardState;
   /** 相手に強制勝ちが生じたか。生じなければ null */
   forcedWinKind: "VCF" | "VCT" | null;
   forcedWinSequence: Position[] | null;
   forcedWinSequenceStr: string | null;
+}
+
+export interface ForcedWinCheckResult extends ForcedWinAfterMoveResult {
+  /** hard が選んだ手 */
+  chosenMove: Position;
+  chosenMoveStr: string;
   elapsedMs: number;
 }
 
@@ -84,6 +87,55 @@ export function chooseHardMove(
 }
 
 /**
+ * sideToMove が move を着手した後の局面で、相手側に VCF/VCT（強制勝ち手順）が
+ * 生じるか判定する。move は呼び出し側が既に決めた手（chooseHardMove を経由しない）。
+ * オープニングブックの手など、engine の選択を経ない手を検証する用途向け
+ * （opening-book-2026-07-16.md §5 ゲート1）。
+ */
+export function checkForcedWinAfterMove(
+  engine: WasmSearchEngine,
+  board: BoardState,
+  sideToMove: Side,
+  move: Position,
+): ForcedWinAfterMoveResult {
+  const opponent = getOppositeColor(sideToMove);
+  const afterMoveBoard = applyMove(board, move, sideToMove);
+
+  const vcf = engine.findVCFSequence(
+    afterMoveBoard,
+    opponent,
+    VCF_MAX_DEPTH,
+    VCF_TIME_LIMIT_MS,
+    VCF_MAX_NODES,
+  );
+  const forcedWin =
+    vcf ??
+    engine.findVCTSequence(
+      afterMoveBoard,
+      opponent,
+      VCT_MAX_DEPTH,
+      VCT_TIME_LIMIT_MS,
+      VCT_MAX_NODES,
+      false,
+    );
+
+  if (!forcedWin) {
+    return {
+      afterMoveBoard,
+      forcedWinKind: null,
+      forcedWinSequence: null,
+      forcedWinSequenceStr: null,
+    };
+  }
+  return {
+    afterMoveBoard,
+    forcedWinKind: vcf ? "VCF" : "VCT",
+    forcedWinSequence: forcedWin.sequence,
+    forcedWinSequenceStr: forcedWin.sequence.map(formatMove).join(" "),
+  };
+}
+
+/**
  * hard（実機経路: WasmSearchEngine.findBestMove）に着手させ、着手後の局面で
  * 相手側に VCF/VCT（強制勝ち手順）が生じるか判定する。
  *
@@ -105,46 +157,18 @@ export function checkForcedWin(
     hardTimeLimitMs,
   );
 
-  const opponent = getOppositeColor(sideToMove);
-  const afterMoveBoard = applyMove(board, chosenMove, sideToMove);
-
-  const vcf = engine.findVCFSequence(
-    afterMoveBoard,
-    opponent,
-    VCF_MAX_DEPTH,
-    VCF_TIME_LIMIT_MS,
-    VCF_MAX_NODES,
+  const afterResult = checkForcedWinAfterMove(
+    engine,
+    board,
+    sideToMove,
+    chosenMove,
   );
-  const forcedWin =
-    vcf ??
-    engine.findVCTSequence(
-      afterMoveBoard,
-      opponent,
-      VCT_MAX_DEPTH,
-      VCT_TIME_LIMIT_MS,
-      VCT_MAX_NODES,
-      false,
-    );
 
   const elapsedMs = Date.now() - start;
-  if (!forcedWin) {
-    return {
-      chosenMove,
-      chosenMoveStr,
-      afterMoveBoard,
-      forcedWinKind: null,
-      forcedWinSequence: null,
-      forcedWinSequenceStr: null,
-      elapsedMs,
-    };
-  }
   return {
     chosenMove,
     chosenMoveStr,
-    afterMoveBoard,
-    forcedWinKind: vcf ? "VCF" : "VCT",
-    forcedWinSequence: forcedWin.sequence,
-    forcedWinSequenceStr: forcedWin.sequence.map(formatMove).join(" "),
+    ...afterResult,
     elapsedMs,
   };
 }

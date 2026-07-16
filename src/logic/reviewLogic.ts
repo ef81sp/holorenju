@@ -114,6 +114,19 @@ export function buildEvaluatedMove(
     quality = "blunder";
   }
 
+  // 序盤定石ブックと一致する手（§3）: ミス判定を抑制する。
+  // ブックは深い採掘で検証済みの安全な手を選ぶため、素の探索（浅い候補検証）が
+  // 見つけられないトラップを避けている場合がある。その場合 scoreDiff が大きく
+  // 出ても「ミス」ではないため、quality を good に固定して mistake/blunder
+  // 分類とそれに伴う代替手表示（bestMove のクロス表示）を抑制する。
+  // ただし forcedLossType が検出されている場合は抑制しない
+  // （「定石なのに被詰み」という矛盾表示を防ぐ。ブックが古くなった場合や
+  // 想定外の局面遷移でも、振り返りは誠実な通常判定を出す）。
+  const isBookMove = (result.isBookMove ?? false) && !result.forcedLossType;
+  if (isBookMove) {
+    quality = "good";
+  }
+
   return {
     moveIndex: result.moveIndex,
     position: move?.position ?? { row: 7, col: 7 },
@@ -132,6 +145,7 @@ export function buildEvaluatedMove(
     forcedLossBranches: result.forcedLossBranches,
     missedDoubleMise: result.missedDoubleMise,
     doubleMiseTargets: result.doubleMiseTargets,
+    isBookMove,
   };
 }
 
@@ -339,8 +353,17 @@ export function getQualityColor(quality: MoveQuality): string {
 
 /**
  * 品質に対応するラベルを取得
+ *
+ * isBookMove が true の場合、quality に関わらず「定石（ブック手）」を返す
+ * （§3: 序盤定石ブックと一致する手は、独立した表示ラベルとして扱う）。
  */
-export function getQualityLabel(quality: MoveQuality): string {
+export function getQualityLabel(
+  quality: MoveQuality,
+  isBookMove?: boolean,
+): string {
+  if (isBookMove) {
+    return "定石（ブック手）";
+  }
   switch (quality) {
     case "excellent":
       return "最善手";

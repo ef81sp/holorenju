@@ -104,14 +104,77 @@ export function canonicalKey(
   board: BoardState,
   sideToMove: "black" | "white",
 ): string {
-  let best: string | null = null;
-  for (const { transform } of D4_TRANSFORMS) {
+  return canonicalKeyWithTransform(board, sideToMove).key;
+}
+
+/**
+ * canonicalKey を計算し、その値を達成した変換の名前（D4_TRANSFORMS の name）も返す。
+ *
+ * オープニングブックのルックアップ結果（canonical 空間の座標）を実盤座標へ
+ * 逆写像する際に、どの変換で canonical 化されたかを知る必要があるための拡張 API
+ * （opening-book-2026-07-16.md §2）。
+ *
+ * 自己対称局面（stabilizer が非自明）では複数の変換が同じ最小キーを達成し得るが、
+ * D4_TRANSFORMS の先頭から探索して最初に見つかったものを返す（canonicalKey 本体と
+ * 同じ tie-break: 厳密な `<` 比較で先着優先）。盤対称で戦略的に等価なため、
+ * どれを選んでも逆写像の結果は安全（transformPosition/inverseTransformPosition の
+ * ラウンドトリップテスト参照）。
+ */
+export function canonicalKeyWithTransform(
+  board: BoardState,
+  sideToMove: "black" | "white",
+): { key: string; transformName: string } {
+  let best: { key: string; transformName: string } | null = null;
+  for (const { name, transform } of D4_TRANSFORMS) {
     const transformed = transformBoard(board, transform);
     const key = `${boardToString(transformed)}|${sideToMove}`;
-    if (best === null || key < best) {
-      best = key;
+    if (best === null || key < best.key) {
+      best = { key, transformName: name };
     }
   }
   // D4_TRANSFORMS は非空のため best は必ず設定される
-  return best as string;
+  return best as { key: string; transformName: string };
+}
+
+/** 各変換名の逆変換名（D4群は全要素が位数1か2、または回転90⇔270が互いの逆）。 */
+const INVERSE_TRANSFORM_NAME: Record<string, string> = {
+  identity: "identity",
+  rotate90: "rotate270",
+  rotate180: "rotate180",
+  rotate270: "rotate90",
+  flipHorizontal: "flipHorizontal",
+  flipVertical: "flipVertical",
+  flipDiagonal: "flipDiagonal",
+  flipAntiDiagonal: "flipAntiDiagonal",
+};
+
+function findTransformByName(transformName: string): CoordTransform {
+  const found = D4_TRANSFORMS.find((t) => t.name === transformName);
+  if (!found) {
+    throw new Error(`未知の変換名: ${transformName}`);
+  }
+  return found.transform;
+}
+
+/** 指定した名前の変換で座標を写像する（canonical 化と同じ向き）。 */
+export function transformPosition(
+  pos: Position,
+  transformName: string,
+): Position {
+  return findTransformByName(transformName)(pos.row, pos.col);
+}
+
+/**
+ * canonical 空間の座標を、指定した変換で canonical 化された局面から実盤座標へ
+ * 逆写像する（opening-book-2026-07-16.md §2）。
+ */
+export function inverseTransformPosition(
+  canonicalPos: Position,
+  transformName: string,
+): Position {
+  const inverseName = INVERSE_TRANSFORM_NAME[transformName];
+  if (!inverseName) {
+    throw new Error(`未知の変換名: ${transformName}`);
+  }
+  return findTransformByName(inverseName)(canonicalPos.row, canonicalPos.col);
 }

@@ -41,7 +41,7 @@ const qualityLabel = computed(() => {
   if (!props.evaluation) {
     return "";
   }
-  return getQualityLabel(props.evaluation.quality);
+  return getQualityLabel(props.evaluation.quality, props.evaluation.isBookMove);
 });
 
 const forcedWinLabel = computed(() => {

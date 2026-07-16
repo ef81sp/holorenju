@@ -13,12 +13,17 @@
  *   # キャリブレーションモード（代表 ply-7 局面 N 点の1チェック平均時間を実測のみ）
  *   node --experimental-strip-types --import ./scripts/register-loader.mjs \
  *     scripts/trap-mining.ts --calibrate=30
+ *
+ *   # ブックダンプ付き権威実行（opening-book-2026-07-16.md §1）
+ *   node --experimental-strip-types --import ./scripts/register-loader.mjs \
+ *     scripts/trap-mining.ts --dump-book=bench-results/book-dump.jsonl
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Worker } from "node:worker_threads";
 
+import { canonicalKey } from "@/logic/boardSymmetry";
 import { preloadForbiddenWasm } from "@/logic/cpu/wasm/forbiddenAdapter";
 import { loadWasmModule } from "@/logic/cpu/wasm/loader";
 import { WasmSearchEngine } from "@/logic/cpu/wasm/searchEngine";
@@ -26,12 +31,22 @@ import { preloadThreatWasm } from "@/logic/cpu/wasm/threatAdapter";
 
 import type { CheckTask, CheckTaskResult } from "./trap-mining-worker";
 
-import { canonicalKey } from "./lib/boardSymmetry";
+import {
+  buildBookDumpMetadata,
+  getGitRev,
+  getWasmBuildTime,
+} from "./lib/bookDumpMetadata";
 import { checkForcedWin } from "./lib/forcedWinCheck";
-import { buildCheckTasks, type CheckLineTask } from "./lib/trapPipeline";
+import {
+  buildCheckTasks,
+  type BookDumpNode,
+  type CheckLineTask,
+} from "./lib/trapPipeline";
 import { buildAllRoots } from "./lib/trapRoutes";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+const WASM_PATH = path.join(__dirname, "../zig/zig-out/bin/cpu-engine.wasm");
 
 // ============================================================================
 // CLI 引数
@@ -47,6 +62,12 @@ interface CliOptions {
   hardTimeMs: number | undefined;
   /** 攻め側フィルタのランダム枠抽選シード（固定すれば決定的）。 */
   randomSeed: number;
+  /**
+   * 指定すると全ノード（白4/白6/白8手番）を canonical key・hard選択手・
+   * 強制勝ちチェック結果付きで JSONL にダンプする（opening-book §1）。
+   * トラップ検出時はその場で生存手導出まで実行する。
+   */
+  dumpBook: string | null;
 }
 
 function parseArgs(): CliOptions {
@@ -60,6 +81,7 @@ function parseArgs(): CliOptions {
     calibrate: null,
     hardTimeMs: undefined,
     randomSeed: 20260716,
+    dumpBook: null,
   };
   for (const arg of args) {
     if (arg.startsWith("--roots=")) {
@@ -72,6 +94,8 @@ function parseArgs(): CliOptions {
       opts.jobs = parseInt(arg.slice("--jobs=".length), 10);
     } else if (arg.startsWith("--out=")) {
       opts.out = arg.slice("--out=".length);
+    } else if (arg.startsWith("--dump-book=")) {
+      opts.dumpBook = arg.slice("--dump-book=".length);
     } else if (arg.startsWith("--calibrate=")) {
       opts.calibrate = parseInt(arg.slice("--calibrate=".length), 10);
     } else if (arg.startsWith("--hard-time=")) {
@@ -132,6 +156,7 @@ async function runCheckTasksInParallel(
   tasks: CheckLineTask[],
   jobs: number,
   hardTimeMs: number | undefined,
+  dumpBook: boolean,
 ): Promise<Map<number, CheckTaskResult>> {
   const workerCount = Math.max(1, Math.min(jobs, tasks.length || 1));
   const workers = await Promise.all(
@@ -155,6 +180,7 @@ async function runCheckTasksInParallel(
           taskId: task.taskId,
           boardAfterBlack7: task.boardAfterBlack7,
           hardTimeMs,
+          dumpBook,
         };
         worker.postMessage(req);
       };
@@ -221,6 +247,14 @@ async function main(): Promise<void> {
   const wasm = await loadWasmModule();
   const mainEngine = new WasmSearchEngine(wasm);
 
+  const dumpBookSink: BookDumpNode[] | undefined =
+    opts.dumpBook === null ? undefined : [];
+  if (dumpBookSink) {
+    console.log(
+      `--dump-book 有効: 全ノード（白4/白6/白8）を ${opts.dumpBook} に記録`,
+    );
+  }
+
   console.log("");
   console.log("Phase 1/2: white4/white6 + 攻め側フィルタ候補選定（直列）...");
   const tasks = buildCheckTasks(mainEngine, routes, {
@@ -228,6 +262,7 @@ async function main(): Promise<void> {
     black7Budget: { maxTotal: opts.b7 },
     hardTimeMs: opts.hardTimeMs,
     randomSeed: opts.randomSeed,
+    dumpBookSink,
   });
   console.log(`チェックタスク数: ${tasks.length}`);
 
@@ -266,7 +301,30 @@ async function main(): Promise<void> {
     tasks,
     opts.jobs,
     opts.hardTimeMs,
+    dumpBookSink !== undefined,
   );
+
+  // white8 ノード（Phase3 の結果）を dumpBookSink に追加する。
+  if (dumpBookSink) {
+    for (const task of tasks) {
+      const result = results.get(task.taskId);
+      if (!result) {
+        continue;
+      }
+      dumpBookSink.push({
+        canonicalKey: canonicalKey(task.boardAfterBlack7, "white"),
+        route: task.route.name,
+        ply: 8,
+        // 白ply8の着手直前の局面 = 黒7まで全7手（黒7を含む）。
+        // slice(0, 6) は黒7を落とす off-by-one だったため修正（opening-book §1）。
+        movesUpToHere: [...task.moveStrs],
+        hardMove: result.chosenMoveStr,
+        forcedWinKind: result.forcedWinKind,
+        forcedWinSequenceStr: result.forcedWinSequenceStr,
+        survivorMoves: result.survivorMoves,
+      });
+    }
+  }
 
   const outPath =
     opts.out ?? path.join("bench-results", `trap-mining-${Date.now()}.jsonl`);
@@ -316,6 +374,34 @@ async function main(): Promise<void> {
     `（総チェック数: ${tasks.length}, 強制勝ちあり(ゲート前): ${forcedWinCount}）`,
   );
   console.log("========================================");
+
+  // --dump-book: メタデータ行 + 全ノード（白4/白6/白8）を JSONL で出力する。
+  if (dumpBookSink && opts.dumpBook) {
+    const metadata = buildBookDumpMetadata({
+      gitRev: getGitRev(),
+      wasmBuildTime: getWasmBuildTime(WASM_PATH),
+      seed: opts.randomSeed,
+      roots: opts.rootsFilter,
+      b5: opts.b5,
+      b7: opts.b7,
+      hardTimeMs: opts.hardTimeMs ?? null,
+    });
+    mkdirSync(path.dirname(opts.dumpBook), { recursive: true });
+    const dumpLines = [
+      JSON.stringify(metadata),
+      ...dumpBookSink.map((node) => JSON.stringify(node)),
+    ];
+    writeFileSync(opts.dumpBook, `${dumpLines.join("\n")}\n`);
+
+    const cometCount = dumpBookSink.filter(
+      (n) => n.forcedWinKind !== null && n.survivorMoves?.length === 0,
+    ).length;
+    console.log("");
+    console.log(
+      ` --dump-book: ${dumpBookSink.length}ノード（メタデータ含め${dumpLines.length}行）を ${opts.dumpBook} に出力`,
+    );
+    console.log(`（うち生存手ゼロ=彗星型: ${cometCount}件）`);
+  }
 }
 
 main().catch((err: unknown) => {

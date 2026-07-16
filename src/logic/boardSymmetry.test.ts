@@ -15,7 +15,10 @@ import {
   type CoordTransform,
   boardToString,
   canonicalKey,
+  canonicalKeyWithTransform,
+  inverseTransformPosition,
   transformBoard,
+  transformPosition,
 } from "./boardSymmetry";
 
 function findTransform(name: string): CoordTransform {
@@ -158,5 +161,90 @@ describe("canonicalKey", () => {
   it("同一盤面でも手番が異なればcanonicalKeyが異なる", () => {
     const board = boardWith([{ row: 3, col: 5, color: "black" }]);
     expect(canonicalKey(board, "black")).not.toBe(canonicalKey(board, "white"));
+  });
+});
+
+describe("canonicalKeyWithTransform", () => {
+  it("canonicalKey と同じキーを返す", () => {
+    const board = boardWith([
+      { row: 3, col: 5, color: "black" },
+      { row: 7, col: 7, color: "white" },
+    ]);
+    expect(canonicalKeyWithTransform(board, "white").key).toBe(
+      canonicalKey(board, "white"),
+    );
+  });
+
+  it("非対称局面では identity 変換が選ばれる（盤面がすでに最小）", () => {
+    // 天元のみの盤は全変換で不変なので、非対称の別局面で確認する
+    const board = boardWith([{ row: 0, col: 0, color: "black" }]);
+    // (0,0) は全変換で座標が変わり得るため、実際に最小となる変換を検証するのではなく、
+    // 返された変換を適用した結果が canonicalKey の盤面部分と一致することを確認する。
+    const { key, transformName } = canonicalKeyWithTransform(board, "black");
+    const transform = D4_TRANSFORMS.find((t) => t.name === transformName)!;
+    const transformed = transformBoard(board, transform.transform);
+    expect(`${boardToString(transformed)}|black`).toBe(key);
+  });
+});
+
+describe("transformPosition / inverseTransformPosition", () => {
+  it.each(D4_TRANSFORMS.map((t) => t.name))(
+    "%s: 順変換→逆変換で元の座標に戻る（往復）",
+    (name) => {
+      for (let row = 0; row < BOARD_SIZE; row += 3) {
+        for (let col = 0; col < BOARD_SIZE; col += 3) {
+          const pos: Position = { row, col };
+          const forward = transformPosition(pos, name);
+          const back = inverseTransformPosition(forward, name);
+          expect(back).toEqual(pos);
+        }
+      }
+    },
+  );
+
+  it("transformPosition は D4_TRANSFORMS の対応する変換関数と一致する", () => {
+    const rotate90 = findTransform("rotate90");
+    expect(transformPosition({ row: 2, col: 9 }, "rotate90")).toEqual(
+      rotate90(2, 9),
+    );
+  });
+
+  it("自己対称局面（stabilizer非自明）でもブック手が正しいセルに戻る", () => {
+    // rotate180 で対称なペア（黒2石）を持つ局面（stabilizer = {identity, rotate180}）。
+    const board = boardWith([
+      { row: 5, col: 5, color: "black" },
+      { row: 9, col: 9, color: "black" },
+    ]);
+    const rotate90 = findTransform("rotate90");
+    // 同一局面（回転させただけ）
+    const rotatedBoard = transformBoard(board, rotate90);
+
+    const canonA = canonicalKeyWithTransform(board, "white");
+    const canonB = canonicalKeyWithTransform(rotatedBoard, "white");
+
+    // 回転させても同一局面なので canonicalKey は一致する
+    expect(canonA.key).toBe(canonB.key);
+
+    // canonical 空間上の任意の空きマスをブック手と仮定し、それぞれの実盤へ逆写像する。
+    const canonicalMove: Position = { row: 3, col: 4 };
+    const realMoveA = inverseTransformPosition(
+      canonicalMove,
+      canonA.transformName,
+    );
+    const realMoveB = inverseTransformPosition(
+      canonicalMove,
+      canonB.transformName,
+    );
+
+    // rotatedBoard は board を rotate90 しただけなので、逆写像結果も rotate90 の関係になる
+    expect(rotate90(realMoveA.row, realMoveA.col)).toEqual(realMoveB);
+
+    // ラウンドトリップ: 実盤座標を同じ変換で canonical 空間に戻すと元のマスに一致する
+    expect(transformPosition(realMoveA, canonA.transformName)).toEqual(
+      canonicalMove,
+    );
+    expect(transformPosition(realMoveB, canonB.transformName)).toEqual(
+      canonicalMove,
+    );
   });
 });

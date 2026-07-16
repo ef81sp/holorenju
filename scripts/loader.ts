@@ -3,7 +3,7 @@
  * @/ パスエイリアスを src/ に解決し、.ts 拡張子を自動補完する
  */
 
-import { existsSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import { dirname, resolve as pathResolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -66,6 +66,13 @@ export function resolve(
 function addTsExtension(filePath: string): string {
   // 既に拡張子がある場合はそのまま
   if (filePath.endsWith(".ts") || filePath.endsWith(".js")) {
+    return filePath;
+  }
+
+  // 指定パスがそのままファイルとして存在する場合（.json 等の非ts資産のインポート）は
+  // そのまま使う。例: `@/assets/opening-book-hard.json` を `.json.ts` にしてしまう
+  // バグを防ぐ。ディレクトリの場合は除外する（次の index.ts 探索に委ねる）。
+  if (existsSync(filePath) && statSync(filePath).isFile()) {
     return filePath;
   }
 

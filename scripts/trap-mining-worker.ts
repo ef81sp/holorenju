@@ -18,6 +18,7 @@ import { WasmSearchEngine } from "@/logic/cpu/wasm/searchEngine";
 import { preloadThreatWasm } from "@/logic/cpu/wasm/threatAdapter";
 
 import { checkForcedWin } from "./lib/forcedWinCheck";
+import { findSurvivorMoves } from "./lib/survivorMoves";
 
 export interface CheckTask {
   taskId: number;
@@ -25,6 +26,11 @@ export interface CheckTask {
   boardAfterBlack7: BoardState;
   /** 未指定なら実機 hard（DIFFICULTY_PARAMS.hard.timeLimit）をそのまま使う。 */
   hardTimeMs?: number;
+  /**
+   * true の場合、トラップ検出時（forcedWinKind 非null）にその場で生存手導出
+   * まで実行する（opening-book-2026-07-16.md §1、white8 ノード用）。
+   */
+  dumpBook?: boolean;
 }
 
 export interface CheckTaskResult {
@@ -39,6 +45,11 @@ export interface CheckTaskResult {
    * 強制勝ちが残る場合のみ true。
    */
   verifiedAtFullHardTime: boolean;
+  /**
+   * dumpBook=true かつトラップ検出時のみ非null（生存手導出結果）。
+   * 空配列なら生存手ゼロ（彗星型）。dumpBook=false またはトラップなしなら null。
+   */
+  survivorMoves: string[] | null;
 }
 
 type WorkerRequest = CheckTask | { type: "shutdown" };
@@ -83,12 +94,23 @@ async function main(): Promise<void> {
         fullCheck.chosenMoveStr === result.chosenMoveStr;
     }
 
+    const survivorMoves =
+      task.dumpBook === true && result.forcedWinKind !== null
+        ? findSurvivorMoves(
+            engine,
+            task.boardAfterBlack7,
+            "white",
+            result.chosenMove,
+          ).survivors
+        : null;
+
     const response: CheckTaskResult = {
       taskId: task.taskId,
       forcedWinKind: result.forcedWinKind,
       chosenMoveStr: result.chosenMoveStr,
       forcedWinSequenceStr: result.forcedWinSequenceStr,
       verifiedAtFullHardTime,
+      survivorMoves,
     };
     parentPort!.postMessage(response);
   });
