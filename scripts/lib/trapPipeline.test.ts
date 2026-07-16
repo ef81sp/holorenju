@@ -9,8 +9,13 @@ import { preloadForbiddenWasm } from "@/logic/cpu/wasm/forbiddenAdapter";
 import { loadWasmModule } from "@/logic/cpu/wasm/loader";
 import { WasmSearchEngine } from "@/logic/cpu/wasm/searchEngine";
 import { preloadThreatWasm } from "@/logic/cpu/wasm/threatAdapter";
+import { createEmptyBoard } from "@/logic/renjuRules";
 
-import { buildCheckTasks, type BookDumpNode } from "./trapPipeline";
+import {
+  buildCheckTasks,
+  dedupByResultingCanonicalKey,
+  type BookDumpNode,
+} from "./trapPipeline";
 import { buildJushuRoots } from "./trapRoutes";
 
 const TEST_TIMEOUT = 120_000;
@@ -30,6 +35,39 @@ function singleRoute(): ReturnType<typeof buildJushuRoots> {
   }
   return [route];
 }
+
+describe("dedupByResultingCanonicalKey — 対称重複除去（ボス指摘 2026-07-16）", () => {
+  it("寒星型（軸上の黒3）局面で white4 候補の鏡映ペアが1本に畳まれる", () => {
+    // 寒星: 黒1=天元(7,7)・白2=(8,7)・黒3=(9,7)。白2・黒3とも列7上にあるため
+    // 局面は flipHorizontal（列7を軸とした左右鏡映）に対して不変（残存対称軸）。
+    // white4候補 (8,6) と (8,8) は互いに写り合う対称ペア。
+    const board = createEmptyBoard();
+    board[7]![7] = "black";
+    board[8]![7] = "white";
+    board[9]![7] = "black";
+    const candidates = [
+      { position: { row: 8, col: 6 } },
+      { position: { row: 8, col: 8 } },
+    ];
+    const result = dedupByResultingCanonicalKey(board, "white", candidates);
+    expect(result.length).toBe(1);
+  });
+
+  it("残存対称が無い局面では候補は減らない（no-op）", () => {
+    // 雲月: 黒1=天元(7,7)・白2=(6,8)・黒3=(7,8)。この配置に軸対称はない。
+    const board = createEmptyBoard();
+    board[7]![7] = "black";
+    board[6]![8] = "white";
+    board[7]![8] = "black";
+    const candidates = [
+      { position: { row: 5, col: 4 } },
+      { position: { row: 4, col: 5 } },
+      { position: { row: 9, col: 9 } },
+    ];
+    const result = dedupByResultingCanonicalKey(board, "white", candidates);
+    expect(result.length).toBe(candidates.length);
+  });
+});
 
 describe("buildCheckTasks dumpBookSink", () => {
   it(

@@ -11,7 +11,7 @@
 import type { BoardState, Position } from "@/types/game";
 
 import { canonicalKey } from "@/logic/boardSymmetry";
-import { applyMove } from "@/logic/cpu/core/boardUtils";
+import { applyMove, getOppositeColor } from "@/logic/cpu/core/boardUtils";
 import {
   REVIEW_PROFILE_FAST,
   REVIEW_SEARCH_PARAMS,
@@ -60,12 +60,17 @@ export interface CheckLineTask {
  * ブックダンプ用の1ノード（opening-book-2026-07-16.md §1）。
  * white4/white6/white8 いずれかの手番ノードに対応する
  * （white8 は trap-mining.ts 側で Phase3 の結果から構築する）。
+ *
+ * ply 5/7 は黒番トラップ個別対応（opening-book-2026-07-16.md 黒対応）用。
+ * 黒ダンプ（opening-book-dump-black.jsonl）の生スキーマは `blackMove` フィールドを
+ * 持つが、buildOpeningBook.ts の抽出時に `hardMove` へマッピングして
+ * この型に揃える（変換ロジック自体は着手した色に依存しないため）。
  */
 export interface BookDumpNode {
   canonicalKey: string;
   route: string;
-  ply: 4 | 6 | 8;
-  /** このノードの局面に至るまでの手順（このノードの白の着手は含まない）。 */
+  ply: 4 | 5 | 6 | 7 | 8;
+  /** このノードの局面に至るまでの手順（このノード自身の着手は含まない）。 */
   movesUpToHere: string[];
   hardMove: string;
   forcedWinKind: "VCF" | "VCT" | null;
@@ -167,6 +172,35 @@ function randomSlotCountFor(maxTotal: number): number {
 }
 
 /**
+ * 候補適用後の局面の canonical key で dedup する（ボス指摘 2026-07-16、
+ * opening-trap-mining-2026-07-16.md ★第2段:「白2の代表固定後も残存対称がある限り
+ * どの列挙段階でも対称ペアの枝が生じ得るため、全列挙段階（黒3・白4・白6）で
+ * 候補適用後の局面 canonical key による dedup を一律適用する」という一般則を
+ * 白番パイプライン（黒5/黒7列挙）にも適用する）。
+ * 残存対称が無ければ全候補が異なる key を持つため自然に no-op になる。
+ * trapPipelineBlack.ts でも再利用する共通ヘルパー。
+ */
+export function dedupByResultingCanonicalKey<T extends { position: Position }>(
+  board: BoardState,
+  moverColor: "black" | "white",
+  candidates: T[],
+): T[] {
+  const opponent = getOppositeColor(moverColor);
+  const seen = new Set<string>();
+  const result: T[] = [];
+  for (const c of candidates) {
+    const afterBoard = applyMove(board, c.position, moverColor);
+    const key = canonicalKey(afterBoard, opponent);
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    result.push(c);
+  }
+  return result;
+}
+
+/**
  * ルート集合から「チェック粒度」タスク（black7着手後・白番の局面）をすべて構築する。
  * ルートごとに white4 を1回、黒5候補ごとに white6 を1回進める（Phase1/2 は直列実行。
  * 並列化はチェック粒度=Phase3 側で行う設計）。
@@ -211,15 +245,19 @@ export function buildCheckTasks(
     const boardAfterWhite4 = applyMove(board0, white4.position, "white");
 
     const candidates4 = candidateRanking(engine, boardAfterWhite4, "black");
-    const black5Candidates = selectAttackerMoves({
-      board: boardAfterWhite4,
-      color: "black",
-      candidates: candidates4,
-      topK: opts.black5Budget.maxTotal,
-      maxTotal: opts.black5Budget.maxTotal,
-      randomSlotCount: randomSlotCountFor(opts.black5Budget.maxTotal),
-      randomSeed: opts.randomSeed,
-    });
+    const black5Candidates = dedupByResultingCanonicalKey(
+      boardAfterWhite4,
+      "black",
+      selectAttackerMoves({
+        board: boardAfterWhite4,
+        color: "black",
+        candidates: candidates4,
+        topK: opts.black5Budget.maxTotal,
+        maxTotal: opts.black5Budget.maxTotal,
+        randomSlotCount: randomSlotCountFor(opts.black5Budget.maxTotal),
+        randomSeed: opts.randomSeed,
+      }),
+    );
 
     for (const black5Entry of black5Candidates) {
       const boardAfterBlack5 = applyMove(
@@ -256,15 +294,19 @@ export function buildCheckTasks(
       );
 
       const candidates6 = candidateRanking(engine, boardAfterWhite6, "black");
-      const black7Candidates = selectAttackerMoves({
-        board: boardAfterWhite6,
-        color: "black",
-        candidates: candidates6,
-        topK: opts.black7Budget.maxTotal,
-        maxTotal: opts.black7Budget.maxTotal,
-        randomSlotCount: randomSlotCountFor(opts.black7Budget.maxTotal),
-        randomSeed: opts.randomSeed,
-      });
+      const black7Candidates = dedupByResultingCanonicalKey(
+        boardAfterWhite6,
+        "black",
+        selectAttackerMoves({
+          board: boardAfterWhite6,
+          color: "black",
+          candidates: candidates6,
+          topK: opts.black7Budget.maxTotal,
+          maxTotal: opts.black7Budget.maxTotal,
+          randomSlotCount: randomSlotCountFor(opts.black7Budget.maxTotal),
+          randomSeed: opts.randomSeed,
+        }),
+      );
 
       for (const black7Entry of black7Candidates) {
         const boardAfterBlack7 = applyMove(

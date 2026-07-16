@@ -18,6 +18,8 @@ export interface BookDumpMetadata {
   b5: number;
   b7: number;
   hardTimeMs: number | null;
+  /** white版（第1段）/black版（★第2段）の判別。 */
+  side: "white" | "black";
 }
 
 /** 現在の git HEAD のコミットハッシュを取得する（取得失敗時は "unknown"）。 */
@@ -47,6 +49,7 @@ export function buildBookDumpMetadata(params: {
   b5: number;
   b7: number;
   hardTimeMs: number | null;
+  side?: "white" | "black";
   now?: Date;
 }): BookDumpMetadata {
   return {
@@ -59,5 +62,6 @@ export function buildBookDumpMetadata(params: {
     b5: params.b5,
     b7: params.b7,
     hardTimeMs: params.hardTimeMs,
+    side: params.side ?? "white",
   };
 }

@@ -34,7 +34,23 @@ describe("buildBookDumpMetadata", () => {
       b5: 12,
       b7: 20,
       hardTimeMs: 1000,
+      side: "white",
     });
+  });
+
+  it("side を明示指定すると反映される（★第2段: black版）", () => {
+    const meta = buildBookDumpMetadata({
+      gitRev: "abc123",
+      wasmBuildTime: "2026-07-16T00:00:00.000Z",
+      seed: 42,
+      roots: null,
+      b5: 12,
+      b7: 20,
+      hardTimeMs: null,
+      side: "black",
+      now: new Date("2026-07-17T00:00:00.000Z"),
+    });
+    expect(meta.side).toBe("black");
   });
 
   it("roots/hardTimeMs は null を許容する（フィルタなし・実機default）", () => {

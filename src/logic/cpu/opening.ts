@@ -205,6 +205,56 @@ function isEmpty(board: BoardState, pos: Position): boolean {
   return board[pos.row]?.[pos.col] === null;
 }
 
+/** 珠型パターンからの3手目候補（座標 + 対応する珠型名）。 */
+export interface ThirdMoveCandidate {
+  position: Position;
+  patternName: string;
+}
+
+/**
+ * 3手目（黒）で珠型パターンから選択可能な候補手をすべて返す。
+ *
+ * getOpeningMove の3手目ロジック（珠型パターンからのランダム選択）のコア抽出。
+ * 黒が天元以外、または白が天元隣接8マス以外（SECOND_MOVE_OFFSETS 外）に置いた
+ * 場合は空配列を返す（getOpeningMove 同様、この場合は通常の CPU 処理へフォール
+ * バックすべきというシグナル）。
+ *
+ * trap-mining.ts の黒番採掘（「CPU 実開局ロジックの全出力列挙」＋珠型選択ごとの
+ * 生存性統計）で使う。
+ */
+export function getThirdMoveCandidates(
+  board: BoardState,
+): ThirdMoveCandidate[] {
+  if (!hasStoneatTengen(board)) {
+    return [];
+  }
+
+  const secondMove = findSecondMovePosition(board);
+  if (!secondMove) {
+    return [];
+  }
+
+  // 白の位置に応じたパターンを選択
+  const patterns =
+    secondMove.type === "diagonal" ? DIAGONAL_PATTERNS : ORTHOGONAL_PATTERNS;
+
+  // 白の位置のオフセット
+  const whiteOffset = {
+    dr: secondMove.position.row - TENGEN.row,
+    dc: secondMove.position.col - TENGEN.col,
+  };
+
+  // 有効なパターン（盤面内かつ空きマス）をフィルタリング
+  const candidates: ThirdMoveCandidate[] = [];
+  for (const pattern of patterns) {
+    const pos = transformOffset(pattern.offset, whiteOffset, secondMove.type);
+    if (isValidPosition(pos) && isEmpty(board, pos)) {
+      candidates.push({ position: pos, patternName: pattern.name });
+    }
+  }
+  return candidates;
+}
+
 /**
  * 開局の手を取得
  *
@@ -250,39 +300,9 @@ export function getOpeningMove(
 
   // 3手目（黒）: 珠型パターンからランダムに選択
   if (stoneCount === 2 && color === "black") {
-    if (!hasStoneatTengen(board)) {
-      // 黒が天元以外に置いた場合は通常のCPU処理
-      return null;
-    }
-
-    const secondMove = findSecondMovePosition(board);
-    if (!secondMove) {
-      // 白が天元周囲以外に置いた場合は通常のCPU処理
-      return null;
-    }
-
-    // 白の位置に応じたパターンを選択
-    const patterns =
-      secondMove.type === "diagonal" ? DIAGONAL_PATTERNS : ORTHOGONAL_PATTERNS;
-
-    // 白の位置のオフセット
-    const whiteOffset = {
-      dr: secondMove.position.row - TENGEN.row,
-      dc: secondMove.position.col - TENGEN.col,
-    };
-
-    // 有効なパターン（盤面内かつ空きマス）をフィルタリング
-    const validPositions: Position[] = [];
-
-    for (const pattern of patterns) {
-      const pos = transformOffset(pattern.offset, whiteOffset, secondMove.type);
-      if (isValidPosition(pos) && isEmpty(board, pos)) {
-        validPositions.push(pos);
-      }
-    }
-
-    // ランダムに選択
-    return selectRandom(validPositions) ?? null;
+    const candidates = getThirdMoveCandidates(board);
+    const selected = selectRandom(candidates);
+    return selected ? { ...selected.position } : null;
   }
 
   // 4手目以降は通常のCPU処理
