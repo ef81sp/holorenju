@@ -12,6 +12,8 @@
  */
 import { Worker } from "node:worker_threads";
 
+import type { EvaluationOptions } from "../../src/logic/cpu/evaluation/patternScores.ts";
+import type { DifficultyParams } from "../../src/types/cpu.ts";
 import type { Position } from "../../src/types/game.ts";
 import type { SPRTConfig, WDLCount } from "../types/ab.ts";
 import type { CommitGameResult } from "../types/commit-bench.ts";
@@ -101,6 +103,41 @@ export interface CreateBridgeWorkerParams {
   randomFactor?: number;
   /** eval 形系重みの実行時注入（weight-bench 用。commit-bench は未使用）。 */
   evalWeights?: Record<string, number>;
+  /**
+   * eval 基底/オプションの実行時オーバーライド（Gate 2: evalBasis=prospect 注入用）。
+   * cpu-bridge-worker 側で baseParams.evaluationOptions と浅くマージされる
+   * （mergeDifficultyParams 参照）。省略時は現行挙動と完全一致（後方互換）。
+   */
+  evaluationOptions?: Partial<EvaluationOptions>;
+  /**
+   * オープニングブック（opening-book-2026-07-16.md ★v2プラン B3）を有効化するか。
+   * 既定 OFF（未指定時は現行挙動と完全一致・後方互換）。ON でも worktree に
+   * ブックモジュール/資産が無ければ cpu-bridge-worker 側で自動的に book-OFF
+   * として続行する。
+   */
+  bookEnabled?: boolean;
+}
+
+/**
+ * createBridgeWorker に渡す customParams を組み立てる（純粋関数・単体テスト用に export）。
+ * randomFactor / evaluationOptions のいずれも未指定なら undefined を返し、
+ * 既存呼び出し（weight-bench 等）の挙動を完全に保つ。
+ */
+export function buildBridgeCustomParams(
+  randomFactor: number | undefined,
+  evaluationOptions: Partial<EvaluationOptions> | undefined,
+): Partial<DifficultyParams> | undefined {
+  if (randomFactor === undefined && evaluationOptions === undefined) {
+    return undefined;
+  }
+  const customParams: Partial<DifficultyParams> = {};
+  if (randomFactor !== undefined) {
+    customParams.randomFactor = randomFactor;
+  }
+  if (evaluationOptions !== undefined) {
+    customParams.evaluationOptions = evaluationOptions as EvaluationOptions;
+  }
+  return customParams;
 }
 
 /** bridge worker を起動し、ready 通知を待って resolve する。 */
@@ -114,13 +151,23 @@ export function createBridgeWorker(
     difficulty,
     randomFactor,
     evalWeights,
+    evaluationOptions,
+    bookEnabled,
   } = params;
   return new Promise<Worker>((resolve, reject) => {
-    const customParams =
-      randomFactor === undefined ? undefined : { randomFactor };
+    const customParams = buildBridgeCustomParams(
+      randomFactor,
+      evaluationOptions,
+    );
 
     const worker = new Worker(workerPath, {
-      workerData: { worktreePath, difficulty, customParams, evalWeights },
+      workerData: {
+        worktreePath,
+        difficulty,
+        customParams,
+        evalWeights,
+        bookEnabled,
+      },
       execArgv: [
         "--experimental-strip-types",
         "--disable-warning=ExperimentalWarning",

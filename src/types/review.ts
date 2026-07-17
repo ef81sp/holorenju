@@ -155,6 +155,11 @@ export interface EvaluatedMove {
   missedDoubleMise?: Position[];
   /** 両ミセのターゲット位置（四三を作る位置） */
   doubleMiseTargets?: Position[];
+  /**
+   * 序盤定石ブックと一致する手か（§3）。true のときはミス判定・代替推奨の
+   * 表示を抑制し、「序盤ブック手」ラベルを表示する。
+   */
+  isBookMove?: boolean;
 }
 
 /**
@@ -269,6 +274,11 @@ export interface FullEvalResult extends ReviewWorkerResultBase {
   doubleMiseTargets?: Position[];
   /** Phase 1でVCTをスキップし、Phase 2でのVCTチェックが必要 */
   needsVCTCheck?: boolean;
+  /**
+   * 打たれた手が序盤定石ブック（opening-book-2026-07-16.md）と一致するか
+   * （§3: 注釈専用。対象は白番 ply4〜8。着手選択には使わない）。
+   */
+  isBookMove?: boolean;
 }
 
 /**

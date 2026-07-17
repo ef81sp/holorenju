@@ -25,7 +25,13 @@ import { parentPort, workerData } from "node:worker_threads";
 import type { DifficultyParams } from "../src/types/cpu.ts";
 import type { BoardState, Position } from "../src/types/game.ts";
 
+import { mergeDifficultyParams } from "./lib/difficultyParamsMerge.ts";
 import { EVAL_PARAM_IDS } from "./lib/evalParams.ts";
+import {
+  countStones,
+  loadOpeningBookFromWorktree,
+} from "./lib/openingBookBridge.ts";
+import { encodeEvalOptionsForWasm } from "./lib/wasmEvalOptionsEncoder.ts";
 
 // ============================================================================
 // 型定義
@@ -41,6 +47,12 @@ interface BridgeWorkerData {
    * （setEvalParam 非対応の古い commit を読む commit-bench と後方互換）。
    */
   evalWeights?: Record<string, number>;
+  /**
+   * オープニングブック（opening-book-2026-07-16.md ★v2プラン B3）を有効化するか。
+   * 既定 OFF（未指定時は従来どおり探索のみ）。ON でもモジュール/資産が
+   * worktree に存在しなければ自動的に book-OFF として続行する（クラッシュしない）。
+   */
+  bookEnabled?: boolean;
 }
 
 interface MoveRequest {
@@ -142,59 +154,6 @@ interface WasmSearchHandler {
     color: "black" | "white",
     params: DifficultyParams,
   ) => FindBestMoveResult;
-}
-
-/**
- * EvaluationOptions → WASM用ビットマスク
- * Zig main.zig findBestMove のビットレイアウトと一致させる。
- *
- * ビットレイアウト（u32）:
- *   bits 0-8:   position_eval.EvalOptions（ムーブオーダリング用フラグ）
- *   bits 9-16:  葉評価 single_four_penalty_multiplier
- *               （0=未指定→100、255=センチネル→0、1-254=そのまま）
- *   bit 17:     enable_leaf_mise（現在は未使用）
- */
-function encodeEvalOptionsForWasm(opts: {
-  enableMise?: boolean;
-  enableForbiddenTrap?: boolean;
-  enableMultiThreat?: boolean;
-  enableCounterFour?: boolean;
-  enableNullMovePruning?: boolean;
-  enableFutilityPruning?: boolean;
-  enableMandatoryDefense?: boolean;
-  enableSingleFourPenalty?: boolean;
-  singleFourPenaltyMultiplier?: number;
-  enableMiseThreat?: boolean;
-  enableDoubleThreeThreat?: boolean;
-  enableForbiddenVulnerability?: boolean;
-}): number {
-  const bits: boolean[] = [
-    opts.enableMise ?? false,
-    opts.enableForbiddenTrap ?? false,
-    opts.enableMultiThreat ?? false,
-    (opts.enableCounterFour ?? false) ||
-      (opts.enableNullMovePruning ?? false) ||
-      (opts.enableFutilityPruning ?? false),
-    opts.enableMandatoryDefense ?? false,
-    opts.enableSingleFourPenalty ?? false,
-    opts.enableMiseThreat ?? false,
-    opts.enableDoubleThreeThreat ?? false,
-    opts.enableForbiddenVulnerability ?? false,
-  ];
-  let flags = bits.reduce((acc, bit, i) => acc + (bit ? 2 ** i : 0), 0);
-
-  // bits 9-16: 葉評価 singleFourPenaltyMultiplier
-  // センチネル規則（Zig main.zig findBestMove と対称）:
-  //   enableSingleFourPenalty が false → 0（未指定 = デフォルト 100）
-  //   multiplier === 0 → 255（センチネル: 完全ペナルティ）
-  //   その他 → Math.round(m * 100)（1-254）
-  if (opts.enableSingleFourPenalty) {
-    const m = opts.singleFourPenaltyMultiplier ?? 1.0;
-    const raw = m === 0 ? 255 : Math.round(m * 100);
-    flags |= (raw & 0xff) << 9;
-  }
-
-  return flags;
 }
 
 // WASM cell constants (matching Zig Cell enum)
@@ -351,17 +310,7 @@ async function loadDifficultyParams(
     );
   }
 
-  const { customParams } = data;
-  return customParams
-    ? {
-        ...baseParams,
-        ...customParams,
-        evaluationOptions: {
-          ...baseParams.evaluationOptions,
-          ...customParams.evaluationOptions,
-        },
-      }
-    : baseParams;
+  return mergeDifficultyParams(baseParams, data.customParams);
 }
 
 /**
@@ -466,6 +415,17 @@ async function main(): Promise<void> {
   // 難易度パラメータを読み込み
   const params = await loadDifficultyParams(worktreePath);
 
+  // オープニングブック（B3仕様③: 同一バイナリでbook-ON/OFFをフラグ切替できるよう、
+  // コミット差ではなく workerData.bookEnabled で分岐する）
+  const bookBridge = data.bookEnabled
+    ? await loadOpeningBookFromWorktree(worktreePath)
+    : null;
+  if (data.bookEnabled) {
+    console.log(
+      `[cpu-bridge-worker] book=${bookBridge ? "ON" : "OFF(unavailable)"} for ${worktreePath}`,
+    );
+  }
+
   // WASM版を試行、失敗時はTS版にフォールバック
   const wasm = await loadWasmFromWorktree(worktreePath);
   let wasmHandler: WasmSearchHandler | null = null;
@@ -475,7 +435,18 @@ async function main(): Promise<void> {
     wasmHandler = createWasmSearchHandler(wasm);
     // eval 形系重みを注入（baseline は weights 空＝reset のみでクリーン既定）
     applyEvalWeights(wasm, data.evalWeights);
-    console.log(`[cpu-bridge-worker] WASM engine loaded for ${worktreePath}`);
+    // evalBasis 配線の silent 事故防止: 実際に search に渡る evaluationOptions を
+    // エンコードした flags と bit18 (eval_basis) の状態を必ず1行ログに出す。
+    // worktreePath のディレクトリ名（A-<sha>/B-<sha>）で A/B 側を判別できる。
+    // search 経路（createWasmSearchHandler）と同じく evaluationOptions 未定義を許容する
+    const evalFlags = params.evaluationOptions
+      ? encodeEvalOptionsForWasm(params.evaluationOptions)
+      : 0;
+    const basis = params.evaluationOptions?.evalBasis ?? "legacy";
+    const bit18 = (evalFlags & (1 << 18)) === 0 ? "legacy" : "prospect";
+    console.log(
+      `[cpu-bridge-worker] WASM engine loaded for ${worktreePath} | evalBasis=${basis} evalFlags=${evalFlags} bit18=${bit18}`,
+    );
   } else {
     tsFindBestMove = await loadTsCpuFromWorktree(worktreePath);
     console.log(
@@ -492,6 +463,25 @@ async function main(): Promise<void> {
     const startTime = performance.now();
 
     try {
+      if (bookBridge) {
+        const moveCount = countStones(board);
+        if (bookBridge.isBookEligible(data.difficulty, color, moveCount)) {
+          const bookMove = bookBridge.getBookMove(board, color);
+          if (bookMove) {
+            const response: MoveResponse = {
+              requestId,
+              position: bookMove,
+              score: 0, // ブックの手は評価スコアなし（cpu.worker.ts と同じ扱い）
+              depth: 0, // 探索なし
+              thinkingTimeMs: performance.now() - startTime,
+              interrupted: false,
+            };
+            parentPort?.postMessage(response);
+            return;
+          }
+        }
+      }
+
       const result: FindBestMoveResult = wasmHandler
         ? wasmHandler.search(board, color, params)
         : callTsFindBestMove(tsFindBestMove!, board, color, params);

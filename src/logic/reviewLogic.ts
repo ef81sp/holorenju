@@ -33,20 +33,42 @@ export function isOpeningMove(moveIndex: number): boolean {
 }
 
 /**
+ * スコア差の品質境界（review-threshold-calibration 2026-07-17 較正調査で改定）。
+ *
+ * 旧値 80/300/1000 は Rapfi オラクルとの二重採点（n=186、うちscoreDiff駆動133件）
+ * で過剰判定（現行mistake/blunderの40%がRapfi基準ではgood以下、blunder判定の
+ * 94.4%が真にblunder級でない）が確認されたため、グリッドサーチ（FP2倍重み付け
+ * loss最小化）の結果を丸めて採用。
+ */
+const QUALITY_THRESHOLD_GOOD = 150;
+const QUALITY_THRESHOLD_INACCURACY = 400;
+const QUALITY_THRESHOLD_MISTAKE = 2500;
+
+/**
  * スコア差に基づく品質分類
+ *
+ * scoreDiff（= bestScore - playedScore）は本来 0 以上のはずだが、実手が
+ * minimax 候補(top5)外のとき probePlayedMoveScore（別の浅い探索）でスコアを
+ * 推定する経路があり、探索の非単調性により playedScore が bestScore を
+ * 上回る（scoreDiff が負になる）ことがある。これは「実手がbestより悪い」
+ * ことを意味せず、むしろ our own bestScore 推定が悲観的だった可能性が高い。
+ * 符号を無視して絶対値を取ると、この負の差分まで悪手側に倒れてしまう
+ * （較正調査で確認: scoreDiff=-2224 が blunder 判定されたが Rapfi 検証では
+ * 実際には悪手でなかった）。「best 以上」に対応する品質はそれ以上存在しない
+ * ため、負の scoreDiff は 0（= excellent）に丸める。
  */
 export function classifyMoveQuality(scoreDiff: number): MoveQuality {
-  const absDiff = Math.abs(scoreDiff);
-  if (absDiff === 0) {
+  const clampedDiff = Math.max(0, scoreDiff);
+  if (clampedDiff === 0) {
     return "excellent";
   }
-  if (absDiff <= 80) {
+  if (clampedDiff <= QUALITY_THRESHOLD_GOOD) {
     return "good";
   }
-  if (absDiff <= 300) {
+  if (clampedDiff <= QUALITY_THRESHOLD_INACCURACY) {
     return "inaccuracy";
   }
-  if (absDiff <= 1000) {
+  if (clampedDiff <= QUALITY_THRESHOLD_MISTAKE) {
     return "mistake";
   }
   return "blunder";
@@ -114,6 +136,19 @@ export function buildEvaluatedMove(
     quality = "blunder";
   }
 
+  // 序盤定石ブックと一致する手（§3）: ミス判定を抑制する。
+  // ブックは深い採掘で検証済みの安全な手を選ぶため、素の探索（浅い候補検証）が
+  // 見つけられないトラップを避けている場合がある。その場合 scoreDiff が大きく
+  // 出ても「ミス」ではないため、quality を good に固定して mistake/blunder
+  // 分類とそれに伴う代替手表示（bestMove のクロス表示）を抑制する。
+  // ただし forcedLossType が検出されている場合は抑制しない
+  // （「定石なのに被詰み」という矛盾表示を防ぐ。ブックが古くなった場合や
+  // 想定外の局面遷移でも、振り返りは誠実な通常判定を出す）。
+  const isBookMove = (result.isBookMove ?? false) && !result.forcedLossType;
+  if (isBookMove) {
+    quality = "good";
+  }
+
   return {
     moveIndex: result.moveIndex,
     position: move?.position ?? { row: 7, col: 7 },
@@ -133,6 +168,7 @@ export function buildEvaluatedMove(
     forcedLossTree: result.forcedLossTree,
     missedDoubleMise: result.missedDoubleMise,
     doubleMiseTargets: result.doubleMiseTargets,
+    isBookMove,
   };
 }
 
@@ -341,8 +377,19 @@ export function getQualityColor(quality: MoveQuality): string {
 
 /**
  * 品質に対応するラベルを取得
+ *
+ * isBookMove が true の場合、quality に関わらず「序盤ブック手」を返す
+ * （§3: 序盤定石ブックと一致する手は、独立した表示ラベルとして扱う。
+ * 「定石」は確立した連珠用語のため、定石そのものではない手にはこの語を
+ * 使わない）。
  */
-export function getQualityLabel(quality: MoveQuality): string {
+export function getQualityLabel(
+  quality: MoveQuality,
+  isBookMove?: boolean,
+): string {
+  if (isBookMove) {
+    return "序盤ブック手";
+  }
   switch (quality) {
     case "excellent":
       return "最善手";

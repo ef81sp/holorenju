@@ -217,6 +217,13 @@ pub fn build(b: *std.Build) void {
         }),
     });
 
+    const test_prospect = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/prospect.zig"),
+            .target = native_target,
+        }),
+    });
+
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&b.addRunArtifact(test_board).step);
     test_step.dependOn(&b.addRunArtifact(test_patterns).step);
@@ -241,6 +248,7 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&b.addRunArtifact(test_line_potential).step);
     test_step.dependOn(&b.addRunArtifact(test_forced_win_tree).step);
     test_step.dependOn(&b.addRunArtifact(test_mise_vcf).step);
+    test_step.dependOn(&b.addRunArtifact(test_prospect).step);
 
     // 重い統合テスト（実探索を伴う #22 詰み木検証）。pre-commit の高速性を保つため
     // 通常の `test` には含めず、`zig build test-slow` で実行する（ReleaseFast）。

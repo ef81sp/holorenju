@@ -1,0 +1,672 @@
+#!/usr/bin/env node
+/**
+ * 序盤トラップ採掘パイプライン CLI（opening-trap-mining-2026-07-16.md）。
+ *
+ * --side=white（既定）: ルート集合（26珠型 + 珠型外ルート）ごとに hard 白4 →
+ *   攻め側フィルタで黒5候補 → hard 白6 → 攻め側フィルタで黒7候補 → hard 白8 +
+ *   黒の強制勝ち判定（VCF∪VCT）を進める（第1段）。
+ * --side=black: ルート集合（26珠型。★第2段はプレイヤー選択が無い珠型外は対象外）
+ *   ごとに 攻め側フィルタで白4候補 → hard 黒5 → 攻め側フィルタで白6候補 →
+ *   hard 黒7 + 白の強制勝ち判定（VCF∪VCT）を進める（★第2段、白版の色反転）。
+ * いずれも severity-A（実機再検証ゲート通過）のトラップ候補を JSONL に出力する。
+ *
+ * 使用例（スモーク・軽予算）:
+ *   node --experimental-strip-types --import ./scripts/register-loader.mjs \
+ *     scripts/trap-mining.ts --roots=雲月 --b5=2 --b7=2 --jobs=2 --hard-time=1000
+ *
+ *   # 黒版（★第2段）
+ *   node --experimental-strip-types --import ./scripts/register-loader.mjs \
+ *     scripts/trap-mining.ts --side=black --roots=雲月 --b5=2 --b7=2 --hard-time=1000
+ *
+ *   # キャリブレーションモード（代表 ply-7 局面 N 点の1チェック平均時間を実測のみ）
+ *   node --experimental-strip-types --import ./scripts/register-loader.mjs \
+ *     scripts/trap-mining.ts --calibrate=30
+ *
+ *   # ブックダンプ付き権威実行（opening-book-2026-07-16.md §1）
+ *   node --experimental-strip-types --import ./scripts/register-loader.mjs \
+ *     scripts/trap-mining.ts --dump-book=bench-results/book-dump.jsonl
+ */
+import { mkdirSync, writeFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { Worker } from "node:worker_threads";
+
+import type { BoardState } from "@/types/game";
+
+import { canonicalKey } from "@/logic/boardSymmetry";
+import { preloadForbiddenWasm } from "@/logic/cpu/wasm/forbiddenAdapter";
+import { loadWasmModule } from "@/logic/cpu/wasm/loader";
+import { WasmSearchEngine } from "@/logic/cpu/wasm/searchEngine";
+import { preloadThreatWasm } from "@/logic/cpu/wasm/threatAdapter";
+
+import type { CheckTask, CheckTaskResult } from "./trap-mining-worker";
+
+import {
+  buildBookDumpMetadata,
+  getGitRev,
+  getWasmBuildTime,
+} from "./lib/bookDumpMetadata";
+import { checkForcedWin, type Side } from "./lib/forcedWinCheck";
+import {
+  buildCheckTasks,
+  type BookDumpNode,
+  type CheckLineTask,
+} from "./lib/trapPipeline";
+import {
+  buildBlackCheckTasks,
+  type BlackBookDumpNode,
+  type BlackCheckLineTask,
+} from "./lib/trapPipelineBlack";
+import { buildAllRoots, buildJushuRoots } from "./lib/trapRoutes";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+const WASM_PATH = path.join(__dirname, "../zig/zig-out/bin/cpu-engine.wasm");
+
+// ============================================================================
+// CLI 引数
+// ============================================================================
+
+interface CliOptions {
+  side: Side;
+  rootsFilter: string | null;
+  /** white版: black5Budget。black版: white4Budget。 */
+  b5: number;
+  /** white版: black7Budget。black版: white6Budget。 */
+  b7: number;
+  jobs: number;
+  out: string | null;
+  calibrate: number | null;
+  hardTimeMs: number | undefined;
+  /** 攻め側フィルタのランダム枠抽選シード（固定すれば決定的）。 */
+  randomSeed: number;
+  /**
+   * 指定すると全ノードを canonical key・hard選択手・強制勝ちチェック結果付きで
+   * JSONL にダンプする（opening-book §1）。トラップ検出時はその場で生存手導出
+   * まで実行する。
+   */
+  dumpBook: string | null;
+}
+
+function parseArgs(): CliOptions {
+  const args = process.argv.slice(2);
+  const opts: CliOptions = {
+    side: "white",
+    rootsFilter: null,
+    b5: 12,
+    b7: 20,
+    jobs: 6,
+    out: null,
+    calibrate: null,
+    hardTimeMs: undefined,
+    randomSeed: 20260716,
+    dumpBook: null,
+  };
+  for (const arg of args) {
+    if (arg.startsWith("--side=")) {
+      const value = arg.slice("--side=".length);
+      if (value !== "white" && value !== "black") {
+        throw new Error(`--side は white|black のみ対応（指定値: ${value}）`);
+      }
+      opts.side = value;
+    } else if (arg.startsWith("--roots=")) {
+      opts.rootsFilter = arg.slice("--roots=".length);
+    } else if (arg.startsWith("--b5=")) {
+      opts.b5 = parseInt(arg.slice("--b5=".length), 10);
+    } else if (arg.startsWith("--b7=")) {
+      opts.b7 = parseInt(arg.slice("--b7=".length), 10);
+    } else if (arg.startsWith("--jobs=")) {
+      opts.jobs = parseInt(arg.slice("--jobs=".length), 10);
+    } else if (arg.startsWith("--out=")) {
+      opts.out = arg.slice("--out=".length);
+    } else if (arg.startsWith("--dump-book=")) {
+      opts.dumpBook = arg.slice("--dump-book=".length);
+    } else if (arg.startsWith("--calibrate=")) {
+      opts.calibrate = parseInt(arg.slice("--calibrate=".length), 10);
+    } else if (arg.startsWith("--hard-time=")) {
+      opts.hardTimeMs = parseInt(arg.slice("--hard-time=".length), 10);
+    } else if (arg.startsWith("--seed=")) {
+      opts.randomSeed = parseInt(arg.slice("--seed=".length), 10);
+    }
+  }
+  return opts;
+}
+
+// ============================================================================
+// チェック粒度ワーカープール（gate3 方式の直接 wasm ロード・ワークスティール）
+// ============================================================================
+
+function createCheckWorker(): Promise<Worker> {
+  const workerPath = path.join(__dirname, "trap-mining-worker.ts");
+  const loaderPath = path.join(__dirname, "register-loader.mjs");
+  return new Promise<Worker>((resolve, reject) => {
+    const worker = new Worker(workerPath, {
+      execArgv: [
+        "--experimental-strip-types",
+        "--disable-warning=ExperimentalWarning",
+        "--import",
+        loaderPath,
+      ],
+    });
+
+    const initTimeout = setTimeout(() => {
+      worker.terminate();
+      reject(new Error("trap-mining-worker の初期化がタイムアウトしました"));
+    }, 60000);
+
+    const readyHandler = (msg: unknown): void => {
+      if (
+        typeof msg === "object" &&
+        msg !== null &&
+        "ready" in msg &&
+        (msg as { ready: unknown }).ready === true
+      ) {
+        clearTimeout(initTimeout);
+        worker.off("message", readyHandler);
+        resolve(worker);
+      }
+    };
+    worker.on("message", readyHandler);
+    worker.on("error", (err) => {
+      clearTimeout(initTimeout);
+      reject(err);
+    });
+  });
+}
+
+interface MinimalCheckInput {
+  taskId: number;
+  board: BoardState;
+}
+
+/**
+ * チェック粒度のワークスティール並列実行（match.ts の nextTask カウンタ方式を踏襲）。
+ * side は「このノードで hard が着手する側」（white版=white8, black版=black7）。
+ */
+async function runCheckTasksInParallel(
+  side: Side,
+  inputs: MinimalCheckInput[],
+  jobs: number,
+  hardTimeMs: number | undefined,
+  dumpBook: boolean,
+): Promise<Map<number, CheckTaskResult>> {
+  const workerCount = Math.max(1, Math.min(jobs, inputs.length || 1));
+  const workers = await Promise.all(
+    Array.from({ length: workerCount }, () => createCheckWorker()),
+  );
+
+  const results = new Map<number, CheckTaskResult>();
+  let nextTask = 0;
+
+  const runWorker = (worker: Worker): Promise<void> =>
+    new Promise<void>((resolve, reject) => {
+      const sendNext = (): void => {
+        if (nextTask >= inputs.length) {
+          worker.off("message", messageHandler);
+          resolve();
+          return;
+        }
+        const input = inputs[nextTask]!;
+        nextTask += 1;
+        const req: CheckTask = {
+          taskId: input.taskId,
+          side,
+          board: input.board,
+          hardTimeMs,
+          dumpBook,
+        };
+        worker.postMessage(req);
+      };
+      const messageHandler = (msg: CheckTaskResult): void => {
+        results.set(msg.taskId, msg);
+        sendNext();
+      };
+      worker.on("message", messageHandler);
+      worker.on("error", reject);
+      sendNext();
+    });
+
+  await Promise.all(workers.map((w) => runWorker(w)));
+  for (const worker of workers) {
+    worker.postMessage({ type: "shutdown" });
+    await worker.terminate();
+  }
+
+  return results;
+}
+
+// ============================================================================
+// 出力レコード
+// ============================================================================
+
+interface TrapMiningRecord {
+  canonicalKeyPly8: string;
+  route: string;
+  /** [黒1, 白2, 黒3, 白4, 黒5, 白6, 黒7] */
+  moves: string[];
+  black5Provenance: CheckLineTask["black5Provenance"];
+  black7Provenance: CheckLineTask["black7Provenance"];
+  severity: "A";
+  forcedWinKind: "VCF" | "VCT";
+  forcedWinSequence: string;
+  hardTimeMsUsed: number | null;
+  verifiedAtFullHardTime: boolean;
+}
+
+interface BlackTrapMiningRecord {
+  canonicalKeyBeforeBlack7: string;
+  route: string;
+  /** [白2, 黒3, 白4, 黒5, 白6, 黒7] */
+  moves: string[];
+  white4Provenance: BlackCheckLineTask["white4Provenance"];
+  white6Provenance: BlackCheckLineTask["white6Provenance"];
+  severity: "A";
+  forcedWinKind: "VCF" | "VCT";
+  forcedWinSequence: string;
+  hardTimeMsUsed: number | null;
+  verifiedAtFullHardTime: boolean;
+}
+
+// ============================================================================
+// メタデータ + ダンプ出力（共通）
+// ============================================================================
+
+function writeDumpBook(
+  dumpBookPath: string,
+  nodes: (BookDumpNode | BlackBookDumpNode)[],
+  opts: CliOptions,
+): void {
+  const metadata = buildBookDumpMetadata({
+    gitRev: getGitRev(),
+    wasmBuildTime: getWasmBuildTime(WASM_PATH),
+    seed: opts.randomSeed,
+    roots: opts.rootsFilter,
+    b5: opts.b5,
+    b7: opts.b7,
+    hardTimeMs: opts.hardTimeMs ?? null,
+    side: opts.side,
+  });
+  mkdirSync(path.dirname(dumpBookPath), { recursive: true });
+  const dumpLines = [
+    JSON.stringify(metadata),
+    ...nodes.map((node) => JSON.stringify(node)),
+  ];
+  writeFileSync(dumpBookPath, `${dumpLines.join("\n")}\n`);
+
+  const cometCount = nodes.filter(
+    (n) => n.forcedWinKind !== null && n.survivorMoves?.length === 0,
+  ).length;
+  console.log("");
+  console.log(
+    ` --dump-book: ${nodes.length}ノード（メタデータ含め${dumpLines.length}行）を ${dumpBookPath} に出力`,
+  );
+  console.log(`（うち生存手ゼロ=彗星型: ${cometCount}件）`);
+}
+
+/** ルート（珠型）別の severity-A 分布サマリを表示する（黒固有の観点）。 */
+function printRouteSeveritySummary(
+  records: { route: string; canonicalKeyLabel: string }[],
+  allRouteNames: string[],
+): void {
+  const byRoute = new Map<string, Set<string>>();
+  for (const r of records) {
+    const set = byRoute.get(r.route) ?? new Set<string>();
+    set.add(r.canonicalKeyLabel);
+    byRoute.set(r.route, set);
+  }
+  const sorted = [...byRoute.entries()].sort((a, b) => b[1].size - a[1].size);
+  console.log("");
+  console.log(
+    ` 珠型選択ごとの severity-A 分布（distinct canonical、上位・存在するもののみ）:`,
+  );
+  for (const [route, set] of sorted) {
+    console.log(`   ${route}: ${set.size}局面`);
+  }
+  const totalFailRoutes = sorted.length;
+  const cleanRoutes = allRouteNames.filter((n) => !byRoute.has(n));
+  console.log(
+    ` severity-Aあり: ${totalFailRoutes}/${allRouteNames.length}珠型、severity-Aなし: ${cleanRoutes.length}珠型`,
+  );
+}
+
+// ============================================================================
+// white版パイプライン（第1段）
+// ============================================================================
+
+async function runWhitePipeline(
+  opts: CliOptions,
+  mainEngine: WasmSearchEngine,
+): Promise<void> {
+  const allRoutes = buildAllRoots();
+  const routes = opts.rootsFilter
+    ? allRoutes.filter((r) => r.name.includes(opts.rootsFilter!))
+    : allRoutes;
+
+  console.log(`ルート数: ${routes.length}（全体: ${allRoutes.length}）`);
+  console.log(`b5=${opts.b5} b7=${opts.b7} jobs=${opts.jobs}`);
+  const hardTimeSuffix =
+    opts.hardTimeMs === undefined ? "" : "ms（実機再検証ゲートあり）";
+  console.log(
+    `hard-time: ${opts.hardTimeMs ?? "実機default"}${hardTimeSuffix}`,
+  );
+
+  const dumpBookSink: BookDumpNode[] | undefined =
+    opts.dumpBook === null ? undefined : [];
+  if (dumpBookSink) {
+    console.log(
+      `--dump-book 有効: 全ノード（白4/白6/白8）を ${opts.dumpBook} に記録`,
+    );
+  }
+
+  console.log("");
+  console.log("Phase 1/2: white4/white6 + 攻め側フィルタ候補選定（直列）...");
+  const tasks = buildCheckTasks(mainEngine, routes, {
+    black5Budget: { maxTotal: opts.b5 },
+    black7Budget: { maxTotal: opts.b7 },
+    hardTimeMs: opts.hardTimeMs,
+    randomSeed: opts.randomSeed,
+    dumpBookSink,
+  });
+  console.log(`チェックタスク数: ${tasks.length}`);
+
+  if (opts.calibrate !== null) {
+    const sampleSize = Math.min(opts.calibrate, tasks.length);
+    const sample = tasks.slice(0, sampleSize);
+    console.log("");
+    console.log(
+      `キャリブレーションモード: 代表 ${sampleSize} 点の1チェック（hard白8+VCF+VCT）平均時間を実測...`,
+    );
+    const elapsedList: number[] = [];
+    for (const task of sample) {
+      const result = checkForcedWin(
+        mainEngine,
+        task.boardAfterBlack7,
+        "white",
+        opts.hardTimeMs,
+      );
+      elapsedList.push(result.elapsedMs);
+    }
+    const avg = elapsedList.reduce((a, b) => a + b, 0) / elapsedList.length;
+    console.log(
+      `平均: ${(avg / 1000).toFixed(2)}秒/チェック（${sampleSize}点）`,
+    );
+    console.log(
+      "（キャリブレーションのみ。本チェック・JSONL出力は実行していません）",
+    );
+    return;
+  }
+
+  console.log("");
+  console.log(
+    `Phase 3: チェック粒度ワークスティール並列（jobs=${opts.jobs}）...`,
+  );
+  const results = await runCheckTasksInParallel(
+    "white",
+    tasks.map((t) => ({ taskId: t.taskId, board: t.boardAfterBlack7 })),
+    opts.jobs,
+    opts.hardTimeMs,
+    dumpBookSink !== undefined,
+  );
+
+  // white8 ノード（Phase3 の結果）を dumpBookSink に追加する。
+  if (dumpBookSink) {
+    for (const task of tasks) {
+      const result = results.get(task.taskId);
+      if (!result) {
+        continue;
+      }
+      dumpBookSink.push({
+        canonicalKey: canonicalKey(task.boardAfterBlack7, "white"),
+        route: task.route.name,
+        ply: 8,
+        movesUpToHere: [...task.moveStrs],
+        hardMove: result.chosenMoveStr,
+        forcedWinKind: result.forcedWinKind,
+        forcedWinSequenceStr: result.forcedWinSequenceStr,
+        survivorMoves: result.survivorMoves,
+      });
+    }
+  }
+
+  const outPath =
+    opts.out ?? path.join("bench-results", `trap-mining-${Date.now()}.jsonl`);
+  mkdirSync(path.dirname(outPath), { recursive: true });
+
+  let forcedWinCount = 0;
+  const records: TrapMiningRecord[] = [];
+  for (const task of tasks) {
+    const result = results.get(task.taskId);
+    if (!result || result.forcedWinKind === null) {
+      continue;
+    }
+    forcedWinCount++;
+    if (!result.verifiedAtFullHardTime) {
+      // 実機再検証ゲート未通過 = severity-A 未確定。閾値カウントに含めない（§4, §6）。
+      continue;
+    }
+
+    records.push({
+      canonicalKeyPly8: canonicalKey(task.boardAfterBlack7, "white"),
+      route: task.route.name,
+      moves: [...task.moveStrs],
+      black5Provenance: task.black5Provenance,
+      black7Provenance: task.black7Provenance,
+      severity: "A",
+      forcedWinKind: result.forcedWinKind,
+      forcedWinSequence: result.forcedWinSequenceStr ?? "",
+      hardTimeMsUsed: opts.hardTimeMs ?? null,
+      verifiedAtFullHardTime: result.verifiedAtFullHardTime,
+    });
+  }
+
+  const lines = records.map((r) => JSON.stringify(r));
+  writeFileSync(outPath, lines.length > 0 ? `${lines.join("\n")}\n` : "");
+
+  // §6 の閾値判定は「canonical ply-8前局面」= distinct(canonicalKeyPly8) で数える。
+  const distinctPositionCount = new Set(records.map((r) => r.canonicalKeyPly8))
+    .size;
+
+  console.log("");
+  console.log("========================================");
+  console.log(
+    ` 結果: severity-A ${distinctPositionCount}局面（${records.length}レコード）を ${outPath} に出力`,
+  );
+  console.log(
+    `（総チェック数: ${tasks.length}, 強制勝ちあり(ゲート前): ${forcedWinCount}）`,
+  );
+  console.log("========================================");
+
+  if (dumpBookSink && opts.dumpBook) {
+    writeDumpBook(opts.dumpBook, dumpBookSink, opts);
+  }
+}
+
+// ============================================================================
+// black版パイプライン（★第2段）
+// ============================================================================
+
+async function runBlackPipeline(
+  opts: CliOptions,
+  mainEngine: WasmSearchEngine,
+): Promise<void> {
+  const allRoutes = buildJushuRoots();
+  const routes = opts.rootsFilter
+    ? allRoutes.filter((r) => r.name.includes(opts.rootsFilter!))
+    : allRoutes;
+
+  console.log(`ルート数: ${routes.length}（全体: ${allRoutes.length}珠型）`);
+  console.log(`b5(white4)=${opts.b5} b7(white6)=${opts.b7} jobs=${opts.jobs}`);
+  const hardTimeSuffix =
+    opts.hardTimeMs === undefined ? "" : "ms（実機再検証ゲートあり）";
+  console.log(
+    `hard-time: ${opts.hardTimeMs ?? "実機default"}${hardTimeSuffix}`,
+  );
+
+  const dumpBookSink: BlackBookDumpNode[] | undefined =
+    opts.dumpBook === null ? undefined : [];
+  if (dumpBookSink) {
+    console.log(
+      `--dump-book 有効: 全ノード（黒5/黒7）を ${opts.dumpBook} に記録`,
+    );
+  }
+
+  console.log("");
+  console.log(
+    "Phase 1/2: white4/white6(攻め側フィルタ) + black5(実機)（直列）...",
+  );
+  const tasks = buildBlackCheckTasks(mainEngine, routes, {
+    white4Budget: { maxTotal: opts.b5 },
+    white6Budget: { maxTotal: opts.b7 },
+    hardTimeMs: opts.hardTimeMs,
+    randomSeed: opts.randomSeed,
+    dumpBookSink,
+  });
+  console.log(`チェックタスク数: ${tasks.length}`);
+
+  if (opts.calibrate !== null) {
+    const sampleSize = Math.min(opts.calibrate, tasks.length);
+    const sample = tasks.slice(0, sampleSize);
+    console.log("");
+    console.log(
+      `キャリブレーションモード: 代表 ${sampleSize} 点の1チェック（hard黒7+VCF+VCT）平均時間を実測...`,
+    );
+    const elapsedList: number[] = [];
+    for (const task of sample) {
+      const result = checkForcedWin(
+        mainEngine,
+        task.boardAfterWhite6,
+        "black",
+        opts.hardTimeMs,
+      );
+      elapsedList.push(result.elapsedMs);
+    }
+    const avg = elapsedList.reduce((a, b) => a + b, 0) / elapsedList.length;
+    console.log(
+      `平均: ${(avg / 1000).toFixed(2)}秒/チェック（${sampleSize}点）`,
+    );
+    console.log(
+      "（キャリブレーションのみ。本チェック・JSONL出力は実行していません）",
+    );
+    return;
+  }
+
+  console.log("");
+  console.log(
+    `Phase 3: チェック粒度ワークスティール並列（jobs=${opts.jobs}）...`,
+  );
+  const results = await runCheckTasksInParallel(
+    "black",
+    tasks.map((t) => ({ taskId: t.taskId, board: t.boardAfterWhite6 })),
+    opts.jobs,
+    opts.hardTimeMs,
+    dumpBookSink !== undefined,
+  );
+
+  // black7 ノード（Phase3 の結果）を dumpBookSink に追加する。
+  if (dumpBookSink) {
+    for (const task of tasks) {
+      const result = results.get(task.taskId);
+      if (!result) {
+        continue;
+      }
+      dumpBookSink.push({
+        canonicalKey: canonicalKey(task.boardAfterWhite6, "black"),
+        route: task.route.name,
+        ply: 7,
+        movesUpToHere: [...task.moveStrs],
+        blackMove: result.chosenMoveStr,
+        forcedWinKind: result.forcedWinKind,
+        forcedWinSequenceStr: result.forcedWinSequenceStr,
+        survivorMoves: result.survivorMoves,
+      });
+    }
+  }
+
+  const outPath =
+    opts.out ??
+    path.join("bench-results", `trap-mining-black-${Date.now()}.jsonl`);
+  mkdirSync(path.dirname(outPath), { recursive: true });
+
+  let forcedWinCount = 0;
+  const records: BlackTrapMiningRecord[] = [];
+  for (const task of tasks) {
+    const result = results.get(task.taskId);
+    if (!result || result.forcedWinKind === null) {
+      continue;
+    }
+    forcedWinCount++;
+    if (!result.verifiedAtFullHardTime) {
+      continue;
+    }
+
+    records.push({
+      canonicalKeyBeforeBlack7: canonicalKey(task.boardAfterWhite6, "black"),
+      route: task.route.name,
+      moves: [...task.moveStrs],
+      white4Provenance: task.white4Provenance,
+      white6Provenance: task.white6Provenance,
+      severity: "A",
+      forcedWinKind: result.forcedWinKind,
+      forcedWinSequence: result.forcedWinSequenceStr ?? "",
+      hardTimeMsUsed: opts.hardTimeMs ?? null,
+      verifiedAtFullHardTime: result.verifiedAtFullHardTime,
+    });
+  }
+
+  const lines = records.map((r) => JSON.stringify(r));
+  writeFileSync(outPath, lines.length > 0 ? `${lines.join("\n")}\n` : "");
+
+  const distinctPositionCount = new Set(
+    records.map((r) => r.canonicalKeyBeforeBlack7),
+  ).size;
+
+  console.log("");
+  console.log("========================================");
+  console.log(
+    ` 結果: severity-A ${distinctPositionCount}局面（${records.length}レコード）を ${outPath} に出力`,
+  );
+  console.log(
+    `（総チェック数: ${tasks.length}, 強制勝ちあり(ゲート前): ${forcedWinCount}）`,
+  );
+  console.log("========================================");
+
+  // 黒固有の観点: 珠型選択のランダム分岐ごとの生存性（全滅系の珠型があるか）。
+  printRouteSeveritySummary(
+    records.map((r) => ({
+      route: r.route,
+      canonicalKeyLabel: r.canonicalKeyBeforeBlack7,
+    })),
+    allRoutes.map((r) => r.name),
+  );
+
+  if (dumpBookSink && opts.dumpBook) {
+    writeDumpBook(opts.dumpBook, dumpBookSink, opts);
+  }
+}
+
+// ============================================================================
+// メイン
+// ============================================================================
+
+async function main(): Promise<void> {
+  const opts = parseArgs();
+
+  console.log("========================================");
+  console.log(` 序盤トラップ採掘パイプライン（side=${opts.side}）`);
+  console.log("========================================");
+
+  await Promise.all([preloadThreatWasm(), preloadForbiddenWasm()]);
+  const wasm = await loadWasmModule();
+  const mainEngine = new WasmSearchEngine(wasm);
+
+  if (opts.side === "black") {
+    await runBlackPipeline(opts, mainEngine);
+  } else {
+    await runWhitePipeline(opts, mainEngine);
+  }
+}
+
+main().catch((err: unknown) => {
+  console.error("Fatal error:", err);
+  process.exit(1);
+});

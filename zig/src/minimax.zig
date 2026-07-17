@@ -2,7 +2,6 @@
 ///
 /// Alpha-Beta + NMP/LMR/Futility/PVS/Threat Extension
 /// TS版 minimaxCore.ts に対応
-
 const bitboard = @import("bitboard.zig");
 const board_mod = @import("board.zig");
 const evaluate = @import("evaluate.zig");
@@ -262,6 +261,12 @@ fn isThreatExtensionCandidate(cells: []const Cell, row: u8, col: u8, color: Cell
 // Threat Probe（脅威プローブ）
 // =============================================================================
 
+/// threatProbe の実行時トグル（Gate 0 計測用）。
+/// probe 込み NPS は eval 退行を隠すため、probe 無効構成で NPS/time-to-depth を
+/// 測る必要がある（docs/plans/eval-basis-prospect-2026-07-13.md §5 Gate 0）。
+/// 既定 true なので既存の探索挙動・commit-bench 互換は不変。
+pub var threat_probe_enabled: bool = true;
+
 /// 深度適応型バジェット（TS版 threatProbe.ts の getThreatBudget に対応）
 const ThreatBudget = struct {
     vcf_depth: u8,
@@ -331,6 +336,30 @@ fn threatProbe(
 // Minimax探索本体
 // =============================================================================
 
+/// 打ち切り時の静的評価に使う EvalOptions を返す。
+///
+/// eval_basis==.prospect のときのみ、その場の手番（is_maximizing）から
+/// last_mover_is_perspective を上書きする（prospect は stm 供給が仕様のため）。
+/// legacy のときは ctx.board_eval_options を無変更で返す — legacy パスの
+/// 挙動・Elo を一切変えないため（TEMPO 割引が新たに発火してはならない）。
+///
+/// **stm 供給ルールの非対称性（quiescence.zig と対比）**: quiescence.zig の
+/// quiescenceSearch は legacy/prospect どちらでも常時 is_maximizing から
+/// last_mover_is_perspective を導出する（既存挙動・変更なし）。一方この
+/// abortEvalOptions は **prospect のみ** stm を供給し、legacy は常に
+/// ctx.board_eval_options（既定 .unset）のまま――legacy の TEMPO 割引を
+/// minimax の abort 経路で新規発火させないための P1 実装決定。同じ「静的評価」
+/// でも呼び出し元（minimax の abort 分岐 / quiescence の stand-pat）で stm 供給
+/// ルールが異なる点に注意。
+fn abortEvalOptions(ctx: *SearchContext, is_maximizing: bool) evaluate.EvalOptions {
+    if (ctx.board_eval_options.eval_basis != .prospect) return ctx.board_eval_options;
+    var opts = ctx.board_eval_options;
+    // is_maximizing=true  → 現在手番は perspective → 最後の着手は相手 → .no
+    // is_maximizing=false → 現在手番は相手         → 最後の着手は perspective → .yes
+    opts.last_mover_is_perspective = if (is_maximizing) .no else .yes;
+    return opts;
+}
+
 /// SearchContext から quiescence の打ち切り制御を構築する。
 /// 制限のセマンティクス（deadline/ノード予算の意味）の SSoT は SearchContext 側にあり、
 /// フィールド転記をここに一本化して呼び出し側とのドリフトを防ぐ。
@@ -381,7 +410,7 @@ pub fn minimaxWithTT(
 
     // タイムアウト/ノード上限時は静的評価を返す（インクリメンタル評価を使用）
     if (ctx.isAborted()) {
-        return incremental_eval.getEvaluation(cells, perspective, ctx.board_eval_options, false);
+        return incremental_eval.getEvaluation(cells, perspective, abortEvalOptions(ctx, is_maximizing));
     }
 
     // 現在の手番を決定
@@ -437,7 +466,7 @@ pub fn minimaxWithTT(
     // Threat Probe: 手番側のVCFをチェック
     // VCFがあれば勝ちスコア(FIVE-1)でカットオフ
     // =========================================================================
-    if (depth >= 3) {
+    if (threat_probe_enabled and depth >= 3) {
         // !is_maximizing = 相手手番ノード = 自分の被詰み判定 → strict で幻を棄却。
         const threat_result = threatProbe(
             cells,
@@ -502,7 +531,7 @@ pub fn minimaxWithTT(
         // NMP子探索中の打ち切り検出: nmp_score には static eval が混入している可能性があり、
         // 偽の beta-cutoff で汚染値を返さないよう、冒頭の早期 latch と同じ形で静的評価に落とす。
         if (ctx.isAborted()) {
-            return incremental_eval.getEvaluation(cells, perspective, ctx.board_eval_options, false);
+            return incremental_eval.getEvaluation(cells, perspective, abortEvalOptions(ctx, is_maximizing));
         }
         if (if (is_maximizing) nmp_score >= beta else nmp_score <= alpha) {
             ctx.stats.null_move_cutoffs += 1;
@@ -700,7 +729,7 @@ pub fn minimaxWithTT(
     if (aborted) {
         // 1手も完了せず best_score が初期値のままなら static eval にフォールバック
         if (best_score == scores.INFINITY or best_score == -scores.INFINITY) {
-            return incremental_eval.getEvaluation(cells, perspective, ctx.board_eval_options, false);
+            return incremental_eval.getEvaluation(cells, perspective, abortEvalOptions(ctx, is_maximizing));
         }
         return best_score;
     }
@@ -953,13 +982,63 @@ fn getTimestampMs() u32 {
 
 const testing = std.testing;
 
+test "threat_probe_enabled=false: threatProbeによるcutoffが発生しない（深さ3以上、VCFがある局面）" {
+    defer threat_probe_enabled = true;
+
+    var cells = [_]Cell{.empty} ** board_mod.CELL_COUNT;
+    // 黒の活四: (7,4)(7,5)(7,6)(7,7)。threatProbeのVCF検出が確実に発火する局面
+    // （findVCFMove: immediate five と同一フィクスチャ）。
+    cells[7 * BOARD_SIZE + 4] = .black;
+    cells[7 * BOARD_SIZE + 5] = .black;
+    cells[7 * BOARD_SIZE + 6] = .black;
+    cells[7 * BOARD_SIZE + 7] = .black;
+
+    incremental_eval.initFromBoard(&cells, .{ .connectivity_bonus = scores.CONNECTIVITY_BONUS, .single_four_penalty_multiplier = 100 });
+
+    var tt = tt_mod.TranspositionTable{
+        .entries = &tt_mod.global_tt_storage,
+        .current_generation = 0,
+    };
+
+    const board_eval_options = evaluate.EvalOptions{
+        .enable_leaf_mise = false,
+        .last_mover_is_perspective = .unset,
+        .single_four_penalty_multiplier = 100,
+        .connectivity_bonus = scores.CONNECTIVITY_BONUS,
+    };
+
+    threat_probe_enabled = true;
+    {
+        tt.clear();
+        var history = move_order.HistoryTable.init();
+        var killers = move_order.KillerMoves.init();
+        var counter_moves = initCounterMoveTable();
+        var ctx = SearchContext.init(&tt, &history, &killers, &counter_moves, position_eval.DEFAULT_EVAL_OPTIONS, board_eval_options);
+        ctx.no_time_limit = true;
+        _ = minimaxWithTT(&cells, 0, 3, true, .black, -scores.INFINITY, scores.INFINITY, null, &ctx, true, 0);
+        try testing.expect(ctx.stats.threat_probe_cutoffs > 0);
+    }
+
+    threat_probe_enabled = false;
+    {
+        tt.clear();
+        var history = move_order.HistoryTable.init();
+        var killers = move_order.KillerMoves.init();
+        var counter_moves = initCounterMoveTable();
+        var ctx = SearchContext.init(&tt, &history, &killers, &counter_moves, position_eval.DEFAULT_EVAL_OPTIONS, board_eval_options);
+        ctx.no_time_limit = true;
+        _ = minimaxWithTT(&cells, 0, 3, true, .black, -scores.INFINITY, scores.INFINITY, null, &ctx, true, 0);
+        try testing.expectEqual(@as(u32, 0), ctx.stats.threat_probe_cutoffs);
+    }
+}
+
 test "minimaxWithTT basic: empty board" {
     const CELL_COUNT = board_mod.CELL_COUNT;
     var cells = [_]Cell{.empty} ** CELL_COUNT;
     // 天元に黒石
     cells[7 * BOARD_SIZE + 7] = .black;
 
-    incremental_eval.initFromBoard(&cells, scores.CONNECTIVITY_BONUS, 100);
+    incremental_eval.initFromBoard(&cells, .{ .connectivity_bonus = scores.CONNECTIVITY_BONUS, .single_four_penalty_multiplier = 100 });
 
     var tt = tt_mod.TranspositionTable{
         .entries = &tt_mod.global_tt_storage,
@@ -1073,7 +1152,7 @@ test "minimaxWithTT: ノード上限到達後は不完全スコアをTTに保存
     const CELL_COUNT = board_mod.CELL_COUNT;
     var cells: [CELL_COUNT]Cell = undefined;
     setupMinimaxTacticalPosition(&cells);
-    incremental_eval.initFromBoard(&cells, scores.CONNECTIVITY_BONUS, 100);
+    incremental_eval.initFromBoard(&cells, .{ .connectivity_bonus = scores.CONNECTIVITY_BONUS, .single_four_penalty_multiplier = 100 });
 
     var tt = tt_mod.TranspositionTable{
         .entries = &tt_mod.global_tt_storage,

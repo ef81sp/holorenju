@@ -30,6 +30,13 @@ export interface BoardEvaluator {
 
 /**
  * EvalOptions を WASM ビットフィールドにエンコード
+ *
+ * ビットレイアウト（u32）— Zig evaluate.decodeOptions と一致:
+ *   bit0:      enableLeafMise
+ *   bits1-2:   lastMoverIsPerspective (0=unset, 1=true, 2=false)
+ *   bits8-15:  singleFourPenaltyMultiplier
+ *   bits16-23: connectivityBonusValue
+ *   bit24:     evalBasis ("prospect" のとき1、それ以外0=legacy)
  */
 function encodeEvalOptions(options?: LeafEvaluationOptions): number {
   if (!options) {
@@ -64,6 +71,10 @@ function encodeEvalOptions(options?: LeafEvaluationOptions): number {
         ? 255
         : options.connectivityBonusValue;
     flags |= (raw & 0xff) << 16;
+  }
+
+  if (options.evalBasis === "prospect") {
+    flags |= 1 << 24;
   }
 
   return flags;

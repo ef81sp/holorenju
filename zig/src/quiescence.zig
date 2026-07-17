@@ -4,7 +4,6 @@
 /// これらを追加探索して「静止した状態」で評価する。
 /// 水平線効果を軽減する。
 /// TS版 quiescence.ts に対応
-
 const bitboard = @import("bitboard.zig");
 const board_mod = @import("board.zig");
 const evaluate = @import("evaluate.zig");
@@ -351,12 +350,17 @@ pub fn quiescenceSearch(
         }
     }
 
-    const eval_opts = evaluate.EvalOptions{
-        .enable_leaf_mise = eval_options.enable_leaf_mise,
-        .last_mover_is_perspective = if (!is_maximizing) .yes else .no,
-        .single_four_penalty_multiplier = eval_options.single_four_penalty_multiplier,
-        .connectivity_bonus = eval_options.connectivity_bonus,
-    };
+    // フィールドコピー（旧: 手動リテラル）ではなく eval_options を丸ごと引き継いで
+    // last_mover_is_perspective だけ上書きする。これにより eval_basis 等の新規
+    // フィールドが将来追加されても取りこぼさない（§3.3 の「手動コピーの罠」対応）。
+    //
+    // stm 供給ルール: ここは legacy/prospect どちらでも常時 is_maximizing から
+    // last_mover_is_perspective を導出する（既存挙動、変更なし）。minimax.zig の
+    // abortEvalOptions（打ち切り時の静的評価）は prospect のみ stm を供給し legacy は
+    // .unset のまま――同じ「静的評価」でも呼び出し元によって stm 供給ルールが非対称な
+    // ことに注意（minimax.zig の abortEvalOptions のコメント参照）。
+    var eval_opts = eval_options;
+    eval_opts.last_mover_is_perspective = if (!is_maximizing) .yes else .no;
 
     // 総ノード数を共有カウンタに計上（minimax と同じカウンタ）。
     limits.node_counter.* += 1;
@@ -364,7 +368,7 @@ pub fn quiescenceSearch(
     // 決定的ノード上限（主たる打ち切り条件・ハードウェア非依存）。
     // q探索ノードも総予算に計上されるため、密局面での q爆発が決定的に頭打ちになる。
     if (limits.max_nodes > 0 and limits.node_counter.* >= limits.max_nodes) {
-        return incremental_eval.getEvaluation(cells, perspective, eval_opts, false);
+        return incremental_eval.getEvaluation(cells, perspective, eval_opts);
     }
 
     // 壁時計の安全天井（出荷時の応答性用）。`no_time_limit` 時は無効＝計測は決定的。
@@ -378,11 +382,11 @@ pub fn quiescenceSearch(
         }
     }
     if (limits.timeout_flag.*) {
-        return incremental_eval.getEvaluation(cells, perspective, eval_opts, false);
+        return incremental_eval.getEvaluation(cells, perspective, eval_opts);
     }
 
     // Stand-pat: 何もしない場合の評価（インクリメンタル評価を使用）
-    const stand_pat = incremental_eval.getEvaluation(cells, perspective, eval_opts, false);
+    const stand_pat = incremental_eval.getEvaluation(cells, perspective, eval_opts);
 
     var alpha = alpha_init;
     var beta = beta_init;
@@ -538,7 +542,7 @@ test "generateTacticalMoves finds four moves" {
 test "quiescenceSearch stand-pat on empty" {
     ll.init();
     var cells = [_]Cell{.empty} ** CELL_COUNT;
-    incremental_eval.initFromBoard(&cells, scores.CONNECTIVITY_BONUS, 100);
+    incremental_eval.initFromBoard(&cells, .{ .connectivity_bonus = scores.CONNECTIVITY_BONUS, .single_four_penalty_multiplier = 100 });
     var stats = QSearchStats{};
     var timeout_flag = false;
     var node_counter: u32 = 0;
@@ -588,7 +592,7 @@ test "quiescenceSearch: 総ノード上限=1 は最初の1ノードで打ち切�
     ll.init();
     var cells: [CELL_COUNT]Cell = undefined;
     setupTacticalPosition(&cells);
-    incremental_eval.initFromBoard(&cells, scores.CONNECTIVITY_BONUS, 100);
+    incremental_eval.initFromBoard(&cells, .{ .connectivity_bonus = scores.CONNECTIVITY_BONUS, .single_four_penalty_multiplier = 100 });
     var stats = QSearchStats{};
     var timeout_flag = false;
     var node_counter: u32 = 0;
@@ -628,7 +632,7 @@ test "quiescenceSearch: 既定上限では戦術局面で再帰する（>1ノー
     ll.init();
     var cells: [CELL_COUNT]Cell = undefined;
     setupTacticalPosition(&cells);
-    incremental_eval.initFromBoard(&cells, scores.CONNECTIVITY_BONUS, 100);
+    incremental_eval.initFromBoard(&cells, .{ .connectivity_bonus = scores.CONNECTIVITY_BONUS, .single_four_penalty_multiplier = 100 });
     var stats = QSearchStats{};
     var timeout_flag = false;
     var node_counter: u32 = 0;
@@ -678,7 +682,7 @@ test "quiescenceSearch: 木の途中でノード予算が尽きても安全に�
     ll.init();
     var cells: [CELL_COUNT]Cell = undefined;
     setupDenseTacticalPosition(&cells);
-    incremental_eval.initFromBoard(&cells, scores.CONNECTIVITY_BONUS, 100);
+    incremental_eval.initFromBoard(&cells, .{ .connectivity_bonus = scores.CONNECTIVITY_BONUS, .single_four_penalty_multiplier = 100 });
     var tt = tt_mod.TranspositionTable{
         .entries = &tt_mod.global_tt_storage,
         .current_generation = 0,

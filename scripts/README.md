@@ -238,6 +238,64 @@ ab-results/                # 比較結果出力先
 
 ---
 
+## コミット間CPU強度比較ベンチマーク（commit-bench）
+
+### 概要
+
+2つのgit commit（worktree）のCPU実装同士を対戦させ、強度の変化をElo差・SPRTで検証する。
+`--jobs=N` で複数対局を並列消化できる（1局≈1コア）。
+
+### CLI
+
+```bash
+pnpm commit:bench --commitA=HEAD~1 --commitB=HEAD --sets=1
+pnpm commit:bench --commitA=abc1234 --commitB=def5678 --sprt --elo0=0 --elo1=30
+pnpm commit:bench --sets=8 --randomFactor=0.02 --jobs=6   # r0.02 8セット基準（416局）
+```
+
+### `--eval-options-a` / `--eval-options-b`（Gate 2: 評価基底の対決）
+
+A/B 側それぞれに `EvaluationOptions` の部分オブジェクトを JSON で注入できる
+（`evalBasis` のような string enum も渡せる。`--eval-option`（ab-bench 側）は
+boolean/number 専用のためこちらとは別系統）。commitA と commitB に同一コミットを
+指定すれば、同一 worktree 内で基底違いのみを比較できる:
+
+```bash
+# 同一コミットで evalBasis=prospect(A) vs legacy(B) を対決
+pnpm commit:bench --commitA=HEAD --commitB=HEAD --sets=8 --randomFactor=0.02 \
+  --eval-options-a='{"evalBasis":"prospect"}'
+```
+
+省略時（未指定）は従来どおり legacy 同士で挙動不変。実行ログに各ワーカーの
+`evalBasis` / `evalFlags`（エンコード済み数値）/ `bit18`（prospect 判定）が
+1行出力されるため、silent に legacy vs legacy を測ってしまう事故を目視で防げる。
+
+### 出力
+
+```
+bench-results/commit-bench-<timestamp>.json
+```
+
+### ファイル構成
+
+```
+scripts/
+├── commit-bench.ts            # CLI エントリポイント
+├── cpu-bridge-worker.ts       # worktree の CPU 実装を動的 import する bridge worker
+├── commit-game-runner.ts      # 2 worker 間の対局コーディネーター
+├── types/
+│   └── commit-bench.ts        # CommitInfo, CommitBenchResult 型定義
+└── lib/
+    ├── match.ts                    # 珠型タスク生成 / bridge worker 生成 / 対局ループ（commit-bench・weight-bench共有）
+    ├── difficultyParamsMerge.ts    # customParams のマージ規則（SSoT）
+    └── wasmEvalOptionsEncoder.ts   # EvaluationOptions → WASM findBestMove 用ビットマスク
+
+bench-results/                 # 比較結果出力先
+└── commit-bench-*.json
+```
+
+---
+
 ## SPSA パラメータチューニングツール
 
 ### 概要

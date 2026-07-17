@@ -27,7 +27,7 @@ import {
 import {
   wasmFindVCFSequence,
   wasmFindMiseVCFSequence,
-  wasmFindVCTSequence,
+  wasmFindVCTSequenceStrict,
 } from "./wasmAdapters";
 
 /**
@@ -252,9 +252,10 @@ export function checkForcedLoss(
     }
   }
 
-  // 6. VCT
+  // 6. VCT（被詰み判定なので strict: カウンターフォーでテンポを奪い返される
+  // 手順=幻の被詰みを棄却する。攻めの forcedWin 検出とは非対称なので lenient は使わない）
   if (!options?.skipVCT) {
-    const oppVCT = wasmFindVCTSequence(
+    const oppVCT = wasmFindVCTSequenceStrict(
       wasmSearchEngine,
       boardAfter,
       opponentColor,

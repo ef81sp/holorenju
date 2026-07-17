@@ -18,6 +18,7 @@ import {
   buildGameReview,
   classifyMoveQuality,
   findLosingMove,
+  getQualityLabel,
   isOpeningMove,
 } from "./reviewLogic";
 
@@ -30,33 +31,42 @@ describe("classifyMoveQuality", () => {
     expect(classifyMoveQuality(1)).toBe("good");
   });
 
-  it("スコア差80は好手", () => {
-    expect(classifyMoveQuality(80)).toBe("good");
+  it("スコア差150は好手", () => {
+    expect(classifyMoveQuality(150)).toBe("good");
   });
 
-  it("スコア差81は疑問手", () => {
-    expect(classifyMoveQuality(81)).toBe("inaccuracy");
+  it("スコア差151は疑問手", () => {
+    expect(classifyMoveQuality(151)).toBe("inaccuracy");
   });
 
-  it("スコア差300は疑問手", () => {
-    expect(classifyMoveQuality(300)).toBe("inaccuracy");
+  it("スコア差400は疑問手", () => {
+    expect(classifyMoveQuality(400)).toBe("inaccuracy");
   });
 
-  it("スコア差301は悪手", () => {
-    expect(classifyMoveQuality(301)).toBe("mistake");
+  it("スコア差401は悪手", () => {
+    expect(classifyMoveQuality(401)).toBe("mistake");
   });
 
-  it("スコア差1000は悪手", () => {
-    expect(classifyMoveQuality(1000)).toBe("mistake");
+  it("スコア差2500は悪手", () => {
+    expect(classifyMoveQuality(2500)).toBe("mistake");
   });
 
-  it("スコア差1001は大悪手", () => {
-    expect(classifyMoveQuality(1001)).toBe("blunder");
+  it("スコア差2501は大悪手", () => {
+    expect(classifyMoveQuality(2501)).toBe("blunder");
   });
 
-  it("負のスコア差でも絶対値で判定", () => {
-    expect(classifyMoveQuality(-80)).toBe("good");
-    expect(classifyMoveQuality(-300)).toBe("inaccuracy");
+  it("負のスコア差は0扱い（best以上=最善手）", () => {
+    // playedScore が bestScore を上回るケース（probePlayedMoveScore の非単調性由来）。
+    // 「best以上」に対応する品質はexcellentより上に無いため0に丸める。
+    expect(classifyMoveQuality(-1)).toBe("excellent");
+    expect(classifyMoveQuality(-80)).toBe("excellent");
+    expect(classifyMoveQuality(-300)).toBe("excellent");
+  });
+
+  it("回帰: scoreDiff=-2224（較正調査 #170 手24 L7 で確認された実例）はexcellent", () => {
+    // 修正前は Math.abs() により blunder 判定されていたが、Rapfi 検証
+    // （3000ms再解析）では実際には悪手ではなかった（effDrop=+214=inaccuracy相当）。
+    expect(classifyMoveQuality(-2224)).toBe("excellent");
   });
 });
 
@@ -166,6 +176,81 @@ describe("buildEvaluatedMove: モード別", () => {
     expect(evaluated.quality).toBe("excellent");
     expect(evaluated.forcedWinType).toBe("vcf");
     expect(evaluated.candidates).toEqual([]);
+  });
+
+  it("isBookMove=true: スコア差が大きくてもミス判定を抑制する（quality=good）", () => {
+    const result: FullEvalResult = {
+      mode: "fullEval",
+      moveIndex: 3,
+      bestMove: { row: 7, col: 7 },
+      bestScore: 3000,
+      playedScore: 0, // scoreDiff=3000 → 素の分類なら blunder
+      candidates: [],
+      completedDepth: 6,
+      isBookMove: true,
+    };
+    const evaluated = buildEvaluatedMove(result, moveHistory, true);
+    expect(evaluated.quality).toBe("good");
+    expect(evaluated.isBookMove).toBe(true);
+  });
+
+  it("isBookMove=false: 通常どおりスコア差で分類される", () => {
+    const result: FullEvalResult = {
+      mode: "fullEval",
+      moveIndex: 3,
+      bestMove: { row: 7, col: 7 },
+      bestScore: 3000,
+      playedScore: 0,
+      candidates: [],
+      completedDepth: 6,
+      isBookMove: false,
+    };
+    const evaluated = buildEvaluatedMove(result, moveHistory, true);
+    expect(evaluated.quality).toBe("blunder");
+    expect(evaluated.isBookMove).toBe(false);
+  });
+
+  it("isBookMove=true でも forcedLossType が検出されていれば抑制しない（通常判定＋blunder）", () => {
+    const result: FullEvalResult = {
+      mode: "fullEval",
+      moveIndex: 3,
+      bestMove: { row: 7, col: 7 },
+      bestScore: 3000,
+      playedScore: 0,
+      candidates: [],
+      completedDepth: 6,
+      isBookMove: true,
+      forcedLossType: "vct",
+    };
+    const evaluated = buildEvaluatedMove(result, moveHistory, true);
+    expect(evaluated.quality).toBe("blunder");
+    expect(evaluated.isBookMove).toBe(false);
+  });
+
+  it("isBookMove 未指定: 従来どおりfalse扱いで分類される", () => {
+    const result: FullEvalResult = {
+      mode: "fullEval",
+      moveIndex: 3,
+      bestMove: { row: 7, col: 7 },
+      bestScore: 500,
+      playedScore: 500,
+      candidates: [],
+      completedDepth: 6,
+    };
+    const evaluated = buildEvaluatedMove(result, moveHistory, true);
+    expect(evaluated.isBookMove).toBe(false);
+  });
+});
+
+describe("getQualityLabel", () => {
+  it("isBookMove=true のときは quality に関わらず「序盤ブック手」を返す", () => {
+    expect(getQualityLabel("blunder", true)).toBe("序盤ブック手");
+    expect(getQualityLabel("excellent", true)).toBe("序盤ブック手");
+  });
+
+  it("isBookMove が未指定/falseなら通常のラベルを返す", () => {
+    expect(getQualityLabel("excellent")).toBe("最善手");
+    expect(getQualityLabel("blunder", false)).toBe("悪手");
   });
 });
 

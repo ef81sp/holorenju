@@ -2,6 +2,7 @@
  * コミット間ベンチマーク比較の型定義
  */
 
+import type { EvaluationOptions } from "../../src/logic/cpu/evaluation/patternScores.ts";
 import type { CpuDifficulty } from "../../src/types/cpu.ts";
 import type { GameResult } from "../commit-game-runner.ts";
 import type { EloDiffResult, SPRTConfig, SPRTState, WDLCount } from "./ab.ts";
@@ -51,6 +52,12 @@ export interface CommitBenchResult {
     gamesPerSet: number;
     randomFactor?: number;
     sprt: SPRTConfig | null;
+    /** Gate 2: A/B 側それぞれの evaluationOptions オーバーライド（例: evalBasis=prospect）。 */
+    evalOptionsA?: Partial<EvaluationOptions>;
+    evalOptionsB?: Partial<EvaluationOptions>;
+    /** ブックゲート（★v2プラン B3）: A/B 側それぞれでオープニングブックを有効化したか。 */
+    bookA?: boolean;
+    bookB?: boolean;
   };
   /** 対局数 */
   totalGames: number;

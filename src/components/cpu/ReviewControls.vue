@@ -72,7 +72,7 @@ const moveDots = computed(() =>
     const moveNum = String(i + 1);
     const qualityLabel =
       evaluated && !evaluated.isLightEval && evaluated.quality !== "excellent"
-        ? getQualityLabel(evaluated.quality)
+        ? getQualityLabel(evaluated.quality, evaluated.isBookMove)
         : undefined;
     const forcedWinLabel = getForcedWinLabel(evaluated?.forcedWinType);
     const forcedLossLabel = getForcedLossLabel(evaluated?.forcedLossType);

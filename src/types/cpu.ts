@@ -191,6 +191,10 @@ export const DIFFICULTY_PARAMS: Record<CpuDifficulty, DifficultyParams> = {
       enableNullMovePruning: true, // depth 4 の中断率削減
       enableFutilityPruning: true,
       enableForbiddenVulnerability: true, // 黒番の禁手脆弱性評価
+      // P5-a: Gate 2（Elo +181、docs/plans/eval-basis-prospect-2026-07-13.md §5）
+      // で採用決定した空点プロスペクト基底に hard（★4）のみ切り替える。
+      // beginner〜medium は難易度カーブを壊さないため legacy のまま据え置く。
+      evalBasis: "prospect",
     },
     scoreThreshold: 0, // 常に最善手（使用しない）
   },

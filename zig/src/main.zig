@@ -5,6 +5,7 @@ const forbidden = @import("forbidden.zig");
 const ft = @import("forced_win_tree.zig");
 const jump_patterns = @import("jump_patterns.zig");
 const patterns = @import("patterns.zig");
+const prospect = @import("prospect.zig");
 const search = @import("search.zig");
 const position_eval = @import("position_eval.zig");
 const scores_mod = @import("scores.zig");
@@ -43,17 +44,70 @@ export fn wasmGetPatternScore(count: u8, end1: u8, end2: u8) i32 {
 }
 
 // --- eval 重み実行時注入（bench 専用。重みごとリビルド不要にする） ---
+//
+// id 空間: 0-8 は legacy（scores.EvalParamId）、100〜100+PROSPECT_PARAM_COUNT-1 は
+// 空点プロスペクト基底の重み（prospect.setProspectParam/getProspectParam、
+// id-100 = offset = カテゴリ*2+手番か）。id>=100 は prospect 側にルーティングする。
+const PROSPECT_PARAM_ID_BASE: u32 = 100;
+
 export fn setEvalParam(id: u32, value: i32) void {
+    if (id >= PROSPECT_PARAM_ID_BASE) {
+        prospect.setProspectParam(id - PROSPECT_PARAM_ID_BASE, value);
+        return;
+    }
     scores_mod.setEvalParam(id, value);
 }
 export fn getEvalParam(id: u32) i32 {
+    if (id >= PROSPECT_PARAM_ID_BASE) {
+        return prospect.getProspectParam(id - PROSPECT_PARAM_ID_BASE);
+    }
     return scores_mod.getEvalParam(id);
 }
 export fn resetEvalParams() void {
     scores_mod.resetEvalParams();
+    prospect.resetProspectScores();
 }
 export fn getEvalParamName(id: u32) [*:0]const u8 {
+    if (id >= PROSPECT_PARAM_ID_BASE) {
+        return prospect.getProspectParamName(id - PROSPECT_PARAM_ID_BASE);
+    }
     return scores_mod.getEvalParamName(id);
+}
+
+// --- 空点プロスペクト特徴ベクトル抽出（P3 の Texel 回帰用特徴ダンプ） ---
+
+/// 特徴ベクトルバッファ（PROSPECT_PARAM_COUNT 個 × i32、リトルエンディアン）。
+var prospect_feature_buffer: [prospect.PROSPECT_PARAM_COUNT * 4]u8 = .{0} ** (prospect.PROSPECT_PARAM_COUNT * 4);
+
+export fn getProspectFeatureBuffer() [*]u8 {
+    return &prospect_feature_buffer;
+}
+
+/// 現在の盤面(board_cells)について空点プロスペクト特徴ベクトルを抽出し、
+/// getProspectFeatureBuffer() に little-endian i32 × PROSPECT_PARAM_COUNT で書き込む。
+/// 返り値は要素数(PROSPECT_PARAM_COUNT)。
+///
+/// stm_is_perspective: 1=perspective手番、0=相手手番の2値のみ対応。
+/// evaluate.EvalOptions.last_mover_is_perspective の unset（両手番平均）に相当する
+/// stm は本 export では非対応（回帰時は教師局面ごとに手番既知が前提のため。
+/// 必要なら stm_is_perspective=1/0 の2回呼び出しを呼び出し側で平均する）。
+export fn extractProspectFeatures(perspective: u8, stm_is_perspective: u8) u32 {
+    var features: [prospect.PROSPECT_PARAM_COUNT]i32 = undefined;
+    prospect.extractFeatures(
+        &board.board_cells,
+        @enumFromInt(perspective),
+        stm_is_perspective != 0,
+        &features,
+    );
+    for (features, 0..) |val, i| {
+        const bytes: [4]u8 = @bitCast(val);
+        const base = i * 4;
+        prospect_feature_buffer[base] = bytes[0];
+        prospect_feature_buffer[base + 1] = bytes[1];
+        prospect_feature_buffer[base + 2] = bytes[2];
+        prospect_feature_buffer[base + 3] = bytes[3];
+    }
+    return prospect.PROSPECT_PARAM_COUNT;
 }
 export fn wasmGetPatternType(count: u8, end1: u8, end2: u8) u8 {
     return patterns.wasmGetPatternType(count, end1, end2);
@@ -158,6 +212,7 @@ export fn findBestMove(color: u8, max_depth: u8, time_limit_ms: u32, max_nodes: 
     //   255 = センチネル → 0（完全ペナルティ）
     //   1-254 = そのまま使用
     // bit 17: enable_leaf_mise
+    // bit 18: eval_basis (0=legacy, 1=prospect)
     const leaf_multiplier_raw: u8 = @intCast((eval_options_flags >> 9) & 0xFF);
     const leaf_multiplier: i32 = switch (leaf_multiplier_raw) {
         0 => 100,
@@ -165,12 +220,14 @@ export fn findBestMove(color: u8, max_depth: u8, time_limit_ms: u32, max_nodes: 
         else => @as(i32, leaf_multiplier_raw),
     };
     const enable_leaf_mise = ((eval_options_flags >> 17) & 1) != 0;
+    const eval_basis: evaluate.EvalBasis = if (((eval_options_flags >> 18) & 1) != 0) .prospect else .legacy;
 
     const board_eval_options = evaluate.EvalOptions{
         .enable_leaf_mise = enable_leaf_mise,
         .last_mover_is_perspective = .unset,
         .single_four_penalty_multiplier = leaf_multiplier,
         .connectivity_bonus = @import("scores.zig").CONNECTIVITY_BONUS,
+        .eval_basis = eval_basis,
     };
 
     const result = search.findBestMoveIterative(cells, cell_color, .{
@@ -225,6 +282,19 @@ export fn ttClear() void {
 }
 
 const minimax = @import("minimax.zig");
+
+/// threatProbe の実行時トグル（Gate 0 計測用。既定 true=有効、既存挙動不変）。
+export fn setThreatProbeEnabled(enabled: u8) void {
+    minimax.threat_probe_enabled = enabled != 0;
+}
+
+/// aspiration window fail による再探索回数を返す（Gate 0 計測用）。
+/// search.findBestMoveIterative の開始時にリセットされるため、直前の
+/// findBestMove 呼び出し1回分の値になる。stats_buffer とは独立の export
+/// （レイアウト変更禁止のため既存バッファには含めない）。
+export fn getAspirationResearchCount() u32 {
+    return search.aspiration_research_count;
+}
 
 // ─── PV抽出 ─────────────────────────────────────────
 
@@ -553,8 +623,29 @@ export fn findVCTSequenceWasm(color: u8, max_depth: u8, time_limit_ms: u32, max_
     };
 
     const cells = &board.board_cells;
-    // 振り返り(review)用エントリは攻めの追い詰め手順提示なので lenient（main 挙動）。
+    // 攻めの追い詰め手順提示（自分の forcedWin 検出）なので lenient（main 挙動）。
+    // 相手の被詰み判定には findVCTSequenceStrictWasm を使うこと。
     const result = vct.findVCTSequence(cells, cell_color, max_depth, time_limit_ms, max_nodes, collect_branches != 0, .lenient);
+    writeVCTResult(result);
+}
+
+/// VCT手順を探索し結果を vct_seq_buffer に書き込む（被詰み判定専用・strict）
+///
+/// 相手（防御側）がカウンターフォーでテンポを奪い返せる手順は「幻の被詰み」として
+/// 棄却する。review の checkForcedLoss（自分の着手が相手の VCT を許したか）専用。
+/// 自分の forcedWin 検出（攻め）には使わないこと（真正VCTまで棄却され弱体化する）。
+export fn findVCTSequenceStrictWasm(color: u8, max_depth: u8, time_limit_ms: u32, max_nodes: u32, collect_branches: u8) void {
+    const cell_color: board.Cell = switch (color) {
+        1 => .black,
+        2 => .white,
+        else => {
+            vct_seq_buffer[0] = 0;
+            return;
+        },
+    };
+
+    const cells = &board.board_cells;
+    const result = vct.findVCTSequence(cells, cell_color, max_depth, time_limit_ms, max_nodes, collect_branches != 0, .strict);
     writeVCTResult(result);
 }
 

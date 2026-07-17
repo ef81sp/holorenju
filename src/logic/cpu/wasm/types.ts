@@ -40,6 +40,19 @@ export interface WasmModuleContext {
   // Board evaluation
   evaluateBoard: (perspective: number, optionsFlags: number) => number;
 
+  // eval 重み実行時注入（id 0-8=legacy, 100〜=prospect。bench/回帰スクリプト用）
+  getEvalParam: (id: number) => number;
+  // id の正準名（[*:0]const u8 ポインタ。呼び出し側で null 終端文字列として読む。
+  // SSoT: scores.zig(legacy id) / prospect.zig(prospect id、getProspectParamName)）
+  getEvalParamName: (id: number) => number;
+
+  // 空点プロスペクト特徴ベクトル抽出（P3 の Texel 回帰用特徴ダンプ）
+  extractProspectFeatures: (
+    perspective: number,
+    stmIsPerspective: number,
+  ) => number;
+  getProspectFeatureBuffer: () => number;
+
   // Search
   findBestMove: (
     color: number,
@@ -52,6 +65,13 @@ export interface WasmModuleContext {
   ) => void;
   getResultBuffer: () => number;
   ttClear: () => void;
+
+  // 探索統計バッファ（12フィールド×u32=48バイト。レイアウトは main.zig writeStats 参照）
+  getStatsBuffer: () => number;
+
+  // Gate 0 計測用（docs/plans/eval-basis-prospect-2026-07-13.md §5）
+  setThreatProbeEnabled: (enabled: number) => void;
+  getAspirationResearchCount: () => number;
 
   // PV extraction
   extractPV: (
@@ -90,6 +110,14 @@ export interface WasmModuleContext {
 
   // VCT sequence
   findVCTSequenceWasm: (
+    color: number,
+    maxDepth: number,
+    timeLimitMs: number,
+    maxNodes: number,
+    collectBranches: number,
+  ) => void;
+  /** 被詰み判定専用（strict）。攻めの forcedWin 検出には findVCTSequenceWasm（lenient）を使うこと。 */
+  findVCTSequenceStrictWasm: (
     color: number,
     maxDepth: number,
     timeLimitMs: number,

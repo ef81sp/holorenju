@@ -17,15 +17,20 @@ import type {
   VCTCheckResult,
 } from "@/types/review";
 
-import { createBoardFromRecord } from "@/logic/gameRecordParser";
+import { createBoardFromRecord, parseMove } from "@/logic/gameRecordParser";
 
 import type { WasmModuleContext } from "./wasm/types";
 
+import { isWithinBookRange } from "./bookGate";
 import { countStones } from "./core/boardUtils";
+// 注釈専用API（isBookMove）のみを import する。着手API（getBookMove）は
+// import しない（opening-book-2026-07-16.md §3: 振り返りの着手選択には
+// ブックを使わない構造を保つ）。
+import { isBookMove, preloadOpeningBook } from "./openingBook";
 import { FORCED_LOSS_VCT_OPTIONS } from "./review/forcedLossCheck";
 import { detectForcedWin } from "./review/forcedWinDetection";
 import { executeFullEval } from "./review/fullEval";
-import { wasmFindVCTSequence } from "./review/wasmAdapters";
+import { wasmFindVCTSequenceStrict } from "./review/wasmAdapters";
 import { VCT_STONE_THRESHOLD } from "./search/types";
 import { preloadForbiddenWasm } from "./wasm/forbiddenAdapter";
 import { loadWasmModule } from "./wasm/loader";
@@ -93,7 +98,8 @@ self.onmessage = async (event: MessageEvent<ReviewEvalRequest>) => {
         !selfHasFour &&
         (skipStoneThreshold || stoneCountAfter >= VCT_STONE_THRESHOLD)
       ) {
-        const oppVCT = wasmFindVCTSequence(
+        // 被詰み判定なので strict（幻の被詰みを棄却。forcedLossCheck.ts と同じ理由）
+        const oppVCT = wasmFindVCTSequenceStrict(
           searchEngine,
           boardAfter,
           opponentColor,
@@ -156,9 +162,25 @@ self.onmessage = async (event: MessageEvent<ReviewEvalRequest>) => {
       wasmSearchEngine: searchEngine,
     });
 
+    // オープニングブック注釈（§3）: 着手選択には使わない。打たれた手が
+    // ブック手（対象は白番 ply4〜8・黒番 ply5〜7）と一致するかどうかだけを判定する。
+    const moveColor = moveIndex % 2 === 0 ? "black" : "white";
+    let isBookMoveAnnotation: boolean | undefined = undefined;
+    if (isWithinBookRange(moveColor, moveIndex) && moves[moveIndex]) {
+      await preloadOpeningBook();
+      const { board: boardBeforeMove } = createBoardFromRecord(
+        moves.slice(0, moveIndex).join(" "),
+      );
+      const played = parseMove(moves[moveIndex]!);
+      isBookMoveAnnotation = isBookMove(boardBeforeMove, moveColor, played);
+    }
+
     // timings は Worker の結果には不要なので除外
     const { timings: _timings, ...response } = result;
-    self.postMessage(response as FullEvalResult);
+    self.postMessage({
+      ...response,
+      isBookMove: isBookMoveAnnotation,
+    } as FullEvalResult);
   } catch (error) {
     console.error("Review Worker error:", error);
     // エラー時はデフォルト結果を返す

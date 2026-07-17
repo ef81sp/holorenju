@@ -4,6 +4,7 @@ const forbidden = @import("forbidden.zig");
 const jp = @import("jump_patterns.zig");
 const ll = @import("line_lookup.zig");
 const patterns = @import("patterns.zig");
+const prospect = @import("prospect.zig");
 const scores = @import("scores.zig");
 const std = @import("std");
 
@@ -17,12 +18,28 @@ fn lutEnd(end: u2) board_mod.EndState {
     return if (end == 0) .empty else .opponent;
 }
 
+/// last_mover_is_perspective の3値。EvalOptions のテンポ補正・prospect 基底の
+/// stm 変換で共有する型（両モジュールが同じ型を参照できるよう名前を付ける）。
+pub const LastMoverIsPerspective = enum(u8) { unset = 0, yes = 1, no = 2 };
+
+/// 葉評価の基底。legacy=石ベース（既存）、prospect=空点プロスペクト基底（新）。
+/// docs/plans/eval-basis-prospect-2026-07-13.md 参照。難易度により恒久併存する。
+pub const EvalBasis = enum(u1) { legacy = 0, prospect = 1 };
+
 /// evaluateBoard のオプション（ビットフィールドからデコード）
+///
+/// フラグのビット割当（decodeOptions 準拠）:
+///   bit0:      enable_leaf_mise
+///   bits1-2:   last_mover_is_perspective (0=unset, 1=yes, 2=no)
+///   bits8-15:  single_four_penalty_multiplier (0=デフォルト100, 255=完全ペナルティ0, 1-254=そのまま)
+///   bits16-23: connectivity_bonus (0=デフォルト, 255=0, 1-254=そのまま)
+///   bit24:     eval_basis (0=legacy, 1=prospect)
 pub const EvalOptions = struct {
     enable_leaf_mise: bool,
-    last_mover_is_perspective: enum(u8) { unset = 0, yes = 1, no = 2 },
+    last_mover_is_perspective: LastMoverIsPerspective,
     single_four_penalty_multiplier: i32, // 0-100 (実際の値は /100)
     connectivity_bonus: i32,
+    eval_basis: EvalBasis = .legacy,
 };
 
 pub fn decodeOptions(flags: u32) EvalOptions {
@@ -42,11 +59,27 @@ pub fn decodeOptions(flags: u32) EvalOptions {
         else => @as(i32, multiplier_raw),
     };
 
+    const eval_basis: EvalBasis = if (((flags >> 24) & 1) != 0) .prospect else .legacy;
+
     return .{
         .enable_leaf_mise = (flags & 1) != 0,
         .last_mover_is_perspective = @enumFromInt(if (last_mover_bits > 2) 0 else last_mover_bits),
         .single_four_penalty_multiplier = multiplier,
         .connectivity_bonus = if (connectivity_raw == 0) scores.CONNECTIVITY_BONUS else if (connectivity_raw == 255) 0 else @as(i32, connectivity_raw),
+        .eval_basis = eval_basis,
+    };
+}
+
+/// last_mover_is_perspective（3値）から prospect.StmMode へ変換する。
+/// evaluate.zig / incremental_eval.zig の両方から呼ぶ共通ロジック（§3.3）。
+///   .yes（最後に着手したのが perspective） → 次は相手番       → .opponent
+///   .no（最後に着手したのが相手）           → 次は perspective 番 → .perspective
+///   .unset                                   → 両手番の平均       → .average
+pub fn stmModeFromLastMover(last_mover_is_perspective: LastMoverIsPerspective) prospect.StmMode {
+    return switch (last_mover_is_perspective) {
+        .yes => .opponent,
+        .no => .perspective,
+        .unset => .average,
     };
 }
 
@@ -367,6 +400,12 @@ pub fn evaluateBoardOnCells(
     perspective: Cell,
     options: EvalOptions,
 ) i32 {
+    if (options.eval_basis == .prospect) {
+        // evaluateFull が冒頭で ensureTables() を呼ぶため、ここでは呼ばない
+        // （incremental_eval.getEvaluation の switch ディスパッチャと呼び出し規約を揃える）。
+        return prospect.evaluateFull(cells, perspective, stmModeFromLastMover(options.last_mover_is_perspective));
+    }
+
     const opponent = perspective.opposite();
     var my_score: i32 = 0;
     var opp_score: i32 = 0;
@@ -642,4 +681,48 @@ test "decodeOptions: flags=0 の全体が DEFAULT_EVAL_OPTIONS 相当" {
     const opts = decodeOptions(0);
     try std.testing.expectEqual(false, opts.enable_leaf_mise);
     try std.testing.expectEqual(@as(i32, 100), opts.single_four_penalty_multiplier);
+}
+
+test "decodeOptions: bit24=0 は eval_basis=.legacy（既定）" {
+    const opts = decodeOptions(0);
+    try std.testing.expectEqual(EvalBasis.legacy, opts.eval_basis);
+}
+
+test "decodeOptions: bit24=1 は eval_basis=.prospect" {
+    const flags: u32 = @as(u32, 1) << 24;
+    const opts = decodeOptions(flags);
+    try std.testing.expectEqual(EvalBasis.prospect, opts.eval_basis);
+}
+
+test "decodeOptions: bit24 は他ビット（multiplier/connectivity 等）と独立" {
+    const flags: u32 = (@as(u32, 1) << 24) | (@as(u32, 50) << 8);
+    const opts = decodeOptions(flags);
+    try std.testing.expectEqual(EvalBasis.prospect, opts.eval_basis);
+    try std.testing.expectEqual(@as(i32, 50), opts.single_four_penalty_multiplier);
+}
+
+test "stmModeFromLastMover: yes/no/unset の変換" {
+    try std.testing.expectEqual(prospect.StmMode.opponent, stmModeFromLastMover(.yes));
+    try std.testing.expectEqual(prospect.StmMode.perspective, stmModeFromLastMover(.no));
+    try std.testing.expectEqual(prospect.StmMode.average, stmModeFromLastMover(.unset));
+}
+
+test "evaluateBoardOnCells: eval_basis=.prospect のとき prospect.evaluateFull と一致する" {
+    // prospect 経路は cells のみを読み bitboard 同期を前提としないため
+    // bitboard.initFromCells は不要（evaluateFull のドキュメント参照）。
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[7 * BOARD_SIZE + 6] = .black;
+    cells[7 * BOARD_SIZE + 7] = .black;
+    cells[7 * BOARD_SIZE + 8] = .black;
+
+    const opts = EvalOptions{
+        .enable_leaf_mise = false,
+        .last_mover_is_perspective = .unset,
+        .single_four_penalty_multiplier = 100,
+        .connectivity_bonus = scores.CONNECTIVITY_BONUS,
+        .eval_basis = .prospect,
+    };
+    const via_dispatch = evaluateBoardOnCells(&cells, .black, opts);
+    const direct = prospect.evaluateFull(&cells, .black, .average);
+    try std.testing.expectEqual(direct, via_dispatch);
 }
