@@ -65,11 +65,15 @@ function getForcedLossLabel(
   return type ? `被${FULL_LABELS[type]}` : undefined;
 }
 
+/** 強制応手（forcedReply）の補足テキスト */
+const FORCED_REPLY_NOTE = "既に被詰みのため評価対象外";
+
 /** 各手の品質ドット表示データ */
 const moveDots = computed(() =>
   Array.from({ length: props.totalMoves }, (_, i) => {
     const evaluated = props.evaluatedMoves.find((e) => e.moveIndex === i);
     const moveNum = String(i + 1);
+    const isForcedReply = evaluated?.quality === "forcedReply";
     const qualityLabel =
       evaluated && !evaluated.isLightEval && evaluated.quality !== "excellent"
         ? getQualityLabel(evaluated.quality, evaluated.isBookMove)
@@ -90,12 +94,14 @@ const moveDots = computed(() =>
         : getUnderlineCount(evaluated?.quality),
       hasForcedWin: forcedWinLabel !== undefined,
       hasForcedLoss: forcedLossLabel !== undefined,
+      isForcedReply,
       isLosingMove,
       ariaLabel: [
         moveNum,
         qualityLabel,
         forcedWinLabel,
         forcedLossLabel,
+        isForcedReply ? FORCED_REPLY_NOTE : undefined,
         isLosingMove ? "敗着" : undefined,
       ]
         .filter(Boolean)
@@ -167,10 +173,12 @@ const moveDots = computed(() =>
           [`underlines-${dot.underlines}`]: dot.underlines > 0,
           'has-forced-win': dot.hasForcedWin,
           'has-forced-loss': dot.hasForcedLoss,
+          'is-forced-reply': dot.isForcedReply,
           'is-losing-move': dot.isLosingMove,
         }"
         :style="dot.color ? { backgroundColor: dot.color } : {}"
         :aria-label="dot.ariaLabel"
+        :title="dot.ariaLabel"
         @click="emit('goToMove', dot.index)"
       >
         {{ dot.index }}
@@ -327,6 +335,13 @@ const moveDots = computed(() =>
   background: hsl(0, 65%, 50%);
   box-shadow: 0 0 0 1px var(--color-bg-white);
   pointer-events: none;
+}
+
+/* 強制応手（forcedReply）: 既に被詰みで選択の余地がなかった手。
+   グレー背景に加えて破線ボーダーで「評価対象外」であることを視覚的に区別する */
+.is-forced-reply {
+  border-style: dashed;
+  opacity: 0.85;
 }
 
 /* 敗着マーカー（二重リング） */
