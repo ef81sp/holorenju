@@ -172,6 +172,12 @@ export interface CreateBridgeWorkerParams {
    * customParams 経由で mergeDifficultyParams に注入される）。
    */
   maxNodes?: number;
+  /**
+   * 探索の depth cap オーバーライド。未指定なら difficulty 既定を使う。
+   * DifficultyParams.depth に写される。iterative deepening の上限。
+   * probe OFF/深さ探索レバーが depth cap で頭打ちになるのを避けるためのレバー。
+   */
+  maxDepth?: number;
 }
 
 /**
@@ -183,11 +189,13 @@ export function buildBridgeCustomParams(
   randomFactor: number | undefined,
   evaluationOptions: Partial<EvaluationOptions> | undefined,
   maxNodes?: number,
+  maxDepth?: number,
 ): Partial<DifficultyParams> | undefined {
   if (
     randomFactor === undefined &&
     evaluationOptions === undefined &&
-    maxNodes === undefined
+    maxNodes === undefined &&
+    maxDepth === undefined
   ) {
     return undefined;
   }
@@ -200,6 +208,11 @@ export function buildBridgeCustomParams(
   }
   if (maxNodes !== undefined) {
     customParams.maxNodes = maxNodes;
+  }
+  if (maxDepth !== undefined) {
+    // DifficultyParams.depth = iterative deepening の上限。maxDepth の名前は
+    // ベンチ CLI の flag に合わせ、ここで DifficultyParams.depth に写す。
+    customParams.depth = maxDepth;
   }
   return customParams;
 }
@@ -219,12 +232,14 @@ export function createBridgeWorker(
     bookEnabled,
     threatProbeEnabled,
     maxNodes,
+    maxDepth,
   } = params;
   return new Promise<Worker>((resolve, reject) => {
     const customParams = buildBridgeCustomParams(
       randomFactor,
       evaluationOptions,
       maxNodes,
+      maxDepth,
     );
 
     const worker = new Worker(workerPath, {

@@ -69,6 +69,39 @@ describe("buildBridgeCustomParams", () => {
     expect(merged.timeLimit).toBe(DIFFICULTY_PARAMS.hard.timeLimit);
     expect(merged.depth).toBe(DIFFICULTY_PARAMS.hard.depth);
   });
+
+  it("maxDepth のみ指定（--max-depth-a/b 経路）— DifficultyParams.depth に写る", () => {
+    expect(
+      buildBridgeCustomParams(undefined, undefined, undefined, 12),
+    ).toEqual({
+      depth: 12,
+    });
+  });
+
+  it("maxDepth は他レバーと共存する", () => {
+    expect(
+      buildBridgeCustomParams(0.02, { evalBasis: "prospect" }, 3_000_000, 12),
+    ).toEqual({
+      randomFactor: 0.02,
+      evaluationOptions: { evalBasis: "prospect" },
+      maxNodes: 3_000_000,
+      depth: 12,
+    });
+  });
+
+  it("maxDepth オーバーライドが merge 後に depth を上書きする", () => {
+    const customParams = buildBridgeCustomParams(
+      undefined,
+      undefined,
+      undefined,
+      12,
+    );
+    const merged = mergeDifficultyParams(DIFFICULTY_PARAMS.hard, customParams);
+    expect(merged.depth).toBe(12);
+    // 他フィールドは baseParams のまま
+    expect(merged.timeLimit).toBe(DIFFICULTY_PARAMS.hard.timeLimit);
+    expect(merged.maxNodes).toBe(DIFFICULTY_PARAMS.hard.maxNodes);
+  });
 });
 
 describe("evalBasis 配線の end-to-end（silent 事故防止）", () => {

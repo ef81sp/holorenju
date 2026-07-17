@@ -134,6 +134,12 @@ interface CliOptions {
   maxNodesA?: number;
   maxNodesB?: number;
   /**
+   * 探索の depth cap オーバーライド（side 別）。未指定なら difficulty 既定を使う。
+   * probe OFF/深さレバーが depth cap で頭打ちになるのを避けるためのレバー。
+   */
+  maxDepthA?: number;
+  maxDepthB?: number;
+  /**
    * デバッグ/スモークテスト用: タスクを先頭 N 局に切り詰める（0 なら無効）。
    * ハング計装の e2e 検証で少局数（例: 4局）を回すために追加。
    * 通常のベンチ運用では 0（無効＝全 sets を消化）。
@@ -257,6 +263,26 @@ function parseArgs(): CliOptions {
         );
         process.exit(1);
       }
+    } else if (arg.startsWith("--max-depth-a=")) {
+      const value = parseInt(arg.slice("--max-depth-a=".length), 10);
+      if (Number.isFinite(value) && value > 0) {
+        options.maxDepthA = value;
+      } else {
+        console.error(
+          `Error: --max-depth-a は正の整数で指定 (got: ${arg.slice("--max-depth-a=".length)})`,
+        );
+        process.exit(1);
+      }
+    } else if (arg.startsWith("--max-depth-b=")) {
+      const value = parseInt(arg.slice("--max-depth-b=".length), 10);
+      if (Number.isFinite(value) && value > 0) {
+        options.maxDepthB = value;
+      } else {
+        console.error(
+          `Error: --max-depth-b は正の整数で指定 (got: ${arg.slice("--max-depth-b=".length)})`,
+        );
+        process.exit(1);
+      }
     } else if (arg.startsWith("--max-games=")) {
       const value = parseInt(arg.slice("--max-games=".length), 10);
       if (!isNaN(value) && value >= 0) {
@@ -357,6 +383,10 @@ Options:
                          probe OFF/深さレバーが maxNodes 早期打ち切りに拘束される
                          のを避け、timeLimit ベースで測るためのレバー
   --max-nodes-b=<n>      B側の maxNodes を上書き（既定=difficulty 既定）
+  --max-depth-a=<n>      A側の depth cap を上書き（既定=difficulty 既定）。
+                         probe OFF で深読みが伸びるかを見るとき、depth cap が
+                         binding だと差が出ないので併用する
+  --max-depth-b=<n>      B側の depth cap を上書き（既定=difficulty 既定）
   --max-games=<n>        タスクを先頭 N 局に切り詰め（0=無効, default: 0）。
                          ハング計装のスモークテスト用
   --move-timeout-ms=<n>  1手あたりのタイムアウト (default: 30000)
@@ -709,6 +739,11 @@ async function main(): Promise<void> {
       `maxNodes A: ${options.maxNodesA ?? "(既定=difficulty)"} / B: ${options.maxNodesB ?? "(既定=difficulty)"}`,
     );
   }
+  if (options.maxDepthA !== undefined || options.maxDepthB !== undefined) {
+    console.log(
+      `maxDepth A: ${options.maxDepthA ?? "(既定=difficulty)"} / B: ${options.maxDepthB ?? "(既定=difficulty)"}`,
+    );
+  }
   if (sprtConfig) {
     console.log(
       `SPRT: elo0=${sprtConfig.elo0}, elo1=${sprtConfig.elo1}, ` +
@@ -762,6 +797,7 @@ async function main(): Promise<void> {
       bookEnabled: boolean,
       threatProbeEnabled: boolean,
       maxNodes: number | undefined,
+      maxDepth: number | undefined,
     ): Promise<Worker> =>
       createBridgeWorker({
         workerPath,
@@ -773,6 +809,7 @@ async function main(): Promise<void> {
         bookEnabled,
         threatProbeEnabled,
         maxNodes,
+        maxDepth,
       });
 
     console.log(`Bridge workerを初期化中... (${options.jobs}並列)`);
@@ -785,6 +822,7 @@ async function main(): Promise<void> {
             options.bookA,
             options.probeEnabledA,
             options.maxNodesA,
+            options.maxDepthA,
           ),
           makeWorker(
             worktreePathB!,
@@ -792,6 +830,7 @@ async function main(): Promise<void> {
             options.bookB,
             options.probeEnabledB,
             options.maxNodesB,
+            options.maxDepthB,
           ),
         ]);
         return { a, b };
@@ -842,6 +881,7 @@ async function main(): Promise<void> {
           options.bookA,
           options.probeEnabledA,
           options.maxNodesA,
+          options.maxDepthA,
         ),
         makeWorker(
           worktreePathB!,
@@ -849,6 +889,7 @@ async function main(): Promise<void> {
           options.bookB,
           options.probeEnabledB,
           options.maxNodesB,
+          options.maxDepthB,
         ),
       ]);
       const fresh = { a, b };
@@ -1017,6 +1058,8 @@ async function main(): Promise<void> {
         threatProbeB: options.probeEnabledB,
         maxNodesA: options.maxNodesA,
         maxNodesB: options.maxNodesB,
+        maxDepthA: options.maxDepthA,
+        maxDepthB: options.maxDepthB,
         seed: seedInEffect,
       },
       totalGames: completedGames,
