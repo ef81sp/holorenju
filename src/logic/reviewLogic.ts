@@ -191,10 +191,71 @@ export function applyVCTResult(
 }
 
 /**
+ * forcedLoss チェーンの2手目以降を「強制応手（forcedReply）」に再分類する
+ *
+ * 同一プレイヤー（moveIndex の偶奇 = 手番の色）の forcedLossType 付きの手が
+ * 連続する区間をチェーンとみなす。チェーン初手は従来どおりの品質（多くの場合
+ * blunder への降格を含む）のまま扱い「敗着」としてカウントする。2手目以降は
+ * scoreDiff ベースの分類（mistake 等）を上書きして quality を "forcedReply" に
+ * 固定する — 被詰み確定後は選択の余地がなく、独立したミスとしてカウントすべき
+ * ではないため。
+ *
+ * チェーンは forcedLossType の種類（vcf/vct等）が途中で変わっても継続する。
+ * 途中で forcedLossType が消える（相手が勝ち手順を逃す）とチェーンは途切れ、
+ * 再度検出されれば新しいチェーンとして扱う（= 新たな敗着）。
+ *
+ * 評価順序への依存を避けるため、色（偶奇）ごとに moveIndex 昇順へソートしてから
+ * 走査する。moveIndex が前のチェーン手の直後（+2）でない場合は非連続とみなし、
+ * 新しいチェーンとして扱う（評価が部分的にしか揃っていない場合の防御）。
+ */
+export function applyForcedReplyChains(
+  evaluatedMoves: EvaluatedMove[],
+): EvaluatedMove[] {
+  const forcedReplyIndices = new Set<number>();
+
+  for (const parity of [0, 1] as const) {
+    const colorMoves = evaluatedMoves
+      .filter((m) => m.moveIndex % 2 === parity)
+      .sort((a, b) => a.moveIndex - b.moveIndex);
+
+    let prevChainMoveIndex: number | null = null;
+    for (const move of colorMoves) {
+      if (!move.forcedLossType) {
+        prevChainMoveIndex = null;
+        continue;
+      }
+      const isChainContinuation =
+        prevChainMoveIndex !== null &&
+        move.moveIndex === prevChainMoveIndex + 2;
+      if (isChainContinuation) {
+        forcedReplyIndices.add(move.moveIndex);
+      }
+      prevChainMoveIndex = move.moveIndex;
+    }
+  }
+
+  if (forcedReplyIndices.size === 0) {
+    return evaluatedMoves;
+  }
+
+  return evaluatedMoves.map((move) =>
+    forcedReplyIndices.has(move.moveIndex)
+      ? { ...move, quality: "forcedReply" as const }
+      : move,
+  );
+}
+
+/**
  * 全手の評価結果から対局全体の評価を構築
+ *
+ * forcedLoss チェーンの2手目以降（forcedReply）は accuracy の分母と
+ * criticalErrors から除外する（applyForcedReplyChains 参照）。
  */
 export function buildGameReview(evaluatedMoves: EvaluatedMove[]): GameReview {
-  const playerMoves = evaluatedMoves.filter((m) => m.isPlayerMove);
+  const processedMoves = applyForcedReplyChains(evaluatedMoves);
+  const playerMoves = processedMoves.filter(
+    (m) => m.isPlayerMove && m.quality !== "forcedReply",
+  );
 
   // 精度計算: excellentとgoodの割合
   const goodOrBetter = playerMoves.filter(
@@ -211,10 +272,10 @@ export function buildGameReview(evaluatedMoves: EvaluatedMove[]): GameReview {
   ).length;
 
   return {
-    evaluatedMoves,
+    evaluatedMoves: processedMoves,
     accuracy,
     criticalErrors,
-    losingMove: findLosingMove(evaluatedMoves),
+    losingMove: findLosingMove(processedMoves),
   };
 }
 
@@ -368,6 +429,8 @@ export function getQualityColor(quality: MoveQuality): string {
       return "#f44336";
     case "blunder":
       return "#f44336";
+    case "forcedReply":
+      return "#9e9e9e";
     default: {
       const _exhaustive: never = quality;
       return _exhaustive;
@@ -401,6 +464,8 @@ export function getQualityLabel(
       return "悪手";
     case "blunder":
       return "悪手";
+    case "forcedReply":
+      return "被詰み継続";
     default: {
       const _exhaustive: never = quality;
       return _exhaustive;

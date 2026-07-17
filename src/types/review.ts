@@ -105,13 +105,18 @@ export interface ReviewCandidate {
 
 /**
  * 手の品質分類
+ *
+ * "forcedReply"（被詰み継続）: 同一プレイヤーの forcedLoss（被追詰）チェーンの
+ * 2手目以降。選択の余地がない手のため、mistake/blunder 等のミス評価を上書きし、
+ * criticalErrors カウントと accuracy 分母から除外する（applyForcedReplyChains 参照）。
  */
 export type MoveQuality =
   | "excellent"
   | "good"
   | "inaccuracy"
   | "mistake"
-  | "blunder";
+  | "blunder"
+  | "forcedReply";
 
 /**
  * 1手分の評価結果

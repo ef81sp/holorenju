@@ -35,6 +35,13 @@ const QUALITY_DIALOGUES: Record<MoveQuality, string[]> = {
     "{bestMove}に打つべきだったかも...",
     "うーん、{bestMove}の方がずっと良かったよ",
   ],
+  // 被詰みチェーンの2手目以降（選択の余地がない手）。forcedLossType が
+  // 常に付いているため実質 FORCED_LOSS_DIALOGUES 経由で選ばれるが、
+  // Record の網羅性のため定義しておく。
+  forcedReply: [
+    "ここは選択の余地がない局面だったね",
+    "もう厳しい流れの中の一手だね",
+  ],
 };
 
 /** 品質別の表情 */
@@ -44,6 +51,7 @@ const QUALITY_EMOTIONS: Record<MoveQuality, EmotionId> = {
   inaccuracy: 1, // 考え中
   mistake: 19, // 強調・指摘
   blunder: 19, // 強調・指摘（mistakeと同じ）
+  forcedReply: 1, // 考え中（仕方ない）
 };
 
 /** 負け確定（相手の必勝手順あり）時のセリフ（品質別） */
@@ -57,6 +65,11 @@ const FORCED_LOSS_DIALOGUES: Record<MoveQuality, string[]> = {
   blunder: [
     "この手で相手に{forcedLoss}を許しちゃったよ！{bestMove}ならまだ粘れたかも",
   ],
+  // 被詰みチェーンの継続手。既に{forcedLoss}を防げない中の一手のため、
+  // ミスとしては指摘しない。
+  forcedReply: [
+    "ここはもう{forcedLoss}を防げない中の一手。他に選びようがなかったね",
+  ],
 };
 
 /** 負け確定時の表情 */
@@ -66,6 +79,7 @@ const FORCED_LOSS_EMOTIONS: Record<MoveQuality, EmotionId> = {
   inaccuracy: 11, // 心配
   mistake: 11, // 心配
   blunder: 11, // 心配
+  forcedReply: 1, // 考え中（仕方ない）
 };
 
 /** 敗着（勝負の分かれ目）のセリフ — bestMove ≠ 打った手の場合 */
@@ -125,6 +139,10 @@ const FORCED_WIN_DIALOGUES: Record<MoveQuality, string[]> = {
     "ここは{forcedWin}で勝てたね。{bestMove}がポイント！",
   ],
   blunder: [
+    "{forcedWin}を逃しちゃった！{bestMove}から決まったよ",
+    "ここは{forcedWin}で勝てたね。{bestMove}がポイント！",
+  ],
+  forcedReply: [
     "{forcedWin}を逃しちゃった！{bestMove}から決まったよ",
     "ここは{forcedWin}で勝てたね。{bestMove}がポイント！",
   ],
