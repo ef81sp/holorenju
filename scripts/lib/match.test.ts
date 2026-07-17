@@ -40,6 +40,35 @@ describe("buildBridgeCustomParams", () => {
       evaluationOptions: { evalBasis: "prospect" },
     });
   });
+
+  it("maxNodes のみ指定（--max-nodes-a/b 経路）", () => {
+    expect(buildBridgeCustomParams(undefined, undefined, 3_000_000)).toEqual({
+      maxNodes: 3_000_000,
+    });
+  });
+
+  it("maxNodes は他レバーと共存する", () => {
+    expect(
+      buildBridgeCustomParams(0.02, { evalBasis: "prospect" }, 3_000_000),
+    ).toEqual({
+      randomFactor: 0.02,
+      evaluationOptions: { evalBasis: "prospect" },
+      maxNodes: 3_000_000,
+    });
+  });
+
+  it("maxNodes オーバーライドが merge 後に反映される（difficulty 既定を上書き）", () => {
+    const customParams = buildBridgeCustomParams(
+      undefined,
+      undefined,
+      3_000_000,
+    );
+    const merged = mergeDifficultyParams(DIFFICULTY_PARAMS.hard, customParams);
+    expect(merged.maxNodes).toBe(3_000_000);
+    // 他フィールドは baseParams のまま
+    expect(merged.timeLimit).toBe(DIFFICULTY_PARAMS.hard.timeLimit);
+    expect(merged.depth).toBe(DIFFICULTY_PARAMS.hard.depth);
+  });
 });
 
 describe("evalBasis 配線の end-to-end（silent 事故防止）", () => {

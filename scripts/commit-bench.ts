@@ -126,6 +126,14 @@ interface CliOptions {
   probeEnabledA: boolean;
   probeEnabledB: boolean;
   /**
+   * 探索の maxNodes オーバーライド（side 別）。未指定なら difficulty 既定を使う。
+   * probe OFF/深さ探索レバーが maxNodes 早期打ち切りに拘束されるのを避け、
+   * 「同じ持ち時間でノード上限が実質非拘束なら深読みが Elo に転換するか」を
+   * 測るための CLI レバー。
+   */
+  maxNodesA?: number;
+  maxNodesB?: number;
+  /**
    * デバッグ/スモークテスト用: タスクを先頭 N 局に切り詰める（0 なら無効）。
    * ハング計装の e2e 検証で少局数（例: 4局）を回すために追加。
    * 通常のベンチ運用では 0（無効＝全 sets を消化）。
@@ -229,6 +237,26 @@ function parseArgs(): CliOptions {
       options.probeEnabledA = false;
     } else if (arg === "--probe-off-b") {
       options.probeEnabledB = false;
+    } else if (arg.startsWith("--max-nodes-a=")) {
+      const value = parseInt(arg.slice("--max-nodes-a=".length), 10);
+      if (Number.isFinite(value) && value > 0) {
+        options.maxNodesA = value;
+      } else {
+        console.error(
+          `Error: --max-nodes-a は正の整数で指定 (got: ${arg.slice("--max-nodes-a=".length)})`,
+        );
+        process.exit(1);
+      }
+    } else if (arg.startsWith("--max-nodes-b=")) {
+      const value = parseInt(arg.slice("--max-nodes-b=".length), 10);
+      if (Number.isFinite(value) && value > 0) {
+        options.maxNodesB = value;
+      } else {
+        console.error(
+          `Error: --max-nodes-b は正の整数で指定 (got: ${arg.slice("--max-nodes-b=".length)})`,
+        );
+        process.exit(1);
+      }
     } else if (arg.startsWith("--max-games=")) {
       const value = parseInt(arg.slice("--max-games=".length), 10);
       if (!isNaN(value) && value >= 0) {
@@ -325,6 +353,10 @@ Options:
   --probe-off-a          A側の脅威プローブを無効化（既定ON）。prospect 基底下で
                          深度向上が Elo に転換するか検証するレバー
   --probe-off-b          B側の脅威プローブを無効化（既定ON）
+  --max-nodes-a=<n>      A側の maxNodes を上書き（既定=difficulty 既定）。
+                         probe OFF/深さレバーが maxNodes 早期打ち切りに拘束される
+                         のを避け、timeLimit ベースで測るためのレバー
+  --max-nodes-b=<n>      B側の maxNodes を上書き（既定=difficulty 既定）
   --max-games=<n>        タスクを先頭 N 局に切り詰め（0=無効, default: 0）。
                          ハング計装のスモークテスト用
   --move-timeout-ms=<n>  1手あたりのタイムアウト (default: 30000)
@@ -672,6 +704,11 @@ async function main(): Promise<void> {
     console.log(`threatProbe A: ${options.probeEnabledA ? "ON" : "OFF"}`);
     console.log(`threatProbe B: ${options.probeEnabledB ? "ON" : "OFF"}`);
   }
+  if (options.maxNodesA !== undefined || options.maxNodesB !== undefined) {
+    console.log(
+      `maxNodes A: ${options.maxNodesA ?? "(既定=difficulty)"} / B: ${options.maxNodesB ?? "(既定=difficulty)"}`,
+    );
+  }
   if (sprtConfig) {
     console.log(
       `SPRT: elo0=${sprtConfig.elo0}, elo1=${sprtConfig.elo1}, ` +
@@ -724,6 +761,7 @@ async function main(): Promise<void> {
       evaluationOptions: Partial<EvaluationOptions> | undefined,
       bookEnabled: boolean,
       threatProbeEnabled: boolean,
+      maxNodes: number | undefined,
     ): Promise<Worker> =>
       createBridgeWorker({
         workerPath,
@@ -734,6 +772,7 @@ async function main(): Promise<void> {
         evaluationOptions,
         bookEnabled,
         threatProbeEnabled,
+        maxNodes,
       });
 
     console.log(`Bridge workerを初期化中... (${options.jobs}並列)`);
@@ -745,12 +784,14 @@ async function main(): Promise<void> {
             options.evalOptionsA,
             options.bookA,
             options.probeEnabledA,
+            options.maxNodesA,
           ),
           makeWorker(
             worktreePathB!,
             options.evalOptionsB,
             options.bookB,
             options.probeEnabledB,
+            options.maxNodesB,
           ),
         ]);
         return { a, b };
@@ -800,12 +841,14 @@ async function main(): Promise<void> {
           options.evalOptionsA,
           options.bookA,
           options.probeEnabledA,
+          options.maxNodesA,
         ),
         makeWorker(
           worktreePathB!,
           options.evalOptionsB,
           options.bookB,
           options.probeEnabledB,
+          options.maxNodesB,
         ),
       ]);
       const fresh = { a, b };
@@ -972,6 +1015,8 @@ async function main(): Promise<void> {
         bookB: options.bookB,
         threatProbeA: options.probeEnabledA,
         threatProbeB: options.probeEnabledB,
+        maxNodesA: options.maxNodesA,
+        maxNodesB: options.maxNodesB,
         seed: seedInEffect,
       },
       totalGames: completedGames,

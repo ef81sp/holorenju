@@ -165,18 +165,30 @@ export interface CreateBridgeWorkerParams {
    * スキップされる（fallback で ON 相当）。
    */
   threatProbeEnabled?: boolean;
+  /**
+   * 探索の maxNodes オーバーライド。未指定なら difficulty 既定を使う。
+   * 「同じ持ち時間でノード上限が実質非拘束なら深読みが Elo に転換するか」を
+   * 測るための実行時レバー（randomFactor/evaluationOptions と同じ流儀で
+   * customParams 経由で mergeDifficultyParams に注入される）。
+   */
+  maxNodes?: number;
 }
 
 /**
  * createBridgeWorker に渡す customParams を組み立てる（純粋関数・単体テスト用に export）。
- * randomFactor / evaluationOptions のいずれも未指定なら undefined を返し、
+ * randomFactor / evaluationOptions / maxNodes のいずれも未指定なら undefined を返し、
  * 既存呼び出し（weight-bench 等）の挙動を完全に保つ。
  */
 export function buildBridgeCustomParams(
   randomFactor: number | undefined,
   evaluationOptions: Partial<EvaluationOptions> | undefined,
+  maxNodes?: number,
 ): Partial<DifficultyParams> | undefined {
-  if (randomFactor === undefined && evaluationOptions === undefined) {
+  if (
+    randomFactor === undefined &&
+    evaluationOptions === undefined &&
+    maxNodes === undefined
+  ) {
     return undefined;
   }
   const customParams: Partial<DifficultyParams> = {};
@@ -185,6 +197,9 @@ export function buildBridgeCustomParams(
   }
   if (evaluationOptions !== undefined) {
     customParams.evaluationOptions = evaluationOptions as EvaluationOptions;
+  }
+  if (maxNodes !== undefined) {
+    customParams.maxNodes = maxNodes;
   }
   return customParams;
 }
@@ -203,11 +218,13 @@ export function createBridgeWorker(
     evaluationOptions,
     bookEnabled,
     threatProbeEnabled,
+    maxNodes,
   } = params;
   return new Promise<Worker>((resolve, reject) => {
     const customParams = buildBridgeCustomParams(
       randomFactor,
       evaluationOptions,
+      maxNodes,
     );
 
     const worker = new Worker(workerPath, {

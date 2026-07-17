@@ -65,6 +65,11 @@ export interface CommitBenchResult {
     threatProbeA?: boolean;
     threatProbeB?: boolean;
     /**
+     * maxNodes オーバーライド（探索レバー A/B）。未指定なら difficulty 既定。
+     */
+    maxNodesA?: number;
+    maxNodesB?: number;
+    /**
      * PRNG baseSeed。--seed 指定時は明示値、未指定時は Date.now() の下位32bit。
      * randomFactor 未指定なら undefined（seed が意味を持たないため）。
      * 局ごとの実効 seed は mixSeed(seed, gameIdx) で導出される。
