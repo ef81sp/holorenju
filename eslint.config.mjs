@@ -17,6 +17,8 @@ export default [
       "**/*.d.ts",
       ".oxlint_cache",
       ".eslint_cache",
+      // サブエージェント用 git worktree 置き場。main からは lint 対象外。
+      ".claude/**",
       // GPL の外部解析エンジン（Rapfi）置き場。コミット禁止・lint対象外。
       "scripts/rapfi/**",
       "tools/oracle/**",

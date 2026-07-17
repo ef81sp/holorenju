@@ -75,15 +75,5 @@
   },
   "engines": {
     "node": ">=24.0.0"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "lefthook"
-    ],
-    "peerDependencyRules": {
-      "allowedVersions": {
-        "vite-plugin-pwa>vite": "8"
-      }
-    }
   }
 }

@@ -1,0 +1,6 @@
+allowBuilds:
+  lefthook: true
+
+peerDependencyRules:
+  allowedVersions:
+    "vite-plugin-pwa>vite": "8"
