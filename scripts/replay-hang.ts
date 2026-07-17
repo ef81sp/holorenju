@@ -31,55 +31,13 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Worker } from "node:worker_threads";
 
-import type { EvaluationOptions } from "../src/logic/cpu/evaluation/patternScores.ts";
 import type { BoardState, Position } from "../src/types/game.ts";
+import type { HangDumpJson } from "./lib/hangDump.ts";
 
 import { buildBridgeCustomParams } from "./lib/match.ts";
+import { mixSeed } from "./lib/mulberry32.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-// ============================================================================
-// 型定義（ダンプ JSON の最低限のスキーマ）
-// ============================================================================
-
-interface HangDumpJson {
-  type: "hang-dump";
-  schemaVersion: number;
-  timestamp: string;
-  bench: {
-    tool: string;
-    difficulty: string;
-    randomFactor: number | undefined;
-    moveTimeoutMs: number;
-  };
-  match: {
-    gameIdx: number;
-    jushuName: string;
-    isABlack: boolean;
-    pairIdx: number;
-  };
-  hang: {
-    side: "A" | "B";
-    color: "black" | "white";
-    requestId: number;
-    timeoutMs: number;
-    elapsedMs: number;
-    moveNumber: number;
-  };
-  worker: {
-    side: "A" | "B";
-    worktreePath: string;
-    commit: { sha: string; shortSha: string; message: string; date: string };
-    difficulty: string;
-    randomFactor: number | undefined;
-    evaluationOptions: Partial<EvaluationOptions> | undefined;
-    bookEnabled: boolean;
-    color: "black" | "white";
-  };
-  opponent: unknown;
-  board: BoardState;
-  moveHistory: unknown;
-}
 
 interface CliOptions {
   dumpPath: string;
@@ -304,6 +262,7 @@ function requestMoveWithWatchdog(
   board: BoardState,
   color: "black" | "white",
   timeoutMs: number,
+  moveSeed: number | undefined,
 ): Promise<ReplayOutcome> {
   return new Promise<ReplayOutcome>((resolve) => {
     const requestId = 1;
@@ -343,7 +302,7 @@ function requestMoveWithWatchdog(
       }
     };
     worker.on("message", handler);
-    worker.postMessage({ requestId, board, color });
+    worker.postMessage({ requestId, board, color, moveSeed });
   });
 }
 
@@ -374,6 +333,17 @@ async function main(): Promise<void> {
   console.log(
     `  evaluationOptions: ${dump.worker.evaluationOptions ? JSON.stringify(dump.worker.evaluationOptions) : "(未指定)"}`,
   );
+  // gameSeed とハング時の非オープニング要求番号から moveSeed を復元。
+  // ダンプ側でこれらが両方あれば、randomFactor の近傍ランダム化まで再現できる。
+  const nonOpeningOrdinal =
+    dump.hang.moveNumber - dump.moveHistory.filter((m) => m.isOpening).length;
+  const moveSeed =
+    dump.match.gameSeed !== undefined && nonOpeningOrdinal >= 1
+      ? mixSeed(dump.match.gameSeed, nonOpeningOrdinal)
+      : undefined;
+  console.log(
+    `  seed: gameSeed=${dump.match.gameSeed ?? "unset"} → moveSeed=${moveSeed ?? "unset"} (nonOpeningOrdinal=${nonOpeningOrdinal})`,
+  );
   console.log(`watchdog: ${options.timeoutMs}ms\n`);
 
   if (options.recreateWorktree) {
@@ -389,6 +359,7 @@ async function main(): Promise<void> {
     dump.board,
     dump.hang.color,
     options.timeoutMs,
+    moveSeed,
   );
   worker.terminate();
 

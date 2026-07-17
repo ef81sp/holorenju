@@ -10,6 +10,7 @@ import type { Worker } from "node:worker_threads";
 
 import type { BoardState, Position } from "../src/types/game.ts";
 
+import { mixSeed } from "./lib/mulberry32.ts";
 import { WorkerMoveTimeoutError } from "./lib/workerMoveTimeoutError.ts";
 
 /** 着手記録 */
@@ -96,7 +97,10 @@ export interface HangContext {
   moveHistory: MoveRecord[];
   /** ゲーム開始からの経過ミリ秒 */
   elapsedMs: number;
-  /** ハング時の手数（0-based, opening 3手を含む＝ハング要求は moveHistory.length 番目の手を打とうとしていた） */
+  /**
+   * ハング時の手数（1-based, opening 3手を含む）。
+   * moveHistory の直後に打とうとしていた手の番号（= moveHistory.length + 1）。
+   */
   moveNumber: number;
 }
 
@@ -112,18 +116,29 @@ export class GameHangError extends Error {
   }
 }
 
+/** askWorker のリクエストパラメータ。位置引数の膨張を避けるためオブジェクト化。 */
+interface AskWorkerParams {
+  worker: Worker;
+  board: BoardState;
+  color: "black" | "white";
+  timeoutMs: number;
+  side: "A" | "B";
+  hangInject: boolean;
+  /**
+   * この1手用の PRNG シード。bridge worker は randomFactor 適用時に
+   * `mulberry32(moveSeed)` で決定的な近傍ランダム選択を行う。
+   * 未指定なら worker 側は非決定的（Math.random）にフォールバック。
+   */
+  moveSeed?: number;
+}
+
 /**
  * workerに着手を要求し、レスポンスを待つ。
  * timeout 時は WorkerMoveTimeoutError を throw（runCommitGame が context を付与する）。
  */
-function askWorker(
-  worker: Worker,
-  board: BoardState,
-  color: "black" | "white",
-  timeoutMs: number,
-  side: "A" | "B",
-  hangInject: boolean,
-): Promise<MoveResponse> {
+function askWorker(params: AskWorkerParams): Promise<MoveResponse> {
+  const { worker, board, color, timeoutMs, side, hangInject, moveSeed } =
+    params;
   return new Promise<MoveResponse>((resolve, reject) => {
     const requestId = nextRequestId++;
 
@@ -147,7 +162,7 @@ function askWorker(
     };
 
     worker.on("message", handler);
-    worker.postMessage({ requestId, board, color, hangInject });
+    worker.postMessage({ requestId, board, color, hangInject, moveSeed });
   });
 }
 
@@ -179,23 +194,20 @@ export interface HangInjectSpec {
   side?: "A" | "B";
 }
 
+interface AskOrHangParams extends AskWorkerParams {
+  moveHistory: MoveRecord[];
+  gameStartTime: number;
+  moveCount: number;
+}
+
 /**
  * askWorker のラッパー。WorkerMoveTimeoutError を GameHangError に変換して throw する。
  * ループ内クロージャで no-loop-func 警告を出さないため、ループ外の関数として切り出す。
  */
-async function askOrHang(
-  worker: Worker,
-  board: BoardState,
-  color: "black" | "white",
-  timeoutMs: number,
-  side: "A" | "B",
-  hangInject: boolean,
-  moveHistory: MoveRecord[],
-  gameStartTime: number,
-  moveCount: number,
-): Promise<MoveResponse> {
+async function askOrHang(params: AskOrHangParams): Promise<MoveResponse> {
+  const { board, moveHistory, gameStartTime, moveCount, ...askParams } = params;
   try {
-    return await askWorker(worker, board, color, timeoutMs, side, hangInject);
+    return await askWorker({ ...askParams, board });
   } catch (err: unknown) {
     if (err instanceof WorkerMoveTimeoutError) {
       throw new GameHangError({
@@ -232,6 +244,12 @@ export async function runCommitGame(
     openingMoves?: [Position, Position, Position];
     /** テスト用: 特定の要求番目でハングを注入する */
     hangInject?: HangInjectSpec;
+    /**
+     * この局用の PRNG seed。指定時、1手ごとに `mixSeed(gameSeed, moveOrdinal)` で
+     * 導出した moveSeed を bridge worker に渡し、randomFactor 適用時の近傍ランダム
+     * 選択を決定的にする。未指定なら bridge worker は Math.random にフォールバック。
+     */
+    gameSeed?: number;
   } = {},
 ): Promise<GameResult> {
   // #43 PR-6: 禁手判定(forbidden) と脅威検出(detectOpponentThreats→threat) はどちらも
@@ -302,17 +320,22 @@ export async function runCommitGame(
 
     const moveStartTime = performance.now();
 
-    const response = await askOrHang(
+    const moveSeed =
+      options.gameSeed === undefined
+        ? undefined
+        : mixSeed(options.gameSeed, nonOpeningRequestOrdinal);
+    const response = await askOrHang({
       worker,
       board,
-      currentColor,
-      moveTimeoutMs,
-      currentSide,
-      shouldInject,
+      color: currentColor,
+      timeoutMs: moveTimeoutMs,
+      side: currentSide,
+      hangInject: shouldInject,
+      moveSeed,
       moveHistory,
-      startTime,
+      gameStartTime: startTime,
       moveCount,
-    );
+    });
     const moveTime = performance.now() - moveStartTime;
 
     const move: Position = response.position;

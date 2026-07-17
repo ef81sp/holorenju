@@ -27,6 +27,7 @@ import type { BoardState, Position } from "../src/types/game.ts";
 
 import { mergeDifficultyParams } from "./lib/difficultyParamsMerge.ts";
 import { EVAL_PARAM_IDS } from "./lib/evalParams.ts";
+import { mulberry32 } from "./lib/mulberry32.ts";
 import {
   countStones,
   loadOpeningBookFromWorktree,
@@ -65,6 +66,12 @@ interface MoveRequest {
    * runCommitGame の HangInjectSpec から立てられる。
    */
   hangInject?: boolean;
+  /**
+   * この1手用の PRNG seed。指定時、randomFactor 適用の近傍ランダム選択に
+   * `mulberry32(moveSeed)` を使い、同一シード同一棋譜を保証する。
+   * 未指定なら Math.random にフォールバック（従来挙動）。
+   */
+  moveSeed?: number;
 }
 
 interface WasmSearchStats {
@@ -415,6 +422,154 @@ function applyEvalWeights(
   }
 }
 
+// ============================================================================
+// randomFactor 適用（cpu.worker.ts のブラウザ側実装を鏡写しに再現）
+// ============================================================================
+
+interface RandomizationModule {
+  selectMoveWithRandomization: (opts: {
+    bestMove: Position;
+    bestMoveScore?: number;
+    criticalScoreThreshold?: number;
+    randomFactor: number;
+    pickRandomMove: () => Position | null;
+    random?: () => number;
+  }) => Position;
+  listChebyshevNeighbors: (
+    center: Position,
+    radius: number,
+    boardSize?: number,
+  ) => Position[];
+}
+
+interface ForbiddenAdapterModule {
+  isForbiddenForBlack: (board: BoardState, row: number, col: number) => boolean;
+  /** 禁手判定 wasm を事前ロード。未ロードで isForbiddenForBlack を呼ぶと throw する。 */
+  preloadForbiddenWasm: () => Promise<void>;
+}
+
+interface RandomizationBundle {
+  randomization: RandomizationModule;
+  forbidden: ForbiddenAdapterModule;
+}
+
+const RANDOM_NEIGHBOR_RADIUS = 3;
+
+/**
+ * worktree から randomization.ts と forbiddenAdapter.ts を動的 import する。
+ * 古い commit（randomization.ts が無い）では null を返し、randomFactor は
+ * 無視される（既存挙動と同等）。
+ */
+async function loadRandomizationFromWorktree(
+  worktreePath: string,
+): Promise<RandomizationBundle | null> {
+  const randomizationPath = path.join(
+    worktreePath,
+    "src",
+    "logic",
+    "cpu",
+    "randomization.ts",
+  );
+  const forbiddenPath = path.join(
+    worktreePath,
+    "src",
+    "logic",
+    "cpu",
+    "wasm",
+    "forbiddenAdapter.ts",
+  );
+  if (!fs.existsSync(randomizationPath) || !fs.existsSync(forbiddenPath)) {
+    return null;
+  }
+  try {
+    const [randomizationMod, forbiddenMod] = await Promise.all([
+      import(pathToFileURL(randomizationPath).href) as Promise<
+        Partial<RandomizationModule>
+      >,
+      import(pathToFileURL(forbiddenPath).href) as Promise<
+        Partial<ForbiddenAdapterModule>
+      >,
+    ]);
+    if (
+      typeof randomizationMod.selectMoveWithRandomization !== "function" ||
+      typeof randomizationMod.listChebyshevNeighbors !== "function" ||
+      typeof forbiddenMod.isForbiddenForBlack !== "function" ||
+      typeof forbiddenMod.preloadForbiddenWasm !== "function"
+    ) {
+      console.warn(
+        "[cpu-bridge-worker] randomization/forbidden の期待 export がありません。randomFactor を無視します。",
+      );
+      return null;
+    }
+    // 禁手判定 wasm を事前ロード（isForbiddenForBlack は未ロードで throw する）。
+    // 動的 import した forbiddenAdapter は独立モジュールインスタンスなので、
+    // 上位（commit-game-runner）の preloadForbiddenWasm() では初期化されない。
+    await forbiddenMod.preloadForbiddenWasm();
+    return {
+      randomization: randomizationMod as RandomizationModule,
+      forbidden: forbiddenMod as ForbiddenAdapterModule,
+    };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(
+      `[cpu-bridge-worker] randomization ロード失敗（randomFactor 無視）: ${msg}`,
+    );
+    return null;
+  }
+}
+
+/**
+ * bestMove とスコアから、cpu.worker.ts と同じ手順で近傍 Chebyshev≤3 の
+ * 合法空き点からランダム選択を掛ける。黒手番は禁手を除外。moveSeed が
+ * あれば `mulberry32(moveSeed)` で決定的にする。
+ */
+function applyRandomization(
+  bundle: RandomizationBundle | null,
+  bestMove: Position,
+  bestMoveScore: number,
+  board: BoardState,
+  color: "black" | "white",
+  randomFactor: number,
+  criticalScoreThreshold: number | undefined,
+  moveSeed: number | undefined,
+): Position {
+  if (!bundle || randomFactor <= 0) {
+    return bestMove;
+  }
+  const random = moveSeed === undefined ? undefined : mulberry32(moveSeed);
+  const neighbors = bundle.randomization.listChebyshevNeighbors(
+    bestMove,
+    RANDOM_NEIGHBOR_RADIUS,
+  );
+  const candidates = neighbors.filter((p) => {
+    if (board[p.row]?.[p.col] !== null) {
+      return false;
+    }
+    if (
+      color === "black" &&
+      bundle.forbidden.isForbiddenForBlack(board, p.row, p.col)
+    ) {
+      return false;
+    }
+    return true;
+  });
+  return bundle.randomization.selectMoveWithRandomization({
+    bestMove,
+    bestMoveScore,
+    criticalScoreThreshold,
+    randomFactor,
+    random,
+    pickRandomMove: () => {
+      if (candidates.length === 0) {
+        return null;
+      }
+      const draw = random ? random() : Math.random();
+      const idx = Math.floor(draw * candidates.length);
+      return candidates[idx] ?? null;
+    },
+  });
+}
+
 async function main(): Promise<void> {
   const { worktreePath } = data;
 
@@ -429,6 +584,16 @@ async function main(): Promise<void> {
   if (data.bookEnabled) {
     console.log(
       `[cpu-bridge-worker] book=${bookBridge ? "ON" : "OFF(unavailable)"} for ${worktreePath}`,
+    );
+  }
+
+  // randomFactor 用の worktree モジュール（無ければ null＝randomFactor 無視）。
+  // 既存の commit-bench では params.randomFactor は WASM パスで完全に無視されていた
+  // ため、この配線が「WASM 対局に randomFactor が効くようにする」修正の本体。
+  const randomizationBundle = await loadRandomizationFromWorktree(worktreePath);
+  if (params.randomFactor > 0) {
+    console.log(
+      `[cpu-bridge-worker] randomFactor=${params.randomFactor} randomization=${randomizationBundle ? "ON" : "OFF(unavailable)"} criticalScoreThreshold=${params.randomCriticalScoreThreshold ?? "unset"} for ${worktreePath}`,
     );
   }
 
@@ -465,7 +630,7 @@ async function main(): Promise<void> {
 
   // 着手要求を処理（同期的にCPUを呼び出す）
   parentPort?.on("message", (msg: MoveRequest) => {
-    const { requestId, board, color, hangInject } = msg;
+    const { requestId, board, color, hangInject, moveSeed } = msg;
     // テスト用: hangInject が立っていれば応答せず沈黙 → 呼び出し側が timeout する
     if (hangInject) {
       console.warn(
@@ -499,11 +664,24 @@ async function main(): Promise<void> {
         ? wasmHandler.search(board, color, params)
         : callTsFindBestMove(tsFindBestMove!, board, color, params);
 
+      // randomFactor 適用（WASM/TS どちらの探索結果にも掛かる）。
+      // cpu.worker.ts と同じ手順で近傍ランダム化 + 黒番の禁手除外。
+      const finalPosition = applyRandomization(
+        randomizationBundle,
+        result.position,
+        result.score,
+        board,
+        color,
+        params.randomFactor,
+        params.randomCriticalScoreThreshold,
+        moveSeed,
+      );
+
       const thinkingTimeMs = performance.now() - startTime;
 
       const response: MoveResponse = {
         requestId,
-        position: result.position,
+        position: finalPosition,
         score: result.score,
         depth: result.completedDepth,
         thinkingTimeMs,

@@ -57,6 +57,12 @@ export interface RunMatchResult {
    * 未破棄なら常に 0。既存 caller が field を読まなくても影響しない。
    */
   aborts: number;
+  /**
+   * abort 局を側（A/B）別に集計したもの。
+   * 「劣勢側がハングしやすい場合に負けを消す」一方向バイアスの検出に使う。
+   * A + B = aborts の関係。
+   */
+  abortsBySide: { A: number; B: number };
 }
 
 export interface RunMatchParams {
@@ -89,6 +95,13 @@ export interface RunMatchParams {
    * gameIdx が現在の taskIdx に一致する局にだけ runCommitGame へ hangInject を渡す。
    */
   hangInject?: { gameIdx: number; spec: HangInjectSpec };
+  /**
+   * 各局に渡す PRNG シードを算出する関数。指定時、局ごとの gameSeed を
+   * `getGameSeed(gameIdx)` で決めて runCommitGame に渡す。
+   * randomFactor > 0 のとき「同一 baseSeed → 同一棋譜」を保証するのに使う。
+   * 未指定なら worker 側は Math.random にフォールバック（従来挙動）。
+   */
+  getGameSeed?: (gameIdx: number) => number;
 }
 
 // ============================================================================
@@ -281,6 +294,7 @@ export async function runMatch(
     recreatePair,
     onHang,
     hangInject,
+    getGameSeed,
   } = params;
 
   const wdl: WDLCount = { wins: 0, draws: 0, losses: 0 };
@@ -288,6 +302,7 @@ export async function runMatch(
   let completedGames = 0;
   let stoppedBySprt = false;
   let aborts = 0;
+  const abortsBySide = { A: 0, B: 0 };
 
   const cumAcc = { A: newAcc(), B: newAcc() };
 
@@ -312,12 +327,14 @@ export async function runMatch(
         hangInject !== undefined && hangInject.gameIdx === taskIdx
           ? hangInject.spec
           : undefined;
+      const gameSeed = getGameSeed ? getGameSeed(taskIdx) : undefined;
       try {
         const r = await runCommitGame(pair.a, pair.b, isABlack, {
           verbose,
           moveTimeoutMs,
           openingMoves: positions,
           hangInject: injectHere,
+          gameSeed,
         });
         result = { ...r, jushuName };
       } catch (err: unknown) {
@@ -347,6 +364,11 @@ export async function runMatch(
           }
         }
         aborts++;
+        // side 別集計: ハングした側（A/B）に加算。ハングじゃない例外（worker死等）
+        // は側が特定できないので aborts のみ加算する。
+        if (isHang) {
+          abortsBySide[err.context.side]++;
+        }
         try {
           pair.a.terminate();
           pair.b.terminate();
@@ -466,5 +488,5 @@ export async function runMatch(
 
   clearStatus();
 
-  return { wdl, games, completedGames, stoppedBySprt, aborts };
+  return { wdl, games, completedGames, stoppedBySprt, aborts, abortsBySide };
 }

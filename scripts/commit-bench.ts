@@ -42,6 +42,7 @@ import type {
 } from "./types/commit-bench.ts";
 
 import { estimateEloDiff, formatEloDiff } from "./lib/eloDiff.ts";
+import { type HangDumpSideConfig, writeHangDump } from "./lib/hangDump.ts";
 import {
   buildJushuTasks,
   createBridgeWorker,
@@ -49,6 +50,8 @@ import {
   type HangMatchInfo,
   runMatch,
 } from "./lib/match.ts";
+import { mixSeed } from "./lib/mulberry32.ts";
+import { parseHangInjectEnv } from "./lib/parseHangInjectEnv.ts";
 import { DEFAULT_SPRT_CONFIG, formatSPRT, updateSPRT } from "./lib/sprt.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -83,181 +86,9 @@ function resolveGitCommonDir(): string {
 const WORKTREES_DIR = path.join(resolveGitCommonDir(), "worktrees-bench");
 const HANG_DUMPS_DIR = path.join(OUTPUT_DIR, "hang-dumps");
 
-/**
- * HANG_INJECT=<gameIdx>:<requestOrdinal>[:A|B] を parse する。
- * - gameIdx: 0-based の tasks 配列上の局番号
- * - requestOrdinal: 1-based の非オープニング要求番号（その局で N 番目の要求でハング）
- * - オプション A|B: 対象 side を絞る（省略時はその手番の side を対象）
- * 不正な値なら process.exit(1)。
- */
-function parseHangInjectEnv(
-  raw: string | undefined,
-): { gameIdx: number; requestOrdinal: number; side?: "A" | "B" } | null {
-  if (raw === undefined || raw === "") {
-    return null;
-  }
-  const parts = raw.split(":");
-  if (parts.length !== 2 && parts.length !== 3) {
-    console.error(
-      `Error: HANG_INJECT は "<gameIdx>:<requestOrdinal>[:A|B]" の形式で指定してください (got: ${raw})`,
-    );
-    process.exit(1);
-  }
-  const gameIdx = parseInt(parts[0]!, 10);
-  const requestOrdinal = parseInt(parts[1]!, 10);
-  if (!Number.isFinite(gameIdx) || gameIdx < 0) {
-    console.error(`Error: HANG_INJECT gameIdx が不正 (got: ${parts[0]})`);
-    process.exit(1);
-  }
-  if (!Number.isFinite(requestOrdinal) || requestOrdinal < 1) {
-    console.error(
-      `Error: HANG_INJECT requestOrdinal は 1 以上の整数 (got: ${parts[1]})`,
-    );
-    process.exit(1);
-  }
-  const sideRaw = parts.length === 3 ? parts[2]! : undefined;
-  if (sideRaw !== undefined && sideRaw !== "A" && sideRaw !== "B") {
-    console.error(`Error: HANG_INJECT side は A か B (got: ${sideRaw})`);
-    process.exit(1);
-  }
-  return {
-    gameIdx,
-    requestOrdinal,
-    side: sideRaw as "A" | "B" | undefined,
-  };
-}
-
-// ============================================================================
-// ハングダンプ書き出し
-// ============================================================================
-
-interface HangDumpSideConfig {
-  worktreePath: string;
-  evaluationOptions: Partial<EvaluationOptions> | undefined;
-  bookEnabled: boolean;
-  commit: CommitInfo;
-}
-
-interface HangDumpJson {
-  type: "hang-dump";
-  schemaVersion: 1;
-  timestamp: string;
-  bench: {
-    /** 発生元スクリプト。replay がどの構成を組めばよいか区別するため */
-    tool: "commit-bench";
-    difficulty: string;
-    randomFactor: number | undefined;
-    moveTimeoutMs: number;
-  };
-  match: {
-    gameIdx: number;
-    jushuName: string;
-    isABlack: boolean;
-    pairIdx: number;
-  };
-  hang: {
-    /** ハングした側（A/B）— この情報だけで worker 側の worktree/config を引ける */
-    side: "A" | "B";
-    color: "black" | "white";
-    requestId: number;
-    timeoutMs: number;
-    elapsedMs: number;
-    /** 何手目でハングしたか（1-based, opening 3手を含む） */
-    moveNumber: number;
-  };
-  /** ハングした側の worker 設定（replay 用の完全情報） */
-  worker: {
-    side: "A" | "B";
-    worktreePath: string;
-    commit: CommitInfo;
-    difficulty: string;
-    randomFactor: number | undefined;
-    evaluationOptions: Partial<EvaluationOptions> | undefined;
-    bookEnabled: boolean;
-    color: "black" | "white";
-  };
-  /** 相手側の worker 設定（対戦の再構築が必要な将来のため） */
-  opponent: {
-    side: "A" | "B";
-    worktreePath: string;
-    commit: CommitInfo;
-    evaluationOptions: Partial<EvaluationOptions> | undefined;
-    bookEnabled: boolean;
-  };
-  /** ハング直前の盤面（そのままリクエストとして送れる形） */
-  board: unknown;
-  /** ハング直前までの着手履歴（opening 3手を含む。row/col/isOpening/time…） */
-  moveHistory: unknown;
-}
-
-function writeHangDump(params: {
-  context: HangContext;
-  info: HangMatchInfo;
-  commonConfig: { difficulty: string; randomFactor: number | undefined };
-  workerConfigs: { A: HangDumpSideConfig; B: HangDumpSideConfig };
-}): void {
-  const { context, info, commonConfig, workerConfigs } = params;
-  const hangSide = context.side;
-  const oppSide: "A" | "B" = hangSide === "A" ? "B" : "A";
-  const hangCfg = workerConfigs[hangSide];
-  const oppCfg = workerConfigs[oppSide];
-
-  const dump: HangDumpJson = {
-    type: "hang-dump",
-    schemaVersion: 1,
-    timestamp: new Date().toISOString(),
-    bench: {
-      tool: "commit-bench",
-      difficulty: commonConfig.difficulty,
-      randomFactor: commonConfig.randomFactor,
-      moveTimeoutMs: context.timeoutMs,
-    },
-    match: {
-      gameIdx: info.gameIdx,
-      jushuName: info.jushuName,
-      isABlack: info.isABlack,
-      pairIdx: info.pairIdx,
-    },
-    hang: {
-      side: context.side,
-      color: context.color,
-      requestId: context.requestId,
-      timeoutMs: context.timeoutMs,
-      elapsedMs: context.elapsedMs,
-      moveNumber: context.moveNumber,
-    },
-    worker: {
-      side: hangSide,
-      worktreePath: hangCfg.worktreePath,
-      commit: hangCfg.commit,
-      difficulty: commonConfig.difficulty,
-      randomFactor: commonConfig.randomFactor,
-      evaluationOptions: hangCfg.evaluationOptions,
-      bookEnabled: hangCfg.bookEnabled,
-      color: context.color,
-    },
-    opponent: {
-      side: oppSide,
-      worktreePath: oppCfg.worktreePath,
-      commit: oppCfg.commit,
-      evaluationOptions: oppCfg.evaluationOptions,
-      bookEnabled: oppCfg.bookEnabled,
-    },
-    board: context.board,
-    moveHistory: context.moveHistory,
-  };
-
-  if (!fs.existsSync(HANG_DUMPS_DIR)) {
-    fs.mkdirSync(HANG_DUMPS_DIR, { recursive: true });
-  }
-  const iso = dump.timestamp.replace(/[:.]/g, "-");
-  const outPath = path.join(
-    HANG_DUMPS_DIR,
-    `hang-${iso}-g${info.gameIdx}.json`,
-  );
-  fs.writeFileSync(outPath, JSON.stringify(dump, null, 2));
-  console.warn(`⚠ hang detected g${info.gameIdx}, dumped to ${outPath}`);
-}
+// HANG_INJECT 環境変数のパーサは scripts/lib/parseHangInjectEnv.ts に SSoT 化（テスト付き）。
+// ハングダンプ書き出しの型定義と実装は scripts/lib/hangDump.ts に SSoT 化した
+// （commit-bench と replay-hang で型定義が食い違うのを防ぐため）。
 
 // ============================================================================
 // CLI引数パース
@@ -298,6 +129,12 @@ interface CliOptions {
    * 通常は 30000 で運用。ハング計装のテスト時は短くして待ち時間を減らす。
    */
   moveTimeoutMs: number;
+  /**
+   * randomFactor > 0 での対局の PRNG シード（baseSeed）。指定時、局ごとの
+   * 実効 seed は `mixSeed(baseSeed, gameIdx)` で導出され、同一 --seed なら
+   * 同一棋譜になる。未指定なら `Date.now() | 0` を使う（従来と同じく非決定的）。
+   */
+  seed: number;
 }
 
 function parseArgs(): CliOptions {
@@ -318,6 +155,7 @@ function parseArgs(): CliOptions {
     bookB: false,
     maxGames: 0,
     moveTimeoutMs: 30000,
+    seed: Date.now() | 0,
   };
 
   for (const arg of args) {
@@ -398,6 +236,15 @@ function parseArgs(): CliOptions {
         );
         process.exit(1);
       }
+    } else if (arg.startsWith("--seed=")) {
+      const raw = arg.slice("--seed=".length);
+      const value = parseInt(raw, 10);
+      if (Number.isFinite(value)) {
+        options.seed = value | 0;
+      } else {
+        console.error(`Error: --seed は整数で指定 (got: ${raw})`);
+        process.exit(1);
+      }
     } else if (arg === "--verbose" || arg === "-v") {
       options.verbose = true;
     } else if (arg === "--help" || arg === "-h") {
@@ -465,6 +312,8 @@ Options:
   --max-games=<n>        タスクを先頭 N 局に切り詰め（0=無効, default: 0）。
                          ハング計装のスモークテスト用
   --move-timeout-ms=<n>  1手あたりのタイムアウト (default: 30000)
+  --seed=<n>             randomFactor 使用時の PRNG baseSeed（integer）。
+                         同一 seed なら同一棋譜を再現。default: Date.now()（非決定的）
   --verbose, -v          詳細ログ
   --help, -h             ヘルプを表示
 
@@ -895,7 +744,7 @@ async function main(): Promise<void> {
     }
 
     // ダンプ用の side メタ（worker 再生成にも再利用）
-    const workerConfigs = {
+    const workerConfigs: { A: HangDumpSideConfig; B: HangDumpSideConfig } = {
       A: {
         worktreePath: worktreePathA!,
         evaluationOptions: options.evalOptionsA,
@@ -908,7 +757,7 @@ async function main(): Promise<void> {
         bookEnabled: options.bookB,
         commit: commitB,
       },
-    } as const;
+    };
 
     const recreatePair = async (
       idx: number,
@@ -922,45 +771,81 @@ async function main(): Promise<void> {
       return fresh;
     };
 
+    // randomFactor 使用時は seed を明示ログ（同一シード同一棋譜の検証で使う）
+    const seedInEffect =
+      options.randomFactor === undefined ? undefined : options.seed;
+    if (seedInEffect !== undefined) {
+      console.log(
+        `PRNG seed（baseSeed）: ${seedInEffect}${process.argv.some((a) => a.startsWith("--seed=")) ? "" : " (default = Date.now())"}`,
+      );
+    }
+
     const onHang = (context: HangContext, info: HangMatchInfo): void => {
-      writeHangDump({
+      const dumpPath = writeHangDump({
+        outputDir: HANG_DUMPS_DIR,
         context,
-        info,
-        commonConfig: {
+        match: {
+          gameIdx: info.gameIdx,
+          jushuName: info.jushuName,
+          isABlack: info.isABlack,
+          pairIdx: info.pairIdx,
+          gameSeed:
+            seedInEffect === undefined
+              ? undefined
+              : mixSeed(seedInEffect, info.gameIdx),
+        },
+        bench: {
+          tool: "commit-bench",
           difficulty: options.difficulty,
           randomFactor: options.randomFactor,
+          moveTimeoutMs: context.timeoutMs,
+          jobs: options.jobs,
+          baseSeed: seedInEffect,
         },
         workerConfigs,
       });
+      console.warn(`⚠ hang detected g${info.gameIdx}, dumped to ${dumpPath}`);
     };
 
-    const hangInjectEnv = parseHangInjectEnv(process.env.HANG_INJECT);
+    const hangInjectParsed = parseHangInjectEnv(process.env.HANG_INJECT);
+    if (hangInjectParsed.kind === "error") {
+      console.error(`Error: ${hangInjectParsed.message}`);
+      process.exit(1);
+    }
+    const hangInjectEnv = hangInjectParsed.value;
     if (hangInjectEnv) {
       console.log(
         `⚠ HANG_INJECT 有効: gameIdx=${hangInjectEnv.gameIdx} requestOrdinal=${hangInjectEnv.requestOrdinal}${hangInjectEnv.side ? ` side=${hangInjectEnv.side}` : ""}`,
       );
     }
 
-    const { wdl, games, completedGames, aborts } = await runMatch({
-      pairs,
-      tasks,
-      totalGames: tasks.length,
-      sprtConfig,
-      moveTimeoutMs: options.moveTimeoutMs,
-      verbose: options.verbose,
-      startTime,
-      recreatePair,
-      onHang,
-      hangInject: hangInjectEnv
-        ? {
-            gameIdx: hangInjectEnv.gameIdx,
-            spec: {
-              requestOrdinal: hangInjectEnv.requestOrdinal,
-              side: hangInjectEnv.side,
-            },
-          }
-        : undefined,
-    });
+    const { wdl, games, completedGames, aborts, abortsBySide } = await runMatch(
+      {
+        pairs,
+        tasks,
+        totalGames: tasks.length,
+        sprtConfig,
+        moveTimeoutMs: options.moveTimeoutMs,
+        verbose: options.verbose,
+        startTime,
+        recreatePair,
+        onHang,
+        hangInject: hangInjectEnv
+          ? {
+              gameIdx: hangInjectEnv.gameIdx,
+              spec: {
+                requestOrdinal: hangInjectEnv.requestOrdinal,
+                side: hangInjectEnv.side,
+              },
+            }
+          : undefined,
+        // randomFactor 未指定なら getGameSeed を渡さない（従来と同じ Math.random）
+        getGameSeed:
+          seedInEffect === undefined
+            ? undefined
+            : (gameIdx: number): number => mixSeed(seedInEffect, gameIdx),
+      },
+    );
 
     const elapsedSeconds = (performance.now() - startTime) / 1000;
 
@@ -969,12 +854,18 @@ async function main(): Promise<void> {
     console.log(`commitA: ${commitA.shortSha} "${commitA.message}"`);
     console.log(`commitB: ${commitB.shortSha} "${commitB.message}"`);
     console.log(
-      `対局数: ${completedGames}${aborts > 0 ? ` (abort: ${aborts})` : ""}`,
+      `対局数: ${completedGames}${aborts > 0 ? ` (abort: ${aborts} = A側${abortsBySide.A} / B側${abortsBySide.B})` : ""}`,
     );
     if (aborts > 0) {
       console.log(
-        `⚠ ハング検出: ${aborts} 局を破棄しました。ダンプは ${HANG_DUMPS_DIR} を参照`,
+        `⚠ ハング検出: ${aborts} 局を破棄しました（A側=${abortsBySide.A} / B側=${abortsBySide.B}）。ダンプは ${HANG_DUMPS_DIR} を参照`,
       );
+      // 一方向バイアス（劣勢側がハングして負けが消される）を検出しやすくする
+      if (abortsBySide.A !== abortsBySide.B) {
+        console.log(
+          `  ※ side 別 abort 数が非対称です。「劣勢側だけ抜ける」バイアスの可能性を確認してください`,
+        );
+      }
     }
     console.log(`WDL (commitA視点): +${wdl.wins} =${wdl.draws} -${wdl.losses}`);
 
@@ -1037,9 +928,11 @@ async function main(): Promise<void> {
         evalOptionsB: options.evalOptionsB,
         bookA: options.bookA,
         bookB: options.bookB,
+        seed: seedInEffect,
       },
       totalGames: completedGames,
       aborts,
+      abortsBySide,
       wdl,
       eloDiff: eloDiffResult,
       sprt: sprtState,
