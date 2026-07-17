@@ -372,7 +372,7 @@ function handleLayoutClick(event: MouseEvent): void {
           <ReviewControls
             :current-move-index="reviewStore.currentMoveIndex"
             :total-moves="reviewStore.moves.length"
-            :evaluated-moves="reviewStore.evaluatedMoves"
+            :evaluated-moves="reviewStore.evaluatedMovesWithChains"
             :losing-move-index="reviewStore.losingMove?.moveIndex"
             @go-to-move="advanceToMove"
             @go-to-start="reviewStore.goToStart"

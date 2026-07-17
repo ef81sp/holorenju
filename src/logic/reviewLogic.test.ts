@@ -11,6 +11,7 @@ import {
   OPENING_MOVES,
   adjustCandidatesForForcedLoss,
   allCandidatesLose,
+  applyForcedReplyChains,
   applyVCTResult,
   buildBacktrackBranches,
   buildBacktrackSequence,
@@ -18,6 +19,7 @@ import {
   buildGameReview,
   classifyMoveQuality,
   findLosingMove,
+  getQualityColor,
   getQualityLabel,
   isOpeningMove,
 } from "./reviewLogic";
@@ -142,6 +144,199 @@ describe("buildGameReview", () => {
     const review = buildGameReview(moves);
     expect(review.accuracy).toBe(100);
   });
+
+  it("forcedLossチェーンの2手目以降はforcedReplyとして扱われ、criticalErrors・accuracy分母から除外される", () => {
+    const moves: EvaluatedMove[] = [
+      {
+        moveIndex: 3,
+        position: { row: 0, col: 0 },
+        isPlayerMove: true,
+        quality: "blunder",
+        playedScore: 0,
+        bestScore: 0,
+        scoreDiff: 0,
+        bestMove: { row: 0, col: 0 },
+        candidates: [],
+        forcedLossType: "vct",
+      },
+      {
+        moveIndex: 4,
+        position: { row: 0, col: 0 },
+        isPlayerMove: false,
+        quality: "excellent",
+        playedScore: 0,
+        bestScore: 0,
+        scoreDiff: 0,
+        bestMove: { row: 0, col: 0 },
+        candidates: [],
+      },
+      {
+        moveIndex: 5,
+        position: { row: 0, col: 0 },
+        isPlayerMove: true,
+        quality: "mistake",
+        playedScore: 0,
+        bestScore: 0,
+        scoreDiff: 0,
+        bestMove: { row: 0, col: 0 },
+        candidates: [],
+        forcedLossType: "vcf",
+      },
+    ];
+    const review = buildGameReview(moves);
+    // 分母はプレイヤーの手のうちforcedReply(5手目)を除いた1件(3手目)のみ
+    expect(review.accuracy).toBe(0); // 3手目はblunderなのでgoodOrBetter=0/1
+    expect(review.criticalErrors).toBe(1); // 3手目のみ（5手目はforcedReplyで除外）
+    expect(review.evaluatedMoves.find((m) => m.moveIndex === 5)?.quality).toBe(
+      "forcedReply",
+    );
+  });
+});
+
+describe("applyForcedReplyChains", () => {
+  function makeMove(
+    moveIndex: number,
+    opts?: {
+      isPlayerMove?: boolean;
+      quality?: EvaluatedMove["quality"];
+      forcedLossType?: EvaluatedMove["forcedLossType"];
+    },
+  ): EvaluatedMove {
+    return {
+      moveIndex,
+      position: { row: 0, col: 0 },
+      isPlayerMove: opts?.isPlayerMove ?? true,
+      quality: opts?.quality ?? "excellent",
+      playedScore: 0,
+      bestScore: 0,
+      scoreDiff: 0,
+      bestMove: { row: 0, col: 0 },
+      candidates: [],
+      forcedLossType: opts?.forcedLossType,
+    };
+  }
+
+  it("forcedLossType がひとつもなければ変更しない（同一参照）", () => {
+    const moves = [makeMove(3), makeMove(4), makeMove(5)];
+    expect(applyForcedReplyChains(moves)).toBe(moves);
+  });
+
+  it("ゲーム最初の評価対象手からチェーンが始まる: 初手はそのまま", () => {
+    const moves = [
+      makeMove(3, { quality: "blunder", forcedLossType: "vct" }),
+      makeMove(4, { isPlayerMove: false }),
+    ];
+    const result = applyForcedReplyChains(moves);
+    expect(result[0]!.quality).toBe("blunder");
+  });
+
+  it("チェーンが1手だけ: 敗着のみで強制応手は発生しない", () => {
+    const moves = [
+      makeMove(3, { quality: "blunder", forcedLossType: "vct" }),
+      makeMove(4, { isPlayerMove: false }),
+      makeMove(5, { quality: "excellent" }), // forcedLossType消滅=脱出
+    ];
+    const result = applyForcedReplyChains(moves);
+    expect(result[0]!.quality).toBe("blunder");
+    expect(result[2]!.quality).toBe("excellent");
+  });
+
+  it("チェーン2手目以降はforcedReplyになる（mistake等の分類を上書き）", () => {
+    const moves = [
+      makeMove(3, { quality: "blunder", forcedLossType: "vct" }),
+      makeMove(4, { isPlayerMove: false }),
+      makeMove(5, { quality: "mistake", forcedLossType: "vcf" }),
+      makeMove(6, { isPlayerMove: false }),
+      makeMove(7, { quality: "blunder", forcedLossType: "vct" }),
+    ];
+    const result = applyForcedReplyChains(moves);
+    expect(result[0]!.quality).toBe("blunder"); // 初手=敗着
+    expect(result[2]!.quality).toBe("forcedReply"); // 2手目: mistakeより優先
+    expect(result[4]!.quality).toBe("forcedReply"); // 3手目
+  });
+
+  it("forcedLossType の種類が途中で変わっても同一チェーン扱い", () => {
+    const moves = [
+      makeMove(3, { quality: "blunder", forcedLossType: "vcf" }),
+      makeMove(4, { isPlayerMove: false }),
+      makeMove(5, { quality: "blunder", forcedLossType: "vct" }),
+      makeMove(6, { isPlayerMove: false }),
+      makeMove(7, { quality: "blunder", forcedLossType: "forbidden-trap" }),
+    ];
+    const result = applyForcedReplyChains(moves);
+    expect(result[0]!.quality).toBe("blunder");
+    expect(result[2]!.quality).toBe("forcedReply");
+    expect(result[4]!.quality).toBe("forcedReply");
+  });
+
+  it("相手が勝ちを逃して脱出→再度被詰み: 2チェーン=敗着2つ", () => {
+    const moves = [
+      makeMove(3, { quality: "blunder", forcedLossType: "vct" }), // チェーン1 初手=敗着
+      makeMove(4, { isPlayerMove: false }),
+      makeMove(5, { quality: "blunder", forcedLossType: "vct" }), // チェーン1 継続=forcedReply
+      makeMove(6, { isPlayerMove: false }),
+      makeMove(7, { quality: "excellent" }), // 脱出（forcedLossTypeなし）
+      makeMove(8, { isPlayerMove: false }),
+      makeMove(9, { quality: "blunder", forcedLossType: "vcf" }), // チェーン2 初手=敗着
+      makeMove(10, { isPlayerMove: false }),
+      makeMove(11, { quality: "blunder", forcedLossType: "vcf" }), // チェーン2 継続=forcedReply
+    ];
+    const result = applyForcedReplyChains(moves);
+    expect(result[0]!.quality).toBe("blunder");
+    expect(result[2]!.quality).toBe("forcedReply");
+    expect(result[4]!.quality).toBe("excellent");
+    expect(result[6]!.quality).toBe("blunder");
+    expect(result[8]!.quality).toBe("forcedReply");
+  });
+
+  it("黒白両方が別々にチェーンを持つ棋譜: 色ごとに独立して判定する", () => {
+    const moves = [
+      // 黒(偶数)のチェーン: 3手目=敗着, 5手目=forcedReply
+      makeMove(3, { quality: "blunder", forcedLossType: "vct" }),
+      // 白(奇数)のチェーン: 4手目=敗着, 6手目=forcedReply
+      makeMove(4, {
+        isPlayerMove: false,
+        quality: "blunder",
+        forcedLossType: "vcf",
+      }),
+      makeMove(5, { quality: "mistake", forcedLossType: "vct" }),
+      makeMove(6, {
+        isPlayerMove: false,
+        quality: "mistake",
+        forcedLossType: "vcf",
+      }),
+    ];
+    const result = applyForcedReplyChains(moves);
+    expect(result[0]!.quality).toBe("blunder"); // moveIndex3: 黒チェーン初手
+    expect(result[1]!.quality).toBe("blunder"); // moveIndex4: 白チェーン初手
+    expect(result[2]!.quality).toBe("forcedReply"); // moveIndex5: 黒チェーン継続
+    expect(result[3]!.quality).toBe("forcedReply"); // moveIndex6: 白チェーン継続
+  });
+
+  it("最終手でチェーンが終端しても例外は起きない", () => {
+    const moves = [
+      makeMove(3, { quality: "blunder", forcedLossType: "vct" }),
+      makeMove(4, { isPlayerMove: false }),
+      makeMove(5, { quality: "blunder", forcedLossType: "vct" }),
+    ];
+    const result = applyForcedReplyChains(moves);
+    expect(result[0]!.quality).toBe("blunder");
+    expect(result[2]!.quality).toBe("forcedReply");
+  });
+
+  it("評価順序に依存しない（入力配列の順序がバラバラでも同じ結果）", () => {
+    const inOrder = [
+      makeMove(3, { quality: "blunder", forcedLossType: "vct" }),
+      makeMove(4, { isPlayerMove: false }),
+      makeMove(5, { quality: "blunder", forcedLossType: "vct" }),
+    ];
+    const shuffled = [inOrder[2]!, inOrder[0]!, inOrder[1]!];
+    const result = applyForcedReplyChains(shuffled);
+    const byIndex = (i: number): EvaluatedMove =>
+      result.find((m) => m.moveIndex === i)!;
+    expect(byIndex(3).quality).toBe("blunder");
+    expect(byIndex(5).quality).toBe("forcedReply");
+  });
 });
 
 describe("buildEvaluatedMove: モード別", () => {
@@ -251,6 +446,16 @@ describe("getQualityLabel", () => {
   it("isBookMove が未指定/falseなら通常のラベルを返す", () => {
     expect(getQualityLabel("excellent")).toBe("最善手");
     expect(getQualityLabel("blunder", false)).toBe("悪手");
+  });
+
+  it("forcedReplyは「被詰み継続」を返す", () => {
+    expect(getQualityLabel("forcedReply")).toBe("被詰み継続");
+  });
+});
+
+describe("getQualityColor", () => {
+  it("forcedReplyはグレー系の色を返す", () => {
+    expect(getQualityColor("forcedReply")).toBe("#9e9e9e");
   });
 });
 
