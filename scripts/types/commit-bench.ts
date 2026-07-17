@@ -59,6 +59,12 @@ export interface CommitBenchResult {
     bookA?: boolean;
     bookB?: boolean;
     /**
+     * 脅威プローブトグル（探索レバー A/B）。true=ON（従来挙動）、false=OFF。
+     * 記録なし＝ON 相当（後方互換 optional）。
+     */
+    threatProbeA?: boolean;
+    threatProbeB?: boolean;
+    /**
      * PRNG baseSeed。--seed 指定時は明示値、未指定時は Date.now() の下位32bit。
      * randomFactor 未指定なら undefined（seed が意味を持たないため）。
      * 局ごとの実効 seed は mixSeed(seed, gameIdx) で導出される。

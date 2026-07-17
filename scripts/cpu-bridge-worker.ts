@@ -54,6 +54,15 @@ interface BridgeWorkerData {
    * worktree に存在しなければ自動的に book-OFF として続行する（クラッシュしない）。
    */
   bookEnabled?: boolean;
+  /**
+   * 脅威プローブ（threat_probe_enabled）を無効化して探索させる。
+   * 既定 true=従来挙動。false の時は WASM ロード後に `setThreatProbeEnabled(0)` を
+   * 呼び、プローブ抜きの深度を計測する。export が無い古い wasm では warn してスキップ。
+   *
+   * prospect 基底下で probe OFF（NPS×17・深度5→12 が既測）が Elo に転換するかを
+   * commit-bench で再検証するための実行時レバー。
+   */
+  threatProbeEnabled?: boolean;
 }
 
 interface MoveRequest {
@@ -158,6 +167,12 @@ interface WasmModuleExports {
   setEvalParam?: (id: number, value: number) => void;
   getEvalParam?: (id: number) => number;
   resetEvalParams?: () => void;
+  /**
+   * 脅威プローブの有効/無効を切り替える（Gate 0 計測用、zig/src/main.zig）。
+   * 1=有効（既定）、0=無効。無効化した wasm では NPS×17・深度が上がる傾向がある
+   * が Elo に転換するかは要検証。古い wasm には無い＝optional。
+   */
+  setThreatProbeEnabled?: (enabled: number) => void;
 }
 
 /** WASM探索のハンドラ */
@@ -606,6 +621,20 @@ async function main(): Promise<void> {
     wasmHandler = createWasmSearchHandler(wasm);
     // eval 形系重みを注入（baseline は weights 空＝reset のみでクリーン既定）
     applyEvalWeights(wasm, data.evalWeights);
+    // 脅威プローブトグル（Gate 0 計測用）。既定 true=従来挙動、false のときのみ
+    // 明示 off。setThreatProbeEnabled が無い古い wasm は warn してスキップ。
+    let threatProbeState = "ON(default)";
+    if (data.threatProbeEnabled === false) {
+      if (typeof wasm.setThreatProbeEnabled === "function") {
+        wasm.setThreatProbeEnabled(0);
+        threatProbeState = "OFF(runtime)";
+      } else {
+        console.warn(
+          "[cpu-bridge-worker] この wasm は setThreatProbeEnabled 非対応。--probe-off を無視して既定 ON で走ります。",
+        );
+        threatProbeState = "ON(fallback, no-export)";
+      }
+    }
     // evalBasis 配線の silent 事故防止: 実際に search に渡る evaluationOptions を
     // エンコードした flags と bit18 (eval_basis) の状態を必ず1行ログに出す。
     // worktreePath のディレクトリ名（A-<sha>/B-<sha>）で A/B 側を判別できる。
@@ -616,7 +645,7 @@ async function main(): Promise<void> {
     const basis = params.evaluationOptions?.evalBasis ?? "legacy";
     const bit18 = (evalFlags & (1 << 18)) === 0 ? "legacy" : "prospect";
     console.log(
-      `[cpu-bridge-worker] WASM engine loaded for ${worktreePath} | evalBasis=${basis} evalFlags=${evalFlags} bit18=${bit18}`,
+      `[cpu-bridge-worker] WASM engine loaded for ${worktreePath} | evalBasis=${basis} evalFlags=${evalFlags} bit18=${bit18} threatProbe=${threatProbeState}`,
     );
   } else {
     tsFindBestMove = await loadTsCpuFromWorktree(worktreePath);

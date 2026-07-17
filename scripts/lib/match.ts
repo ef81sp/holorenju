@@ -159,6 +159,12 @@ export interface CreateBridgeWorkerParams {
    * として続行する。
    */
   bookEnabled?: boolean;
+  /**
+   * 脅威プローブトグル（探索レバー A/B）。未指定/true=従来挙動、false=無効化。
+   * setThreatProbeEnabled 非対応の古い wasm では bridge worker 側で warn して
+   * スキップされる（fallback で ON 相当）。
+   */
+  threatProbeEnabled?: boolean;
 }
 
 /**
@@ -196,6 +202,7 @@ export function createBridgeWorker(
     evalWeights,
     evaluationOptions,
     bookEnabled,
+    threatProbeEnabled,
   } = params;
   return new Promise<Worker>((resolve, reject) => {
     const customParams = buildBridgeCustomParams(
@@ -210,6 +217,7 @@ export function createBridgeWorker(
         customParams,
         evalWeights,
         bookEnabled,
+        threatProbeEnabled,
       },
       execArgv: [
         "--experimental-strip-types",

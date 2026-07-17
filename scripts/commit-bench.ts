@@ -119,6 +119,13 @@ interface CliOptions {
   bookA: boolean;
   bookB: boolean;
   /**
+   * 脅威プローブトグル（探索レバー A/B）。true=既定 ON（従来挙動）、
+   * false=無効化（--probe-off-a/b で false になる）。prospect 基底下で
+   * probe OFF が Elo に転換するかを commit-bench で再検証するためのレバー。
+   */
+  probeEnabledA: boolean;
+  probeEnabledB: boolean;
+  /**
    * デバッグ/スモークテスト用: タスクを先頭 N 局に切り詰める（0 なら無効）。
    * ハング計装の e2e 検証で少局数（例: 4局）を回すために追加。
    * 通常のベンチ運用では 0（無効＝全 sets を消化）。
@@ -153,6 +160,8 @@ function parseArgs(): CliOptions {
     jobs: 1,
     bookA: false,
     bookB: false,
+    probeEnabledA: true,
+    probeEnabledB: true,
     maxGames: 0,
     moveTimeoutMs: 30000,
     seed: Date.now() | 0,
@@ -216,6 +225,10 @@ function parseArgs(): CliOptions {
       options.bookA = true;
     } else if (arg === "--book-b") {
       options.bookB = true;
+    } else if (arg === "--probe-off-a") {
+      options.probeEnabledA = false;
+    } else if (arg === "--probe-off-b") {
+      options.probeEnabledB = false;
     } else if (arg.startsWith("--max-games=")) {
       const value = parseInt(arg.slice("--max-games=".length), 10);
       if (!isNaN(value) && value >= 0) {
@@ -309,6 +322,9 @@ Options:
   --eval-options-b=<json> B側 evaluationOptions オーバーライド（JSON。省略時は legacy 既定）
   --book-a               A側でオープニングブックを有効化（既定OFF）
   --book-b               B側でオープニングブックを有効化（既定OFF）
+  --probe-off-a          A側の脅威プローブを無効化（既定ON）。prospect 基底下で
+                         深度向上が Elo に転換するか検証するレバー
+  --probe-off-b          B側の脅威プローブを無効化（既定ON）
   --max-games=<n>        タスクを先頭 N 局に切り詰め（0=無効, default: 0）。
                          ハング計装のスモークテスト用
   --move-timeout-ms=<n>  1手あたりのタイムアウト (default: 30000)
@@ -652,6 +668,10 @@ async function main(): Promise<void> {
     console.log(`book A: ${options.bookA ? "ON" : "OFF"}`);
     console.log(`book B: ${options.bookB ? "ON" : "OFF"}`);
   }
+  if (!options.probeEnabledA || !options.probeEnabledB) {
+    console.log(`threatProbe A: ${options.probeEnabledA ? "ON" : "OFF"}`);
+    console.log(`threatProbe B: ${options.probeEnabledB ? "ON" : "OFF"}`);
+  }
   if (sprtConfig) {
     console.log(
       `SPRT: elo0=${sprtConfig.elo0}, elo1=${sprtConfig.elo1}, ` +
@@ -703,6 +723,7 @@ async function main(): Promise<void> {
       worktreePath: string,
       evaluationOptions: Partial<EvaluationOptions> | undefined,
       bookEnabled: boolean,
+      threatProbeEnabled: boolean,
     ): Promise<Worker> =>
       createBridgeWorker({
         workerPath,
@@ -712,14 +733,25 @@ async function main(): Promise<void> {
         randomFactor: options.randomFactor,
         evaluationOptions,
         bookEnabled,
+        threatProbeEnabled,
       });
 
     console.log(`Bridge workerを初期化中... (${options.jobs}並列)`);
     const createdPairs = await Promise.all(
       Array.from({ length: options.jobs }, async () => {
         const [a, b] = await Promise.all([
-          makeWorker(worktreePathA!, options.evalOptionsA, options.bookA),
-          makeWorker(worktreePathB!, options.evalOptionsB, options.bookB),
+          makeWorker(
+            worktreePathA!,
+            options.evalOptionsA,
+            options.bookA,
+            options.probeEnabledA,
+          ),
+          makeWorker(
+            worktreePathB!,
+            options.evalOptionsB,
+            options.bookB,
+            options.probeEnabledB,
+          ),
         ]);
         return { a, b };
       }),
@@ -763,8 +795,18 @@ async function main(): Promise<void> {
       idx: number,
     ): Promise<{ a: Worker; b: Worker }> => {
       const [a, b] = await Promise.all([
-        makeWorker(worktreePathA!, options.evalOptionsA, options.bookA),
-        makeWorker(worktreePathB!, options.evalOptionsB, options.bookB),
+        makeWorker(
+          worktreePathA!,
+          options.evalOptionsA,
+          options.bookA,
+          options.probeEnabledA,
+        ),
+        makeWorker(
+          worktreePathB!,
+          options.evalOptionsB,
+          options.bookB,
+          options.probeEnabledB,
+        ),
       ]);
       const fresh = { a, b };
       pairs[idx] = fresh;
@@ -928,6 +970,8 @@ async function main(): Promise<void> {
         evalOptionsB: options.evalOptionsB,
         bookA: options.bookA,
         bookB: options.bookB,
+        threatProbeA: options.probeEnabledA,
+        threatProbeB: options.probeEnabledB,
         seed: seedInEffect,
       },
       totalGames: completedGames,
