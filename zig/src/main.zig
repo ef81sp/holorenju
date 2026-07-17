@@ -623,8 +623,29 @@ export fn findVCTSequenceWasm(color: u8, max_depth: u8, time_limit_ms: u32, max_
     };
 
     const cells = &board.board_cells;
-    // 振り返り(review)用エントリは攻めの追い詰め手順提示なので lenient（main 挙動）。
+    // 攻めの追い詰め手順提示（自分の forcedWin 検出）なので lenient（main 挙動）。
+    // 相手の被詰み判定には findVCTSequenceStrictWasm を使うこと。
     const result = vct.findVCTSequence(cells, cell_color, max_depth, time_limit_ms, max_nodes, collect_branches != 0, .lenient);
+    writeVCTResult(result);
+}
+
+/// VCT手順を探索し結果を vct_seq_buffer に書き込む（被詰み判定専用・strict）
+///
+/// 相手（防御側）がカウンターフォーでテンポを奪い返せる手順は「幻の被詰み」として
+/// 棄却する。review の checkForcedLoss（自分の着手が相手の VCT を許したか）専用。
+/// 自分の forcedWin 検出（攻め）には使わないこと（真正VCTまで棄却され弱体化する）。
+export fn findVCTSequenceStrictWasm(color: u8, max_depth: u8, time_limit_ms: u32, max_nodes: u32, collect_branches: u8) void {
+    const cell_color: board.Cell = switch (color) {
+        1 => .black,
+        2 => .white,
+        else => {
+            vct_seq_buffer[0] = 0;
+            return;
+        },
+    };
+
+    const cells = &board.board_cells;
+    const result = vct.findVCTSequence(cells, cell_color, max_depth, time_limit_ms, max_nodes, collect_branches != 0, .strict);
     writeVCTResult(result);
 }
 

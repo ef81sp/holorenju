@@ -29,7 +29,7 @@ import { isBookMove, preloadOpeningBook } from "./openingBook";
 import { FORCED_LOSS_VCT_OPTIONS } from "./review/forcedLossCheck";
 import { detectForcedWin } from "./review/forcedWinDetection";
 import { executeFullEval } from "./review/fullEval";
-import { wasmFindVCTSequence } from "./review/wasmAdapters";
+import { wasmFindVCTSequenceStrict } from "./review/wasmAdapters";
 import { VCT_STONE_THRESHOLD } from "./search/types";
 import { preloadForbiddenWasm } from "./wasm/forbiddenAdapter";
 import { loadWasmModule } from "./wasm/loader";
@@ -96,7 +96,8 @@ self.onmessage = async (event: MessageEvent<ReviewEvalRequest>) => {
         !selfHasFour &&
         (skipStoneThreshold || stoneCountAfter >= VCT_STONE_THRESHOLD)
       ) {
-        const oppVCT = wasmFindVCTSequence(
+        // 被詰み判定なので strict（幻の被詰みを棄却。forcedLossCheck.ts と同じ理由）
+        const oppVCT = wasmFindVCTSequenceStrict(
           searchEngine,
           boardAfter,
           opponentColor,

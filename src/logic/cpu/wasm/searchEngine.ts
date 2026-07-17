@@ -382,6 +382,31 @@ export class WasmSearchEngine {
   }
 
   /**
+   * VCT手順全体を探索（被詰み判定専用・strict）
+   *
+   * カウンターフォーでテンポを奪い返される手順（幻の被詰み）を棄却する。
+   * 自分の forcedWin 検出（攻め）には findVCTSequence（lenient）を使うこと。
+   */
+  findVCTSequenceStrict(
+    board: BoardState,
+    color: "black" | "white",
+    maxDepth: number,
+    timeLimitMs: number,
+    maxNodes: number,
+    collectBranches: boolean,
+  ): VCTSequenceResult | null {
+    boardStateToWasm(this.wasm, board);
+    this.wasm.findVCTSequenceStrictWasm(
+      colorToWasm(color),
+      maxDepth,
+      timeLimitMs,
+      maxNodes,
+      collectBranches ? 1 : 0,
+    );
+    return this.readVCTSequenceResult();
+  }
+
+  /**
    * 指定初手からのVCT手順を探索
    */
   findVCTSequenceFromFirstMove(

@@ -88,6 +88,29 @@ export function wasmFindVCTSequence(
   );
 }
 
+/**
+ * VCT手順探索（被詰み判定専用・strict）
+ *
+ * 「相手の着手（自分の forcedLoss）を検出する」用途専用。カウンターフォーで
+ * テンポを奪い返される手順（幻の被詰み）を棄却する。自分の forcedWin 検出
+ * （攻め）には wasmFindVCTSequence（lenient）を使うこと。
+ */
+export function wasmFindVCTSequenceStrict(
+  engine: WasmSearchEngine,
+  board: BoardState,
+  color: "black" | "white",
+  options: VCTSearchOptions,
+): VCTSequenceResult | null {
+  return engine.findVCTSequenceStrict(
+    board,
+    color,
+    options.maxDepth ?? 4,
+    toWasmLimit(options.timeLimit),
+    toWasmLimit(options.maxNodes),
+    options.collectBranches ?? false,
+  );
+}
+
 export function wasmFindVCTSequenceFromFirstMove(
   engine: WasmSearchEngine,
   board: BoardState,

@@ -33,6 +33,18 @@ export function isOpeningMove(moveIndex: number): boolean {
 }
 
 /**
+ * スコア差の品質境界（review-threshold-calibration 2026-07-17 較正調査で改定）。
+ *
+ * 旧値 80/300/1000 は Rapfi オラクルとの二重採点（n=186、うちscoreDiff駆動133件）
+ * で過剰判定（現行mistake/blunderの40%がRapfi基準ではgood以下、blunder判定の
+ * 94.4%が真にblunder級でない）が確認されたため、グリッドサーチ（FP2倍重み付け
+ * loss最小化）の結果を丸めて採用。
+ */
+const QUALITY_THRESHOLD_GOOD = 150;
+const QUALITY_THRESHOLD_INACCURACY = 400;
+const QUALITY_THRESHOLD_MISTAKE = 2500;
+
+/**
  * スコア差に基づく品質分類
  *
  * scoreDiff（= bestScore - playedScore）は本来 0 以上のはずだが、実手が
@@ -50,13 +62,13 @@ export function classifyMoveQuality(scoreDiff: number): MoveQuality {
   if (clampedDiff === 0) {
     return "excellent";
   }
-  if (clampedDiff <= 80) {
+  if (clampedDiff <= QUALITY_THRESHOLD_GOOD) {
     return "good";
   }
-  if (clampedDiff <= 300) {
+  if (clampedDiff <= QUALITY_THRESHOLD_INACCURACY) {
     return "inaccuracy";
   }
-  if (clampedDiff <= 1000) {
+  if (clampedDiff <= QUALITY_THRESHOLD_MISTAKE) {
     return "mistake";
   }
   return "blunder";

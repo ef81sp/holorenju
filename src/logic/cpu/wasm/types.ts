@@ -116,6 +116,14 @@ export interface WasmModuleContext {
     maxNodes: number,
     collectBranches: number,
   ) => void;
+  /** 被詰み判定専用（strict）。攻めの forcedWin 検出には findVCTSequenceWasm（lenient）を使うこと。 */
+  findVCTSequenceStrictWasm: (
+    color: number,
+    maxDepth: number,
+    timeLimitMs: number,
+    maxNodes: number,
+    collectBranches: number,
+  ) => void;
   findVCTSequenceFromFirstMoveWasm: (
     row: number,
     col: number,

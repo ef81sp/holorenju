@@ -31,28 +31,28 @@ describe("classifyMoveQuality", () => {
     expect(classifyMoveQuality(1)).toBe("good");
   });
 
-  it("スコア差80は好手", () => {
-    expect(classifyMoveQuality(80)).toBe("good");
+  it("スコア差150は好手", () => {
+    expect(classifyMoveQuality(150)).toBe("good");
   });
 
-  it("スコア差81は疑問手", () => {
-    expect(classifyMoveQuality(81)).toBe("inaccuracy");
+  it("スコア差151は疑問手", () => {
+    expect(classifyMoveQuality(151)).toBe("inaccuracy");
   });
 
-  it("スコア差300は疑問手", () => {
-    expect(classifyMoveQuality(300)).toBe("inaccuracy");
+  it("スコア差400は疑問手", () => {
+    expect(classifyMoveQuality(400)).toBe("inaccuracy");
   });
 
-  it("スコア差301は悪手", () => {
-    expect(classifyMoveQuality(301)).toBe("mistake");
+  it("スコア差401は悪手", () => {
+    expect(classifyMoveQuality(401)).toBe("mistake");
   });
 
-  it("スコア差1000は悪手", () => {
-    expect(classifyMoveQuality(1000)).toBe("mistake");
+  it("スコア差2500は悪手", () => {
+    expect(classifyMoveQuality(2500)).toBe("mistake");
   });
 
-  it("スコア差1001は大悪手", () => {
-    expect(classifyMoveQuality(1001)).toBe("blunder");
+  it("スコア差2501は大悪手", () => {
+    expect(classifyMoveQuality(2501)).toBe("blunder");
   });
 
   it("負のスコア差は0扱い（best以上=最善手）", () => {
@@ -183,8 +183,8 @@ describe("buildEvaluatedMove: モード別", () => {
       mode: "fullEval",
       moveIndex: 3,
       bestMove: { row: 7, col: 7 },
-      bestScore: 2000,
-      playedScore: 0, // scoreDiff=2000 → 素の分類なら blunder
+      bestScore: 3000,
+      playedScore: 0, // scoreDiff=3000 → 素の分類なら blunder
       candidates: [],
       completedDepth: 6,
       isBookMove: true,
@@ -199,7 +199,7 @@ describe("buildEvaluatedMove: モード別", () => {
       mode: "fullEval",
       moveIndex: 3,
       bestMove: { row: 7, col: 7 },
-      bestScore: 2000,
+      bestScore: 3000,
       playedScore: 0,
       candidates: [],
       completedDepth: 6,
@@ -215,7 +215,7 @@ describe("buildEvaluatedMove: モード別", () => {
       mode: "fullEval",
       moveIndex: 3,
       bestMove: { row: 7, col: 7 },
-      bestScore: 2000,
+      bestScore: 3000,
       playedScore: 0,
       candidates: [],
       completedDepth: 6,
