@@ -19,7 +19,7 @@ import type {
 
 import { parseGameRecord } from "@/logic/gameRecordParser";
 import { checkWin, createEmptyBoard } from "@/logic/renjuRules";
-import { findLosingMove } from "@/logic/reviewLogic";
+import { buildGameReview } from "@/logic/reviewLogic";
 
 /** localStorageキャッシュキー */
 const REVIEW_CACHE_KEY = "holorenju-review-cache";
@@ -194,42 +194,45 @@ export const useCpuReviewStore = defineStore("cpuReview", () => {
     return board;
   });
 
-  /** 現在の手の評価 */
+  /**
+   * 対局全体の評価（forcedLossチェーンのforcedReply再分類・精度・
+   * クリティカルエラー数・敗着推定を一括算出する SSoT）
+   */
+  const gameReview = computed(() => buildGameReview(evaluatedMoves.value));
+
+  /**
+   * forcedLossチェーンの2手目以降を forcedReply に再分類済みの評価一覧
+   *
+   * UI表示（ReviewControlsの品質ドット・ReviewVerdictの品質タグ等）は
+   * こちらを使う。生の evaluatedMoves は評価の逐次追加・部分更新用。
+   */
+  const evaluatedMovesWithChains = computed(
+    () => gameReview.value.evaluatedMoves,
+  );
+
+  /** 現在の手の評価（forcedReply再分類済み） */
   const currentEvaluation = computed<EvaluatedMove | null>(() => {
     if (currentMoveIndex.value === 0) {
       return null;
     }
     return (
-      evaluatedMoves.value.find(
+      evaluatedMovesWithChains.value.find(
         (e) => e.moveIndex === currentMoveIndex.value - 1,
       ) ?? null
     );
   });
 
-  /** プレイヤー精度 */
+  /** プレイヤー精度（forcedReplyは分母から除外。評価済みの手が無ければnull） */
   const playerAccuracy = computed(() => {
-    const playerMoves = evaluatedMoves.value.filter((m) => m.isPlayerMove);
-    if (playerMoves.length === 0) {
-      return null;
-    }
-    const goodOrBetter = playerMoves.filter(
-      (m) => m.quality === "excellent" || m.quality === "good",
-    ).length;
-    return Math.round((goodOrBetter / playerMoves.length) * 100);
+    const hasPlayerMoves = evaluatedMoves.value.some((m) => m.isPlayerMove);
+    return hasPlayerMoves ? gameReview.value.accuracy : null;
   });
 
-  /** ミス数（mistake + blunder） */
-  const criticalErrors = computed(
-    () =>
-      evaluatedMoves.value.filter(
-        (m) =>
-          m.isPlayerMove &&
-          (m.quality === "mistake" || m.quality === "blunder"),
-      ).length,
-  );
+  /** ミス数（mistake + blunder。forcedReplyは含まない） */
+  const criticalErrors = computed(() => gameReview.value.criticalErrors);
 
   /** 敗着の推定結果 */
-  const losingMove = computed(() => findLosingMove(evaluatedMoves.value));
+  const losingMove = computed(() => gameReview.value.losingMove);
 
   // ========== Actions ==========
 
@@ -349,13 +352,14 @@ export const useCpuReviewStore = defineStore("cpuReview", () => {
   function setEvaluationResults(results: EvaluatedMove[]): void {
     evaluatedMoves.value = results;
 
-    // cpuBattle のみキャッシュ保存
+    // cpuBattle のみキャッシュ保存（evaluatedMoves は生データ、
+    // accuracy/criticalErrors/losingMove は forcedReply 再分類を反映した値）
     if (currentRecord.value) {
       const review: GameReview = {
         evaluatedMoves: results,
-        accuracy: playerAccuracy.value ?? 100,
-        criticalErrors: criticalErrors.value,
-        losingMove: losingMove.value,
+        accuracy: gameReview.value.accuracy,
+        criticalErrors: gameReview.value.criticalErrors,
+        losingMove: gameReview.value.losingMove,
       };
       reviewCache.value.set(currentRecord.value.id, review);
       saveCache(reviewCache.value);
@@ -406,6 +410,7 @@ export const useCpuReviewStore = defineStore("cpuReview", () => {
     currentPlayerSide,
     gameResult,
     boardAtCurrentMove,
+    evaluatedMovesWithChains,
     currentEvaluation,
     playerAccuracy,
     criticalErrors,
