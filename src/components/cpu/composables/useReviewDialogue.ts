@@ -142,10 +142,9 @@ const FORCED_WIN_DIALOGUES: Record<MoveQuality, string[]> = {
     "{forcedWin}を逃しちゃった！{bestMove}から決まったよ",
     "ここは{forcedWin}で勝てたね。{bestMove}がポイント！",
   ],
-  forcedReply: [
-    "{forcedWin}を逃しちゃった！{bestMove}から決まったよ",
-    "ここは{forcedWin}で勝てたね。{bestMove}がポイント！",
-  ],
+  // forcedReplyは選択の余地がない手だったため「逃した」とは言わず、
+  // 情報提供に留めるトーンにする
+  forcedReply: ["実は{forcedWin}もあったみたいだね。{bestMove}が起点だよ"],
 };
 
 /**

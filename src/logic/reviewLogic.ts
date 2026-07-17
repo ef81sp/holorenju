@@ -211,6 +211,12 @@ export function applyVCTResult(
 export function applyForcedReplyChains(
   evaluatedMoves: EvaluatedMove[],
 ): EvaluatedMove[] {
+  // forcedLossType が一つも無ければチェーンは存在し得ない。大半の対局
+  // （被詰みが一度も発生しない）で色ごとの filter+sort を丸ごと省略する。
+  if (!evaluatedMoves.some((m) => m.forcedLossType)) {
+    return evaluatedMoves;
+  }
+
   const forcedReplyIndices = new Set<number>();
 
   for (const parity of [0, 1] as const) {
