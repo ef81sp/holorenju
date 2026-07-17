@@ -9,14 +9,15 @@ import type { ForcedLossResult } from "@/types/review";
 
 import { BOARD_SIZE } from "@/constants/board";
 
-import type {
-  MiseVCFSearchOptions,
-  VCFSearchOptions,
-  VCTSearchOptions,
-} from "../search/types";
 import type { WasmSearchEngine } from "../wasm/searchEngine";
 
 import { detectWhiteWinningPattern } from "../evaluation/winningPatterns";
+import {
+  VCT_STONE_THRESHOLD,
+  type MiseVCFSearchOptions,
+  type VCFSearchOptions,
+  type VCTSearchOptions,
+} from "../search/types";
 // #37 P3 PR4/PR5b/PR6: 脅威検出・両ミセ手・VCT検証ヘルパーを Zig 単一ソース経由に（合法局面で TS と一致、未ロード時 TS フォールバック）。
 import {
   detectOpponentThreats,
@@ -50,10 +51,22 @@ export const REVIEW_MISE_VCF_OPTIONS: MiseVCFSearchOptions = {
   timeLimit: 5_000,
 };
 
-/** Phase 2/3 VCT 深掘りチェック用 */
+/**
+ * Phase 2/3 VCT 深掘りチェック用
+ *
+ * timeLimit（#70 review-forcedloss-vct-budget 調査 2026-07-18）: 旧値は
+ * 10,000ms（VCT内部のVCFがノードカウントを共有しないため maxNodes だけでは
+ * 不十分、という理由での保守的な上限）。ボス実戦棋譜21手全てで実測したところ、
+ * 本物の被詰み検出（VCT/VCF発見）は全て600ms未満で完了する一方、被詰みが
+ * 存在しない局面での網羅探索（陰性判定）はこの10秒上限にほぼ張り付いて
+ * 停止していた（VCT_STONE_THRESHOLD引き下げにより新たにこの範囲もチェック
+ * 対象になったため、この無駄なコストが顕在化した）。3,000msは実測した
+ * 最遅の本物の検出（約580ms）に対して約5倍の安全マージンを残しつつ、
+ * 陰性判定の最悪コストを1/3に抑える。
+ */
 export const FORCED_LOSS_VCT_OPTIONS: VCTSearchOptions = {
   maxDepth: 8,
-  timeLimit: 10_000, // 10秒上限（VCT内部のVCFがノードカウントを共有しないため maxNodes だけでは不十分）
+  timeLimit: 3_000,
   maxNodes: 500_000,
   vcfOptions: { maxDepth: 16, timeLimit: 3_000, maxNodes: 100_000 },
   // 被詰タブで防御分岐を木展開するための詰み木を収集する（#26）。
@@ -271,6 +284,54 @@ export function checkForcedLoss(
   }
 
   return undefined;
+}
+
+/**
+ * Phase 2/3: 相手のVCTのみを判定する（vctCheckOnly 用。review.worker.ts と
+ * テストの両方から利用する SSoT）
+ *
+ * checkForcedLoss の VCT ステップ（#6）と異なり、こちらは以下の呼び出し条件を
+ * 追加で持つ:
+ * - 自分（color）に四/活四があれば相手はVCT不可のため即 undefined
+ * - 石数が VCT_STONE_THRESHOLD 未満の局面は、探索コストに見合わないため
+ *   スキップする（#70: 旧14は開局直後の陰性探索が高コストという想定だったが、
+ *   J6の実例のように8石時点で本物の被詰みが存在するケースを見逃していた。
+ *   skipStoneThreshold=true で無視可能。Phase 3 遡及チェック用）
+ */
+export function checkForcedLossVCTOnly(
+  boardAfter: BoardState,
+  color: "black" | "white",
+  opponentColor: "black" | "white",
+  stoneCountAfter: number,
+  wasmSearchEngine: WasmSearchEngine,
+  options?: { vctOptions?: VCTSearchOptions; skipStoneThreshold?: boolean },
+): ForcedLossResult | undefined {
+  const selfThreats = detectOpponentThreats(boardAfter, color);
+  const selfHasFour =
+    selfThreats.fours.length > 0 || selfThreats.openFours.length > 0;
+  if (selfHasFour) {
+    return undefined;
+  }
+  if (!options?.skipStoneThreshold && stoneCountAfter < VCT_STONE_THRESHOLD) {
+    return undefined;
+  }
+
+  const vctOpts = options?.vctOptions ?? FORCED_LOSS_VCT_OPTIONS;
+  // 被詰み判定なので strict（幻の被詰みを棄却。checkForcedLoss と同じ理由）
+  const oppVCT = wasmFindVCTSequenceStrict(
+    wasmSearchEngine,
+    boardAfter,
+    opponentColor,
+    vctOpts,
+  );
+  if (!oppVCT) {
+    return undefined;
+  }
+  return {
+    type: oppVCT.isForbiddenTrap ? "forbidden-trap" : "vct",
+    sequence: oppVCT.sequence,
+    tree: oppVCT.tree,
+  };
 }
 
 /**

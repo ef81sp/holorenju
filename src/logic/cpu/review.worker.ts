@@ -7,10 +7,7 @@
  * import ReviewWorker from './review.worker?worker'
  */
 
-import type { Position } from "@/types/game";
 import type {
-  ForcedLossType,
-  ForcedWinNode,
   FullEvalResult,
   LightEvalResult,
   ReviewEvalRequest,
@@ -27,11 +24,9 @@ import { countStones } from "./core/boardUtils";
 // import しない（opening-book-2026-07-16.md §3: 振り返りの着手選択には
 // ブックを使わない構造を保つ）。
 import { isBookMove, preloadOpeningBook } from "./openingBook";
-import { FORCED_LOSS_VCT_OPTIONS } from "./review/forcedLossCheck";
+import { checkForcedLossVCTOnly } from "./review/forcedLossCheck";
 import { detectForcedWin } from "./review/forcedWinDetection";
 import { executeFullEval } from "./review/fullEval";
-import { wasmFindVCTSequenceStrict } from "./review/wasmAdapters";
-import { VCT_STONE_THRESHOLD } from "./search/types";
 import { preloadForbiddenWasm } from "./wasm/forbiddenAdapter";
 import { loadWasmModule } from "./wasm/loader";
 import { WasmSearchEngine } from "./wasm/searchEngine";
@@ -86,38 +81,24 @@ self.onmessage = async (event: MessageEvent<ReviewEvalRequest>) => {
       const opponentColor = color === "black" ? "white" : "black";
       const stoneCountAfter = countStones(boardAfter);
 
-      // 自分に四があれば相手はVCT不可
-      const selfThreats = detectOpponentThreats(boardAfter, color);
-      const selfHasFour =
-        selfThreats.fours.length > 0 || selfThreats.openFours.length > 0;
-
-      let forcedLossType: ForcedLossType | undefined = undefined;
-      let forcedLossSequence: Position[] | undefined = undefined;
-      let forcedLossTree: ForcedWinNode | undefined = undefined;
-      if (
-        !selfHasFour &&
-        (skipStoneThreshold || stoneCountAfter >= VCT_STONE_THRESHOLD)
-      ) {
-        // 被詰み判定なので strict（幻の被詰みを棄却。forcedLossCheck.ts と同じ理由）
-        const oppVCT = wasmFindVCTSequenceStrict(
-          searchEngine,
-          boardAfter,
-          opponentColor,
-          FORCED_LOSS_VCT_OPTIONS,
-        );
-        if (oppVCT) {
-          forcedLossType = oppVCT.isForbiddenTrap ? "forbidden-trap" : "vct";
-          forcedLossSequence = oppVCT.sequence;
-          forcedLossTree = oppVCT.tree;
-        }
-      }
+      // selfHasFourチェック・石数閾値ゲート・strict VCT探索は
+      // forcedLossCheck.ts の checkForcedLossVCTOnly に集約（worker とテストの
+      // 両方から利用する SSoT、#70）
+      const loss = checkForcedLossVCTOnly(
+        boardAfter,
+        color,
+        opponentColor,
+        stoneCountAfter,
+        searchEngine,
+        { skipStoneThreshold },
+      );
 
       const response: VCTCheckResult = {
         mode: "vctCheck",
         moveIndex,
-        forcedLossType,
-        forcedLossSequence,
-        forcedLossTree,
+        forcedLossType: loss?.type,
+        forcedLossSequence: loss?.sequence,
+        forcedLossTree: loss?.tree,
       };
       self.postMessage(response);
       return;

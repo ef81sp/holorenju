@@ -73,8 +73,19 @@ export interface VCTSequenceResult {
   tree?: ForcedWinNode;
 }
 
-/** VCT探索を有効にする石数の閾値（終盤のみ） */
-export const VCT_STONE_THRESHOLD = 14;
+/**
+ * VCT探索を有効にする石数の閾値（review.worker.ts の vctCheckOnly のみで使用）
+ *
+ * #70（2026-07-18）: 旧値14は「石が少なすぎる開局直後は探索コストに見合わない」
+ * という想定だったが、実戦棋譜で8石時点（開局3手をスキップした直後）に本物の
+ * 被詰み（VCT）が存在する敗着（J6）を見逃す原因になっていた。開局の珠型3手
+ * （isOpeningMove/OPENING_MOVES）は review のキュー自体に載らないため、4は
+ * 実質「開局直後を除く全ての評価対象手でVCTチェックを行う」に等しい。
+ * ボス実戦21手での実測では、閾値を下げても本物の検出は全て600ms未満で
+ * 完了し、レイテンシ増は陰性局面の探索コスト（FORCED_LOSS_VCT_OPTIONS.timeLimit
+ * 参照）に限られることを確認済み。
+ */
+export const VCT_STONE_THRESHOLD = 4;
 
 // =============================================================================
 // Mise-VCF
