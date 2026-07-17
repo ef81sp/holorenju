@@ -22,7 +22,12 @@ import {
   getAllJushuNames,
   getJushuPositions,
 } from "../../src/logic/cpu/opening.ts";
-import { runCommitGame } from "../commit-game-runner.ts";
+import {
+  GameHangError,
+  type HangContext,
+  type HangInjectSpec,
+  runCommitGame,
+} from "../commit-game-runner.ts";
 import { estimateEloDiff } from "./eloDiff.ts";
 import { updateSPRT } from "./sprt.ts";
 
@@ -33,12 +38,25 @@ export interface MatchTask {
   isABlack: boolean;
 }
 
+/** ハング局のメタ情報（caller のダンプ作成用） */
+export interface HangMatchInfo {
+  gameIdx: number;
+  jushuName: string;
+  isABlack: boolean;
+  pairIdx: number;
+}
+
 /** runMatch の結果（caller が後処理＝性能統計や保存を行う）。 */
 export interface RunMatchResult {
   wdl: WDLCount;
   games: CommitGameResult[];
   completedGames: number;
   stoppedBySprt: boolean;
+  /**
+   * ハング等で破棄された局数（recreatePair 指定時のみ発生しうる）。
+   * 未破棄なら常に 0。既存 caller が field を読まなくても影響しない。
+   */
+  aborts: number;
 }
 
 export interface RunMatchParams {
@@ -59,6 +77,18 @@ export interface RunMatchParams {
    * **未指定なら旧挙動**（エラーを伝播＝commit-bench を出力同一に保つ）。
    */
   recreatePair?: (idx: number) => Promise<{ a: Worker; b: Worker }>;
+  /**
+   * ハング（GameHangError）が起きたときに呼ばれる。ダンプ書き出し等の副作用を行う。
+   * recreatePair と併用したときのみ呼ばれる（recreatePair 未指定＝旧挙動でエラーを
+   * 伝播するときは、caller にはハング固有の情報が届かず onHang が意味を持たないため）。
+   */
+  onHang?: (context: HangContext, info: HangMatchInfo) => void;
+  /**
+   * テスト用: 特定の gameIdx（0-based, tasks 配列上のインデックス）に到達した局で
+   * ハング注入を行う。ハング回復パスの手動 e2e テストに使う。
+   * gameIdx が現在の taskIdx に一致する局にだけ runCommitGame へ hangInject を渡す。
+   */
+  hangInject?: { gameIdx: number; spec: HangInjectSpec };
 }
 
 // ============================================================================
@@ -249,12 +279,15 @@ export async function runMatch(
     verbose,
     startTime,
     recreatePair,
+    onHang,
+    hangInject,
   } = params;
 
   const wdl: WDLCount = { wins: 0, draws: 0, losses: 0 };
   const games: CommitGameResult[] = [];
   let completedGames = 0;
   let stoppedBySprt = false;
+  let aborts = 0;
 
   const cumAcc = { A: newAcc(), B: newAcc() };
 
@@ -275,11 +308,16 @@ export async function runMatch(
       const { jushuName, positions, isABlack } = tasks[taskIdx]!;
 
       let result: CommitGameResult | null = null;
+      const injectHere =
+        hangInject !== undefined && hangInject.gameIdx === taskIdx
+          ? hangInject.spec
+          : undefined;
       try {
         const r = await runCommitGame(pair.a, pair.b, isABlack, {
           verbose,
           moveTimeoutMs,
           openingMoves: positions,
+          hangInject: injectHere,
         });
         result = { ...r, jushuName };
       } catch (err: unknown) {
@@ -288,16 +326,35 @@ export async function runMatch(
           throw err;
         }
         // 1局隔離: ハング/worker死。当該局は破棄し worker を再生成して続行。
+        const isHang = err instanceof GameHangError;
         const msg = err instanceof Error ? err.message : String(err);
         clearStatus();
         console.warn(
-          `\n⚠ 局 ${jushuName}(${isABlack ? "A黒" : "A白"}) を破棄: ${msg}`,
+          `\n⚠ 局 g${taskIdx} ${jushuName}(${isABlack ? "A黒" : "A白"}) を破棄: ${msg}`,
         );
+        if (isHang && onHang) {
+          try {
+            onHang(err.context, {
+              gameIdx: taskIdx,
+              jushuName,
+              isABlack,
+              pairIdx,
+            });
+          } catch (dumpErr: unknown) {
+            const dm =
+              dumpErr instanceof Error ? dumpErr.message : String(dumpErr);
+            console.error(`onHang ダンプ処理でエラー: ${dm}`);
+          }
+        }
+        aborts++;
         try {
           pair.a.terminate();
           pair.b.terminate();
           pair = await recreatePair(pairIdx);
           pairs[pairIdx] = pair;
+          console.warn(
+            `↳ worker pair (idx=${pairIdx}) 再生成完了。残り局を継続します。`,
+          );
         } catch (reErr: unknown) {
           const m = reErr instanceof Error ? reErr.message : String(reErr);
           console.error(`worker 再生成に失敗（このペアを終了）: ${m}`);
@@ -409,5 +466,5 @@ export async function runMatch(
 
   clearStatus();
 
-  return { wdl, games, completedGames, stoppedBySprt };
+  return { wdl, games, completedGames, stoppedBySprt, aborts };
 }

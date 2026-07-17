@@ -32,6 +32,7 @@ import { Worker } from "node:worker_threads";
 
 import type { EvaluationOptions } from "../src/logic/cpu/evaluation/patternScores.ts";
 import type { CpuDifficulty } from "../src/types/cpu.ts";
+import type { HangContext } from "./commit-game-runner.ts";
 import type { SPRTConfig } from "./types/ab.ts";
 import type {
   CommitBenchResult,
@@ -45,6 +46,7 @@ import {
   buildJushuTasks,
   createBridgeWorker,
   gamesPerSet as computeGamesPerSet,
+  type HangMatchInfo,
   runMatch,
 } from "./lib/match.ts";
 import { DEFAULT_SPRT_CONFIG, formatSPRT, updateSPRT } from "./lib/sprt.ts";
@@ -79,6 +81,183 @@ function resolveGitCommonDir(): string {
 }
 
 const WORKTREES_DIR = path.join(resolveGitCommonDir(), "worktrees-bench");
+const HANG_DUMPS_DIR = path.join(OUTPUT_DIR, "hang-dumps");
+
+/**
+ * HANG_INJECT=<gameIdx>:<requestOrdinal>[:A|B] を parse する。
+ * - gameIdx: 0-based の tasks 配列上の局番号
+ * - requestOrdinal: 1-based の非オープニング要求番号（その局で N 番目の要求でハング）
+ * - オプション A|B: 対象 side を絞る（省略時はその手番の side を対象）
+ * 不正な値なら process.exit(1)。
+ */
+function parseHangInjectEnv(
+  raw: string | undefined,
+): { gameIdx: number; requestOrdinal: number; side?: "A" | "B" } | null {
+  if (raw === undefined || raw === "") {
+    return null;
+  }
+  const parts = raw.split(":");
+  if (parts.length !== 2 && parts.length !== 3) {
+    console.error(
+      `Error: HANG_INJECT は "<gameIdx>:<requestOrdinal>[:A|B]" の形式で指定してください (got: ${raw})`,
+    );
+    process.exit(1);
+  }
+  const gameIdx = parseInt(parts[0]!, 10);
+  const requestOrdinal = parseInt(parts[1]!, 10);
+  if (!Number.isFinite(gameIdx) || gameIdx < 0) {
+    console.error(`Error: HANG_INJECT gameIdx が不正 (got: ${parts[0]})`);
+    process.exit(1);
+  }
+  if (!Number.isFinite(requestOrdinal) || requestOrdinal < 1) {
+    console.error(
+      `Error: HANG_INJECT requestOrdinal は 1 以上の整数 (got: ${parts[1]})`,
+    );
+    process.exit(1);
+  }
+  const sideRaw = parts.length === 3 ? parts[2]! : undefined;
+  if (sideRaw !== undefined && sideRaw !== "A" && sideRaw !== "B") {
+    console.error(`Error: HANG_INJECT side は A か B (got: ${sideRaw})`);
+    process.exit(1);
+  }
+  return {
+    gameIdx,
+    requestOrdinal,
+    side: sideRaw as "A" | "B" | undefined,
+  };
+}
+
+// ============================================================================
+// ハングダンプ書き出し
+// ============================================================================
+
+interface HangDumpSideConfig {
+  worktreePath: string;
+  evaluationOptions: Partial<EvaluationOptions> | undefined;
+  bookEnabled: boolean;
+  commit: CommitInfo;
+}
+
+interface HangDumpJson {
+  type: "hang-dump";
+  schemaVersion: 1;
+  timestamp: string;
+  bench: {
+    /** 発生元スクリプト。replay がどの構成を組めばよいか区別するため */
+    tool: "commit-bench";
+    difficulty: string;
+    randomFactor: number | undefined;
+    moveTimeoutMs: number;
+  };
+  match: {
+    gameIdx: number;
+    jushuName: string;
+    isABlack: boolean;
+    pairIdx: number;
+  };
+  hang: {
+    /** ハングした側（A/B）— この情報だけで worker 側の worktree/config を引ける */
+    side: "A" | "B";
+    color: "black" | "white";
+    requestId: number;
+    timeoutMs: number;
+    elapsedMs: number;
+    /** 何手目でハングしたか（1-based, opening 3手を含む） */
+    moveNumber: number;
+  };
+  /** ハングした側の worker 設定（replay 用の完全情報） */
+  worker: {
+    side: "A" | "B";
+    worktreePath: string;
+    commit: CommitInfo;
+    difficulty: string;
+    randomFactor: number | undefined;
+    evaluationOptions: Partial<EvaluationOptions> | undefined;
+    bookEnabled: boolean;
+    color: "black" | "white";
+  };
+  /** 相手側の worker 設定（対戦の再構築が必要な将来のため） */
+  opponent: {
+    side: "A" | "B";
+    worktreePath: string;
+    commit: CommitInfo;
+    evaluationOptions: Partial<EvaluationOptions> | undefined;
+    bookEnabled: boolean;
+  };
+  /** ハング直前の盤面（そのままリクエストとして送れる形） */
+  board: unknown;
+  /** ハング直前までの着手履歴（opening 3手を含む。row/col/isOpening/time…） */
+  moveHistory: unknown;
+}
+
+function writeHangDump(params: {
+  context: HangContext;
+  info: HangMatchInfo;
+  commonConfig: { difficulty: string; randomFactor: number | undefined };
+  workerConfigs: { A: HangDumpSideConfig; B: HangDumpSideConfig };
+}): void {
+  const { context, info, commonConfig, workerConfigs } = params;
+  const hangSide = context.side;
+  const oppSide: "A" | "B" = hangSide === "A" ? "B" : "A";
+  const hangCfg = workerConfigs[hangSide];
+  const oppCfg = workerConfigs[oppSide];
+
+  const dump: HangDumpJson = {
+    type: "hang-dump",
+    schemaVersion: 1,
+    timestamp: new Date().toISOString(),
+    bench: {
+      tool: "commit-bench",
+      difficulty: commonConfig.difficulty,
+      randomFactor: commonConfig.randomFactor,
+      moveTimeoutMs: context.timeoutMs,
+    },
+    match: {
+      gameIdx: info.gameIdx,
+      jushuName: info.jushuName,
+      isABlack: info.isABlack,
+      pairIdx: info.pairIdx,
+    },
+    hang: {
+      side: context.side,
+      color: context.color,
+      requestId: context.requestId,
+      timeoutMs: context.timeoutMs,
+      elapsedMs: context.elapsedMs,
+      moveNumber: context.moveNumber,
+    },
+    worker: {
+      side: hangSide,
+      worktreePath: hangCfg.worktreePath,
+      commit: hangCfg.commit,
+      difficulty: commonConfig.difficulty,
+      randomFactor: commonConfig.randomFactor,
+      evaluationOptions: hangCfg.evaluationOptions,
+      bookEnabled: hangCfg.bookEnabled,
+      color: context.color,
+    },
+    opponent: {
+      side: oppSide,
+      worktreePath: oppCfg.worktreePath,
+      commit: oppCfg.commit,
+      evaluationOptions: oppCfg.evaluationOptions,
+      bookEnabled: oppCfg.bookEnabled,
+    },
+    board: context.board,
+    moveHistory: context.moveHistory,
+  };
+
+  if (!fs.existsSync(HANG_DUMPS_DIR)) {
+    fs.mkdirSync(HANG_DUMPS_DIR, { recursive: true });
+  }
+  const iso = dump.timestamp.replace(/[:.]/g, "-");
+  const outPath = path.join(
+    HANG_DUMPS_DIR,
+    `hang-${iso}-g${info.gameIdx}.json`,
+  );
+  fs.writeFileSync(outPath, JSON.stringify(dump, null, 2));
+  console.warn(`⚠ hang detected g${info.gameIdx}, dumped to ${outPath}`);
+}
 
 // ============================================================================
 // CLI引数パース
@@ -108,6 +287,17 @@ interface CliOptions {
    */
   bookA: boolean;
   bookB: boolean;
+  /**
+   * デバッグ/スモークテスト用: タスクを先頭 N 局に切り詰める（0 なら無効）。
+   * ハング計装の e2e 検証で少局数（例: 4局）を回すために追加。
+   * 通常のベンチ運用では 0（無効＝全 sets を消化）。
+   */
+  maxGames: number;
+  /**
+   * ハングした側 worker の 1 手あたりタイムアウト（ms）。
+   * 通常は 30000 で運用。ハング計装のテスト時は短くして待ち時間を減らす。
+   */
+  moveTimeoutMs: number;
 }
 
 function parseArgs(): CliOptions {
@@ -126,6 +316,8 @@ function parseArgs(): CliOptions {
     jobs: 1,
     bookA: false,
     bookB: false,
+    maxGames: 0,
+    moveTimeoutMs: 30000,
   };
 
   for (const arg of args) {
@@ -186,6 +378,26 @@ function parseArgs(): CliOptions {
       options.bookA = true;
     } else if (arg === "--book-b") {
       options.bookB = true;
+    } else if (arg.startsWith("--max-games=")) {
+      const value = parseInt(arg.slice("--max-games=".length), 10);
+      if (!isNaN(value) && value >= 0) {
+        options.maxGames = value;
+      } else {
+        console.error(
+          `Error: --max-games は 0 以上の整数で指定 (got: ${arg.slice("--max-games=".length)})`,
+        );
+        process.exit(1);
+      }
+    } else if (arg.startsWith("--move-timeout-ms=")) {
+      const value = parseInt(arg.slice("--move-timeout-ms=".length), 10);
+      if (!isNaN(value) && value > 0) {
+        options.moveTimeoutMs = value;
+      } else {
+        console.error(
+          `Error: --move-timeout-ms は正の整数で指定 (got: ${arg.slice("--move-timeout-ms=".length)})`,
+        );
+        process.exit(1);
+      }
     } else if (arg === "--verbose" || arg === "-v") {
       options.verbose = true;
     } else if (arg === "--help" || arg === "-h") {
@@ -250,8 +462,17 @@ Options:
   --eval-options-b=<json> B側 evaluationOptions オーバーライド（JSON。省略時は legacy 既定）
   --book-a               A側でオープニングブックを有効化（既定OFF）
   --book-b               B側でオープニングブックを有効化（既定OFF）
+  --max-games=<n>        タスクを先頭 N 局に切り詰め（0=無効, default: 0）。
+                         ハング計装のスモークテスト用
+  --move-timeout-ms=<n>  1手あたりのタイムアウト (default: 30000)
   --verbose, -v          詳細ログ
   --help, -h             ヘルプを表示
+
+環境変数:
+  HANG_INJECT=<gameIdx>:<requestOrdinal>[:A|B]
+      指定 gameIdx の局で N 番目の非オープニング要求にハングを注入
+      （bridge worker が応答しなくなる）。ハング検出→ダンプ→worker 再生成の
+      回復パスを実際に発火させるテスト用。
 
 Examples:
   pnpm commit:bench --commitA=HEAD~1 --commitB=HEAD --sets=1
@@ -265,6 +486,10 @@ Examples:
   # （B3仕様③: コミット差の交絡を排除、worktree1本で済む）
   pnpm commit:bench --commitA=HEAD --commitB=HEAD --sets=8 --randomFactor=0.02 \\
     --book-a
+
+  # ハング計装スモークテスト（4局・jobs=2・5秒タイムアウト・g1 の 2 手目で注入）
+  HANG_INJECT=1:2 pnpm commit:bench --commitA=HEAD --commitB=HEAD \\
+    --difficulty=easy --max-games=4 --jobs=2 --move-timeout-ms=5000
 `);
 }
 
@@ -654,16 +879,87 @@ async function main(): Promise<void> {
     console.log("Bridge worker初期化完了\n");
 
     // 珠型タスクを生成し、共有の対局ループ（runMatch）で消化する。
-    // commit-bench は recreatePair を渡さない＝従来どおりエラーは伝播（出力同一）。
-    const tasks = buildJushuTasks(options.sets);
-    const { wdl, games, completedGames } = await runMatch({
+    //
+    // ハング耐性: move-request timeout（GameHangError）が起きたら、当該局を破棄しつつ
+    // 再現ダンプ（bench-results/hang-dumps/hang-*.json）を書き、当該 pair の worker を
+    // 再生成して残り局を続行する。プロセス全体を落とさない。
+    const allTasks = buildJushuTasks(options.sets);
+    const tasks =
+      options.maxGames > 0 && options.maxGames < allTasks.length
+        ? allTasks.slice(0, options.maxGames)
+        : allTasks;
+    if (options.maxGames > 0 && options.maxGames < allTasks.length) {
+      console.log(
+        `--max-games=${options.maxGames} 指定により ${allTasks.length}→${tasks.length} 局に切り詰め`,
+      );
+    }
+
+    // ダンプ用の side メタ（worker 再生成にも再利用）
+    const workerConfigs = {
+      A: {
+        worktreePath: worktreePathA!,
+        evaluationOptions: options.evalOptionsA,
+        bookEnabled: options.bookA,
+        commit: commitA,
+      },
+      B: {
+        worktreePath: worktreePathB!,
+        evaluationOptions: options.evalOptionsB,
+        bookEnabled: options.bookB,
+        commit: commitB,
+      },
+    } as const;
+
+    const recreatePair = async (
+      idx: number,
+    ): Promise<{ a: Worker; b: Worker }> => {
+      const [a, b] = await Promise.all([
+        makeWorker(worktreePathA!, options.evalOptionsA, options.bookA),
+        makeWorker(worktreePathB!, options.evalOptionsB, options.bookB),
+      ]);
+      const fresh = { a, b };
+      pairs[idx] = fresh;
+      return fresh;
+    };
+
+    const onHang = (context: HangContext, info: HangMatchInfo): void => {
+      writeHangDump({
+        context,
+        info,
+        commonConfig: {
+          difficulty: options.difficulty,
+          randomFactor: options.randomFactor,
+        },
+        workerConfigs,
+      });
+    };
+
+    const hangInjectEnv = parseHangInjectEnv(process.env.HANG_INJECT);
+    if (hangInjectEnv) {
+      console.log(
+        `⚠ HANG_INJECT 有効: gameIdx=${hangInjectEnv.gameIdx} requestOrdinal=${hangInjectEnv.requestOrdinal}${hangInjectEnv.side ? ` side=${hangInjectEnv.side}` : ""}`,
+      );
+    }
+
+    const { wdl, games, completedGames, aborts } = await runMatch({
       pairs,
       tasks,
-      totalGames,
+      totalGames: tasks.length,
       sprtConfig,
-      moveTimeoutMs: 30000,
+      moveTimeoutMs: options.moveTimeoutMs,
       verbose: options.verbose,
       startTime,
+      recreatePair,
+      onHang,
+      hangInject: hangInjectEnv
+        ? {
+            gameIdx: hangInjectEnv.gameIdx,
+            spec: {
+              requestOrdinal: hangInjectEnv.requestOrdinal,
+              side: hangInjectEnv.side,
+            },
+          }
+        : undefined,
     });
 
     const elapsedSeconds = (performance.now() - startTime) / 1000;
@@ -672,7 +968,14 @@ async function main(): Promise<void> {
     console.log(`\n=== 結果 ===`);
     console.log(`commitA: ${commitA.shortSha} "${commitA.message}"`);
     console.log(`commitB: ${commitB.shortSha} "${commitB.message}"`);
-    console.log(`対局数: ${completedGames}`);
+    console.log(
+      `対局数: ${completedGames}${aborts > 0 ? ` (abort: ${aborts})` : ""}`,
+    );
+    if (aborts > 0) {
+      console.log(
+        `⚠ ハング検出: ${aborts} 局を破棄しました。ダンプは ${HANG_DUMPS_DIR} を参照`,
+      );
+    }
     console.log(`WDL (commitA視点): +${wdl.wins} =${wdl.draws} -${wdl.losses}`);
 
     const eloDiffResult = estimateEloDiff(wdl);
@@ -736,6 +1039,7 @@ async function main(): Promise<void> {
         bookB: options.bookB,
       },
       totalGames: completedGames,
+      aborts,
       wdl,
       eloDiff: eloDiffResult,
       sprt: sprtState,

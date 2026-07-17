@@ -59,8 +59,13 @@ export interface CommitBenchResult {
     bookA?: boolean;
     bookB?: boolean;
   };
-  /** 対局数 */
+  /** 対局数（実際に完走した局のみ。中断＝abort 局は含めない） */
   totalGames: number;
+  /**
+   * ハング等で破棄された局数。回復パスが働いた回数。
+   * 既存 JSON との後方互換のため optional（未設定＝0 相当）。
+   */
+  aborts?: number;
   /** WDL（commitA視点） */
   wdl: WDLCount;
   /** Elo差推定 */

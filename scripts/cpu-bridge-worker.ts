@@ -59,6 +59,12 @@ interface MoveRequest {
   requestId: number;
   board: BoardState;
   color: "black" | "white";
+  /**
+   * テスト用: true の場合、応答を返さず沈黙する（bench の timeout→dump→respawn
+   * 回復パスを実際に発火させる）。本番パスに影響しない差し込み口で、
+   * runCommitGame の HangInjectSpec から立てられる。
+   */
+  hangInject?: boolean;
 }
 
 interface WasmSearchStats {
@@ -459,7 +465,14 @@ async function main(): Promise<void> {
 
   // 着手要求を処理（同期的にCPUを呼び出す）
   parentPort?.on("message", (msg: MoveRequest) => {
-    const { requestId, board, color } = msg;
+    const { requestId, board, color, hangInject } = msg;
+    // テスト用: hangInject が立っていれば応答せず沈黙 → 呼び出し側が timeout する
+    if (hangInject) {
+      console.warn(
+        `[cpu-bridge-worker] HANG_INJECT active (requestId=${requestId}) — 応答を返しません`,
+      );
+      return;
+    }
     const startTime = performance.now();
 
     try {
