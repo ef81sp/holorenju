@@ -34,19 +34,29 @@ export function isOpeningMove(moveIndex: number): boolean {
 
 /**
  * スコア差に基づく品質分類
+ *
+ * scoreDiff（= bestScore - playedScore）は本来 0 以上のはずだが、実手が
+ * minimax 候補(top5)外のとき probePlayedMoveScore（別の浅い探索）でスコアを
+ * 推定する経路があり、探索の非単調性により playedScore が bestScore を
+ * 上回る（scoreDiff が負になる）ことがある。これは「実手がbestより悪い」
+ * ことを意味せず、むしろ our own bestScore 推定が悲観的だった可能性が高い。
+ * 符号を無視して絶対値を取ると、この負の差分まで悪手側に倒れてしまう
+ * （較正調査で確認: scoreDiff=-2224 が blunder 判定されたが Rapfi 検証では
+ * 実際には悪手でなかった）。「best 以上」に対応する品質はそれ以上存在しない
+ * ため、負の scoreDiff は 0（= excellent）に丸める。
  */
 export function classifyMoveQuality(scoreDiff: number): MoveQuality {
-  const absDiff = Math.abs(scoreDiff);
-  if (absDiff === 0) {
+  const clampedDiff = Math.max(0, scoreDiff);
+  if (clampedDiff === 0) {
     return "excellent";
   }
-  if (absDiff <= 80) {
+  if (clampedDiff <= 80) {
     return "good";
   }
-  if (absDiff <= 300) {
+  if (clampedDiff <= 300) {
     return "inaccuracy";
   }
-  if (absDiff <= 1000) {
+  if (clampedDiff <= 1000) {
     return "mistake";
   }
   return "blunder";

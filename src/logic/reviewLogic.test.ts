@@ -55,9 +55,18 @@ describe("classifyMoveQuality", () => {
     expect(classifyMoveQuality(1001)).toBe("blunder");
   });
 
-  it("負のスコア差でも絶対値で判定", () => {
-    expect(classifyMoveQuality(-80)).toBe("good");
-    expect(classifyMoveQuality(-300)).toBe("inaccuracy");
+  it("負のスコア差は0扱い（best以上=最善手）", () => {
+    // playedScore が bestScore を上回るケース（probePlayedMoveScore の非単調性由来）。
+    // 「best以上」に対応する品質はexcellentより上に無いため0に丸める。
+    expect(classifyMoveQuality(-1)).toBe("excellent");
+    expect(classifyMoveQuality(-80)).toBe("excellent");
+    expect(classifyMoveQuality(-300)).toBe("excellent");
+  });
+
+  it("回帰: scoreDiff=-2224（較正調査 #170 手24 L7 で確認された実例）はexcellent", () => {
+    // 修正前は Math.abs() により blunder 判定されていたが、Rapfi 検証
+    // （3000ms再解析）では実際には悪手ではなかった（effDrop=+214=inaccuracy相当）。
+    expect(classifyMoveQuality(-2224)).toBe("excellent");
   });
 });
 
