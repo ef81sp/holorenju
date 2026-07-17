@@ -23,10 +23,22 @@ import { formatMove, parseMove } from "@/logic/gameRecordParser";
 
 /** 1エントリ（canonical 空間の座標を棋譜表記で保持）。 */
 export interface OpeningBookEntry {
-  /** 既定の手（randomPool が無い、または rng 未使用時に使う）。 */
-  move: string;
-  /** トラップ局面の検証済み生存手。存在する場合はこの中から選ぶ。 */
-  randomPool?: string[];
+  /**
+   * 着手用の手。cpu.worker.ts の実際の着手選択に使う。
+   * 単一手、またはトラップ局面の検証済み生存手プール（ランダム選択の対象）。
+   */
+  play: {
+    /** 既定の手（randomPool が無い、または rng 未使用時に使う）。 */
+    move: string;
+    /** トラップ局面の検証済み生存手。存在する場合はこの中から選ぶ。 */
+    randomPool?: string[];
+  };
+  /**
+   * 注釈用プール（重複除去済み）。振り返りの isBookMove はこのプールとの
+   * 一致で判定する（v2: 注釈側の top-N 許容。opening-book-2026-07-16.md
+   * ★v2プラン B1/B2）。play より広くなり得る（例: Rapfi 誘導の未検証候補）。
+   */
+  annotation: string[];
 }
 
 export interface OpeningBookAsset {
@@ -125,22 +137,24 @@ export function getBookMove(
     return null;
   }
   const { entry, transformName } = found;
-  const pool = entry.randomPool;
+  const pool = entry.play.randomPool;
   const canonicalMoveStr =
     pool && pool.length > 0
       ? pool[Math.floor(rng() * pool.length) % pool.length]!
-      : entry.move;
+      : entry.play.move;
   return inverseTransformPosition(parseMove(canonicalMoveStr), transformName);
 }
 
 /**
- * ヒット時のブック候補（実盤座標）を全列挙する。randomPool があれば全件、
- * なければ既定手のみを1件返す。ヒットしなければ null。
+ * ヒット時のブック候補（実盤座標、着手用の手のみ）を全列挙する。
+ * play.randomPool があれば全件、なければ play.move のみを1件返す。
+ * ヒットしなければ null。
  *
  * cpu.worker.ts / review.worker.ts の対局用途では使わない
  * （getBookMove/isBookMove で十分）。ゲート検証スクリプト
- * （scripts/verify-book-blocks-traps.ts）が「ランダム候補はプール全手を
- * 決定的に列挙して検証する」ために使う。
+ * （scripts/verify-book-blocks-traps.ts）が「着手候補はプール全手を
+ * 決定的に列挙して検証する」ために使う。注釈プール（annotation）は
+ * 対象外（未検証の候補を含み得るため、着手安全性ゲートの対象は play のみ）。
  */
 export function getBookMoveCandidates(
   board: BoardState,
@@ -152,9 +166,9 @@ export function getBookMoveCandidates(
   }
   const { entry, transformName } = found;
   const canonicalMoveStrs =
-    entry.randomPool && entry.randomPool.length > 0
-      ? entry.randomPool
-      : [entry.move];
+    entry.play.randomPool && entry.play.randomPool.length > 0
+      ? entry.play.randomPool
+      : [entry.play.move];
   return canonicalMoveStrs.map((s) =>
     inverseTransformPosition(parseMove(s), transformName),
   );
@@ -162,8 +176,9 @@ export function getBookMoveCandidates(
 
 /**
  * 注釈専用API（review.worker.ts 専用。着手選択には使わない）。
- * 打たれた手が、この局面のブック手（既定手 or randomPool のいずれか）と
- * 一致するかどうかだけを判定する（opening-book-2026-07-16.md §3）。
+ * 打たれた手が、この局面の注釈プール（annotation）に含まれるかどうかだけを
+ * 判定する（opening-book-2026-07-16.md §3、v2: ★v2プラン B1/B2で
+ * annotation プール判定に変更。同一局面の複数の有力定石を劣手表示しない）。
  */
 export function isBookMove(
   board: BoardState,
@@ -178,6 +193,5 @@ export function isBookMove(
   const playedCanonicalStr = formatMove(
     transformPosition(played, transformName),
   );
-  const candidates = entry.randomPool ?? [entry.move];
-  return candidates.includes(playedCanonicalStr);
+  return entry.annotation.includes(playedCanonicalStr);
 }

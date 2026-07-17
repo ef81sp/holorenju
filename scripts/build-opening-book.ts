@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * オープニングブック資産ビルダー（opening-book-2026-07-16.md §2）。
+ * オープニングブック資産ビルダー（opening-book-2026-07-16.md §2、v2: ★v2プラン）。
  *
  * trap-mining.ts --dump-book が出力した JSONL を読み込み、
- * src/assets/opening-book-hard.json（canonical key → { move, randomPool? }）を生成する。
+ * src/assets/opening-book-hard.json（canonical key → { play, annotation }）を生成する。
  *
  * 使用例:
  *   node --experimental-strip-types --import ./scripts/register-loader.mjs \
@@ -22,20 +22,46 @@
  *     scripts/build-opening-book.ts --dump=bench-results/opening-book-dump.jsonl \
  *     --black-traps-only=bench-results/opening-book-dump-black.jsonl \
  *     --out=src/assets/opening-book-hard.json --weight-gen=texel-r2
+ *
+ *   # v2: Rapfi 誘導化（★v2プラン B1〜B3）。安全検証結果は --rapfi-cache に
+ *   # 永続化され、次回以降の再ビルドで未変更分の再検証（~10秒/エントリ）を省く。
+ *   node --experimental-strip-types --import ./scripts/register-loader.mjs \
+ *     scripts/build-opening-book.ts --dump=bench-results/opening-book-dump.jsonl \
+ *     --rapfi-moves=bench-results/rapfi-book-moves.jsonl \
+ *     --rapfi-cache=bench-results/rapfi-verification-cache.jsonl \
+ *     --out=src/assets/opening-book-hard.json --weight-gen=texel-r2
  */
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 import { gzipSync } from "node:zlib";
+
+import { preloadForbiddenWasm } from "@/logic/cpu/wasm/forbiddenAdapter";
+import { loadWasmModule } from "@/logic/cpu/wasm/loader";
+import { WasmSearchEngine } from "@/logic/cpu/wasm/searchEngine";
+import { preloadThreatWasm } from "@/logic/cpu/wasm/threatAdapter";
+
+import type { ForcedWinChecker } from "./lib/verifyBookBlocksTraps";
 
 import { getGitRev } from "./lib/bookDumpMetadata";
 import {
   applyPatches,
+  applyRapfiGuidance,
   buildOpeningBookAsset,
   mergeBlackTrapIntoAsset,
   parseBlackTrapDumpJsonl,
   parseDumpJsonl,
   parsePatchJsonl,
+  parseRapfiMovesJsonl,
+  parseRapfiVerificationCacheJsonl,
+  serializeRapfiVerificationCache,
 } from "./lib/buildOpeningBook";
+import { checkForcedWinAfterMove } from "./lib/forcedWinCheck";
 
 interface CliOptions {
   dumpPath: string;
@@ -43,6 +69,8 @@ interface CliOptions {
   weightGeneration: string;
   patchPath: string | null;
   blackTrapsOnlyPath: string | null;
+  rapfiMovesPath: string | null;
+  rapfiCachePath: string | null;
 }
 
 function parseArgs(): CliOptions {
@@ -52,6 +80,8 @@ function parseArgs(): CliOptions {
   let weightGeneration = "unknown";
   let patchPath: string | null = null;
   let blackTrapsOnlyPath: string | null = null;
+  let rapfiMovesPath: string | null = null;
+  let rapfiCachePath: string | null = null;
   for (const arg of args) {
     if (arg.startsWith("--dump=")) {
       dumpPath = arg.slice("--dump=".length);
@@ -63,15 +93,32 @@ function parseArgs(): CliOptions {
       patchPath = arg.slice("--patch=".length);
     } else if (arg.startsWith("--black-traps-only=")) {
       blackTrapsOnlyPath = arg.slice("--black-traps-only=".length);
+    } else if (arg.startsWith("--rapfi-moves=")) {
+      rapfiMovesPath = arg.slice("--rapfi-moves=".length);
+    } else if (arg.startsWith("--rapfi-cache=")) {
+      rapfiCachePath = arg.slice("--rapfi-cache=".length);
     }
   }
   if (!dumpPath) {
     throw new Error("--dump=<path> は必須です");
   }
-  return { dumpPath, outPath, weightGeneration, patchPath, blackTrapsOnlyPath };
+  if (rapfiMovesPath && !rapfiCachePath) {
+    throw new Error(
+      "--rapfi-moves 指定時は --rapfi-cache=<path> も必須です（安全検証結果の永続化先）",
+    );
+  }
+  return {
+    dumpPath,
+    outPath,
+    weightGeneration,
+    patchPath,
+    blackTrapsOnlyPath,
+    rapfiMovesPath,
+    rapfiCachePath,
+  };
 }
 
-function main(): void {
+async function main(): Promise<void> {
   const opts = parseArgs();
 
   console.log("========================================");
@@ -84,6 +131,10 @@ function main(): void {
   }
   if (opts.blackTrapsOnlyPath) {
     console.log(`black-traps-only: ${opts.blackTrapsOnlyPath}`);
+  }
+  if (opts.rapfiMovesPath) {
+    console.log(`rapfi-moves: ${opts.rapfiMovesPath}`);
+    console.log(`rapfi-cache: ${opts.rapfiCachePath}`);
   }
 
   const dumpText = readFileSync(opts.dumpPath, "utf-8");
@@ -120,6 +171,67 @@ function main(): void {
       dumpMetadata: blackMetadata,
       trapNodes,
     });
+  }
+
+  if (opts.rapfiMovesPath && opts.rapfiCachePath) {
+    const { rapfiMovesPath, rapfiCachePath } = opts;
+
+    const rapfiText = readFileSync(rapfiMovesPath, "utf-8");
+    const rapfiEntries = parseRapfiMovesJsonl(rapfiText);
+    console.log(`Rapfiエントリ数: ${rapfiEntries.length}`);
+
+    const cache = existsSync(rapfiCachePath)
+      ? parseRapfiVerificationCacheJsonl(readFileSync(rapfiCachePath, "utf-8"))
+      : new Map<string, "VCF" | "VCT" | null>();
+    console.log(`検証キャッシュ既存エントリ数: ${cache.size}`);
+
+    await Promise.all([preloadThreatWasm(), preloadForbiddenWasm()]);
+    const wasm = await loadWasmModule();
+    const engine = new WasmSearchEngine(wasm);
+    const checker: ForcedWinChecker = {
+      check(board, sideToMove, move) {
+        return checkForcedWinAfterMove(engine, board, sideToMove, move)
+          .forcedWinKind;
+      },
+    };
+
+    // 検証のたび逐次キャッシュへ追記する（実装レビュー suggestion:
+    // 長時間実行中の途中クラッシュで検証結果が全消失しないように）。
+    // onVerified は cache がまだ持っていない新規検証結果のときだけ呼ばれるため
+    // （applyRapfiGuidance 側で cache ヒット時はスキップ済み）、追記のみで
+    // 重複行は発生しない。
+    mkdirSync(path.dirname(rapfiCachePath), { recursive: true });
+    if (!existsSync(rapfiCachePath)) {
+      writeFileSync(rapfiCachePath, "");
+    }
+    const onVerified = (entry: {
+      canonicalKey: string;
+      move: string;
+      forcedWinKind: "VCF" | "VCT" | null;
+    }): void => {
+      appendFileSync(rapfiCachePath, `${JSON.stringify(entry)}\n`);
+    };
+
+    const { entries, report } = applyRapfiGuidance(
+      asset.entries,
+      rapfiEntries,
+      checker,
+      cache,
+      onVerified,
+    );
+    asset.entries = entries;
+    asset.stats.entryCount = Object.keys(asset.entries).length;
+
+    // 完了後、キャッシュ全体（旧+新、Map による自動重複排除・整形済み）を
+    // 正規形として一括書き出す（逐次追記分と内容は同じだが、複数回の実行を
+    // またいだ蓄積で生じ得る整形の揺れを解消するため）。
+    writeFileSync(rapfiCachePath, serializeRapfiVerificationCache(cache));
+
+    console.log("");
+    console.log("── Rapfi 誘導化レポート ──────────────");
+    console.log(`  採用（play を Rapfi 手へ切替）:   ${report.adopted}`);
+    console.log(`  却下（Rapfi候補が全て危険）:       ${report.rejected}`);
+    console.log(`  対象外（canonicalize失敗等）:      ${report.unavailable}`);
   }
 
   const json = JSON.stringify(asset);
@@ -177,4 +289,7 @@ function main(): void {
   console.log("========================================");
 }
 
-main();
+main().catch((err: unknown) => {
+  console.error("Fatal error:", err);
+  process.exit(1);
+});

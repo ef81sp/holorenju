@@ -55,6 +55,9 @@ export interface CommitBenchResult {
     /** Gate 2: A/B 側それぞれの evaluationOptions オーバーライド（例: evalBasis=prospect）。 */
     evalOptionsA?: Partial<EvaluationOptions>;
     evalOptionsB?: Partial<EvaluationOptions>;
+    /** ブックゲート（★v2プラン B3）: A/B 側それぞれでオープニングブックを有効化したか。 */
+    bookA?: boolean;
+    bookB?: boolean;
   };
   /** 対局数 */
   totalGames: number;

@@ -354,15 +354,17 @@ export function getQualityColor(quality: MoveQuality): string {
 /**
  * 品質に対応するラベルを取得
  *
- * isBookMove が true の場合、quality に関わらず「定石（ブック手）」を返す
- * （§3: 序盤定石ブックと一致する手は、独立した表示ラベルとして扱う）。
+ * isBookMove が true の場合、quality に関わらず「序盤ブック手」を返す
+ * （§3: 序盤定石ブックと一致する手は、独立した表示ラベルとして扱う。
+ * 「定石」は確立した連珠用語のため、定石そのものではない手にはこの語を
+ * 使わない）。
  */
 export function getQualityLabel(
   quality: MoveQuality,
   isBookMove?: boolean,
 ): string {
   if (isBookMove) {
-    return "定石（ブック手）";
+    return "序盤ブック手";
   }
   switch (quality) {
     case "excellent":

@@ -88,8 +88,10 @@ const REGRESSION_POSITIONS: RegressionPosition[] = [
     description:
       "黒7手目 I7 が敗着（黒番採掘 severity-A）。I7 を打った後、白に7手の VCT" +
       "（強制勝ち手順 K9 L9 G9 H9 K10 L11 G6）が生じる。オープニングブックに" +
-      "個別対応済み（生存手 F9）で、この回帰チェックはブック経由でF9が選ばれ" +
-      "PASSすることを固定する。",
+      "個別対応済み（生存手 F9・annotation収録）で、この回帰チェックはブック" +
+      "経由で強制勝ちを許さない手が選ばれ PASS することを固定する（v2: Rapfi" +
+      "誘導化により play は安全検証済みの F5 へ切り替わっているが、F9 も" +
+      "annotation には残っている）。",
     source:
       "2026-07-16 黒番採掘 run1（route=彗星）: " +
       "bench-results/opening-traps-black-run1.jsonl",

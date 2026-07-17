@@ -28,6 +28,7 @@ import {
 
 import type { BookDumpMetadata } from "./bookDumpMetadata";
 import type { BookDumpNode } from "./trapPipeline";
+import type { ForcedWinChecker } from "./verifyBookBlocksTraps";
 
 // ─── ダンプ JSONL のパース ──────────────────────────────
 
@@ -135,18 +136,31 @@ function isEmptyOnCanonicalBoard(
 // ─── ノード → ブックエントリ ─────────────────────────────
 
 export interface OpeningBookEntry {
-  /** canonical 空間の既定手（棋譜表記）。 */
-  move: string;
-  /** トラップ局面の検証済み生存手（canonical 空間、棋譜表記）。ランダム選択の対象。 */
-  randomPool?: string[];
+  /**
+   * 着手用の手（canonical 空間）。cpu.worker.ts が実際の着手選択に使う。
+   * 単一手、またはトラップ局面の検証済み生存手プール（ランダム選択の対象）。
+   */
+  play: {
+    move: string;
+    randomPool?: string[];
+  };
+  /**
+   * 注釈用プール（canonical 空間、棋譜表記、重複除去済み）。振り返りの
+   * isBookMove はこのプールとの一致で判定する（v2: 注釈側の top-N 許容。
+   * opening-book-2026-07-16.md ★v2プラン B1/B2）。v1 時点では play の
+   * move/randomPool と同一内容だが、Rapfi 誘導化（applyRapfiGuidance）で
+   * 安全検証済みの Rapfi 候補が合流し、play より広くなり得る。
+   */
+  annotation: string[];
 }
 
 /**
  * 1ノードをブックエントリ（canonical 空間）+ 使用した変換名に解決する。
  * - 変換が特定できない（矛盾する）場合は null（安全側フォールバック、除外）
  * - 彗星型（forcedWinKind有り・survivorMoves空配列）は null（非掲載）
- * - トラップ（survivorMoves非空）は生存手を randomPool に、move は先頭を既定値に
+ * - トラップ（survivorMoves非空）は生存手を play.randomPool に、move は先頭を既定値に
  * - 通常ノードは hardMove をそのまま採用
+ * - annotation は初期状態では play の手集合と同一内容（重複除去済み）
  *
  * 変換後の座標が canonical 盤面上で空きマスでない場合も安全側で除外する
  * （findConsistentTransform の矛盾検出をすり抜けた誤変換の検知）。
@@ -173,7 +187,13 @@ export function resolveCanonicalEntry(
     ) {
       return null;
     }
-    return { entry: { move: canonicalMove }, transformName };
+    return {
+      entry: {
+        play: { move: canonicalMove },
+        annotation: [canonicalMove],
+      },
+      transformName,
+    };
   }
 
   const survivors = node.survivorMoves ?? [];
@@ -192,7 +212,10 @@ export function resolveCanonicalEntry(
   }
 
   return {
-    entry: { move: canonicalSurvivors[0]!, randomPool: canonicalSurvivors },
+    entry: {
+      play: { move: canonicalSurvivors[0]!, randomPool: canonicalSurvivors },
+      annotation: [...canonicalSurvivors],
+    },
     transformName,
   };
 }
@@ -222,7 +245,7 @@ export function assertHardMoveInvariant(
     return;
   }
   const recoveredReal = formatMove(
-    inverseTransformPosition(parseMove(entry.move), transformName),
+    inverseTransformPosition(parseMove(entry.play.move), transformName),
   );
   if (recoveredReal !== node.hardMove) {
     throw new Error(
@@ -267,12 +290,15 @@ function mergeResolvedGroup(group: ResolvedGroupMember[]): OpeningBookEntry {
   }
   const survivors = new Set<string>();
   for (const g of trapGroup) {
-    for (const s of g.entry.randomPool ?? [g.entry.move]) {
+    for (const s of g.entry.play.randomPool ?? [g.entry.play.move]) {
       survivors.add(s);
     }
   }
   const survivorsArr = [...survivors];
-  return { move: survivorsArr[0]!, randomPool: survivorsArr };
+  return {
+    play: { move: survivorsArr[0]!, randomPool: survivorsArr },
+    annotation: [...survivorsArr],
+  };
 }
 
 // ─── ノード集合 → エントリ辞書 + 統計 ───────────────────────
@@ -356,7 +382,7 @@ export function buildOpeningBookEntries(nodes: BookDumpNode[]): {
       const entry = mergeResolvedGroup(trapResolved);
       entries[canonicalKey] = entry;
       trapEntryCount++;
-      const poolSize = entry.randomPool?.length ?? 1;
+      const poolSize = entry.play.randomPool?.length ?? 1;
       randomPoolSizeDistribution[poolSize] =
         (randomPoolSizeDistribution[poolSize] ?? 0) + 1;
       continue;
@@ -655,4 +681,248 @@ export function mergeBlackTrapIntoAsset(
       entryCount: blackStats.entryCount,
     },
   };
+}
+
+// ─── Rapfi 誘導化（opening-book-2026-07-16.md ★v2プラン・B1〜B3） ──────────────
+//
+// 別エージェント（Rapfi オラクル）が出力した「局面ごとの Rapfi 推奨手（優先順位順、
+// 実盤座標）」を取り込み、安全検証（checkForcedWinAfterMove と同じ強制勝ち判定）を
+// 通過した手だけを着手（play）へ採用する。安全検証は高コスト（~10秒/エントリ）
+// なため、結果は canonicalKey+候補手 単位でキャッシュし、再ビルド間で再利用する。
+
+/** --rapfi-moves=<jsonl> の1行（Rapfi オラクル担当エージェントの出力フォーマット）。 */
+export interface RapfiMoveEntry {
+  /** この局面（Rapfi 推奨手を打つ手番の着手前）の canonicalKey。 */
+  canonicalKey: string;
+  /** この局面までの手順（実盤座標）。 */
+  movesUpToHere: string[];
+  /** Rapfi の推奨手（実盤座標、優先順位順）。 */
+  rapfiMoves: string[];
+}
+
+/** --rapfi-moves=<jsonl> をパースする（メタデータ行なし、Rapfi行のみ）。 */
+export function parseRapfiMovesJsonl(text: string): RapfiMoveEntry[] {
+  return text
+    .split("\n")
+    .filter((line) => line.trim().length > 0)
+    .map((line) => JSON.parse(line) as RapfiMoveEntry);
+}
+
+/**
+ * 安全検証キャッシュの1行。canonicalKey + canonical 空間の候補手の組で
+ * 検証結果（forcedWinKind）を一意に特定する（実盤の向きに依存しない。
+ * canonical 空間の局面+手が同一なら結果も同一のため、複数の実盤向きから
+ * 再利用できる）。
+ */
+export interface RapfiVerificationCacheEntry {
+  canonicalKey: string;
+  /** canonical 空間の候補手（棋譜表記）。 */
+  move: string;
+  forcedWinKind: "VCF" | "VCT" | null;
+}
+
+function rapfiCacheKey(canonicalKeyStr: string, move: string): string {
+  return `${canonicalKeyStr}::${move}`;
+}
+
+/** キャッシュ JSONL をロードし、`canonicalKey::move` → forcedWinKind の Map に変換する。 */
+export function parseRapfiVerificationCacheJsonl(
+  text: string,
+): Map<string, "VCF" | "VCT" | null> {
+  const map = new Map<string, "VCF" | "VCT" | null>();
+  for (const line of text.split("\n")) {
+    if (line.trim().length === 0) {
+      continue;
+    }
+    const entry = JSON.parse(line) as RapfiVerificationCacheEntry;
+    map.set(rapfiCacheKey(entry.canonicalKey, entry.move), entry.forcedWinKind);
+  }
+  return map;
+}
+
+/** キャッシュ Map をキャッシュ JSONL のテキストへシリアライズする（再ビルド間で永続化）。 */
+export function serializeRapfiVerificationCache(
+  cache: Map<string, "VCF" | "VCT" | null>,
+): string {
+  const lines: string[] = [];
+  for (const [key, forcedWinKind] of cache) {
+    const sep = key.indexOf("::");
+    const canonicalKeyStr = key.slice(0, sep);
+    const move = key.slice(sep + 2);
+    const entry: RapfiVerificationCacheEntry = {
+      canonicalKey: canonicalKeyStr,
+      move,
+      forcedWinKind,
+    };
+    lines.push(JSON.stringify(entry));
+  }
+  return lines.join("\n") + (lines.length > 0 ? "\n" : "");
+}
+
+/** Rapfi 誘導化の適用結果レポート（採用/却下/対象外の内訳）。 */
+export interface RapfiGuidanceReport {
+  /** rapfiMoves のいずれかが安全検証を通過し、play を Rapfi 手へ切り替えた件数。 */
+  adopted: number;
+  /** Rapfi 候補は存在したが全滅（安全検証不通過）し、v1 の手を維持した件数。 */
+  rejected: number;
+  /** canonicalize 失敗、または候補が全て盤上の既存石と重複し検証対象がゼロだった件数。 */
+  unavailable: number;
+  adoptedKeys: string[];
+  rejectedKeys: string[];
+  unavailableKeys: string[];
+}
+
+function emptyRapfiGuidanceReport(): RapfiGuidanceReport {
+  return {
+    adopted: 0,
+    rejected: 0,
+    unavailable: 0,
+    adoptedKeys: [],
+    rejectedKeys: [],
+    unavailableKeys: [],
+  };
+}
+
+/** board 上の石（black/white）の総数。 */
+function countBoardStones(board: BoardState): number {
+  let count = 0;
+  for (const row of board) {
+    for (const cell of row) {
+      if (cell !== null) {
+        count++;
+      }
+    }
+  }
+  return count;
+}
+
+/** canonicalKey の盤面部分（"|black"/"|white" を除いた225文字）に含まれる石の総数。 */
+function countCanonicalKeyStones(canonicalKeyStr: string): number {
+  const canonicalBoardStr = canonicalKeyStr.split("|")[0] ?? "";
+  let count = 0;
+  for (const ch of canonicalBoardStr) {
+    if (ch !== ".") {
+      count++;
+    }
+  }
+  return count;
+}
+
+/**
+ * Rapfi 推奨手を安全検証（checker）にかけ、通過した候補だけを着手（play）へ
+ * 採用する。手順:
+ * 1. movesUpToHere から実盤を再構築し、findConsistentTransform で canonicalKey
+ *    との変換を特定する（失敗したら unavailable）。
+ * 1.5. 石数ガード（実装レビュー suggestion）: movesUpToHere から再構築した盤の
+ *    石数と canonicalKey の石数が一致することを確認する。findConsistentTransform
+ *    は「わかっている石だけ」が矛盾なく一致する変換を探すため、movesUpToHere が
+ *    1手欠損していても（trap-mining.ts の既知の欠損パターン）矛盾なく変換が
+ *    見つかってしまうことがあり、欠けた盤のまま安全検証が通ってしまう
+ *    silent hole になり得る。石数不一致は rejected 扱いにして安全側に倒す
+ *    （v1 の play/annotation は変更しない）。
+ * 2. rapfiMoves を canonical 空間へ変換し、盤上の空きマスのみ候補として残す
+ *    （残り0件なら unavailable）。
+ * 3. 各候補を canonicalKey+move 単位でキャッシュを引き、無ければ checker で
+ *    検証してキャッシュへ書き込む（onVerified で呼び出し側にも通知し、
+ *    CLI 側が逐次キャッシュファイルへ永続化できるようにする）。
+ * 4. 安全検証を通過した候補（forcedWinKind===null）が1件でもあれば adopted。
+ *    - play は先頭（Rapfi の優先順位#1の安全な手）を採用（randomPool は持たない。
+ *      Rapfi 誘導時点で着手はランダム選択ではなく Rapfi 誘導の単一手に一本化する）。
+ *    - annotation は既存の注釈プール（v1 の手）と通過した Rapfi 候補全件の
+ *      和集合（重複除去）にする（B1/B2: 注釈側の top-N 許容）。
+ *    通過が0件なら rejected（v1 の play/annotation を変更しない）。
+ * 5. 既存資産に無い canonicalKey（v1 book の対象外だった局面）でも、通過した
+ *    Rapfi 候補があれば新規エントリとして追加する（Rapfi 誘導によるブック拡張）。
+ */
+export function applyRapfiGuidance(
+  entries: Record<string, OpeningBookEntry>,
+  rapfiEntries: RapfiMoveEntry[],
+  checker: ForcedWinChecker,
+  cache: Map<string, "VCF" | "VCT" | null>,
+  onVerified?: (entry: RapfiVerificationCacheEntry) => void,
+): { entries: Record<string, OpeningBookEntry>; report: RapfiGuidanceReport } {
+  const result = { ...entries };
+  const report = emptyRapfiGuidanceReport();
+
+  for (const rapfi of rapfiEntries) {
+    const { board } = createBoardFromRecord(rapfi.movesUpToHere.join(" "));
+    const transformName = findConsistentTransform(board, rapfi.canonicalKey);
+    if (transformName === null) {
+      report.unavailable++;
+      report.unavailableKeys.push(rapfi.canonicalKey);
+      continue;
+    }
+
+    const boardStoneCount = countBoardStones(board);
+    const canonicalStoneCount = countCanonicalKeyStones(rapfi.canonicalKey);
+    if (boardStoneCount !== canonicalStoneCount) {
+      console.warn(
+        "[applyRapfiGuidance] movesUpToHere の石数が canonicalKey と一致しません" +
+          `（movesUpToHere欠損の疑い、silent hole封鎖のため rejected 扱い）: ` +
+          `canonicalKey=${rapfi.canonicalKey}, movesUpToHere石数=${boardStoneCount}, ` +
+          `canonicalKey石数=${canonicalStoneCount}`,
+      );
+      report.rejected++;
+      report.rejectedKeys.push(rapfi.canonicalKey);
+      continue;
+    }
+
+    const sideToMove: "black" | "white" = rapfi.canonicalKey.endsWith("|black")
+      ? "black"
+      : "white";
+    const boardSize = board.length;
+
+    const canonicalCandidates = rapfi.rapfiMoves
+      .map((m) => toCanonicalMoveStr(m, transformName))
+      .filter((s) =>
+        isEmptyOnCanonicalBoard(rapfi.canonicalKey, parseMove(s), boardSize),
+      );
+
+    if (canonicalCandidates.length === 0) {
+      report.unavailable++;
+      report.unavailableKeys.push(rapfi.canonicalKey);
+      continue;
+    }
+
+    const verified: string[] = [];
+    for (const canonicalMove of canonicalCandidates) {
+      const key = rapfiCacheKey(rapfi.canonicalKey, canonicalMove);
+      let forcedWinKind = cache.get(key);
+      if (forcedWinKind === undefined) {
+        const realMove = inverseTransformPosition(
+          parseMove(canonicalMove),
+          transformName,
+        );
+        forcedWinKind = checker.check(board, sideToMove, realMove);
+        cache.set(key, forcedWinKind);
+        onVerified?.({
+          canonicalKey: rapfi.canonicalKey,
+          move: canonicalMove,
+          forcedWinKind,
+        });
+      }
+      if (forcedWinKind === null) {
+        verified.push(canonicalMove);
+      }
+    }
+
+    if (verified.length === 0) {
+      report.rejected++;
+      report.rejectedKeys.push(rapfi.canonicalKey);
+      continue;
+    }
+
+    report.adopted++;
+    report.adoptedKeys.push(rapfi.canonicalKey);
+
+    const existingAnnotation = result[rapfi.canonicalKey]?.annotation ?? [];
+    const mergedAnnotation = [...new Set([...existingAnnotation, ...verified])];
+
+    result[rapfi.canonicalKey] = {
+      play: { move: verified[0]! },
+      annotation: mergedAnnotation,
+    };
+  }
+
+  return { entries: result, report };
 }

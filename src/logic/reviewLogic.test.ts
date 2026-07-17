@@ -234,9 +234,9 @@ describe("buildEvaluatedMove: モード別", () => {
 });
 
 describe("getQualityLabel", () => {
-  it("isBookMove=true のときは quality に関わらず「定石（ブック手）」を返す", () => {
-    expect(getQualityLabel("blunder", true)).toBe("定石（ブック手）");
-    expect(getQualityLabel("excellent", true)).toBe("定石（ブック手）");
+  it("isBookMove=true のときは quality に関わらず「序盤ブック手」を返す", () => {
+    expect(getQualityLabel("blunder", true)).toBe("序盤ブック手");
+    expect(getQualityLabel("excellent", true)).toBe("序盤ブック手");
   });
 
   it("isBookMove が未指定/falseなら通常のラベルを返す", () => {

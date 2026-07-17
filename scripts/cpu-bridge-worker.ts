@@ -27,6 +27,10 @@ import type { BoardState, Position } from "../src/types/game.ts";
 
 import { mergeDifficultyParams } from "./lib/difficultyParamsMerge.ts";
 import { EVAL_PARAM_IDS } from "./lib/evalParams.ts";
+import {
+  countStones,
+  loadOpeningBookFromWorktree,
+} from "./lib/openingBookBridge.ts";
 import { encodeEvalOptionsForWasm } from "./lib/wasmEvalOptionsEncoder.ts";
 
 // ============================================================================
@@ -43,6 +47,12 @@ interface BridgeWorkerData {
    * （setEvalParam 非対応の古い commit を読む commit-bench と後方互換）。
    */
   evalWeights?: Record<string, number>;
+  /**
+   * オープニングブック（opening-book-2026-07-16.md ★v2プラン B3）を有効化するか。
+   * 既定 OFF（未指定時は従来どおり探索のみ）。ON でもモジュール/資産が
+   * worktree に存在しなければ自動的に book-OFF として続行する（クラッシュしない）。
+   */
+  bookEnabled?: boolean;
 }
 
 interface MoveRequest {
@@ -405,6 +415,17 @@ async function main(): Promise<void> {
   // 難易度パラメータを読み込み
   const params = await loadDifficultyParams(worktreePath);
 
+  // オープニングブック（B3仕様③: 同一バイナリでbook-ON/OFFをフラグ切替できるよう、
+  // コミット差ではなく workerData.bookEnabled で分岐する）
+  const bookBridge = data.bookEnabled
+    ? await loadOpeningBookFromWorktree(worktreePath)
+    : null;
+  if (data.bookEnabled) {
+    console.log(
+      `[cpu-bridge-worker] book=${bookBridge ? "ON" : "OFF(unavailable)"} for ${worktreePath}`,
+    );
+  }
+
   // WASM版を試行、失敗時はTS版にフォールバック
   const wasm = await loadWasmFromWorktree(worktreePath);
   let wasmHandler: WasmSearchHandler | null = null;
@@ -442,6 +463,25 @@ async function main(): Promise<void> {
     const startTime = performance.now();
 
     try {
+      if (bookBridge) {
+        const moveCount = countStones(board);
+        if (bookBridge.isBookEligible(data.difficulty, color, moveCount)) {
+          const bookMove = bookBridge.getBookMove(board, color);
+          if (bookMove) {
+            const response: MoveResponse = {
+              requestId,
+              position: bookMove,
+              score: 0, // ブックの手は評価スコアなし（cpu.worker.ts と同じ扱い）
+              depth: 0, // 探索なし
+              thinkingTimeMs: performance.now() - startTime,
+              interrupted: false,
+            };
+            parentPort?.postMessage(response);
+            return;
+          }
+        }
+      }
+
       const result: FindBestMoveResult = wasmHandler
         ? wasmHandler.search(board, color, params)
         : callTsFindBestMove(tsFindBestMove!, board, color, params);

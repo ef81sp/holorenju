@@ -22,6 +22,12 @@
   （黒ダンプ全体は焼き込まない方針のため、フィクスチャも最小限に絞っている）。
 - `severity-a-black.jsonl`: 対応する黒番severity-Aレコード1件
   （`bench-results/opening-traps-black-run1.jsonl` のコピー）。
+- `rapfi-moves.jsonl`: `--rapfi-moves=<jsonl>`（v2: Rapfi 誘導化）の統合テスト用
+  フィクスチャ。`dump.jsonl` の先頭2ノード（非トラップ、ply4/ply6）と同一の
+  canonicalKey/movesUpToHere を使い、rapfiMoves の先頭候補に元の hardMove を
+  含めている（安全な既知の手なので、フェイク checker でなく実 checker でも
+  adopted になるはず、という対応関係を意図的に保っている）。実際の Rapfi
+  オラクル出力（`bench-results/rapfi-book-moves.jsonl`、非公開）とは無関係。
 
 ## 再生成コマンド
 

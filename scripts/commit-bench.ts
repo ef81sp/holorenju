@@ -100,6 +100,14 @@ interface CliOptions {
   /** Gate 2: A/B 側それぞれの evaluationOptions オーバーライド（例: evalBasis=prospect）。 */
   evalOptionsA?: Partial<EvaluationOptions>;
   evalOptionsB?: Partial<EvaluationOptions>;
+  /**
+   * オープニングブック（opening-book-2026-07-16.md ★v2プラン B3）を A/B 側それぞれで
+   * 有効化するか。既定 OFF（両側とも従来どおり探索のみ、後方互換）。
+   * B3仕様③: 同一バイナリで book-ON/OFF をフラグ切替できる構成を優先する
+   * （--commitA=HEAD --commitB=HEAD --book-a で単一 worktree のまま比較できる）。
+   */
+  bookA: boolean;
+  bookB: boolean;
 }
 
 function parseArgs(): CliOptions {
@@ -116,6 +124,8 @@ function parseArgs(): CliOptions {
     sprtBeta: DEFAULT_SPRT_CONFIG.beta,
     verbose: false,
     jobs: 1,
+    bookA: false,
+    bookB: false,
   };
 
   for (const arg of args) {
@@ -172,6 +182,10 @@ function parseArgs(): CliOptions {
         arg.slice("--eval-options-b=".length),
         "--eval-options-b",
       );
+    } else if (arg === "--book-a") {
+      options.bookA = true;
+    } else if (arg === "--book-b") {
+      options.bookB = true;
     } else if (arg === "--verbose" || arg === "-v") {
       options.verbose = true;
     } else if (arg === "--help" || arg === "-h") {
@@ -234,6 +248,8 @@ Options:
                          1ゲーム≈1コア。8コアなら6前後が目安
   --eval-options-a=<json> A側 evaluationOptions オーバーライド（JSON。例: '{"evalBasis":"prospect"}'）
   --eval-options-b=<json> B側 evaluationOptions オーバーライド（JSON。省略時は legacy 既定）
+  --book-a               A側でオープニングブックを有効化（既定OFF）
+  --book-b               B側でオープニングブックを有効化（既定OFF）
   --verbose, -v          詳細ログ
   --help, -h             ヘルプを表示
 
@@ -244,6 +260,11 @@ Examples:
   # Gate 2: 同一コミット内で evalBasis=prospect vs legacy を対決させる
   pnpm commit:bench --commitA=HEAD --commitB=HEAD --sets=8 --randomFactor=0.02 \\
     --eval-options-a='{"evalBasis":"prospect"}'
+
+  # ブックゲート: 同一コミット内で book-ON vs book-OFF を対決させる
+  # （B3仕様③: コミット差の交絡を排除、worktree1本で済む）
+  pnpm commit:bench --commitA=HEAD --commitB=HEAD --sets=8 --randomFactor=0.02 \\
+    --book-a
 `);
 }
 
@@ -553,6 +574,10 @@ async function main(): Promise<void> {
       `evalOptions B: ${options.evalOptionsB ? JSON.stringify(options.evalOptionsB) : "(既定=legacy)"}`,
     );
   }
+  if (options.bookA || options.bookB) {
+    console.log(`book A: ${options.bookA ? "ON" : "OFF"}`);
+    console.log(`book B: ${options.bookB ? "ON" : "OFF"}`);
+  }
   if (sprtConfig) {
     console.log(
       `SPRT: elo0=${sprtConfig.elo0}, elo1=${sprtConfig.elo1}, ` +
@@ -603,6 +628,7 @@ async function main(): Promise<void> {
     const makeWorker = (
       worktreePath: string,
       evaluationOptions: Partial<EvaluationOptions> | undefined,
+      bookEnabled: boolean,
     ): Promise<Worker> =>
       createBridgeWorker({
         workerPath,
@@ -611,14 +637,15 @@ async function main(): Promise<void> {
         difficulty: options.difficulty,
         randomFactor: options.randomFactor,
         evaluationOptions,
+        bookEnabled,
       });
 
     console.log(`Bridge workerを初期化中... (${options.jobs}並列)`);
     const createdPairs = await Promise.all(
       Array.from({ length: options.jobs }, async () => {
         const [a, b] = await Promise.all([
-          makeWorker(worktreePathA!, options.evalOptionsA),
-          makeWorker(worktreePathB!, options.evalOptionsB),
+          makeWorker(worktreePathA!, options.evalOptionsA, options.bookA),
+          makeWorker(worktreePathB!, options.evalOptionsB, options.bookB),
         ]);
         return { a, b };
       }),
@@ -705,6 +732,8 @@ async function main(): Promise<void> {
         sprt: sprtConfig,
         evalOptionsA: options.evalOptionsA,
         evalOptionsB: options.evalOptionsB,
+        bookA: options.bookA,
+        bookB: options.bookB,
       },
       totalGames: completedGames,
       wdl,

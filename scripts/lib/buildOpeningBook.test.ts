@@ -11,6 +11,7 @@ import {
   D4_TRANSFORMS,
   canonicalKeyWithTransform,
   inverseTransformPosition,
+  transformPosition,
 } from "@/logic/boardSymmetry";
 import {
   createBoardFromRecord,
@@ -20,9 +21,11 @@ import {
 
 import type { BookDumpMetadata } from "./bookDumpMetadata";
 import type { BookDumpNode } from "./trapPipeline";
+import type { ForcedWinChecker } from "./verifyBookBlocksTraps";
 
 import {
   applyPatches,
+  applyRapfiGuidance,
   assertHardMoveInvariant,
   buildOpeningBookAsset,
   buildOpeningBookEntries,
@@ -33,10 +36,16 @@ import {
   parseBlackTrapDumpJsonl,
   parseDumpJsonl,
   parsePatchJsonl,
+  parseRapfiMovesJsonl,
+  parseRapfiVerificationCacheJsonl,
   reconstructNodeBoard,
   resolveCanonicalEntry,
+  serializeRapfiVerificationCache,
   type BlackDumpRawNode,
+  type OpeningBookEntry,
   type OpeningBookPatchEntry,
+  type RapfiMoveEntry,
+  type RapfiVerificationCacheEntry,
 } from "./buildOpeningBook";
 
 function plainNode(overrides: Partial<BookDumpNode> = {}): BookDumpNode {
@@ -156,8 +165,9 @@ describe("nodeToCanonicalEntry", () => {
     const node = withRealCanonicalKey(plainNode({ hardMove: "J8" }));
     const entry = nodeToCanonicalEntry(node);
     expect(entry).not.toBeNull();
-    expect(entry?.randomPool).toBeUndefined();
-    expect(typeof entry?.move).toBe("string");
+    expect(entry?.play.randomPool).toBeUndefined();
+    expect(typeof entry?.play.move).toBe("string");
+    expect(entry?.annotation).toEqual([entry?.play.move]);
   });
 
   it("トラップノード（生存手あり）: randomPool に生存手（canonical空間）が入る", () => {
@@ -173,8 +183,9 @@ describe("nodeToCanonicalEntry", () => {
     );
     const entry = nodeToCanonicalEntry(node);
     expect(entry).not.toBeNull();
-    expect(entry?.randomPool).toHaveLength(2);
-    expect(entry?.randomPool).toContain(entry?.move);
+    expect(entry?.play.randomPool).toHaveLength(2);
+    expect(entry?.play.randomPool).toContain(entry?.play.move);
+    expect(new Set(entry?.annotation)).toEqual(new Set(entry?.play.randomPool));
   });
 
   it("彗星型（survivorMoves 空配列）: null（非掲載）を返す", () => {
@@ -214,8 +225,8 @@ describe("同一canonicalKeyへのtransposition（別ルート合流）のマー
       survivorMoves: ["E12"],
     };
     const { entries } = buildOpeningBookEntries([nonTrap, trap]);
-    expect(entries[base.canonicalKey]?.randomPool).toEqual(
-      nodeToCanonicalEntry(trap)?.randomPool,
+    expect(entries[base.canonicalKey]?.play.randomPool).toEqual(
+      nodeToCanonicalEntry(trap)?.play.randomPool,
     );
   });
 
@@ -241,10 +252,10 @@ describe("同一canonicalKeyへのtransposition（別ルート合流）のマー
     };
     const { entries } = buildOpeningBookEntries([trap1, trap2]);
     const expectedUnion = new Set([
-      ...nodeToCanonicalEntry(trap1)!.randomPool!,
-      ...nodeToCanonicalEntry(trap2)!.randomPool!,
+      ...nodeToCanonicalEntry(trap1)!.play.randomPool!,
+      ...nodeToCanonicalEntry(trap2)!.play.randomPool!,
     ]);
-    expect(new Set(entries[base.canonicalKey]?.randomPool)).toEqual(
+    expect(new Set(entries[base.canonicalKey]?.play.randomPool)).toEqual(
       expectedUnion,
     );
   });
@@ -306,7 +317,7 @@ describe("同一canonicalKeyへのtransposition（別ルート合流）のマー
     };
 
     const { entries } = buildOpeningBookEntries([nodeA, nodeB]);
-    const pool = entries[sharedCanonicalKey]?.randomPool ?? [];
+    const pool = entries[sharedCanonicalKey]?.play.randomPool ?? [];
 
     // 正しい実装なら、P（boardA視点）と P（boardB視点、rotate90表記）は
     // 同一の canonical セルに解決されるため重複除去され、Q と合わせて
@@ -377,7 +388,7 @@ describe("buildOpeningBookEntries", () => {
     // ゲート3（実装レビュー B1）: 挙動不変レポート用の内訳統計
     expect(stats.nonTrapEntryCount).toBe(1); // plain のみ
     expect(stats.trapEntryCount).toBe(1); // trap のみ（comet は非掲載）
-    const expectedPoolSize = expectedEntry!.randomPool!.length;
+    const expectedPoolSize = expectedEntry!.play.randomPool!.length;
     expect(stats.randomPoolSizeDistribution).toEqual({
       [expectedPoolSize]: 1,
     });
@@ -391,7 +402,8 @@ describe("buildOpeningBookEntries", () => {
       plainNode({ movesUpToHere: ["H8", "I9", "I8"], hardMove: "J8" }),
     );
     const resolved = resolveCanonicalEntry(node)!;
-    const corruptedEntry = { move: "A1" }; // hardMove(J8) とは無関係な手
+    // hardMove(J8) とは無関係な手
+    const corruptedEntry = { play: { move: "A1" }, annotation: ["A1"] };
     expect(() =>
       assertHardMoveInvariant(node, corruptedEntry, resolved.transformName),
     ).toThrow(/invariant/);
@@ -414,7 +426,11 @@ describe("assertHardMoveInvariant", () => {
       plainNode({ movesUpToHere: ["H8", "I9", "I8"], hardMove: "J8" }),
     );
     expect(() =>
-      assertHardMoveInvariant(node, { move: "A1" }, "identity"),
+      assertHardMoveInvariant(
+        node,
+        { play: { move: "A1" }, annotation: ["A1"] },
+        "identity",
+      ),
     ).toThrow(/invariant/);
   });
 
@@ -430,7 +446,11 @@ describe("assertHardMoveInvariant", () => {
       }),
     );
     expect(() =>
-      assertHardMoveInvariant(node, { move: "A1" }, "identity"),
+      assertHardMoveInvariant(
+        node,
+        { play: { move: "A1" }, annotation: ["A1"] },
+        "identity",
+      ),
     ).not.toThrow();
   });
 });
@@ -531,13 +551,16 @@ describe("parsePatchJsonl / applyPatches（opening-book-2026-07-16.md §4 彗星
 
   it("applyPatches: 既存エントリを patch の代替手（canonical空間へ変換済み）で上書きする", () => {
     const patch = makePatch();
-    const original: Record<string, { move: string }> = {
-      [patch.canonicalKey]: { move: "H9-original-placeholder" },
+    const original: Record<string, OpeningBookEntry> = {
+      [patch.canonicalKey]: {
+        play: { move: "H9-original-placeholder" },
+        annotation: ["H9-original-placeholder"],
+      },
     };
     const { entries, appliedCount } = applyPatches(original, [patch]);
     expect(appliedCount).toBe(1);
     expect(entries[patch.canonicalKey]).toBeDefined();
-    expect(entries[patch.canonicalKey]?.move).not.toBe(
+    expect(entries[patch.canonicalKey]?.play.move).not.toBe(
       "H9-original-placeholder",
     );
     // 逆変換で実盤に戻すと replacementMove と一致する（invariant相当）はず。
@@ -695,8 +718,8 @@ describe("黒番トラップ個別対応（opening-book-2026-07-16.md 黒対応�
     expect(Object.keys(merged.entries)).toHaveLength(originalEntryCount + 1);
     expect(merged.entries[whiteNode.canonicalKey]).toBeDefined();
     const blackKey = trapNodes[0]!.canonicalKey;
-    expect(merged.entries[blackKey]?.randomPool).toEqual(
-      nodeToCanonicalEntry(trapNodes[0]!)?.randomPool,
+    expect(merged.entries[blackKey]?.play.randomPool).toEqual(
+      nodeToCanonicalEntry(trapNodes[0]!)?.play.randomPool,
     );
 
     expect(merged.blackTrapProvenance).toEqual({
@@ -717,5 +740,381 @@ describe("黒番トラップ個別対応（opening-book-2026-07-16.md 黒対応�
     expect(merged.stats.trapEntryCount).toBe(asset.stats.trapEntryCount + 1);
     expect(merged.stats.trapNodes).toBe(asset.stats.trapNodes + 1);
     expect(merged.stats.nonTrapEntryCount).toBe(asset.stats.nonTrapEntryCount);
+  });
+});
+
+describe("Rapfi 誘導化（opening-book-2026-07-16.md ★v2プラン B1〜B3）", () => {
+  /** 指定した実盤座標の手ごとに強制勝ちの有無を固定するフェイク ForcedWinChecker。 */
+  function fakeChecker(
+    resultByMove: Record<string, "VCF" | "VCT" | null>,
+  ): ForcedWinChecker & { callCount: number } {
+    let callCount = 0;
+    return {
+      get callCount() {
+        return callCount;
+      },
+      check(_board, _sideToMove, move) {
+        callCount++;
+        return resultByMove[formatMove(move)] ?? null;
+      },
+    };
+  }
+
+  /** node の局面（実盤）で、realMoveStr を canonical 空間の棋譜表記に変換する。 */
+  function toCanonicalStr(node: BookDumpNode, realMoveStr: string): string {
+    const { board } = createBoardFromRecord(node.movesUpToHere.join(" "));
+    const { transformName } = canonicalKeyWithTransform(board, "white");
+    return formatMove(transformPosition(parseMove(realMoveStr), transformName));
+  }
+
+  describe("parseRapfiMovesJsonl", () => {
+    it("Rapfi行をパースし空行を無視する", () => {
+      const entry: RapfiMoveEntry = {
+        canonicalKey: "dummy|white",
+        movesUpToHere: ["H8", "I9", "I8"],
+        rapfiMoves: ["J8", "K9"],
+      };
+      const text = `${JSON.stringify(entry)}\n\n`;
+      expect(parseRapfiMovesJsonl(text)).toEqual([entry]);
+    });
+  });
+
+  describe("RapfiVerificationCache のシリアライズ/ロード", () => {
+    it("Map → JSONL → Map の往復で内容が保たれる", () => {
+      const cache = new Map<string, "VCF" | "VCT" | null>([
+        ["keyA|white::J8", null],
+        ["keyB|white::K9", "VCF"],
+        ["keyC|black::L10", "VCT"],
+      ]);
+      const text = serializeRapfiVerificationCache(cache);
+      const roundTripped = parseRapfiVerificationCacheJsonl(text);
+      expect(roundTripped).toEqual(cache);
+    });
+
+    it("空の Map は空文字列にシリアライズされる", () => {
+      expect(serializeRapfiVerificationCache(new Map())).toBe("");
+    });
+  });
+
+  describe("applyRapfiGuidance", () => {
+    it("先頭のRapfi候補が安全なら採用され、playがRapfi手になり注釈へ合流する", () => {
+      const node = withRealCanonicalKey(
+        plainNode({ movesUpToHere: ["H8", "I9", "I8"], hardMove: "J8" }),
+      );
+      const { entries: v1Entries } = buildOpeningBookEntries([node]);
+
+      const rapfi: RapfiMoveEntry = {
+        canonicalKey: node.canonicalKey,
+        movesUpToHere: node.movesUpToHere,
+        rapfiMoves: ["K9", "L10"],
+      };
+      const checker = fakeChecker({}); // 全て安全
+      const cache = new Map<string, "VCF" | "VCT" | null>();
+      const { entries, report } = applyRapfiGuidance(
+        v1Entries,
+        [rapfi],
+        checker,
+        cache,
+      );
+
+      expect(report.adopted).toBe(1);
+      expect(report.rejected).toBe(0);
+      expect(report.unavailable).toBe(0);
+      expect(report.adoptedKeys).toEqual([node.canonicalKey]);
+
+      // 全候補が安全なため、K9（先頭）が play に、K9・L10 両方が注釈へ合流する。
+      const canonicalK9 = toCanonicalStr(node, "K9");
+      const canonicalL10 = toCanonicalStr(node, "L10");
+      const canonicalJ8 = toCanonicalStr(node, "J8");
+      expect(entries[node.canonicalKey]?.play).toEqual({ move: canonicalK9 });
+      expect(new Set(entries[node.canonicalKey]?.annotation)).toEqual(
+        new Set([canonicalJ8, canonicalK9, canonicalL10]),
+      );
+    });
+
+    it("先頭候補が危険でも次点が安全なら次点が採用され、危険だった候補は注釈に含めない", () => {
+      const node = withRealCanonicalKey(
+        plainNode({ movesUpToHere: ["H8", "I9", "I8"], hardMove: "J8" }),
+      );
+      const { entries: v1Entries } = buildOpeningBookEntries([node]);
+
+      const rapfi: RapfiMoveEntry = {
+        canonicalKey: node.canonicalKey,
+        movesUpToHere: node.movesUpToHere,
+        rapfiMoves: ["K9", "L10"],
+      };
+      const checker = fakeChecker({ K9: "VCF" }); // K9だけ危険
+      const cache = new Map<string, "VCF" | "VCT" | null>();
+      const { entries, report } = applyRapfiGuidance(
+        v1Entries,
+        [rapfi],
+        checker,
+        cache,
+      );
+
+      expect(report.adopted).toBe(1);
+      const canonicalL10 = toCanonicalStr(node, "L10");
+      const canonicalK9 = toCanonicalStr(node, "K9");
+      const canonicalJ8 = toCanonicalStr(node, "J8");
+      expect(entries[node.canonicalKey]?.play).toEqual({ move: canonicalL10 });
+      const annotation = new Set(entries[node.canonicalKey]?.annotation);
+      expect(annotation).toEqual(new Set([canonicalJ8, canonicalL10]));
+      expect(annotation.has(canonicalK9)).toBe(false); // 危険だった候補は含めない
+    });
+
+    it("全候補が危険ならv1のplay/annotationを維持し、rejectedとして報告する", () => {
+      const node = withRealCanonicalKey(
+        plainNode({ movesUpToHere: ["H8", "I9", "I8"], hardMove: "J8" }),
+      );
+      const { entries: v1Entries } = buildOpeningBookEntries([node]);
+
+      const rapfi: RapfiMoveEntry = {
+        canonicalKey: node.canonicalKey,
+        movesUpToHere: node.movesUpToHere,
+        rapfiMoves: ["K9", "L10"],
+      };
+      const checker = fakeChecker({ K9: "VCF", L10: "VCT" }); // 全て危険
+      const cache = new Map<string, "VCF" | "VCT" | null>();
+      const { entries, report } = applyRapfiGuidance(
+        v1Entries,
+        [rapfi],
+        checker,
+        cache,
+      );
+
+      expect(report.adopted).toBe(0);
+      expect(report.rejected).toBe(1);
+      expect(report.rejectedKeys).toEqual([node.canonicalKey]);
+      expect(entries[node.canonicalKey]).toEqual(v1Entries[node.canonicalKey]);
+    });
+
+    it("canonicalKeyが盤面と矛盾する場合はunavailableとして扱い、既存資産を変更しない", () => {
+      const node = withRealCanonicalKey(
+        plainNode({ movesUpToHere: ["H8", "I9", "I8"], hardMove: "J8" }),
+      );
+      const { entries: v1Entries } = buildOpeningBookEntries([node]);
+
+      const rapfi: RapfiMoveEntry = {
+        canonicalKey: `${"B".repeat(225)}|white`,
+        movesUpToHere: node.movesUpToHere,
+        rapfiMoves: ["K9"],
+      };
+      const checker = fakeChecker({});
+      const cache = new Map<string, "VCF" | "VCT" | null>();
+      const { entries, report } = applyRapfiGuidance(
+        v1Entries,
+        [rapfi],
+        checker,
+        cache,
+      );
+
+      expect(report.unavailable).toBe(1);
+      expect(report.adopted).toBe(0);
+      expect(report.rejected).toBe(0);
+      expect(entries).toEqual(v1Entries);
+      expect(checker.callCount).toBe(0); // canonicalize失敗なら検証すら行わない
+    });
+
+    it("石数ガード（実装レビュー suggestion）: movesUpToHereがcanonicalKeyより石数不足だとrejected扱いになり検証も行わない", () => {
+      // 完全な7手局面から正しいcanonicalKeyを計算した後、Rapfiエントリの
+      // movesUpToHereからは最後の1手（黒7相当）を落とす（trap-mining.tsの
+      // 既知の欠損パターンを模擬）。findConsistentTransformは既知の石だけで
+      // 判定するため矛盾なく変換が見つかってしまう＝欠けた盤のまま検証が
+      // 通ってしまうsilent holeを、石数ガードで検出できることを確認する。
+      const fullMoves = ["H8", "I9", "I8", "J8", "H9", "H10", "G11"];
+      const { board: fullBoard } = createBoardFromRecord(fullMoves.join(" "));
+      const trueCanonicalKey = canonicalKeyWithTransform(
+        fullBoard,
+        "white",
+      ).key;
+
+      const node: BookDumpNode = {
+        canonicalKey: trueCanonicalKey,
+        route: "雲月",
+        ply: 8,
+        movesUpToHere: fullMoves, // 資産側は完全な7手（既存エントリを持つ）
+        hardMove: "F11",
+        forcedWinKind: null,
+        forcedWinSequenceStr: null,
+        survivorMoves: null,
+      };
+      const { entries: v1Entries } = buildOpeningBookEntries([node]);
+
+      const rapfi: RapfiMoveEntry = {
+        canonicalKey: trueCanonicalKey,
+        movesUpToHere: fullMoves.slice(0, 6), // 黒7(G11)を欠落させる
+        rapfiMoves: ["F11"],
+      };
+      // checkerが呼ばれたら失敗させる（欠けた盤で検証が走ってしまうバグの検出）。
+      const checker: ForcedWinChecker = {
+        check() {
+          throw new Error(
+            "石数不一致のエントリでcheckerが呼ばれた（ガードが機能していない）",
+          );
+        },
+      };
+      const cache = new Map<string, "VCF" | "VCT" | null>();
+      const { entries, report } = applyRapfiGuidance(
+        v1Entries,
+        [rapfi],
+        checker,
+        cache,
+      );
+
+      expect(report.rejected).toBe(1);
+      expect(report.rejectedKeys).toEqual([trueCanonicalKey]);
+      expect(report.adopted).toBe(0);
+      expect(report.unavailable).toBe(0);
+      expect(entries).toEqual(v1Entries); // v1のplay/annotationは変更されない
+    });
+
+    it("候補が全て盤上の既存石と重複する場合はunavailableとして扱う", () => {
+      const node = withRealCanonicalKey(
+        plainNode({ movesUpToHere: ["H8", "I9", "I8"], hardMove: "J8" }),
+      );
+      const { entries: v1Entries } = buildOpeningBookEntries([node]);
+
+      const rapfi: RapfiMoveEntry = {
+        canonicalKey: node.canonicalKey,
+        movesUpToHere: node.movesUpToHere,
+        rapfiMoves: ["H8"], // 既に黒石がある実盤座標
+      };
+      const checker = fakeChecker({});
+      const cache = new Map<string, "VCF" | "VCT" | null>();
+      const { entries, report } = applyRapfiGuidance(
+        v1Entries,
+        [rapfi],
+        checker,
+        cache,
+      );
+
+      expect(report.unavailable).toBe(1);
+      expect(entries).toEqual(v1Entries);
+    });
+
+    it("v1に存在しないcanonicalKeyでも、安全なRapfi候補があれば新規エントリとして追加する", () => {
+      const node = withRealCanonicalKey(
+        plainNode({ movesUpToHere: ["H8", "I9", "I8"], hardMove: "J8" }),
+      );
+      // v1エントリは空（このcanonicalKeyはv1ブックの対象外だった局面という想定）。
+      const v1Entries: Record<string, OpeningBookEntry> = {};
+
+      const rapfi: RapfiMoveEntry = {
+        canonicalKey: node.canonicalKey,
+        movesUpToHere: node.movesUpToHere,
+        rapfiMoves: ["K9"],
+      };
+      const checker = fakeChecker({});
+      const cache = new Map<string, "VCF" | "VCT" | null>();
+      const { entries, report } = applyRapfiGuidance(
+        v1Entries,
+        [rapfi],
+        checker,
+        cache,
+      );
+
+      expect(report.adopted).toBe(1);
+      const canonicalK9 = toCanonicalStr(node, "K9");
+      expect(entries[node.canonicalKey]).toEqual({
+        play: { move: canonicalK9 },
+        annotation: [canonicalK9],
+      });
+    });
+
+    it("キャッシュにヒットした候補はcheckerを呼ばずに再利用する（高コスト検証の再ビルド間節約）", () => {
+      const node = withRealCanonicalKey(
+        plainNode({ movesUpToHere: ["H8", "I9", "I8"], hardMove: "J8" }),
+      );
+      const { entries: v1Entries } = buildOpeningBookEntries([node]);
+      const canonicalK9 = toCanonicalStr(node, "K9");
+
+      const rapfi: RapfiMoveEntry = {
+        canonicalKey: node.canonicalKey,
+        movesUpToHere: node.movesUpToHere,
+        rapfiMoves: ["K9"],
+      };
+      // 事前にキャッシュへ「安全」を書き込んでおく。
+      const cache = new Map<string, "VCF" | "VCT" | null>([
+        [`${node.canonicalKey}::${canonicalK9}`, null],
+      ]);
+      const checker = fakeChecker({ K9: "VCF" }); // もし呼ばれたら危険と返す設定
+      const { entries, report } = applyRapfiGuidance(
+        v1Entries,
+        [rapfi],
+        checker,
+        cache,
+      );
+
+      expect(checker.callCount).toBe(0); // キャッシュヒットのため checker は呼ばれない
+      expect(report.adopted).toBe(1); // キャッシュの「安全」がそのまま使われる
+      expect(entries[node.canonicalKey]?.play.move).toBe(canonicalK9);
+    });
+
+    it("新規に検証した候補はonVerifiedコールバックへ通知される（CLI側でキャッシュ永続化するため）", () => {
+      const node = withRealCanonicalKey(
+        plainNode({ movesUpToHere: ["H8", "I9", "I8"], hardMove: "J8" }),
+      );
+      const { entries: v1Entries } = buildOpeningBookEntries([node]);
+
+      const rapfi: RapfiMoveEntry = {
+        canonicalKey: node.canonicalKey,
+        movesUpToHere: node.movesUpToHere,
+        rapfiMoves: ["K9"],
+      };
+      const checker = fakeChecker({});
+      const cache = new Map<string, "VCF" | "VCT" | null>();
+      const notified: RapfiVerificationCacheEntry[] = [];
+      applyRapfiGuidance(v1Entries, [rapfi], checker, cache, (entry) => {
+        notified.push(entry);
+      });
+
+      const canonicalK9 = toCanonicalStr(node, "K9");
+      expect(notified).toEqual([
+        {
+          canonicalKey: node.canonicalKey,
+          move: canonicalK9,
+          forcedWinKind: null,
+        },
+      ]);
+    });
+  });
+
+  describe("実データフィクスチャからの統合確認（ID2: rapfi-moves.jsonl）", () => {
+    const __dirname = path.dirname(fileURLToPath(import.meta.url));
+    const fixtureDir = path.join(__dirname, "__fixtures__/opening-book");
+
+    it("dump.jsonlの実局面を対象にしたRapfi推奨手フィクスチャを取り込み、v1資産のplay/annotationを更新できる", () => {
+      const dumpText = readFileSync(
+        path.join(fixtureDir, "dump.jsonl"),
+        "utf-8",
+      );
+      const { nodes } = parseDumpJsonl(dumpText);
+      const { entries: v1Entries } = buildOpeningBookEntries(nodes);
+
+      const rapfiText = readFileSync(
+        path.join(fixtureDir, "rapfi-moves.jsonl"),
+        "utf-8",
+      );
+      const rapfiEntries = parseRapfiMovesJsonl(rapfiText);
+      expect(rapfiEntries.length).toBeGreaterThan(0);
+
+      // フィクスチャの局面は既に検証済みのハード手を Rapfi 推奨としているため、
+      // 「常に安全」なフェイク checker で adopted になることを確認する
+      // （実運用では checkForcedWinAfterMove を注入する）。
+      const checker = fakeChecker({});
+      const cache = new Map<string, "VCF" | "VCT" | null>();
+      const { entries, report } = applyRapfiGuidance(
+        v1Entries,
+        rapfiEntries,
+        checker,
+        cache,
+      );
+
+      expect(report.unavailable).toBe(0);
+      expect(report.adopted).toBe(rapfiEntries.length);
+      for (const rapfi of rapfiEntries) {
+        expect(entries[rapfi.canonicalKey]).toBeDefined();
+      }
+    });
   });
 });

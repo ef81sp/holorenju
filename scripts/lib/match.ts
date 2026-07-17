@@ -109,6 +109,13 @@ export interface CreateBridgeWorkerParams {
    * （mergeDifficultyParams 参照）。省略時は現行挙動と完全一致（後方互換）。
    */
   evaluationOptions?: Partial<EvaluationOptions>;
+  /**
+   * オープニングブック（opening-book-2026-07-16.md ★v2プラン B3）を有効化するか。
+   * 既定 OFF（未指定時は現行挙動と完全一致・後方互換）。ON でも worktree に
+   * ブックモジュール/資産が無ければ cpu-bridge-worker 側で自動的に book-OFF
+   * として続行する。
+   */
+  bookEnabled?: boolean;
 }
 
 /**
@@ -145,6 +152,7 @@ export function createBridgeWorker(
     randomFactor,
     evalWeights,
     evaluationOptions,
+    bookEnabled,
   } = params;
   return new Promise<Worker>((resolve, reject) => {
     const customParams = buildBridgeCustomParams(
@@ -153,7 +161,13 @@ export function createBridgeWorker(
     );
 
     const worker = new Worker(workerPath, {
-      workerData: { worktreePath, difficulty, customParams, evalWeights },
+      workerData: {
+        worktreePath,
+        difficulty,
+        customParams,
+        evalWeights,
+        bookEnabled,
+      },
       execArgv: [
         "--experimental-strip-types",
         "--disable-warning=ExperimentalWarning",

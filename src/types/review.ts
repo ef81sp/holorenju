@@ -149,7 +149,7 @@ export interface EvaluatedMove {
   doubleMiseTargets?: Position[];
   /**
    * 序盤定石ブックと一致する手か（§3）。true のときはミス判定・代替推奨の
-   * 表示を抑制し、「定石（ブック手）」ラベルを表示する。
+   * 表示を抑制し、「序盤ブック手」ラベルを表示する。
    */
   isBookMove?: boolean;
 }
