@@ -15,10 +15,12 @@
  *
  * 修正: 石数ゲート判定を checkForcedLossVCTOnly（review.worker.ts とテストの
  * 両方が使う SSoT）に切り出してテスト可能にし、VCT_STONE_THRESHOLD を
- * 14→4 に引き下げた（開局3手=OPENING_MOVESは review のキューに載らないため、
- * 4は実質「開局直後を除く全ての手でVCTチェックする」に等しい）。
- * レイテンシ対策として FORCED_LOSS_VCT_OPTIONS.timeLimit も 10,000ms→3,000ms
- * に短縮（詳細はそちらのコメント参照）。
+ * 14→8 に引き下げた。ボス実戦21手全手の実測で、6-7石は陰性探索が
+ * timeLimit(10秒)に張り付く「重いゾーン」である一方、8石以降（J6含む）は
+ * 陽性・陰性問わず全て600ms未満で完了することが分かったため、8はこの重い
+ * ゾーンを避けつつ報告された J6 を確実に含む最小の閾値として選んだ（詳細は
+ * search/types.ts の VCT_STONE_THRESHOLD コメント参照）。FORCED_LOSS_VCT_OPTIONS
+ * のtimeLimit/maxNodesはこの閾値変更のみで対応できたため変更していない。
  */
 
 import { describe, expect, it } from "vitest";
@@ -65,17 +67,17 @@ describe("checkForcedLossVCTOnly: VCT石数ゲート（#70）", () => {
     expect(result?.type).toBe("vct");
   });
 
-  it("旧閾値相当（14）を明示すると J6局面はゲートで弾かれる（バグ時の挙動を再現）", () => {
+  it("石数が閾値未満ならVCTチェック自体がスキップされる（ゲートの健全性確認）", () => {
     const { board } = createBoardFromRecord(RECORD_UP_TO_J6);
 
     // checkForcedLossVCTOnly 自体は VCT_STONE_THRESHOLD 定数を直接使うため、
-    // 旧バグの挙動は stoneCountAfter が定数を下回るケースとして
-    // 石数を人為的に小さく渡すことでシミュレートする。
+    // 石数を人為的に閾値未満へ渡すことでゲートが機能することを確認する
+    // （旧バグは、閾値(旧14)が高すぎてJ6の8石を弾いていたのと同じ仕組み）。
     const result = checkForcedLossVCTOnly(
       board,
       "white",
       "black",
-      3, // 旧14は当然、現行閾値(4)未満に相当する値
+      3, // 現行閾値(8)未満
       engine,
       { vctOptions: FORCED_LOSS_VCT_OPTIONS },
     );

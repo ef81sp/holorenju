@@ -54,19 +54,20 @@ export const REVIEW_MISE_VCF_OPTIONS: MiseVCFSearchOptions = {
 /**
  * Phase 2/3 VCT 深掘りチェック用
  *
- * timeLimit（#70 review-forcedloss-vct-budget 調査 2026-07-18）: 旧値は
- * 10,000ms（VCT内部のVCFがノードカウントを共有しないため maxNodes だけでは
- * 不十分、という理由での保守的な上限）。ボス実戦棋譜21手全てで実測したところ、
- * 本物の被詰み検出（VCT/VCF発見）は全て600ms未満で完了する一方、被詰みが
- * 存在しない局面での網羅探索（陰性判定）はこの10秒上限にほぼ張り付いて
- * 停止していた（VCT_STONE_THRESHOLD引き下げにより新たにこの範囲もチェック
- * 対象になったため、この無駄なコストが顕在化した）。3,000msは実測した
- * 最遅の本物の検出（約580ms）に対して約5倍の安全マージンを残しつつ、
- * 陰性判定の最悪コストを1/3に抑える。
+ * timeLimit=10,000ms（VCT内部のVCFがノードカウントを共有しないため maxNodes
+ * だけでは不十分、という理由での保守的な上限）。
+ *
+ * #70（2026-07-18）調査時の判断: 当初「予算不足」と推測されていたが、実際の
+ * 原因は VCT_STONE_THRESHOLD の石数ゲート（そちらのコメント参照）で、この
+ * timeLimit/maxNodes 自体は変更していない。ボス実戦21手の実測では、閾値を
+ * 8（危険な陰性探索ゾーンである6-7石を除外）に調整した結果、この21手全体で
+ * timeLimit(10秒)に張り付くケースは発生しなくなった（本物の検出は全て
+ * 600ms未満）。maxNodes=500,000 を主たる決定的な打ち切り条件として維持し、
+ * timeLimit はその補助的な安全上限のままとしている。
  */
 export const FORCED_LOSS_VCT_OPTIONS: VCTSearchOptions = {
   maxDepth: 8,
-  timeLimit: 3_000,
+  timeLimit: 10_000,
   maxNodes: 500_000,
   vcfOptions: { maxDepth: 16, timeLimit: 3_000, maxNodes: 100_000 },
   // 被詰タブで防御分岐を木展開するための詰み木を収集する（#26）。

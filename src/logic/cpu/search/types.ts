@@ -74,18 +74,26 @@ export interface VCTSequenceResult {
 }
 
 /**
- * VCT探索を有効にする石数の閾値（review.worker.ts の vctCheckOnly のみで使用）
+ * VCT探索を有効にする石数の閾値
+ *
+ * review.worker.ts の vctCheckOnly から forcedLossCheck.ts の
+ * checkForcedLossVCTOnly 経由で使用される（#70 でロジックを review.worker.ts
+ * からこちらへ集約したため、参照元は checkForcedLossVCTOnly のみ）。
  *
  * #70（2026-07-18）: 旧値14は「石が少なすぎる開局直後は探索コストに見合わない」
  * という想定だったが、実戦棋譜で8石時点（開局3手をスキップした直後）に本物の
- * 被詰み（VCT）が存在する敗着（J6）を見逃す原因になっていた。開局の珠型3手
- * （isOpeningMove/OPENING_MOVES）は review のキュー自体に載らないため、4は
- * 実質「開局直後を除く全ての評価対象手でVCTチェックを行う」に等しい。
- * ボス実戦21手での実測では、閾値を下げても本物の検出は全て600ms未満で
- * 完了し、レイテンシ増は陰性局面の探索コスト（FORCED_LOSS_VCT_OPTIONS.timeLimit
- * 参照）に限られることを確認済み。
+ * 被詰み（VCT）が存在する敗着（J6）を見逃す原因になっていた。
+ *
+ * ボス実戦21手全手で checkForcedLossVCTOnly のVCTステップの壁時計時間を実測
+ * したところ、石数と探索コストに明確な非単調な偏りがあった: 6-7石（陰性・
+ * 被詰みなし）はいずれも探索空間が広すぎて exhaustive に近い探索になり
+ * timeLimit(10秒)いっぱいまで浪費する一方、8石以降（J6含む）は陽性・陰性
+ * 問わず全て600ms未満で完了した。8はこの「危険な陰性探索ゾーン(6-7石)」を
+ * 除外しつつ、報告された J6（8石）を確実に含む最小の閾値として選定した
+ * （4等さらに低い値も検出自体は可能だが、6-7石の重い陰性探索を毎回抱える
+ * ことになり不要なレイテンシ増を招く）。
  */
-export const VCT_STONE_THRESHOLD = 4;
+export const VCT_STONE_THRESHOLD = 8;
 
 // =============================================================================
 // Mise-VCF
