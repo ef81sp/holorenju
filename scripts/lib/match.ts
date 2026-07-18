@@ -22,7 +22,12 @@ import {
   getAllJushuNames,
   getJushuPositions,
 } from "../../src/logic/cpu/opening.ts";
-import { runCommitGame } from "../commit-game-runner.ts";
+import {
+  GameHangError,
+  type HangContext,
+  type HangInjectSpec,
+  runCommitGame,
+} from "../commit-game-runner.ts";
 import { estimateEloDiff } from "./eloDiff.ts";
 import { updateSPRT } from "./sprt.ts";
 
@@ -33,12 +38,31 @@ export interface MatchTask {
   isABlack: boolean;
 }
 
+/** ハング局のメタ情報（caller のダンプ作成用） */
+export interface HangMatchInfo {
+  gameIdx: number;
+  jushuName: string;
+  isABlack: boolean;
+  pairIdx: number;
+}
+
 /** runMatch の結果（caller が後処理＝性能統計や保存を行う）。 */
 export interface RunMatchResult {
   wdl: WDLCount;
   games: CommitGameResult[];
   completedGames: number;
   stoppedBySprt: boolean;
+  /**
+   * ハング等で破棄された局数（recreatePair 指定時のみ発生しうる）。
+   * 未破棄なら常に 0。既存 caller が field を読まなくても影響しない。
+   */
+  aborts: number;
+  /**
+   * abort 局を側（A/B）別に集計したもの。
+   * 「劣勢側がハングしやすい場合に負けを消す」一方向バイアスの検出に使う。
+   * A + B = aborts の関係。
+   */
+  abortsBySide: { A: number; B: number };
 }
 
 export interface RunMatchParams {
@@ -59,6 +83,25 @@ export interface RunMatchParams {
    * **未指定なら旧挙動**（エラーを伝播＝commit-bench を出力同一に保つ）。
    */
   recreatePair?: (idx: number) => Promise<{ a: Worker; b: Worker }>;
+  /**
+   * ハング（GameHangError）が起きたときに呼ばれる。ダンプ書き出し等の副作用を行う。
+   * recreatePair と併用したときのみ呼ばれる（recreatePair 未指定＝旧挙動でエラーを
+   * 伝播するときは、caller にはハング固有の情報が届かず onHang が意味を持たないため）。
+   */
+  onHang?: (context: HangContext, info: HangMatchInfo) => void;
+  /**
+   * テスト用: 特定の gameIdx（0-based, tasks 配列上のインデックス）に到達した局で
+   * ハング注入を行う。ハング回復パスの手動 e2e テストに使う。
+   * gameIdx が現在の taskIdx に一致する局にだけ runCommitGame へ hangInject を渡す。
+   */
+  hangInject?: { gameIdx: number; spec: HangInjectSpec };
+  /**
+   * 各局に渡す PRNG シードを算出する関数。指定時、局ごとの gameSeed を
+   * `getGameSeed(gameIdx)` で決めて runCommitGame に渡す。
+   * randomFactor > 0 のとき「同一 baseSeed → 同一棋譜」を保証するのに使う。
+   * 未指定なら worker 側は Math.random にフォールバック（従来挙動）。
+   */
+  getGameSeed?: (gameIdx: number) => number;
 }
 
 // ============================================================================
@@ -116,18 +159,44 @@ export interface CreateBridgeWorkerParams {
    * として続行する。
    */
   bookEnabled?: boolean;
+  /**
+   * 脅威プローブトグル（探索レバー A/B）。未指定/true=従来挙動、false=無効化。
+   * setThreatProbeEnabled 非対応の古い wasm では bridge worker 側で warn して
+   * スキップされる（fallback で ON 相当）。
+   */
+  threatProbeEnabled?: boolean;
+  /**
+   * 探索の maxNodes オーバーライド。未指定なら difficulty 既定を使う。
+   * 「同じ持ち時間でノード上限が実質非拘束なら深読みが Elo に転換するか」を
+   * 測るための実行時レバー（randomFactor/evaluationOptions と同じ流儀で
+   * customParams 経由で mergeDifficultyParams に注入される）。
+   */
+  maxNodes?: number;
+  /**
+   * 探索の depth cap オーバーライド。未指定なら difficulty 既定を使う。
+   * DifficultyParams.depth に写される。iterative deepening の上限。
+   * probe OFF/深さ探索レバーが depth cap で頭打ちになるのを避けるためのレバー。
+   */
+  maxDepth?: number;
 }
 
 /**
  * createBridgeWorker に渡す customParams を組み立てる（純粋関数・単体テスト用に export）。
- * randomFactor / evaluationOptions のいずれも未指定なら undefined を返し、
+ * randomFactor / evaluationOptions / maxNodes のいずれも未指定なら undefined を返し、
  * 既存呼び出し（weight-bench 等）の挙動を完全に保つ。
  */
 export function buildBridgeCustomParams(
   randomFactor: number | undefined,
   evaluationOptions: Partial<EvaluationOptions> | undefined,
+  maxNodes?: number,
+  maxDepth?: number,
 ): Partial<DifficultyParams> | undefined {
-  if (randomFactor === undefined && evaluationOptions === undefined) {
+  if (
+    randomFactor === undefined &&
+    evaluationOptions === undefined &&
+    maxNodes === undefined &&
+    maxDepth === undefined
+  ) {
     return undefined;
   }
   const customParams: Partial<DifficultyParams> = {};
@@ -136,6 +205,14 @@ export function buildBridgeCustomParams(
   }
   if (evaluationOptions !== undefined) {
     customParams.evaluationOptions = evaluationOptions as EvaluationOptions;
+  }
+  if (maxNodes !== undefined) {
+    customParams.maxNodes = maxNodes;
+  }
+  if (maxDepth !== undefined) {
+    // DifficultyParams.depth = iterative deepening の上限。maxDepth の名前は
+    // ベンチ CLI の flag に合わせ、ここで DifficultyParams.depth に写す。
+    customParams.depth = maxDepth;
   }
   return customParams;
 }
@@ -153,11 +230,16 @@ export function createBridgeWorker(
     evalWeights,
     evaluationOptions,
     bookEnabled,
+    threatProbeEnabled,
+    maxNodes,
+    maxDepth,
   } = params;
   return new Promise<Worker>((resolve, reject) => {
     const customParams = buildBridgeCustomParams(
       randomFactor,
       evaluationOptions,
+      maxNodes,
+      maxDepth,
     );
 
     const worker = new Worker(workerPath, {
@@ -167,6 +249,7 @@ export function createBridgeWorker(
         customParams,
         evalWeights,
         bookEnabled,
+        threatProbeEnabled,
       },
       execArgv: [
         "--experimental-strip-types",
@@ -249,12 +332,17 @@ export async function runMatch(
     verbose,
     startTime,
     recreatePair,
+    onHang,
+    hangInject,
+    getGameSeed,
   } = params;
 
   const wdl: WDLCount = { wins: 0, draws: 0, losses: 0 };
   const games: CommitGameResult[] = [];
   let completedGames = 0;
   let stoppedBySprt = false;
+  let aborts = 0;
+  const abortsBySide = { A: 0, B: 0 };
 
   const cumAcc = { A: newAcc(), B: newAcc() };
 
@@ -275,11 +363,18 @@ export async function runMatch(
       const { jushuName, positions, isABlack } = tasks[taskIdx]!;
 
       let result: CommitGameResult | null = null;
+      const injectHere =
+        hangInject !== undefined && hangInject.gameIdx === taskIdx
+          ? hangInject.spec
+          : undefined;
+      const gameSeed = getGameSeed ? getGameSeed(taskIdx) : undefined;
       try {
         const r = await runCommitGame(pair.a, pair.b, isABlack, {
           verbose,
           moveTimeoutMs,
           openingMoves: positions,
+          hangInject: injectHere,
+          gameSeed,
         });
         result = { ...r, jushuName };
       } catch (err: unknown) {
@@ -288,16 +383,40 @@ export async function runMatch(
           throw err;
         }
         // 1局隔離: ハング/worker死。当該局は破棄し worker を再生成して続行。
+        const isHang = err instanceof GameHangError;
         const msg = err instanceof Error ? err.message : String(err);
         clearStatus();
         console.warn(
-          `\n⚠ 局 ${jushuName}(${isABlack ? "A黒" : "A白"}) を破棄: ${msg}`,
+          `\n⚠ 局 g${taskIdx} ${jushuName}(${isABlack ? "A黒" : "A白"}) を破棄: ${msg}`,
         );
+        if (isHang && onHang) {
+          try {
+            onHang(err.context, {
+              gameIdx: taskIdx,
+              jushuName,
+              isABlack,
+              pairIdx,
+            });
+          } catch (dumpErr: unknown) {
+            const dm =
+              dumpErr instanceof Error ? dumpErr.message : String(dumpErr);
+            console.error(`onHang ダンプ処理でエラー: ${dm}`);
+          }
+        }
+        aborts++;
+        // side 別集計: ハングした側（A/B）に加算。ハングじゃない例外（worker死等）
+        // は側が特定できないので aborts のみ加算する。
+        if (isHang) {
+          abortsBySide[err.context.side]++;
+        }
         try {
           pair.a.terminate();
           pair.b.terminate();
           pair = await recreatePair(pairIdx);
           pairs[pairIdx] = pair;
+          console.warn(
+            `↳ worker pair (idx=${pairIdx}) 再生成完了。残り局を継続します。`,
+          );
         } catch (reErr: unknown) {
           const m = reErr instanceof Error ? reErr.message : String(reErr);
           console.error(`worker 再生成に失敗（このペアを終了）: ${m}`);
@@ -409,5 +528,5 @@ export async function runMatch(
 
   clearStatus();
 
-  return { wdl, games, completedGames, stoppedBySprt };
+  return { wdl, games, completedGames, stoppedBySprt, aborts, abortsBySide };
 }

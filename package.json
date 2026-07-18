@@ -34,6 +34,7 @@
     "debug:vcf": "node --experimental-strip-types --disable-warning=ExperimentalWarning --import ./scripts/register-loader.mjs scripts/debug-vcf-false-positive.ts",
     "commit:bench": "node --experimental-strip-types --disable-warning=ExperimentalWarning --import ./scripts/register-loader.mjs scripts/commit-bench.ts",
     "weight:bench": "node --experimental-strip-types --disable-warning=ExperimentalWarning --import ./scripts/register-loader.mjs scripts/weight-bench.ts",
+    "replay:hang": "node --experimental-strip-types --disable-warning=ExperimentalWarning --import ./scripts/register-loader.mjs scripts/replay-hang.ts",
     "build:wasm": "cd zig && zig build",
     "profile:review": "node --experimental-strip-types --disable-warning=ExperimentalWarning --import ./scripts/register-loader.mjs scripts/profile-review.ts"
   },

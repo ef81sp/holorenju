@@ -58,9 +58,41 @@ export interface CommitBenchResult {
     /** ブックゲート（★v2プラン B3）: A/B 側それぞれでオープニングブックを有効化したか。 */
     bookA?: boolean;
     bookB?: boolean;
+    /**
+     * 脅威プローブトグル（探索レバー A/B）。true=ON（従来挙動）、false=OFF。
+     * 記録なし＝ON 相当（後方互換 optional）。
+     */
+    threatProbeA?: boolean;
+    threatProbeB?: boolean;
+    /**
+     * maxNodes オーバーライド（探索レバー A/B）。未指定なら difficulty 既定。
+     */
+    maxNodesA?: number;
+    maxNodesB?: number;
+    /**
+     * depth cap オーバーライド（探索レバー A/B）。未指定なら difficulty 既定。
+     */
+    maxDepthA?: number;
+    maxDepthB?: number;
+    /**
+     * PRNG baseSeed。--seed 指定時は明示値、未指定時は Date.now() の下位32bit。
+     * randomFactor 未指定なら undefined（seed が意味を持たないため）。
+     * 局ごとの実効 seed は mixSeed(seed, gameIdx) で導出される。
+     */
+    seed?: number;
   };
-  /** 対局数 */
+  /** 対局数（実際に完走した局のみ。中断＝abort 局は含めない） */
   totalGames: number;
+  /**
+   * ハング等で破棄された局数。回復パスが働いた回数。
+   * 既存 JSON との後方互換のため optional（未設定＝0 相当）。
+   */
+  aborts?: number;
+  /**
+   * abort 局を側（A/B）別に集計。「劣勢側だけハングして負けが消える」
+   * バイアスの検出に使う。後方互換のため optional。
+   */
+  abortsBySide?: { A: number; B: number };
   /** WDL（commitA視点） */
   wdl: WDLCount;
   /** Elo差推定 */

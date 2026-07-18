@@ -32,6 +32,7 @@ import { Worker } from "node:worker_threads";
 
 import type { EvaluationOptions } from "../src/logic/cpu/evaluation/patternScores.ts";
 import type { CpuDifficulty } from "../src/types/cpu.ts";
+import type { HangContext } from "./commit-game-runner.ts";
 import type { SPRTConfig } from "./types/ab.ts";
 import type {
   CommitBenchResult,
@@ -41,12 +42,16 @@ import type {
 } from "./types/commit-bench.ts";
 
 import { estimateEloDiff, formatEloDiff } from "./lib/eloDiff.ts";
+import { type HangDumpSideConfig, writeHangDump } from "./lib/hangDump.ts";
 import {
   buildJushuTasks,
   createBridgeWorker,
   gamesPerSet as computeGamesPerSet,
+  type HangMatchInfo,
   runMatch,
 } from "./lib/match.ts";
+import { mixSeed } from "./lib/mulberry32.ts";
+import { parseHangInjectEnv } from "./lib/parseHangInjectEnv.ts";
 import { DEFAULT_SPRT_CONFIG, formatSPRT, updateSPRT } from "./lib/sprt.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -79,6 +84,11 @@ function resolveGitCommonDir(): string {
 }
 
 const WORKTREES_DIR = path.join(resolveGitCommonDir(), "worktrees-bench");
+const HANG_DUMPS_DIR = path.join(OUTPUT_DIR, "hang-dumps");
+
+// HANG_INJECT 環境変数のパーサは scripts/lib/parseHangInjectEnv.ts に SSoT 化（テスト付き）。
+// ハングダンプ書き出しの型定義と実装は scripts/lib/hangDump.ts に SSoT 化した
+// （commit-bench と replay-hang で型定義が食い違うのを防ぐため）。
 
 // ============================================================================
 // CLI引数パース
@@ -108,6 +118,44 @@ interface CliOptions {
    */
   bookA: boolean;
   bookB: boolean;
+  /**
+   * 脅威プローブトグル（探索レバー A/B）。true=既定 ON（従来挙動）、
+   * false=無効化（--probe-off-a/b で false になる）。prospect 基底下で
+   * probe OFF が Elo に転換するかを commit-bench で再検証するためのレバー。
+   */
+  probeEnabledA: boolean;
+  probeEnabledB: boolean;
+  /**
+   * 探索の maxNodes オーバーライド（side 別）。未指定なら difficulty 既定を使う。
+   * probe OFF/深さ探索レバーが maxNodes 早期打ち切りに拘束されるのを避け、
+   * 「同じ持ち時間でノード上限が実質非拘束なら深読みが Elo に転換するか」を
+   * 測るための CLI レバー。
+   */
+  maxNodesA?: number;
+  maxNodesB?: number;
+  /**
+   * 探索の depth cap オーバーライド（side 別）。未指定なら difficulty 既定を使う。
+   * probe OFF/深さレバーが depth cap で頭打ちになるのを避けるためのレバー。
+   */
+  maxDepthA?: number;
+  maxDepthB?: number;
+  /**
+   * デバッグ/スモークテスト用: タスクを先頭 N 局に切り詰める（0 なら無効）。
+   * ハング計装の e2e 検証で少局数（例: 4局）を回すために追加。
+   * 通常のベンチ運用では 0（無効＝全 sets を消化）。
+   */
+  maxGames: number;
+  /**
+   * ハングした側 worker の 1 手あたりタイムアウト（ms）。
+   * 通常は 30000 で運用。ハング計装のテスト時は短くして待ち時間を減らす。
+   */
+  moveTimeoutMs: number;
+  /**
+   * randomFactor > 0 での対局の PRNG シード（baseSeed）。指定時、局ごとの
+   * 実効 seed は `mixSeed(baseSeed, gameIdx)` で導出され、同一 --seed なら
+   * 同一棋譜になる。未指定なら `Date.now() | 0` を使う（従来と同じく非決定的）。
+   */
+  seed: number;
 }
 
 function parseArgs(): CliOptions {
@@ -126,6 +174,11 @@ function parseArgs(): CliOptions {
     jobs: 1,
     bookA: false,
     bookB: false,
+    probeEnabledA: true,
+    probeEnabledB: true,
+    maxGames: 0,
+    moveTimeoutMs: 30000,
+    seed: Date.now() | 0,
   };
 
   for (const arg of args) {
@@ -186,6 +239,79 @@ function parseArgs(): CliOptions {
       options.bookA = true;
     } else if (arg === "--book-b") {
       options.bookB = true;
+    } else if (arg === "--probe-off-a") {
+      options.probeEnabledA = false;
+    } else if (arg === "--probe-off-b") {
+      options.probeEnabledB = false;
+    } else if (arg.startsWith("--max-nodes-a=")) {
+      const value = parseInt(arg.slice("--max-nodes-a=".length), 10);
+      if (Number.isFinite(value) && value > 0) {
+        options.maxNodesA = value;
+      } else {
+        console.error(
+          `Error: --max-nodes-a は正の整数で指定 (got: ${arg.slice("--max-nodes-a=".length)})`,
+        );
+        process.exit(1);
+      }
+    } else if (arg.startsWith("--max-nodes-b=")) {
+      const value = parseInt(arg.slice("--max-nodes-b=".length), 10);
+      if (Number.isFinite(value) && value > 0) {
+        options.maxNodesB = value;
+      } else {
+        console.error(
+          `Error: --max-nodes-b は正の整数で指定 (got: ${arg.slice("--max-nodes-b=".length)})`,
+        );
+        process.exit(1);
+      }
+    } else if (arg.startsWith("--max-depth-a=")) {
+      const value = parseInt(arg.slice("--max-depth-a=".length), 10);
+      if (Number.isFinite(value) && value > 0) {
+        options.maxDepthA = value;
+      } else {
+        console.error(
+          `Error: --max-depth-a は正の整数で指定 (got: ${arg.slice("--max-depth-a=".length)})`,
+        );
+        process.exit(1);
+      }
+    } else if (arg.startsWith("--max-depth-b=")) {
+      const value = parseInt(arg.slice("--max-depth-b=".length), 10);
+      if (Number.isFinite(value) && value > 0) {
+        options.maxDepthB = value;
+      } else {
+        console.error(
+          `Error: --max-depth-b は正の整数で指定 (got: ${arg.slice("--max-depth-b=".length)})`,
+        );
+        process.exit(1);
+      }
+    } else if (arg.startsWith("--max-games=")) {
+      const value = parseInt(arg.slice("--max-games=".length), 10);
+      if (!isNaN(value) && value >= 0) {
+        options.maxGames = value;
+      } else {
+        console.error(
+          `Error: --max-games は 0 以上の整数で指定 (got: ${arg.slice("--max-games=".length)})`,
+        );
+        process.exit(1);
+      }
+    } else if (arg.startsWith("--move-timeout-ms=")) {
+      const value = parseInt(arg.slice("--move-timeout-ms=".length), 10);
+      if (!isNaN(value) && value > 0) {
+        options.moveTimeoutMs = value;
+      } else {
+        console.error(
+          `Error: --move-timeout-ms は正の整数で指定 (got: ${arg.slice("--move-timeout-ms=".length)})`,
+        );
+        process.exit(1);
+      }
+    } else if (arg.startsWith("--seed=")) {
+      const raw = arg.slice("--seed=".length);
+      const value = parseInt(raw, 10);
+      if (Number.isFinite(value)) {
+        options.seed = value | 0;
+      } else {
+        console.error(`Error: --seed は整数で指定 (got: ${raw})`);
+        process.exit(1);
+      }
     } else if (arg === "--verbose" || arg === "-v") {
       options.verbose = true;
     } else if (arg === "--help" || arg === "-h") {
@@ -250,8 +376,30 @@ Options:
   --eval-options-b=<json> B側 evaluationOptions オーバーライド（JSON。省略時は legacy 既定）
   --book-a               A側でオープニングブックを有効化（既定OFF）
   --book-b               B側でオープニングブックを有効化（既定OFF）
+  --probe-off-a          A側の脅威プローブを無効化（既定ON）。prospect 基底下で
+                         深度向上が Elo に転換するか検証するレバー
+  --probe-off-b          B側の脅威プローブを無効化（既定ON）
+  --max-nodes-a=<n>      A側の maxNodes を上書き（既定=difficulty 既定）。
+                         probe OFF/深さレバーが maxNodes 早期打ち切りに拘束される
+                         のを避け、timeLimit ベースで測るためのレバー
+  --max-nodes-b=<n>      B側の maxNodes を上書き（既定=difficulty 既定）
+  --max-depth-a=<n>      A側の depth cap を上書き（既定=difficulty 既定）。
+                         probe OFF で深読みが伸びるかを見るとき、depth cap が
+                         binding だと差が出ないので併用する
+  --max-depth-b=<n>      B側の depth cap を上書き（既定=difficulty 既定）
+  --max-games=<n>        タスクを先頭 N 局に切り詰め（0=無効, default: 0）。
+                         ハング計装のスモークテスト用
+  --move-timeout-ms=<n>  1手あたりのタイムアウト (default: 30000)
+  --seed=<n>             randomFactor 使用時の PRNG baseSeed（integer）。
+                         同一 seed なら同一棋譜を再現。default: Date.now()（非決定的）
   --verbose, -v          詳細ログ
   --help, -h             ヘルプを表示
+
+環境変数:
+  HANG_INJECT=<gameIdx>:<requestOrdinal>[:A|B]
+      指定 gameIdx の局で N 番目の非オープニング要求にハングを注入
+      （bridge worker が応答しなくなる）。ハング検出→ダンプ→worker 再生成の
+      回復パスを実際に発火させるテスト用。
 
 Examples:
   pnpm commit:bench --commitA=HEAD~1 --commitB=HEAD --sets=1
@@ -265,6 +413,10 @@ Examples:
   # （B3仕様③: コミット差の交絡を排除、worktree1本で済む）
   pnpm commit:bench --commitA=HEAD --commitB=HEAD --sets=8 --randomFactor=0.02 \\
     --book-a
+
+  # ハング計装スモークテスト（4局・jobs=2・5秒タイムアウト・g1 の 2 手目で注入）
+  HANG_INJECT=1:2 pnpm commit:bench --commitA=HEAD --commitB=HEAD \\
+    --difficulty=easy --max-games=4 --jobs=2 --move-timeout-ms=5000
 `);
 }
 
@@ -578,6 +730,20 @@ async function main(): Promise<void> {
     console.log(`book A: ${options.bookA ? "ON" : "OFF"}`);
     console.log(`book B: ${options.bookB ? "ON" : "OFF"}`);
   }
+  if (!options.probeEnabledA || !options.probeEnabledB) {
+    console.log(`threatProbe A: ${options.probeEnabledA ? "ON" : "OFF"}`);
+    console.log(`threatProbe B: ${options.probeEnabledB ? "ON" : "OFF"}`);
+  }
+  if (options.maxNodesA !== undefined || options.maxNodesB !== undefined) {
+    console.log(
+      `maxNodes A: ${options.maxNodesA ?? "(既定=difficulty)"} / B: ${options.maxNodesB ?? "(既定=difficulty)"}`,
+    );
+  }
+  if (options.maxDepthA !== undefined || options.maxDepthB !== undefined) {
+    console.log(
+      `maxDepth A: ${options.maxDepthA ?? "(既定=difficulty)"} / B: ${options.maxDepthB ?? "(既定=difficulty)"}`,
+    );
+  }
   if (sprtConfig) {
     console.log(
       `SPRT: elo0=${sprtConfig.elo0}, elo1=${sprtConfig.elo1}, ` +
@@ -629,6 +795,9 @@ async function main(): Promise<void> {
       worktreePath: string,
       evaluationOptions: Partial<EvaluationOptions> | undefined,
       bookEnabled: boolean,
+      threatProbeEnabled: boolean,
+      maxNodes: number | undefined,
+      maxDepth: number | undefined,
     ): Promise<Worker> =>
       createBridgeWorker({
         workerPath,
@@ -638,14 +807,31 @@ async function main(): Promise<void> {
         randomFactor: options.randomFactor,
         evaluationOptions,
         bookEnabled,
+        threatProbeEnabled,
+        maxNodes,
+        maxDepth,
       });
 
     console.log(`Bridge workerを初期化中... (${options.jobs}並列)`);
     const createdPairs = await Promise.all(
       Array.from({ length: options.jobs }, async () => {
         const [a, b] = await Promise.all([
-          makeWorker(worktreePathA!, options.evalOptionsA, options.bookA),
-          makeWorker(worktreePathB!, options.evalOptionsB, options.bookB),
+          makeWorker(
+            worktreePathA!,
+            options.evalOptionsA,
+            options.bookA,
+            options.probeEnabledA,
+            options.maxNodesA,
+            options.maxDepthA,
+          ),
+          makeWorker(
+            worktreePathB!,
+            options.evalOptionsB,
+            options.bookB,
+            options.probeEnabledB,
+            options.maxNodesB,
+            options.maxDepthB,
+          ),
         ]);
         return { a, b };
       }),
@@ -654,17 +840,138 @@ async function main(): Promise<void> {
     console.log("Bridge worker初期化完了\n");
 
     // 珠型タスクを生成し、共有の対局ループ（runMatch）で消化する。
-    // commit-bench は recreatePair を渡さない＝従来どおりエラーは伝播（出力同一）。
-    const tasks = buildJushuTasks(options.sets);
-    const { wdl, games, completedGames } = await runMatch({
-      pairs,
-      tasks,
-      totalGames,
-      sprtConfig,
-      moveTimeoutMs: 30000,
-      verbose: options.verbose,
-      startTime,
-    });
+    //
+    // ハング耐性: move-request timeout（GameHangError）が起きたら、当該局を破棄しつつ
+    // 再現ダンプ（bench-results/hang-dumps/hang-*.json）を書き、当該 pair の worker を
+    // 再生成して残り局を続行する。プロセス全体を落とさない。
+    const allTasks = buildJushuTasks(options.sets);
+    const tasks =
+      options.maxGames > 0 && options.maxGames < allTasks.length
+        ? allTasks.slice(0, options.maxGames)
+        : allTasks;
+    if (options.maxGames > 0 && options.maxGames < allTasks.length) {
+      console.log(
+        `--max-games=${options.maxGames} 指定により ${allTasks.length}→${tasks.length} 局に切り詰め`,
+      );
+    }
+
+    // ダンプ用の side メタ（worker 再生成にも再利用）
+    const workerConfigs: { A: HangDumpSideConfig; B: HangDumpSideConfig } = {
+      A: {
+        worktreePath: worktreePathA!,
+        evaluationOptions: options.evalOptionsA,
+        bookEnabled: options.bookA,
+        commit: commitA,
+      },
+      B: {
+        worktreePath: worktreePathB!,
+        evaluationOptions: options.evalOptionsB,
+        bookEnabled: options.bookB,
+        commit: commitB,
+      },
+    };
+
+    const recreatePair = async (
+      idx: number,
+    ): Promise<{ a: Worker; b: Worker }> => {
+      const [a, b] = await Promise.all([
+        makeWorker(
+          worktreePathA!,
+          options.evalOptionsA,
+          options.bookA,
+          options.probeEnabledA,
+          options.maxNodesA,
+          options.maxDepthA,
+        ),
+        makeWorker(
+          worktreePathB!,
+          options.evalOptionsB,
+          options.bookB,
+          options.probeEnabledB,
+          options.maxNodesB,
+          options.maxDepthB,
+        ),
+      ]);
+      const fresh = { a, b };
+      pairs[idx] = fresh;
+      return fresh;
+    };
+
+    // randomFactor 使用時は seed を明示ログ（同一シード同一棋譜の検証で使う）
+    const seedInEffect =
+      options.randomFactor === undefined ? undefined : options.seed;
+    if (seedInEffect !== undefined) {
+      console.log(
+        `PRNG seed（baseSeed）: ${seedInEffect}${process.argv.some((a) => a.startsWith("--seed=")) ? "" : " (default = Date.now())"}`,
+      );
+    }
+
+    const onHang = (context: HangContext, info: HangMatchInfo): void => {
+      const dumpPath = writeHangDump({
+        outputDir: HANG_DUMPS_DIR,
+        context,
+        match: {
+          gameIdx: info.gameIdx,
+          jushuName: info.jushuName,
+          isABlack: info.isABlack,
+          pairIdx: info.pairIdx,
+          gameSeed:
+            seedInEffect === undefined
+              ? undefined
+              : mixSeed(seedInEffect, info.gameIdx),
+        },
+        bench: {
+          tool: "commit-bench",
+          difficulty: options.difficulty,
+          randomFactor: options.randomFactor,
+          moveTimeoutMs: context.timeoutMs,
+          jobs: options.jobs,
+          baseSeed: seedInEffect,
+        },
+        workerConfigs,
+      });
+      console.warn(`⚠ hang detected g${info.gameIdx}, dumped to ${dumpPath}`);
+    };
+
+    const hangInjectParsed = parseHangInjectEnv(process.env.HANG_INJECT);
+    if (hangInjectParsed.kind === "error") {
+      console.error(`Error: ${hangInjectParsed.message}`);
+      process.exit(1);
+    }
+    const hangInjectEnv = hangInjectParsed.value;
+    if (hangInjectEnv) {
+      console.log(
+        `⚠ HANG_INJECT 有効: gameIdx=${hangInjectEnv.gameIdx} requestOrdinal=${hangInjectEnv.requestOrdinal}${hangInjectEnv.side ? ` side=${hangInjectEnv.side}` : ""}`,
+      );
+    }
+
+    const { wdl, games, completedGames, aborts, abortsBySide } = await runMatch(
+      {
+        pairs,
+        tasks,
+        totalGames: tasks.length,
+        sprtConfig,
+        moveTimeoutMs: options.moveTimeoutMs,
+        verbose: options.verbose,
+        startTime,
+        recreatePair,
+        onHang,
+        hangInject: hangInjectEnv
+          ? {
+              gameIdx: hangInjectEnv.gameIdx,
+              spec: {
+                requestOrdinal: hangInjectEnv.requestOrdinal,
+                side: hangInjectEnv.side,
+              },
+            }
+          : undefined,
+        // randomFactor 未指定なら getGameSeed を渡さない（従来と同じ Math.random）
+        getGameSeed:
+          seedInEffect === undefined
+            ? undefined
+            : (gameIdx: number): number => mixSeed(seedInEffect, gameIdx),
+      },
+    );
 
     const elapsedSeconds = (performance.now() - startTime) / 1000;
 
@@ -672,7 +979,20 @@ async function main(): Promise<void> {
     console.log(`\n=== 結果 ===`);
     console.log(`commitA: ${commitA.shortSha} "${commitA.message}"`);
     console.log(`commitB: ${commitB.shortSha} "${commitB.message}"`);
-    console.log(`対局数: ${completedGames}`);
+    console.log(
+      `対局数: ${completedGames}${aborts > 0 ? ` (abort: ${aborts} = A側${abortsBySide.A} / B側${abortsBySide.B})` : ""}`,
+    );
+    if (aborts > 0) {
+      console.log(
+        `⚠ ハング検出: ${aborts} 局を破棄しました（A側=${abortsBySide.A} / B側=${abortsBySide.B}）。ダンプは ${HANG_DUMPS_DIR} を参照`,
+      );
+      // 一方向バイアス（劣勢側がハングして負けが消される）を検出しやすくする
+      if (abortsBySide.A !== abortsBySide.B) {
+        console.log(
+          `  ※ side 別 abort 数が非対称です。「劣勢側だけ抜ける」バイアスの可能性を確認してください`,
+        );
+      }
+    }
     console.log(`WDL (commitA視点): +${wdl.wins} =${wdl.draws} -${wdl.losses}`);
 
     const eloDiffResult = estimateEloDiff(wdl);
@@ -734,8 +1054,17 @@ async function main(): Promise<void> {
         evalOptionsB: options.evalOptionsB,
         bookA: options.bookA,
         bookB: options.bookB,
+        threatProbeA: options.probeEnabledA,
+        threatProbeB: options.probeEnabledB,
+        maxNodesA: options.maxNodesA,
+        maxNodesB: options.maxNodesB,
+        maxDepthA: options.maxDepthA,
+        maxDepthB: options.maxDepthB,
+        seed: seedInEffect,
       },
       totalGames: completedGames,
+      aborts,
+      abortsBySide,
       wdl,
       eloDiff: eloDiffResult,
       sprt: sprtState,

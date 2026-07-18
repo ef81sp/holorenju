@@ -10,6 +10,9 @@ import type { Worker } from "node:worker_threads";
 
 import type { BoardState, Position } from "../src/types/game.ts";
 
+import { mixSeed } from "./lib/mulberry32.ts";
+import { WorkerMoveTimeoutError } from "./lib/workerMoveTimeoutError.ts";
+
 /** 着手記録 */
 export interface MoveRecord {
   row: number;
@@ -75,23 +78,73 @@ type WorkerMessage = MoveResponse | ErrorResponse;
 
 let nextRequestId = 0;
 
+export { WorkerMoveTimeoutError } from "./lib/workerMoveTimeoutError.ts";
+
 /**
- * workerに着手を要求し、レスポンスを待つ
+ * runCommitGame がハング（move-request timeout）で throw するエラー。
+ * bench ハーネス（match ループ）がこれを catch して再現ダンプを書き、
+ * worker を respawn して残り局を続行する。
  */
-function askWorker(
-  worker: Worker,
-  board: BoardState,
-  color: "black" | "white",
-  timeoutMs: number,
-): Promise<MoveResponse> {
+export interface HangContext {
+  requestId: number;
+  timeoutMs: number;
+  /** ハングした側（A/B）と手番色 */
+  side: "A" | "B";
+  color: "black" | "white";
+  /** ハング直前の盤面（再現の起点） */
+  board: BoardState;
+  /** ハング直前までの着手履歴（opening 3手を含む） */
+  moveHistory: MoveRecord[];
+  /** ゲーム開始からの経過ミリ秒 */
+  elapsedMs: number;
+  /**
+   * ハング時の手数（1-based, opening 3手を含む）。
+   * moveHistory の直後に打とうとしていた手の番号（= moveHistory.length + 1）。
+   */
+  moveNumber: number;
+}
+
+export class GameHangError extends Error {
+  readonly context: HangContext;
+
+  constructor(context: HangContext) {
+    super(
+      `Game hang: side=${context.side} color=${context.color} moveNumber=${context.moveNumber} requestId=${context.requestId} timeoutMs=${context.timeoutMs}`,
+    );
+    this.name = "GameHangError";
+    this.context = context;
+  }
+}
+
+/** askWorker のリクエストパラメータ。位置引数の膨張を避けるためオブジェクト化。 */
+interface AskWorkerParams {
+  worker: Worker;
+  board: BoardState;
+  color: "black" | "white";
+  timeoutMs: number;
+  side: "A" | "B";
+  hangInject: boolean;
+  /**
+   * この1手用の PRNG シード。bridge worker は randomFactor 適用時に
+   * `mulberry32(moveSeed)` で決定的な近傍ランダム選択を行う。
+   * 未指定なら worker 側は非決定的（Math.random）にフォールバック。
+   */
+  moveSeed?: number;
+}
+
+/**
+ * workerに着手を要求し、レスポンスを待つ。
+ * timeout 時は WorkerMoveTimeoutError を throw（runCommitGame が context を付与する）。
+ */
+function askWorker(params: AskWorkerParams): Promise<MoveResponse> {
+  const { worker, board, color, timeoutMs, side, hangInject, moveSeed } =
+    params;
   return new Promise<MoveResponse>((resolve, reject) => {
     const requestId = nextRequestId++;
 
     const timer = setTimeout(() => {
       worker.off("message", handler);
-      reject(
-        new Error(`Worker move request timed out (requestId=${requestId})`),
-      );
+      reject(new WorkerMoveTimeoutError({ requestId, timeoutMs, color, side }));
     }, timeoutMs);
 
     const handler = (msg: WorkerMessage): void => {
@@ -109,7 +162,7 @@ function askWorker(
     };
 
     worker.on("message", handler);
-    worker.postMessage({ requestId, board, color });
+    worker.postMessage({ requestId, board, color, hangInject, moveSeed });
   });
 }
 
@@ -129,6 +182,50 @@ function colorToWinner(
 }
 
 /**
+ * ハング注入設定。指定した非オープニング手番号（1-based）で該当 side/color の
+ * リクエストにハングフラグを立て、bridge worker に応答させない。
+ * bench 側の回復パス（timeout → dump → worker respawn）を確実にテストするための
+ * 差し込み口で、未指定時は完全に既存挙動（後方互換）。
+ */
+export interface HangInjectSpec {
+  /** 非オープニング手番号（1-based）。この番目の要求でハングを起こす */
+  requestOrdinal: number;
+  /** どちらのプレイヤーで注入するか。未指定なら手番に来た側 */
+  side?: "A" | "B";
+}
+
+interface AskOrHangParams extends AskWorkerParams {
+  moveHistory: MoveRecord[];
+  gameStartTime: number;
+  moveCount: number;
+}
+
+/**
+ * askWorker のラッパー。WorkerMoveTimeoutError を GameHangError に変換して throw する。
+ * ループ内クロージャで no-loop-func 警告を出さないため、ループ外の関数として切り出す。
+ */
+async function askOrHang(params: AskOrHangParams): Promise<MoveResponse> {
+  const { board, moveHistory, gameStartTime, moveCount, ...askParams } = params;
+  try {
+    return await askWorker({ ...askParams, board });
+  } catch (err: unknown) {
+    if (err instanceof WorkerMoveTimeoutError) {
+      throw new GameHangError({
+        requestId: err.requestId,
+        timeoutMs: err.timeoutMs,
+        side: err.side,
+        color: err.color,
+        board,
+        moveHistory,
+        elapsedMs: performance.now() - gameStartTime,
+        moveNumber: moveCount + 1,
+      });
+    }
+    throw err;
+  }
+}
+
+/**
  * 1ゲームを実行
  *
  * @param workerA commitAのbridge worker
@@ -145,6 +242,14 @@ export async function runCommitGame(
     verbose?: boolean;
     moveTimeoutMs?: number;
     openingMoves?: [Position, Position, Position];
+    /** テスト用: 特定の要求番目でハングを注入する */
+    hangInject?: HangInjectSpec;
+    /**
+     * この局用の PRNG seed。指定時、1手ごとに `mixSeed(gameSeed, moveOrdinal)` で
+     * 導出した moveSeed を bridge worker に渡し、randomFactor 適用時の近傍ランダム
+     * 選択を決定的にする。未指定なら bridge worker は Math.random にフォールバック。
+     */
+    gameSeed?: number;
   } = {},
 ): Promise<GameResult> {
   // #43 PR-6: 禁手判定(forbidden) と脅威検出(detectOpponentThreats→threat) はどちらも
@@ -194,20 +299,43 @@ export async function runCommitGame(
     currentColor = "white";
   }
 
+  // 非オープニング手のリクエスト番号（1-based）。ハング注入の照合用。
+  let nonOpeningRequestOrdinal = 0;
+
   while (moveCount < DRAW_MOVE_LIMIT) {
     const isBlack = currentColor === "black";
     const worker = isBlack ? blackWorker : whiteWorker;
+    // どちらの side (A/B) がこの手番か
+    const currentSide: "A" | "B" =
+      (isBlack && isABlack) || (!isBlack && !isABlack) ? "A" : "B";
+
+    nonOpeningRequestOrdinal++;
+    const shouldInject =
+      options.hangInject !== undefined &&
+      options.hangInject.requestOrdinal === nonOpeningRequestOrdinal &&
+      (options.hangInject.side === undefined ||
+        options.hangInject.side === currentSide);
 
     // 着手要求（逐次実行が必要: 同じworkerを1ゲーム内で交互に使用）
 
     const moveStartTime = performance.now();
 
-    const response = await askWorker(
+    const moveSeed =
+      options.gameSeed === undefined
+        ? undefined
+        : mixSeed(options.gameSeed, nonOpeningRequestOrdinal);
+    const response = await askOrHang({
       worker,
       board,
-      currentColor,
-      moveTimeoutMs,
-    );
+      color: currentColor,
+      timeoutMs: moveTimeoutMs,
+      side: currentSide,
+      hangInject: shouldInject,
+      moveSeed,
+      moveHistory,
+      gameStartTime: startTime,
+      moveCount,
+    });
     const moveTime = performance.now() - moveStartTime;
 
     const move: Position = response.position;
