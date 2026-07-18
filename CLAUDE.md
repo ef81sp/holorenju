@@ -22,6 +22,11 @@ pnpm build         # 本番ビルド
 
 - `git -C` は使わないこと。必要なら `pwd` で確認する。
 
+### ブランチ運用（2026-07-18 制定）
+
+- **機能開発は `development` ブランチに対してマージする**（feature ブランチは development から切り、PR の base も development）
+- **リリースは development → main へのマージをもって行う**（main への直接の機能マージはしない）
+
 ### ワークツリー（サブエージェント）
 
 - ワークツリーでコミットするには、先に **WASM ビルド** (`cd zig && zig build`) と **`pnpm install --frozen-lockfile --ignore-scripts`** が必要。lefthook の pre-commit フックがテストを走らせるため。
