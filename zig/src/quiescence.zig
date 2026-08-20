@@ -181,6 +181,12 @@ fn findJumpFourGap(cells: []const Cell, row: u8, col: u8, dr: i8, dc: i8) ?Posit
 /// issue #115: 以前は跳び四で `findJumpGapPosition` の返り値を検証せずに
 /// 使っていたため、同一ライン上に長連ギャップと正当なギャップが併存すると
 /// 長連ギャップ（＝五にできない点）を受けとして返していた。
+///
+/// 注意（戻り値 null の多義性・#124）: null は「防御不可（五点 2 個以上＝活四）」と
+/// 「そもそも四ではない（五点 0 個）」の両方を表す。`vcf.zig` は null を勝ちとして
+/// 扱うため、四の生成側（`createsFour`）が偽陽性を出すと偽 VCF になる既存経路がある。
+/// 一方 `vct.zig` の呼び出し 6 箇所は ct==.four ゲート内で null を
+/// 「VCT 不成立」＝保守側に倒しているので健全である。
 pub fn getFourDefensePosition(cells: []const Cell, last_row: u8, last_col: u8, color: Cell) ?Position {
     var first_defense: ?Position = null;
 

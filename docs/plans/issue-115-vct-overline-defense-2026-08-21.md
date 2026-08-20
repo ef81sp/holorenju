@@ -80,7 +80,9 @@ J8 は本物の四なので `classifyThreat` も `isJumpFourOverline` も正し�
 - TS: `core/lineAnalysis.ts` の `collectLineFivePoints`
 
 判定は「黒はちょうど 5（6 以上は長連なので五ではない）／白は 5 以上（白に長連の
-制限は無い）」。**方向限定**なのが要点で、`forbidden.checkFive`（TS: `checkFive`）は
+制限は無い）」。白を `>= 5` にしたのは意図的で、既存の `checkFive` は白でも `== 5` と
+しており白の長連を五と認めない（定義不一致・**#125**）。連珠ルール上は白の長連は
+勝ちなので、受け点の列挙ではルールに従った。**方向限定**なのが要点で、`forbidden.checkFive`（TS: `checkFive`）は
 4 方向すべてを見るため、別ラインの五点まで拾って「この四の受け」の意味からずれる。
 
 盤面のコピーや書き換えは不要である。Zig の `jump_patterns.getLineLength` も
@@ -112,6 +114,14 @@ TS の `countLine` も中央セルの中身を読まず無条件に 1 と数え�
 ```
 
 に置き換わった（この局面自体には黒の追い詰めが実在する）。
+
+## コミット構成についての注意
+
+`94c03fa`（跳び四の受け点を五になる点で選ぶ）は単独では `forbidden.checkFive`
+（4 方向・`== 5`）を使っており、別ラインの五点が混入する／白の 6 連ギャップを
+取りこぼす、という欠点がある。これらは `1c21fa1`（方向限定の
+`collectLineFivePoints` へ統一）で解消される。
+**squash マージでない場合、この 2 コミットは必ずセットで扱うこと。**
 
 ## 検証
 
@@ -149,7 +159,23 @@ TDD で先に赤を確認した。
 | 白 `_XXXX_` 同形 → null（活四）         | 緑                   | 緑     |
 
 なお `renjuParity.test.ts` はリポジトリ内に存在しない（CLAUDE.md の記述は現状と不一致）。
-TS⇄Zig の対応は上記の TS テストと Zig テストを同じ局面で対にすることで担保した。
+
+### TS⇄Zig パリティテスト
+
+`src/logic/cpu/search/fourDefenseParity.wasm.test.ts`（新規・unit）。
+盤面の 1 行（row 7 の col 3..11、長さ 9）に空/黒/白の全パターン 3^9 = 19,683 を敷き、
+各パターン・両色・ライン上の自色石すべてを「最後の着手」として
+`collectLineFivePoints` と `getFourDefensePosition` を TS 実装と wasm（Zig）で
+突き合わせる。他の行は空なので横方向だけが効き、1 ラインの比較として閉じる。
+
+- 結果: 全一致（不一致 0 件）、**0.6 秒**
+- 検出力の確認: TS 側の白判定を `>= 5` から `== 5` に一時的に戻すと、
+  `code=242 color=white col=3: ts=[] zig=[7,2 7,8]` のように不一致を検出して赤になる
+  （テストが素通しでないことを確認済み）
+
+wasm export は `zig/src/threat_wasm.zig` に `collectLineFivePointsWasm` /
+`getFivePointsBuffer` / `getFourDefensePositionWasm` を追加した。
+`quiescence.zig` を import するため thin wasm は 139,188 → 144,390 バイト（+3.7%）。
 
 ### TS wasm 回帰テスト
 
@@ -260,7 +286,7 @@ N10 はカウンター脅威扱いで木に載らず J6 だけが記録される
 14 石局面で best=J7 / eval +469（詰みスコアではない）と答えている。
 両者の食い違いは残っているので、`ResilienceMode` の lenient がテンポ喪失だけの
 カウンターフォーを棄却しない件（`vct.zig` の `ResilienceMode` 定義部）は
-**別 issue として残す**（番号は未採番）。
+**別 issue として残す**（**#123**）。
 
 ## 残課題
 
@@ -290,6 +316,26 @@ N10 はカウンター脅威扱いで木に載らず J6 だけが記録される
 - TS の `src/logic/cpu/search/vctHelpers.ts` の `getThreatDefensePositions` は
   呼び出し元ゼロの dead export。#43 の流れで削除するのが筋。
 
-### カウンターフォー起因の偽 VCT
+### #123: カウンターフォー起因の偽 VCT
 
-上記「カウンターフォーによる偽 VCT の疑い」を参照。別 issue 化予定（番号未採番）。
+上記「カウンターフォーによる偽 VCT の疑い」を参照。
+`ResilienceMode` の lenient がテンポ喪失だけのカウンターフォーを棄却しない件。
+
+### #124: `getFourDefensePosition` の戻り値 null の多義性
+
+null が「防御不可（五点 2 個以上＝活四）」と「そもそも四ではない（五点 0 個）」の
+両方を表す。`vcf.zig` は null を勝ちとして扱うため、四の生成側（`createsFour`）が
+偽陽性を出すと偽 VCF になる既存経路がある。
+`vct.zig` の呼び出し 6 箇所は ct==.four ゲート内で null を「VCT 不成立」＝保守側に
+倒しているので健全。
+
+推奨: 本 PR で作った詰み木の不変条件チェッカー
+（`forcedWinTreeTestUtils.collectForcedWinTreeViolations`）を、振り返り回帰棋譜群へ
+横展開すること。1 局面の作り込みテストより広く同種の不整合を拾える。
+
+### #125: 白の長連と五の定義不一致
+
+`forbidden.checkFive` / `renjuRules` の `checkFive` は白でも `== 5` で判定しており、
+白の長連（6 連以上）を五と認めない。連珠ルール上は白の長連は勝ちなので、
+本 PR で追加した `collectLineFivePoints` は白を `>= 5` としてルール側に合わせた。
+両者の食い違いは残っているので、どちらに寄せるかを決める必要がある。
