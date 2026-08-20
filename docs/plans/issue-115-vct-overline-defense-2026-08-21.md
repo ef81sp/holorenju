@@ -50,6 +50,18 @@ D9 E10 D11 D10 C10 B9 G11 E11 E9 F10 B6 A5 F12 E13 J8
 J8 は本物の四なので `classifyThreat` も `isJumpFourOverline` も正しく動く。
 壊れているのは**ギャップの選び方**だけである。
 
+この誤選択は受け点を返す 2 経路それぞれにあった。
+
+| 経路               | 関数                                                                            |
+| ------------------ | ------------------------------------------------------------------------------- |
+| VCT の脅威受け     | `vct.zig` `getThreatDefensePositions`                                           |
+| VCF / 四追いの受け | `quiescence.zig` `getFourDefensePosition`（TS: `threatPatterns.ts` の同名関数） |
+
+さらに TS 側の `getFourDefensePosition` には別の誤りもあった。連続四で
+`getLineEnds` の両端空きを無条件に活四（防御不可）としているため、黒の片端が
+長連になる `_XXXX_`（実際は反対の端で受けられる止め四）を「防御不可」と
+誤判定していた（Zig 側は `getLineEnds` に長連補正が入っていたので無事だった）。
+
 ## 修正
 
 ### 1. 分類と受け点の基準を揃える
@@ -57,20 +69,38 @@ J8 は本物の四なので `classifyThreat` も `isJumpFourOverline` も正し�
 `getThreatDefensePositions` の跳び四条件に `!isJumpFourOverline(...)` を追加し、
 分類側と同基準にした（1 行 + コメント）。
 
-### 2. 受け点を「本当に五になる点」で選ぶ
+### 2. 受け点を「本当に五になる点」で選ぶ（受け点の SSoT 化）
 
 ギャップを*探す*のをやめ、ライン上（±5 マス）の空点を仮の着手点として
-`forbidden.checkFive` で判定し、**五になる点をすべて**受け点に入れる
-（`vct.zig` の `addJumpFourDefensePositions`）。黒の長連点は `checkFive` が
-偽を返すので自然に除外される。
+「**その方向で**埋めると五になるか」を直接判定し、五になる点を列挙する。
 
-`checkFive` は中央セルを読まず「そこに color を置いたら五か」を答える実装
-（`jump_patterns.getLineLength` が中央を無条件に 1 と数える）なので、
-盤面を書き換えたりコピーしたりする必要はない。
+共通ヘルパーを 1 つ作り、受け点を返す全経路がこれを使う。
 
-五点が 1 つも無ければ四として扱わず、呼び出し側で三として受けを広く列挙する
-（防御側に有利な健全側に倒す）。共有関数 `threats.findJumpGapPosition` 自体は
-VCF 全体から使われるため触っていない。
+- Zig: `threats.zig` の `collectLineFivePoints`
+- TS: `core/lineAnalysis.ts` の `collectLineFivePoints`
+
+判定は「黒はちょうど 5（6 以上は長連なので五ではない）／白は 5 以上（白に長連の
+制限は無い）」。**方向限定**なのが要点で、`forbidden.checkFive`（TS: `checkFive`）は
+4 方向すべてを見るため、別ラインの五点まで拾って「この四の受け」の意味からずれる。
+
+盤面のコピーや書き換えは不要である。Zig の `jump_patterns.getLineLength` も
+TS の `countLine` も中央セルの中身を読まず無条件に 1 と数えるので、空点に対して
+呼べば「そこに置いたときの連の長さ」がそのまま得られる。
+
+利用側:
+
+- `vct.zig` `getThreatDefensePositions`（跳び四ブランチ）: 五点が 1 つも無ければ
+  四として扱わず、三として受けを広く列挙する（防御側に有利な健全側に倒す）。
+- `quiescence.zig` / `threatPatterns.ts` `getFourDefensePosition`: 連続四・跳び四を
+  区別せず、方向ごとに五点を列挙して
+  - 0 個 → この方向は四ではない（長連にしかならない四）→ 無視
+  - 2 個以上 → 両方は塞げない ＝ 活四（防御不可）→ null
+  - 1 個 → 止め四。その点が受け
+
+  これで TS 側の `_XXXX_` 誤判定（上記）も同時に解消する。
+
+共有関数 `threats.findJumpGapPosition` 自体は他の用途にも使われるため触っていない。
+不要になった `quiescence.zig` の `getLineEnds` / `LineEnds` は削除した。
 
 ### 結果
 
@@ -95,10 +125,31 @@ TDD で先に赤を確認した。
     分類と受け点が同基準であることを主張している。
   - 局面ヘルパーは `setupIssue115BranchPosition`（実戦 14 手＋偽手順の分岐 6 手を含むため
     「Branch」を名前に入れ、実戦棋譜だけを置く #116 側ヘルパーと区別する）。
+- `getFourDefensePosition: 長連ギャップではなく五になるギャップを返す（issue #115）`（quiescence.zig）
+  - 修正前: `expected 12, found 8`（M8 ではなく I8 を返す）で赤、修正後は緑。
+- `getFourDefensePosition: 白の _XXXX_ で片端の先が白でも活四（防御不可）`（quiescence.zig）
+  - 白に長連の制限が無いことの対比。修正前から緑（回帰用）。
+  - 黒の同形（`getFourDefensePosition: black four with overline should not be open four`）も
+    修正前から緑。Zig 側の `getLineEnds` には長連補正が入っていたため。
 - `getThreatDefensePositions: 同一ラインに長連ギャップと正当なギャップが併存する場合は後者を受けにする（issue #115）`
   - 第二の欠陥の回帰テスト。`classifyThreat(J8).creates_four = true`（四であること自体は正しい）
     を前提として assert したうえで、受けが `{M8}` の 1 点のみであることを固定する。
     修正前は `expected 12, found 8`（M8 ではなく I8 を返す）で赤、修正後は緑。
+
+### TS 単体テスト
+
+`src/logic/cpu/search/fourDefenseOverline.test.ts`（新規）。TS 側の
+`threatPatterns.getFourDefensePosition` は vcfPuzzle / vctValidation / vcfCheck から
+**live で使われている**ため、Zig と同じ基準に直したうえで 3 ケースを固定した。
+
+| ケース                                  | 修正前               | 修正後 |
+| --------------------------------------- | -------------------- | ------ |
+| 長連ギャップと正当なギャップの併存 → M8 | I8 を返して赤        | 緑     |
+| 黒 `_XXXX_` 片端長連 → 反対の端 B8      | null（防御不可）で赤 | 緑     |
+| 白 `_XXXX_` 同形 → null（活四）         | 緑                   | 緑     |
+
+なお `renjuParity.test.ts` はリポジトリ内に存在しない（CLAUDE.md の記述は現状と不一致）。
+TS⇄Zig の対応は上記の TS テストと Zig テストを同じ局面で対にすることで担保した。
 
 ### TS wasm 回帰テスト
 
@@ -117,8 +168,19 @@ issue #115 の不整合自体は 20 石版でも赤になる（修正前の赤�
 
 赤→緑の証跡（20 石版・unit）:
 
-- 修正前: `21.J8: 四でないのに受けが I8 の1点に強制されている（そこは攻め手の長連点で五にできない）`
+- 1 回目の修正前: `21.J8: 四でないのに受けが I8 の1点に強制されている（そこは攻め手の長連点で五にできない）`
+- 2 回目（`getFourDefensePosition` 修正前）: `21.K7 22.M7 23.N8 24.O8 25.J8: 四の受けが I8 の1点に強制されているが、そこは攻め手が打っても五にならない`
 - 修正後: 緑
+
+14 石の全木（perf）でも緑。メインラインは修正前後で変わらず
+
+```
+15.L7 16.M6 17.J7 18.I6 19.L8 20.L6 21.M8 22.N8 23.K10 24.N7 25.L11 26.L10 27.M12
+```
+
+で、木全体（攻め手ノード 39 個）に長連前提の強制受けは無くなった。
+`22.I8` / `20.I8` という受け自体は 2 箇所に残るが、そのサブ局面では I8 が
+本物の五点であり不変条件を満たす（8 行目の並びが異なる）。
 
 ### 不変条件の設計メモ
 
@@ -127,9 +189,16 @@ issue #115 の不整合自体は 20 石版でも赤になる（修正前の赤�
 カウンター脅威を作る場合（`checkDefenseCounterThreat` が win/four/three）を VCF 経路で
 処理し、その受けを木の `defenses` に記録しない。つまり木に記録された受けは
 `getThreatDefensePositions` の結果の**部分集合**であり、三の攻め手でも記録上 1 点に
-なりうる。そこで条件を
-**「四でない攻め手が受けを 1 点に強制していて、その 1 点が攻め手側の長連点なら違反」**
-に限定した（＝ #115 の系統だけを狙う）。
+なりうる。そこで攻め手の強さで場合分けした。
+
+- 攻め手が**四**なら、受けの 1 点は「攻め手がそこに打つと本当に五になる点」でなければ
+  ならない（四の受けは五点を塞ぐ以外にありえないので厳密に成り立つ）。
+  → `getFourDefensePosition` 経路を押さえる。
+- 攻め手が**四でない**なら、受けの 1 点は少なくとも攻め手の長連点であってはならない。
+  → `getThreatDefensePositions` 経路を押さえる。部分集合問題があるのでこちらは弱い条件。
+
+実例: `21.K7 22.M7 23.N8 24.M8 25.M9` の M9 は活三で受けは J6 と N10 の 2 点あるが、
+N10 はカウンター脅威扱いで木に載らず J6 だけが記録される。
 
 ### 全体
 
@@ -145,9 +214,9 @@ issue #115 の不整合自体は 20 石版でも赤になる（修正前の赤�
 |        | 時間    |
 | ------ | ------- |
 | 修正前 | 6.4 秒  |
-| 修正後 | 34.1 秒 |
+| 修正後 | 39.6 秒 |
 
-受けの選択肢が増えて探索木が広がるため約 5 倍に増えた。**正しさのための必要コスト**
+受けの選択肢が増えて探索木が広がるため約 6 倍に増えた。**正しさのための必要コスト**
 （修正前は白の受けを不当に 1 点へ絞ることで探索を刈っていた）だが、
 振り返り解析のテール遅延として無視できない大きさである。
 
@@ -163,7 +232,7 @@ issue #115 の不整合自体は 20 石版でも赤になる（修正前の赤�
 |        | 合計     |
 | ------ | -------- |
 | 修正前 | 22,272ms |
-| 修正後 | 22,296ms |
+| 修正後 | 22,289ms |
 
 全 14 手の判定（実手・最善手・勝ち筋・負け筋・quality）は**全手一致・変化 0 件**。
 この棋譜には長連絡みの跳び四が出てこないため、修正の影響が出ないのは想定どおり。
@@ -208,6 +277,10 @@ issue #115 の不整合自体は 20 石版でも赤になる（修正前の赤�
 - `zig/src/threats.zig` `detectThreatsCore`
 - `zig/src/threats.zig` `countThreatDirections`
 - `src/logic/cpu/search/vctHelpers.ts`（TS 側の同型ロジック）
+- `src/logic/cpu/search/threatPatterns.ts` の `findDefenseForJumpFour` /
+  `findDefenseForConsecutiveFour` — `getFourDefensePosition` の修正で呼び出し元が
+  無くなり、`index.ts` からの再 export だけが残った。**古い（誤った）基準のまま**なので
+  そのまま使うと同じバグを踏む。#43 の流れで削除するのが筋。
 
 #121 に追記すべき事項:
 

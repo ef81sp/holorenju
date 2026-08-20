@@ -171,93 +171,32 @@ fn findJumpFourGap(cells: []const Cell, row: u8, col: u8, dr: i8, dc: i8) ?Posit
 /// 四は1点でしか止められないのでその位置を返す
 /// 石配置済み前提、bitboard も同期済み前提。
 /// TS版 threatPatterns.ts の getFourDefensePosition に対応
+///
+/// 連続四・跳び四を区別せず、方向ごとに「その方向で埋めると五になる点」を
+/// `threats.collectLineFivePoints` で列挙して判定する（受け点の SSoT）。
+/// - 五点 0 個: この方向は四ではない（黒の長連にしかならない四）→ 無視
+/// - 五点 2 個以上: 両方は塞げない ＝ 活四（防御不可）→ null
+/// - 五点 1 個: 止め四。その点が受け
+///
+/// issue #115: 以前は跳び四で `findJumpGapPosition` の返り値を検証せずに
+/// 使っていたため、同一ライン上に長連ギャップと正当なギャップが併存すると
+/// 長連ギャップ（＝五にできない点）を受けとして返していた。
 pub fn getFourDefensePosition(cells: []const Cell, last_row: u8, last_col: u8, color: Cell) ?Position {
     var first_defense: ?Position = null;
 
     for (DIRECTIONS, 0..) |dir, i| {
         const result = ll.queryPatternByCell(last_row, last_col, i, color);
+        if (result.count != 4 and !result.has_jump_four) continue;
 
-        // 連続四をチェック
-        if (result.count == 4) {
-            const ends = getLineEnds(cells, last_row, last_col, dir.dr, dir.dc, color);
-            if (ends.count == 2) {
-                // 活四（両端空き）= 防御不可能
-                return null;
-            }
-            if (ends.count == 1 and first_defense == null) {
-                first_defense = ends.items[0];
-            }
-            continue;
-        }
+        var five_points = threats.PositionList.init();
+        _ = threats.collectLineFivePoints(cells, last_row, last_col, dir.dr, dir.dc, color, &five_points);
 
-        // 跳び四をチェック
-        if (result.has_jump_four) {
-            const gap = @import("threats.zig").findJumpGapPosition(cells, last_row, last_col, dir.dr, dir.dc, color);
-            if (gap != null and first_defense == null) {
-                first_defense = gap;
-            }
-        }
+        if (five_points.len == 0) continue;
+        if (five_points.len >= 2) return null;
+        if (first_defense == null) first_defense = five_points.items[0];
     }
 
     return first_defense;
-}
-
-/// ラインの端（空きマス）を返す
-const LineEnds = struct {
-    items: [2]Position,
-    count: u8,
-};
-
-fn getLineEnds(cells: []const Cell, row: u8, col: u8, dr: i8, dc: i8, color: Cell) LineEnds {
-    var ends = LineEnds{ .items = undefined, .count = 0 };
-
-    // 正方向の端
-    var r: i16 = @as(i16, row) + dr;
-    var c: i16 = @as(i16, col) + dc;
-    while (board_mod.isValid(r, c) and cells[@intCast(@as(u16, @intCast(r)) * BOARD_SIZE + @as(u16, @intCast(c)))] == color) {
-        r += dr;
-        c += dc;
-    }
-    if (board_mod.isValid(r, c) and cells[@intCast(@as(u16, @intCast(r)) * BOARD_SIZE + @as(u16, @intCast(c)))] == .empty) {
-        // 黒のoverline補正: 空き端の先に黒石があれば打つと長連になるため除外
-        var include = true;
-        if (color == .black) {
-            const br = r + dr;
-            const bc = c + dc;
-            if (board_mod.isValid(br, bc) and cells[@intCast(@as(u16, @intCast(br)) * BOARD_SIZE + @as(u16, @intCast(bc)))] == .black) {
-                include = false;
-            }
-        }
-        if (include) {
-            ends.items[ends.count] = .{ .row = @intCast(r), .col = @intCast(c) };
-            ends.count += 1;
-        }
-    }
-
-    // 負方向の端
-    r = @as(i16, row) - dr;
-    c = @as(i16, col) - dc;
-    while (board_mod.isValid(r, c) and cells[@intCast(@as(u16, @intCast(r)) * BOARD_SIZE + @as(u16, @intCast(c)))] == color) {
-        r -= dr;
-        c -= dc;
-    }
-    if (board_mod.isValid(r, c) and cells[@intCast(@as(u16, @intCast(r)) * BOARD_SIZE + @as(u16, @intCast(c)))] == .empty) {
-        // 黒のoverline補正: 空き端の先に黒石があれば打つと長連になるため除外
-        var include = true;
-        if (color == .black) {
-            const br = r - dr;
-            const bc = c - dc;
-            if (board_mod.isValid(br, bc) and cells[@intCast(@as(u16, @intCast(br)) * BOARD_SIZE + @as(u16, @intCast(bc)))] == .black) {
-                include = false;
-            }
-        }
-        if (include) {
-            ends.items[ends.count] = .{ .row = @intCast(r), .col = @intCast(c) };
-            ends.count += 1;
-        }
-    }
-
-    return ends;
 }
 
 /// 脅威手（四を作る手 + 相手の四へのブロック）を生成
@@ -765,4 +704,66 @@ test "getFourDefensePosition: black four with overline should not be open four" 
     const dp = defense.?;
     try std.testing.expectEqual(dp.row, 7);
     try std.testing.expectEqual(dp.col, 1); // B8
+}
+
+/// issue #115 の局面（左下原点・黒先手）
+///
+/// 実戦 14 手 "H8 H7 G8 G9 I10 H9 J9 J10 K8 H11 L9 K9 I11 I9" +
+/// "L7 M6 L8 L6 J7 M10" + "K7 M7 N8 O8 J8"
+/// 8 行目は G8 H8 _ J8 K8 L8 _ N8（黒）/ O8（白）。
+/// I8 を埋めると G8..L8 の 6 連＝長連、M8 を埋めると J8..N8 の五。本物の受けは M8。
+fn setupIssue115FourGapPosition(cells: []Cell) void {
+    cells[7 * BOARD_SIZE + 7] = .black; // H8
+    cells[8 * BOARD_SIZE + 7] = .white; // H7
+    cells[7 * BOARD_SIZE + 6] = .black; // G8
+    cells[6 * BOARD_SIZE + 6] = .white; // G9
+    cells[5 * BOARD_SIZE + 8] = .black; // I10
+    cells[6 * BOARD_SIZE + 7] = .white; // H9
+    cells[6 * BOARD_SIZE + 9] = .black; // J9
+    cells[5 * BOARD_SIZE + 9] = .white; // J10
+    cells[7 * BOARD_SIZE + 10] = .black; // K8
+    cells[4 * BOARD_SIZE + 7] = .white; // H11
+    cells[6 * BOARD_SIZE + 11] = .black; // L9
+    cells[6 * BOARD_SIZE + 10] = .white; // K9
+    cells[4 * BOARD_SIZE + 8] = .black; // I11
+    cells[6 * BOARD_SIZE + 8] = .white; // I9
+    cells[8 * BOARD_SIZE + 11] = .black; // L7
+    cells[9 * BOARD_SIZE + 12] = .white; // M6
+    cells[7 * BOARD_SIZE + 11] = .black; // L8
+    cells[9 * BOARD_SIZE + 11] = .white; // L6
+    cells[8 * BOARD_SIZE + 9] = .black; // J7
+    cells[5 * BOARD_SIZE + 12] = .white; // M10
+    cells[8 * BOARD_SIZE + 10] = .black; // K7
+    cells[8 * BOARD_SIZE + 12] = .white; // M7
+    cells[7 * BOARD_SIZE + 13] = .black; // N8
+    cells[7 * BOARD_SIZE + 14] = .white; // O8
+    cells[7 * BOARD_SIZE + 9] = .black; // J8
+}
+
+test "getFourDefensePosition: 長連ギャップではなく五になるギャップを返す（issue #115）" {
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    setupIssue115FourGapPosition(&cells);
+    bitboard.initFromCells(&cells);
+
+    // J8 は本物の四（M8 側の跳び四）。受けは M8 であって I8 ではない。
+    const defense = getFourDefensePosition(&cells, 7, 9, .black);
+    try std.testing.expect(defense != null);
+    try std.testing.expectEqual(@as(u8, 7), defense.?.row);
+    try std.testing.expectEqual(@as(u8, 12), defense.?.col); // M8
+}
+
+test "getFourDefensePosition: 白の _XXXX_ で片端の先が白でも活四（防御不可）" {
+    ll.init();
+    // C8-D8-E8-F8-(空G8)-H8(白)。白に長連の制限は無いので G8 を埋めると 6 連＝五。
+    // B8 も五点なので五点は 2 つ＝活四＝防御不可（黒の同形との対比）。
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[7 * BOARD_SIZE + 2] = .white; // C8
+    cells[7 * BOARD_SIZE + 3] = .white; // D8
+    cells[7 * BOARD_SIZE + 4] = .white; // E8
+    cells[7 * BOARD_SIZE + 5] = .white; // F8
+    cells[7 * BOARD_SIZE + 7] = .white; // H8
+    bitboard.initFromCells(&cells);
+
+    try std.testing.expect(getFourDefensePosition(&cells, 7, 4, .white) == null);
 }

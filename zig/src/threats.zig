@@ -316,6 +316,62 @@ pub fn detectJumpThreePattern(cells: []const Cell, row: u8, col: u8, dr: i8, dc:
 
     return result;
 }
+/// ライン上の空点のうち、その方向で「埋めるとちょうど五になる」点を列挙する
+///
+/// 受け点（四を止める点）の SSoT。`getThreatDefensePositions`（vct.zig）と
+/// `getFourDefensePosition`（quiescence.zig）の両方がこれを使う。
+///
+/// 「跳び四のギャップを探して返す」方式（`findJumpGapPosition`）は、5 マス窓を
+/// ラインの先頭から走査して最初のギャップを返すため、同一ライン上に
+/// 「埋めると長連になるギャップ」と「埋めると五になる正当なギャップ」が
+/// 併存すると前者を返してしまう（issue #115）。
+/// 例: 8 行目 `G8 H8 _ J8 K8 L8 _ N8`（黒）で J8 に打ったとき、
+/// I8 を埋めると G8..L8 の 6 連＝長連、M8 を埋めると J8..N8 の五。本物の受けは M8。
+///
+/// そこでギャップを探すのではなく、ライン上（±5 マス）の空点を仮の着手点として
+/// 「その方向で五になるか」を直接判定する。
+///
+/// - 黒: ちょうど 5（6 以上は長連なので五ではない）
+/// - 白: 5 以上（白に長連の制限は無い）
+///
+/// **方向限定**である点が重要: `forbidden.checkFive` は 4 方向すべてを見るため、
+/// 別ラインの五点まで拾ってしまい「この四の受け」という意味からずれる。
+///
+/// @return このライン上で見つかった五点の数（`out` へは addUnique で追加する）
+pub fn collectLineFivePoints(
+    cells: []const Cell,
+    row: u8,
+    col: u8,
+    dr: i8,
+    dc: i8,
+    color: Cell,
+    out: *PositionList,
+) u8 {
+    var found: u8 = 0;
+    var i: i16 = -5;
+    while (i <= 5) : (i += 1) {
+        if (i == 0) continue;
+        const r = @as(i16, row) + @as(i16, dr) * i;
+        const c = @as(i16, col) + @as(i16, dc) * i;
+        if (!board_mod.isValid(r, c)) continue;
+
+        const gap_r: u8 = @intCast(r);
+        const gap_c: u8 = @intCast(c);
+        if (cells[@as(u16, gap_r) * BOARD_SIZE + gap_c] != .empty) continue;
+
+        const pos_result = board_mod.countInDirectionOnCells(cells, gap_r, gap_c, dr, dc, color);
+        const neg_result = board_mod.countInDirectionOnCells(cells, gap_r, gap_c, -dr, -dc, color);
+        const total = @as(u16, pos_result.count) + neg_result.count + 1;
+
+        const is_five = if (color == .black) total == 5 else total >= 5;
+        if (!is_five) continue;
+
+        out.addUnique(.{ .row = gap_r, .col = gap_c });
+        found += 1;
+    }
+    return found;
+}
+
 
 /// 跳び四の空き位置（ギャップ）を検出
 pub fn findJumpGapPosition(cells: []const Cell, row: u8, col: u8, dr: i8, dc: i8, color: Cell) ?Position {

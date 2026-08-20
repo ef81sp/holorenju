@@ -8,37 +8,37 @@
  *
  * ## 検査する不変条件
  *
- * 1. **四でない**攻め手が受けを 1 点に強制しているとき、その 1 点は
- *    **攻め手側の長連点であってはならない**。
- *    受けが 1 点になるのは「四の五点を止める」場合であり、埋めると 6 連になる点は
- *    そもそも五点ではないので、そこを唯一の受けとして強制するのは
- *    分類（`classifyThreat` は長連補正済み）と食い違う＝ issue #115 の不整合。
+ * 1. 攻め手が受けを 1 点に強制しているとき、その 1 点は攻め手の強さと釣り合うこと。
+ *    - 攻め手が**四**なら、その 1 点は「攻め手がそこに打つと本当に五になる点」でなければ
+ *      ならない。四の受けは五点を塞ぐこと以外にありえないので、これは厳密に成り立つ。
+ *      （`quiescence.getFourDefensePosition` 経路の長連ギャップ誤選択を押さえる）
+ *    - 攻め手が**四でない**なら、その 1 点は少なくとも
+ *      **攻め手の長連点であってはならない**。埋めると 6 連になる点は五点ではないので、
+ *      それを唯一の受けとして強制するのは分類（`classifyThreat` は長連補正済み）との
+ *      食い違いである。（`getThreatDefensePositions` 経路を押さえる）
+ *      四のときより弱い条件にしているのは、記録された受けが部分集合になりうるため
+ *      （下記「適用範囲の注意」）。
  * 2. 受けが 0 点（＝防御不可・終端）の攻め手ノードは五か達四でなければならない
  *    （zig/src/vct.zig `hasVCT` の「防御不可 → 脅威が成立していれば勝ち」に対応）。
  *
  * ## 適用範囲の注意
  *
- * - **四の攻め手を 1. の対象から外しているのは意図的**である。四なのに受けが
- *   長連点になる別系統の不具合（VCF 経路の `quiescence.getFourDefensePosition` が
- *   `threats.findJumpGapPosition` の返す最初のギャップを検証せずに使う）が
- *   **未修正で残っており（issue #121）**、この局面にも実在する:
- *   `21.K7 22.M7 23.N8 24.O8 25.J8` で 8 行目は `G8 H8 _ J8 K8 L8 _ N8`。
- *   J8 は M8 側の跳び四なので四であること自体は正しいが、受けとして I8
- *   （埋めると G8..L8 の 6 連）が強制されている。#121 の修正は VCF 全体に
- *   影響するため本 issue のスコープ外とし、ここでは #115 の系統だけを検査する。
  * - **「受けが 1 点 ⇒ 四」という、より強い不変条件は成り立たない。**
  *   `findVCTSequenceRecursive` は、受け手自身がカウンター脅威を作る場合
  *   （`checkDefenseCounterThreat` が win/four/three）を VCF 経路で処理し、
  *   その受けを木の `defenses` に記録しない。つまり記録された受けは
  *   `getThreatDefensePositions` の結果の**部分集合**であり、三の攻め手でも
- *   記録上 1 点だけになりうる。だから 1. は「長連点でない」に限定してある。
+ *   記録上 1 点だけになりうる。だから四でないときは「長連点でない」に限定してある。
+ *   （実例: `21.K7 22.M7 23.N8 24.M8 25.M9` の M9 は活三で、受けは J6 と N10 の
+ *   2 点あるが、N10 はカウンター脅威扱いで木に載らず J6 だけが記録される）
  * - 守り手が黒の場合、受け点から黒の禁手が除外されるため受けはさらに減る。
  *   長連点の判定も攻め手＝黒を前提にしているので、この検査は
  *   **攻め手が黒（＝守り手が白）の木でのみ有効**であり、ヘルパー側で assert する。
- * - 四の判定に `createsFour`（wasm の `vct.classifyThreat`）を使うため、この検査は
- *   ある意味で自己参照的である。**真のアンカーは座標を明示した Zig 単体テスト**
- *   （`zig/src/vct.zig` の issue #115 テスト）で、こちらは探索木全体への波及を
- *   広く押さえる補助と位置づける。
+ * - 五の判定に `checkFive`（TS 側の連珠ルール実装）を使う。Zig/WASM の探索が
+ *   返した木を **TS 側の独立した実装で**検算する形になっており、
+ *   `createsFour`（wasm の `vct.classifyThreat`）に頼る自己参照を避けている。
+ *   座標を明示した Zig 単体テストが一次のアンカーで、こちらは探索木全体への
+ *   波及を広く押さえる補助という位置づけは変わらない。
  */
 
 import type { BoardState, Position } from "@/types/game";
@@ -57,7 +57,6 @@ const DIRECTIONS: [number, number][] = [
   [1, 1],
   [1, -1],
 ];
-
 /** 石の色（`StoneColor` は空点を表す null を含むため、ここでは実色のみを扱う） */
 type PlayerColor = "black" | "white";
 
@@ -115,6 +114,22 @@ function isOverlinePoint(
   });
 }
 
+/** color がそこに打つと五になる空点かどうか（黒の長連点は checkFive が偽） */
+function isFivePointFor(
+  board: BoardState,
+  pos: Position,
+  color: PlayerColor,
+): boolean {
+  const row = board[pos.row];
+  if (!row || row[pos.col]) {
+    return false;
+  }
+  row[pos.col] = color;
+  const result = checkFive(board, pos.row, pos.col, color);
+  row[pos.col] = null;
+  return result;
+}
+
 /** color がそこに打つと五になる空点の数（黒の長連点は checkFive が偽なので数えない） */
 function countFivePoints(board: BoardState, color: PlayerColor): number {
   let count = 0;
@@ -152,14 +167,18 @@ function walk(
 
   if (node.defenses.length === 1) {
     const [defense] = node.defenses;
-    if (
-      defense &&
-      !createsFour(board, move.row, move.col, attacker) &&
-      isOverlinePoint(board, defense.defenderMove, attacker)
-    ) {
-      out.push(
-        `${line.join(" ")}: 四でないのに受けが ${formatMove(defense.defenderMove)} の1点に強制されている（そこは攻め手の長連点で五にできない）`,
-      );
+    if (defense) {
+      const isFour = createsFour(board, move.row, move.col, attacker);
+      const defensePos = defense.defenderMove;
+      if (isFour && !isFivePointFor(board, defensePos, attacker)) {
+        out.push(
+          `${line.join(" ")}: 四の受けが ${formatMove(defensePos)} の1点に強制されているが、そこは攻め手が打っても五にならない`,
+        );
+      } else if (!isFour && isOverlinePoint(board, defensePos, attacker)) {
+        out.push(
+          `${line.join(" ")}: 四でないのに受けが ${formatMove(defensePos)} の1点に強制されている（そこは攻め手の長連点で五にできない）`,
+        );
+      }
     }
   } else if (node.defenses.length === 0) {
     // 終端＝防御不可。五そのものか、五点が 2 つ以上ある達四のはず。

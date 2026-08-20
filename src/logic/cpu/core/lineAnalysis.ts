@@ -9,6 +9,56 @@ import type { BoardState, Position } from "@/types/game";
 import { isValidPosition } from "@/logic/renjuRules";
 
 /**
+ * ライン上の空点のうち、その方向で「埋めると五になる」点を列挙する
+ *
+ * 受け点（四を止める点）の SSoT。Zig 側 `threats.collectLineFivePoints` と対応する。
+ *
+ * 「跳び四のギャップを探して返す」方式（`findJumpGapPosition`）は、5 マス窓を
+ * ラインの先頭から走査して最初のギャップを返すため、同一ライン上に
+ * 「埋めると長連になるギャップ」と「埋めると五になる正当なギャップ」が
+ * 併存すると前者を返してしまう（issue #115）。
+ * 例: 8 行目 `G8 H8 _ J8 K8 L8 _ N8`（黒）で J8 に打ったとき、
+ * I8 を埋めると G8..L8 の 6 連＝長連、M8 を埋めると J8..N8 の五。本物の受けは M8。
+ *
+ * そこでギャップを探すのではなく、ライン上（±5 マス）の空点を仮の着手点として
+ * 「その方向で五になるか」を直接判定する。
+ *
+ * - 黒: ちょうど 5（6 以上は長連なので五ではない）
+ * - 白: 5 以上（白に長連の制限は無い）
+ *
+ * 方向限定である点が重要: `checkFive` は 4 方向すべてを見るため、
+ * 別ラインの五点まで拾ってしまい「この四の受け」という意味からずれる。
+ */
+export function collectLineFivePoints(
+  board: BoardState,
+  row: number,
+  col: number,
+  dr: number,
+  dc: number,
+  color: "black" | "white",
+): Position[] {
+  const points: Position[] = [];
+  for (let i = -5; i <= 5; i++) {
+    if (i === 0) {
+      continue;
+    }
+    const r = row + dr * i;
+    const c = col + dc * i;
+    if (!isValidPosition(r, c) || board[r]?.[c]) {
+      continue;
+    }
+    // countLine は起点を色に関係なく 1 と数えるので、空点に対して呼べば
+    // 「そこに color を置いたときの連の長さ」になる（盤面を書き換える必要はない）。
+    const total = countLine(board, r, c, dr, dc, color);
+    const isFive = color === "black" ? total === 5 : total >= 5;
+    if (isFive) {
+      points.push({ row: r, col: c });
+    }
+  }
+  return points;
+}
+
+/**
  * 指定方向に連続する石の数をカウント
  *
  * @param board 盤面

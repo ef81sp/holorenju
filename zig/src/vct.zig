@@ -354,17 +354,8 @@ pub fn findThreatMovesCounted(cells: []Cell, color: Cell, buf: *[225]Position) T
 /// 脅威に対する防御位置を取得
 /// 跳び四の受け点（＝そのラインで「埋めると本当に五になる」空点）を列挙する
 ///
-/// `threats.findJumpGapPosition` は 5 マス窓をラインの先頭から走査して最初に
-/// 見つかったギャップを返すため、同一ライン上に「埋めると長連になるギャップ」と
-/// 「埋めると五になる正当なギャップ」が併存すると前者を返しうる（issue #115）。
-/// 例: 8 行目 `G8 H8 _ J8 K8 L8 _ N8`（黒）で J8 に打ったとき、
-/// I8 を埋めると G8..L8 の 6 連＝長連、M8 を埋めると J8..N8 の五。本物の受けは M8。
-///
-/// そこでギャップを「探す」のではなく、ライン上の空点を仮の着手点として
-/// `forbidden.checkFive` で判定し、**五になる点をすべて**受け点に入れる
-/// （`isJumpFourOverline` と同じ発想。`checkFive` は中央セルを読まず
-/// 「そこに color を置いたら五か」を答えるので、盤面を書き換える必要はない）。
-/// 黒の長連点は `checkFive` が偽になるため自然に除外される。
+/// 実体は `threats.collectLineFivePoints`（受け点の SSoT。
+/// `quiescence.getFourDefensePosition` も同じ関数を使う）。
 ///
 /// 戻り値: 受け点を 1 つ以上追加できたか（false なら四として扱わず、
 /// 呼び出し側で三として受けを広く列挙する＝防御側に有利な健全側に倒す）
@@ -377,23 +368,7 @@ fn addJumpFourDefensePositions(
     color: Cell,
     defense_positions: *PositionList,
 ) bool {
-    var added = false;
-    var i: i16 = -5;
-    while (i <= 5) : (i += 1) {
-        if (i == 0) continue;
-        const r = @as(i16, row) + @as(i16, dr) * i;
-        const c = @as(i16, col) + @as(i16, dc) * i;
-        if (!board_mod.isValid(r, c)) continue;
-        if (cellAt(cells, r, c) != .empty) continue;
-
-        const gap_r: u8 = @intCast(r);
-        const gap_c: u8 = @intCast(c);
-        if (!forbidden.checkFive(cells, gap_r, gap_c, color)) continue;
-
-        defense_positions.addUnique(.{ .row = gap_r, .col = gap_c });
-        added = true;
-    }
-    return added;
+    return threats.collectLineFivePoints(cells, row, col, dr, dc, color, defense_positions) > 0;
 }
 
 pub fn getThreatDefensePositions(cells: []const Cell, row: u8, col: u8, color: Cell) PositionList {
