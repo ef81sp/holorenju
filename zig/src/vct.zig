@@ -387,9 +387,14 @@ pub fn getThreatDefensePositions(cells: []const Cell, row: u8, col: u8, color: C
             }
         }
 
-        // 跳び四をチェック
+        // 跳び四をチェック（黒はオーバーライン補正）
+        // ギャップを埋めると長連になる跳び四は五にできない＝四ではないので、
+        // 受けをギャップ 1 点に絞ってはならない。分類側（classifyThreat /
+        // checkDefenseCounterThreat）と同基準に揃える（SSoT）。
         var has_jump_four = false;
-        if (result.count != 4 and result.has_jump_four) {
+        if (result.count != 4 and result.has_jump_four and
+            !isJumpFourOverline(cells, row, col, dir.dr, dir.dc, color))
+        {
             has_jump_four = true;
             if (threats.findJumpGapPosition(cells, row, col, dir.dr, dir.dc, color)) |gap| {
                 defense_positions.addUnique(gap);
@@ -2775,4 +2780,67 @@ test "hasVCT: 四で相手の活三を潰してから三で追う手順は成立
     try testing.expect(!vcf_mod.hasVCF(&cells, .white, 0, &limiter, vcf_mod.VCF_MAX_DEPTH));
 
     try testing.expect(hasVCT(&cells, .white, 0, &limiter, VCT_MAX_DEPTH));
+}
+
+/// issue #115 の実戦棋譜の 20 石局面（左下原点・黒先手・黒番）
+///
+/// 実戦 14 手 "H8 H7 G8 G9 I10 H9 J9 J10 K8 H11 L9 K9 I11 I9" に
+/// 偽 VCT 手順の先頭 "15.L7 16.M6 17.L8 18.L6 19.J7 20.M10" を進めた局面。
+/// 8 行目は G8 H8 _ J8 K8 L8（黒）で、黒が I8 に打つと 6 連＝長連になるため
+/// J8 は「跳び四」ではなく三でしかない。
+fn setupIssue115Position(cells: []Cell) void {
+    cells[7 * BOARD_SIZE + 7] = .black; // 1. H8
+    cells[8 * BOARD_SIZE + 7] = .white; // 2. H7
+    cells[7 * BOARD_SIZE + 6] = .black; // 3. G8
+    cells[6 * BOARD_SIZE + 6] = .white; // 4. G9
+    cells[5 * BOARD_SIZE + 8] = .black; // 5. I10
+    cells[6 * BOARD_SIZE + 7] = .white; // 6. H9
+    cells[6 * BOARD_SIZE + 9] = .black; // 7. J9
+    cells[5 * BOARD_SIZE + 9] = .white; // 8. J10
+    cells[7 * BOARD_SIZE + 10] = .black; // 9. K8
+    cells[4 * BOARD_SIZE + 7] = .white; // 10. H11
+    cells[6 * BOARD_SIZE + 11] = .black; // 11. L9
+    cells[6 * BOARD_SIZE + 10] = .white; // 12. K9
+    cells[4 * BOARD_SIZE + 8] = .black; // 13. I11
+    cells[6 * BOARD_SIZE + 8] = .white; // 14. I9
+    cells[8 * BOARD_SIZE + 11] = .black; // 15. L7
+    cells[9 * BOARD_SIZE + 12] = .white; // 16. M6
+    cells[7 * BOARD_SIZE + 11] = .black; // 17. L8
+    cells[9 * BOARD_SIZE + 11] = .white; // 18. L6
+    cells[8 * BOARD_SIZE + 9] = .black; // 19. J7
+    cells[5 * BOARD_SIZE + 12] = .white; // 20. M10
+}
+
+test "getThreatDefensePositions: 長連にしかならない跳び四は受けを1点に絞らない（issue #115）" {
+    // 20 石局面（黒番）に黒 J8 を置いた局面。
+    // 8 行目: G8 H8 _ J8 K8 L8 で、ギャップ I8 は黒が打つと 6 連＝長連。
+    // よって J8 は四ではなく三であり（classifyThreat と同基準）、
+    // 受けを跳び四のギャップ I8 の 1 点に絞ってはならない。
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    setupIssue115Position(&cells);
+    cells[7 * BOARD_SIZE + 9] = .black; // 21. J8
+    bitboard.initFromCells(&cells);
+
+    // 前提: 分類側は長連補正済みで「四ではない三」と判定している
+    const classification = classifyThreat(&cells, 7, 9, .black);
+    try testing.expect(!classification.creates_four);
+    try testing.expect(classification.creates_open_three);
+
+    // 受け点も同基準でなければならない: I8 の 1 点強制ではなく M8 / I8 / N8
+    const defense = getThreatDefensePositions(&cells, 7, 9, .black);
+    try testing.expectEqual(@as(usize, 3), defense.len);
+
+    var has_m8 = false;
+    var has_i8 = false;
+    var has_n8 = false;
+    for (0..defense.len) |i| {
+        const p = defense.items[i];
+        if (p.row == 7 and p.col == 12) has_m8 = true; // M8
+        if (p.row == 7 and p.col == 8) has_i8 = true; // I8
+        if (p.row == 7 and p.col == 13) has_n8 = true; // N8
+    }
+    try testing.expect(has_m8);
+    try testing.expect(has_i8);
+    try testing.expect(has_n8);
 }
