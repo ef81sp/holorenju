@@ -391,6 +391,8 @@ pub fn getThreatDefensePositions(cells: []const Cell, row: u8, col: u8, color: C
         // ギャップを埋めると長連になる跳び四は五にできない＝四ではないので、
         // 受けをギャップ 1 点に絞ってはならない。分類側（classifyThreat /
         // checkDefenseCounterThreat）と同基準に揃える（SSoT）。
+        // 四扱いをやめた結果、同方向は下の活三/跳び三ブランチで受け点を列挙する
+        // （has_jump_four=false の連鎖は意図的。受けが広がる＝防御側に有利な健全側）。
         var has_jump_four = false;
         if (result.count != 4 and result.has_jump_four and
             !isJumpFourOverline(cells, row, col, dir.dr, dir.dc, color))
@@ -2788,7 +2790,7 @@ test "hasVCT: 四で相手の活三を潰してから三で追う手順は成立
 /// 偽 VCT 手順の先頭 "15.L7 16.M6 17.L8 18.L6 19.J7 20.M10" を進めた局面。
 /// 8 行目は G8 H8 _ J8 K8 L8（黒）で、黒が I8 に打つと 6 連＝長連になるため
 /// J8 は「跳び四」ではなく三でしかない。
-fn setupIssue115Position(cells: []Cell) void {
+fn setupIssue115BranchPosition(cells: []Cell) void {
     cells[7 * BOARD_SIZE + 7] = .black; // 1. H8
     cells[8 * BOARD_SIZE + 7] = .white; // 2. H7
     cells[7 * BOARD_SIZE + 6] = .black; // 3. G8
@@ -2818,7 +2820,7 @@ test "getThreatDefensePositions: 長連にしかならない跳び四は受け�
     // 受けを跳び四のギャップ I8 の 1 点に絞ってはならない。
     ll.init();
     var cells = [_]Cell{.empty} ** CELL_COUNT;
-    setupIssue115Position(&cells);
+    setupIssue115BranchPosition(&cells);
     cells[7 * BOARD_SIZE + 9] = .black; // 21. J8
     bitboard.initFromCells(&cells);
 
@@ -2844,3 +2846,4 @@ test "getThreatDefensePositions: 長連にしかならない跳び四は受け�
     try testing.expect(has_i8);
     try testing.expect(has_n8);
 }
+
