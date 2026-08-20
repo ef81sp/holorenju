@@ -352,6 +352,50 @@ pub fn findThreatMovesCounted(cells: []Cell, color: Cell, buf: *[225]Position) T
 // =============================================================================
 
 /// 脅威に対する防御位置を取得
+/// 跳び四の受け点（＝そのラインで「埋めると本当に五になる」空点）を列挙する
+///
+/// `threats.findJumpGapPosition` は 5 マス窓をラインの先頭から走査して最初に
+/// 見つかったギャップを返すため、同一ライン上に「埋めると長連になるギャップ」と
+/// 「埋めると五になる正当なギャップ」が併存すると前者を返しうる（issue #115）。
+/// 例: 8 行目 `G8 H8 _ J8 K8 L8 _ N8`（黒）で J8 に打ったとき、
+/// I8 を埋めると G8..L8 の 6 連＝長連、M8 を埋めると J8..N8 の五。本物の受けは M8。
+///
+/// そこでギャップを「探す」のではなく、ライン上の空点を仮の着手点として
+/// `forbidden.checkFive` で判定し、**五になる点をすべて**受け点に入れる
+/// （`isJumpFourOverline` と同じ発想。`checkFive` は中央セルを読まず
+/// 「そこに color を置いたら五か」を答えるので、盤面を書き換える必要はない）。
+/// 黒の長連点は `checkFive` が偽になるため自然に除外される。
+///
+/// 戻り値: 受け点を 1 つ以上追加できたか（false なら四として扱わず、
+/// 呼び出し側で三として受けを広く列挙する＝防御側に有利な健全側に倒す）
+fn addJumpFourDefensePositions(
+    cells: []const Cell,
+    row: u8,
+    col: u8,
+    dr: i8,
+    dc: i8,
+    color: Cell,
+    defense_positions: *PositionList,
+) bool {
+    var added = false;
+    var i: i16 = -5;
+    while (i <= 5) : (i += 1) {
+        if (i == 0) continue;
+        const r = @as(i16, row) + @as(i16, dr) * i;
+        const c = @as(i16, col) + @as(i16, dc) * i;
+        if (!board_mod.isValid(r, c)) continue;
+        if (cellAt(cells, r, c) != .empty) continue;
+
+        const gap_r: u8 = @intCast(r);
+        const gap_c: u8 = @intCast(c);
+        if (!forbidden.checkFive(cells, gap_r, gap_c, color)) continue;
+
+        defense_positions.addUnique(.{ .row = gap_r, .col = gap_c });
+        added = true;
+    }
+    return added;
+}
+
 pub fn getThreatDefensePositions(cells: []const Cell, row: u8, col: u8, color: Cell) PositionList {
     var defense_positions = PositionList.init();
 
@@ -393,14 +437,12 @@ pub fn getThreatDefensePositions(cells: []const Cell, row: u8, col: u8, color: C
         // checkDefenseCounterThreat）と同基準に揃える（SSoT）。
         // 四扱いをやめた結果、同方向は下の活三/跳び三ブランチで受け点を列挙する
         // （has_jump_four=false の連鎖は意図的。受けが広がる＝防御側に有利な健全側）。
+        // 受け点が取れない場合も同様に三として扱う（受けが広がる側に倒す）。
         var has_jump_four = false;
         if (result.count != 4 and result.has_jump_four and
             !isJumpFourOverline(cells, row, col, dir.dr, dir.dc, color))
         {
-            has_jump_four = true;
-            if (threats.findJumpGapPosition(cells, row, col, dir.dr, dir.dc, color)) |gap| {
-                defense_positions.addUnique(gap);
-            }
+            has_jump_four = addJumpFourDefensePositions(cells, row, col, dir.dr, dir.dc, color, &defense_positions);
         }
 
         // 活三をチェック（同方向に跳び四がある場合は不要：跳び四の防御が優先）
@@ -2847,3 +2889,30 @@ test "getThreatDefensePositions: 長連にしかならない跳び四は受け�
     try testing.expect(has_n8);
 }
 
+test "getThreatDefensePositions: 同一ラインに長連ギャップと正当なギャップが併存する場合は後者を受けにする（issue #115）" {
+    // 上記 20 石局面に 21.黒K7 22.白M7 23.黒N8 24.白O8 25.黒J8 を進めた局面。
+    // 8 行目は G8 H8 _ J8 K8 L8 _ N8（黒）/ O8（白）。
+    //   - I8 側の窓 (G8 H8 _ J8 K8): 埋めると G8..L8 の 6 連＝長連で五にならない
+    //   - M8 側の窓 (J8 K8 L8 _ N8): 埋めると J8..N8 の五 ＝ こちらが本物の跳び四
+    // J8 は本物の四なので受けは 1 点に絞ってよいが、その 1 点は M8 であって I8 ではない。
+    // findJumpGapPosition は 5 マス窓をラインの先頭から走査して最初のギャップを返すため、
+    // 素通しだと長連ギャップ I8 を受けとして返してしまう。
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    setupIssue115BranchPosition(&cells);
+    cells[8 * BOARD_SIZE + 10] = .black; // 21. K7
+    cells[8 * BOARD_SIZE + 12] = .white; // 22. M7
+    cells[7 * BOARD_SIZE + 13] = .black; // 23. N8
+    cells[7 * BOARD_SIZE + 14] = .white; // 24. O8
+    cells[7 * BOARD_SIZE + 9] = .black; // 25. J8
+    bitboard.initFromCells(&cells);
+
+    // 前提: J8 は本物の四（M8 側の跳び四）
+    try testing.expect(classifyThreat(&cells, 7, 9, .black).creates_four);
+
+    // 受けは M8 の 1 点のみ（I8 は埋めると長連なので五点ではない）
+    const defense = getThreatDefensePositions(&cells, 7, 9, .black);
+    try testing.expectEqual(@as(usize, 1), defense.len);
+    try testing.expectEqual(@as(u8, 7), defense.items[0].row);
+    try testing.expectEqual(@as(u8, 12), defense.items[0].col); // M8
+}
