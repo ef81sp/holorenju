@@ -898,8 +898,10 @@ pub fn hasVCT(
 
     const opponent = color.opposite();
 
-    // 相手に活三があればVCT（三脅威）は不成立
+    // 相手に活三・ミセ手（1手四三）があればVCT（三脅威）は不成立
+    // （直前でVCFを試しているため「四追いで勝てる」ケースは保存される）
     if (hasOpenThree(cells, opponent)) return false;
+    if (hasFourThreeAvailable(cells, opponent)) return false;
 
     var threat_buf: [225]Position = undefined;
     const threat_count = findThreatMoves(cells, color, &threat_buf);
@@ -1206,8 +1208,10 @@ fn findVCTSequenceRecursive(
 
     const opponent = color.opposite();
 
-    // 相手に活三があればVCT不成立
+    // 相手に活三・ミセ手（1手四三）があればVCT不成立
+    // （直前でVCFを試しているため「四追いで勝てる」ケースは保存される）
     if (hasOpenThree(cells, opponent)) return false;
+    if (hasFourThreeAvailable(cells, opponent)) return false;
 
     var threat_buf: [225]Position = undefined;
     const threat_count = findThreatMoves(cells, color, &threat_buf);
@@ -2628,4 +2632,78 @@ test "hasVCT: 夏止め済みの三しか作れない局面で偽VCTが成立し
     };
 
     try testing.expect(!hasVCT(&cells, .black, 0, &limiter, VCT_MAX_DEPTH));
+}
+
+test "hasVCT: 相手にミセ手がある局面で偽VCTが成立しない（issue #116）" {
+    // issue #116 の実戦棋譜
+    // "H8 H9 J10 I9 G9 I7 I8 J8 H10 K9 L10 K7 K10 I10 J9 H7 J7" の17石局面に、
+    // 偽VCT手順の分岐 18.白M5 19.黒L6 20.白G8 21.黒J11 を進めた局面（白番）。
+    //
+    // この局面で黒は四三点 J12 を持つ（ミセ手）。白は四追いで勝てないため、
+    // 三で追う手順は黒の四三に先行されて崩れる＝VCTは不成立でなければならない。
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[7 * BOARD_SIZE + 7] = .black; // 1. H8
+    cells[6 * BOARD_SIZE + 7] = .white; // 2. H9
+    cells[5 * BOARD_SIZE + 9] = .black; // 3. J10
+    cells[6 * BOARD_SIZE + 8] = .white; // 4. I9
+    cells[6 * BOARD_SIZE + 6] = .black; // 5. G9
+    cells[8 * BOARD_SIZE + 8] = .white; // 6. I7
+    cells[7 * BOARD_SIZE + 8] = .black; // 7. I8
+    cells[7 * BOARD_SIZE + 9] = .white; // 8. J8
+    cells[5 * BOARD_SIZE + 7] = .black; // 9. H10
+    cells[6 * BOARD_SIZE + 10] = .white; // 10. K9
+    cells[5 * BOARD_SIZE + 11] = .black; // 11. L10
+    cells[8 * BOARD_SIZE + 10] = .white; // 12. K7
+    cells[5 * BOARD_SIZE + 10] = .black; // 13. K10
+    cells[5 * BOARD_SIZE + 8] = .white; // 14. I10
+    cells[6 * BOARD_SIZE + 9] = .black; // 15. J9
+    cells[8 * BOARD_SIZE + 7] = .white; // 16. H7
+    cells[8 * BOARD_SIZE + 9] = .black; // 17. J7
+    cells[10 * BOARD_SIZE + 12] = .white; // 18. M5
+    cells[9 * BOARD_SIZE + 11] = .black; // 19. L6
+    cells[7 * BOARD_SIZE + 6] = .white; // 20. G8
+    cells[4 * BOARD_SIZE + 9] = .black; // 21. J11
+    bitboard.initFromCells(&cells);
+
+    // 前提: 黒に活三はないがミセ手はある（＝活三チェックだけでは弾けない）
+    try testing.expect(!hasOpenThree(&cells, .black));
+    try testing.expect(hasFourThreeAvailable(&cells, .black));
+
+    var limiter = TimeLimiter{
+        .start_time = 0,
+        .time_limit = 0,
+        .nodes = 0,
+        .max_nodes = 0,
+    };
+
+    try testing.expect(!hasVCT(&cells, .white, 0, &limiter, VCT_MAX_DEPTH));
+}
+
+test "findVCTSequence: 途中でミセ手を持たれる手順をVCTとして返さない（issue #116）" {
+    // 上と同じ棋譜の17石局面（白番）。開始局面では黒に活三・ミセ手・VCFがないため
+    // エントリのガードは通過するが、手順の途中（21.黒J11 の後）で黒がミセ手を得る。
+    // 白にVCFはないので、VCTとしても成立してはならない。
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[7 * BOARD_SIZE + 7] = .black; // 1. H8
+    cells[6 * BOARD_SIZE + 7] = .white; // 2. H9
+    cells[5 * BOARD_SIZE + 9] = .black; // 3. J10
+    cells[6 * BOARD_SIZE + 8] = .white; // 4. I9
+    cells[6 * BOARD_SIZE + 6] = .black; // 5. G9
+    cells[8 * BOARD_SIZE + 8] = .white; // 6. I7
+    cells[7 * BOARD_SIZE + 8] = .black; // 7. I8
+    cells[7 * BOARD_SIZE + 9] = .white; // 8. J8
+    cells[5 * BOARD_SIZE + 7] = .black; // 9. H10
+    cells[6 * BOARD_SIZE + 10] = .white; // 10. K9
+    cells[5 * BOARD_SIZE + 11] = .black; // 11. L10
+    cells[8 * BOARD_SIZE + 10] = .white; // 12. K7
+    cells[5 * BOARD_SIZE + 10] = .black; // 13. K10
+    cells[5 * BOARD_SIZE + 8] = .white; // 14. I10
+    cells[6 * BOARD_SIZE + 9] = .black; // 15. J9
+    cells[8 * BOARD_SIZE + 7] = .white; // 16. H7
+    cells[8 * BOARD_SIZE + 9] = .black; // 17. J7
+
+    const result = findVCTSequence(&cells, .white, VCT_MAX_DEPTH, 0, 0, false, .lenient);
+    try testing.expect(!result.found);
 }
