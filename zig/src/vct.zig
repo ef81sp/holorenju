@@ -1132,6 +1132,9 @@ const DefenseSeqEntry = struct {
 
 const MAX_DEFENSE_ENTRIES = 20;
 
+/// 手順長 α カットの「上限なし」（sequence バッファ長 = 実質無制限）
+const SEQ_LEN_UNBOUNDED: u8 = 64;
+
 /// VCT手順全体を返す（反復深化）
 pub fn findVCTSequence(
     cells: []Cell,
@@ -1218,7 +1221,7 @@ fn findVCTSequenceWithLimiter(
             .branches = undefined,
             .branch_count = 0,
         };
-        const found = findVCTSequenceRecursive(cells, color, 0, depth, limiter, &result.sequence, &seq_len, &context);
+        const found = findVCTSequenceRecursive(cells, color, 0, depth, limiter, &result.sequence, &seq_len, &context, SEQ_LEN_UNBOUNDED);
         if (found) {
             // カウンターフォー耐性検証: 活三を打つ段階で相手のカウンターフォーが
             // 残り手順を破壊するならVCT不成立扱い → VCF-onlyにフォールバック
@@ -1270,6 +1273,12 @@ fn tryVCFOnly(cells: []Cell, color: Cell, limiter: *TimeLimiter, result: *VCTSeq
 }
 
 /// VCT手順の再帰探索
+///
+/// `max_len` は「この部分木が返してよい手順長の上限（この値未満）」。
+/// 呼び出し元がすでに長さ `max_len` の手順を持っているなら、それ以上に長い
+/// 手順は採用されないので、途中で打ち切ってよい（手順長の α カット。issue #122）。
+/// 最短性は保存される（純粋に「採用されない枝」だけを捨てる健全カット）。
+/// 上限なしは `SEQ_LEN_UNBOUNDED`。
 fn findVCTSequenceRecursive(
     cells: []Cell,
     color: Cell,
@@ -1279,13 +1288,16 @@ fn findVCTSequenceRecursive(
     sequence: *[64]Position,
     seq_len: *u8,
     context: *VCTRecursiveContext,
+    max_len: u8,
 ) bool {
     if (depth >= max_depth) return false;
     if (isTimeExceeded(limiter)) return false;
+    if (max_len == 0) return false;
 
     // VCF手順に委譲
     const vcf_seq = vcf_mod.findVCFSequence(cells, color, vcf_mod.VCF_MAX_DEPTH, 0, 0);
     chargeVCFNodes(limiter, vcf_seq);
+    if (vcf_seq.found and vcf_seq.len >= max_len) return false;
     if (vcf_seq.found) {
         var i: u8 = 0;
         while (i < vcf_seq.len) : (i += 1) {
@@ -1311,7 +1323,9 @@ fn findVCTSequenceRecursive(
 
     // 最短手順の候補を保持（全脅威手を試して最短を選ぶ）
     var best_seq: [64]Position = undefined;
-    var best_seq_len: u8 = 64; // 最短を見つけるため最大値で初期化
+    // 「これ未満の長さでなければ採用しない」上限。呼び出し元の α 値で初期化し、
+    // 短い手順が見つかるたびに絞り込む（issue #122 レバー2）。
+    var best_seq_len: u8 = max_len;
     var best_root: u16 = ft.TREE_TERMINAL;
     var best_context = VCTRecursiveContext{
         .is_forbidden_trap = false,
@@ -1532,7 +1546,16 @@ fn findVCTSequenceRecursive(
                 };
                 var sub_seq: [64]Position = undefined;
                 var sub_len: u8 = 0;
-                const found = findVCTSequenceRecursive(cells, color, depth + 1, max_depth, limiter, &sub_seq, &sub_len, &sub_context);
+                // 手順長の α カット（issue #122 レバー2）。
+                // この攻め手の候補手順長は `1（攻め手）+ 1（受け手）+ sub_len` なので、
+                // `sub_len >= best_seq_len - 2` の部分木は採用されない＝探索不要。
+                // 収集モードは全受けを完全展開して木を作る必要があり、この節点の
+                // 候補長は「最短の受け」で決まるため、長い受けを打ち切ると
+                // 「受けきれない」と誤判定しうる。よって非収集モードにのみ適用する。
+                const sub_max_len: u8 = if (context.collect_branches)
+                    SEQ_LEN_UNBOUNDED
+                else if (best_seq_len > 2) best_seq_len - 2 else 0;
+                const found = findVCTSequenceRecursive(cells, color, depth + 1, max_depth, limiter, &sub_seq, &sub_len, &sub_context, sub_max_len);
 
                 cells[def_idx] = .empty;
                 bitboard.removeStone(dp.row, dp.col);
@@ -1624,8 +1647,8 @@ fn findVCTSequenceRecursive(
                 }
             }
 
-            // 最短の候補を保持
-            if (!has_best or candidate_len < best_seq_len) {
+            // 最短の候補を保持（α 値の更新も兼ねる）
+            if (candidate_len < best_seq_len) {
                 var ci: u8 = 0;
                 while (ci < candidate_len) : (ci += 1) {
                     best_seq[ci] = candidate_seq[ci];
@@ -1844,7 +1867,7 @@ fn buildBlockDefSubSequence(
                 .branches = undefined,
                 .branch_count = 0,
             };
-            const found = findVCTSequenceRecursive(cells, color, depth + 1, max_depth, limiter, &sub_seq, &sub_len, &sub_context);
+            const found = findVCTSequenceRecursive(cells, color, depth + 1, max_depth, limiter, &sub_seq, &sub_len, &sub_context, SEQ_LEN_UNBOUNDED);
             if (!found) return result;
             var i: u8 = 0;
             while (i < sub_len) : (i += 1) {
@@ -3430,4 +3453,59 @@ test "findVCTSequenceFromFirstMove: collect_branches で詰み木を構築する
     try testing.expect(root.defense_count > 0);
     try testing.expectEqual(with_tree.sequence[1].row, g_tree_arena.defenses[root.defense_start].defender.row);
     try testing.expectEqual(with_tree.sequence[1].col, g_tree_arena.defenses[root.defense_start].defender.col);
+}
+
+test "findVCTSequenceRecursive: max_len 未満の手順しか返さない（issue #122 レバー2）" {
+    // 行7: 黒 (7,2) が端を止めた白 3 連 → 白 (7,6) の四から手順長 5 で詰む局面。
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[7 * BOARD_SIZE + 2] = .black;
+    cells[7 * BOARD_SIZE + 3] = .white;
+    cells[7 * BOARD_SIZE + 4] = .white;
+    cells[7 * BOARD_SIZE + 5] = .white;
+    cells[10 * BOARD_SIZE + 6] = .white;
+    cells[10 * BOARD_SIZE + 7] = .white;
+    cells[11 * BOARD_SIZE + 8] = .white;
+    cells[12 * BOARD_SIZE + 8] = .white;
+
+    // 上限なしの手順長を基準にする
+    const full = findVCTSequence(&cells, .white, 6, 0, 0, false, .lenient);
+    try testing.expect(full.found);
+    const full_len = full.len;
+    try testing.expect(full_len > 1);
+
+    bitboard.initFromCells(&cells);
+    var limiter = TimeLimiter{ .start_time = 0, .time_limit = 0, .nodes = 0, .max_nodes = 0 };
+
+    // 上限 = 実際の手順長 → 「これ未満」を満たせないので見つからない
+    {
+        var context = VCTRecursiveContext{
+            .is_forbidden_trap = false,
+            .collect_branches = false,
+            .branches = undefined,
+            .branch_count = 0,
+        };
+        var seq: [64]Position = undefined;
+        var len: u8 = 0;
+        try testing.expect(!findVCTSequenceRecursive(&cells, .white, 0, 6, &limiter, &seq, &len, &context, full_len));
+    }
+
+    // 上限 = 手順長 + 1 → 従来どおり同じ手順が見つかる
+    {
+        var context = VCTRecursiveContext{
+            .is_forbidden_trap = false,
+            .collect_branches = false,
+            .branches = undefined,
+            .branch_count = 0,
+        };
+        var seq: [64]Position = undefined;
+        var len: u8 = 0;
+        try testing.expect(findVCTSequenceRecursive(&cells, .white, 0, 6, &limiter, &seq, &len, &context, full_len + 1));
+        try testing.expectEqual(full_len, len);
+        var i: u8 = 0;
+        while (i < len) : (i += 1) {
+            try testing.expectEqual(full.sequence[i].row, seq[i].row);
+            try testing.expectEqual(full.sequence[i].col, seq[i].col);
+        }
+    }
 }
