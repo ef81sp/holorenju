@@ -1,6 +1,14 @@
-// ⚠️ 連珠ルールの二重実装: 禁手判定は TS 側 `src/logic/renjuRules/forbiddenMoves.ts` と
-// 同義。片方だけ変更するとサイレントに食い違う（#19 で実害）。変更すると
-// `renjuParity.test.ts`（TS⇄Zig パリティテスト）が落ちる。両方を直すこと。
+// 連珠ルール判定モジュール（禁手専用ではない）
+//
+// 収録: `checkFive` / `checkOverline` / `isFiveLength`（五・長連）と
+// `checkForbiddenMove`（黒の三三・四四・長連）。
+//
+// - **禁手判定は Zig 単一ソース**。TS 側の実装は #43 で物理削除済みで、
+//   TS からは `src/logic/cpu/wasm/forbiddenAdapter.ts`（forbidden.wasm）経由で使う。
+// - ⚠️ **五・長連の判定だけは TS にも実装がある**（`src/logic/renjuRules/core.ts` の
+//   `checkFive` / `isFiveLength` / `checkOverline`）。片方だけ変更するとサイレントに
+//   食い違う（#19 / #125 で実害）。両方を直し、パリティテスト
+//   `src/logic/renjuRules/checkFiveParity.wasm.test.ts` が緑か確認すること。
 const board_mod = @import("board.zig");
 const jp = @import("jump_patterns.zig");
 const std = @import("std");
@@ -45,12 +53,18 @@ const ForbiddenContext = struct {
 /// 「五」の定義の SSoT（issue #125）。`checkFive` と `threats.collectLineFivePoints`
 /// はこの述語を経由すること。TS 側の SSoT は `src/logic/renjuRules/core.ts` の
 /// `isFiveLength`。
+///
+/// `.empty` を渡された場合は false（`else` で白扱いすると、空点を数える
+/// `getLineLength(.empty)` が空盤でも五を返してしまうため）。
 pub fn isFiveLength(length: u8, color: Cell) bool {
-    return if (color == .black) length == 5 else length >= 5;
+    return if (color == .white) length >= 5 else length == 5;
 }
 
 /// 五連をチェック（白は長連＝6連以上も五）
 pub fn checkFive(cells: []const Cell, row: u8, col: u8, color: Cell) bool {
+    // `.empty` は「石の色」ではない。getLineLength は空点も数えるので、
+    // ガードしないと空マスが 5 つ並んだだけで五になってしまう。
+    if (color == .empty) return false;
     for (DIRECTION_PAIR_INDICES) |dir_index| {
         if (isFiveLength(jp.getLineLength(cells, row, col, dir_index, color), color)) return true;
     }
@@ -368,6 +382,26 @@ test "checkFive: 白の長連（6連以上）は五" {
     var bc: u8 = 4;
     while (bc <= 9) : (bc += 1) black_cells[7 * BOARD_SIZE + bc] = .black;
     try std.testing.expect(!checkFive(&black_cells, 7, 9, .black));
+}
+
+test "isFiveLength: 色ごとの五の定義（.empty は常に false 側）" {
+    try std.testing.expect(!isFiveLength(4, .black));
+    try std.testing.expect(isFiveLength(5, .black));
+    try std.testing.expect(!isFiveLength(6, .black));
+
+    try std.testing.expect(!isFiveLength(4, .white));
+    try std.testing.expect(isFiveLength(5, .white));
+    try std.testing.expect(isFiveLength(6, .white));
+
+    // .empty は石の色ではない。白扱い（>= 5）で拾わないこと
+    try std.testing.expect(!isFiveLength(6, .empty));
+    try std.testing.expect(!isFiveLength(7, .empty));
+}
+
+test "checkFive: .empty は空盤でも五にならない" {
+    const CELL_COUNT = board_mod.CELL_COUNT;
+    const cells = [_]Cell{.empty} ** CELL_COUNT;
+    try std.testing.expect(!checkFive(&cells, 7, 7, .empty));
 }
 
 test "checkFive: #125 実測例 白 _WWWW_W のギャップを埋めると五" {

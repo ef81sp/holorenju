@@ -9,7 +9,7 @@
 
 /* eslint-disable no-bitwise -- ビットマスク操作に必要 */
 
-import { isFiveLength } from "@/logic/renjuRules/core";
+import { isFiveLength } from "@/logic/renjuRules";
 
 import { countLineBit } from "./lineCounting";
 import { CELL_LINES_FLAT } from "./lineMapping";

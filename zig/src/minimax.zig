@@ -219,6 +219,11 @@ fn hasFourInDirection(cells: []const Cell, row: u8, col: u8, dr: i8, dc: i8, col
 // =============================================================================
 
 /// analyzeFourAndThree: 四と活三の有無を分析（石配置済み前提）
+///
+/// ⚠️ `has_five` の判定が色盲（`count >= 5`）で、黒の長連（6 連以上＝禁手で五ではない）も
+/// 五として返す。#125 では「勝敗に効く五判定」（`forbidden.checkFive`）のみを
+/// `forbidden.isFiveLength` に揃え、ここは**意図的に未変更**とした
+/// （評価・move ordering 系の色盲な五扱いはまとめて別 issue #132 で扱う）。
 pub fn analyzeFourAndThree(cells: []const Cell, row: u8, col: u8, color: Cell) struct { has_five: bool, has_four: bool, has_open_three: bool } {
     const jp = @import("jump_patterns.zig");
     var has_four = false;

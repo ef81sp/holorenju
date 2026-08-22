@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   checkDraw,
   checkFive,
+  isFiveLength,
   checkWin,
   copyBoard,
   createEmptyBoard,
@@ -50,6 +51,28 @@ describe("copyBoard（盤面のコピー）", () => {
 
     expect(original[7][7]).toBe("black");
     expect(copied[7][7]).toBe("white");
+  });
+});
+
+describe("isFiveLength（五の定義）", () => {
+  it("黒はちょうど5のみ五", () => {
+    expect(isFiveLength(4, "black")).toBe(false);
+    expect(isFiveLength(5, "black")).toBe(true);
+    expect(isFiveLength(6, "black")).toBe(false);
+  });
+
+  it("白は5以上が五（長連も勝ち）", () => {
+    expect(isFiveLength(4, "white")).toBe(false);
+    expect(isFiveLength(5, "white")).toBe(true);
+    expect(isFiveLength(6, "white")).toBe(true);
+  });
+
+  it("空点（null）は型で弾かれる（実行時に渡っても白扱いしない）", () => {
+    // `PlayerColor` に絞っているので TS 上は渡せない。JS 境界から渡ってきた場合の
+    // 安全側の挙動（黒と同じ === 5）を固定する。
+    const asAny = isFiveLength as (l: number, c: unknown) => boolean;
+    expect(asAny(6, null)).toBe(false);
+    expect(asAny(7, null)).toBe(false);
   });
 });
 

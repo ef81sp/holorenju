@@ -34,6 +34,7 @@
 const std = @import("std");
 const board_mod = @import("board.zig");
 const bitboard = @import("bitboard.zig");
+const forbidden = @import("forbidden.zig");
 const ll = @import("line_lookup.zig");
 const scores = @import("scores.zig");
 
@@ -896,7 +897,6 @@ pub fn getStateEval(perspective: Cell, stm: StmMode) i32 {
 // Tests
 // ============================================================================
 
-const forbidden = @import("forbidden.zig");
 const evaluate = @import("evaluate.zig");
 
 test "initProspectTables runs and is idempotent" {

@@ -24,6 +24,9 @@ export fn checkForbiddenPointWasm(row: u8, col: u8) u8 {
 /// 黒はちょうど 5、白は 5 以上（白に長連禁手はない・#125）。1=五 / 0=五でない。
 /// TS の `renjuRules.checkFive` とのパリティ検証用の面。
 export fn checkFiveWasm(row: u8, col: u8, color: u8) u8 {
+    // 1=black / 2=white 以外（0=empty や範囲外）は @enumFromInt が未定義動作に
+    // なりうるので、境界で弾く。
+    if (color != 1 and color != 2) return 0;
     const c: board.Cell = @enumFromInt(color);
     return if (forbidden.checkFive(&board.board_cells, row, col, c)) 1 else 0;
 }
