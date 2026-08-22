@@ -265,9 +265,15 @@ export fn collectLineFivePointsWasm(row: u8, col: u8, dir_index: u8, color: u8) 
     }
 }
 
-/// 四に対する受け点。戻り値は row * 15 + col、受けが無い(null)場合は 255。
+/// 四に対する受け点（3 値・issue #124）。
+/// - 止め四: `row * 15 + col`（0..224）
+/// - 活四（防御不可）: 255 = `FOUR_DEFENSE_UNSTOPPABLE`
+/// - そもそも四ではない: 254 = `FOUR_DEFENSE_NOT_FOUR`
 export fn getFourDefensePositionWasm(row: u8, col: u8, color: u8) u8 {
     const c: board.Cell = @enumFromInt(color);
-    const d = quiescence.getFourDefensePosition(&board.board_cells, row, col, c) orelse return 255;
-    return d.row * board.BOARD_SIZE + d.col;
+    return switch (quiescence.getFourDefensePosition(&board.board_cells, row, col, c)) {
+        .not_four => 254,
+        .unstoppable => 255,
+        .block => |d| d.row * board.BOARD_SIZE + d.col,
+    };
 }

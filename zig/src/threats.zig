@@ -377,6 +377,28 @@ pub fn collectLineFivePoints(
 }
 
 
+/// その方向で「四」が成立しているかを判定する（四判定の SSoT・issue #124）
+///
+/// **四の定義**: あと 1 手で五にできる点がその方向に存在すること。
+/// これは `collectLineFivePoints` が列挙する五点が 1 つ以上あることと同値である。
+///
+/// 以前は「連続四なら端の空きを見る（黒は `isOverlineEnd` 補正）／跳び四なら
+/// 最も近いギャップだけを `isJumpFourOverline` で見る」という別基準で判定しており、
+/// 受け点側（`collectLineFivePoints`）と食い違っていた。同一ライン上に
+/// 「埋めると長連になるギャップ」と「埋めても五にならないギャップ」が併存すると
+/// 四でない手が四と判定され、受け点 0 個 → 防御不可 → 偽 VCF になっていた（issue #124）。
+///
+/// LUT (`queryPatternByCell`) の四パターン判定は候補の絞り込み（高速な足切り）にのみ使う。
+/// 最終判断は必ず五点の列挙で行う。
+pub fn isFourInDirection(cells: []const Cell, row: u8, col: u8, dir_idx: usize, color: Cell) bool {
+    const result = ll.queryPatternByCell(row, col, dir_idx, color);
+    if (result.count != 4 and !result.has_jump_four) return false;
+
+    const dir = DIRECTIONS[dir_idx];
+    var five_points = PositionList.init();
+    return collectLineFivePoints(cells, row, col, dir.dr, dir.dc, color, &five_points) > 0;
+}
+
 /// 跳び四の空き位置（ギャップ）を検出
 pub fn findJumpGapPosition(cells: []const Cell, row: u8, col: u8, dr: i8, dc: i8, color: Cell) ?Position {
     const r: i16 = row;

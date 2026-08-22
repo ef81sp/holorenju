@@ -52,24 +52,11 @@ pub fn classifyThreat(cells: []const Cell, row: u8, col: u8, color: Cell) Threat
     for (0..4) |i| {
         const result = ll.queryPatternByCell(row, col, i, color);
 
-        // 連続四（黒はオーバーライン補正）
-        if (result.count == 4) {
-            var end1_open = result.end1 == 0;
-            var end2_open = result.end2 == 0;
-            if (color == .black) {
-                if (end1_open) end1_open = !isOverlineEnd(cells, row, col, i, true);
-                if (end2_open) end2_open = !isOverlineEnd(cells, row, col, i, false);
-            }
-            if (end1_open or end2_open) {
-                has_four = true;
-            }
-        }
-
-        // 跳び四
-        if (!has_four and result.count != 4 and result.has_jump_four) {
-            if (!isJumpFourOverline(cells, row, col, DIRECTIONS[i].dr, DIRECTIONS[i].dc, color)) {
-                has_four = true;
-            }
+        // 四（連続四・跳び四とも `threats.isFourInDirection` に一本化・issue #124）。
+        // 「あと 1 手で五にできる点がその方向にある」が四の定義であり、
+        // 受け点（`collectLineFivePoints`）と同一基準になる。
+        if (!has_four and threats.isFourInDirection(cells, row, col, i, color)) {
+            has_four = true;
         }
 
         // 連続活三
@@ -463,24 +450,12 @@ pub fn checkDefenseCounterThreat(cells: []const Cell, row: u8, col: u8, opponent
     for (0..4) |i| {
         const result = ll.queryPatternByCell(row, col, i, opponent_color);
 
-        // 連続四（黒はオーバーライン補正）
-        if (result.count == 4) {
-            var end1_open = result.end1 == 0;
-            var end2_open = result.end2 == 0;
-            if (opponent_color == .black) {
-                if (end1_open) end1_open = !isOverlineEnd(cells, row, col, i, true);
-                if (end2_open) end2_open = !isOverlineEnd(cells, row, col, i, false);
-            }
-            if (end1_open or end2_open) {
-                return .four;
-            }
-        }
-
-        // 跳び四
-        if (result.count != 4 and result.has_jump_four) {
-            if (!isJumpFourOverline(cells, row, col, DIRECTIONS[i].dr, DIRECTIONS[i].dc, opponent_color)) {
-                return .four;
-            }
+        // 四（連続四・跳び四とも `threats.isFourInDirection` に一本化・issue #124）。
+        // ここを `getFourDefensePosition` と同一基準にしておかないと、
+        // 「.four と分類されたのに受け点が 0 個」という不整合が VCT の
+        // 保守側フォールバックを踏み続ける。
+        if (threats.isFourInDirection(cells, row, col, i, opponent_color)) {
+            return .four;
         }
 
         // 連続活三
@@ -578,7 +553,8 @@ fn checkSequenceBreaksByCF(
                 break;
             }
             if (ct == .four) {
-                const four_block_pos = quiescence.getFourDefensePosition(cells, pos.row, pos.col, opponent);
+                // .not_four / .unstoppable いずれも「この筋は追えない」＝保守側（#124）
+                const four_block_pos = quiescence.getFourDefensePosition(cells, pos.row, pos.col, opponent).blockPos();
                 if (four_block_pos == null) {
                     breaks = true;
                     break;
@@ -678,7 +654,7 @@ fn hasBreakingCounterFour(
         }
 
         // ブロック位置取得（null = 活四 → 防御不可）
-        const block_pos_opt = quiescence.getFourDefensePosition(cells, cf.row, cf.col, opponent);
+        const block_pos_opt = quiescence.getFourDefensePosition(cells, cf.row, cf.col, opponent).blockPos();
         if (block_pos_opt == null) {
             cells[cf_idx] = .empty;
             bitboard.removeStone(cf.row, cf.col);
@@ -827,7 +803,7 @@ fn evaluateCounterThreat(
         .win => return false,
         .four => {
             // 防御のカウンター四に対してブロック
-            const block_pos = quiescence.getFourDefensePosition(cells, defense_pos.row, defense_pos.col, opponent);
+            const block_pos = quiescence.getFourDefensePosition(cells, defense_pos.row, defense_pos.col, opponent).blockPos();
             if (block_pos == null) {
                 // 活四でブロック不可 → VCT不成立
                 return false;
@@ -1359,7 +1335,7 @@ fn findVCTSequenceRecursive(
 
             // ct=four: ブロック配置
             if (ct == .four) {
-                const block_pos = quiescence.getFourDefensePosition(cells, dp.row, dp.col, opponent);
+                const block_pos = quiescence.getFourDefensePosition(cells, dp.row, dp.col, opponent).blockPos();
                 if (block_pos == null) {
                     cells[def_idx] = .empty;
                     bitboard.removeStone(dp.row, dp.col);
@@ -1752,7 +1728,7 @@ fn buildBlockDefSubSequence(
         },
         .four => {
             const opponent = color.opposite();
-            const nested_block = quiescence.getFourDefensePosition(cells, defense_pos.row, defense_pos.col, opponent);
+            const nested_block = quiescence.getFourDefensePosition(cells, defense_pos.row, defense_pos.col, opponent).blockPos();
             if (nested_block == null) return result;
             const nb = nested_block.?;
             const nb_idx = @as(u16, nb.row) * BOARD_SIZE + nb.col;
@@ -1995,7 +1971,7 @@ pub fn findVCTSequenceFromFirstMove(
         var cont_is_forbidden = false;
 
         if (ct == .four) {
-            const block_pos = quiescence.getFourDefensePosition(cells, dp.row, dp.col, opponent);
+            const block_pos = quiescence.getFourDefensePosition(cells, dp.row, dp.col, opponent).blockPos();
             if (block_pos == null) {
                 cells[def_idx] = .empty;
                 bitboard.removeStone(dp.row, dp.col);
