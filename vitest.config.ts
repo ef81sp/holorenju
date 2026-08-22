@@ -38,6 +38,9 @@ export default defineConfig({
           globals: true,
           include: ["src/**/*.perf.test.ts"],
           environment: "node",
+          // unit と同じく wasm を事前ロードする。振り返り経路（detectForcedWin →
+          // validateVCTSequence → hasVCF）は forbidden wasm を要求する（#118）。
+          setupFiles: ["src/test-setup/wasm-preload.ts"],
           fileParallelism: false,
           testTimeout: 120000,
           pool: "forks",
