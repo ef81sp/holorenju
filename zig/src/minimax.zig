@@ -280,6 +280,12 @@ const ThreatBudget = struct {
     vct_nodes: u32,
 };
 
+/// **issue #119 注意**: `vct_nodes` は #119 以前は事実上ノーオペだった
+/// （`vct.zig` が `incrementNodes` を呼んでおらず、`vcf.zig` に共有 limiter を
+/// 渡したときしかノードが進まなかった）。#119 で VCT 経路がノードを計上する
+/// ようになり、この 500 は本当に効く上限になった＝プローブが VCT を主張しなく
+/// なる局面が増える。値そのものは「計上されていない前提」で決まった可能性が
+/// あるため据え置きとし、Elo 影響は commit-bench で測る。
 fn getThreatBudget(minimax_depth: u8) ThreatBudget {
     if (minimax_depth >= 4) {
         return .{ .vcf_depth = 8, .vcf_nodes = 200, .vct_depth = 4, .vct_nodes = 500 };

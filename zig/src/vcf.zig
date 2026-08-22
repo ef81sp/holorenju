@@ -338,6 +338,8 @@ pub const VCFSequenceResult = struct {
     len: u8,
     is_forbidden_trap: bool,
     found: bool,
+    /// この探索が消費したノード数（呼び出し側の共有 limiter へ加算するため。issue #119）
+    nodes: u32 = 0,
 };
 
 /// VCF手順全体を返す（反復深化）
@@ -369,7 +371,7 @@ pub fn findVCFSequence(
     // 反復深化: 浅い深度から探索し最短手順を優先
     var depth: u8 = 1;
     while (depth <= max_depth) : (depth += 1) {
-        if (isTimeExceeded(&limiter)) return result;
+        if (isTimeExceeded(&limiter)) break;
 
         var seq_len: u8 = 0;
         var is_forbidden_trap = false;
@@ -378,9 +380,11 @@ pub fn findVCFSequence(
             result.len = seq_len;
             result.is_forbidden_trap = is_forbidden_trap;
             result.found = true;
-            return result;
+            break;
         }
     }
+    // 呼び出し側（vct.zig など）が共有 limiter へ加算できるよう消費ノード数を返す（#119）
+    result.nodes = limiter.nodes;
     return result;
 }
 
@@ -477,6 +481,7 @@ pub fn findVCFSequenceFromFirstMove(
     cells[idx] = .empty;
     bitboard.removeStone(first_move.row, first_move.col);
 
+    result.nodes = continuation.nodes;
     if (!continuation.found) return result;
 
     // 手順を組み立て: [初手, 防御手, 継続手順...]

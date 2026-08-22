@@ -872,6 +872,20 @@ fn isTimeExceeded(limiter: *const TimeLimiter) bool {
     return (now - limiter.start_time) >= limiter.time_limit;
 }
 
+/// 探索ノードを 1 つ計上する（vcf.zig の同名関数と同じ役割。issue #119）
+///
+/// VCT 経路は長らく `incrementNodes` を一切呼んでおらず、`limiter.max_nodes` が
+/// ノーオペだった（`vcf_mod.hasVCF` に共有 limiter を渡したときだけ進んでいた）。
+/// 攻め手（OR ノード）を 1 手展開するごとに 1 ノードとして数える。
+fn incrementNodes(limiter: *TimeLimiter) void {
+    limiter.nodes +|= 1;
+}
+
+/// 独自 limiter で回した VCF 探索の消費ノードを共有 limiter へ加算する（issue #119）
+fn chargeVCFNodes(limiter: *TimeLimiter, vcf_result: vcf_mod.VCFSequenceResult) void {
+    limiter.nodes +|= vcf_result.nodes;
+}
+
 // =============================================================================
 // processBlockDefenses
 // =============================================================================
@@ -961,6 +975,10 @@ pub fn hasVCT(
         // hasVCT は公開 API でエントリガードを持たないため depth 0 でもプローブする。
         if (i == @as(usize, threat_moves.four_count) and
             opponentBlocksThreePursuitWithShallowVCF(cells, opponent, depth, limiter)) break;
+
+        // 攻め手 1 手 = 1 ノード（#119）
+        incrementNodes(limiter);
+        if (isTimeExceeded(limiter)) return false;
 
         const move = threat_buf[i];
         const move_idx = @as(u16, move.row) * BOARD_SIZE + move.col;
@@ -1082,6 +1100,8 @@ pub const VCTSequenceResult = struct {
     /// 詰み木 root node index（g_tree_arena 内）。TREE_TERMINAL = 木なし。
     /// collect_branches 有効時のみ構築される。
     tree_root: u16 = ft.TREE_TERMINAL,
+    /// この探索が消費したノード数（呼び出し側の共有 limiter へ加算するため。issue #119）
+    nodes: u32 = 0,
 };
 
 /// 詰み木アリーナ（review 専用・collect_branches 時のみ構築）。
@@ -1133,6 +1153,27 @@ pub fn findVCTSequence(
         .max_nodes = max_nodes,
     };
 
+    // 詰み木アリーナを初期化（collect_branches 時のみ構築する）
+    if (collect_branches) g_tree_arena.reset();
+
+    var result = findVCTSequenceWithLimiter(cells, color, max_depth, &limiter, collect_branches, mode);
+    result.nodes = limiter.nodes;
+    return result;
+}
+
+/// findVCTSequence の本体（limiter 共有版）
+///
+/// bitboard/line_lookup の初期化と詰み木アリーナの reset は行わない。
+/// 呼び出し元がすでに探索中で、アリーナへノードを積んでいる途中でも呼べるようにするため
+/// （`findVCTSequenceFromFirstMove` の collect モードから使う）。
+fn findVCTSequenceWithLimiter(
+    cells: []Cell,
+    color: Cell,
+    max_depth: u8,
+    limiter: *TimeLimiter,
+    collect_branches: bool,
+    mode: ResilienceMode,
+) VCTSequenceResult {
     var result = VCTSequenceResult{
         .sequence = undefined,
         .len = 0,
@@ -1142,18 +1183,16 @@ pub fn findVCTSequence(
         .branch_count = 0,
     };
 
-    // 詰み木アリーナを初期化（collect_branches 時のみ構築する）
-    if (collect_branches) g_tree_arena.reset();
-
     const opponent = color.opposite();
 
     // 相手に活三・ミセ手・VCFがあればVCT不成立（四追いでしか勝てない）
-    if (opponentBlocksThreePursuitAtRoot(cells, opponent, &limiter)) {
-        return tryVCFOnly(cells, color, &limiter, &result, collect_branches);
+    if (opponentBlocksThreePursuitAtRoot(cells, opponent, limiter)) {
+        return tryVCFOnly(cells, color, limiter, &result, collect_branches);
     }
 
     // VCFが先に成立する場合はVCF手順を返す
-    const vcf_seq = vcf_mod.findVCFSequence(cells, color, vcf_mod.VCF_MAX_DEPTH, time_limit, max_nodes);
+    const vcf_seq = vcf_mod.findVCFSequence(cells, color, vcf_mod.VCF_MAX_DEPTH, limiter.time_limit, limiter.max_nodes);
+    chargeVCFNodes(limiter, vcf_seq);
     if (vcf_seq.found) {
         var i: u8 = 0;
         while (i < vcf_seq.len) : (i += 1) {
@@ -1170,7 +1209,7 @@ pub fn findVCTSequence(
     // 反復深化
     var depth: u8 = 1;
     while (depth <= max_depth) : (depth += 1) {
-        if (isTimeExceeded(&limiter)) return result;
+        if (isTimeExceeded(limiter)) return result;
 
         var seq_len: u8 = 0;
         var context = VCTRecursiveContext{
@@ -1179,7 +1218,7 @@ pub fn findVCTSequence(
             .branches = undefined,
             .branch_count = 0,
         };
-        const found = findVCTSequenceRecursive(cells, color, 0, depth, &limiter, &result.sequence, &seq_len, &context);
+        const found = findVCTSequenceRecursive(cells, color, 0, depth, limiter, &result.sequence, &seq_len, &context);
         if (found) {
             // カウンターフォー耐性検証: 活三を打つ段階で相手のカウンターフォーが
             // 残り手順を破壊するならVCT不成立扱い → VCF-onlyにフォールバック
@@ -1194,7 +1233,7 @@ pub fn findVCTSequence(
                     .branches = undefined,
                     .branch_count = 0,
                 };
-                return tryVCFOnly(cells, color, &limiter, &fallback, collect_branches);
+                return tryVCFOnly(cells, color, limiter, &fallback, collect_branches);
             }
             result.len = seq_len;
             result.is_forbidden_trap = context.is_forbidden_trap;
@@ -1215,6 +1254,7 @@ pub fn findVCTSequence(
 /// VCF-onlyフォールバック: 相手にVCT阻害要因があるとき
 fn tryVCFOnly(cells: []Cell, color: Cell, limiter: *TimeLimiter, result: *VCTSequenceResult, collect_branches: bool) VCTSequenceResult {
     const vcf_seq = vcf_mod.findVCFSequence(cells, color, vcf_mod.VCF_MAX_DEPTH, limiter.time_limit, if (limiter.max_nodes > 0) limiter.max_nodes else 0);
+    chargeVCFNodes(limiter, vcf_seq);
     if (vcf_seq.found) {
         var i: u8 = 0;
         while (i < vcf_seq.len) : (i += 1) {
@@ -1245,6 +1285,7 @@ fn findVCTSequenceRecursive(
 
     // VCF手順に委譲
     const vcf_seq = vcf_mod.findVCFSequence(cells, color, vcf_mod.VCF_MAX_DEPTH, 0, 0);
+    chargeVCFNodes(limiter, vcf_seq);
     if (vcf_seq.found) {
         var i: u8 = 0;
         while (i < vcf_seq.len) : (i += 1) {
@@ -1296,6 +1337,10 @@ fn findVCTSequenceRecursive(
                 opponentBlocksThreePursuitWithShallowVCF(cells, opponent, depth, limiter);
             if (blocked) break;
         }
+
+        // 攻め手 1 手 = 1 ノード（#119）。予算切れなら「ここまでの best」を返す。
+        incrementNodes(limiter);
+        if (isTimeExceeded(limiter)) break;
 
         // この脅威手の探索でアリーナへ積むノードの起点。採用されなければ巻き戻す。
         const threat_snap = g_tree_arena.snapshot();
@@ -1434,6 +1479,7 @@ fn findVCTSequenceRecursive(
                 const vcf_depth = @min(CT_THREE_VCF_MAX_DEPTH, vcf_mod.VCF_MAX_DEPTH);
                 if (context.collect_branches or !has_first_defense) {
                     const vcf_result = vcf_mod.findVCFSequence(cells, color, vcf_depth, 0, 0);
+                    chargeVCFNodes(limiter, vcf_result);
                     if (!vcf_result.found) {
                         cells[def_idx] = .empty;
                         bitboard.removeStone(dp.row, dp.col);
@@ -1746,6 +1792,7 @@ fn buildBlockDefSubSequence(
         .three => {
             const vcf_depth = @min(CT_THREE_VCF_MAX_DEPTH, vcf_mod.VCF_MAX_DEPTH);
             const vcf_result = vcf_mod.findVCFSequence(cells, color, vcf_depth, 0, 0);
+            chargeVCFNodes(limiter, vcf_result);
             if (!vcf_result.found) return result;
             var i: u8 = 0;
             while (i < vcf_result.len) : (i += 1) {
@@ -2039,6 +2086,7 @@ pub fn findVCTSequenceFromFirstMove(
         } else if (ct == .three) {
             const vcf_depth = @min(CT_THREE_VCF_MAX_DEPTH, vcf_mod.VCF_MAX_DEPTH);
             const vcf_result = vcf_mod.findVCFSequence(cells, color, vcf_depth, 0, 0);
+            chargeVCFNodes(&limiter, vcf_result);
             if (vcf_result.found) {
                 var si: u8 = 0;
                 while (si < vcf_result.len) : (si += 1) {
@@ -2052,6 +2100,7 @@ pub fn findVCTSequenceFromFirstMove(
             // ct=none: 通常のVCT探索
             _ = collect_branches;
             const sub = findVCTSequence(cells, color, max_depth, time_limit, max_nodes, false, .lenient);
+            limiter.nodes +|= sub.nodes;
             if (sub.found) {
                 var si: u8 = 0;
                 while (si < sub.len) : (si += 1) {
@@ -2594,10 +2643,14 @@ test "phantom: 偽の追い詰め(VCT)を防御側strictのみ棄却・攻めlen
     for (whites) |w| cells[@as(usize, w[0]) * BOARD_SIZE + w[1]] = .white;
     bitboard.initFromCells(&cells);
 
+    // ノード予算は 0（無制限）で比較する。#119 で VCT 経路がノードを計上する
+    // ようになり、旧来ここで使っていた 500 ノードは本当に効く上限になったため
+    // （この局面の lenient VCT は 500 ノードでは見つからない）。この検査の主眼は
+    // 予算ではなく lenient / strict の非対称なので、予算差を排除して比べる。
     // lenient（攻め）は手を返す＝攻めの探索力は不変
-    try testing.expect(findVCTMoveWithBudget(&cells, .black, 4, 0, 500) != null);
+    try testing.expect(findVCTMoveWithBudget(&cells, .black, 4, 0, 0) != null);
     // strict（防御）は null ＝幻の被詰みを棄却
-    try testing.expect(findVCTMoveWithBudgetStrict(&cells, .black, 4, 0, 500) == null);
+    try testing.expect(findVCTMoveWithBudgetStrict(&cells, .black, 4, 0, 0) == null);
 }
 
 test "getThreatDefensePositions: 活三の受けに夏止め位置を含む（片側ブロック）" {
@@ -3214,4 +3267,85 @@ test "opponentBlocksThreePursuitWithShallowVCF: 相手VCFはノード深さ1ま�
     try testing.expect(!opponentBlocksThreePursuitWithShallowVCF(&cells, .white, OPPONENT_VCF_PROBE_MAX_NODE_DEPTH + 1, &limiter));
     // プローブの消費ノードは呼び出し元 limiter に加算される（#119 の部分払い）
     try testing.expect(limiter.nodes > 0);
+}
+
+// =============================================================================
+// issue #119: VCT 経路のノード計上
+// =============================================================================
+
+/// 四が一切作れない（＝VCF 経路がノードを消費しない）局面を作る。
+///
+/// 黒 (7,7)(7,8) の 2 連だけ。脅威手は活三を作る手のみで四は無いので、
+/// `vcf_mod.hasVCF` は四手の列挙で 0 手＝ノード消費 0 になる。
+/// したがって計上されたノードはすべて VCT 経路由来と言い切れる。
+fn setupThreeOnlyPosition(cells: []Cell) void {
+    cells[7 * BOARD_SIZE + 7] = .black;
+    cells[7 * BOARD_SIZE + 8] = .black;
+}
+
+test "hasVCT: 四の無い局面でも攻め手をノードとして計上する（issue #119）" {
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    setupThreeOnlyPosition(&cells);
+    bitboard.initFromCells(&cells);
+
+    var limiter = TimeLimiter{
+        .start_time = 0,
+        .time_limit = 0,
+        .nodes = 0,
+        .max_nodes = 0,
+    };
+
+    // 前提: 黒に四は無い＝VCF はノードを消費しない（修正前はここが 0 のままだった）
+    try testing.expect(!vcf_mod.hasVCF(&cells, .black, 0, &limiter, vcf_mod.VCF_MAX_DEPTH));
+    try testing.expectEqual(@as(u32, 0), limiter.nodes);
+
+    _ = hasVCT(&cells, .black, 0, &limiter, VCT_MAX_DEPTH);
+    try testing.expect(limiter.nodes > 0);
+}
+
+test "hasVCT: max_nodes が探索を打ち切る（issue #119）" {
+    // 「四で相手の活三を潰してから三で追う」ケース（無制限なら true）と同じ局面。
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[7 * BOARD_SIZE + 4] = .white;
+    cells[7 * BOARD_SIZE + 5] = .white;
+    cells[7 * BOARD_SIZE + 6] = .white;
+    cells[10 * BOARD_SIZE + 5] = .white;
+    cells[10 * BOARD_SIZE + 6] = .white;
+    cells[11 * BOARD_SIZE + 7] = .white;
+    cells[12 * BOARD_SIZE + 7] = .white;
+    cells[7 * BOARD_SIZE + 3] = .black;
+    cells[4 * BOARD_SIZE + 4] = .black;
+    cells[5 * BOARD_SIZE + 5] = .black;
+    cells[6 * BOARD_SIZE + 6] = .black;
+    bitboard.initFromCells(&cells);
+
+    var unlimited = TimeLimiter{ .start_time = 0, .time_limit = 0, .nodes = 0, .max_nodes = 0 };
+    try testing.expect(hasVCT(&cells, .white, 0, &unlimited, VCT_MAX_DEPTH));
+
+    var tight = TimeLimiter{ .start_time = 0, .time_limit = 0, .nodes = 0, .max_nodes = 1 };
+    try testing.expect(!hasVCT(&cells, .white, 0, &tight, VCT_MAX_DEPTH));
+}
+
+test "findVCTSequence: 消費ノード数を結果に返す（issue #119）" {
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    setupThreeOnlyPosition(&cells);
+
+    const result = findVCTSequence(&cells, .black, VCT_MAX_DEPTH, 0, 0, false, .lenient);
+    try testing.expect(!result.found);
+    // 修正前は VCT 経路が一切ノードを進めなかったため 0 だった
+    try testing.expect(result.nodes > 0);
+}
+
+test "findVCTSequence: max_nodes が探索を打ち切る（issue #119）" {
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    setupIssue27Position(&cells);
+
+    const unlimited = findVCTSequence(&cells, .black, VCT_MAX_DEPTH, 0, 0, false, .lenient);
+    const tight = findVCTSequence(&cells, .black, VCT_MAX_DEPTH, 0, 1, false, .lenient);
+    // 予算 1 ノードでは無制限探索より消費が小さい（＝上限が機能している）
+    try testing.expect(tight.nodes < unlimited.nodes);
 }
