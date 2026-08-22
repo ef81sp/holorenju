@@ -15,6 +15,7 @@ import {
   getPatternScore,
   getPatternType,
 } from "../evaluation/directionAnalysis";
+import { PATTERN_SCORES } from "../evaluation/patternScores";
 import { getDirectionPattern } from "./adapter";
 import { CELL_LINES_FLAT } from "./lineMapping";
 import {
@@ -91,8 +92,9 @@ describe("PACKED_TO_SCORE", () => {
         continue;
       }
       const expected = getPatternScore({ count, end1, end2 }, color);
-      // FIVE(100000) は Int16 clamp されるが、count>=5 は早期リターンで使われない
-      if (count >= 5 && expected !== 0) {
+      // FIVE(100000) は Int16 clamp される。五になる packed 値は minimax の
+      // 勝敗判定で処理されるため参照されない（黒の長連 = 0 は比較対象に残す）
+      if (expected === PATTERN_SCORES.FIVE) {
         continue;
       }
       expect(

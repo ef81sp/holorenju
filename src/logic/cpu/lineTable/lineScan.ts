@@ -108,10 +108,14 @@ function buildPackedToType(color: PlayerColor): Uint8Array {
  * packed byte → score (getPatternScore と等価)。色ごとに 256 entries × 2 bytes
  *
  * 黒の長連（count >= 6）は五ではなく 0 点なので、テーブルは色で分かれる（#132）。
+ * 黒テーブルは count >= 6 が 0、白テーブルは count >= 5 が FIVE（clamp 後の値）。
  *
  * FIVE(100000) は Int16Array の範囲外で clamp されるが、
- * 五連は minimax の勝敗判定で処理されるため、PACKED_TO_SCORE 経由での参照は
- * count <= 4 のパターンのみ（全て Int16 範囲内: max OPEN_FOUR=10000）。
+ * 五連は minimax の勝敗判定で処理されるため、五になる packed 値は参照されない
+ * （参照されるのは count <= 4 と黒の長連 = 0 のみ。max OPEN_FOUR=10000）。
+ *
+ * ⚠️ 本番探索からの消費者はゼロ（探索は WASM 専用）。テスト＝パリティ検証専用の
+ * 参照実装として残っている（#43 の死蔵棚卸し候補）。
  */
 export let PACKED_TO_SCORE: Record<PlayerColor, Int16Array> = {
   black: buildPackedToScore("black"),

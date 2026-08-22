@@ -4,6 +4,7 @@ import {
   checkDraw,
   checkFive,
   isFiveLength,
+  isOverlineLength,
   checkWin,
   copyBoard,
   createEmptyBoard,
@@ -73,6 +74,30 @@ describe("isFiveLength（五の定義）", () => {
     const asAny = isFiveLength as (l: number, c: unknown) => boolean;
     expect(asAny(6, null)).toBe(false);
     expect(asAny(7, null)).toBe(false);
+  });
+});
+
+describe("isOverlineLength（長連の定義）", () => {
+  it("黒は6以上が長連", () => {
+    expect(isOverlineLength(5, "black")).toBe(false);
+    expect(isOverlineLength(6, "black")).toBe(true);
+    expect(isOverlineLength(10, "black")).toBe(true);
+  });
+
+  it("白に長連は無い（6以上は五）", () => {
+    expect(isOverlineLength(6, "white")).toBe(false);
+    expect(isOverlineLength(10, "white")).toBe(false);
+  });
+
+  it("isFiveLength と排他（同じ長さで両方 true にならない）", () => {
+    for (const color of ["black", "white"] as const) {
+      for (let length = 0; length <= 15; length++) {
+        expect(
+          isFiveLength(length, color) && isOverlineLength(length, color),
+          `length=${length} color=${color}`,
+        ).toBe(false);
+      }
+    }
   });
 });
 

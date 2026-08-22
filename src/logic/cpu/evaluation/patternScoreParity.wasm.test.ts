@@ -33,6 +33,13 @@ const COLORS: { name: PlayerColor; code: number }[] = [
   { name: "white", code: CELL.WHITE },
 ];
 
+/**
+ * `.empty` は「石の色」ではないので本来渡されない（TS 側は `PlayerColor` 型で
+ * 弾いている）。Zig 側は黒扱いにフォールバックする＝空点が五になることはない、
+ * という安全側の挙動だけを確認しておく。
+ */
+const EMPTY_FALLBACK_IS_BLACK = true;
+
 /** Zig `PatternType` の enum 値 → TS の PatternType 文字列 */
 const TYPE_CODE_TO_NAME: PatternType[] = [
   null,
@@ -75,6 +82,27 @@ describe("getPatternScore / getPatternType の TS⇄Zig パリティ", () => {
     }
   });
 
+  it("color=.empty は黒扱いにフォールバックする（空点が五にならない）", () => {
+    expect(EMPTY_FALLBACK_IS_BLACK).toBe(true);
+    for (let count = 6; count <= MAX_COUNT; count++) {
+      expect(
+        wasm.wasmGetPatternScore(
+          count,
+          END_STATE.EMPTY,
+          END_STATE.EMPTY,
+          CELL.EMPTY,
+        ),
+        `count=${count}`,
+      ).toBe(0);
+    }
+    // ちょうど 5 は黒と同じく五
+    expect(
+      wasm.wasmGetPatternScore(5, END_STATE.EMPTY, END_STATE.EMPTY, CELL.EMPTY),
+    ).toBe(
+      wasm.wasmGetPatternScore(5, END_STATE.EMPTY, END_STATE.EMPTY, CELL.BLACK),
+    );
+  });
+
   // #132 の本体: 色盲だったころは黒の長連も FIVE(100000) を返していた
   it("黒の長連（6 連以上）は 0 点・null、白の長連は五（両実装）", () => {
     for (let count = 6; count <= MAX_COUNT; count++) {
@@ -92,14 +120,16 @@ describe("getPatternScore / getPatternType の TS⇄Zig パリティ", () => {
         `ts black count=${count}`,
       ).toBe(0);
       expect(
-        wasm.wasmGetPatternType(
-          count,
-          END_STATE.EMPTY,
-          END_STATE.EMPTY,
-          CELL.WHITE,
-        ),
+        TYPE_CODE_TO_NAME[
+          wasm.wasmGetPatternType(
+            count,
+            END_STATE.EMPTY,
+            END_STATE.EMPTY,
+            CELL.WHITE,
+          )
+        ] ?? null,
         `zig white count=${count}`,
-      ).toBe(1); // five
+      ).toBe("five");
     }
   });
 });

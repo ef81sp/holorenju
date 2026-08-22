@@ -13,11 +13,18 @@ const DIRECTIONS = board_mod.DIRECTIONS;
 /// パターンからスコアを計算（getPatternScore 相当）
 ///
 /// 五の判定は `forbidden.isFiveLength` に委ねる（SSoT・#125）。黒はちょうど 5 連、
-/// 白は 5 連以上が五。**黒の 6 連以上は長連＝禁手なので五でも四でもなく 0 点**（#132）。
+/// 白は 5 連以上が五。**黒の 6 連以上は長連＝禁手なので五でも四でもなく 0 点**（#132、
+/// `forbidden.isOverlineLength` と同値）。
+///
+/// `color` に `.empty` を渡してはいけない（黒扱いになる）。呼び出し元はいずれも
+/// 実際に石を置く色を渡す。
+///
+/// ホットパス（`position_eval.computeAttackScore` から 1 手あたり 4 方向）なので、
+/// count 0..4 は先頭の `count >= 5` 1 比較だけで switch に落ちるようにしている。
 pub fn getPatternScore(count: u8, end1: EndState, end2: EndState, color: Cell) i32 {
-    if (forbidden.isFiveLength(count, color)) return scores.FIVE;
-    // ここに来る count >= 5 は黒の長連のみ（count == 5 は黒白とも五）
-    if (count >= 5) return 0;
+    // count >= 5 は「五」か「黒の長連」のいずれか。isFiveLength が false なら
+    // 残るのは黒の長連だけ（= isOverlineLength(count, color)）。
+    if (count >= 5) return if (forbidden.isFiveLength(count, color)) scores.FIVE else 0;
 
     const both_open = end1 == .empty and end2 == .empty;
     const one_open = end1 == .empty or end2 == .empty;
@@ -44,10 +51,9 @@ pub const PatternType = enum(u8) {
 };
 
 /// 五の判定は `getPatternScore` と同じく `forbidden.isFiveLength`（#125）。
-/// 黒の 6 連以上（長連＝禁手）は `.none`（#132）。
+/// 黒の 6 連以上（長連＝禁手）は `.none`（#132）。`color` の扱いも同じ。
 pub fn getPatternType(count: u8, end1: EndState, end2: EndState, color: Cell) PatternType {
-    if (forbidden.isFiveLength(count, color)) return .five;
-    if (count >= 5) return .none;
+    if (count >= 5) return if (forbidden.isFiveLength(count, color)) .five else .none;
 
     const both_open = end1 == .empty and end2 == .empty;
     const one_open = end1 == .empty or end2 == .empty;
