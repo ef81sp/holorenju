@@ -6,7 +6,7 @@
 
 import type { BoardState, Position } from "@/types/game";
 
-import { isValidPosition } from "@/logic/renjuRules";
+import { isFiveLength, isValidPosition } from "@/logic/renjuRules";
 
 /**
  * ライン上の空点のうち、その方向で「埋めると五になる」点を列挙する
@@ -26,9 +26,8 @@ import { isValidPosition } from "@/logic/renjuRules";
  * - 黒: ちょうど 5（6 以上は長連なので五ではない）
  * - 白: 5 以上（白に長連の制限は無い）
  *
- * 白を `>= 5` にしているのは意図的である。`renjuRules` の `checkFive` は白でも
- * `== 5` で判定しており、白の長連（6 連以上）を五と認めない（定義不一致・#125）。
- * 連珠ルール上は白の長連は勝ちなので、受け点の列挙ではルールに従って `>= 5` を採る。
+ * 五の判定そのものは `renjuRules` の `isFiveLength`（SSoT）に委ねる。#125 で
+ * `checkFive` 側も白 `>= 5` に揃えたので、コードベース内で定義は 1 つになっている。
  *
  * 方向限定である点が重要: `checkFive` は 4 方向すべてを見るため、
  * 別ラインの五点まで拾ってしまい「この四の受け」という意味からずれる。
@@ -40,6 +39,42 @@ export function collectLineFivePoints(
   dr: number,
   dc: number,
   color: "black" | "white",
+): Position[] {
+  return scanLineFivePoints(board, row, col, dr, dc, color, false);
+}
+
+/**
+ * `collectLineFivePoints` の存在判定版（五点が 1 つでもあるか）
+ *
+ * 「四かどうか」を聞くだけの呼び出し（`isFourInDirection` など）は個数も座標も要らない。
+ * 最初の 1 点で打ち切り、配列の確保も省く。
+ * **定義は共有**（実体は `scanLineFivePoints`）なので SSoT は保たれる。
+ * Zig 側 `threats.hasLineFivePoint` と対応する。
+ */
+export function hasLineFivePoint(
+  board: BoardState,
+  row: number,
+  col: number,
+  dr: number,
+  dc: number,
+  color: "black" | "white",
+): boolean {
+  return scanLineFivePoints(board, row, col, dr, dc, color, true).length > 0;
+}
+
+/**
+ * 五点走査の本体。`collectLineFivePoints` / `hasLineFivePoint` が共有する唯一の定義。
+ *
+ * @param stopAtFirst true なら最初の 1 点で打ち切る（存在判定用）
+ */
+function scanLineFivePoints(
+  board: BoardState,
+  row: number,
+  col: number,
+  dr: number,
+  dc: number,
+  color: "black" | "white",
+  stopAtFirst: boolean,
 ): Position[] {
   const points: Position[] = [];
   for (let i = -5; i <= 5; i++) {
@@ -54,9 +89,11 @@ export function collectLineFivePoints(
     // countLine は起点を色に関係なく 1 と数えるので、空点に対して呼べば
     // 「そこに color を置いたときの連の長さ」になる（盤面を書き換える必要はない）。
     const total = countLine(board, r, c, dr, dc, color);
-    const isFive = color === "black" ? total === 5 : total >= 5;
-    if (isFive) {
+    if (isFiveLength(total, color)) {
       points.push({ row: r, col: c });
+      if (stopAtFirst) {
+        return points;
+      }
     }
   }
   return points;

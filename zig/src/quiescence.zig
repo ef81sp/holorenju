@@ -132,6 +132,7 @@ pub fn getFourDefensePosition(cells: []const Cell, last_row: u8, last_col: u8, c
     var first_defense: ?Position = null;
 
     for (DIRECTIONS, 0..) |dir, i| {
+        // NOTE: この分岐は 5 箇所に複製されている。SSoT 統合は issue #134。
         const result = ll.queryPatternByCell(last_row, last_col, i, color);
         if (result.count != 4 and !result.has_jump_four) continue;
 
