@@ -650,6 +650,7 @@ fn hasBreakingCounterFour(
     sequence: []const Position,
     attack_index: usize,
     mode: ResilienceMode,
+    limiter: ?*TimeLimiter,
 ) bool {
     const opponent = color.opposite();
 
@@ -710,13 +711,15 @@ fn hasBreakingCounterFour(
             // 白相手の場合、三三・四四も即勝ち
             if (opponent == .white and hasDoubleThreeForWhite(cells)) break :blk true;
             var probe_limiter = TimeLimiter{
-                .start_time = 0,
-                .time_limit = 0,
+                .start_time = if (limiter) |l| l.start_time else 0,
+                .time_limit = if (limiter) |l| l.time_limit else 0,
                 .nodes = 0,
-                .max_nodes = 3000,
+                .max_nodes = COUNTER_FOUR_VCF_PROBE_MAX_NODES,
             };
-            if (vcf_mod.hasVCF(cells, opponent, 0, &probe_limiter, vcf_mod.VCF_MAX_DEPTH)) break :blk true;
-            break :blk false;
+            const found = vcf_mod.hasVCF(cells, opponent, 0, &probe_limiter, vcf_mod.VCF_MAX_DEPTH);
+            // プローブの消費ノードも親の予算に計上する（issue #119）
+            if (limiter) |l| l.charge(probe_limiter.nodes);
+            break :blk found;
         };
         if (opp_has_threat) {
             cells[bp_idx] = .empty;
@@ -745,11 +748,15 @@ fn hasBreakingCounterFour(
 /// TS版 isResilientToCounterFours を移植。
 /// 各攻撃手（活三）の段階で、相手のカウンターフォーが手順を破壊しないことを確認する。
 /// 四・五を作る攻撃手はチェック対象外（相手は必ず防御を強いられるため）。
+/// カウンターフォー耐性検証の相手 VCF プローブのノード上限
+const COUNTER_FOUR_VCF_PROBE_MAX_NODES: u32 = 3000;
+
 pub fn isResilientToCounterFours(
     cells: []Cell,
     color: Cell,
     sequence: []const Position,
     mode: ResilienceMode,
+    limiter: ?*TimeLimiter,
 ) bool {
     const opponent = color.opposite();
 
@@ -779,7 +786,7 @@ pub fn isResilientToCounterFours(
             const is_five = forbidden.checkFive(cells, pos.row, pos.col, color);
             const is_four = quiescence.createsFour(cells, pos.row, pos.col, color);
             if (!is_five and !is_four) {
-                if (hasBreakingCounterFour(cells, color, sequence, i, mode)) {
+                if (hasBreakingCounterFour(cells, color, sequence, i, mode, limiter)) {
                     resilient = false;
                     break;
                 }
@@ -851,7 +858,7 @@ fn evaluateCounterThreat(
         },
         .three => {
             // 防御側が活三 → VCFのみで勝てるか
-            if (isTimeExceeded(limiter)) return false;
+            if (limiter.exceeded()) return false;
             const vcf_depth = @min(CT_THREE_VCF_MAX_DEPTH, vcf_mod.VCF_MAX_DEPTH);
             return vcf_mod.hasVCF(cells, color, 0, limiter, vcf_depth);
         },
@@ -862,29 +869,11 @@ fn evaluateCounterThreat(
     }
 }
 
-fn isTimeExceeded(limiter: *const TimeLimiter) bool {
-    if (limiter.max_nodes > 0 and limiter.nodes >= limiter.max_nodes) {
-        return true;
-    }
-    if (limiter.time_limit == 0) return false;
-    const now = getTimestampMs();
-    if (now == 0) return false;
-    return (now - limiter.start_time) >= limiter.time_limit;
-}
-
-/// 探索ノードを 1 つ計上する（vcf.zig の同名関数と同じ役割。issue #119）
+/// 予算判定・ノード計上は `TimeLimiter` のメソッド（vcf.zig）が SSoT。
 ///
-/// VCT 経路は長らく `incrementNodes` を一切呼んでおらず、`limiter.max_nodes` が
-/// ノーオペだった（`vcf_mod.hasVCF` に共有 limiter を渡したときだけ進んでいた）。
-/// 攻め手（OR ノード）を 1 手展開するごとに 1 ノードとして数える。
-fn incrementNodes(limiter: *TimeLimiter) void {
-    limiter.nodes +|= 1;
-}
-
-/// 独自 limiter で回した VCF 探索の消費ノードを共有 limiter へ加算する（issue #119）
-fn chargeVCFNodes(limiter: *TimeLimiter, vcf_result: vcf_mod.VCFSequenceResult) void {
-    limiter.nodes +|= vcf_result.nodes;
-}
+/// VCT 経路は #119 以前 `bump` 相当を一切呼んでおらず `max_nodes` がノーオペだった
+/// （`vcf_mod.hasVCF` に共有 limiter を渡したときだけ進んでいた）。
+/// いまは攻め手（OR ノード）を 1 手展開するごとに 1 ノードとして数える。
 
 // =============================================================================
 // processBlockDefenses
@@ -953,7 +942,7 @@ pub fn hasVCT(
     max_depth: u8,
 ) bool {
     if (depth >= max_depth) return false;
-    if (isTimeExceeded(limiter)) return false;
+    if (limiter.exceeded()) return false;
 
     // まずVCFを試す
     if (vcf_mod.hasVCF(cells, color, 0, limiter, vcf_mod.VCF_MAX_DEPTH)) {
@@ -977,8 +966,8 @@ pub fn hasVCT(
             opponentBlocksThreePursuitWithShallowVCF(cells, opponent, depth, limiter)) break;
 
         // 攻め手 1 手 = 1 ノード（#119）
-        incrementNodes(limiter);
-        if (isTimeExceeded(limiter)) return false;
+        limiter.bump();
+        if (limiter.exceeded()) return false;
 
         const move = threat_buf[i];
         const move_idx = @as(u16, move.row) * BOARD_SIZE + move.col;
@@ -1130,24 +1119,35 @@ const DefenseSeqEntry = struct {
     child_node: u16 = ft.TREE_TERMINAL,
 };
 
-const MAX_DEFENSE_ENTRIES = 20;
+/// 1ノードあたりの受け手の最大数（詰み木の SSoT は forced_win_tree.zig）
+const MAX_DEFENSE_ENTRIES = ft.MAX_DEFENSES_PER_NODE;
 
-/// `MAX_DEFENSE_ENTRIES` に達して受け分岐を切り捨てたか（issue #122 レバー4）
+
+/// 手順長 α カットの「上限なし」
 ///
-/// 収集モードの詰み木は 1 ノードあたり `MAX_DEFENSE_ENTRIES` 件までしか受けを
-/// 持てない。超過分は黙って落ちる（詰み判定は壊れないが、表示の受け分岐が欠ける）。
-/// 受け点を増やす修正（#115 / #121）で到達確率が上がったため、
-/// 少なくとも「起きたかどうか」を観測できるようにしておく。
-/// 探索エントリ（`findVCTSequence` / `findVCTSequenceFromFirstMove`）で false に戻す。
-pub var g_defense_entries_truncated: bool = false;
+/// カットは「`max_len` 未満なら採用」なので、sequence バッファ長 64 ちょうどの
+/// 手順も採用できるように 65 にする（64 にすると長さ 64 の手順だけ落ちる）。
+const SEQ_LEN_UNBOUNDED: u8 = 65;
 
-/// 受け分岐の切り捨てを記録する
-fn noteDefenseEntriesTruncated() void {
-    g_defense_entries_truncated = true;
+/// 受けエントリを 1 件確保する（issue #122 レバー4 / レビュー should-12）
+///
+/// 収集モードのときだけエントリを積む。`MAX_DEFENSE_ENTRIES` に達していたら
+/// アリーナの `defense_truncated` を立てて null を返す（超過分は木から落ちる。
+/// 詰み判定は壊れないが表示の受け分岐が欠ける）。
+fn pushDefenseEntry(
+    entries: *[MAX_DEFENSE_ENTRIES]DefenseSeqEntry,
+    count: *u8,
+    collect_branches: bool,
+) ?*DefenseSeqEntry {
+    if (!collect_branches) return null;
+    if (count.* >= MAX_DEFENSE_ENTRIES) {
+        g_tree_arena.defense_truncated = true;
+        return null;
+    }
+    const entry = &entries[count.*];
+    count.* += 1;
+    return entry;
 }
-
-/// 手順長 α カットの「上限なし」（sequence バッファ長 = 実質無制限）
-const SEQ_LEN_UNBOUNDED: u8 = 64;
 
 /// VCT手順全体を返す（反復深化）
 pub fn findVCTSequence(
@@ -1172,11 +1172,9 @@ pub fn findVCTSequence(
 
     // 詰み木アリーナを初期化（collect_branches 時のみ構築する）
     if (collect_branches) g_tree_arena.reset();
-    g_defense_entries_truncated = false;
 
-    var result = findVCTSequenceWithLimiter(cells, color, max_depth, &limiter, collect_branches, mode);
-    result.nodes = limiter.nodes;
-    return result;
+    return findVCTSequenceWithLimiter(cells, color, max_depth, &limiter, collect_branches, mode);
+
 }
 
 /// findVCTSequence の本体（limiter 共有版）
@@ -1185,6 +1183,23 @@ pub fn findVCTSequence(
 /// 呼び出し元がすでに探索中で、アリーナへノードを積んでいる途中でも呼べるようにするため
 /// （`findVCTSequenceFromFirstMove` の collect モードから使う）。
 fn findVCTSequenceWithLimiter(
+    cells: []Cell,
+    color: Cell,
+    max_depth: u8,
+    limiter: *TimeLimiter,
+    collect_branches: bool,
+    mode: ResilienceMode,
+) VCTSequenceResult {
+    // どの return 経路でも消費ノードが埋まるように薄く包む
+    // （呼び出し元が親 limiter へ加算するため。`defer` は戻り値のコピー後に
+    //   走るので result への代入が反映されない）
+    const nodes_at_entry = limiter.nodes;
+    var result = findVCTSequenceInner(cells, color, max_depth, limiter, collect_branches, mode);
+    result.nodes = limiter.nodes - nodes_at_entry;
+    return result;
+}
+
+fn findVCTSequenceInner(
     cells: []Cell,
     color: Cell,
     max_depth: u8,
@@ -1208,9 +1223,9 @@ fn findVCTSequenceWithLimiter(
         return tryVCFOnly(cells, color, limiter, &result, collect_branches);
     }
 
-    // VCFが先に成立する場合はVCF手順を返す
-    const vcf_seq = vcf_mod.findVCFSequence(cells, color, vcf_mod.VCF_MAX_DEPTH, limiter.time_limit, limiter.max_nodes);
-    chargeVCFNodes(limiter, vcf_seq);
+    // VCFが先に成立する場合はVCF手順を返す（予算は残額。満額だと親の予算を超える）
+    const vcf_seq = vcf_mod.findVCFSequence(cells, color, vcf_mod.VCF_MAX_DEPTH, limiter.time_limit, limiter.remainingNodes());
+    limiter.charge(vcf_seq.nodes);
     if (vcf_seq.found) {
         var i: u8 = 0;
         while (i < vcf_seq.len) : (i += 1) {
@@ -1227,7 +1242,7 @@ fn findVCTSequenceWithLimiter(
     // 反復深化
     var depth: u8 = 1;
     while (depth <= max_depth) : (depth += 1) {
-        if (isTimeExceeded(limiter)) return result;
+        if (limiter.exceeded()) return result;
 
         var seq_len: u8 = 0;
         var context = VCTRecursiveContext{
@@ -1242,7 +1257,7 @@ fn findVCTSequenceWithLimiter(
             // 残り手順を破壊するならVCT不成立扱い → VCF-onlyにフォールバック
             //
             // 深い反復に進んでも先頭の活三は同じで再度棄却されるため早期終了する。
-            if (!isResilientToCounterFours(cells, color, result.sequence[0..seq_len], mode)) {
+            if (!isResilientToCounterFours(cells, color, result.sequence[0..seq_len], mode, limiter)) {
                 var fallback = VCTSequenceResult{
                     .sequence = undefined,
                     .len = 0,
@@ -1271,8 +1286,8 @@ fn findVCTSequenceWithLimiter(
 
 /// VCF-onlyフォールバック: 相手にVCT阻害要因があるとき
 fn tryVCFOnly(cells: []Cell, color: Cell, limiter: *TimeLimiter, result: *VCTSequenceResult, collect_branches: bool) VCTSequenceResult {
-    const vcf_seq = vcf_mod.findVCFSequence(cells, color, vcf_mod.VCF_MAX_DEPTH, limiter.time_limit, if (limiter.max_nodes > 0) limiter.max_nodes else 0);
-    chargeVCFNodes(limiter, vcf_seq);
+    const vcf_seq = vcf_mod.findVCFSequence(cells, color, vcf_mod.VCF_MAX_DEPTH, limiter.time_limit, limiter.remainingNodes());
+    limiter.charge(vcf_seq.nodes);
     if (vcf_seq.found) {
         var i: u8 = 0;
         while (i < vcf_seq.len) : (i += 1) {
@@ -1306,12 +1321,20 @@ fn findVCTSequenceRecursive(
     max_len: u8,
 ) bool {
     if (depth >= max_depth) return false;
-    if (isTimeExceeded(limiter)) return false;
-    if (max_len == 0) return false;
+    if (limiter.exceeded()) return false;
+    // 採用されうる最短の手順は「五連 1 手」＝長さ 1 なので、max_len<=1 では
+    // どんな手順も採用されない。重い VCF 探索に入る前に落とす（issue #122 レバー2）。
+    if (max_len <= 1) return false;
 
-    // VCF手順に委譲
+    // VCF手順に委譲。
+    //
+    // 探索深さを `max_len / 2` で頭打ちにする案（レビュー should-6(b)）は**採らない**。
+    // このノードの意味論は「VCF があればそれを返す / 無ければ脅威手を探索する」で、
+    // 深さを絞ると「VCF は在るが長すぎる」と「VCF が無い」を区別できなくなり、
+    // 前者のとき脅威手探索に落ちて**より短い別解**を返してしまう（＝結果が変わる）。
+    // 長すぎる VCF はここで false にして親に捨てさせるのが α カットの健全な形。
     const vcf_seq = vcf_mod.findVCFSequence(cells, color, vcf_mod.VCF_MAX_DEPTH, 0, 0);
-    chargeVCFNodes(limiter, vcf_seq);
+    limiter.charge(vcf_seq.nodes);
     if (vcf_seq.found and vcf_seq.len >= max_len) return false;
     if (vcf_seq.found) {
         var i: u8 = 0;
@@ -1351,6 +1374,12 @@ fn findVCTSequenceRecursive(
     var has_best = false;
 
     for (0..threat_count) |ti| {
+        // 受けのある攻め手の候補手順長は最短でも 3（攻め手 + 受け手 + 継続 1 手）。
+        // すでに 3 以下の手順を持っているなら、残りの攻め手は改善しえない。
+        // ただし「1 手で終わる攻め手」（五連・受け不能）は best を経由せず即 return
+        // するので、それが混ざる四の区間（buf は四→活三の順）を抜けてから適用する。
+        if (ti >= @as(usize, threat_moves.four_count) and best_seq_len <= 3) break;
+
         // 三の攻め手に入る直前で一度だけ判定（buf は四→活三の順）。
         // 相手が活三/ミセ手/（根に近いノードでは）VCF を持つなら三で追っても
         // 手順が崩壊するため、残り（すべて三）は打ち切る。四で受けを強制して
@@ -1368,8 +1397,8 @@ fn findVCTSequenceRecursive(
         }
 
         // 攻め手 1 手 = 1 ノード（#119）。予算切れなら「ここまでの best」を返す。
-        incrementNodes(limiter);
-        if (isTimeExceeded(limiter)) break;
+        limiter.bump();
+        if (limiter.exceeded()) break;
 
         // この脅威手の探索でアリーナへ積むノードの起点。採用されなければ巻き戻す。
         const threat_snap = g_tree_arena.snapshot();
@@ -1464,9 +1493,7 @@ fn findVCTSequenceRecursive(
                 const block_ok = processBlockDefensesSeq(cells, bp, color, depth, max_depth, limiter, context.collect_branches or !has_first_defense);
 
                 if (block_ok.found) {
-                    if (context.collect_branches and defense_entry_count >= MAX_DEFENSE_ENTRIES) noteDefenseEntriesTruncated();
-                    if (context.collect_branches and defense_entry_count < MAX_DEFENSE_ENTRIES) {
-                        var entry = &defense_entries[defense_entry_count];
+                    if (pushDefenseEntry(&defense_entries, &defense_entry_count, context.collect_branches)) |entry| {
                         entry.defense = dp;
                         entry.seq[0] = bp;
                         var si: u8 = 0;
@@ -1478,7 +1505,6 @@ fn findVCTSequenceRecursive(
                         entry.is_forbidden_trap = block_ok.is_forbidden_trap;
                         // ブロック四追いは受け一意の線形手順 → 線形チェイン木
                         entry.child_node = g_tree_arena.buildLinearChain(entry.seq[0..], entry.seq_len);
-                        defense_entry_count += 1;
                     }
                     if (!has_first_defense and block_ok.seq_len_valid) {
                         first_defense_seq[0] = dp;
@@ -1509,16 +1535,14 @@ fn findVCTSequenceRecursive(
                 const vcf_depth = @min(CT_THREE_VCF_MAX_DEPTH, vcf_mod.VCF_MAX_DEPTH);
                 if (context.collect_branches or !has_first_defense) {
                     const vcf_result = vcf_mod.findVCFSequence(cells, color, vcf_depth, 0, 0);
-                    chargeVCFNodes(limiter, vcf_result);
+                    limiter.charge(vcf_result.nodes);
                     if (!vcf_result.found) {
                         cells[def_idx] = .empty;
                         bitboard.removeStone(dp.row, dp.col);
                         all_defense_leads_to_vct = false;
                         break;
                     }
-                    if (context.collect_branches and defense_entry_count >= MAX_DEFENSE_ENTRIES) noteDefenseEntriesTruncated();
-                    if (context.collect_branches and defense_entry_count < MAX_DEFENSE_ENTRIES) {
-                        var entry = &defense_entries[defense_entry_count];
+                    if (pushDefenseEntry(&defense_entries, &defense_entry_count, context.collect_branches)) |entry| {
                         entry.defense = dp;
                         var si: u8 = 0;
                         while (si < vcf_result.len) : (si += 1) {
@@ -1529,7 +1553,6 @@ fn findVCTSequenceRecursive(
                         entry.is_forbidden_trap = vcf_result.is_forbidden_trap;
                         // 三防御後の VCF は受け一意の線形手順 → 線形チェイン木
                         entry.child_node = g_tree_arena.buildLinearChain(entry.seq[0..], entry.seq_len);
-                        defense_entry_count += 1;
                     }
                     if (!has_first_defense) {
                         first_defense_seq[0] = dp;
@@ -1582,9 +1605,7 @@ fn findVCTSequenceRecursive(
                     break;
                 }
 
-                if (context.collect_branches and defense_entry_count >= MAX_DEFENSE_ENTRIES) noteDefenseEntriesTruncated();
-                if (context.collect_branches and defense_entry_count < MAX_DEFENSE_ENTRIES) {
-                    var entry = &defense_entries[defense_entry_count];
+                if (pushDefenseEntry(&defense_entries, &defense_entry_count, context.collect_branches)) |entry| {
                     entry.defense = dp;
                     var si: u8 = 0;
                     while (si < sub_len) : (si += 1) {
@@ -1599,7 +1620,6 @@ fn findVCTSequenceRecursive(
                     entry.is_forbidden_trap = sub_context.is_forbidden_trap;
                     // ct=none: 子は再帰で構築した部分木
                     entry.child_node = sub_context.out_node;
-                    defense_entry_count += 1;
                 } else if (sub_context.is_forbidden_trap) {
                     context.is_forbidden_trap = true;
                 }
@@ -1645,14 +1665,15 @@ fn findVCTSequenceRecursive(
                 buildBranches(&defense_entries, defense_entry_count, shortest_idx, &candidate_seq, &candidate_len, move, &candidate_context);
 
                 // アリーナ: この攻め手ノードを構築。defenses[0] = 最短防御（前出し）。
-                const def_start = g_tree_arena.defense_count;
-                g_tree_arena.addDefense(defense_entries[shortest_idx].defense, defense_entries[shortest_idx].child_node);
+                var tree_defenses: [MAX_DEFENSE_ENTRIES]ft.TreeDefense = undefined;
                 var ei: u8 = 0;
                 while (ei < defense_entry_count) : (ei += 1) {
-                    if (ei == shortest_idx) continue;
-                    g_tree_arena.addDefense(defense_entries[ei].defense, defense_entries[ei].child_node);
+                    tree_defenses[ei] = .{
+                        .defender = defense_entries[ei].defense,
+                        .child_node = defense_entries[ei].child_node,
+                    };
                 }
-                candidate_root = g_tree_arena.addNode(move, def_start, defense_entry_count);
+                candidate_root = g_tree_arena.addNodeMainFirst(move, tree_defenses[0..defense_entry_count], shortest_idx);
             } else {
                 candidate_seq[0] = move;
                 candidate_len = 1;
@@ -1833,7 +1854,7 @@ fn buildBlockDefSubSequence(
         .three => {
             const vcf_depth = @min(CT_THREE_VCF_MAX_DEPTH, vcf_mod.VCF_MAX_DEPTH);
             const vcf_result = vcf_mod.findVCFSequence(cells, color, vcf_depth, 0, 0);
-            chargeVCFNodes(limiter, vcf_result);
+            limiter.charge(vcf_result.nodes);
             if (!vcf_result.found) return result;
             var i: u8 = 0;
             while (i < vcf_result.len) : (i += 1) {
@@ -2019,7 +2040,6 @@ pub fn findVCTSequenceFromFirstMove(
 
     // 詰み木アリーナを初期化（collect_branches 時のみ構築する。issue #122 レバー1）
     if (collect_branches) g_tree_arena.reset();
-    g_defense_entries_truncated = false;
 
     const opponent = color.opposite();
 
@@ -2073,11 +2093,9 @@ pub fn findVCTSequenceFromFirstMove(
 
     // 詰み木用: 受けごとの継続ノード（collect_branches 時のみ。issue #122 レバー1）。
     // アリーナの defenses は「同一ノードぶんが連続していること」が前提なので、
-    // ループ中は index を溜めておき、全受けを見終わってからまとめて addDefense する。
-    var tree_defenses: [MAX_DEFENSE_ENTRIES]Position = undefined;
-    var tree_children: [MAX_DEFENSE_ENTRIES]u16 = undefined;
+    // ループ中はここに溜めておき、全受けを見終わってから addNodeMainFirst でまとめて積む。
+    var tree_defenses: [MAX_DEFENSE_ENTRIES]ft.TreeDefense = undefined;
     var tree_defense_count: u8 = 0;
-    var tree_main_index: u8 = 0;
 
     for (0..defense_positions.len) |j| {
         const dp = defense_positions.items[j];
@@ -2105,8 +2123,14 @@ pub fn findVCTSequenceFromFirstMove(
         var cont_seq: [64]Position = undefined;
         var cont_len: u8 = 0;
         var cont_is_forbidden = false;
-        // この受けに対する継続の詰み木 root（collect_branches 時のみ）
+        // この受けに対する継続の詰み木 root（収集モードのときだけ構築する）
         var cont_node: u16 = ft.TREE_TERMINAL;
+        // 受けエントリの上限に達していたら木は作らない（作っても捨てるだけ）。
+        // 木を作らないぶん子探索も収集モードにしない（findVCTSequenceRecursive と同じ方針）。
+        const use_collect = collect_branches and tree_defense_count < MAX_DEFENSE_ENTRIES;
+        if (collect_branches and !use_collect) g_tree_arena.defense_truncated = true;
+        // 採用されなかった／切り捨てられた受けの部分木は巻き戻す
+        const def_snap = g_tree_arena.snapshot();
 
         if (ct == .four) {
             const block_pos = quiescence.getFourDefensePosition(cells, dp.row, dp.col, opponent).blockPos();
@@ -2135,7 +2159,7 @@ pub fn findVCTSequenceFromFirstMove(
                     cont_is_forbidden = block_ok.is_forbidden_trap;
                     continuation_found = true;
                     // ブロック四追いは受け一意の線形手順 → 線形チェイン木
-                    if (collect_branches) cont_node = g_tree_arena.buildLinearChain(cont_seq[0..], cont_len);
+                    if (use_collect) cont_node = g_tree_arena.buildLinearChain(cont_seq[0..], cont_len);
                 }
             }
             cells[block_idx] = .empty;
@@ -2143,7 +2167,7 @@ pub fn findVCTSequenceFromFirstMove(
         } else if (ct == .three) {
             const vcf_depth = @min(CT_THREE_VCF_MAX_DEPTH, vcf_mod.VCF_MAX_DEPTH);
             const vcf_result = vcf_mod.findVCFSequence(cells, color, vcf_depth, 0, 0);
-            chargeVCFNodes(&limiter, vcf_result);
+            limiter.charge(vcf_result.nodes);
             if (vcf_result.found) {
                 var si: u8 = 0;
                 while (si < vcf_result.len) : (si += 1) {
@@ -2153,7 +2177,7 @@ pub fn findVCTSequenceFromFirstMove(
                 cont_is_forbidden = vcf_result.is_forbidden_trap;
                 continuation_found = true;
                 // 三防御後の VCF は受け一意の線形手順 → 線形チェイン木
-                if (collect_branches) cont_node = g_tree_arena.buildLinearChain(cont_seq[0..], cont_len);
+                if (use_collect) cont_node = g_tree_arena.buildLinearChain(cont_seq[0..], cont_len);
             }
         } else {
             // ct=none: 通常のVCT探索
@@ -2166,9 +2190,9 @@ pub fn findVCTSequenceFromFirstMove(
                 .start_time = limiter.start_time,
                 .time_limit = limiter.time_limit,
                 .nodes = 0,
-                .max_nodes = limiter.max_nodes,
+                .max_nodes = limiter.remainingNodes(),
             };
-            const sub = findVCTSequenceWithLimiter(cells, color, max_depth, &sub_limiter, collect_branches, .lenient);
+            const sub = findVCTSequenceWithLimiter(cells, color, max_depth, &sub_limiter, use_collect, .lenient);
             limiter.nodes +|= sub_limiter.nodes;
             if (sub.found) {
                 var si: u8 = 0;
@@ -2185,6 +2209,9 @@ pub fn findVCTSequenceFromFirstMove(
         cells[def_idx] = .empty;
         bitboard.removeStone(dp.row, dp.col);
 
+        // 木に載せない受けの部分木はアリーナから巻き戻す
+        if (!continuation_found or !use_collect) g_tree_arena.rollback(def_snap);
+
         if (!continuation_found) {
             cells[idx] = .empty;
             bitboard.removeStone(first_move.row, first_move.col);
@@ -2200,15 +2227,11 @@ pub fn findVCTSequenceFromFirstMove(
             }
             main_continuation_len = cont_len;
             main_is_forbidden_trap = cont_is_forbidden;
-            tree_main_index = tree_defense_count;
         }
 
-        if (collect_branches and tree_defense_count < MAX_DEFENSE_ENTRIES) {
-            tree_defenses[tree_defense_count] = dp;
-            tree_children[tree_defense_count] = cont_node;
+        if (use_collect) {
+            tree_defenses[tree_defense_count] = .{ .defender = dp, .child_node = cont_node };
             tree_defense_count += 1;
-        } else if (collect_branches) {
-            noteDefenseEntriesTruncated();
         }
     }
 
@@ -2231,15 +2254,21 @@ pub fn findVCTSequenceFromFirstMove(
     result.found = true;
 
     // 初手ノードを構築。defenses[0] = メインライン（最短継続）を前出しする。
+    // メインラインが受けの切り捨てで木に載っていない場合は 0（最初の受け）に倒す
+    // （addNodeMainFirst 側でも範囲外は 0 に丸めるので二重に安全）。
     if (collect_branches and tree_defense_count > 0) {
-        const def_start = g_tree_arena.defense_count;
-        g_tree_arena.addDefense(tree_defenses[tree_main_index], tree_children[tree_main_index]);
-        var di: u8 = 0;
-        while (di < tree_defense_count) : (di += 1) {
-            if (di == tree_main_index) continue;
-            g_tree_arena.addDefense(tree_defenses[di], tree_children[di]);
+        var main_tree_index: usize = 0;
+        if (main_defense) |md| {
+            var di: u8 = 0;
+            while (di < tree_defense_count) : (di += 1) {
+                const d = tree_defenses[di].defender;
+                if (d.row == md.row and d.col == md.col) {
+                    main_tree_index = di;
+                    break;
+                }
+            }
         }
-        result.tree_root = g_tree_arena.addNode(first_move, def_start, tree_defense_count);
+        result.tree_root = g_tree_arena.addNodeMainFirst(first_move, tree_defenses[0..tree_defense_count], main_tree_index);
     }
     result.nodes = limiter.nodes;
     return result;
@@ -2689,7 +2718,7 @@ test "isResilientToCounterFours: J10 sequence rejected by counter-four (issue #2
         .{ .row = 5, .col = 8 }, // I10 (黒)
     };
 
-    try testing.expect(!isResilientToCounterFours(&cells, .black, &seq, .lenient));
+    try testing.expect(!isResilientToCounterFours(&cells, .black, &seq, .lenient, null));
 }
 
 test "isResilientToCounterFours: empty sequence is trivially resilient" {
@@ -2698,7 +2727,7 @@ test "isResilientToCounterFours: empty sequence is trivially resilient" {
     bitboard.initFromCells(&cells);
 
     const seq = [_]Position{};
-    try testing.expect(isResilientToCounterFours(&cells, .black, &seq, .lenient));
+    try testing.expect(isResilientToCounterFours(&cells, .black, &seq, .lenient, null));
 }
 
 test "isResilientToCounterFours: VCF (four-only) sequence is resilient" {
@@ -2716,7 +2745,7 @@ test "isResilientToCounterFours: VCF (four-only) sequence is resilient" {
         .{ .row = 7, .col = 8 }, // I8 (五連完成)
     };
 
-    try testing.expect(isResilientToCounterFours(&cells, .black, &seq, .lenient));
+    try testing.expect(isResilientToCounterFours(&cells, .black, &seq, .lenient, null));
 }
 
 test "phantom: 偽の追い詰め(VCT)を防御側strictのみ棄却・攻めlenientは検出（非対称ゲート）" {
@@ -3443,6 +3472,8 @@ test "findVCTSequence: max_nodes が探索を打ち切る（issue #119）" {
 }
 
 test "findVCTSequenceFromFirstMove: collect_branches で詰み木を構築する（issue #122）" {
+    // 収集モードの重い統合テストの定位置は `vct_tree_test.zig`（test-slow）だが、
+    // これは 8 石の合成局面で即座に終わる軽量テストなので pre-commit 側に置く。
     // 修正前は `_ = collect_branches;` で引数が黙って捨てられており、
     // wasm から collect_branches=1 を渡しても木は返らなかった。
     // 行7: 黒 (7,2) が端を止めた白 3 連 → 白 (7,6) が四（受けは (7,7) 一点）。
@@ -3531,19 +3562,46 @@ test "findVCTSequenceRecursive: max_len 未満の手順しか返さない（issu
     }
 }
 
-test "MAX_DEFENSE_ENTRIES: 通常の収集モード探索では受け分岐を切り捨てない（issue #122 レバー4）" {
-    // 詰み木は 1 ノードあたり MAX_DEFENSE_ENTRIES 件までしか受けを持てず、
-    // 超過分は黙って落ちる。受け点を増やす修正（#115 / #121）で到達確率が
-    // 上がったので、切り捨てが起きたかを観測できるようにした。
-    // ここは「普通の局面では起きない」ことを固定するカナリア
-    // （21 点以上の受けを持つ攻め手を人手で構成できなかったため、
-    //   切り捨て側を赤にする判別テストは無い）。
+
+test "VCT探索は委譲した VCF のノードも予算に計上する（issue #119）" {
+    // VCT 経路は VCF を独自 limiter で回すので、その消費を親へ加算しないと
+    // 予算が実態より小さく見える（＝ max_nodes が緩む）。
+    // 白 (7,6) の四から始まる局面は VCF 探索が実際に走る。
     ll.init();
     var cells = [_]Cell{.empty} ** CELL_COUNT;
-    setupIssue115BranchPosition(&cells);
+    cells[7 * BOARD_SIZE + 2] = .black;
+    cells[7 * BOARD_SIZE + 3] = .white;
+    cells[7 * BOARD_SIZE + 4] = .white;
+    cells[7 * BOARD_SIZE + 5] = .white;
+    cells[10 * BOARD_SIZE + 6] = .white;
+    cells[10 * BOARD_SIZE + 7] = .white;
+    cells[11 * BOARD_SIZE + 8] = .white;
+    cells[12 * BOARD_SIZE + 8] = .white;
+    bitboard.initFromCells(&cells);
 
-    g_defense_entries_truncated = true; // エントリでリセットされることも見る
-    const result = findVCTSequence(&cells, .black, 4, 0, 100_000, true, .lenient);
-    _ = result;
-    try testing.expect(!g_defense_entries_truncated);
+    // 同一局面の VCF 単体の消費ノード
+    const vcf_only = vcf_mod.findVCFSequence(&cells, .white, vcf_mod.VCF_MAX_DEPTH, 0, 0);
+    try testing.expect(vcf_only.nodes > 0);
+
+    const vct = findVCTSequence(&cells, .white, 6, 0, 0, false, .lenient);
+    try testing.expect(vct.found);
+    // VCT は入口で同じ VCF を回すので、少なくともその消費ぶんは計上されていなければ
+    // ならない（この局面は入口の VCF で解決するので両者は一致する。委譲先の消費を
+    // 加算していなかった #119 以前はここが 0 になる）。
+    try testing.expect(vct.nodes >= vcf_only.nodes);
+
+    // 三の追いが要る局面（入口の活三ガードで VCF-only に落ちる）でも、
+    // 委譲先の VCF ぶんが計上されていること
+    var cells2 = [_]Cell{.empty} ** CELL_COUNT;
+    cells2[7 * BOARD_SIZE + 4] = .white;
+    cells2[7 * BOARD_SIZE + 5] = .white;
+    cells2[7 * BOARD_SIZE + 6] = .white;
+    cells2[7 * BOARD_SIZE + 3] = .black;
+    cells2[4 * BOARD_SIZE + 4] = .black;
+    cells2[5 * BOARD_SIZE + 5] = .black;
+    cells2[6 * BOARD_SIZE + 6] = .black;
+    const vcf_only2 = vcf_mod.findVCFSequence(&cells2, .white, vcf_mod.VCF_MAX_DEPTH, 0, 0);
+    try testing.expect(vcf_only2.nodes > 0);
+    const vct2 = findVCTSequence(&cells2, .white, 6, 0, 0, false, .lenient);
+    try testing.expect(vct2.nodes >= vcf_only2.nodes);
 }

@@ -566,15 +566,18 @@ pub fn findMiseVCFSequence(
                                 br.continuation_len,
                             );
                         }
-                        // defenses を contiguous に積む（子は全て構築済み）
-                        const def_start = g_tree_arena.defense_count;
-                        g_tree_arena.addDefense(result.sequence[1], child_nodes[0]);
+                        // 受け一覧（メインライン = index 0）を組んでノードを構築
+                        var node_defenses: [1 + MAX_MISE_BRANCHES]ft.TreeDefense = undefined;
+                        node_defenses[0] = .{ .defender = result.sequence[1], .child_node = child_nodes[0] };
                         di = 0;
                         while (di < result.branch_count) : (di += 1) {
-                            g_tree_arena.addDefense(result.branches[di].defense_move, child_nodes[1 + di]);
+                            node_defenses[1 + di] = .{
+                                .defender = result.branches[di].defense_move,
+                                .child_node = child_nodes[1 + di],
+                            };
                         }
-                        const total_def: u16 = 1 + @as(u16, result.branch_count);
-                        result.tree_root = g_tree_arena.addNode(result.sequence[0], def_start, total_def);
+                        const total_def: usize = 1 + @as(usize, result.branch_count);
+                        result.tree_root = g_tree_arena.addNodeMainFirst(result.sequence[0], node_defenses[0..total_def], 0);
                     }
 
                     cells[idx] = .empty;

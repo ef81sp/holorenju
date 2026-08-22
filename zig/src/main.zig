@@ -509,7 +509,26 @@ var serialize_defenses: [MAX_SER_DEFENSES]ft.TreeDefense = undefined;
 ///   [...]        defense_count × { row:u8, col:u8, child_node:u16 LE }                        (4B)
 ///   node[0] = root。child_node == 0xFFFF は終端（継続なし）。
 ///   node_count == 0 は木なし（TS 側は sequence から線形木を合成する）。
+/// 直近に書き出した詰み木の健全性（issue #122 レバー4）
+///
+/// どちらも「詰み判定は壊れないが表示の受け分岐が欠ける」種類の劣化。
+/// バッファ形式を変えずに読めるよう getter で露出する。
+var last_tree_overflow: bool = false;
+var last_tree_defense_truncated: bool = false;
+
+/// アリーナのノード/受け上限を超えて枝が terminal に倒れたか
+export fn getLastForcedWinTreeOverflow() u8 {
+    return if (last_tree_overflow) 1 else 0;
+}
+
+/// 1ノードの受けが `ft.MAX_DEFENSES_PER_NODE` を超えて切り捨てられたか
+export fn getLastForcedWinTreeDefenseTruncated() u8 {
+    return if (last_tree_defense_truncated) 1 else 0;
+}
+
 fn writeForcedWinTree(buffer: []u8, start: usize, arena: *const ft.Arena, root: u16) void {
+    last_tree_overflow = arena.overflow;
+    last_tree_defense_truncated = arena.defense_truncated;
     const r = ft.serializeCompact(arena, root, serialize_nodes[0..], serialize_defenses[0..]);
     std.mem.writeInt(u16, buffer[start..][0..2], r.node_count, .little);
     std.mem.writeInt(u16, buffer[start + 2 ..][0..2], r.defense_count, .little);

@@ -30,26 +30,47 @@ pub const VCF_TIME_LIMIT: u32 = 150;
 // TimeLimiter
 // =============================================================================
 
+/// 探索の予算（時間 / ノード数）
+///
+/// 予算操作は VCF / VCT の両方から使うので、ここのメソッドを SSoT にする
+/// （かつては `vcf.zig` と `vct.zig` に同名の自由関数が二重定義されていて、
+///  片方が飽和加算・片方が通常加算という差もあった）。
 pub const TimeLimiter = struct {
     start_time: u32,
     time_limit: u32,
     nodes: u32,
     max_nodes: u32, // 0 = 無制限
-};
 
-fn isTimeExceeded(limiter: *const TimeLimiter) bool {
-    if (limiter.max_nodes > 0 and limiter.nodes >= limiter.max_nodes) {
-        return true;
+    /// 探索ノードを 1 つ計上する
+    pub fn bump(self: *TimeLimiter) void {
+        self.nodes +|= 1;
     }
-    if (limiter.time_limit == 0) return false;
-    const now = getTimestampMs();
-    if (now == 0) return false; // ネイティブテスト
-    return (now - limiter.start_time) >= limiter.time_limit;
-}
 
-fn incrementNodes(limiter: *TimeLimiter) void {
-    limiter.nodes += 1;
-}
+    /// 別 limiter で回した探索の消費ノードを取り込む（issue #119）
+    pub fn charge(self: *TimeLimiter, consumed: u32) void {
+        self.nodes +|= consumed;
+    }
+
+    /// 予算（ノード数 or 時間）を超えたか
+    pub fn exceeded(self: *const TimeLimiter) bool {
+        if (self.max_nodes > 0 and self.nodes >= self.max_nodes) {
+            return true;
+        }
+        if (self.time_limit == 0) return false;
+        const now = getTimestampMs();
+        if (now == 0) return false; // ネイティブテスト
+        return (now - self.start_time) >= self.time_limit;
+    }
+
+    /// 子探索へ渡す残りノード予算（0 = 無制限。issue #119 / レビュー should-8）
+    ///
+    /// 子探索は独自 limiter で回るので、満額の `max_nodes` を渡すと
+    /// 「親の予算 × 子の数」まで使えてしまう。
+    pub fn remainingNodes(self: *const TimeLimiter) u32 {
+        if (self.max_nodes == 0) return 0;
+        return self.max_nodes -| self.nodes;
+    }
+};
 
 // =============================================================================
 // 四を作れる手の列挙
@@ -115,7 +136,7 @@ pub fn hasVCF(
     limiter: *TimeLimiter,
     max_depth: u8,
 ) bool {
-    if (isTimeExceeded(limiter)) return false;
+    if (limiter.exceeded()) return false;
     if (depth >= max_depth) return false;
 
     var buf: [225]Position = undefined;
@@ -125,7 +146,7 @@ pub fn hasVCF(
 
     for (0..four_count) |i| {
         const move = buf[i];
-        incrementNodes(limiter);
+        limiter.bump();
 
         // 四を作る（インプレース、bitboard も同期）
         const idx = @as(u16, move.row) * BOARD_SIZE + move.col;
@@ -222,7 +243,7 @@ pub fn findVCFMoveWithBudget(cells: []Cell, color: Cell, max_depth: u8, time_lim
     // 反復深化: 浅い深度から探索し最短VCFを優先
     var depth: u8 = 1;
     while (depth <= max_depth) : (depth += 1) {
-        if (isTimeExceeded(&limiter)) return null;
+        if (limiter.exceeded()) return null;
         const result = findVCFMoveRecursive(cells, color, 0, &limiter, depth);
         if (result) |_| return result;
     }
@@ -239,7 +260,7 @@ fn findVCFMoveRecursive(
     max_depth: u8,
 ) ?Position {
     if (depth >= max_depth) return null;
-    if (isTimeExceeded(limiter)) return null;
+    if (limiter.exceeded()) return null;
 
     var buf: [225]Position = undefined;
     const four_count = findFourMoves(cells, color, &buf);
@@ -254,8 +275,8 @@ fn findVCFMoveRecursive(
 
     for (0..four_count) |i| {
         const move = buf[i];
-        incrementNodes(limiter);
-        if (isTimeExceeded(limiter)) return null;
+        limiter.bump();
+        if (limiter.exceeded()) return null;
 
         const idx = @as(u16, move.row) * BOARD_SIZE + move.col;
         cells[idx] = color;
@@ -371,7 +392,7 @@ pub fn findVCFSequence(
     // 反復深化: 浅い深度から探索し最短手順を優先
     var depth: u8 = 1;
     while (depth <= max_depth) : (depth += 1) {
-        if (isTimeExceeded(&limiter)) break;
+        if (limiter.exceeded()) break;
 
         var seq_len: u8 = 0;
         var is_forbidden_trap = false;
@@ -510,7 +531,7 @@ fn findVCFSequenceRecursive(
     is_forbidden_trap: *bool,
 ) bool {
     if (depth >= max_depth) return false;
-    if (isTimeExceeded(limiter)) return false;
+    if (limiter.exceeded()) return false;
 
     var buf: [225]Position = undefined;
     const four_count = findFourMoves(cells, color, &buf);
@@ -525,8 +546,8 @@ fn findVCFSequenceRecursive(
 
     for (0..four_count) |i| {
         const move = buf[i];
-        incrementNodes(limiter);
-        if (isTimeExceeded(limiter)) return false;
+        limiter.bump();
+        if (limiter.exceeded()) return false;
 
         const idx = @as(u16, move.row) * BOARD_SIZE + move.col;
         cells[idx] = color;
