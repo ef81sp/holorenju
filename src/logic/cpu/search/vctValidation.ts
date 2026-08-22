@@ -109,6 +109,12 @@ function validateSubsequence(
           blockPos.col,
           color,
         );
+        // ブロック石が五を作った → その場で攻撃側の勝ち（issue #140）。
+        // 以降の手順は存在しない（Zig 側もブロック石で手順を確定する）ので検証不要。
+        if (blockThreat === "win") {
+          placed.push(blockPos);
+          break;
+        }
         if (!blockThreatContinues(blockThreat, board, opponentColor)) {
           valid = false;
           break;

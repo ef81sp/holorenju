@@ -19,6 +19,7 @@ import { checkDefenseCounterThreat } from "./threatPatterns";
 import {
   blockThreatContinues,
   opponentBlocksThreePursuit,
+  validateVCTSequence,
 } from "./vctValidation";
 
 /**
@@ -115,5 +116,41 @@ describe("opponentBlocksThreePursuit（issue #116 / #118）", () => {
   it("相手に活三・ミセ手・VCF のいずれも無ければ三で追える", () => {
     const board = parseInitialBoard(BOARD_AFTER_BLOCK_NO_THREE);
     expect(opponentBlocksThreePursuit(board, "black")).toBe(false);
+  });
+});
+
+/**
+ * issue #140 の再現局面（黒番・攻めは黒）
+ *
+ * 黒 (7,7)（列7の止め四 + 行7の活三）→ 白 (7,8)（活三の受け兼カウンター四）
+ * → 黒 (8,7)（カウンター四のブロック。同時に列7の五連＝その場で勝ち）。
+ */
+const BOARD_BLOCK_FIVE = [
+  "---------------",
+  "---------------",
+  "---------------",
+  "-------o----x--",
+  "-------x--xo---",
+  "-------x-oo----",
+  "-------xoo-----",
+  "-----xx--------",
+  "------o--------",
+  "--------x------",
+  "---------------",
+  "---------------",
+  "---------------",
+  "---------------",
+  "---------------",
+];
+
+describe("validateVCTSequence: ブロック石が五連なら手順はそこで確定（issue #140）", () => {
+  it("五連になるブロックで終わる手順は有効", () => {
+    const board = parseInitialBoard(BOARD_BLOCK_FIVE);
+    const sequence = [
+      { row: 7, col: 7 },
+      { row: 7, col: 8 },
+      { row: 8, col: 7 },
+    ];
+    expect(validateVCTSequence(board, "black", sequence)).toBe(true);
   });
 });
