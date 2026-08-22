@@ -83,7 +83,11 @@ export interface ThreatWasmContext {
   /** five points バッファの先頭オフセット（memory 内）を返す。 */
   getFivePointsBuffer: () => number;
   /**
-   * 四に対する受け点。戻り値は row * 15 + col、受けが無い（null）場合は 255。
+   * 四に対する受け点（3 値・issue #124）。
+   * - 止め四: `row * 15 + col`（0..224）
+   * - 活四（防御不可・`unstoppable`）: 255
+   * - そもそも四ではない（`not_four`）: 254
+   *
    * TS の `getFourDefensePosition`（search/threatPatterns.ts）とのパリティ検証用。
    */
   getFourDefensePositionWasm: (

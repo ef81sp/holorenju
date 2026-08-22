@@ -6,10 +6,12 @@
 
 import type { BoardState } from "@/types/game";
 
-import { isValidPosition } from "@/logic/renjuRules";
-
 import { DIRECTION_INDICES, DIRECTIONS } from "../core/constants";
-import { checkEnds, checkEndsForFour, countLine } from "../core/lineAnalysis";
+import {
+  checkEnds,
+  collectLineFivePoints,
+  countLine,
+} from "../core/lineAnalysis";
 // 夏止め済み判定（受け点の基準と活三判定を一致させる SSoT）
 import { getOpenThreeDefensePositions } from "../evaluation/threatDetection";
 // #43 PR-3: 跳び四/三の図形判定を Zig アダプタへ委譲（patterns.ts 依存を断つ）。
@@ -31,43 +33,51 @@ export function createsFour(
   color: "black" | "white",
 ): boolean {
   for (let i = 0; i < DIRECTION_INDICES.length; i++) {
-    const dirIndex = DIRECTION_INDICES[i];
-    if (dirIndex === undefined) {
-      continue;
-    }
-
-    const direction = DIRECTIONS[i];
-    if (!direction) {
-      continue;
-    }
-    const [dr, dc] = direction;
-
-    // 連続四をチェック
-    const count = countLine(board, row, col, dr, dc, color);
-    if (count === 4) {
-      // 片方でも開いていれば四（黒は長連チェック付き）
-      const { end1Open, end2Open } = checkEndsForFour(
-        board,
-        row,
-        col,
-        dr,
-        dc,
-        color,
-      );
-      if (end1Open || end2Open) {
-        return true;
-      }
-    }
-
-    // 跳び四をチェック
-    if (count !== 4 && checkJumpFour(board, row, col, dirIndex, color)) {
-      if (!isJumpFourOverline(board, row, col, dr, dc, color)) {
-        return true;
-      }
+    if (isFourInDirection(board, row, col, i, color)) {
+      return true;
     }
   }
 
   return false;
+}
+
+/**
+ * その方向で「四」が成立しているかを判定する（四判定の SSoT・issue #124）
+ *
+ * **四の定義**: あと 1 手で五にできる点がその方向に存在すること。
+ * これは `collectLineFivePoints` が列挙する五点が 1 つ以上あることと同値であり、
+ * 受け点を返す `getFourDefensePosition` と完全に同じ基準になる。
+ *
+ * 以前は「連続四なら端の空きを見る（黒は `checkEndsForFour` 補正）／跳び四なら
+ * 最も近いギャップだけを `isJumpFourOverline` で見る」という別基準で判定しており、
+ * 同一ライン上に長連ギャップと「埋めても五にならないギャップ」が併存すると
+ * 四でない手を四と判定していた（受け点 0 個 → 防御不可 → 偽 VCF・issue #124）。
+ *
+ * `countLine` / `checkJumpFour` による四パターン判定は候補の足切りにのみ使う。
+ * 最終判断は必ず五点の列挙で行う。Zig 側 `threats.isFourInDirection` と対応する。
+ *
+ * @param i DIRECTIONS / DIRECTION_INDICES のインデックス（0..3）
+ */
+export function isFourInDirection(
+  board: BoardState,
+  row: number,
+  col: number,
+  i: number,
+  color: "black" | "white",
+): boolean {
+  const dirIndex = DIRECTION_INDICES[i];
+  const direction = DIRECTIONS[i];
+  if (dirIndex === undefined || !direction) {
+    return false;
+  }
+  const [dr, dc] = direction;
+
+  const count = countLine(board, row, col, dr, dc, color);
+  if (count !== 4 && !checkJumpFour(board, row, col, dirIndex, color)) {
+    return false;
+  }
+
+  return collectLineFivePoints(board, row, col, dr, dc, color).length > 0;
 }
 
 /**
@@ -161,28 +171,9 @@ export function classifyThreat(
 
     const count = countLine(board, row, col, dr, dc, color);
 
-    // 連続四をチェック（黒は長連チェック付き）
-    if (count === 4) {
-      const { end1Open, end2Open } = checkEndsForFour(
-        board,
-        row,
-        col,
-        dr,
-        dc,
-        color,
-      );
-      if (end1Open || end2Open) {
-        hasFour = true;
-      }
-    }
-
-    // 跳び四をチェック
-    if (!hasFour && count !== 4) {
-      if (checkJumpFour(board, row, col, dirIndex, color)) {
-        if (!isJumpFourOverline(board, row, col, dr, dc, color)) {
-          hasFour = true;
-        }
-      }
+    // 四（連続四・跳び四とも isFourInDirection に一本化・issue #124）
+    if (!hasFour && isFourInDirection(board, row, col, i, color)) {
+      hasFour = true;
     }
 
     // 連続三をチェック
@@ -212,87 +203,4 @@ export function classifyThreat(
   }
 
   return { createsFour: hasFour, createsOpenThree: hasOpenThree };
-}
-
-/**
- * 跳び四が長連になるかチェック
- *
- * 跳び四のギャップを埋めると定義上5連になる。
- * countLine >= 6 は窓外に黒石がある場合のみ true = 長連。
- * 白番では常に false を返す（長連ルールなし）。
- */
-export function isJumpFourOverline(
-  board: BoardState,
-  row: number,
-  col: number,
-  dr: number,
-  dc: number,
-  color: "black" | "white",
-): boolean {
-  if (color !== "black") {
-    return false;
-  }
-  const gapPos = findJumpFourGap(board, row, col, dr, dc);
-  if (!gapPos) {
-    return false;
-  }
-  const gapRow = board[gapPos.row];
-  if (!gapRow) {
-    return false;
-  }
-  gapRow[gapPos.col] = "black";
-  const lineLen = countLine(board, gapPos.row, gapPos.col, dr, dc, "black");
-  gapRow[gapPos.col] = null;
-  return lineLen >= 6;
-}
-
-/**
- * 跳び四のギャップ位置を簡易検出（isJumpFourOverline 専用）
- *
- * 起点から正方向・負方向に走査し、連の途中にある空きマスを返す。
- */
-function findJumpFourGap(
-  board: BoardState,
-  row: number,
-  col: number,
-  dr: number,
-  dc: number,
-): { row: number; col: number } | null {
-  // 正方向に走査
-  let gap = scanForGap(board, row, col, dr, dc);
-  if (gap) {
-    return gap;
-  }
-  // 負方向に走査
-  gap = scanForGap(board, row, col, -dr, -dc);
-  return gap;
-}
-
-function scanForGap(
-  board: BoardState,
-  row: number,
-  col: number,
-  dr: number,
-  dc: number,
-): { row: number; col: number } | null {
-  let r = row + dr;
-  let c = col + dc;
-  // 起点から正方向に連続する石をスキップ
-  while (isValidPosition(r, c) && board[r]?.[c] === "black") {
-    r += dr;
-    c += dc;
-  }
-  // 空きマスがあるか
-  if (!isValidPosition(r, c) || board[r]?.[c] !== null) {
-    return null;
-  }
-  const gapR = r;
-  const gapC = c;
-  // 空きの先に黒石が続くか
-  r += dr;
-  c += dc;
-  if (isValidPosition(r, c) && board[r]?.[c] === "black") {
-    return { row: gapR, col: gapC };
-  }
-  return null;
 }

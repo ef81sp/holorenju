@@ -15,6 +15,7 @@ import { createsFour } from "./threatMoves";
 import {
   checkDefenseCounterThreat,
   findFourMoves,
+  fourDefenseBlock,
   getFourDefensePosition,
 } from "./threatPatterns";
 
@@ -78,7 +79,10 @@ function validateSubsequence(
       }
       if (ct === "four") {
         // 明示的ブロック: 次の攻撃手がブロック位置と一致するか確認
-        const blockPos = getFourDefensePosition(board, pos, opponentColor);
+        // #124: not_four / unstoppable いずれも「この筋は追えない」＝保守側
+        const blockPos = fourDefenseBlock(
+          getFourDefensePosition(board, pos, opponentColor),
+        );
         if (!blockPos) {
           valid = false;
           break;
@@ -268,8 +272,10 @@ function hasBreakingCounterFour(
       return true;
     }
 
-    // ブロック位置取得（null = 活四 → 防御側勝利）
-    const blockPos = getFourDefensePosition(board, cf, opponentColor);
+    // ブロック位置取得（null = 活四 or 四でない → 防御側勝利扱い・保守側 #124）
+    const blockPos = fourDefenseBlock(
+      getFourDefensePosition(board, cf, opponentColor),
+    );
     if (!blockPos) {
       cfRow[cf.col] = null;
       return true;
@@ -356,7 +362,9 @@ function checkSequenceBreaksByCF(
         break;
       }
       if (ct === "four") {
-        const fourBlockPos = getFourDefensePosition(board, pos, opponentColor);
+        const fourBlockPos = fourDefenseBlock(
+          getFourDefensePosition(board, pos, opponentColor),
+        );
         if (!fourBlockPos) {
           breaks = true;
           break;

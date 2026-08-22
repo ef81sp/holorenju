@@ -27,16 +27,18 @@ export { hasVCF } from "./vcfCheck";
 
 // 脅威パターン
 export {
+  type FourDefense,
   findDefenseForConsecutiveFour,
   findDefenseForJumpFour,
   findFourMoves,
   findWinningMove,
+  fourDefenseBlock,
   getFourDefensePosition,
   checkDefenseCounterThreat,
 } from "./threatPatterns";
 
 // 脅威手
-export { createsFour } from "./threatMoves";
+export { createsFour, isFourInDirection } from "./threatMoves";
 
 // VCTヘルパー
 export {

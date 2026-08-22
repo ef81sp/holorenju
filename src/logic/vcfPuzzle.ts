@@ -108,14 +108,22 @@ export type DefenseResponse =
   | { type: "blocked"; position: Position }
   | { type: "counter-five"; defensePos: Position; winPos: Position }
   | { type: "open-four"; winPositions: Position[] }
-  | { type: "forbidden-trap" };
+  | { type: "forbidden-trap" }
+  /**
+   * 直前手が四ですらなかった（issue #124）。
+   * `validateAttackMove` が `createsFour` を通した手にしか呼ばれないので
+   * 通常は到達しない。`createsFour` と受け点の基準は SSoT 化されているため
+   * 「四なのに受け点 0 個」は起きえないが、契約違反を黙って握り潰さないため
+   * 明示的な値として持つ。
+   */
+  | { type: "not-four" };
 
 /**
  * 四に対する防御応手を計算する。
  *
  * フロー:
  * 1. 防御位置を探す
- * 2. null（活四）→ 両端の勝ち手位置を返す
+ * 2. unstoppable（活四）→ 両端の勝ち手位置を返す
  * 3. 防御側が黒の場合 → 禁手チェック（禁手陥穽）
  * 4. 防御石を仮配置 → カウンター五連チェック
  * 5. 通常の防御
@@ -128,13 +136,17 @@ export function getDefenseResponse(
   const opponentColor = attackerColor === "black" ? "white" : "black";
 
   // 1. 防御位置を探す
-  const defensePos = getFourDefensePosition(board, lastMove, attackerColor);
+  const defense = getFourDefensePosition(board, lastMove, attackerColor);
 
-  // 2. null = 活四（防御不能）
-  if (defensePos === null) {
+  // 2. unstoppable = 活四（防御不能）。not_four は四ですらない（#124）
+  if (defense.kind === "unstoppable") {
     const winPositions = findAllWinPositions(board, attackerColor);
     return { type: "open-four", winPositions };
   }
+  if (defense.kind === "not_four") {
+    return { type: "not-four" };
+  }
+  const defensePos = defense.position;
 
   // 3. 防御側が黒の場合、禁手チェック（Zig thin wasm 経由 #37 P2）
   if (opponentColor === "black") {

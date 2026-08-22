@@ -296,6 +296,11 @@ export const useVcfSolver = (
         // 禁手陥穽 → 即座に成功
         handleSuccess(questionSection);
         break;
+
+      case "not-four":
+        // 四ではなかった（#124）。validateAttackMove が createsFour を通した手
+        // にしか到達しないので通常は起きない。防御石を置かずに継続する。
+        break;
       default:
         break;
     }

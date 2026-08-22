@@ -87,9 +87,11 @@ export function hasVCF(
     }
 
     // 相手の応手（四を止める）
-    const defensePos = getFourDefensePosition(board, move, color);
+    const defense = getFourDefensePosition(board, move, color);
 
-    if (!defensePos) {
+    // #124: 勝ちは「活四（unstoppable）」のみ。
+    // 「そもそも四ではない（not_four）」を勝ち扱いにしていたのが偽 VCF の原因だった。
+    if (defense.kind === "unstoppable") {
       // 止められない = 勝利
       // 元に戻す（Undo）
       if (moveRow) {
@@ -97,6 +99,16 @@ export function hasVCF(
       }
       return true;
     }
+
+    if (defense.kind === "not_four") {
+      // 四ですらない → この手は追えない
+      if (moveRow) {
+        moveRow[move.col] = null;
+      }
+      continue;
+    }
+
+    const defensePos = defense.position;
 
     // 白番の場合、黒の防御位置が禁手ならVCF成立
     if (color === "white") {
