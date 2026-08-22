@@ -135,7 +135,8 @@ pnpm build         # 本番ビルド
 
 ## 連珠の知識
 
-- **連珠ルール（禁手・パターン判定）は TS (`src/logic/renjuRules/`) と Zig (`zig/src/forbidden.zig`, `jump_patterns.zig`) に二重実装されている。どちらかを変更したら必ず両方を直し、`renjuParity.test.ts`（TS⇄Zig パリティテスト）が緑か確認すること。**
+- **禁手・図形判定（三三・四四・長連）は Zig/WASM 単一ソース**（`zig/src/forbidden.zig`, `jump_patterns.zig`。TS からは `src/logic/cpu/wasm/forbiddenAdapter.ts` / `patternsAdapter.ts` 経由）。TS の `src/logic/renjuRules/` は core（五連・長連検出、盤面操作）のみで、TS 側の禁手実装は #43 で物理削除済み。
+- **脅威パターン系（四の受け点など）は TS (`src/logic/cpu/search/threatPatterns.ts`, `src/logic/cpu/core/lineAnalysis.ts`) と Zig (`zig/src/threats.zig`, `quiescence.zig`) に二重実装が残っている。どちらかを変更したら必ず両方を直し、パリティテスト（`src/logic/cpu/search/fourDefenseParity.wasm.test.ts` などの `*.wasm.test.ts`）が緑か確認すること。**
 - 連珠は15×15の盤で行う
 - 黒が先手で、禁手あり（三三、四四、長連）
 - 勝利条件: 横・縦・斜めに先に5つ石を並べること
