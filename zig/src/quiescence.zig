@@ -86,6 +86,11 @@ pub fn createsFour(cells: []const Cell, row: u8, col: u8, color: Cell) bool {
 /// 以前は `?Position` で、`null` が「防御不可（活四）」と「そもそも四ではない」の
 /// 両方を意味していた。`vcf.zig` は `null` を即勝ちとして扱うため、四の判定側が
 /// 偽陽性を出すと「四ですらない手」で VCF が成立してしまっていた。
+/// wasm export（`threat_wasm.getFourDefensePositionWasm`）で使う番兵。
+/// 盤上の座標は `row * 15 + col` = 0..224 なので 254/255 と衝突しない。
+pub const FOUR_DEFENSE_NOT_FOUR: u8 = 254;
+pub const FOUR_DEFENSE_UNSTOPPABLE: u8 = 255;
+
 pub const FourDefense = union(enum) {
     /// どの方向でも四になっていない（五点 0 個）。脅威ではない。
     not_four,

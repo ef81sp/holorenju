@@ -142,21 +142,21 @@ pub fn hasVCF(
         // 相手の応手（四を止める）
         const defense_pos = quiescence.getFourDefensePosition(cells, move.row, move.col, color);
 
-        // #124: `.not_four`（四ですらない）を勝ちにしない。勝ちは `.unstoppable`（活四）のみ。
-        if (defense_pos == .unstoppable) {
-            // 止められない = 勝利
-            cells[idx] = .empty;
-            bitboard.removeStone(move.row, move.col);
-            return true;
-        }
-
+        // #124: 勝ちは `.unstoppable`（活四）のみ。`.not_four` は四ですらないのでスキップ。
+        // 網羅 switch にして、将来 variant が増えたときに黙って保守側へ落ちないようにする。
         const dp = switch (defense_pos) {
-            .block => |p| p,
-            else => {
+            .unstoppable => {
+                // 止められない = 勝利
+                cells[idx] = .empty;
+                bitboard.removeStone(move.row, move.col);
+                return true;
+            },
+            .not_four => {
                 cells[idx] = .empty;
                 bitboard.removeStone(move.row, move.col);
                 continue;
             },
+            .block => |p| p,
         };
 
         // 白番の場合、黒の防御位置が禁手ならVCF成立
@@ -273,13 +273,10 @@ fn findVCFMoveRecursive(
         bitboard.removeStone(move.row, move.col);
 
         // 活四（防御不能） → 即勝ち。`.not_four` は四ですらないのでスキップ（#124）
-        if (defense_pos == .unstoppable) {
-            return move;
-        }
-
         const dp = switch (defense_pos) {
+            .unstoppable => return move,
+            .not_four => continue,
             .block => |p| p,
-            else => continue,
         };
 
         // 白番: 黒の防御位置が禁手 → 即勝ち
@@ -433,24 +430,23 @@ pub fn findVCFSequenceFromFirstMove(
 
     // 防御位置を取得
     const defense_pos = quiescence.getFourDefensePosition(cells, first_move.row, first_move.col, color);
-    if (defense_pos == .unstoppable) {
-        // 活四 → 防御不可能 → VCF成立
-        cells[idx] = .empty;
-        bitboard.removeStone(first_move.row, first_move.col);
-        result.sequence[0] = first_move;
-        result.len = 1;
-        result.found = true;
-        return result;
-    }
-
-    // createsFour を通っているので `.not_four` は理論上到達しないが、保守側に倒す（#124）
+    // `.not_four` は createsFour を通っているので理論上到達しないが、保守側に倒す（#124）
     const dp = switch (defense_pos) {
-        .block => |p| p,
-        else => {
+        .unstoppable => {
+            // 活四 → 防御不可能 → VCF成立
+            cells[idx] = .empty;
+            bitboard.removeStone(first_move.row, first_move.col);
+            result.sequence[0] = first_move;
+            result.len = 1;
+            result.found = true;
+            return result;
+        },
+        .not_four => {
             cells[idx] = .empty;
             bitboard.removeStone(first_move.row, first_move.col);
             return result;
         },
+        .block => |p| p,
     };
 
     // 白番: 黒の防御位置が禁手 → 即勝ち
@@ -545,15 +541,14 @@ fn findVCFSequenceRecursive(
         bitboard.removeStone(move.row, move.col);
 
         // 活四（防御不能） → 即勝ち。`.not_four` は四ですらないのでスキップ（#124）
-        if (defense_pos == .unstoppable) {
-            sequence[seq_len.*] = move;
-            seq_len.* += 1;
-            return true;
-        }
-
         const dp = switch (defense_pos) {
+            .unstoppable => {
+                sequence[seq_len.*] = move;
+                seq_len.* += 1;
+                return true;
+            },
+            .not_four => continue,
             .block => |p| p,
-            else => continue,
         };
 
         // 白番: 黒の防御位置が禁手 → 即勝ち

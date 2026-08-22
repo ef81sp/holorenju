@@ -391,7 +391,21 @@ pub fn collectLineFivePoints(
 /// LUT (`queryPatternByCell`) の四パターン判定は候補の絞り込み（高速な足切り）にのみ使う。
 /// 最終判断は必ず五点の列挙で行う。
 pub fn isFourInDirection(cells: []const Cell, row: u8, col: u8, dir_idx: usize, color: Cell) bool {
-    const result = ll.queryPatternByCell(row, col, dir_idx, color);
+    return isFourInDirectionWithPattern(cells, row, col, dir_idx, color, ll.queryPatternByCell(row, col, dir_idx, color));
+}
+
+/// `isFourInDirection` の LUT 結果を呼び出し側から渡す版。
+///
+/// 呼び出し側が既に `queryPatternByCell` を引いている場合（`classifyThreat` /
+/// `checkDefenseCounterThreat`）に同じクエリを二重に走らせないため。
+pub fn isFourInDirectionWithPattern(
+    cells: []const Cell,
+    row: u8,
+    col: u8,
+    dir_idx: usize,
+    color: Cell,
+    result: ll.PatternResult,
+) bool {
     if (result.count != 4 and !result.has_jump_four) return false;
 
     const dir = DIRECTIONS[dir_idx];
