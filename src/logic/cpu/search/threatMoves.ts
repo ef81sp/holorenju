@@ -60,8 +60,10 @@ export function createsFour(
  * 意味論は `classifyFourInDirection(...).kind !== "not_four"` と同値（issue #134）。
  * ただし分類には「五点が 1 個か 2 個以上か」の確定が要るのでライン全体の走査が必要
  * なのに対し、boolean 用途は最初の 1 点で打ち切れる。ホットパス向けにこちらは
- * 早期打ち切り版（`hasLineFivePoint`）を維持する。**五点走査の定義は共有**しており、
- * 両者の同値性は `fourDefenseParity.wasm.test.ts` で全列挙固定している。
+ * 早期打ち切り版（`hasLineFivePoint`）を維持する。同値性は**足切り条件が同一で、
+ * 五点走査の定義（`scanLineFivePoints`）を共有している**ことによる構造的な保証
+ * （`hasLineFivePoint` = 五点 >= 1、`not_four` = 五点 0）。
+ * Zig 側は同じ不変条件を `threats.zig` の全列挙テストで固定している。
  *
  * @param i DIRECTIONS / DIRECTION_INDICES のインデックス（0..3）
  */
@@ -107,16 +109,25 @@ export function isFourInDirection(
  *
  * Zig 側 `threats.FourClass` と対応する（脅威系は二重実装。どちらかを変えたら
  * 必ず両方直し、`fourDefenseParity.wasm.test.ts` で確認すること）。
+ *
+ * 4 方向の畳み込み結果（`threatPatterns.FourDefense`）も**この型のエイリアス**。
+ * Zig 側の `quiescence.FourDefense = threats.FourClass` と対称。
+ * `unstoppable.fivePoints` が optional なのはそのため（畳み込み後は「どの方向の
+ * 五点か」が意味を持たないので持たない）。**`classifyFourInDirection` が返す
+ * `unstoppable` では必ず埋まっている。**
  */
 export type FourClass =
   /** 五点 0 個。四ではない（黒の長連にしかならない形を含む） */
   | { kind: "not_four" }
   /** 五点 2 個以上 ＝ 活四。1 手では止められない */
-  | { kind: "unstoppable"; fivePoints: Position[] }
+  | { kind: "unstoppable"; fivePoints?: Position[] }
   /** 五点 1 個 ＝ 止め四。その 1 点が受け */
   | { kind: "block"; position: Position };
 
-const FOUR_CLASS_NOT_FOUR: FourClass = Object.freeze({ kind: "not_four" });
+/** `not_four` の共有インスタンス（分類のたびにオブジェクトを作らないため） */
+export const FOUR_CLASS_NOT_FOUR: FourClass = Object.freeze({
+  kind: "not_four",
+});
 
 /**
  * その方向の四を分類する（四判定・受け点の SSoT・issue #134）

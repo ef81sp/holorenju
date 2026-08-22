@@ -1137,10 +1137,13 @@ test "issue #121: 白なら同じ形は本物の跳び四（長連が禁じら�
 
 // === issue #134: classifyFourInDirection（四判定・受け点の SSoT）の全列挙固定 ===
 
-/// row 7 の連続 9 マスに 3^9 通りの空/黒/白を敷いて全列挙する。
+/// **テスト専用**。row 7 の連続 9 マスに 3^9 通りの空/黒/白を敷いて全列挙する。
 /// 盤端で切れる形も含めるため開始列を 3 通り回す
 /// （TS `search/fourDefenseParity.wasm.test.ts` と同形式）。
-pub fn forEachLinePattern(
+///
+/// 盤面の敷き直しは 3^9 × 3 = 59,049 回と重いので、確認したい不変条件は
+/// **1 つの body にまとめて 1 周で**回すこと（pre-commit で毎回走る）。
+fn forEachLinePattern(
     comptime body: fn (cells: *[CELL_COUNT]Cell, line_start: u8) anyerror!void,
 ) !void {
     const LINE_LEN: usize = 9;
@@ -1167,7 +1170,48 @@ pub fn forEachLinePattern(
     }
 }
 
-fn assertClassifyMatchesIsFour(cells: *[CELL_COUNT]Cell, line_start: u8) anyerror!void {
+/// **テスト専用**。`evaluate.createsFourThree` / TS `analyzeJumpPatterns` が #134 以前に
+/// 使っていた**連続四の旧基準**（端ベース・黒の長連補正込み）の参照実装。
+///
+/// 長連補正（`evaluate.blackOverlineEnd` と同じ規則）もここに写して自己完結させてある。
+/// 本体側の実装が変わってもこの参照実装は変わらないので、新旧差分 0 の固定に使える。
+/// `open_four`（両端空き）は旧 Zig には無く TS `analyzeJumpPatterns.hasOpenFour` に
+/// 対応する項目で、統一後は「五点 2 個以上 ＝ `.unstoppable`」と一致すべきもの。
+fn legacyConsecutiveFour(cells: []const Cell, row: u8, col: u8, dir_idx: usize, color: Cell) struct {
+    has_four: bool,
+    open_four: bool,
+} {
+    const dir = DIRECTIONS[dir_idx];
+    const pos = board_mod.countInDirectionOnCells(cells, row, col, dir.dr, dir.dc, color);
+    const neg = board_mod.countInDirectionOnCells(cells, row, col, -dir.dr, -dir.dc, color);
+    var e1 = pos.end_state;
+    var e2 = neg.end_state;
+    if (color == .black) {
+        if (e1 == .empty and legacyBlackOverlineEnd(cells, row, col, dir.dr, dir.dc, pos.count)) {
+            e1 = .opponent;
+        }
+        if (e2 == .empty and legacyBlackOverlineEnd(cells, row, col, -dir.dr, -dir.dc, neg.count)) {
+            e2 = .opponent;
+        }
+    }
+    return .{
+        .has_four = e1 == .empty or e2 == .empty,
+        .open_four = e1 == .empty and e2 == .empty,
+    };
+}
+
+/// **テスト専用**。`evaluate.blackOverlineEnd` の写し（旧基準の参照実装の一部）。
+/// empty 端の「gap の 1 つ先」が黒なら、その端へ伸ばすと 6 連＝長連なので塞がり扱い。
+fn legacyBlackOverlineEnd(cells: []const Cell, row: u8, col: u8, dr: i8, dc: i8, run: u8) bool {
+    const steps: i16 = @as(i16, run) + 2;
+    const r: i16 = @as(i16, row) + dr * steps;
+    const c: i16 = @as(i16, col) + dc * steps;
+    if (!board_mod.isValid(r, c)) return false;
+    const idx: u16 = @intCast(@as(u16, @intCast(r)) * BOARD_SIZE + @as(u16, @intCast(c)));
+    return cells[idx] == .black;
+}
+
+fn assertFourClassInvariants(cells: *[CELL_COUNT]Cell, line_start: u8) anyerror!void {
     for (0..9) |i| {
         const col: u8 = line_start + @as(u8, @intCast(i));
         const color = cells[7 * BOARD_SIZE + col];
@@ -1201,9 +1245,21 @@ fn assertClassifyMatchesIsFour(cells: *[CELL_COUNT]Cell, line_start: u8) anyerro
 
         // 3. `out` に渡した五点は列挙結果と一致する
         try std.testing.expectEqual(five_count, five_points.len);
+
+        // 4. 連続四の旧基準（端ベース）との差分が 0（`evaluate.createsFourThree` /
+        //    TS `analyzeJumpPatterns` の連続四側を五点列挙に統一した根拠・issue #134）。
+        //    旧実装が連続四を見ていたのは `lut.count == 4` の方向だけ。
+        if (lut.count == 4) {
+            const legacy = legacyConsecutiveFour(cells, 7, col, 0, color);
+            // 「四かどうか」が一致（偽陽性・偽陰性ともゼロ）
+            try std.testing.expectEqual(legacy.has_four, cls != .not_four);
+            // 「活四かどうか」（両端空き ⇔ 五点 2 個以上）も一致
+            try std.testing.expectEqual(legacy.open_four, cls == .unstoppable);
+        }
     }
 }
 
-test "issue #134: classifyFourInDirection は isFourInDirection と同値（1ライン全列挙）" {
-    try forEachLinePattern(assertClassifyMatchesIsFour);
+test "issue #134: 四分類の不変条件（1ライン全列挙）" {
+    ll.init();
+    try forEachLinePattern(assertFourClassInvariants);
 }

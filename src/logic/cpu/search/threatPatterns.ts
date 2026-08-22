@@ -20,6 +20,8 @@ import { isNearExistingStone } from "../moveGenerator";
 import { isForbiddenForBlack } from "../wasm/forbiddenAdapter";
 import { checkJumpThree } from "../wasm/patternsAdapter";
 import {
+  type FourClass,
+  FOUR_CLASS_NOT_FOUR,
   classifyFourInDirection,
   createsFour,
   isFourInDirection,
@@ -128,19 +130,16 @@ export function findFourMoves(
  * 以前は `Position | null` で、`null` が「防御不可（活四）」と「そもそも四ではない」の
  * 両方を意味していた。VCF 経路は `null` を即勝ちとして扱うため、四の判定側が
  * 偽陽性を出すと「四ですらない手」で VCF が成立してしまっていた。
- * Zig 側 `quiescence.FourDefense` と対応する。
+ *
+ * issue #134: 方向ごとの分類（`threatMoves.FourClass`）と**同じ型**にした。
+ * 3 値の意味も一致する（`not_four` = 五点 0 個 / `unstoppable` = 活四で 1 手では
+ * 止められない / `block` = 止め四でその 1 点が受け）。畳み込み後は「どの方向の
+ * 五点か」が意味を持たないので `unstoppable.fivePoints` は付けない（optional）。
+ * Zig 側の `quiescence.FourDefense = threats.FourClass` と対称。
  */
-export type FourDefense =
-  /** どの方向でも四になっていない（五点 0 個）。脅威ではない。 */
-  | { kind: "not_four" }
-  /** 四だが受け点が 2 つ以上ある ＝ 活四。1 手では止められない。 */
-  | { kind: "unstoppable" }
-  /** 止め四。この 1 点で受かる。 */
-  | { kind: "block"; position: Position };
+export type FourDefense = FourClass;
 
-export const FOUR_DEFENSE_NOT_FOUR: FourDefense = Object.freeze({
-  kind: "not_four",
-});
+export const FOUR_DEFENSE_NOT_FOUR: FourDefense = FOUR_CLASS_NOT_FOUR;
 export const FOUR_DEFENSE_UNSTOPPABLE: FourDefense = Object.freeze({
   kind: "unstoppable",
 });
@@ -196,9 +195,14 @@ export function getFourDefensePosition(
       case "block":
         firstDefense ??= fourClass.position;
         break;
-      default:
-        // not_four: この方向は四ではない（黒の長連にしかならない四）
+      case "not_four":
+        // この方向は四ではない（黒の長連にしかならない四）
         break;
+      default: {
+        // 網羅チェック（FourClass に値が増えたらここで型エラーになる）
+        const exhaustive: never = fourClass;
+        return exhaustive;
+      }
     }
   }
 

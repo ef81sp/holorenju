@@ -429,8 +429,11 @@ pub fn getThreatDefensePositions(cells: []const Cell, row: u8, col: u8, color: C
     }
 
     if (!has_threat) return .no_threat;
-    // 脅威はあるのに受け点が 1 つも出せなかったケース（跳び三の受けが空など）は
-    // 従来どおり「防御不可」に倒す（旧実装の `len == 0` + `isThreat` ガードと同値）。
+    // 「脅威はあるのに受け点が 1 つも出せない」ケースは、4 方向 × 88 ライン × 3 オフセット ×
+    // 3^9 × 両色の全列挙で**到達不能**であることを確認済み（PR #139 レビュー）。
+    // ここに到達したら跳び三の判定（LUT の `has_jump_three`）と受け列挙
+    // （`getJumpThreeDefensePositions`）が食い違っているということなので、
+    // 保守側（＝旧実装の `len == 0` + `isThreat` ガードと同じ「防御不可」）に倒す。
     if (defense_positions.len == 0) return .unstoppable;
     return .{ .positions = defense_positions };
 }
@@ -908,6 +911,8 @@ fn processBlockDefenses(
     // 呼び出し元（`evaluateCounterThreat` の ct=four 分岐）は `blockThreatContinues` で
     // `block_ct != .none` を確認済みなので、ここに来る `no_threat` は
     // 「ブロック石が五を作った（`block_ct == .win`）」ケースだけ。どちらも攻撃側の勝ち。
+    // なお `.win` を呼び出し元で早期 return しないため、五を作ったブロック石が別方向にも
+    // 脅威を持つと `.positions` に落ちて勝ちを取りこぼしうる（偽陰性・issue #140）。
     const block_def_positions = switch (getThreatDefensePositions(cells, block_pos.row, block_pos.col, color)) {
         // 防御不可 → ブロックの脅威で勝ち
         .unstoppable, .no_threat => return true,
@@ -1778,7 +1783,8 @@ fn processBlockDefensesSeq(
 
     const opponent = color.opposite();
     // `processBlockDefenses` と同じく、呼び出し元が `blockThreatContinues` で
-    // `block_ct != .none` を確認済みなので `no_threat` はブロック石が五を作った場合だけ。
+    // `block_ct != .none` を確認済みなので `no_threat` はブロック石が五を作った場合だけ
+    // （`.win` を早期 return しないことによる偽陰性は issue #140）。
     const block_def_positions = switch (getThreatDefensePositions(cells, block_pos.row, block_pos.col, color)) {
         // 防御不可 → ブロックの脅威で勝ち
         .unstoppable, .no_threat => {

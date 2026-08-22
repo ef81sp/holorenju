@@ -359,10 +359,22 @@ export function detectOpponentThreats(
           pattern.count,
         );
         const isFour = fourClass.kind !== "not_four";
-        if (fourClass.kind === "unstoppable") {
-          addUniquePositions(result.openFours, fourClass.fivePoints);
-        } else if (fourClass.kind === "block") {
-          addUniquePositions(result.fours, [fourClass.position]);
+        switch (fourClass.kind) {
+          case "unstoppable":
+            // classifyFourInDirection は unstoppable なら必ず fivePoints を埋める
+            // （optional なのは受け点を持たない畳み込み結果 FourDefense と型を共有するため）
+            addUniquePositions(result.openFours, fourClass.fivePoints ?? []);
+            break;
+          case "block":
+            addUniquePositions(result.fours, [fourClass.position]);
+            break;
+          case "not_four":
+            // この方向は四ではない → 下の活三ブランチへ落とす
+            break;
+          default: {
+            const exhaustive: never = fourClass;
+            return exhaustive;
+          }
         }
 
         // 活三をチェック（両端が空いている3連）
