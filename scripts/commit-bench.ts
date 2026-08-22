@@ -929,8 +929,12 @@ async function main(): Promise<void> {
           baseSeed: seedInEffect,
         },
         workerConfigs,
+        recentGames: info.recentGames,
       });
-      console.warn(`⚠ hang detected g${info.gameIdx}, dumped to ${dumpPath}`);
+      console.warn(
+        `⚠ hang detected g${info.gameIdx}, dumped to ${dumpPath} ` +
+          `(requests=${context.telemetry.requestCount}, recentMoves=${context.telemetry.recentMoves.length}, recentGames=${info.recentGames.length})`,
+      );
     };
 
     const hangInjectParsed = parseHangInjectEnv(process.env.HANG_INJECT);

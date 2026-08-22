@@ -24,6 +24,7 @@ import { parentPort, workerData } from "node:worker_threads";
 
 import type { DifficultyParams } from "../src/types/cpu.ts";
 import type { BoardState, Position } from "../src/types/game.ts";
+import type { EngineParamsSnapshot } from "./lib/workerTelemetry.ts";
 
 import { mergeDifficultyParams } from "./lib/difficultyParamsMerge.ts";
 import { EVAL_PARAM_IDS } from "./lib/evalParams.ts";
@@ -616,6 +617,8 @@ async function main(): Promise<void> {
   const wasm = await loadWasmFromWorktree(worktreePath);
   let wasmHandler: WasmSearchHandler | null = null;
   let tsFindBestMove: FindBestMoveFn | null = null;
+  // #128: ready 通知（EngineParamsSnapshot）にも載せるためブロック外で保持する
+  let threatProbeState = "ON(default)";
 
   if (wasm) {
     wasmHandler = createWasmSearchHandler(wasm);
@@ -623,7 +626,6 @@ async function main(): Promise<void> {
     applyEvalWeights(wasm, data.evalWeights);
     // 脅威プローブトグル（Gate 0 計測用）。既定 true=従来挙動、false のときのみ
     // 明示 off。setThreatProbeEnabled が無い古い wasm は warn してスキップ。
-    let threatProbeState = "ON(default)";
     if (data.threatProbeEnabled === false) {
       if (typeof wasm.setThreatProbeEnabled === "function") {
         wasm.setThreatProbeEnabled(0);
@@ -654,8 +656,24 @@ async function main(): Promise<void> {
     );
   }
 
-  // 初期化完了を通知
-  parentPort?.postMessage({ ready: true });
+  // 初期化完了を通知。#128: 解決済みのエンジンパラメータを同梱し、メインスレッド
+  // 側（workerTelemetry）がハングダンプに載せられるようにする。ハング中の worker
+  // は問い合わせに応答できないため、この「起動時の自己申告」が唯一の入手経路。
+  const engineParams: EngineParamsSnapshot = {
+    worktreePath,
+    difficulty: data.difficulty,
+    depth: params.depth,
+    timeLimit: params.timeLimit,
+    maxNodes: params.maxNodes,
+    randomFactor: params.randomFactor,
+    randomCriticalScoreThreshold: params.randomCriticalScoreThreshold,
+    evaluationOptions: params.evaluationOptions,
+    engine: wasmHandler ? "wasm" : "ts",
+    bookEnabled: bookBridge !== null,
+    hasStatsBuffer: typeof wasm?.getStatsBuffer === "function",
+    threatProbe: threatProbeState,
+  };
+  parentPort?.postMessage({ ready: true, params: engineParams });
 
   // 着手要求を処理（同期的にCPUを呼び出す）
   parentPort?.on("message", (msg: MoveRequest) => {

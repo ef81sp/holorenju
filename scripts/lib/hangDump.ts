@@ -16,6 +16,7 @@ import type { EvaluationOptions } from "../../src/logic/cpu/evaluation/patternSc
 import type { BoardState } from "../../src/types/game.ts";
 import type { HangContext, MoveRecord } from "../commit-game-runner.ts";
 import type { CommitInfo } from "../types/commit-bench.ts";
+import type { WorkerTelemetrySnapshot } from "./workerTelemetry.ts";
 
 /** ダンプに含める側（A/B）ごとの worker 設定 */
 export interface HangDumpSideConfig {
@@ -77,6 +78,32 @@ export interface HangDumpWorker {
   evaluationOptions: Partial<EvaluationOptions> | undefined;
   bookEnabled: boolean;
   color: "black" | "white";
+  /**
+   * #128: メインスレッドが保持していた worker 計測のスナップショット。
+   * 起動時の解決済みパラメータ（difficulty/depth/timeLimit/maxNodes/evalOptions/
+   * engine/threatProbe）、起動からの要求数、ハングした要求（seed 含む）、
+   * 直近 N 手の思考統計（nodes/depth/time）を含む。
+   *
+   * schemaVersion>=2 で必ず書かれる。v1 ダンプを読むと undefined（後方互換）。
+   */
+  telemetry?: WorkerTelemetrySnapshot;
+}
+
+/**
+ * #128: ハングした worker が **同一インスタンスで直前に打った局**の記録。
+ * TT/wasm メモリ等の蓄積状態を再現するため、replay-hang が
+ * `--replay-history` でこれらを同じ順に再生してから該当手を要求する。
+ *
+ * 着手は座標のみに切り詰める（時間/統計はダンプ肥大化を招くうえ再生に不要）。
+ */
+export interface HangDumpRecentGame {
+  gameIdx: number;
+  jushuName: string;
+  isABlack: boolean;
+  /** この局の PRNG seed（未指定 bench なら undefined） */
+  gameSeed?: number;
+  /** opening 3手を含む全着手（打たれた順） */
+  moves: { row: number; col: number; isOpening: boolean }[];
 }
 
 /** 相手側の worker 設定（対戦再構築が必要な将来のため） */
@@ -88,10 +115,29 @@ export interface HangDumpOpponent {
   bookEnabled: boolean;
 }
 
-/** ダンプ JSON の全体スキーマ */
+/**
+ * ダンプの現行スキーマ版。
+ * - v1: PR #109 初版
+ * - v2: #128 で worker.telemetry / recentGames / notes を追加
+ */
+export const HANG_DUMP_SCHEMA_VERSION = 2;
+
+/**
+ * wasm 側の「探索中の統計」を同期取得できない理由をダンプ自身に残す。
+ * 調査者が「なぜ nodes の実測が無いのか」を毎回問い直さなくて済むようにする。
+ */
+export const WASM_LIVE_STATS_NOTE =
+  "ハング中の worker は wasm 探索でスレッドが同期ブロックされており、" +
+  "postMessage を送っても event loop が回らないため『現在の探索統計』は取得できない。" +
+  "worker.telemetry.recentMoves（直前 N 手の nodes/depth/time）で代替している。";
+
+/**
+ * ダンプ JSON の全体スキーマ。
+ * ディスク上には v1 ダンプも残るため、v2 で足したフィールドは optional。
+ */
 export interface HangDumpJson {
   type: "hang-dump";
-  schemaVersion: 1;
+  schemaVersion: number;
   timestamp: string;
   bench: HangDumpBench;
   match: HangDumpMatch;
@@ -102,6 +148,14 @@ export interface HangDumpJson {
   board: BoardState;
   /** ハング直前までの着手履歴（opening 3手を含む。row/col/isOpening/time…） */
   moveHistory: MoveRecord[];
+  /**
+   * #128 (v2): ハングした worker が同一インスタンスで直前に打ち終えた局
+   * （古→新）。`replay-hang --replay-history` の入力。
+   * v1 ダンプを読むと undefined（後方互換）。
+   */
+  recentGames?: HangDumpRecentGame[];
+  /** 人間向けの注記（wasm live stats が取れない理由など）。v2 以降。 */
+  notes?: string[];
 }
 
 export interface WriteHangDumpParams {
@@ -110,11 +164,35 @@ export interface WriteHangDumpParams {
   match: HangDumpMatch;
   bench: HangDumpBench;
   workerConfigs: { A: HangDumpSideConfig; B: HangDumpSideConfig };
+  /** #128: ハングした worker が直前に打ち終えた局（古→新）。無ければ空配列。 */
+  recentGames?: HangDumpRecentGame[];
+}
+
+/**
+ * 側（A/B）と先後割当から、その側が担当した石色を求める。
+ * recentGames の再生で「ハングした worker がどの手番を打っていたか」を
+ * 局ごとに復元するのに使う純粋関数。
+ */
+export function hangSideColor(
+  side: "A" | "B",
+  isABlack: boolean,
+): "black" | "white" {
+  if (side === "A") {
+    return isABlack ? "black" : "white";
+  }
+  return isABlack ? "white" : "black";
 }
 
 /** 呼び出し側は match/bench の中身を組み立てて渡す。書き込んだ絶対パスを返す。 */
 export function writeHangDump(params: WriteHangDumpParams): string {
-  const { outputDir, context, match, bench, workerConfigs } = params;
+  const {
+    outputDir,
+    context,
+    match,
+    bench,
+    workerConfigs,
+    recentGames = [],
+  } = params;
   const hangSide = context.side;
   const oppSide: "A" | "B" = hangSide === "A" ? "B" : "A";
   const hangCfg = workerConfigs[hangSide];
@@ -122,7 +200,7 @@ export function writeHangDump(params: WriteHangDumpParams): string {
 
   const dump: HangDumpJson = {
     type: "hang-dump",
-    schemaVersion: 1,
+    schemaVersion: HANG_DUMP_SCHEMA_VERSION,
     timestamp: new Date().toISOString(),
     bench,
     match,
@@ -143,6 +221,7 @@ export function writeHangDump(params: WriteHangDumpParams): string {
       evaluationOptions: hangCfg.evaluationOptions,
       bookEnabled: hangCfg.bookEnabled,
       color: context.color,
+      telemetry: context.telemetry,
     },
     opponent: {
       side: oppSide,
@@ -153,6 +232,8 @@ export function writeHangDump(params: WriteHangDumpParams): string {
     },
     board: context.board,
     moveHistory: context.moveHistory,
+    recentGames,
+    notes: [WASM_LIVE_STATS_NOTE],
   };
 
   if (!fs.existsSync(outputDir)) {

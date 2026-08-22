@@ -13,8 +13,13 @@
  *     --import ./scripts/register-loader.mjs scripts/replay-hang.ts <dump-path>
  *
  * オプション:
- *   --timeout-ms=<N>   watchdog タイムアウト（既定 60000ms）
- *   --verbose          レスポンス JSON を出力
+ *   --timeout-ms=<N>    watchdog タイムアウト（既定 60000ms）
+ *   --verbose           レスポンス JSON を出力
+ *   --replay-history    該当手の前に、同じ worker が直前に打った局（ダンプの
+ *                       recentGames, schemaVersion>=2）を同じ順で再生してから
+ *                       ハング局面を要求する。長時間稼働した worker の蓄積状態
+ *                       （wasm メモリ・アロケータ・内部ヒューリスティック）に
+ *                       依存する再現性を検証するためのモード（#128）。
  *
  * 出力:
  *   - dump のメタ情報（side/color/moveNumber/commit/eval options）
@@ -32,8 +37,14 @@ import { fileURLToPath } from "node:url";
 import { Worker } from "node:worker_threads";
 
 import type { BoardState, Position } from "../src/types/game.ts";
-import type { HangDumpJson } from "./lib/hangDump.ts";
 
+import { applyMove } from "../src/logic/cpu/core/boardUtils.ts";
+import { createEmptyBoard } from "../src/logic/renjuRules/index.ts";
+import {
+  type HangDumpJson,
+  type HangDumpRecentGame,
+  hangSideColor,
+} from "./lib/hangDump.ts";
 import { buildBridgeCustomParams } from "./lib/match.ts";
 import { mixSeed } from "./lib/mulberry32.ts";
 
@@ -49,7 +60,17 @@ interface CliOptions {
    * 既定 ON（現場運用ではダンプ後に bench の finally で消えているのが普通）。
    */
   recreateWorktree: boolean;
+  /**
+   * #128: ハング局面の前に、同じ worker が直前に打った局（dump.recentGames）を
+   * 同じ順で再生する。TT/wasm メモリ等の蓄積状態を再現するため。
+   * schemaVersion 1 のダンプには recentGames が無いので警告して素通しする。
+   */
+  replayHistory: boolean;
 }
+
+const USAGE =
+  "Usage: replay-hang <dump-path> [--timeout-ms=60000] [--verbose] " +
+  "[--no-recreate-worktree] [--replay-history]";
 
 // ============================================================================
 // CLI
@@ -62,6 +83,7 @@ function parseArgs(): CliOptions {
     timeoutMs: 60000,
     verbose: false,
     recreateWorktree: true,
+    replayHistory: false,
   };
   for (const arg of args) {
     if (arg.startsWith("--timeout-ms=")) {
@@ -73,10 +95,10 @@ function parseArgs(): CliOptions {
       options.verbose = true;
     } else if (arg === "--no-recreate-worktree") {
       options.recreateWorktree = false;
+    } else if (arg === "--replay-history") {
+      options.replayHistory = true;
     } else if (arg === "--help" || arg === "-h") {
-      console.log(
-        "Usage: replay-hang <dump-path> [--timeout-ms=60000] [--verbose] [--no-recreate-worktree]",
-      );
+      console.log(USAGE);
       process.exit(0);
     } else if (arg.startsWith("--")) {
       console.error(`Error: 不明な引数: ${arg}`);
@@ -87,9 +109,7 @@ function parseArgs(): CliOptions {
   }
   if (options.dumpPath === "") {
     console.error("Error: ダンプファイルのパスを指定してください");
-    console.error(
-      "Usage: replay-hang <dump-path> [--timeout-ms=60000] [--verbose] [--no-recreate-worktree]",
-    );
+    console.error(USAGE);
     process.exit(1);
   }
   return options;
@@ -257,6 +277,9 @@ interface ReplayOutcome {
   errorMessage?: string;
 }
 
+/** リクエスト ID の採番（履歴再生で複数手を要求するため一意にする） */
+let nextRequestId = 1;
+
 function requestMoveWithWatchdog(
   worker: Worker,
   board: BoardState,
@@ -265,7 +288,7 @@ function requestMoveWithWatchdog(
   moveSeed: number | undefined,
 ): Promise<ReplayOutcome> {
   return new Promise<ReplayOutcome>((resolve) => {
-    const requestId = 1;
+    const requestId = nextRequestId++;
     const start = performance.now();
 
     const timer = setTimeout(() => {
@@ -307,6 +330,134 @@ function requestMoveWithWatchdog(
 }
 
 // ============================================================================
+// 履歴再生（--replay-history, #128）
+// ============================================================================
+
+/**
+ * v2 ダンプの worker 計測（#128）を人間向けに要約表示する。
+ * v1 ダンプには telemetry が無いので、その旨だけを 1 行で知らせる。
+ */
+function printTelemetry(dump: HangDumpJson): void {
+  const { telemetry } = dump.worker;
+  if (!telemetry) {
+    console.log(
+      `telemetry: (schemaVersion=${dump.schemaVersion} — worker 計測なし)`,
+    );
+    return;
+  }
+  const { engineParams, pendingRequest, recentMoves, requestCount } = telemetry;
+  console.log(`telemetry: worker 起動からの要求数=${requestCount}`);
+  if (engineParams) {
+    console.log(
+      `  engine=${engineParams.engine} depth=${engineParams.depth} timeLimit=${engineParams.timeLimit} maxNodes=${engineParams.maxNodes} threatProbe=${engineParams.threatProbe} statsBuffer=${engineParams.hasStatsBuffer}`,
+    );
+  }
+  if (pendingRequest) {
+    console.log(
+      `  ハングした要求: requestId=${pendingRequest.requestId} move#${pendingRequest.moveNumber} ${pendingRequest.color} moveSeed=${pendingRequest.moveSeed ?? "unset"} sentAt=${pendingRequest.sentAt}`,
+    );
+  }
+  if (recentMoves.length > 0) {
+    console.log(`  直前 ${recentMoves.length} 手の思考統計:`);
+    for (const m of recentMoves) {
+      const nodes = m.stats?.nodes;
+      console.log(
+        `    g${m.gameIdx ?? "?"} move#${m.moveNumber} ${m.color} depth=${m.depth} score=${m.score} t=${Math.round(m.thinkingTimeMs)}ms nodes=${nodes ?? "n/a"}`,
+      );
+    }
+  }
+  const recentGames = dump.recentGames ?? [];
+  console.log(
+    `  同一 worker の直前局: ${recentGames.length} 局${recentGames.length > 0 ? ` (g${recentGames.map((g) => g.gameIdx).join(", g")})` : ""}`,
+  );
+}
+
+/** 手番の色。開局手を含め黒→白→黒…と交互（連珠の手順そのもの）。 */
+function colorOfMoveIndex(index: number): "black" | "white" {
+  return index % 2 === 0 ? "black" : "white";
+}
+
+interface HistoryReplayResult {
+  /** 実際に worker に投げた手数 */
+  requestedMoves: number;
+  /** 履歴再生の途中でハングしたか（したならそこが新しい調査対象） */
+  hungAt?: { gameIdx: number; moveNumber: number; elapsedMs: number };
+  /**
+   * 履歴再生の途中で worker がエラー応答を返したか。
+   * ハング（無応答）とは区別する — 混同すると誤診断になる。
+   */
+  erroredAt?: { gameIdx: number; moveNumber: number; message: string };
+}
+
+/**
+ * ハングした worker が直前に打った局を、同じ worker インスタンスに同じ順で
+ * 打たせ直す。相手側 worker は不要（ハングした側の手番だけを要求すればよい）。
+ *
+ * 目的は「長時間稼働した worker の蓄積状態でのみハングする」仮説の検証。
+ * 単独再生（1手だけ）で再現しなかった #128 の実ダンプに対する次の一手。
+ */
+async function replayHistory(
+  worker: Worker,
+  dump: HangDumpJson,
+  games: HangDumpRecentGame[],
+  timeoutMs: number,
+): Promise<HistoryReplayResult> {
+  let requestedMoves = 0;
+  for (const game of games) {
+    const color = hangSideColor(dump.hang.side, game.isABlack);
+    let board: BoardState = createEmptyBoard();
+    let nonOpeningOrdinal = 0;
+    console.log(
+      `  g${game.gameIdx} ${game.jushuName} (${game.isABlack ? "A黒" : "A白"}) — ハング側=${color}, ${game.moves.length}手`,
+    );
+    for (const [index, move] of game.moves.entries()) {
+      const moveColor = colorOfMoveIndex(index);
+      if (!move.isOpening) {
+        nonOpeningOrdinal++;
+        if (moveColor === color) {
+          const moveSeed =
+            game.gameSeed === undefined
+              ? undefined
+              : mixSeed(game.gameSeed, nonOpeningOrdinal);
+          // 逐次実行が必須: 同一 worker に交互要求するので並列化できない
+          const outcome = await requestMoveWithWatchdog(
+            worker,
+            board,
+            color,
+            timeoutMs,
+            moveSeed,
+          );
+          requestedMoves++;
+          if (outcome.status === "timed-out") {
+            return {
+              requestedMoves,
+              hungAt: {
+                gameIdx: game.gameIdx,
+                moveNumber: index + 1,
+                elapsedMs: outcome.elapsedMs,
+              },
+            };
+          }
+          if (outcome.status === "error") {
+            return {
+              requestedMoves,
+              erroredAt: {
+                gameIdx: game.gameIdx,
+                moveNumber: index + 1,
+                message: outcome.errorMessage ?? "(不明なエラー)",
+              },
+            };
+          }
+        }
+      }
+      // 実際に打たれた手を適用する（worker の返した手ではなく棋譜どおりに進める）
+      board = applyMove(board, { row: move.row, col: move.col }, moveColor);
+    }
+  }
+  return { requestedMoves };
+}
+
+// ============================================================================
 // main
 // ============================================================================
 
@@ -344,7 +495,9 @@ async function main(): Promise<void> {
   console.log(
     `  seed: gameSeed=${dump.match.gameSeed ?? "unset"} → moveSeed=${moveSeed ?? "unset"} (nonOpeningOrdinal=${nonOpeningOrdinal})`,
   );
-  console.log(`watchdog: ${options.timeoutMs}ms\n`);
+  console.log(`watchdog: ${options.timeoutMs}ms`);
+  printTelemetry(dump);
+  console.log();
 
   if (options.recreateWorktree) {
     ensureWorktree(dump);
@@ -352,7 +505,54 @@ async function main(): Promise<void> {
 
   console.log(`bridge worker を起動中...`);
   const worker = await spawnBridgeWorker(dump);
-  console.log(`起動完了。1手要求を送信します...\n`);
+  console.log(`起動完了。`);
+
+  if (options.replayHistory) {
+    const recentGames = dump.recentGames ?? [];
+    if (recentGames.length === 0) {
+      console.warn(
+        `⚠ --replay-history 指定ですが、このダンプに recentGames がありません` +
+          `（schemaVersion=${dump.schemaVersion}、v2 未満の古いダンプ）。履歴再生をスキップします。`,
+      );
+    } else {
+      console.log(
+        `\n--- 履歴再生: 同一 worker に直前 ${recentGames.length} 局を打たせ直します ---`,
+      );
+      const historyStart = performance.now();
+      const history = await replayHistory(
+        worker,
+        dump,
+        recentGames,
+        options.timeoutMs,
+      );
+      if (history.hungAt) {
+        const s = (history.hungAt.elapsedMs / 1000).toFixed(2);
+        console.log(
+          `\n✗ HANG REPRODUCED（履歴再生中） g${history.hungAt.gameIdx} の ${history.hungAt.moveNumber} 手目で ${s}s 応答なし`,
+        );
+        console.log(
+          `  蓄積状態依存のハングが再現しました。この局面が根本原因調査の対象です。`,
+        );
+        worker.terminate();
+        process.exit(2);
+      }
+      if (history.erroredAt) {
+        console.log(
+          `\n⚠ 履歴再生中に worker がエラー応答: g${history.erroredAt.gameIdx} の ${history.erroredAt.moveNumber} 手目 — ${history.erroredAt.message}`,
+        );
+        console.log(
+          `  ハング（無応答）ではありません。履歴再生を中断したためハング局面の要求は行いません。`,
+        );
+        worker.terminate();
+        process.exit(1);
+      }
+      console.log(
+        `--- 履歴再生完了: ${history.requestedMoves} 手を要求 (${((performance.now() - historyStart) / 1000).toFixed(1)}s) ---\n`,
+      );
+    }
+  }
+
+  console.log(`ハング局面の1手要求を送信します...\n`);
 
   const outcome = await requestMoveWithWatchdog(
     worker,
@@ -378,6 +578,11 @@ async function main(): Promise<void> {
       `\n※ 再現せず。ダンプ時のハングは非決定的（TT/randomFactor/実行環境）か、` +
         `wasm 側の状態依存の可能性があります。`,
     );
+    if (!options.replayHistory) {
+      console.log(
+        `  次の一手: --replay-history を付けて同一 worker に直前局を打たせてから再試行してください（#128）。`,
+      );
+    }
     process.exit(0);
   }
   if (outcome.status === "timed-out") {

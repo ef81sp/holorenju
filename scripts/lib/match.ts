@@ -17,6 +17,7 @@ import type { DifficultyParams } from "../../src/types/cpu.ts";
 import type { Position } from "../../src/types/game.ts";
 import type { SPRTConfig, WDLCount } from "../types/ab.ts";
 import type { CommitGameResult } from "../types/commit-bench.ts";
+import type { HangDumpRecentGame } from "./hangDump.ts";
 
 import {
   getAllJushuNames,
@@ -30,6 +31,13 @@ import {
 } from "../commit-game-runner.ts";
 import { estimateEloDiff } from "./eloDiff.ts";
 import { updateSPRT } from "./sprt.ts";
+import { extractEngineParams, getWorkerTelemetry } from "./workerTelemetry.ts";
+
+/**
+ * #128: ハングダンプに載せる「同一 worker が直前に打った局」の保持数。
+ * TT/wasm メモリ蓄積の再現が目的なので直近数局あれば足り、ダンプ肥大も避ける。
+ */
+export const RECENT_GAMES_HISTORY_LIMIT = 3;
 
 /** 1局分の珠型タスク（開始局面＋先後割当）。 */
 export interface MatchTask {
@@ -44,6 +52,12 @@ export interface HangMatchInfo {
   jushuName: string;
   isABlack: boolean;
   pairIdx: number;
+  /**
+   * #128: この worker ペアが**同一インスタンスのまま**直前に打ち終えた局
+   * （古→新、最大 RECENT_GAMES_HISTORY_LIMIT 件）。worker 再生成でクリアされる。
+   * replay-hang の `--replay-history` がこれを再生して蓄積状態を再現する。
+   */
+  recentGames: HangDumpRecentGame[];
 }
 
 /** runMatch の結果（caller が後処理＝性能統計や保存を行う）。 */
@@ -275,6 +289,13 @@ export function createBridgeWorker(
       ) {
         clearTimeout(initTimeout);
         worker.off("message", readyHandler);
+        // #128: ready 通知に同梱された解決済みエンジンパラメータを worker 計測へ
+        // 記録する。ハング中の worker には問い合わせられないため、ここが唯一の
+        // 取得機会。古い bridge worker（params 無し）では undefined のまま進む。
+        const engineParams = extractEngineParams(msg);
+        if (engineParams) {
+          getWorkerTelemetry(worker).setEngineParams(engineParams);
+        }
         resolve(worker);
       }
     };
@@ -354,6 +375,10 @@ export async function runMatch(
     pairRef: { a: Worker; b: Worker },
   ): Promise<void> => {
     let pair = pairRef;
+    // #128: この worker ペアが同一インスタンスのまま打ち終えた直近局（古→新）。
+    // ハング時のダンプに載せ、replay-hang が蓄積状態を再現できるようにする。
+    // worker を再生成したらリセットする（状態が引き継がれないため）。
+    let recentGames: HangDumpRecentGame[] = [];
     while (!stop) {
       const taskIdx = nextTask;
       nextTask += 1;
@@ -375,6 +400,7 @@ export async function runMatch(
           openingMoves: positions,
           hangInject: injectHere,
           gameSeed,
+          gameIdx: taskIdx,
         });
         result = { ...r, jushuName };
       } catch (err: unknown) {
@@ -396,6 +422,7 @@ export async function runMatch(
               jushuName,
               isABlack,
               pairIdx,
+              recentGames: [...recentGames],
             });
           } catch (dumpErr: unknown) {
             const dm =
@@ -414,6 +441,8 @@ export async function runMatch(
           pair.b.terminate();
           pair = await recreatePair(pairIdx);
           pairs[pairIdx] = pair;
+          // 新しい worker は TT も wasm メモリも空。直近局の履歴は無効になる。
+          recentGames = [];
           console.warn(
             `↳ worker pair (idx=${pairIdx}) 再生成完了。残り局を継続します。`,
           );
@@ -439,6 +468,22 @@ export async function runMatch(
 
       games.push(result);
       completedGames++;
+
+      // #128: この worker ペアの直近局リング（座標のみ）を更新する。
+      recentGames.push({
+        gameIdx: taskIdx,
+        jushuName,
+        isABlack,
+        gameSeed,
+        moves: result.moveHistory.map((m) => ({
+          row: m.row,
+          col: m.col,
+          isOpening: m.isOpening,
+        })),
+      });
+      while (recentGames.length > RECENT_GAMES_HISTORY_LIMIT) {
+        recentGames.shift();
+      }
 
       // 初回ゲーム後のサニティチェック
       if (completedGames === 1) {
