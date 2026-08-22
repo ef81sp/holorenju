@@ -9,14 +9,17 @@
 
 /* eslint-disable no-bitwise -- ビットマスク操作に必要 */
 
+import { isFiveLength } from "@/logic/renjuRules/core";
+
 import { countLineBit } from "./lineCounting";
 import { CELL_LINES_FLAT } from "./lineMapping";
 
 /**
  * ビットマスク版 checkFive
  *
- * 指定位置を含む連が「ちょうど5」の方向があれば true。
- * renjuRules の checkFive と同一の判定（黒白とも exactly 5）。
+ * 指定位置を含む連が「五」になる方向があれば true。
+ * 五の定義は renjuRules の `isFiveLength`（SSoT）に委ねる
+ * （黒はちょうど 5、白は 5 以上＝長連も五。issue #125）。
  */
 export function checkFiveBit(
   blacks: Uint16Array,
@@ -33,7 +36,7 @@ export function checkFiveBit(
     const lineId = packed >> 8;
     const bitPos = packed & 0xff;
     const count = countLineBit(blacks, whites, lineId, bitPos, color);
-    if (count === 5) {
+    if (isFiveLength(count, color)) {
       return true;
     }
   }

@@ -334,9 +334,8 @@ pub fn detectJumpThreePattern(cells: []const Cell, row: u8, col: u8, dr: i8, dc:
 /// - 黒: ちょうど 5（6 以上は長連なので五ではない）
 /// - 白: 5 以上（白に長連の制限は無い）
 ///
-/// 白を `>= 5` にしているのは意図的である。`forbidden.checkFive` は白でも `== 5` で
-/// 判定しており、白の長連（6 連以上）を五と認めない（定義不一致・#125）。
-/// 連珠ルール上は白の長連は勝ちなので、受け点の列挙ではルールに従って `>= 5` を採る。
+/// 五の判定そのものは `forbidden.isFiveLength`（SSoT）に委ねる。#125 で
+/// `forbidden.checkFive` 側も白 `>= 5` に揃えたので、定義は 1 つになっている。
 ///
 /// **方向限定**である点が重要: `forbidden.checkFive` は 4 方向すべてを見るため、
 /// 別ラインの五点まで拾ってしまい「この四の受け」という意味からずれる。
@@ -367,8 +366,9 @@ pub fn collectLineFivePoints(
         const neg_result = board_mod.countInDirectionOnCells(cells, gap_r, gap_c, -dr, -dc, color);
         const total = @as(u16, pos_result.count) + neg_result.count + 1;
 
-        const is_five = if (color == .black) total == 5 else total >= 5;
-        if (!is_five) continue;
+        // 五の定義は forbidden.isFiveLength（SSoT・#125）に委ねる。
+        // total は最大 BOARD_SIZE(15) なので u8 に収まる。
+        if (!forbidden.isFiveLength(@intCast(total), color)) continue;
 
         out.addUnique(.{ .row = gap_r, .col = gap_c });
         found += 1;

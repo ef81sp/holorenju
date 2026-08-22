@@ -37,10 +37,22 @@ const ForbiddenContext = struct {
     cache: [225]u8 = [_]u8{0} ** 225,
 };
 
-/// 五連をチェック
+/// 連の長さが「五」かどうか（色別の連珠ルール）
+///
+/// - 黒: ちょうど 5（6 以上は長連＝禁手なので五ではない）
+/// - 白: 5 以上（白に長連の制限は無い＝長連も勝ち）
+///
+/// 「五」の定義の SSoT（issue #125）。`checkFive` と `threats.collectLineFivePoints`
+/// はこの述語を経由すること。TS 側の SSoT は `src/logic/renjuRules/core.ts` の
+/// `isFiveLength`。
+pub fn isFiveLength(length: u8, color: Cell) bool {
+    return if (color == .black) length == 5 else length >= 5;
+}
+
+/// 五連をチェック（白は長連＝6連以上も五）
 pub fn checkFive(cells: []const Cell, row: u8, col: u8, color: Cell) bool {
     for (DIRECTION_PAIR_INDICES) |dir_index| {
-        if (jp.getLineLength(cells, row, col, dir_index, color) == 5) return true;
+        if (isFiveLength(jp.getLineLength(cells, row, col, dir_index, color), color)) return true;
     }
     return false;
 }
@@ -339,6 +351,33 @@ test "checkFive: 5連検出" {
     try std.testing.expect(checkFive(&cells, 7, 3, .black));
     // (7,9) に置いても5連にならない（4+1=5ではなく、離れている）
     try std.testing.expect(!checkFive(&cells, 7, 9, .black));
+}
+
+// #125: 白に長連禁手はないので、白の 6 連以上は五（＝勝ち）。黒はちょうど 5 のみ。
+test "checkFive: 白の長連（6連以上）は五" {
+    const CELL_COUNT = board_mod.CELL_COUNT;
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    // 白 6 連（col 4..9）のうち col 9 が最後の着手
+    var c: u8 = 4;
+    while (c <= 8) : (c += 1) cells[7 * BOARD_SIZE + c] = .white;
+    cells[7 * BOARD_SIZE + 9] = .white;
+    try std.testing.expect(checkFive(&cells, 7, 9, .white));
+
+    // 同形の黒は長連なので五ではない
+    var black_cells = [_]Cell{.empty} ** CELL_COUNT;
+    var bc: u8 = 4;
+    while (bc <= 9) : (bc += 1) black_cells[7 * BOARD_SIZE + bc] = .black;
+    try std.testing.expect(!checkFive(&black_cells, 7, 9, .black));
+}
+
+test "checkFive: #125 実測例 白 _WWWW_W のギャップを埋めると五" {
+    const CELL_COUNT = board_mod.CELL_COUNT;
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    // col2..5 白, col6 空, col7 白
+    for ([_]u8{ 2, 3, 4, 5, 7 }) |c| cells[7 * BOARD_SIZE + c] = .white;
+    // col6 に白を置くと col2..7 の 6 連
+    cells[7 * BOARD_SIZE + 6] = .white;
+    try std.testing.expect(checkFive(&cells, 7, 6, .white));
 }
 
 test "checkOverline: ���連検出" {

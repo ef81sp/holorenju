@@ -132,8 +132,22 @@ export function getLineLength(
 // =============================================================================
 
 /**
+ * 連の長さが「五」かどうか（色別の連珠ルール）
+ *
+ * - 黒: ちょうど 5（6 以上は長連＝禁手なので五ではない）
+ * - 白: 5 以上（白に長連の制限は無い＝長連も勝ち）
+ *
+ * 「五」の定義の SSoT（issue #125）。`checkFive` / `checkFiveBit`（LineTable 版）/
+ * `collectLineFivePoints`（受け点列挙）はすべてこの述語を経由すること。
+ * Zig 側の SSoT は `zig/src/forbidden.zig` の `isFiveLength`。
+ */
+export function isFiveLength(length: number, color: StoneColor): boolean {
+  return color === "black" ? length === 5 : length >= 5;
+}
+
+/**
  * 五連をチェック
- * @returns 五連が成立する場合true
+ * @returns 五連が成立する場合true（白は長連＝6連以上も五）
  */
 export function checkFive(
   board: BoardState,
@@ -151,7 +165,7 @@ export function checkFive(
       continue;
     }
     const length = getLineLength(board, row, col, dir1Index, color);
-    if (length === 5) {
+    if (isFiveLength(length, color)) {
       return true;
     }
   }
