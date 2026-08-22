@@ -48,8 +48,16 @@ export interface ForcedWinDetectionResult {
 /** フォールバック時の最大初手検証数 */
 const VCT_FALLBACK_MAX_FIRST_MOVES = 40;
 
-/** フォールバック時の1手あたりVCT探索ノード数上限 */
-const VCT_FALLBACK_MAX_NODES = 100_000;
+/**
+ * フォールバックの初手 1 手あたりの VCT 探索ノード数上限
+ *
+ * 歯止めは 1 手あたり 5s の時間上限（`perMoveOptions.timeLimit`）で、
+ * こちらは暴走時の安全弁。#119 で VCT 経路のノード計上が機能するように
+ * なった結果、旧 100_000 は 5s よりはるかに手前で効く実効上限になり、
+ * それまで数秒で検出できていた追い詰めが出なくなる回帰が出たため引き上げた
+ * （実測: 14 石局面の初手 (8,9) は 500k では未検出、1M で約 2.3s / len13）。
+ */
+const VCT_FALLBACK_MAX_NODES = 2_000_000;
 
 /**
  * 脅威手を1手ずつ findVCTSequenceFromFirstMove で検証する
@@ -87,26 +95,36 @@ function findVCTByFirstMoveIteration(
     },
     collectBranches: false,
   };
-  for (let i = 0; i < threats.length && i < VCT_FALLBACK_MAX_FIRST_MOVES; i++) {
-    const threat = threats[i]!;
-    const result = wasmFindVCTSequenceFromFirstMove(
+  const searchFrom = (
+    firstMove: Position,
+    searchOptions: VCTSearchOptions,
+  ): VCTSequenceResult | null =>
+    wasmFindVCTSequenceFromFirstMove(
       wasmSearchEngine,
       board,
-      threat,
+      firstMove,
       color,
-      perMoveOptions,
+      searchOptions,
     );
+
+  // 詰み木の引き直しは「VCT と確定した初手 1 手」に対する確認パスで、
+  // 40 手の総当たりには乗らない。総当たり用の切り詰めた予算（5s）だと
+  // 収集モードのぶん（実測 約1.8倍）を賄えず木が付かないので、
+  // 主経路と同じ予算（REVIEW_VCT_OPTIONS_WITH_BRANCHES）を与える。
+  const treeOptions: VCTSearchOptions = { ...options, collectBranches: true };
+
+  for (let i = 0; i < threats.length && i < VCT_FALLBACK_MAX_FIRST_MOVES; i++) {
+    const threat = threats[i]!;
+    const result = searchFrom(threat, perMoveOptions);
     if (result && validateVCTSequence(board, color, result.sequence)) {
-      const withTree = wasmFindVCTSequenceFromFirstMove(
-        wasmSearchEngine,
-        board,
-        threat,
-        color,
-        { ...perMoveOptions, collectBranches: true },
-      );
+      const withTree = searchFrom(threat, treeOptions);
       // 収集モードは ct=none の子探索も全受け展開になるため、手順が
-      // 同値な別解に変わりうる。返す手順は必ず検証を通ったものにする。
-      if (withTree && validateVCTSequence(board, color, withTree.sequence)) {
+      // 同値な別解に変わりうる。木が付いていて、かつ検証を通ったときだけ
+      // 差し替える（木が無いなら手順だけ別解に変える意味がない）。
+      if (
+        withTree?.tree &&
+        validateVCTSequence(board, color, withTree.sequence)
+      ) {
         return withTree;
       }
       return result;
@@ -207,6 +225,19 @@ export function detectForcedWin(
             wasmSearchEngine,
           ))
         : null);
+  }
+
+  // 詰み木が劣化した状態で作られていたら知らせる（issue #122 レバー4）。
+  // 詰み判定は壊れないが表示の受け分岐が欠けるので、症状が出たときに
+  // 原因を特定できるようにログだけ残す（ユーザー向けの表示は変えない）。
+  if (forcedWin?.tree) {
+    const health = wasmSearchEngine.lastForcedWinTreeHealth();
+    if (health.overflow || health.defenseTruncated) {
+      console.warn(
+        "[review] 詰み木の分岐が一部欠けています",
+        JSON.stringify({ ...health, firstMove: forcedWin.firstMove }),
+      );
+    }
   }
 
   // forcedWinType 判定

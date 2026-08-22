@@ -60,11 +60,15 @@ export const REVIEW_PROFILE_PRECISE = {
 /** 振り返り用VCT探索パラメータ（forcedWin表示用、分岐収集あり） */
 export const REVIEW_VCT_OPTIONS_WITH_BRANCHES: VCTSearchOptions = {
   maxDepth: 6,
-  // timeLimit を Infinity にすると、maxNodes 500_000 が消化されない密局面で
-  // 単発タスクが 60-120s に伸び、pool のスループットを潰す。#104
+  // 歯止めは **timeLimit（10s）** で、maxNodes は暴走時の安全弁という役割分担。#104
   // 10s を超える場合は VCT を表示しない（forcedWin sequence は minimax PV にフォールバック）。
   timeLimit: 10_000,
-  maxNodes: 500_000,
+  // #119 で VCT 経路のノード計上が機能するようになり、旧 500_000 は 10s より
+  // はるかに手前（実測 約2.5s）で効く実効上限に変わってしまった。
+  // その結果これまで 10s 以内に出ていた追い詰めまで消える回帰が出たため、
+  // 時間上限が先に効く水準まで引き上げる（実測ベース: 14 石局面の
+  // collect 探索は約 70s / 数百万ノード規模なので、10s ぶんの余裕を見て 5M）。
+  maxNodes: 5_000_000,
   vcfOptions: {
     maxDepth: 16,
   },
