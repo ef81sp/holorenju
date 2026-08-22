@@ -15,7 +15,6 @@ import type { DirectionPattern } from "../evaluation/patternScores";
 import type { LineTable } from "../lineTable/lineTable";
 
 import { DIRECTION_INDICES, DIRECTIONS } from "../core/constants";
-import { checkEnds, countLine, getLineEnds } from "../core/lineAnalysis";
 import { analyzeDirection } from "../evaluation/directionAnalysis";
 import {
   isValidConsecutiveThree,
@@ -25,10 +24,7 @@ import { getOpenThreeDefensePositions } from "../evaluation/threatDetection";
 import { createsFourThree } from "../evaluation/winningPatterns";
 import { LINE_BIT_TO_CELL, LINE_LENGTHS } from "../lineTable/lineMapping";
 import { isNearExistingStone } from "../moveGenerator";
-import {
-  findJumpGapPosition,
-  getJumpThreeDefensePositions,
-} from "../patterns/threatAnalysis";
+import { getJumpThreeDefensePositions } from "../patterns/threatAnalysis";
 // #43 PR-3: 葉プリミティブ（図形/禁手判定）を Zig アダプタへ委譲。TS オーケストレーション
 // （本ファイルの VCT 検証ロジック）は温存し、patterns.ts/forbiddenMoves.ts への依存を断つ。
 import { isForbiddenForBlack } from "../wasm/forbiddenAdapter";
@@ -412,91 +408,11 @@ export function isThreat(
   return result.createsFour || result.createsOpenThree;
 }
 
-/**
- * 脅威に対する防御位置を取得
- *
- * - 活四: 防御不可（空配列）
- * - 止め四: 1点
- * - 活三: 両端の2点
- *
- * ⚠️ **本番経路は Zig（`vct.getThreatDefensePositions`）が SSoT**。
- * こちらは `@internal` のテスト用エクスポートのみで、
- * #115（跳び四の長連ギャップを受けにしない）も
- * #124（受け点を `collectLineFivePoints` に一本化）も**未反映の旧基準**である。
- * 実装の正しさを問う用途には使わないこと。#43 で削除候補。
- */
-/** @internal テスト用にエクスポート */
-export function getThreatDefensePositions(
-  board: BoardState,
-  row: number,
-  col: number,
-  color: "black" | "white",
-): Position[] {
-  const defensePositions: Position[] = [];
-
-  for (let i = 0; i < DIRECTION_INDICES.length; i++) {
-    const dirIndex = DIRECTION_INDICES[i];
-    if (dirIndex === undefined) {
-      continue;
-    }
-
-    const direction = DIRECTIONS[i];
-    if (!direction) {
-      continue;
-    }
-    const [dr, dc] = direction;
-
-    // 連続四をチェック
-    const count = countLine(board, row, col, dr, dc, color);
-    if (count === 4) {
-      const ends = getLineEnds(board, row, col, dr, dc, color);
-
-      // 活四（両端開き）= 防御不可
-      if (ends.length === 2) {
-        return [];
-      }
-
-      // 止め四 = 1点で防御
-      if (ends.length === 1 && ends[0]) {
-        defensePositions.push(ends[0]);
-      }
-    }
-
-    // 跳び四をチェック
-    if (count !== 4 && checkJumpFour(board, row, col, dirIndex, color)) {
-      const jumpGap = findJumpGapPosition(board, row, col, dr, dc, color);
-      if (jumpGap) {
-        defensePositions.push(jumpGap);
-      }
-    }
-
-    // 活三をチェック
-    if (count === 3) {
-      const { end1Open, end2Open } = checkEnds(board, row, col, dr, dc, color);
-      if (end1Open && end2Open) {
-        const ends = getLineEnds(board, row, col, dr, dc, color);
-        defensePositions.push(...ends);
-      }
-    }
-
-    // 跳び三をチェック
-    if (count !== 3 && checkJumpThree(board, row, col, dirIndex, color)) {
-      const ends = getJumpThreeDefensePositions(board, row, col, dr, dc, color);
-      defensePositions.push(...ends);
-    }
-  }
-
-  // 重複を除去
-  const unique = new Map<string, Position>();
-  for (const pos of defensePositions) {
-    const key = `${pos.row},${pos.col}`;
-    if (!unique.has(key)) {
-      unique.set(key, pos);
-    }
-  }
-
-  return Array.from(unique.values());
-}
+// issue #121 / #43: TS 版 `getThreatDefensePositions` は削除した。
+// 本番経路は Zig の `vct.getThreatDefensePositions`（`threats.collectLineFivePoints` が
+// 受け点の SSoT）のみで、TS 版は import 元ゼロの `@internal` テスト用エクスポートだった。
+// しかも #115（跳び四の長連ギャップを受けにしない）も #124（受け点を五点列挙に一本化）も
+// 未反映の旧基準のままで、残すと「正しい TS 実装がある」という誤解を生むため物理削除する。
 
 /**
  * 指定位置に石を置いた際に作られた活三/飛び三の防御位置を返す

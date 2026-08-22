@@ -505,3 +505,62 @@ describe("countThreatDirections - 跳び四と活三の分類整合性", () => {
     expect(count).toBe(1);
   });
 });
+
+/**
+ * issue #121: LUT（`line_lookup` / `checkJumpFour`）は中心 ±4 マスの窓しか見ないため、
+ * 窓の外の自石でギャップ埋めが長連になる黒の形を「跳び四」と報告する。
+ *
+ * 再現形: 8 行目に黒 C8 D8 _ F8 G8 H8（col = 2,3,[4],5,6,7）
+ * - F8/G8/H8 から見ると `D8 _ F8 G8 H8` が跳び四に見える
+ * - しかし E8 を埋めると C8..H8 の 6 連＝長連。黒はこのラインで五にできない
+ * - つまり四ではなく、F8 G8 H8 の三として受けを列挙すべき
+ */
+const ISSUE_121_FALSE_JUMP_FOUR = [2, 3, 5, 6, 7].map((col) => ({
+  row: 7,
+  col,
+  color: "black" as const,
+}));
+
+describe("issue #121 - 黒の偽跳び四（ギャップ埋めが長連）", () => {
+  it("detectOpponentThreats は偽跳び四を四の受けとして返さない", () => {
+    const board = createEmptyBoard();
+    placeStonesOnBoard(board, ISSUE_121_FALSE_JUMP_FOUR);
+
+    const threats = detectOpponentThreats(board, "black");
+
+    expect(threats.fours).not.toContainEqual({ row: 7, col: 4 });
+    expect(threats.fours).toHaveLength(0);
+    expect(threats.openFours).toHaveLength(0);
+  });
+
+  it("detectOpponentThreats は偽跳び四に隠れた三の受けを列挙する", () => {
+    const board = createEmptyBoard();
+    placeStonesOnBoard(board, ISSUE_121_FALSE_JUMP_FOUR);
+
+    const threats = detectOpponentThreats(board, "black");
+
+    expect(threats.openThrees).toContainEqual({ row: 7, col: 4 });
+    expect(threats.openThrees).toContainEqual({ row: 7, col: 8 });
+  });
+
+  it("countThreatDirections は偽跳び四を脅威に数えない", () => {
+    const board = createEmptyBoard();
+    placeStonesOnBoard(board, ISSUE_121_FALSE_JUMP_FOUR);
+
+    expect(countThreatDirections(board, 7, 6, "black")).toBe(0);
+    expect(countThreatDirections(board, 7, 3, "black")).toBe(0);
+  });
+
+  it("白なら同じ形は本物の跳び四（白に長連の制限は無い）", () => {
+    const board = createEmptyBoard();
+    placeStonesOnBoard(
+      board,
+      ISSUE_121_FALSE_JUMP_FOUR.map((s) => ({ ...s, color: "white" as const })),
+    );
+
+    const threats = detectOpponentThreats(board, "white");
+
+    expect(threats.fours).toContainEqual({ row: 7, col: 4 });
+    expect(countThreatDirections(board, 7, 6, "white")).toBe(1);
+  });
+});
