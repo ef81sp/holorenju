@@ -23,3 +23,4 @@ export {
   isFiveLength,
   isValidPosition,
 } from "./core";
+export type { PlayerColor } from "./core";

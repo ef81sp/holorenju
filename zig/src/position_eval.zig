@@ -181,7 +181,7 @@ fn computeAttackScore(cells: []Cell, row: u8, col: u8, color: Cell) struct {
         dir_end1s[i] = ends.end1;
         dir_end2s[i] = ends.end2;
 
-        var dir_score = patterns.getPatternScore(lut.count, ends.end1, ends.end2);
+        var dir_score = patterns.getPatternScore(lut.count, ends.end1, ends.end2, color);
 
         // 斜め方向ボーナス
         if ((i == 2 or i == 3) and dir_score > 0) {

@@ -53,12 +53,14 @@ function assertPattern(
   // lineTable なし（analyzeDirection パス）
   const withoutLt = getDirectionPattern(board, row, col, dirIndex, color);
   expect(withoutLt.count, "without LT: count").toBe(expectedCount);
-  expect(getPatternScore(withoutLt), "without LT: score").toBe(expectedScore);
+  expect(getPatternScore(withoutLt, color), "without LT: score").toBe(
+    expectedScore,
+  );
 
   // lineTable あり（analyzeLinePattern パス）
   const withLt = getDirectionPattern(board, row, col, dirIndex, color, lt);
   expect(withLt.count, "with LT: count").toBe(expectedCount);
-  expect(getPatternScore(withLt), "with LT: score").toBe(expectedScore);
+  expect(getPatternScore(withLt, color), "with LT: score").toBe(expectedScore);
 
   // 両パスで結果一致
   expect(withLt, "LT parity").toEqual(withoutLt);

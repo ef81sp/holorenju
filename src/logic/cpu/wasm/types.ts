@@ -34,8 +34,19 @@ export interface WasmModuleContext {
 
   // Pattern scoring
   evaluateDirectionScores: (row: number, col: number, color: number) => number;
-  wasmGetPatternScore: (count: number, end1: number, end2: number) => number;
-  wasmGetPatternType: (count: number, end1: number, end2: number) => number;
+  // #132: 黒の長連（6 連以上＝禁手）を五から外すため color を受け取る
+  wasmGetPatternScore: (
+    count: number,
+    end1: number,
+    end2: number,
+    color: number,
+  ) => number;
+  wasmGetPatternType: (
+    count: number,
+    end1: number,
+    end2: number,
+    color: number,
+  ) => number;
 
   // Board evaluation
   evaluateBoard: (perspective: number, optionsFlags: number) => number;

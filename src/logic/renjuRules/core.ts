@@ -10,7 +10,7 @@ import type { BoardState, Position, StoneColor } from "@/types/game";
 import { incrementBoardCopies } from "@/logic/cpu/profiling/counters";
 
 /** 実際に盤上に置かれる石の色（`StoneColor` から空点 `null` を除いたもの） */
-type PlayerColor = Exclude<StoneColor, null>;
+export type PlayerColor = Exclude<StoneColor, null>;
 
 // =============================================================================
 // 引き分けルール

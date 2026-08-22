@@ -220,10 +220,11 @@ fn hasFourInDirection(cells: []const Cell, row: u8, col: u8, dr: i8, dc: i8, col
 
 /// analyzeFourAndThree: 四と活三の有無を分析（石配置済み前提）
 ///
-/// ⚠️ `has_five` の判定が色盲（`count >= 5`）で、黒の長連（6 連以上＝禁手で五ではない）も
-/// 五として返す。#125 では「勝敗に効く五判定」（`forbidden.checkFive`）のみを
-/// `forbidden.isFiveLength` に揃え、ここは**意図的に未変更**とした
-/// （評価・move ordering 系の色盲な五扱いはまとめて別 issue #132 で扱う）。
+/// 五の判定は `forbidden.isFiveLength`（SSoT・#125）。黒はちょうど 5 連、白は 5 連以上。
+///
+/// **黒の長連（6 連以上）は禁手なので、この着手自体が打てない**（#132）。
+/// 五でも四でもないため、`isFiveLength` に落とす前に「脅威なし」で早期 return する
+/// （単に置換すると黒の 6 連が下の `count == 4` 判定などに落ちて誤分類される）。
 pub fn analyzeFourAndThree(cells: []const Cell, row: u8, col: u8, color: Cell) struct { has_five: bool, has_four: bool, has_open_three: bool } {
     const jp = @import("jump_patterns.zig");
     var has_four = false;
@@ -232,7 +233,12 @@ pub fn analyzeFourAndThree(cells: []const Cell, row: u8, col: u8, color: Cell) s
     for (DIRECTIONS, 0..) |dir, i| {
         const result = board_mod.analyzeDirectionOnCells(cells, row, col, dir.dr, dir.dc, color);
 
-        if (result.count >= 5) {
+        // 黒の長連＝禁手。着手そのものが不可なので全方向まとめて脅威なしとする。
+        if (color == .black and result.count >= 6) {
+            return .{ .has_five = false, .has_four = false, .has_open_three = false };
+        }
+
+        if (forbidden.isFiveLength(result.count, color)) {
             return .{ .has_five = true, .has_four = false, .has_open_three = false };
         }
 
@@ -1152,6 +1158,39 @@ test "LMR table values" {
     try testing.expectEqual(getLMRReduction(0, 5), 0);
     // moveIndex=0 → 0
     try testing.expectEqual(getLMRReduction(5, 0), 0);
+}
+
+// #132: analyzeFourAndThree の五判定を forbidden.isFiveLength に揃えた回帰テスト
+test "analyzeFourAndThree: 黒の長連は五でも四でもない" {
+    const CELL_COUNT = board_mod.CELL_COUNT;
+    var cells: [CELL_COUNT]Cell = [_]Cell{.empty} ** CELL_COUNT;
+
+    // 横に黒 6 連（col 3..8、着手点は col 7）＝長連
+    for (3..9) |c| cells[7 * BOARD_SIZE + c] = .black;
+    // 同じ着手点に縦の活三（row 6,7,8 で両端空き）も作っておく
+    cells[6 * BOARD_SIZE + 7] = .black;
+    cells[8 * BOARD_SIZE + 7] = .black;
+
+    const r = analyzeFourAndThree(&cells, 7, 7, .black);
+    try testing.expect(!r.has_five);
+    try testing.expect(!r.has_four);
+    try testing.expect(!r.has_open_three);
+}
+
+test "analyzeFourAndThree: 白の長連は五・黒のちょうど五は五" {
+    const CELL_COUNT = board_mod.CELL_COUNT;
+    var cells: [CELL_COUNT]Cell = [_]Cell{.empty} ** CELL_COUNT;
+
+    // 白 6 連
+    for (3..9) |c| cells[7 * BOARD_SIZE + c] = .white;
+    const w = analyzeFourAndThree(&cells, 7, 7, .white);
+    try testing.expect(w.has_five);
+
+    // 黒ちょうど 5 連
+    @memset(&cells, .empty);
+    for (3..8) |c| cells[7 * BOARD_SIZE + c] = .black;
+    const b = analyzeFourAndThree(&cells, 7, 7, .black);
+    try testing.expect(b.has_five);
 }
 
 /// 序盤の均衡局面（minimax テスト用）。

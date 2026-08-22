@@ -11,16 +11,22 @@ const EndState = board_mod.EndState;
 const DIRECTIONS = board_mod.DIRECTIONS;
 
 /// パターンからスコアを計算（getPatternScore 相当）
-pub fn getPatternScore(count: u8, end1: EndState, end2: EndState) i32 {
+///
+/// 五の判定は `forbidden.isFiveLength` に委ねる（SSoT・#125）。黒はちょうど 5 連、
+/// 白は 5 連以上が五。**黒の 6 連以上は長連＝禁手なので五でも四でもなく 0 点**（#132）。
+pub fn getPatternScore(count: u8, end1: EndState, end2: EndState, color: Cell) i32 {
+    if (forbidden.isFiveLength(count, color)) return scores.FIVE;
+    // ここに来る count >= 5 は黒の長連のみ（count == 5 は黒白とも五）
+    if (count >= 5) return 0;
+
     const both_open = end1 == .empty and end2 == .empty;
     const one_open = end1 == .empty or end2 == .empty;
 
     return switch (count) {
-        5 => scores.FIVE,
         4 => if (both_open) scores.OPEN_FOUR else if (one_open) scores.FOUR else 0,
         3 => if (both_open) scores.OPEN_THREE else if (one_open) scores.THREE else 0,
         2 => if (both_open) scores.OPEN_TWO else if (one_open) scores.TWO else 0,
-        else => if (count >= 6) scores.FIVE else 0,
+        else => 0,
     };
 }
 
@@ -37,16 +43,20 @@ pub const PatternType = enum(u8) {
     two = 7,
 };
 
-pub fn getPatternType(count: u8, end1: EndState, end2: EndState) PatternType {
+/// 五の判定は `getPatternScore` と同じく `forbidden.isFiveLength`（#125）。
+/// 黒の 6 連以上（長連＝禁手）は `.none`（#132）。
+pub fn getPatternType(count: u8, end1: EndState, end2: EndState, color: Cell) PatternType {
+    if (forbidden.isFiveLength(count, color)) return .five;
+    if (count >= 5) return .none;
+
     const both_open = end1 == .empty and end2 == .empty;
     const one_open = end1 == .empty or end2 == .empty;
 
     return switch (count) {
-        5 => .five,
         4 => if (both_open) .open_four else if (one_open) .four else .none,
         3 => if (both_open) .open_three else if (one_open) .three else .none,
         2 => if (both_open) .open_two else if (one_open) .two else .none,
-        else => if (count >= 6) .five else .none,
+        else => .none,
     };
 }
 
@@ -57,7 +67,7 @@ pub fn evaluateDirectionScoresOnCells(cells: []const Cell, row: u8, col: u8, col
     for (DIRECTIONS, 0..) |dir, i| {
         const result = board_mod.analyzeDirectionOnCells(cells, row, col, dir.dr, dir.dc, color);
 
-        var dir_score = getPatternScore(result.count, result.end1, result.end2);
+        var dir_score = getPatternScore(result.count, result.end1, result.end2, color);
 
         // 斜め方向（index 2, 3）に 1.05 倍ボーナス
         if ((i == 2 or i == 3) and dir_score > 0) {
@@ -125,8 +135,8 @@ pub fn evaluateStonePatternsLightOnCells(cells: []Cell, row: u8, col: u8, color:
         dir_end1s[i] = adj_end1;
         dir_end2s[i] = adj_end2;
 
-        const base_score = getPatternScore(result.count, adj_end1, adj_end2);
-        const pattern_type = getPatternType(result.count, adj_end1, adj_end2);
+        const base_score = getPatternScore(result.count, adj_end1, adj_end2, color);
+        const pattern_type = getPatternType(result.count, adj_end1, adj_end2, color);
 
         if (base_score > 0) {
             active_direction_count += 1;
@@ -305,35 +315,55 @@ pub fn evaluateDirectionScores(row: u8, col: u8, color: u8) i32 {
     return evaluateDirectionScoresOnCells(&board_mod.board_cells, row, col, @enumFromInt(color));
 }
 
-pub fn wasmGetPatternScore(count: u8, end1: u8, end2: u8) i32 {
-    return getPatternScore(count, @enumFromInt(end1), @enumFromInt(end2));
+pub fn wasmGetPatternScore(count: u8, end1: u8, end2: u8, color: u8) i32 {
+    return getPatternScore(count, @enumFromInt(end1), @enumFromInt(end2), @enumFromInt(color));
 }
 
-pub fn wasmGetPatternType(count: u8, end1: u8, end2: u8) u8 {
-    return @intFromEnum(getPatternType(count, @enumFromInt(end1), @enumFromInt(end2)));
+pub fn wasmGetPatternType(count: u8, end1: u8, end2: u8, color: u8) u8 {
+    return @intFromEnum(getPatternType(count, @enumFromInt(end1), @enumFromInt(end2), @enumFromInt(color)));
 }
 
 // Zig unit tests
 test "getPatternScore basics" {
-    try std.testing.expectEqual(getPatternScore(5, .empty, .empty), scores.FIVE);
-    try std.testing.expectEqual(getPatternScore(4, .empty, .empty), scores.OPEN_FOUR);
-    try std.testing.expectEqual(getPatternScore(4, .empty, .opponent), scores.FOUR);
-    try std.testing.expectEqual(getPatternScore(4, .opponent, .opponent), 0);
-    try std.testing.expectEqual(getPatternScore(3, .empty, .empty), scores.OPEN_THREE);
-    try std.testing.expectEqual(getPatternScore(3, .empty, .edge), scores.THREE);
-    try std.testing.expectEqual(getPatternScore(2, .empty, .empty), scores.OPEN_TWO);
-    try std.testing.expectEqual(getPatternScore(2, .empty, .opponent), scores.TWO);
-    try std.testing.expectEqual(getPatternScore(6, .empty, .empty), scores.FIVE);
-    try std.testing.expectEqual(getPatternScore(1, .empty, .empty), 0);
+    try std.testing.expectEqual(getPatternScore(5, .empty, .empty, .black), scores.FIVE);
+    try std.testing.expectEqual(getPatternScore(5, .empty, .empty, .white), scores.FIVE);
+    try std.testing.expectEqual(getPatternScore(4, .empty, .empty, .black), scores.OPEN_FOUR);
+    try std.testing.expectEqual(getPatternScore(4, .empty, .opponent, .black), scores.FOUR);
+    try std.testing.expectEqual(getPatternScore(4, .opponent, .opponent, .black), 0);
+    try std.testing.expectEqual(getPatternScore(3, .empty, .empty, .black), scores.OPEN_THREE);
+    try std.testing.expectEqual(getPatternScore(3, .empty, .edge, .black), scores.THREE);
+    try std.testing.expectEqual(getPatternScore(2, .empty, .empty, .black), scores.OPEN_TWO);
+    try std.testing.expectEqual(getPatternScore(2, .empty, .opponent, .black), scores.TWO);
+    try std.testing.expectEqual(getPatternScore(1, .empty, .empty, .black), 0);
+}
+
+// #132: 黒の長連（6 連以上）は禁手なので五でも四でもない。白は五のまま。
+test "getPatternScore: 黒の長連は 0 点・白の長連は五" {
+    var count: u8 = 6;
+    while (count <= 10) : (count += 1) {
+        try std.testing.expectEqual(getPatternScore(count, .empty, .empty, .black), 0);
+        try std.testing.expectEqual(getPatternScore(count, .opponent, .opponent, .black), 0);
+        try std.testing.expectEqual(getPatternScore(count, .empty, .empty, .white), scores.FIVE);
+    }
 }
 
 test "getPatternType basics" {
-    try std.testing.expectEqual(getPatternType(5, .empty, .empty), .five);
-    try std.testing.expectEqual(getPatternType(4, .empty, .empty), .open_four);
-    try std.testing.expectEqual(getPatternType(4, .empty, .opponent), .four);
-    try std.testing.expectEqual(getPatternType(4, .opponent, .opponent), .none);
-    try std.testing.expectEqual(getPatternType(3, .empty, .empty), .open_three);
-    try std.testing.expectEqual(getPatternType(1, .empty, .empty), .none);
+    try std.testing.expectEqual(getPatternType(5, .empty, .empty, .black), .five);
+    try std.testing.expectEqual(getPatternType(5, .empty, .empty, .white), .five);
+    try std.testing.expectEqual(getPatternType(4, .empty, .empty, .black), .open_four);
+    try std.testing.expectEqual(getPatternType(4, .empty, .opponent, .black), .four);
+    try std.testing.expectEqual(getPatternType(4, .opponent, .opponent, .black), .none);
+    try std.testing.expectEqual(getPatternType(3, .empty, .empty, .black), .open_three);
+    try std.testing.expectEqual(getPatternType(1, .empty, .empty, .black), .none);
+}
+
+// #132: 黒の長連は .none（五でも四でもない）。白は .five。
+test "getPatternType: 黒の長連は none・白の長連は five" {
+    var count: u8 = 6;
+    while (count <= 10) : (count += 1) {
+        try std.testing.expectEqual(getPatternType(count, .empty, .empty, .black), .none);
+        try std.testing.expectEqual(getPatternType(count, .empty, .empty, .white), .five);
+    }
 }
 
 test "evaluateDirectionScores basic" {

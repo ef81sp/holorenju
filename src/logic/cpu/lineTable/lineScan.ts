@@ -16,6 +16,8 @@
 
 /* eslint-disable no-bitwise -- ビットマスク操作に必要 */
 
+import type { PlayerColor } from "@/logic/renjuRules";
+
 import {
   getPatternScore,
   getPatternType,
@@ -73,7 +75,7 @@ function unpackPattern(packed: number): {
   };
 }
 
-function buildPackedToScore(): Int16Array {
+function buildPackedToScore(color: PlayerColor): Int16Array {
   const table = new Int16Array(256);
   for (let packed = 0; packed < 256; packed++) {
     const { count, end1, end2 } = unpackPattern(packed);
@@ -81,12 +83,12 @@ function buildPackedToScore(): Int16Array {
       table[packed] = 0;
       continue;
     }
-    table[packed] = getPatternScore({ count, end1, end2 });
+    table[packed] = getPatternScore({ count, end1, end2 }, color);
   }
   return table;
 }
 
-function buildPackedToType(): Uint8Array {
+function buildPackedToType(color: PlayerColor): Uint8Array {
   const table = new Uint8Array(256);
   for (let packed = 0; packed < 256; packed++) {
     const { count, end1, end2 } = unpackPattern(packed);
@@ -94,7 +96,7 @@ function buildPackedToType(): Uint8Array {
       table[packed] = 0;
       continue;
     }
-    const type = getPatternType({ count, end1, end2 });
+    const type = getPatternType({ count, end1, end2 }, color);
     table[packed] = type ? (TYPE_CODE_MAP[type] ?? 0) : 0;
   }
   return table;
@@ -103,20 +105,27 @@ function buildPackedToType(): Uint8Array {
 // ─── ルックアップテーブル ───
 
 /**
- * packed byte → score (getPatternScore と等価)。256 entries × 2 bytes = 512 bytes
+ * packed byte → score (getPatternScore と等価)。色ごとに 256 entries × 2 bytes
+ *
+ * 黒の長連（count >= 6）は五ではなく 0 点なので、テーブルは色で分かれる（#132）。
  *
  * FIVE(100000) は Int16Array の範囲外で clamp されるが、
  * 五連は minimax の勝敗判定で処理されるため、PACKED_TO_SCORE 経由での参照は
  * count <= 4 のパターンのみ（全て Int16 範囲内: max OPEN_FOUR=10000）。
  */
-export let PACKED_TO_SCORE: Int16Array = buildPackedToScore();
+export let PACKED_TO_SCORE: Record<PlayerColor, Int16Array> = {
+  black: buildPackedToScore("black"),
+  white: buildPackedToScore("white"),
+};
 
 /**
- * packed byte → type code (getPatternType と等価)
+ * packed byte → type code (getPatternType と等価)。色ごとに 256 entries × 1 byte
  * 0=null, 1=five, 2=openFour, 3=four, 4=openThree, 5=three, 6=openTwo, 7=two
- * 256 entries × 1 byte = 256 bytes
  */
-export let PACKED_TO_TYPE: Uint8Array = buildPackedToType();
+export let PACKED_TO_TYPE: Record<PlayerColor, Uint8Array> = {
+  black: buildPackedToType("black"),
+  white: buildPackedToType("white"),
+};
 
 /** type code 定数 */
 export const TYPE_FOUR = 3;
@@ -127,8 +136,14 @@ export const TYPE_OPEN_THREE = 4;
  * applyPatternScoreOverrides から呼び出される。
  */
 export function rebuildPackedTables(): void {
-  PACKED_TO_SCORE = buildPackedToScore();
-  PACKED_TO_TYPE = buildPackedToType();
+  PACKED_TO_SCORE = {
+    black: buildPackedToScore("black"),
+    white: buildPackedToScore("white"),
+  };
+  PACKED_TO_TYPE = {
+    black: buildPackedToType("black"),
+    white: buildPackedToType("white"),
+  };
 }
 
 // ─── 事前計算バッファ（非リエントラント） ───
