@@ -460,6 +460,20 @@ export class WasmSearchEngine {
   }
 
   /**
+   * 直近に構築した詰み木の健全性（issue #122）
+   *
+   * どちらも詰み判定は壊れないが、表示の受け分岐が欠ける種類の劣化。
+   * - overflow: アリーナのノード/受け上限を超えて枝が terminal に倒れた
+   * - defenseTruncated: 1ノードの受けが上限を超えて切り捨てられた
+   */
+  lastForcedWinTreeHealth(): { overflow: boolean; defenseTruncated: boolean } {
+    return {
+      overflow: this.wasm.getLastForcedWinTreeOverflow() === 1,
+      defenseTruncated: this.wasm.getLastForcedWinTreeDefenseTruncated() === 1,
+    };
+  }
+
+  /**
    * 詰み木付きの手順バッファをデシリアライズする（VCT / Mise-VCF 共通、#22）。
    *
    * バッファフォーマット（Zig writeVCTResult / findMiseVCFSequenceWasm +

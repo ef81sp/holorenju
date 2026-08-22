@@ -18,8 +18,12 @@ const Position = threats.Position;
 pub const TREE_TERMINAL: u16 = 0xFFFF;
 pub const MAX_TREE_NODES: u16 = 2000;
 pub const MAX_TREE_DEFENSES: u16 = 4000;
-/// 1ノードあたりの受け手の最大数（防御点列挙の上限に余裕を持たせた値）
-const MAX_CHILDREN_PER_NODE: u16 = 32;
+/// 1ノードあたりの受け手の最大数
+///
+/// 木の生成側（`vct.zig` の `MAX_DEFENSE_ENTRIES` / `mise_vcf.zig` の分岐数）と
+/// シリアライズ側のバッファ長の SSoT。生成側がこれを超える受けを持つ局面では
+/// 超過分が木から落ちる（`Arena.defense_truncated` で観測できる）。
+pub const MAX_DEFENSES_PER_NODE = 20;
 
 pub const TreeNode = struct {
     attacker: Position,
@@ -40,11 +44,18 @@ pub const Arena = struct {
     defense_count: u16 = 0,
     /// 上限超過が起きたか（超過枝は terminal に倒す）
     overflow: bool = false,
+    /// 1ノードの受けが `MAX_DEFENSES_PER_NODE` を超えて切り捨てられたか（issue #122）
+    ///
+    /// 詰み判定そのものは壊れないが、表示の受け分岐が欠ける。受け点を増やす修正
+    /// （#115 / #121）で到達確率が上がったので観測できるようにしてある。
+    /// 立てるのは木の生成側（`vct.zig`）。
+    defense_truncated: bool = false,
 
     pub fn reset(self: *Arena) void {
         self.node_count = 0;
         self.defense_count = 0;
         self.overflow = false;
+        self.defense_truncated = false;
     }
 
     pub fn snapshot(self: *const Arena) Snapshot {
@@ -82,6 +93,37 @@ pub const Arena = struct {
         };
         self.node_count += 1;
         return idx;
+    }
+
+    /// 受け手一覧から攻め手ノードを 1 つ構築する（メインライン前出し）。
+    ///
+    /// 詰み木の規約は「`defenses[0]` の連鎖がメイン PV」なので、`main_idx` の受けを
+    /// 先頭に積み直してから残りを元の順で積む。`defenses` は contiguous でなければ
+    /// ならず（`addDefense` の前提）、この関数の中でまとめて積むことでその制約を
+    /// 呼び出し側から隠す。`vct.zig` に 2 箇所、`mise_vcf.zig` に 1 箇所あった
+    /// 同じ手続きの複製を集約したもの。
+    ///
+    /// `main_idx` が範囲外なら 0（＝最初の受け）にフォールバックする
+    /// （受けが切り捨てられてメインラインが載らなかった場合に起こりうる）。
+    /// `MAX_TREE_DEFENSES` 超過で積めなかったぶんは `defense_count` に含めない。
+    pub fn addNodeMainFirst(
+        self: *Arena,
+        attacker: Position,
+        node_defenses: []const TreeDefense,
+        main_idx: usize,
+    ) u16 {
+        if (node_defenses.len == 0) return self.addNode(attacker, 0, 0);
+        const main: usize = if (main_idx < node_defenses.len) main_idx else 0;
+
+        const def_start = self.defense_count;
+        self.addDefense(node_defenses[main].defender, node_defenses[main].child_node);
+        for (node_defenses, 0..) |d, i| {
+            if (i == main) continue;
+            self.addDefense(d.defender, d.child_node);
+        }
+        // 上限で積めなかったぶんを count に含めると他ノードの範囲を指してしまう
+        const added = self.defense_count - def_start;
+        return self.addNode(attacker, def_start, added);
     }
 
     /// 線形手順（分岐なし）からチェインを構築し root node index を返す。
@@ -152,8 +194,8 @@ const CompactWriter = struct {
 
         const n = src_node.defense_count;
         // 子を先にコピーして index を得る
-        var child_indices: [MAX_CHILDREN_PER_NODE]u16 = undefined;
-        const cap: u16 = @min(n, MAX_CHILDREN_PER_NODE);
+        var child_indices: [MAX_DEFENSES_PER_NODE]u16 = undefined;
+        const cap: u16 = @min(n, MAX_DEFENSES_PER_NODE);
         var i: u16 = 0;
         while (i < cap) : (i += 1) {
             const d = self.arena.defenses[src_node.defense_start + i];
@@ -268,4 +310,68 @@ test "snapshot/rollback: dead node が compact で除外される" {
     const r = serializeCompact(&arena, keep, &out_nodes, &out_defs);
     try testing.expectEqual(@as(u16, 1), r.node_count);
     try testing.expectEqual(@as(u8, 9), out_nodes[0].attacker.row);
+}
+
+test "addNodeMainFirst: main_idx の受けを defenses[0] に前出しする" {
+    var arena = Arena{};
+    arena.reset();
+    const defs = [_]TreeDefense{
+        .{ .defender = p(1, 1), .child_node = TREE_TERMINAL },
+        .{ .defender = p(2, 2), .child_node = TREE_TERMINAL },
+        .{ .defender = p(3, 3), .child_node = TREE_TERMINAL },
+    };
+    const root = arena.addNodeMainFirst(p(7, 7), &defs, 2);
+    const node = arena.nodes[root];
+    try testing.expectEqual(@as(u16, 3), node.defense_count);
+    // main（index 2）が先頭、残りは元の順
+    try testing.expectEqual(@as(u8, 3), arena.defenses[node.defense_start].defender.row);
+    try testing.expectEqual(@as(u8, 1), arena.defenses[node.defense_start + 1].defender.row);
+    try testing.expectEqual(@as(u8, 2), arena.defenses[node.defense_start + 2].defender.row);
+}
+
+test "addNodeMainFirst: 範囲外の main_idx は 0 に丸める（配列外参照を作らない）" {
+    // 受けが MAX_DEFENSES_PER_NODE で切り捨てられ、メインラインが木に載らなかった
+    // ケースに相当する。丸めずに読むと未初期化領域を参照する（#122 レビュー must-1）。
+    var arena = Arena{};
+    arena.reset();
+    const defs = [_]TreeDefense{
+        .{ .defender = p(1, 1), .child_node = TREE_TERMINAL },
+        .{ .defender = p(2, 2), .child_node = TREE_TERMINAL },
+    };
+    const root = arena.addNodeMainFirst(p(7, 7), &defs, 99);
+    const node = arena.nodes[root];
+    try testing.expectEqual(@as(u16, 2), node.defense_count);
+    try testing.expectEqual(@as(u8, 1), arena.defenses[node.defense_start].defender.row);
+    try testing.expectEqual(@as(u8, 2), arena.defenses[node.defense_start + 1].defender.row);
+}
+
+test "addNodeMainFirst: 受け 0 件は終端ノード" {
+    var arena = Arena{};
+    arena.reset();
+    const root = arena.addNodeMainFirst(p(7, 7), &[_]TreeDefense{}, 0);
+    try testing.expectEqual(@as(u16, 0), arena.nodes[root].defense_count);
+}
+
+test "addNodeMainFirst: defenses 上限で積めなかったぶんは defense_count に含めない" {
+    // count に含めると他ノードの範囲を指す木になる
+    var arena = Arena{};
+    arena.reset();
+    arena.defense_count = MAX_TREE_DEFENSES - 1;
+    const defs = [_]TreeDefense{
+        .{ .defender = p(1, 1), .child_node = TREE_TERMINAL },
+        .{ .defender = p(2, 2), .child_node = TREE_TERMINAL },
+        .{ .defender = p(3, 3), .child_node = TREE_TERMINAL },
+    };
+    const root = arena.addNodeMainFirst(p(7, 7), &defs, 0);
+    try testing.expectEqual(@as(u16, 1), arena.nodes[root].defense_count);
+    try testing.expect(arena.overflow);
+}
+
+test "reset: defense_truncated も戻す" {
+    var arena = Arena{};
+    arena.defense_truncated = true;
+    arena.overflow = true;
+    arena.reset();
+    try testing.expect(!arena.defense_truncated);
+    try testing.expect(!arena.overflow);
 }

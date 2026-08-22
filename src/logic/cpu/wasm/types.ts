@@ -142,6 +142,10 @@ export interface WasmModuleContext {
     maxNodes: number,
   ) => number;
   getVCTSequenceBuffer: () => number;
+  /** 直近の詰み木でアリーナ上限超過が起きたか（1/0。issue #122） */
+  getLastForcedWinTreeOverflow: () => number;
+  /** 直近の詰み木で1ノードの受けが切り捨てられたか（1/0。issue #122） */
+  getLastForcedWinTreeDefenseTruncated: () => number;
 }
 
 /** Cell values matching Zig Cell enum */

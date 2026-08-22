@@ -69,8 +69,9 @@ test "ISSUE22: VCT詰み木 - 既定経路がsequenceと一致し深いside分�
     place(&cells, 'E', 8, W);
     bitboard.initFromCells(&cells);
 
-    // レビュー実設定（REVIEW_VCT_OPTIONS_WITH_BRANCHES）に合わせた depth=6
-    const result = vct.findVCTSequence(&cells, B, 6, 0, 500000, true, .lenient);
+    // レビュー実設定（REVIEW_VCT_OPTIONS_WITH_BRANCHES）に合わせた depth=6 / maxNodes
+    // （#119 でノード計上が効くようになったので、旧 500_000 だと打ち切られて赤くなる）
+    const result = vct.findVCTSequence(&cells, B, 6, 0, 5_000_000, true, .lenient);
     try testing.expect(result.found);
     try testing.expect(result.tree_root != ft.TREE_TERMINAL);
 
@@ -105,4 +106,44 @@ test "ISSUE22: VCT詰み木 - 既定経路がsequenceと一致し深いside分�
 
     // #22 の核心: side 分岐の中に更なる分岐が保持されている
     try testing.expect(hasDeepSideBranch(result.tree_root));
+}
+
+test "詰み木: 通常の収集モード探索では受け分岐を切り捨てない（issue #122）" {
+    // 木は 1 ノードあたり `ft.MAX_DEFENSES_PER_NODE` 件までしか受けを持てず、
+    // 超過分は黙って落ちる（詰み判定は壊れないが表示の受け分岐が欠ける）。
+    // 受け点を増やす修正（#115 / #121）で到達確率が上がったので
+    // `Arena.defense_truncated` で観測できるようにしてある。
+    // ここは「普通の局面では起きない」ことを固定するカナリア
+    // （21 点以上の受けを持つ攻め手を人手で構成できなかったため、
+    //   切り捨て側を赤にする判別テストは無い）。
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    // issue #115 の 20 石局面（黒番）
+    const stones = [_]struct { col: u8, disp_row: u8, color: Cell }{
+        .{ .col = 'H', .disp_row = 8, .color = .black },
+        .{ .col = 'H', .disp_row = 7, .color = .white },
+        .{ .col = 'G', .disp_row = 8, .color = .black },
+        .{ .col = 'G', .disp_row = 9, .color = .white },
+        .{ .col = 'I', .disp_row = 10, .color = .black },
+        .{ .col = 'H', .disp_row = 9, .color = .white },
+        .{ .col = 'J', .disp_row = 9, .color = .black },
+        .{ .col = 'J', .disp_row = 10, .color = .white },
+        .{ .col = 'K', .disp_row = 8, .color = .black },
+        .{ .col = 'H', .disp_row = 11, .color = .white },
+        .{ .col = 'L', .disp_row = 9, .color = .black },
+        .{ .col = 'K', .disp_row = 9, .color = .white },
+        .{ .col = 'I', .disp_row = 11, .color = .black },
+        .{ .col = 'I', .disp_row = 9, .color = .white },
+        .{ .col = 'L', .disp_row = 7, .color = .black },
+        .{ .col = 'M', .disp_row = 6, .color = .white },
+        .{ .col = 'L', .disp_row = 8, .color = .black },
+        .{ .col = 'L', .disp_row = 6, .color = .white },
+        .{ .col = 'J', .disp_row = 7, .color = .black },
+        .{ .col = 'M', .disp_row = 10, .color = .white },
+    };
+    for (stones) |m| place(&cells, m.col, m.disp_row, m.color);
+
+    vct.g_tree_arena.defense_truncated = true; // エントリでリセットされることも見る
+    _ = vct.findVCTSequence(&cells, .black, 4, 0, 100_000, true, .lenient);
+    try testing.expect(!vct.g_tree_arena.defense_truncated);
 }

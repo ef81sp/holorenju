@@ -34,6 +34,12 @@ describe("VCT: 14 石局面の詰み木全体に長連前提の強制受けが�
     const { board } = createBoardFromRecord(RECORD, 14);
     const result = detectForcedWin(board, "black", false, false, engine);
 
+    // まず「詰み木が返ること」を要求する。
+    // これが無いと forcedWin=null のとき検査対象ゼロで vacuous green になり、
+    // 探索予算を絞りすぎて検出自体が消えた回帰（#119 で実際に起きた）を
+    // 素通ししてしまう。
+    expect(result.forcedWin?.tree).toBeDefined();
+
     // 手順や forcedWinType は固定しない（この局面の VCT 自体、白のカウンターフォーで
     // 崩れる疑いが別途ある。それを正しく消す将来の修正で赤くならないようにする）。
     const violations = collectForcedWinTreeViolations(
