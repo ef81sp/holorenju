@@ -1976,6 +1976,9 @@ pub fn findVCTSequenceFromFirstMove(
         .max_nodes = max_nodes,
     };
 
+    // 詰み木アリーナを初期化（collect_branches 時のみ構築する。issue #122 レバー1）
+    if (collect_branches) g_tree_arena.reset();
+
     const opponent = color.opposite();
 
     // 相手に活三・ミセ手・VCFがあればVCT開始手として無効
@@ -2026,6 +2029,14 @@ pub fn findVCTSequenceFromFirstMove(
     var main_continuation_len: u8 = 0;
     var main_is_forbidden_trap = false;
 
+    // 詰み木用: 受けごとの継続ノード（collect_branches 時のみ。issue #122 レバー1）。
+    // アリーナの defenses は「同一ノードぶんが連続していること」が前提なので、
+    // ループ中は index を溜めておき、全受けを見終わってからまとめて addDefense する。
+    var tree_defenses: [MAX_DEFENSE_ENTRIES]Position = undefined;
+    var tree_children: [MAX_DEFENSE_ENTRIES]u16 = undefined;
+    var tree_defense_count: u8 = 0;
+    var tree_main_index: u8 = 0;
+
     for (0..defense_positions.len) |j| {
         const dp = defense_positions.items[j];
 
@@ -2052,6 +2063,8 @@ pub fn findVCTSequenceFromFirstMove(
         var cont_seq: [64]Position = undefined;
         var cont_len: u8 = 0;
         var cont_is_forbidden = false;
+        // この受けに対する継続の詰み木 root（collect_branches 時のみ）
+        var cont_node: u16 = ft.TREE_TERMINAL;
 
         if (ct == .four) {
             const block_pos = quiescence.getFourDefensePosition(cells, dp.row, dp.col, opponent).blockPos();
@@ -2079,6 +2092,8 @@ pub fn findVCTSequenceFromFirstMove(
                     cont_len = 1 + block_ok.seq_len;
                     cont_is_forbidden = block_ok.is_forbidden_trap;
                     continuation_found = true;
+                    // ブロック四追いは受け一意の線形手順 → 線形チェイン木
+                    if (collect_branches) cont_node = g_tree_arena.buildLinearChain(cont_seq[0..], cont_len);
                 }
             }
             cells[block_idx] = .empty;
@@ -2095,12 +2110,24 @@ pub fn findVCTSequenceFromFirstMove(
                 cont_len = vcf_result.len;
                 cont_is_forbidden = vcf_result.is_forbidden_trap;
                 continuation_found = true;
+                // 三防御後の VCF は受け一意の線形手順 → 線形チェイン木
+                if (collect_branches) cont_node = g_tree_arena.buildLinearChain(cont_seq[0..], cont_len);
             }
         } else {
             // ct=none: 通常のVCT探索
-            _ = collect_branches;
-            const sub = findVCTSequence(cells, color, max_depth, time_limit, max_nodes, false, .lenient);
-            limiter.nodes +|= sub.nodes;
+            // 共有 limiter の開始時刻・予算を引き継いだ子 limiter で回す（#119）。
+            // 従来は findVCTSequence を呼び直しており、受けごとに time_limit が
+            // まるごとリセットされていた（＝予算が受けの数だけ倍加していた）。
+            // アリーナを reset しない内部版を使うのは、collect 時に
+            // ここまで積んだ詰み木ノードを壊さないため（#122 レバー1）。
+            var sub_limiter = TimeLimiter{
+                .start_time = limiter.start_time,
+                .time_limit = limiter.time_limit,
+                .nodes = 0,
+                .max_nodes = limiter.max_nodes,
+            };
+            const sub = findVCTSequenceWithLimiter(cells, color, max_depth, &sub_limiter, collect_branches, .lenient);
+            limiter.nodes +|= sub_limiter.nodes;
             if (sub.found) {
                 var si: u8 = 0;
                 while (si < sub.len) : (si += 1) {
@@ -2109,6 +2136,7 @@ pub fn findVCTSequenceFromFirstMove(
                 cont_len = sub.len;
                 cont_is_forbidden = sub.is_forbidden_trap;
                 continuation_found = true;
+                cont_node = sub.tree_root;
             }
         }
 
@@ -2130,6 +2158,13 @@ pub fn findVCTSequenceFromFirstMove(
             }
             main_continuation_len = cont_len;
             main_is_forbidden_trap = cont_is_forbidden;
+            tree_main_index = tree_defense_count;
+        }
+
+        if (collect_branches and tree_defense_count < MAX_DEFENSE_ENTRIES) {
+            tree_defenses[tree_defense_count] = dp;
+            tree_children[tree_defense_count] = cont_node;
+            tree_defense_count += 1;
         }
     }
 
@@ -2150,6 +2185,19 @@ pub fn findVCTSequenceFromFirstMove(
     result.len = 2 + main_continuation_len;
     result.is_forbidden_trap = main_is_forbidden_trap;
     result.found = true;
+
+    // 初手ノードを構築。defenses[0] = メインライン（最短継続）を前出しする。
+    if (collect_branches and tree_defense_count > 0) {
+        const def_start = g_tree_arena.defense_count;
+        g_tree_arena.addDefense(tree_defenses[tree_main_index], tree_children[tree_main_index]);
+        var di: u8 = 0;
+        while (di < tree_defense_count) : (di += 1) {
+            if (di == tree_main_index) continue;
+            g_tree_arena.addDefense(tree_defenses[di], tree_children[di]);
+        }
+        result.tree_root = g_tree_arena.addNode(first_move, def_start, tree_defense_count);
+    }
+    result.nodes = limiter.nodes;
     return result;
 }
 
@@ -3348,4 +3396,38 @@ test "findVCTSequence: max_nodes が探索を打ち切る（issue #119）" {
     const tight = findVCTSequence(&cells, .black, VCT_MAX_DEPTH, 0, 1, false, .lenient);
     // 予算 1 ノードでは無制限探索より消費が小さい（＝上限が機能している）
     try testing.expect(tight.nodes < unlimited.nodes);
+}
+
+test "findVCTSequenceFromFirstMove: collect_branches で詰み木を構築する（issue #122）" {
+    // 修正前は `_ = collect_branches;` で引数が黙って捨てられており、
+    // wasm から collect_branches=1 を渡しても木は返らなかった。
+    // 行7: 黒 (7,2) が端を止めた白 3 連 → 白 (7,6) が四（受けは (7,7) 一点）。
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[7 * BOARD_SIZE + 2] = .black;
+    cells[7 * BOARD_SIZE + 3] = .white;
+    cells[7 * BOARD_SIZE + 4] = .white;
+    cells[7 * BOARD_SIZE + 5] = .white;
+    cells[10 * BOARD_SIZE + 6] = .white;
+    cells[10 * BOARD_SIZE + 7] = .white;
+    cells[11 * BOARD_SIZE + 8] = .white;
+    cells[12 * BOARD_SIZE + 8] = .white;
+
+    const first_move = Position{ .row = 7, .col = 6 };
+
+    const without_tree = findVCTSequenceFromFirstMove(&cells, first_move, .white, 6, 0, 0, false);
+    try testing.expect(without_tree.found);
+    try testing.expectEqual(ft.TREE_TERMINAL, without_tree.tree_root);
+
+    const with_tree = findVCTSequenceFromFirstMove(&cells, first_move, .white, 6, 0, 0, true);
+    try testing.expect(with_tree.found);
+    try testing.expect(with_tree.tree_root != ft.TREE_TERMINAL);
+    // 木の根は初手そのもの
+    try testing.expectEqual(first_move.row, g_tree_arena.nodes[with_tree.tree_root].attacker.row);
+    try testing.expectEqual(first_move.col, g_tree_arena.nodes[with_tree.tree_root].attacker.col);
+    // 根の受けは 1 点以上あり、メインライン（手順の 2 手目）が defenses[0]
+    const root = g_tree_arena.nodes[with_tree.tree_root];
+    try testing.expect(root.defense_count > 0);
+    try testing.expectEqual(with_tree.sequence[1].row, g_tree_arena.defenses[root.defense_start].defender.row);
+    try testing.expectEqual(with_tree.sequence[1].col, g_tree_arena.defenses[root.defense_start].defender.col);
 }

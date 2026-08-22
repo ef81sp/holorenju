@@ -60,9 +60,13 @@ const VCT_FALLBACK_MAX_NODES = 100_000;
  * 前の手の探索に影響されない。
  *
  * findVCTSequence との違い:
- * - ブランチ収集は行わない（findVCTSequenceFromFirstMove の制約）
  * - 最初に見つかった有効な VCT で即座に返す（最短探索はしない）
  * - 最大 VCT_FALLBACK_MAX_FIRST_MOVES 手まで検証
+ *
+ * 詰み木は二段構えで作る（issue #122 レバー1）。分岐収集モードは全受けを
+ * 完全展開するぶん重いので、総当たりの検証は非収集モードで回し、
+ * 有効な初手が決まったときだけその 1 手を収集モードで引き直す。
+ * 引き直しが空振りしたら非収集の結果をそのまま使う（木なし＝従来の表示）。
  */
 function findVCTByFirstMoveIteration(
   board: BoardState,
@@ -93,6 +97,18 @@ function findVCTByFirstMoveIteration(
       perMoveOptions,
     );
     if (result && validateVCTSequence(board, color, result.sequence)) {
+      const withTree = wasmFindVCTSequenceFromFirstMove(
+        wasmSearchEngine,
+        board,
+        threat,
+        color,
+        { ...perMoveOptions, collectBranches: true },
+      );
+      // 収集モードは ct=none の子探索も全受け展開になるため、手順が
+      // 同値な別解に変わりうる。返す手順は必ず検証を通ったものにする。
+      if (withTree && validateVCTSequence(board, color, withTree.sequence)) {
+        return withTree;
+      }
       return result;
     }
   }
