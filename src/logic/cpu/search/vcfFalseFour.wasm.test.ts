@@ -45,12 +45,38 @@ function buildIssue124Board(): BoardState {
   return board;
 }
 
+/**
+ * VCF の最大深さ。0 を渡すと `vcf.zig` の反復深化ループが 1 度も回らず
+ * 常に null になる（テストが空振りする）ので、必ず 1 以上を渡すこと。
+ */
+const MAX_DEPTH = 20;
+const TIME_LIMIT_MS = 5000;
+
 describe("VCF: 五点 0 個の偽四で勝ちにしない（issue #124）", () => {
+  it("探索パラメータが空振りしていない（陽性コントロール）", async () => {
+    const engine = new WasmSearchEngine(await loadWasmModule());
+    // 黒の連続四 D8-E8-F8-G8。H8 で五 ＝ 自明な VCF。
+    const board = createEmptyBoard();
+    place(board, ["D8", "E8", "F8", "G8"], "black");
+
+    const result = engine.findVCFSequence(
+      board,
+      "black",
+      MAX_DEPTH,
+      TIME_LIMIT_MS,
+      0,
+    );
+    // 活四なので 1 手（C8 / H8 のどちらか）で VCF 成立
+    expect(result?.sequence).toHaveLength(1);
+  });
+
   it("黒に VCF は無い（旧実装は G8 の1手 VCF を返していた）", async () => {
     const engine = new WasmSearchEngine(await loadWasmModule());
     const board = buildIssue124Board();
 
-    expect(engine.findVCFSequence(board, "black", 0, 5000, 0)).toBeNull();
+    expect(
+      engine.findVCFSequence(board, "black", MAX_DEPTH, TIME_LIMIT_MS, 0),
+    ).toBeNull();
   });
 
   it("G8 を初手に指定しても VCF にならない", async () => {
@@ -58,7 +84,14 @@ describe("VCF: 五点 0 個の偽四で勝ちにしない（issue #124）", () =
     const board = buildIssue124Board();
 
     expect(
-      engine.findVCFSequenceFromFirstMove(board, at("G8"), "black", 0, 5000, 0),
+      engine.findVCFSequenceFromFirstMove(
+        board,
+        at("G8"),
+        "black",
+        MAX_DEPTH,
+        TIME_LIMIT_MS,
+        0,
+      ),
     ).toBeNull();
   });
 });
