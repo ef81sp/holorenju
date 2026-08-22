@@ -133,9 +133,14 @@ fn getCreatedOpenThreeDefenses(cells: []Cell, row: u8, col: u8, color: Cell) thr
         const dir_index = jp.DIRECTION_INDICES[i];
         const analysis = ll.queryPatternByCell(row, col, i, color);
 
-        // 連続活三（跳び四の一部は除外、黒の場合はウソの三を除外）
+        // 連続活三（本物の四の一部は除外、黒の場合はウソの三を除外）
+        //
+        // issue #121: 除外条件は LUT の has_jump_four ではなく盤面を見る
+        // `threats.isFourInDirection`（五点の列挙）に委ねる。黒の「ギャップ埋めが長連」
+        // の形は四ではないので、三の受けを握り潰してはいけない。
+        // （TS 版 vctHelpers.isConsecutiveOpenThree と同じ基準）
         if (analysis.count == 3 and analysis.end1 == 0 and analysis.end2 == 0 and
-            !analysis.has_jump_four and
+            !threats.isFourInDirectionWithPattern(cells, row, col, i, color, analysis) and
             (color != .black or patterns.isValidConsecutiveThree(cells, row, col, dir_index, color)))
         {
             const open_three_defenses = threats.getOpenThreeDefensePositions(cells, row, col, dir.dr, dir.dc, color);
