@@ -40,8 +40,9 @@ export function validateVCTSequence(
 /**
  * VCT手順の部分検証（内部ヘルパー）
  *
- * validateVCTSequence と hasBreakingCounterFour の共通ロジック。
- * sequence[startIndex] から末尾までリプレイし、防御の ct 値を検証する。
+ * `sequence[startIndex]` から末尾までリプレイし、防御の ct 値を検証する。
+ * 現在の呼び出し元は `validateVCTSequence` のみ（`startIndex` は手順途中からの
+ * 検証用に残してある）。
  */
 function validateSubsequence(
   board: BoardState,

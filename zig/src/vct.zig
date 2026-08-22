@@ -702,6 +702,23 @@ fn hasBreakingCounterFour(
         cells[bp_idx] = color;
         bitboard.placeStone(bp.row, bp.col, color);
 
+        // ブロック石が五を作るなら、その CF は手順を壊さない（攻撃側がその場で勝つ）。
+        // 以降の「CF+ブロック後に相手が即時勝ち手段を持つか」を見る意味はないので次の CF へ
+        // （issue #140 の ct=four 短絡と同型。`return false` にしないのは、
+        //   別の CF が手順を壊す可能性が残るため）。
+        //
+        // 判別テストが無いのは構造的な理由による: ブロック点 E は「CF の四」と同じ 5 窓に
+        // 入るので、相手は必ず E 自身にも四を持つ（{A,B,C,D} が四なら {A,B,C,E} も四）。
+        // つまりこの短絡が効く局面では E を CF とする分岐が別に走り、関数全体の戻り値は
+        // そちらで決まってしまう。ここは ct=four 側と意味論を揃えるための一貫性の担保。
+        if (forbidden.checkFive(cells, bp.row, bp.col, color)) {
+            cells[bp_idx] = .empty;
+            bitboard.removeStone(bp.row, bp.col);
+            cells[cf_idx] = .empty;
+            bitboard.removeStone(cf.row, cf.col);
+            continue;
+        }
+
         // ノリ手Tierゲート（strict時のみ・連珠テンポ理論）:
         // この攻撃手は三(Tier2)のみ（呼び出し元 isResilientToCounterFours が
         // 四/五の攻撃手を除外済み）。相手の四(Tier1)はノリ手で先手を奪い、
@@ -709,10 +726,10 @@ fn hasBreakingCounterFour(
         // （= 再逆転のノリ手）でなければテンポは相手に渡り手順は崩壊する。
         // 攻めの探索(lenient)ではこのゲートで真正VCTまで棄却され弱体化するため、
         // 防御側の被詰み判定(strict)でのみ発火させる。
+        // （五を作るブロックは直前の短絡で処理済みなので、ここでは四かどうかだけ見る）
         if (mode == .strict) {
-            const block_makes_five = forbidden.checkFive(cells, bp.row, bp.col, color);
             const block_makes_four = quiescence.createsFour(cells, bp.row, bp.col, color);
-            if (!block_makes_five and !block_makes_four) {
+            if (!block_makes_four) {
                 cells[bp_idx] = .empty;
                 bitboard.removeStone(bp.row, bp.col);
                 cells[cf_idx] = .empty;
@@ -857,23 +874,26 @@ fn evaluateCounterThreat(
             cells[block_idx] = color;
             bitboard.placeStone(bp.row, bp.col, color);
 
-            // ブロック石が攻撃側の脅威を作らなければVCT不成立。
-            // 三しか作らない場合は受け手に受ける義務がないので、
-            // 受け手が活三/ミセ手を持つならここで打ち切る（issue #117）。
             const block_ct = checkDefenseCounterThreat(cells, bp.row, bp.col, color);
-            if (!blockThreatContinues(block_ct, cells, opponent, depth, limiter)) {
-                cells[block_idx] = .empty;
-                bitboard.removeStone(bp.row, bp.col);
-                return false;
-            }
 
             // ブロック石が五を作った → その場で攻撃側の勝ち（issue #140）。
             // 受けの列挙に進むと、五と同時に別方向の四/活三も作っている場合に
             // `.positions` が返って受けごとの探索に入り、真の勝ちを取りこぼす。
+            // `blockThreatContinues` より前に見る（`.win` は無条件継続なので結果は同じ・
+            // 呼び出しコストも省ける。TS 側 `vctValidation.ts` と位置を揃えてある）。
             if (block_ct == .win) {
                 cells[block_idx] = .empty;
                 bitboard.removeStone(bp.row, bp.col);
                 return true;
+            }
+
+            // ブロック石が攻撃側の脅威を作らなければVCT不成立。
+            // 三しか作らない場合は受け手に受ける義務がないので、
+            // 受け手が活三/ミセ手を持つならここで打ち切る（issue #117）。
+            if (!blockThreatContinues(block_ct, cells, opponent, depth, limiter)) {
+                cells[block_idx] = .empty;
+                bitboard.removeStone(bp.row, bp.col);
+                return false;
             }
 
             // ブロックの脅威に対する防御をチェック
@@ -906,6 +926,26 @@ fn evaluateCounterThreat(
 // processBlockDefenses
 // =============================================================================
 
+/// ブロック石は必ず四か活三を持つ、という不変条件のチェック（issue #140）
+///
+/// `processBlockDefenses` / `processBlockDefensesSeq` の呼び出し元はいずれも
+/// `blockThreatContinues` で `block_ct != .none` を、`.win` の早期 return で
+/// `block_ct != .win` を確認済み。したがってブロック石は必ず四か活三を持っており、
+/// `getThreatDefensePositions` の `no_threat` は**到達不能**。
+/// 到達したら `checkDefenseCounterThreat` と `getThreatDefensePositions` の脅威判定基準が
+/// 食い違っているということ（両者は同一基準。PR #139 で 1 対 1 対応を確認済み）。
+///
+/// Debug / ReleaseSafe（= `zig build test`）では食い違いをその場で落として検出する。
+/// wasm ビルド（ReleaseFast）では分岐ごと畳まれるので UB にもコスト増にもならず、
+/// 万一到達しても呼び出し元は**旧挙動（`.unstoppable` と束ねていた頃と同じ「勝ち」）**を
+/// 維持する。issue #140 が挙げた「保守側 = false に倒す」を採らなかったのは、
+/// 到達不能を確信していることと、挙動不変にしておくほうが bench で二分しやすいため。
+fn assertBlockHasThreat() void {
+    if (std.debug.runtime_safety) {
+        @panic("block stone must have four/three threat (#140)");
+    }
+}
+
 /// ブロックの脅威に対する防御サイクルを処理
 fn processBlockDefenses(
     cells: []Cell,
@@ -917,18 +957,11 @@ fn processBlockDefenses(
 ) bool {
     const opponent = color.opposite();
 
-    // 呼び出し元（`evaluateCounterThreat` の ct=four 分岐）は `blockThreatContinues` で
-    // `block_ct != .none` を、issue #140 の早期 return で `block_ct != .win` を確認済み。
-    // したがってここに来るブロック石は必ず四か活三を持っており、`no_threat` は到達不能
-    // （到達したら `checkDefenseCounterThreat` と `getThreatDefensePositions` の
-    // 脅威判定基準が食い違っているということ。両者は同一基準・PR #139 参照）。
     const block_def_positions = switch (getThreatDefensePositions(cells, block_pos.row, block_pos.col, color)) {
         // 防御不可 → ブロックの脅威で勝ち
         .unstoppable => return true,
         .no_threat => {
-            // Debug / ReleaseSafe（= `zig build test`）では基準の食い違いを検出する。
-            // ReleaseFast では分岐ごと畳まれ、万一の到達時は旧挙動（保守側 = 勝ち）に倒す。
-            if (std.debug.runtime_safety) unreachable;
+            assertBlockHasThreat();
             return true;
         },
         .positions => |p| p,
@@ -1521,9 +1554,11 @@ fn findVCTSequenceRecursive(
                 cells[block_idx] = color;
                 bitboard.placeStone(bp.row, bp.col, color);
 
-                // 三しか作らないブロックは受けを強制できない（issue #117）
                 const block_ct = checkDefenseCounterThreat(cells, bp.row, bp.col, color);
-                if (!blockThreatContinues(block_ct, cells, opponent, depth, limiter)) {
+                // 三しか作らないブロックは受けを強制できない（issue #117）。
+                // 五を作ったブロックは受けを列挙するまでもなく勝ち（issue #140）なので、
+                // `blockThreatContinues` より前に短絡する。
+                if (block_ct != .win and !blockThreatContinues(block_ct, cells, opponent, depth, limiter)) {
                     cells[block_idx] = .empty;
                     bitboard.removeStone(bp.row, bp.col);
                     cells[def_idx] = .empty;
@@ -1815,9 +1850,6 @@ fn processBlockDefensesSeq(
     };
 
     const opponent = color.opposite();
-    // `processBlockDefenses` と同じく、呼び出し元が `blockThreatContinues` で
-    // `block_ct != .none` を、issue #140 の早期 return で `block_ct != .win` を確認済みなので
-    // `no_threat` は到達不能（判定基準の食い違いのときだけ）。
     const block_def_positions = switch (getThreatDefensePositions(cells, block_pos.row, block_pos.col, color)) {
         // 防御不可 → ブロックの脅威で勝ち
         .unstoppable => {
@@ -1826,7 +1858,7 @@ fn processBlockDefensesSeq(
             return result;
         },
         .no_threat => {
-            if (std.debug.runtime_safety) unreachable;
+            assertBlockHasThreat();
             result.found = true;
             result.seq_len_valid = true;
             return result;
@@ -1944,9 +1976,10 @@ fn buildBlockDefSubSequence(
             cells[nb_idx] = color;
             bitboard.placeStone(nb.row, nb.col, color);
 
-            // 三しか作らないブロックは受けを強制できない（issue #117）
             const nb_threat = checkDefenseCounterThreat(cells, nb.row, nb.col, color);
-            if (!blockThreatContinues(nb_threat, cells, opponent, depth +| 1, limiter)) {
+            // 三しか作らないブロックは受けを強制できない（issue #117）。
+            // 五を作ったブロックは無条件に勝ちなので短絡する（issue #140）。
+            if (nb_threat != .win and !blockThreatContinues(nb_threat, cells, opponent, depth +| 1, limiter)) {
                 cells[nb_idx] = .empty;
                 bitboard.removeStone(nb.row, nb.col);
                 return result;
@@ -2216,7 +2249,9 @@ pub fn findVCTSequenceFromFirstMove(
             bitboard.placeStone(bp.row, bp.col, color);
 
             const block_ct = checkDefenseCounterThreat(cells, bp.row, bp.col, color);
-            if (blockThreatContinues(block_ct, cells, opponent, 0, &limiter)) {
+            // 五を作ったブロックは受けを列挙するまでもなく勝ち（issue #140）なので、
+            // `blockThreatContinues` より前に短絡する。
+            if (block_ct == .win or blockThreatContinues(block_ct, cells, opponent, 0, &limiter)) {
                 // ブロック石が五 → その場で勝ち（issue #140）。手順はブロック石で確定。
                 const block_ok = if (block_ct == .win)
                     blockWinSeqResult()
