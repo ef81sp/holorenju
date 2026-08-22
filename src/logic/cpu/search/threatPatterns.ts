@@ -140,8 +140,12 @@ export type FourDefense =
   /** 止め四。この 1 点で受かる。 */
   | { kind: "block"; position: Position };
 
-export const FOUR_DEFENSE_NOT_FOUR: FourDefense = { kind: "not_four" };
-export const FOUR_DEFENSE_UNSTOPPABLE: FourDefense = { kind: "unstoppable" };
+export const FOUR_DEFENSE_NOT_FOUR: FourDefense = Object.freeze({
+  kind: "not_four",
+});
+export const FOUR_DEFENSE_UNSTOPPABLE: FourDefense = Object.freeze({
+  kind: "unstoppable",
+});
 
 /**
  * 受け点があれば返す。`not_four` / `unstoppable` はどちらも `null`。
@@ -298,7 +302,7 @@ export function checkDefenseCounterThreat(
     // 四（連続四・跳び四とも isFourInDirection に一本化・issue #124）。
     // ここを getFourDefensePosition と同一基準にしておかないと、
     // 「four と分類されたのに受け点が 0 個」という不整合が起きる。
-    if (isFourInDirection(board, row, col, i, opponentColor)) {
+    if (isFourInDirection(board, row, col, i, opponentColor, count)) {
       return "four";
     }
 

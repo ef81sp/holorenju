@@ -38,7 +38,7 @@ export {
 } from "./threatPatterns";
 
 // 脅威手
-export { createsFour, isFourInDirection } from "./threatMoves";
+export { createsFour } from "./threatMoves";
 
 // VCTヘルパー
 export {

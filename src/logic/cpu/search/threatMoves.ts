@@ -64,6 +64,12 @@ export function isFourInDirection(
   col: number,
   i: number,
   color: "black" | "white",
+  /**
+   * 呼び出し側が既に計算済みの `countLine(board, row, col, dr, dc, color)`。
+   * 渡せば同じ走査を二重に行わずに済む（`classifyThreat` /
+   * `checkDefenseCounterThreat` はループ内で先に計算している）。
+   */
+  knownCount?: number,
 ): boolean {
   const dirIndex = DIRECTION_INDICES[i];
   const direction = DIRECTIONS[i];
@@ -72,7 +78,7 @@ export function isFourInDirection(
   }
   const [dr, dc] = direction;
 
-  const count = countLine(board, row, col, dr, dc, color);
+  const count = knownCount ?? countLine(board, row, col, dr, dc, color);
   if (count !== 4 && !checkJumpFour(board, row, col, dirIndex, color)) {
     return false;
   }
@@ -172,7 +178,7 @@ export function classifyThreat(
     const count = countLine(board, row, col, dr, dc, color);
 
     // 四（連続四・跳び四とも isFourInDirection に一本化・issue #124）
-    if (!hasFour && isFourInDirection(board, row, col, i, color)) {
+    if (!hasFour && isFourInDirection(board, row, col, i, color, count)) {
       hasFour = true;
     }
 

@@ -84,6 +84,7 @@ export interface ThreatWasmContext {
   getFivePointsBuffer: () => number;
   /**
    * 四に対する受け点（3 値・issue #124）。
+   * Zig 側の番兵定数は `quiescence.FOUR_DEFENSE_UNSTOPPABLE` / `FOUR_DEFENSE_NOT_FOUR`。
    * - 止め四: `row * 15 + col`（0..224）
    * - 活四（防御不可・`unstoppable`）: 255
    * - そもそも四ではない（`not_four`）: 254

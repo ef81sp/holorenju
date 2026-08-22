@@ -418,6 +418,12 @@ export function isThreat(
  * - 活四: 防御不可（空配列）
  * - 止め四: 1点
  * - 活三: 両端の2点
+ *
+ * ⚠️ **本番経路は Zig（`vct.getThreatDefensePositions`）が SSoT**。
+ * こちらは `@internal` のテスト用エクスポートのみで、
+ * #115（跳び四の長連ギャップを受けにしない）も
+ * #124（受け点を `collectLineFivePoints` に一本化）も**未反映の旧基準**である。
+ * 実装の正しさを問う用途には使わないこと。#43 で削除候補。
  */
 /** @internal テスト用にエクスポート */
 export function getThreatDefensePositions(

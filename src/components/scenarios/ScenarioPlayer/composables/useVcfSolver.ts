@@ -300,9 +300,24 @@ export const useVcfSolver = (
       case "not-four":
         // 四ではなかった（#124）。validateAttackMove が createsFour を通した手
         // にしか到達しないので通常は起きない。防御石を置かずに継続する。
+        if (import.meta.env.DEV) {
+          console.warn(
+            "[useVcfSolver] getDefenseResponse が not-four を返した（契約違反）",
+            position,
+          );
+        }
         break;
-      default:
+
+      default: {
+        // union 網羅チェック。`DefenseResponse` に variant が増えると
+        // ここが型エラーになるので、黙って握り潰されることはない。
+        // （`default` そのものは oxlint の default-case ルールで必須）
+        const unexpected: never = defense;
+        if (import.meta.env.DEV) {
+          console.warn("[useVcfSolver] 未知の DefenseResponse", unexpected);
+        }
         break;
+      }
     }
   }
 
