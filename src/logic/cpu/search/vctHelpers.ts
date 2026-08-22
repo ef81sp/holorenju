@@ -345,18 +345,11 @@ function findThreatMovesFast(
 
 /* eslint-enable no-bitwise */
 
-/**
- * 脅威が成立しているかチェック（四または活三）
- */
-export function isThreat(
-  board: BoardState,
-  row: number,
-  col: number,
-  color: "black" | "white",
-): boolean {
-  const result = classifyThreat(board, row, col, color);
-  return result.createsFour || result.createsOpenThree;
-}
+// issue #130 / #43: TS 版 `isThreat` は削除した。Zig 側の `vct.isThreat` は
+// `getThreatDefensePositions` の `len == 0` を切り分けるガード専用で、
+// 戻り値の 3 値化（`ThreatDefense`）に吸収されて呼び出し元がゼロになった。
+// TS 側も参照ゼロだったため、二重実装を残さないよう同時に削除する。
+// 脅威の有無が要るなら `threatMoves.classifyThreat` を直接使うこと。
 
 // issue #121 / #43: TS 版 `getThreatDefensePositions` は削除した。
 // 本番経路は Zig の `vct.getThreatDefensePositions`（`threats.collectLineFivePoints` が

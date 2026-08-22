@@ -12,18 +12,20 @@ import { BOARD_SIZE } from "@/constants";
 import { checkFive } from "@/logic/renjuRules";
 
 import { DIRECTION_INDICES, DIRECTIONS } from "../core/constants";
-import {
-  checkEnds,
-  collectLineFivePoints,
-  countLine,
-} from "../core/lineAnalysis";
+import { checkEnds, countLine } from "../core/lineAnalysis";
 // 夏止め済み判定（受け点の基準と活三判定を一致させる SSoT）
 import { getOpenThreeDefensePositions } from "../evaluation/threatDetection";
 import { isNearExistingStone } from "../moveGenerator";
 // #43 PR-3: 図形/禁手の葉プリミティブを Zig アダプタへ委譲（patterns.ts/forbiddenMoves.ts 依存を断つ）。
 import { isForbiddenForBlack } from "../wasm/forbiddenAdapter";
-import { checkJumpFour, checkJumpThree } from "../wasm/patternsAdapter";
-import { createsFour, isFourInDirection } from "./threatMoves";
+import { checkJumpThree } from "../wasm/patternsAdapter";
+import {
+  type FourClass,
+  FOUR_CLASS_NOT_FOUR,
+  classifyFourInDirection,
+  createsFour,
+  isFourInDirection,
+} from "./threatMoves";
 
 /**
  * 即勝ち手を探す（五連を完成できる位置）
@@ -128,19 +130,16 @@ export function findFourMoves(
  * 以前は `Position | null` で、`null` が「防御不可（活四）」と「そもそも四ではない」の
  * 両方を意味していた。VCF 経路は `null` を即勝ちとして扱うため、四の判定側が
  * 偽陽性を出すと「四ですらない手」で VCF が成立してしまっていた。
- * Zig 側 `quiescence.FourDefense` と対応する。
+ *
+ * issue #134: 方向ごとの分類（`threatMoves.FourClass`）と**同じ型**にした。
+ * 3 値の意味も一致する（`not_four` = 五点 0 個 / `unstoppable` = 活四で 1 手では
+ * 止められない / `block` = 止め四でその 1 点が受け）。畳み込み後は「どの方向の
+ * 五点か」が意味を持たないので `unstoppable.fivePoints` は付けない（optional）。
+ * Zig 側の `quiescence.FourDefense = threats.FourClass` と対称。
  */
-export type FourDefense =
-  /** どの方向でも四になっていない（五点 0 個）。脅威ではない。 */
-  | { kind: "not_four" }
-  /** 四だが受け点が 2 つ以上ある ＝ 活四。1 手では止められない。 */
-  | { kind: "unstoppable" }
-  /** 止め四。この 1 点で受かる。 */
-  | { kind: "block"; position: Position };
+export type FourDefense = FourClass;
 
-export const FOUR_DEFENSE_NOT_FOUR: FourDefense = Object.freeze({
-  kind: "not_four",
-});
+export const FOUR_DEFENSE_NOT_FOUR: FourDefense = FOUR_CLASS_NOT_FOUR;
 export const FOUR_DEFENSE_UNSTOPPABLE: FourDefense = Object.freeze({
   kind: "unstoppable",
 });
@@ -159,11 +158,11 @@ export function fourDefenseBlock(defense: FourDefense): Position | null {
  * 四に対する防御位置を取得
  * 四は1点でしか止められないので、その位置を返す
  *
- * 方向ごとに `collectLineFivePoints` で「その方向で埋めると五になる点」を列挙する
- * （受け点の SSoT。Zig 側 `quiescence.getFourDefensePosition` と同じ基準）。
- * - 五点 0 個: この方向は四ではない（黒の長連にしかならない四）→ 無視
- * - 五点 2 個以上: 両方は塞げない ＝ 活四（防御不可）→ `unstoppable`
- * - 五点 1 個: 止め四。その点が受け → `block`
+ * 方向ごとの分類（`classifyFourInDirection` ＝ 四判定・受け点の SSoT・issue #134）を
+ * 4 方向で畳み込む（Zig 側 `quiescence.getFourDefensePosition` と同じ基準）。
+ * - `not_four`: この方向は四ではない（黒の長連にしかならない四）→ 無視
+ * - `unstoppable`: 両方は塞げない ＝ 活四（防御不可）→ 即返す
+ * - `block`: 止め四。その点が受け（複数方向あれば最初の 1 点）
  * - どの方向も四でなかった → `not_four`
  *
  * issue #115: 以前は跳び四で `findJumpGapPosition` の返り値を検証せずに使っており、
@@ -184,42 +183,26 @@ export function getFourDefensePosition(
   color: "black" | "white",
 ): FourDefense {
   const { row, col } = lastMove;
-  // NOTE: この「プリフィルタ → collectLineFivePoints → 0/1/2 個で分岐」は
-  // 5 箇所に複製されている。SSoT 統合は issue #134。
   let firstDefense: Position | null = null;
 
   for (let i = 0; i < DIRECTION_INDICES.length; i++) {
-    const dirIndex = DIRECTION_INDICES[i];
-    if (dirIndex === undefined) {
-      continue;
-    }
-
-    const direction = DIRECTIONS[i];
-    if (!direction) {
-      continue;
-    }
-    const [dr, dc] = direction;
-
-    const isConsecutiveFour = countLine(board, row, col, dr, dc, color) === 4;
-    if (
-      !isConsecutiveFour &&
-      !checkJumpFour(board, row, col, dirIndex, color)
-    ) {
-      continue;
-    }
-
-    // 連続四・跳び四を区別せず、その方向で「埋めると五になる点」を列挙して判定する。
-    const fivePoints = collectLineFivePoints(board, row, col, dr, dc, color);
-    if (fivePoints.length === 0) {
-      // この方向は四ではない（黒の長連にしかならない四）
-      continue;
-    }
-    if (fivePoints.length >= 2) {
-      // 両方は塞げない = 活四（防御不可能）
-      return FOUR_DEFENSE_UNSTOPPABLE;
-    }
-    if (!firstDefense) {
-      firstDefense = fivePoints[0] ?? null;
+    // 方向ごとの分類は `classifyFourInDirection`（四判定・受け点の SSoT・issue #134）。
+    const fourClass = classifyFourInDirection(board, row, col, i, color);
+    switch (fourClass.kind) {
+      case "unstoppable":
+        // 両方は塞げない = 活四（防御不可能）
+        return FOUR_DEFENSE_UNSTOPPABLE;
+      case "block":
+        firstDefense ??= fourClass.position;
+        break;
+      case "not_four":
+        // この方向は四ではない（黒の長連にしかならない四）
+        break;
+      default: {
+        // 網羅チェック（FourClass に値が増えたらここで型エラーになる）
+        const exhaustive: never = fourClass;
+        return exhaustive;
+      }
     }
   }
 

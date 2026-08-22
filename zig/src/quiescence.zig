@@ -91,34 +91,22 @@ pub fn createsFour(cells: []const Cell, row: u8, col: u8, color: Cell) bool {
 pub const FOUR_DEFENSE_NOT_FOUR: u8 = 254;
 pub const FOUR_DEFENSE_UNSTOPPABLE: u8 = 255;
 
-pub const FourDefense = union(enum) {
-    /// どの方向でも四になっていない（五点 0 個）。脅威ではない。
-    not_four,
-    /// 四だが受け点が 2 つ以上ある ＝ 活四。1 手では止められない。
-    unstoppable,
-    /// 止め四。この 1 点で受かる。
-    block: Position,
-
-    /// 受け点があればそれを返す。`not_four` / `unstoppable` はどちらも `null`。
-    /// 「四なら必ず受ける／それ以外は保守的に打ち切る」呼び出し側（vct.zig）向け。
-    pub fn blockPos(self: FourDefense) ?Position {
-        return switch (self) {
-            .block => |p| p,
-            else => null,
-        };
-    }
-};
+/// 方向ごとの分類（`threats.FourClass`）と同じ 3 値。issue #134 で 1 つの型に統一した。
+/// - `not_four`: どの方向でも四になっていない（五点 0 個）。脅威ではない。
+/// - `unstoppable`: 四だが受け点が 2 つ以上ある ＝ 活四。1 手では止められない。
+/// - `block`: 止め四。この 1 点で受かる。
+pub const FourDefense = threats.FourClass;
 
 /// 四に対する防御位置を取得
 /// 四は1点でしか止められないのでその位置を返す
 /// 石配置済み前提、bitboard も同期済み前提。
 /// TS版 threatPatterns.ts の getFourDefensePosition に対応
 ///
-/// 連続四・跳び四を区別せず、方向ごとに「その方向で埋めると五になる点」を
-/// `threats.collectLineFivePoints` で列挙して判定する（受け点の SSoT）。
-/// - 五点 0 個: この方向は四ではない（黒の長連にしかならない四）→ 無視
-/// - 五点 2 個以上: 両方は塞げない ＝ 活四（防御不可）→ `.unstoppable`
-/// - 五点 1 個: 止め四。その点が受け → `.block`
+/// 連続四・跳び四を区別せず、方向ごとの分類（`threats.classifyFourInDirection`
+/// ＝ 四判定・受け点の SSoT・issue #134）を 4 方向で畳み込む。
+/// - `.not_four`: この方向は四ではない（黒の長連にしかならない四）→ 無視
+/// - `.unstoppable`: 両方は塞げない ＝ 活四（防御不可）→ 即返す
+/// - `.block`: 止め四。その点が受け（複数方向あれば最初の 1 点）
 /// - どの方向も四でなかった → `.not_four`
 ///
 /// issue #115: 以前は跳び四で `findJumpGapPosition` の返り値を検証せずに
@@ -131,17 +119,15 @@ pub const FourDefense = union(enum) {
 pub fn getFourDefensePosition(cells: []const Cell, last_row: u8, last_col: u8, color: Cell) FourDefense {
     var first_defense: ?Position = null;
 
-    for (DIRECTIONS, 0..) |dir, i| {
-        // NOTE: この分岐は 5 箇所に複製されている。SSoT 統合は issue #134。
+    for (0..DIRECTIONS.len) |i| {
         const result = ll.queryPatternByCell(last_row, last_col, i, color);
-        if (result.count != 4 and !result.has_jump_four) continue;
-
-        var five_points = threats.PositionList.init();
-        _ = threats.collectLineFivePoints(cells, last_row, last_col, dir.dr, dir.dc, color, &five_points);
-
-        if (five_points.len == 0) continue;
-        if (five_points.len >= 2) return .unstoppable;
-        if (first_defense == null) first_defense = five_points.items[0];
+        switch (threats.classifyFourInDirection(cells, last_row, last_col, i, color, result, null)) {
+            .not_four => {},
+            .unstoppable => return .unstoppable,
+            .block => |p| if (first_defense == null) {
+                first_defense = p;
+            },
+        }
     }
 
     if (first_defense) |p| return .{ .block = p };

@@ -22,10 +22,13 @@ import type { BoardState, Position } from "@/types/game";
 import { BOARD_SIZE } from "@/constants";
 import { createEmptyBoard } from "@/logic/renjuRules";
 
+import type { DirectionPattern } from "../evaluation/patternScores";
+
 import { collectLineFivePoints } from "../core/lineAnalysis";
+import { analyzeDirection } from "../evaluation/directionAnalysis";
 import { getThreatWasm, preloadThreatWasm } from "../wasm/threatLoader";
 import { CELL } from "../wasm/types";
-import { createsFour } from "./threatMoves";
+import { classifyFourInDirection, createsFour } from "./threatMoves";
 import { type FourDefense, getFourDefensePosition } from "./threatPatterns";
 
 await preloadThreatWasm();
@@ -142,6 +145,26 @@ function key(points: Position[]): string[] {
   return points.map((p) => `${p.row},${p.col}`).sort();
 }
 
+/**
+ * `analyzeJumpPatterns` / `evaluate.createsFourThree` が #134 以前に使っていた
+ * 連続四の判定（`analyzeDirection` の端ベース・黒の長連補正込み）の参照実装。
+ *
+ * 新実装（`classifyFourInDirection`）との差分が 0 であることを全列挙で固定する。
+ * `pattern` は呼び出し側が計算済みのものを受け取る（`count === 4` の方向のみ有効）。
+ */
+function legacyConsecutiveFour(pattern: DirectionPattern): {
+  hasFour: boolean;
+  openFour: boolean;
+} {
+  if (pattern.count !== 4) {
+    return { hasFour: false, openFour: false };
+  }
+  return {
+    hasFour: pattern.end1 === "empty" || pattern.end2 === "empty",
+    openFour: pattern.end1 === "empty" && pattern.end2 === "empty",
+  };
+}
+
 describe("受け点の TS⇄Zig パリティ（1ライン全列挙・issue #115）", () => {
   it("collectLineFivePoints と getFourDefensePosition が全パターンで一致する", () => {
     const total = 3 ** LINE_LEN;
@@ -151,6 +174,8 @@ describe("受け点の TS⇄Zig パリティ（1ライン全列挙・issue #115�
 
     const mismatches: string[] = [];
     let comparisons = 0;
+    /** 連続四の新旧比較（#134）が実際に行われた回数 */
+    let legacyComparisons = 0;
 
     for (let code = 0; code < total; code++) {
       let rest = code;
@@ -216,6 +241,36 @@ describe("受け点の TS⇄Zig パリティ（1ライン全列挙・issue #115�
                 `createsFour code=${code} color=${color} col=${col}: ts=${tsFour} zig=${zigFour}`,
               );
             }
+
+            // #134: `createsFourThree` / `analyzeJumpPatterns` の連続四側を端ベースから
+            // 五点列挙（classifyFourInDirection）へ統一したので、`count === 4` の方向で
+            // 新旧の四判定・活四判定に差分が無いことを凍結する。
+            const pattern = analyzeDirection(board, LINE_ROW, col, 0, 1, color);
+            // eslint-disable-next-line max-depth
+            if (pattern.count === 4) {
+              legacyComparisons++;
+              const legacy = legacyConsecutiveFour(pattern);
+              const cls = classifyFourInDirection(
+                board,
+                LINE_ROW,
+                col,
+                DIR_INDEX,
+                color,
+                pattern.count,
+              );
+              // eslint-disable-next-line max-depth
+              if (legacy.hasFour !== (cls.kind !== "not_four")) {
+                mismatches.push(
+                  `連続四の四判定 code=${code} color=${color} col=${col}: legacy=${legacy.hasFour} classify=${cls.kind}`,
+                );
+              }
+              // eslint-disable-next-line max-depth
+              if (legacy.openFour !== (cls.kind === "unstoppable")) {
+                mismatches.push(
+                  `連続四の活四判定 code=${code} color=${color} col=${col}: legacy=${legacy.openFour} classify=${cls.kind}`,
+                );
+              }
+            }
           }
         }
       }
@@ -223,6 +278,7 @@ describe("受け点の TS⇄Zig パリティ（1ライン全列挙・issue #115�
 
     // 比較が実際に行われていること（ループ条件のミスで 0 件になる事故を防ぐ）
     expect(comparisons).toBeGreaterThan(30_000);
+    expect(legacyComparisons).toBeGreaterThan(1_000);
     expect(mismatches.slice(0, 10)).toEqual([]);
   }, 120_000);
 });

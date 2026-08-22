@@ -148,23 +148,36 @@ pub fn createsFourThree(cells: []Cell, row: u8, col: u8, color: Cell) bool {
 
     // 各方向のLUT結果をキャッシュ
     var dir_luts: [4]ll.PatternResult = undefined;
+    var is_four_dirs: [4]bool = [_]bool{false} ** 4;
     var jump_four_dirs: [4]bool = [_]bool{false} ** 4;
 
-    // 1st pass: 連続パターン + 跳び四検出 (LUT版)
+    // 1st pass: 連続パターン + 四検出 (LUT版)
     //
     // issue #121: LUT の `has_jump_four` は盤面を見ないため、窓（中心 ±4）の外の自石で
     // ギャップ埋めが長連（6 連以上）になる黒の形も跳び四として報告する。四かどうかの
-    // 最終判断は五点の列挙（`threats.isFourInDirection`）に委ねる。偽の跳び四を四に
-    // 数えると「四三」でない手をミセ手として生成してしまう。
+    // 最終判断は五点の列挙に委ねる。偽の跳び四を四に数えると「四三」でない手を
+    // ミセ手として生成してしまう。
+    //
+    // issue #134: 連続四側も端ベース（`blackOverlineEnd`）をやめ、跳び四と同じ
+    // 五点列挙に統一した（`count == 4` に限れば両者は等価。
+    // `test "issue #134: 四分類の不変条件"`（threats.zig）で全列挙固定）。
+    //
+    // ここで要るのは「四かどうか」の boolean だけなので、分類 3 値
+    // （`classifyFourInDirection`）ではなく**早期打ち切り版**の
+    // `isFourInDirectionWithPattern` を使う（同じ SSoT の存在判定版。定義は
+    // `scanLineFivePoints` で共有）。`createsFourThree` は
+    // `position_eval.computeMiseBonus → countMiseTargets` からムーブオーダリング
+    // 経路に乗る最ホットパスで、五点をライン全走査すると純損になる。
     for (0..4) |i| {
         const lut = ll.queryPatternByCell(row, col, i, color);
         dir_luts[i] = lut;
 
         // `isFourInDirectionWithPattern` が LUT の足切り（count==4 or has_jump_four）を
         // 内部で行うので、ここで重ねてチェックする必要はない。
-        if (lut.count != 4 and
-            threats.isFourInDirectionWithPattern(cells, row, col, i, color, lut))
-        {
+        is_four_dirs[i] = threats.isFourInDirectionWithPattern(cells, row, col, i, color, lut);
+        // 「跳び四の方向」= 四だが連続四ではない方向。同方向の三を四三に数えないための
+        // ガードに使う（連続四の方向は `lut.count == 4` なので三のブランチに入らない）。
+        if (lut.count != 4 and is_four_dirs[i]) {
             jump_four_dirs[i] = true;
         }
     }
@@ -176,32 +189,15 @@ pub fn createsFourThree(cells: []Cell, row: u8, col: u8, color: Cell) bool {
         const end1 = lutEnd(lut.end1);
         const end2 = lutEnd(lut.end2);
 
-        // 連続四（片端以上が空き）。端はセル走査で求め、黒は長連補正を適用する
-        // （TS analyzeDirection と一致。LUT 端は黒長連補正を持たないため使わない）。
+        // 四（連続四・跳び四とも 1st pass の五点列挙に一本化・issue #134）。
         //
-        // 跳び四側（1st pass）は五点列挙（`isFourInDirection`）に寄せたが、**連続四側は
-        // 端ベースのまま**。`count == 4` に限れば両者は等価である:
+        // 旧実装の連続四側は端ベース（`blackOverlineEnd` による長連補正込み）だったが、
+        // `count == 4` に限れば五点列挙と等価である:
         //   - 偽陽性なし: 端が空きかつ長連補正を通れば、その端を埋めると必ずちょうど 5
         //   - 偽陰性なし: 連続 4 連の五点は両端のいずれかにしか存在しえない
         //     （離れた空点を埋めても 4 連と繋がらない）
-        // 統一（`classifyFourInDirection` への集約）は follow-up issue #134 で扱う。
-        if (lut.count == 4) {
-            const dir = board_mod.DIRECTIONS[i];
-            const pos = board_mod.countInDirectionOnCells(cells, row, col, dir.dr, dir.dc, color);
-            const neg = board_mod.countInDirectionOnCells(cells, row, col, -dir.dr, -dir.dc, color);
-            var e1 = pos.end_state;
-            var e2 = neg.end_state;
-            if (color == .black) {
-                if (e1 == .empty and blackOverlineEnd(cells, row, col, dir.dr, dir.dc, pos.count)) {
-                    e1 = .opponent;
-                }
-                if (e2 == .empty and blackOverlineEnd(cells, row, col, -dir.dr, -dir.dc, neg.count)) {
-                    e2 = .opponent;
-                }
-            }
-            if (e1 == .empty or e2 == .empty) {
-                has_four = true;
-            }
+        if (is_four_dirs[i]) {
+            has_four = true;
         }
 
         // 連続三の有効性チェック（跳び四方向でなければ）
@@ -211,11 +207,6 @@ pub fn createsFourThree(cells: []Cell, row: u8, col: u8, color: Cell) bool {
                     has_valid_open_three = true;
                 }
             }
-        }
-
-        // 跳び四
-        if (jump_four_dirs[i]) {
-            has_four = true;
         }
 
         // 跳び三 (LUT版: 連続三がなく、跳び四もない場合のみ)
@@ -775,3 +766,8 @@ test "createsFourThree: 同じ形でも白なら本物の四三（回帰・白�
 
     try std.testing.expect(createsFourThree(&cells, 7, 7, .white));
 }
+
+// issue #134 の全列挙テスト（連続四の端ベース旧基準 ⇔ 五点列挙の等価性）は
+// `threats.zig` の `test "issue #134: 四分類の不変条件（1ライン全列挙）"` に集約した。
+// 盤面の敷き直し（3^9 × 3 窓）を 2 つのテストで二重に回さないため
+// （`createsFourThree` が使う判定は `threats` 側の SSoT なので置き場としても自然）。

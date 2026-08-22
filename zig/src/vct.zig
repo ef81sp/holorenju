@@ -98,11 +98,11 @@ pub fn createsOpenThree(cells: []const Cell, row: u8, col: u8, color: Cell) bool
     return false;
 }
 
-/// 脅威が成立しているか（四または活三）
-pub fn isThreat(cells: []const Cell, row: u8, col: u8, color: Cell) bool {
-    const result = classifyThreat(cells, row, col, color);
-    return result.creates_four or result.creates_open_three;
-}
+// issue #130: `isThreat`（= `classifyThreat` の四 or 活三）は削除した。
+// 唯一の用途が `getThreatDefensePositions` の `len == 0` を「防御不可」と
+// 「そもそも脅威でない」に切り分けるガードで、その分岐は戻り値の 3 値化
+// （`ThreatDefense`）に吸収されたため、呼び出し元がゼロになった。
+// 脅威の有無が要るなら `classifyThreat` を直接使うこと。
 
 // =============================================================================
 // hasOpenThree（TS版 vctHelpers.ts に対応）
@@ -341,42 +341,52 @@ pub fn findThreatMovesCounted(cells: []Cell, color: Cell, buf: *[225]Position) T
 // getThreatDefensePositions（TS版 vctHelpers.ts に対応）
 // =============================================================================
 
-/// 脅威に対する防御位置を取得
-/// 跳び四の受け点（＝そのラインで「埋めると本当に五になる」空点）を列挙する
-///
-/// 実体は `threats.collectLineFivePoints`（受け点の SSoT。
-/// `quiescence.getFourDefensePosition` も同じ関数を使う）。
-///
-/// 戻り値: 受け点を 1 つ以上追加できたか（false なら四として扱わず、
-/// 呼び出し側で三として受けを広く列挙する＝防御側に有利な健全側に倒す）
-fn addJumpFourDefensePositions(
-    cells: []const Cell,
-    row: u8,
-    col: u8,
-    dr: i8,
-    dc: i8,
-    color: Cell,
-    defense_positions: *PositionList,
-) bool {
-    return threats.collectLineFivePoints(cells, row, col, dr, dc, color, defense_positions) > 0;
-}
+// issue #134: `addJumpFourDefensePositions`（`collectLineFivePoints` の薄いラッパ）は
+// 呼び出し元ゼロだったため削除した。四の分類・受け点は
+// `threats.classifyFourInDirection`（SSoT）に一本化されている。
 
-pub fn getThreatDefensePositions(cells: []const Cell, row: u8, col: u8, color: Cell) PositionList {
+/// `getThreatDefensePositions` の結果（issue #130 で 3 値化）
+///
+/// 以前は `PositionList` を返し、`len == 0` が
+/// 「防御不可（活四）＝攻撃側の勝ち」と「そもそも脅威ではない」の両方を意味していた。
+/// 呼び出し側はいずれも `isThreat`（= `classifyThreat` 4 方向）を**もう一度**走らせて
+/// 前者だけを勝ちに倒していたが、ガードを付け忘れると静かに偽 VCT になる形だった
+/// （#124 のレビューで 2 箇所の付け忘れが見つかっている）。
+///
+/// 3 値にしたことで
+/// - 呼び出し側は網羅 switch で `no_threat` を必ず明示的に扱う（勝ちにできない）
+/// - `isThreat` の再計算が不要（脅威の有無は列挙の過程で分かっている）
+///
+/// `quiescence.FourDefense`（= `threats.FourClass`）の VCT 版にあたる。
+pub const ThreatDefense = union(enum) {
+    /// 四でも活三でもない ＝ そもそも脅威が成立していない。
+    /// `isThreat(cells, row, col, color) == false` と同値。
+    no_threat,
+    /// 脅威はあるが 1 手では受からない（活四など）＝ 攻撃側の勝ち。
+    unstoppable,
+    /// 受け点（1 点以上）。
+    positions: PositionList,
+};
+
+/// 脅威（四・活三・跳び三）に対する防御位置を列挙する
+pub fn getThreatDefensePositions(cells: []const Cell, row: u8, col: u8, color: Cell) ThreatDefense {
     var defense_positions = PositionList.init();
+    // 脅威（四 or 活三 or 跳び三）が成立したか。判定基準は `classifyThreat`（= `isThreat`）と
+    // 同一（四: `classifyFourInDirection`、連続三: 受け点が 1 点以上、跳び三: LUT）。
+    var has_threat = false;
 
     for (DIRECTIONS, 0..) |dir, i| {
         const result = ll.queryPatternByCell(row, col, i, color);
 
-        // 四（連続四・跳び四）の受け点（issue #115 / #124）
+        // 四（連続四・跳び四）の受け点（issue #115 / #124 / #134）
         //
-        // 「四の受け＝そのラインで埋めると本当に五になる点」という一つの基準
-        // （`threats.collectLineFivePoints`）に統一する。分類側
-        // （`classifyThreat` / `checkDefenseCounterThreat` = `isFourInDirection`）と
-        // 同じ関数を見るので、「四と分類したのに受け 0 点」が構造的に起きない。
+        // 分類は `threats.classifyFourInDirection`（四判定・受け点の SSoT）に委ねる。
+        // 分類側（`classifyThreat` / `checkDefenseCounterThreat` = `isFourInDirection`）と
+        // 同じ定義を見るので、「四と分類したのに受け 0 点」が構造的に起きない。
         //
-        // - 五点 2 個以上: 両方は塞げない＝活四 → 防御不可（空リスト）
-        // - 五点 1 個: 止め四。その 1 点が受け
-        // - 五点 0 個: この方向は四ではない（黒の長連にしかならない）
+        // - `.unstoppable`（五点 2 個以上）: 両方は塞げない＝活四 → 防御不可
+        // - `.block`（五点 1 個）: 止め四。その 1 点が受け
+        // - `.not_four`（五点 0 個）: この方向は四ではない（黒の長連にしかならない）
         //   → 四扱いをやめ、下の活三/跳び三ブランチで受けを広く列挙する
         //     （受けが広がる＝防御側に有利な健全側に倒す）
         //
@@ -384,25 +394,25 @@ pub fn getThreatDefensePositions(cells: []const Cell, row: u8, col: u8, color: C
         // 「最も近いギャップ 1 つ」（`isJumpFourOverline`）で見ており、
         // 同一ライン上に長連ギャップと本物の五点が併存すると四ブランチごと落ちて
         // 受け 0 点になっていた（#124 レビュー指摘）。
-        // NOTE: この分岐は 5 箇所に複製されている。SSoT 統合は issue #134。
         var has_four = false;
-        if (result.count == 4 or result.has_jump_four) {
-            var five_points = PositionList.init();
-            const five_count = threats.collectLineFivePoints(cells, row, col, dir.dr, dir.dc, color, &five_points);
-            if (five_count >= 2) {
-                // 活四 = 防御不可
-                return PositionList.init();
-            }
-            if (five_count == 1) {
-                defense_positions.addUnique(five_points.items[0]);
+        switch (threats.classifyFourInDirection(cells, row, col, i, color, result, null)) {
+            // 活四 = 防御不可
+            .unstoppable => return .unstoppable,
+            .block => |p| {
+                defense_positions.addUnique(p);
                 has_four = true;
-            }
+                has_threat = true;
+            },
+            .not_four => {},
         }
 
         // 活三をチェック（同方向に四がある場合は不要：四の防御が優先）
         // 両端＋夏止め位置を返す getOpenThreeDefensePositions を使用（getLineEnds は両端のみで不足）
+        // 空リスト = 夏止め済み（活四にできない）＝ 脅威ではない、という基準は
+        // `classifyThreat` / `checkDefenseCounterThreat` と共有している。
         if (!has_four and result.count == 3 and result.end1 == 0 and result.end2 == 0) {
             const open_three_def = threats.getOpenThreeDefensePositions(cells, row, col, dir.dr, dir.dc, color);
+            if (open_three_def.len > 0) has_threat = true;
             for (0..open_three_def.len) |j| {
                 defense_positions.addUnique(open_three_def.items[j]);
             }
@@ -410,6 +420,7 @@ pub fn getThreatDefensePositions(cells: []const Cell, row: u8, col: u8, color: C
 
         // 跳び三をチェック
         if (result.count != 3 and result.has_jump_three) {
+            has_threat = true;
             const jump_defense = threats.getJumpThreeDefensePositions(cells, row, col, dir.dr, dir.dc, color);
             for (0..jump_defense.len) |j| {
                 defense_positions.addUnique(jump_defense.items[j]);
@@ -417,7 +428,14 @@ pub fn getThreatDefensePositions(cells: []const Cell, row: u8, col: u8, color: C
         }
     }
 
-    return defense_positions;
+    if (!has_threat) return .no_threat;
+    // 「脅威はあるのに受け点が 1 つも出せない」ケースは、4 方向 × 88 ライン × 3 オフセット ×
+    // 3^9 × 両色の全列挙で**到達不能**であることを確認済み（PR #139 レビュー）。
+    // ここに到達したら跳び三の判定（LUT の `has_jump_three`）と受け列挙
+    // （`getJumpThreeDefensePositions`）が食い違っているということなので、
+    // 保守側（＝旧実装の `len == 0` + `isThreat` ガードと同じ「防御不可」）に倒す。
+    if (defense_positions.len == 0) return .unstoppable;
+    return .{ .positions = defense_positions };
 }
 
 // =============================================================================
@@ -890,12 +908,16 @@ fn processBlockDefenses(
 ) bool {
     const opponent = color.opposite();
 
-    const block_def_positions = getThreatDefensePositions(cells, block_pos.row, block_pos.col, color);
-
-    // 防御不可 → ブロックの脅威で勝ち
-    if (block_def_positions.len == 0) {
-        return true;
-    }
+    // 呼び出し元（`evaluateCounterThreat` の ct=four 分岐）は `blockThreatContinues` で
+    // `block_ct != .none` を確認済みなので、ここに来る `no_threat` は
+    // 「ブロック石が五を作った（`block_ct == .win`）」ケースだけ。どちらも攻撃側の勝ち。
+    // なお `.win` を呼び出し元で早期 return しないため、五を作ったブロック石が別方向にも
+    // 脅威を持つと `.positions` に落ちて勝ちを取りこぼしうる（偽陰性・issue #140）。
+    const block_def_positions = switch (getThreatDefensePositions(cells, block_pos.row, block_pos.col, color)) {
+        // 防御不可 → ブロックの脅威で勝ち
+        .unstoppable, .no_threat => return true,
+        .positions => |p| p,
+    };
 
     for (0..block_def_positions.len) |i| {
         const bd_pos = block_def_positions.items[i];
@@ -981,19 +1003,22 @@ pub fn hasVCT(
             return true;
         }
 
-        const defense_positions = getThreatDefensePositions(cells, move.row, move.col, color);
-
-        if (defense_positions.len == 0) {
-            // 防御不可 → 脅威が成立していれば勝ち
-            if (isThreat(cells, move.row, move.col, color)) {
+        // issue #130: 3 値なので「脅威でない手」を勝ちにできない（`isThreat` の再計算も不要）
+        const defense_positions = switch (getThreatDefensePositions(cells, move.row, move.col, color)) {
+            .unstoppable => {
+                // 防御不可 → 勝ち
                 cells[move_idx] = .empty;
                 bitboard.removeStone(move.row, move.col);
                 return true;
-            }
-            cells[move_idx] = .empty;
-            bitboard.removeStone(move.row, move.col);
-            continue;
-        }
+            },
+            .no_threat => {
+                // 四でも活三でもない ＝ 追い詰めの手ではない
+                cells[move_idx] = .empty;
+                bitboard.removeStone(move.row, move.col);
+                continue;
+            },
+            .positions => |p| p,
+        };
 
         // 全防御に対してVCTが継続するかチェック
         var all_defense_leads_to_vct = true;
@@ -1418,10 +1443,9 @@ fn findVCTSequenceRecursive(
             return true;
         }
 
-        const defense_positions = getThreatDefensePositions(cells, move.row, move.col, color);
-
-        if (defense_positions.len == 0) {
-            if (isThreat(cells, move.row, move.col, color)) {
+        // issue #130: 3 値なので「脅威でない手」を勝ちにできない（`isThreat` の再計算も不要）
+        const defense_positions = switch (getThreatDefensePositions(cells, move.row, move.col, color)) {
+            .unstoppable => {
                 cells[move_idx] = .empty;
                 bitboard.removeStone(move.row, move.col);
                 // 1手で終わるので即返却
@@ -1430,11 +1454,14 @@ fn findVCTSequenceRecursive(
                 // 受け不能の脅威で終端
                 if (context.collect_branches) context.out_node = g_tree_arena.addNode(move, 0, 0);
                 return true;
-            }
-            cells[move_idx] = .empty;
-            bitboard.removeStone(move.row, move.col);
-            continue;
-        }
+            },
+            .no_threat => {
+                cells[move_idx] = .empty;
+                bitboard.removeStone(move.row, move.col);
+                continue;
+            },
+            .positions => |p| p,
+        };
 
         // 全防御に対してVCTが継続するかチェック
         var all_defense_leads_to_vct = true;
@@ -1755,14 +1782,18 @@ fn processBlockDefensesSeq(
     };
 
     const opponent = color.opposite();
-    const block_def_positions = getThreatDefensePositions(cells, block_pos.row, block_pos.col, color);
-
-    // 防御不可 → ブロックの脅威で勝ち
-    if (block_def_positions.len == 0) {
-        result.found = true;
-        result.seq_len_valid = true;
-        return result;
-    }
+    // `processBlockDefenses` と同じく、呼び出し元が `blockThreatContinues` で
+    // `block_ct != .none` を確認済みなので `no_threat` はブロック石が五を作った場合だけ
+    // （`.win` を早期 return しないことによる偽陰性は issue #140）。
+    const block_def_positions = switch (getThreatDefensePositions(cells, block_pos.row, block_pos.col, color)) {
+        // 防御不可 → ブロックの脅威で勝ち
+        .unstoppable, .no_threat => {
+            result.found = true;
+            result.seq_len_valid = true;
+            return result;
+        },
+        .positions => |p| p,
+    };
 
     var longest_seq: [64]Position = undefined;
     var longest_len: u8 = 0;
@@ -2060,30 +2091,25 @@ pub fn findVCTSequenceFromFirstMove(
         return result;
     }
 
-    // 脅威かチェック
-    if (!isThreat(cells, first_move.row, first_move.col, color)) {
-        cells[idx] = .empty;
-        bitboard.removeStone(first_move.row, first_move.col);
-        return result;
-    }
-
-    // 防御位置を列挙
-    const defense_positions = getThreatDefensePositions(cells, first_move.row, first_move.col, color);
-
-    if (defense_positions.len == 0) {
-        // len==0 は「防御不可」と「そもそも脅威でない」の両方を表す（#124 レビュー）。
-        // 脅威が成立している場合だけ勝ちにする（hasVCT / findVCTSequenceRecursive と同じガード）。
-        const is_threat = isThreat(cells, first_move.row, first_move.col, color);
-        cells[idx] = .empty;
-        bitboard.removeStone(first_move.row, first_move.col);
-        if (!is_threat) {
+    // 防御位置を列挙（issue #130: 脅威判定は列挙と同時に返るので `isThreat` は不要）
+    const defense_positions = switch (getThreatDefensePositions(cells, first_move.row, first_move.col, color)) {
+        .no_threat => {
+            // 四でも活三でもない ＝ 追い詰めの初手ではない
+            cells[idx] = .empty;
+            bitboard.removeStone(first_move.row, first_move.col);
             return result;
-        }
-        result.sequence[0] = first_move;
-        result.len = 1;
-        result.found = true;
-        return result;
-    }
+        },
+        .unstoppable => {
+            // 防御不可の脅威 → 1 手で勝ち
+            cells[idx] = .empty;
+            bitboard.removeStone(first_move.row, first_move.col);
+            result.sequence[0] = first_move;
+            result.len = 1;
+            result.found = true;
+            return result;
+        },
+        .positions => |p| p,
+    };
 
     // 全防御に対してVCT継続＆最短継続を記録（攻撃側の最短勝ちライン）
     var main_defense: ?Position = null;
@@ -2317,24 +2343,22 @@ pub fn isVCTFirstMove(
         return true;
     }
 
-    // 脅威かチェック
-    if (!isThreat(cells, move_pos.row, move_pos.col, color)) {
-        cells[idx] = .empty;
-        bitboard.removeStone(move_pos.row, move_pos.col);
-        return false;
-    }
-
-    // 防御位置を列挙
-    const defense_positions = getThreatDefensePositions(cells, move_pos.row, move_pos.col, color);
-
-    if (defense_positions.len == 0) {
-        // len==0 は「防御不可」と「そもそも脅威でない」の両方を表す（#124 レビュー）。
-        // 脅威が成立している場合だけ勝ちにする（hasVCT と同じガード）。
-        const is_threat = isThreat(cells, move_pos.row, move_pos.col, color);
-        cells[idx] = .empty;
-        bitboard.removeStone(move_pos.row, move_pos.col);
-        return is_threat;
-    }
+    // 防御位置を列挙（issue #130: 脅威判定は列挙と同時に返るので `isThreat` は不要）
+    const defense_positions = switch (getThreatDefensePositions(cells, move_pos.row, move_pos.col, color)) {
+        .no_threat => {
+            // 四でも活三でもない ＝ 追い詰めの手ではない
+            cells[idx] = .empty;
+            bitboard.removeStone(move_pos.row, move_pos.col);
+            return false;
+        },
+        .unstoppable => {
+            // 防御不可の脅威 → 勝ち
+            cells[idx] = .empty;
+            bitboard.removeStone(move_pos.row, move_pos.col);
+            return true;
+        },
+        .positions => |p| p,
+    };
 
     // 全防御に対してVCTが継続するか
     for (0..defense_positions.len) |j| {
@@ -2392,6 +2416,16 @@ fn getTimestampMs() u32 {
 
 const testing = std.testing;
 
+/// テスト用: 受け点が列挙されていることを確認して一覧を取り出す。
+/// `no_threat` / `unstoppable` ならテスト失敗（意図した分岐かを明示させる）。
+fn expectPositions(defense: ThreatDefense) !PositionList {
+    return switch (defense) {
+        .positions => |p| p,
+        .no_threat => error.UnexpectedNoThreat,
+        .unstoppable => error.UnexpectedUnstoppable,
+    };
+}
+
 test "classifyThreat: four detection" {
     ll.init();
     var cells = [_]Cell{.empty} ** CELL_COUNT;
@@ -2443,7 +2477,7 @@ test "getThreatDefensePositions: four" {
     cells[7 * BOARD_SIZE + 8] = .black;
     bitboard.initFromCells(&cells);
 
-    const defense = getThreatDefensePositions(&cells, 7, 8, .black);
+    const defense = try expectPositions(getThreatDefensePositions(&cells, 7, 8, .black));
     // 止め四: (7,9) の1点で防御
     try testing.expect(defense.len == 1);
     try testing.expectEqual(defense.items[0].col, 9);
@@ -2460,8 +2494,8 @@ test "getThreatDefensePositions: open four" {
     bitboard.initFromCells(&cells);
 
     const defense = getThreatDefensePositions(&cells, 7, 8, .black);
-    // 活四: 防御不可
-    try testing.expectEqual(defense.len, 0);
+    // 活四: 防御不可（issue #130 で「脅威なし」と区別）
+    try testing.expectEqual(ThreatDefense.unstoppable, defense);
 }
 
 test "checkDefenseCounterThreat: basic" {
@@ -2651,7 +2685,7 @@ test "getThreatDefensePositions: black four with overline should not be undefend
 
     // E8を基準に脅威防御判定: G8方向はoverlineで塞がり
     // → 防御不可（空リスト）ではなく、B8を含む防御位置を返すべき
-    const defense = getThreatDefensePositions(&cells, 7, 4, .black);
+    const defense = try expectPositions(getThreatDefensePositions(&cells, 7, 4, .black));
     try testing.expect(defense.len > 0); // 防御可能
     try testing.expectEqual(defense.items[0].row, 7);
     try testing.expectEqual(defense.items[0].col, 1); // B8
@@ -2787,7 +2821,7 @@ test "getThreatDefensePositions: 活三の受けに夏止め位置を含む（�
     cells[7 * BOARD_SIZE + 3] = .white; // 負方向外側をブロック → 正方向(7,9)に夏止めが発生
     bitboard.initFromCells(&cells);
 
-    const defense = getThreatDefensePositions(&cells, 7, 6, .black);
+    const defense = try expectPositions(getThreatDefensePositions(&cells, 7, 6, .black));
     // 端 (7,4) と (7,8) は必ず含む
     var has_end1 = false;
     var has_end2 = false;
@@ -2818,9 +2852,9 @@ test "getThreatDefensePositions: 夏止め済みの活三は緊急の受け不�
 
     // getOpenThreeDefensePositions は空リストを返す（夏止め済み）
     // → この方向から受け点が追加されないことを確認
-    // 他方向（縦・斜め）に活三がないため defense.len == 0
+    // 他方向（縦・斜め）にも脅威がないので「脅威なし」（issue #130 で活四と区別）
     const defense = getThreatDefensePositions(&cells, 7, 6, .black);
-    try testing.expectEqual(@as(u8, 0), defense.len);
+    try testing.expectEqual(ThreatDefense.no_threat, defense);
 }
 
 test "checkDefenseCounterThreat: 夏止め済みの三のみを作る石は .none" {
@@ -3035,7 +3069,7 @@ test "getThreatDefensePositions: 長連にしかならない跳び四は受け�
     try testing.expect(classification.creates_open_three);
 
     // 受け点も同基準でなければならない: I8 の 1 点強制ではなく M8 / I8 / N8
-    const defense = getThreatDefensePositions(&cells, 7, 9, .black);
+    const defense = try expectPositions(getThreatDefensePositions(&cells, 7, 9, .black));
     try testing.expectEqual(@as(usize, 3), defense.len);
 
     var has_m8 = false;
@@ -3074,7 +3108,7 @@ test "getThreatDefensePositions: 同一ラインに長連ギャップと正当�
     try testing.expect(classifyThreat(&cells, 7, 9, .black).creates_four);
 
     // 受けは M8 の 1 点のみ（I8 は埋めると長連なので五点ではない）
-    const defense = getThreatDefensePositions(&cells, 7, 9, .black);
+    const defense = try expectPositions(getThreatDefensePositions(&cells, 7, 9, .black));
     try testing.expectEqual(@as(usize, 1), defense.len);
     try testing.expectEqual(@as(u8, 7), defense.items[0].row);
     try testing.expectEqual(@as(u8, 12), defense.items[0].col); // M8
@@ -3112,7 +3146,7 @@ test "getThreatDefensePositions: 最も近いギャップが長連でも遠い�
     try testing.expect(classifyThreat(&cells, 7, 7, .black).creates_four);
 
     // 受け点は G8 を含むこと（0 点＝防御不可にしてはならない）
-    const defense = getThreatDefensePositions(&cells, 7, 7, .black);
+    const defense = try expectPositions(getThreatDefensePositions(&cells, 7, 7, .black));
     try testing.expect(defense.len > 0);
     var has_g8 = false;
     for (0..defense.len) |i| {
@@ -3199,7 +3233,7 @@ test "issue #117 前提: カウンター四のブロック石は三しか作ら�
     // 白の四 (3,7) の受けは (3,8) 一点
     cells[3 * BOARD_SIZE + 7] = .white;
     bitboard.placeStone(3, 7, .white);
-    const def = getThreatDefensePositions(&cells, 3, 7, .white);
+    const def = try expectPositions(getThreatDefensePositions(&cells, 3, 7, .white));
     try testing.expectEqual(@as(usize, 1), def.len);
     try testing.expectEqual(@as(u8, 3), def.items[0].row);
     try testing.expectEqual(@as(u8, 8), def.items[0].col);
@@ -3604,4 +3638,86 @@ test "VCT探索は委譲した VCF のノードも予算に計上する（issue 
     try testing.expect(vcf_only2.nodes > 0);
     const vct2 = findVCTSequence(&cells2, .white, 6, 0, 0, false, .lenient);
     try testing.expect(vct2.nodes >= vcf_only2.nodes);
+}
+
+// === issue #130: getThreatDefensePositions の 3 値化 ===
+
+test "issue #130: 脅威でない手は no_threat（活四の防御不可と区別する）" {
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    // 孤立した黒石: 四でも三でもない
+    cells[7 * BOARD_SIZE + 7] = .black;
+    bitboard.initFromCells(&cells);
+
+    try testing.expectEqual(ThreatDefense.no_threat, getThreatDefensePositions(&cells, 7, 7, .black));
+    // 分類側とも一致（脅威ゼロ）
+    const c = classifyThreat(&cells, 7, 7, .black);
+    try testing.expect(!c.creates_four and !c.creates_open_three);
+}
+
+test "issue #130: 偽跳び四の裏のウソ三も no_threat（issue #121 の形）" {
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    // 8 行目に黒 C8 D8 _ F8 G8 H8。E8 を埋めると 6 連＝長連なので四ではなく、
+    // F8 G8 H8 も達四にできないウソ三。つまり脅威が成立していない。
+    for ([_]u8{ 2, 3, 5, 6, 7 }) |c| {
+        cells[7 * BOARD_SIZE + c] = .black;
+    }
+    bitboard.initFromCells(&cells);
+
+    // 旧実装ではこの手の受け点は「G8 の連続三の受け」が出るので positions になるが、
+    // 四としては成立していない（受けが広い＝防御側有利の健全側）。
+    // 少なくとも「受け 0 点 ＝ 防御不可（＝攻撃側の勝ち）」にはならないことを固定する。
+    switch (getThreatDefensePositions(&cells, 7, 6, .black)) {
+        .unstoppable => return error.FalseUnstoppable,
+        .no_threat, .positions => {},
+    }
+}
+
+test "issue #130: 活四は unstoppable・止め四は positions（#129 レビューの再現形）" {
+    // 8 行目（row=7）: C8白 D8黒 E8黒 F8黒 G8空 H8黒 I8空 J8黒 K8黒 L8黒 M8黒 N8白
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[7 * BOARD_SIZE + 2] = .white; // C8
+    cells[7 * BOARD_SIZE + 3] = .black; // D8
+    cells[7 * BOARD_SIZE + 4] = .black; // E8
+    cells[7 * BOARD_SIZE + 5] = .black; // F8
+    cells[7 * BOARD_SIZE + 7] = .black; // H8
+    cells[7 * BOARD_SIZE + 9] = .black; // J8
+    cells[7 * BOARD_SIZE + 10] = .black; // K8
+    cells[7 * BOARD_SIZE + 11] = .black; // L8
+    cells[7 * BOARD_SIZE + 12] = .black; // M8
+    cells[7 * BOARD_SIZE + 13] = .white; // N8
+    bitboard.initFromCells(&cells);
+
+    // H8 は止め四（受けは G8。I8 は埋めると長連なので五点ではない）
+    const h8 = try expectPositions(getThreatDefensePositions(&cells, 7, 7, .black));
+    try testing.expect(h8.contains(7, 6));
+
+    // N8 の白石は孤立（黒に挟まれているだけ）＝脅威なし
+    try testing.expectEqual(ThreatDefense.no_threat, getThreatDefensePositions(&cells, 7, 13, .white));
+
+    // 白の活四は unstoppable
+    var open4 = [_]Cell{.empty} ** CELL_COUNT;
+    for ([_]u8{ 5, 6, 7, 8 }) |c| {
+        open4[7 * BOARD_SIZE + c] = .white;
+    }
+    bitboard.initFromCells(&open4);
+    try testing.expectEqual(ThreatDefense.unstoppable, getThreatDefensePositions(&open4, 7, 8, .white));
+}
+
+test "issue #130: 脅威でない初手から VCT は成立しない（isVCTFirstMove / findVCTSequenceFromFirstMove）" {
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[7 * BOARD_SIZE + 7] = .black;
+    cells[9 * BOARD_SIZE + 9] = .white;
+    bitboard.initFromCells(&cells);
+
+    // (0,0) は孤立点＝四でも活三でもないので VCT の初手になり得ない
+    // （3 値化前は `getThreatDefensePositions` の空リストを「防御不可」と読み違えると
+    //   ここが true になった。ガードではなく型で防いでいることの固定）
+    try testing.expect(!isVCTFirstMove(&cells, .{ .row = 0, .col = 0 }, .black, 4, 0, 0));
+
+    const seq = findVCTSequenceFromFirstMove(&cells, .{ .row = 0, .col = 0 }, .black, 4, 0, 0, false);
+    try testing.expect(!seq.found);
 }
