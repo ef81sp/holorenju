@@ -15,6 +15,7 @@ import { DIRECTION_INDICES, DIRECTIONS } from "../core/constants";
 import {
   checkEnds,
   checkEndsForFour,
+  collectLineFivePoints,
   countLine,
   getLineEnds,
 } from "../core/lineAnalysis";
@@ -128,6 +129,22 @@ export function findFourMoves(
  * 四に対する防御位置を取得
  * 四は1点でしか止められないので、その位置を返す
  *
+ * 方向ごとに `collectLineFivePoints` で「その方向で埋めると五になる点」を列挙する
+ * （受け点の SSoT。Zig 側 `quiescence.getFourDefensePosition` と同じ基準）。
+ * - 五点 0 個: この方向は四ではない（黒の長連にしかならない四）→ 無視
+ * - 五点 2 個以上: 両方は塞げない ＝ 活四（防御不可）→ null
+ * - 五点 1 個: 止め四。その点が受け
+ *
+ * 注意（戻り値 null の多義性・#124）: null は「防御不可（五点 2 個以上＝活四）」と
+ * 「そもそも四ではない（五点 0 個）」の両方を表す。VCF 経路は null を勝ちとして
+ * 扱うため、四の生成側が偽陽性を出すと偽 VCF になる既存経路がある。
+ * 一方 VCT 経路は四ゲート内で null を「不成立」＝保守側に倒しているので健全である。
+ *
+ * issue #115: 以前は跳び四で `findJumpGapPosition` の返り値を検証せずに使っており、
+ * 同一ライン上に長連ギャップと正当なギャップが併存すると長連ギャップを返していた。
+ * また連続四では `getLineEnds` の両端空きを無条件に活四としており、黒の片端が
+ * 長連になる `_XXXX_`（実際は止め四で受けられる）を防御不可と誤判定していた。
+ *
  * @param board 盤面（四が作られた状態）
  * @param lastMove 最後に置かれた手
  * @param color 四を作った手番
@@ -153,26 +170,26 @@ export function getFourDefensePosition(
     }
     const [dr, dc] = direction;
 
-    // 連続四をチェック
-    const count = countLine(board, row, col, dr, dc, color);
-    if (count === 4) {
-      const ends = getLineEnds(board, row, col, dr, dc, color);
-      if (ends.length === 2) {
-        // 活四（両端空き）= 防御不可能 → 即座にnullを返す
-        return null;
-      }
-      if (ends.length === 1 && !firstDefense) {
-        firstDefense = ends[0] ?? null;
-      }
+    const isConsecutiveFour = countLine(board, row, col, dr, dc, color) === 4;
+    if (
+      !isConsecutiveFour &&
+      !checkJumpFour(board, row, col, dirIndex, color)
+    ) {
       continue;
     }
 
-    // 跳び四をチェック
-    if (checkJumpFour(board, row, col, dirIndex, color)) {
-      const defensePos = findDefenseForJumpFour(board, row, col, dr, dc, color);
-      if (defensePos && !firstDefense) {
-        firstDefense = defensePos;
-      }
+    // 連続四・跳び四を区別せず、その方向で「埋めると五になる点」を列挙して判定する。
+    const fivePoints = collectLineFivePoints(board, row, col, dr, dc, color);
+    if (fivePoints.length === 0) {
+      // この方向は四ではない（黒の長連にしかならない四）
+      continue;
+    }
+    if (fivePoints.length >= 2) {
+      // 両方は塞げない = 活四（防御不可能）
+      return null;
+    }
+    if (!firstDefense) {
+      firstDefense = fivePoints[0] ?? null;
     }
   }
 

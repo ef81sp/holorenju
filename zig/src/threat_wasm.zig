@@ -17,6 +17,7 @@ const bitboard = @import("bitboard.zig");
 const board = @import("board.zig");
 const evaluate = @import("evaluate.zig");
 const jp = @import("jump_patterns.zig");
+const quiescence = @import("quiescence.zig");
 const threats = @import("threats.zig");
 const vct = @import("vct.zig");
 
@@ -233,4 +234,40 @@ export fn getJumpThreeStraightFourPointsWasm(row: u8, col: u8, dir_index: u8, co
     } else {
         pattern_points_buffer[0] = 0;
     }
+}
+
+// =============================================================================
+// 受け点（四を止める点）のパリティ検証用 export（issue #115 / #124）
+// =============================================================================
+
+// collectLineFivePoints の結果を [u8 count][count*(row,col)] でシリアライズ。
+// 1 ライン上の五点はたかだか数点なので 1+2*8 で十分。
+var five_points_buffer: [32]u8 = undefined;
+
+export fn getFivePointsBuffer() [*]u8 {
+    return &five_points_buffer;
+}
+
+/// 指定方向の「埋めると五になる点」を five_points_buffer に書く。
+/// dir_index は board.DIRECTIONS のインデックス（0..3）。
+export fn collectLineFivePointsWasm(row: u8, col: u8, dir_index: u8, color: u8) void {
+    const c: board.Cell = @enumFromInt(color);
+    const dir = board.DIRECTIONS[dir_index];
+    var list = threats.PositionList.init();
+    _ = threats.collectLineFivePoints(&board.board_cells, row, col, dir.dr, dir.dc, c, &list);
+
+    five_points_buffer[0] = list.len;
+    var o: usize = 1;
+    for (0..list.len) |i| {
+        five_points_buffer[o] = list.items[i].row;
+        five_points_buffer[o + 1] = list.items[i].col;
+        o += 2;
+    }
+}
+
+/// 四に対する受け点。戻り値は row * 15 + col、受けが無い(null)場合は 255。
+export fn getFourDefensePositionWasm(row: u8, col: u8, color: u8) u8 {
+    const c: board.Cell = @enumFromInt(color);
+    const d = quiescence.getFourDefensePosition(&board.board_cells, row, col, c) orelse return 255;
+    return d.row * board.BOARD_SIZE + d.col;
 }
