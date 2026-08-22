@@ -13,14 +13,16 @@ import type { LineTable } from "../lineTable/lineTable";
 
 import { includesPosition } from "../core/boardUtils";
 import { DIRECTION_INDICES, DIRECTIONS } from "../core/constants";
-import { collectLineFivePoints } from "../core/lineAnalysis";
 import { getDirectionPattern } from "../lineTable/adapter";
 import { isNearExistingStone } from "../moveGenerator";
-// 四判定の SSoT（issue #124）。Zig 側 `threats.isFourInDirection` と対応する。
-import { isFourInDirection } from "../search/threatMoves";
+// 四判定の SSoT（issue #124 / #134）。Zig 側 `threats.classifyFourInDirection` と対応する。
+import {
+  classifyFourInDirection,
+  isFourInDirection,
+} from "../search/threatMoves";
 // #43 PR-3: 跳び四/三の図形判定を Zig アダプタへ委譲（patterns.ts 依存を断つ）。
 // getOpenThreeDefensePositions が vctHelpers（review judgment）から live のため存続。
-import { checkJumpFour, checkJumpThree } from "../wasm/patternsAdapter";
+import { checkJumpThree } from "../wasm/patternsAdapter";
 import { analyzeDirection } from "./directionAnalysis";
 import { isValidConsecutiveThree, isValidJumpThree } from "./jumpPatterns";
 import { type ThreatInfo, PATTERN_SCORES } from "./patternScores";
@@ -346,30 +348,21 @@ export function detectOpponentThreats(
         // 受けを `getLineEnds` / `findJumpGapPosition` から取っていた。跳び四判定は
         // ±4 マスの窓しか見ないため、窓の外の自石でギャップ埋めが長連になる黒の形を
         // 四と誤判定し、しかも `isJumpFour` が活三の受け列挙まで抑止していた（issue #121）。
-        // NOTE: この「プリフィルタ → collectLineFivePoints → 0/1/2 個で分岐」は
-        // 5 箇所に複製されている。SSoT 統合は issue #134。
-        let isFour = false;
-        if (
-          pattern.count === 4 ||
-          (renjuDirIndex >= 0 &&
-            checkJumpFour(board, row, col, renjuDirIndex, opponentColor))
-        ) {
-          const fivePoints = collectLineFivePoints(
-            board,
-            row,
-            col,
-            dr,
-            dc,
-            opponentColor,
-          );
-          // eslint-disable-next-line max-depth
-          if (fivePoints.length >= 2) {
-            isFour = true;
-            addUniquePositions(result.openFours, fivePoints);
-          } else if (fivePoints.length === 1) {
-            isFour = true;
-            addUniquePositions(result.fours, fivePoints);
-          }
+        //
+        // issue #134: 分岐そのものは `classifyFourInDirection`（SSoT）に一本化した。
+        const fourClass = classifyFourInDirection(
+          board,
+          row,
+          col,
+          dirIdx,
+          opponentColor,
+          pattern.count,
+        );
+        const isFour = fourClass.kind !== "not_four";
+        if (fourClass.kind === "unstoppable") {
+          addUniquePositions(result.openFours, fourClass.fivePoints);
+        } else if (fourClass.kind === "block") {
+          addUniquePositions(result.fours, [fourClass.position]);
         }
 
         // 活三をチェック（両端が空いている3連）

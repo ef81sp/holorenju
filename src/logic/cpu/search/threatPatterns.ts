@@ -12,18 +12,18 @@ import { BOARD_SIZE } from "@/constants";
 import { checkFive } from "@/logic/renjuRules";
 
 import { DIRECTION_INDICES, DIRECTIONS } from "../core/constants";
-import {
-  checkEnds,
-  collectLineFivePoints,
-  countLine,
-} from "../core/lineAnalysis";
+import { checkEnds, countLine } from "../core/lineAnalysis";
 // 夏止め済み判定（受け点の基準と活三判定を一致させる SSoT）
 import { getOpenThreeDefensePositions } from "../evaluation/threatDetection";
 import { isNearExistingStone } from "../moveGenerator";
 // #43 PR-3: 図形/禁手の葉プリミティブを Zig アダプタへ委譲（patterns.ts/forbiddenMoves.ts 依存を断つ）。
 import { isForbiddenForBlack } from "../wasm/forbiddenAdapter";
-import { checkJumpFour, checkJumpThree } from "../wasm/patternsAdapter";
-import { createsFour, isFourInDirection } from "./threatMoves";
+import { checkJumpThree } from "../wasm/patternsAdapter";
+import {
+  classifyFourInDirection,
+  createsFour,
+  isFourInDirection,
+} from "./threatMoves";
 
 /**
  * 即勝ち手を探す（五連を完成できる位置）
@@ -159,11 +159,11 @@ export function fourDefenseBlock(defense: FourDefense): Position | null {
  * 四に対する防御位置を取得
  * 四は1点でしか止められないので、その位置を返す
  *
- * 方向ごとに `collectLineFivePoints` で「その方向で埋めると五になる点」を列挙する
- * （受け点の SSoT。Zig 側 `quiescence.getFourDefensePosition` と同じ基準）。
- * - 五点 0 個: この方向は四ではない（黒の長連にしかならない四）→ 無視
- * - 五点 2 個以上: 両方は塞げない ＝ 活四（防御不可）→ `unstoppable`
- * - 五点 1 個: 止め四。その点が受け → `block`
+ * 方向ごとの分類（`classifyFourInDirection` ＝ 四判定・受け点の SSoT・issue #134）を
+ * 4 方向で畳み込む（Zig 側 `quiescence.getFourDefensePosition` と同じ基準）。
+ * - `not_four`: この方向は四ではない（黒の長連にしかならない四）→ 無視
+ * - `unstoppable`: 両方は塞げない ＝ 活四（防御不可）→ 即返す
+ * - `block`: 止め四。その点が受け（複数方向あれば最初の 1 点）
  * - どの方向も四でなかった → `not_four`
  *
  * issue #115: 以前は跳び四で `findJumpGapPosition` の返り値を検証せずに使っており、
@@ -184,42 +184,21 @@ export function getFourDefensePosition(
   color: "black" | "white",
 ): FourDefense {
   const { row, col } = lastMove;
-  // NOTE: この「プリフィルタ → collectLineFivePoints → 0/1/2 個で分岐」は
-  // 5 箇所に複製されている。SSoT 統合は issue #134。
   let firstDefense: Position | null = null;
 
   for (let i = 0; i < DIRECTION_INDICES.length; i++) {
-    const dirIndex = DIRECTION_INDICES[i];
-    if (dirIndex === undefined) {
-      continue;
-    }
-
-    const direction = DIRECTIONS[i];
-    if (!direction) {
-      continue;
-    }
-    const [dr, dc] = direction;
-
-    const isConsecutiveFour = countLine(board, row, col, dr, dc, color) === 4;
-    if (
-      !isConsecutiveFour &&
-      !checkJumpFour(board, row, col, dirIndex, color)
-    ) {
-      continue;
-    }
-
-    // 連続四・跳び四を区別せず、その方向で「埋めると五になる点」を列挙して判定する。
-    const fivePoints = collectLineFivePoints(board, row, col, dr, dc, color);
-    if (fivePoints.length === 0) {
-      // この方向は四ではない（黒の長連にしかならない四）
-      continue;
-    }
-    if (fivePoints.length >= 2) {
-      // 両方は塞げない = 活四（防御不可能）
-      return FOUR_DEFENSE_UNSTOPPABLE;
-    }
-    if (!firstDefense) {
-      firstDefense = fivePoints[0] ?? null;
+    // 方向ごとの分類は `classifyFourInDirection`（四判定・受け点の SSoT・issue #134）。
+    const fourClass = classifyFourInDirection(board, row, col, i, color);
+    switch (fourClass.kind) {
+      case "unstoppable":
+        // 両方は塞げない = 活四（防御不可能）
+        return FOUR_DEFENSE_UNSTOPPABLE;
+      case "block":
+        firstDefense ??= fourClass.position;
+        break;
+      default:
+        // not_four: この方向は四ではない（黒の長連にしかならない四）
+        break;
     }
   }
 

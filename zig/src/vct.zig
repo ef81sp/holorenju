@@ -341,42 +341,26 @@ pub fn findThreatMovesCounted(cells: []Cell, color: Cell, buf: *[225]Position) T
 // getThreatDefensePositions（TS版 vctHelpers.ts に対応）
 // =============================================================================
 
-/// 脅威に対する防御位置を取得
-/// 跳び四の受け点（＝そのラインで「埋めると本当に五になる」空点）を列挙する
-///
-/// 実体は `threats.collectLineFivePoints`（受け点の SSoT。
-/// `quiescence.getFourDefensePosition` も同じ関数を使う）。
-///
-/// 戻り値: 受け点を 1 つ以上追加できたか（false なら四として扱わず、
-/// 呼び出し側で三として受けを広く列挙する＝防御側に有利な健全側に倒す）
-fn addJumpFourDefensePositions(
-    cells: []const Cell,
-    row: u8,
-    col: u8,
-    dr: i8,
-    dc: i8,
-    color: Cell,
-    defense_positions: *PositionList,
-) bool {
-    return threats.collectLineFivePoints(cells, row, col, dr, dc, color, defense_positions) > 0;
-}
+// issue #134: `addJumpFourDefensePositions`（`collectLineFivePoints` の薄いラッパ）は
+// 呼び出し元ゼロだったため削除した。四の分類・受け点は
+// `threats.classifyFourInDirection`（SSoT）に一本化されている。
 
+/// 脅威（四・活三・跳び三）に対する防御位置を列挙する
 pub fn getThreatDefensePositions(cells: []const Cell, row: u8, col: u8, color: Cell) PositionList {
     var defense_positions = PositionList.init();
 
     for (DIRECTIONS, 0..) |dir, i| {
         const result = ll.queryPatternByCell(row, col, i, color);
 
-        // 四（連続四・跳び四）の受け点（issue #115 / #124）
+        // 四（連続四・跳び四）の受け点（issue #115 / #124 / #134）
         //
-        // 「四の受け＝そのラインで埋めると本当に五になる点」という一つの基準
-        // （`threats.collectLineFivePoints`）に統一する。分類側
-        // （`classifyThreat` / `checkDefenseCounterThreat` = `isFourInDirection`）と
-        // 同じ関数を見るので、「四と分類したのに受け 0 点」が構造的に起きない。
+        // 分類は `threats.classifyFourInDirection`（四判定・受け点の SSoT）に委ねる。
+        // 分類側（`classifyThreat` / `checkDefenseCounterThreat` = `isFourInDirection`）と
+        // 同じ定義を見るので、「四と分類したのに受け 0 点」が構造的に起きない。
         //
-        // - 五点 2 個以上: 両方は塞げない＝活四 → 防御不可（空リスト）
-        // - 五点 1 個: 止め四。その 1 点が受け
-        // - 五点 0 個: この方向は四ではない（黒の長連にしかならない）
+        // - `.unstoppable`（五点 2 個以上）: 両方は塞げない＝活四 → 防御不可
+        // - `.block`（五点 1 個）: 止め四。その 1 点が受け
+        // - `.not_four`（五点 0 個）: この方向は四ではない（黒の長連にしかならない）
         //   → 四扱いをやめ、下の活三/跳び三ブランチで受けを広く列挙する
         //     （受けが広がる＝防御側に有利な健全側に倒す）
         //
@@ -384,19 +368,15 @@ pub fn getThreatDefensePositions(cells: []const Cell, row: u8, col: u8, color: C
         // 「最も近いギャップ 1 つ」（`isJumpFourOverline`）で見ており、
         // 同一ライン上に長連ギャップと本物の五点が併存すると四ブランチごと落ちて
         // 受け 0 点になっていた（#124 レビュー指摘）。
-        // NOTE: この分岐は 5 箇所に複製されている。SSoT 統合は issue #134。
         var has_four = false;
-        if (result.count == 4 or result.has_jump_four) {
-            var five_points = PositionList.init();
-            const five_count = threats.collectLineFivePoints(cells, row, col, dir.dr, dir.dc, color, &five_points);
-            if (five_count >= 2) {
-                // 活四 = 防御不可
-                return PositionList.init();
-            }
-            if (five_count == 1) {
-                defense_positions.addUnique(five_points.items[0]);
+        switch (threats.classifyFourInDirection(cells, row, col, i, color, result, null)) {
+            // 活四 = 防御不可
+            .unstoppable => return PositionList.init(),
+            .block => |p| {
+                defense_positions.addUnique(p);
                 has_four = true;
-            }
+            },
+            .not_four => {},
         }
 
         // 活三をチェック（同方向に四がある場合は不要：四の防御が優先）

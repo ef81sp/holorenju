@@ -23,9 +23,10 @@ import { BOARD_SIZE } from "@/constants";
 import { createEmptyBoard } from "@/logic/renjuRules";
 
 import { collectLineFivePoints } from "../core/lineAnalysis";
+import { analyzeDirection } from "../evaluation/directionAnalysis";
 import { getThreatWasm, preloadThreatWasm } from "../wasm/threatLoader";
 import { CELL } from "../wasm/types";
-import { createsFour } from "./threatMoves";
+import { classifyFourInDirection, createsFour } from "./threatMoves";
 import { type FourDefense, getFourDefensePosition } from "./threatPatterns";
 
 await preloadThreatWasm();
@@ -223,6 +224,90 @@ describe("受け点の TS⇄Zig パリティ（1ライン全列挙・issue #115�
 
     // 比較が実際に行われていること（ループ条件のミスで 0 件になる事故を防ぐ）
     expect(comparisons).toBeGreaterThan(30_000);
+    expect(mismatches.slice(0, 10)).toEqual([]);
+  }, 120_000);
+});
+
+/**
+ * `analyzeJumpPatterns` / `evaluate.createsFourThree` が #134 以前に使っていた
+ * 連続四の判定（`analyzeDirection` の端ベース・黒の長連補正込み）。
+ *
+ * 新実装（`classifyFourInDirection`）との差分が 0 であることを全列挙で固定する。
+ */
+function legacyConsecutiveFour(
+  board: BoardState,
+  row: number,
+  col: number,
+  color: PlayerColor,
+): { hasFour: boolean; openFour: boolean } {
+  const pattern = analyzeDirection(board, row, col, 0, 1, color);
+  if (pattern.count !== 4) {
+    return { hasFour: false, openFour: false };
+  }
+  return {
+    hasFour: pattern.end1 === "empty" || pattern.end2 === "empty",
+    openFour: pattern.end1 === "empty" && pattern.end2 === "empty",
+  };
+}
+
+describe("連続四の端ベース旧基準と classifyFourInDirection の等価性（issue #134）", () => {
+  it("count === 4 の方向で新旧の四判定・活四判定が全パターンで一致する", () => {
+    const total = 3 ** LINE_LEN;
+    const cells: (PlayerColor | null)[] = new Array<PlayerColor | null>(
+      LINE_LEN,
+    ).fill(null);
+
+    const mismatches: string[] = [];
+    let comparisons = 0;
+
+    for (let code = 0; code < total; code++) {
+      let rest = code;
+      for (let i = 0; i < LINE_LEN; i++) {
+        cells[i] = CELL_VALUES[rest % 3] ?? null;
+        rest = Math.floor(rest / 3);
+      }
+
+      for (const lineStart of LINE_STARTS) {
+        const board = buildBoard(cells, lineStart);
+
+        for (const color of ["black", "white"] as const) {
+          for (let i = 0; i < LINE_LEN; i++) {
+            if (cells[i] !== color) {
+              continue;
+            }
+            const col = lineStart + i;
+            const pattern = analyzeDirection(board, LINE_ROW, col, 0, 1, color);
+            // 旧実装が連続四を見ていたのは count === 4 の方向だけ
+            if (pattern.count !== 4) {
+              continue;
+            }
+            comparisons++;
+
+            const legacy = legacyConsecutiveFour(board, LINE_ROW, col, color);
+            const cls = classifyFourInDirection(
+              board,
+              LINE_ROW,
+              col,
+              DIR_INDEX,
+              color,
+              pattern.count,
+            );
+            if (legacy.hasFour !== (cls.kind !== "not_four")) {
+              mismatches.push(
+                `四判定 code=${code} color=${color} col=${col}: legacy=${legacy.hasFour} classify=${cls.kind}`,
+              );
+            }
+            if (legacy.openFour !== (cls.kind === "unstoppable")) {
+              mismatches.push(
+                `活四判定 code=${code} color=${color} col=${col}: legacy=${legacy.openFour} classify=${cls.kind}`,
+              );
+            }
+          }
+        }
+      }
+    }
+
+    expect(comparisons).toBeGreaterThan(1_000);
     expect(mismatches.slice(0, 10)).toEqual([]);
   }, 120_000);
 });

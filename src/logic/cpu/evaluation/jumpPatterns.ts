@@ -7,8 +7,8 @@
 import type { BoardState } from "@/types/game";
 
 import { DIRECTION_INDICES, DIRECTIONS } from "../core/constants";
-// 四判定の SSoT（issue #124）。Zig 側 `threats.isFourInDirection` と対応する。
-import { isFourInDirection } from "../search/threatMoves";
+// 四判定の SSoT（issue #124 / #134）。Zig 側 `threats.classifyFourInDirection` と対応する。
+import { type FourClass, classifyFourInDirection } from "../search/threatMoves";
 // #43 PR-3: 図形/禁手の葉プリミティブを Zig アダプタへ委譲（patterns.ts/forbiddenMoves.ts 依存を断つ）。
 // 本ファイルは vctHelpers/winningPatterns（review judgment）から live のため存続。
 import { isForbiddenForBlack } from "../wasm/forbiddenAdapter";
@@ -129,37 +129,43 @@ export function analyzeJumpPatterns(
     hasValidOpenThree: false,
   };
 
-  // まず各方向の跳び四を先にチェックして記録
+  // まず各方向の四を先にチェックして記録
   // 同じ方向に跳び四がある場合、連続三を活三としてカウントしないため
   const jumpFourDirections = new Set<number>();
+  const fourClasses: FourClass[] = [];
 
   // パターンキャッシュ（precomputed がない場合のみ計算）
   const patterns: DirectionPattern[] =
     precomputed ?? computePatterns(board, row, col, color);
 
   for (let i = 0; i < DIRECTION_INDICES.length; i++) {
-    const dirIndex = DIRECTION_INDICES[i];
-    if (dirIndex === undefined) {
-      continue;
-    }
-
     const pattern = patterns[i];
     if (!pattern) {
+      fourClasses.push({ kind: "not_four" });
       continue;
     }
 
-    // 連続四がなく、跳び四がある場合を記録
+    // 四の分類（連続四・跳び四とも `classifyFourInDirection` に一本化・issue #134）
     //
     // issue #121: `checkJumpFour` は中心 ±4 マスの窓しか見ないため、窓の外の自石で
     // ギャップ埋めが長連（6 連以上）になる黒の形も跳び四として報告する。四かどうかの
-    // 最終判断は五点の列挙（`isFourInDirection`）に委ねる。偽の跳び四を四に数えると
-    // 「四三」でない手をミセ手として生成してしまう。
-    // `isFourInDirection` が内部で `checkJumpFour`（wasm 境界の syncCells 225 回）を
-    // 呼ぶので、ここで先に呼ぶと 2 回同期することになる。足切りも含めて一本化する。
-    if (
-      pattern.count !== 4 &&
-      isFourInDirection(board, row, col, i, color, pattern.count)
-    ) {
+    // 最終判断は五点の列挙に委ねる。偽の跳び四を四に数えると「四三」でない手を
+    // ミセ手として生成してしまう。
+    // 足切り（`checkJumpFour`）も `classifyFourInDirection` の内部で行うので、
+    // ここで先に呼ぶと wasm 境界の syncCells が 2 回走ることになる。一本化する。
+    const fourClass = classifyFourInDirection(
+      board,
+      row,
+      col,
+      i,
+      color,
+      pattern.count,
+    );
+    fourClasses.push(fourClass);
+
+    // 「跳び四の方向」= 四だが連続四ではない方向。同方向の三を四三に数えないための
+    // ガードに使う（連続四の方向は count === 4 なので三のブランチに入らない）。
+    if (pattern.count !== 4 && fourClass.kind !== "not_four") {
       jumpFourDirections.add(i);
     }
   }
@@ -175,19 +181,17 @@ export function analyzeJumpPatterns(
       continue;
     }
 
-    // 連続四をチェック（少なくとも片端が空いていなければ五を作れないため除外）
+    // 四（連続四・跳び四とも 1st pass の `classifyFourInDirection` に一本化・issue #134）
     //
-    // 跳び四側は五点列挙（`isFourInDirection`）に寄せたが、**連続四側は端ベースのまま**
-    // （`analyzeDirection` が黒の長連補正済みの端を返す）。`count === 4` に限れば等価:
+    // 旧実装の連続四側は端ベース（`analyzeDirection` の黒長連補正済みの端）だったが、
+    // `count === 4` に限れば五点列挙と等価:
     //   - 偽陽性なし: 端が空きかつ長連補正を通れば、その端を埋めると必ずちょうど 5
     //   - 偽陰性なし: 連続 4 連の五点は両端のいずれかにしか存在しえない
-    // 統一（`classifyFourInDirection` への集約）は follow-up issue #134 で扱う。
-    if (
-      pattern.count === 4 &&
-      (pattern.end1 === "empty" || pattern.end2 === "empty")
-    ) {
+    // 活四（両端空き）も「五点 2 個以上 = unstoppable」と一致する。
+    const fourClass = fourClasses[i] ?? { kind: "not_four" };
+    if (fourClass.kind !== "not_four") {
       result.hasFour = true;
-      if (pattern.end1 === "empty" && pattern.end2 === "empty") {
+      if (pattern.count === 4 && fourClass.kind === "unstoppable") {
         result.hasOpenFour = true;
       }
     }
@@ -205,7 +209,6 @@ export function analyzeJumpPatterns(
 
     // 跳び四をチェック（連続四がない場合のみ）
     if (jumpFourDirections.has(i)) {
-      result.hasFour = true;
       result.jumpFourCount++;
       // 跳び四は両端開の形がないので、常に止め四扱い
     }
