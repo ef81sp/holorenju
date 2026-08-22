@@ -282,13 +282,19 @@ const ThreatBudget = struct {
 
 /// **issue #119 注意**: `vct_nodes` は #119 以前は事実上ノーオペだった
 /// （`vct.zig` が `incrementNodes` を呼んでおらず、`vcf.zig` に共有 limiter を
-/// 渡したときしかノードが進まなかった）。#119 で VCT 経路がノードを計上する
-/// ようになり、この 500 は本当に効く上限になった＝プローブが VCT を主張しなく
-/// なる局面が増える。値そのものは「計上されていない前提」で決まった可能性が
-/// あるため据え置きとし、Elo 影響は commit-bench で測る。
+/// 渡したときしかノードが進まなかった）。実際の制約は `threatProbe` の 50ms
+/// （解析モードでは無制限）だけで、旧 `vct_nodes = 500` は何も制限していない。
+///
+/// #119 でノード計上が機能するようになったが、**対局側の予算値は未較正**
+/// （41,442 ノード級の真正 VCT でも 500 では届かず、対局 CPU の挙動が大きく変わる）。
+/// #119 の目的は振り返りフォールバックの予算を効かせることなので、
+/// 対局側は `vct_nodes = 0`（= max_nodes 無効）で**旧挙動（時間のみで制限）を維持**する。
+/// チューニングは別 issue（#137）で bench 較正する。
+///
+/// `vcf_nodes` は `vcf.zig` が元から計上していたので実効値。こちらは据え置き。
 fn getThreatBudget(minimax_depth: u8) ThreatBudget {
     if (minimax_depth >= 4) {
-        return .{ .vcf_depth = 8, .vcf_nodes = 200, .vct_depth = 4, .vct_nodes = 500 };
+        return .{ .vcf_depth = 8, .vcf_nodes = 200, .vct_depth = 4, .vct_nodes = 0 };
     }
     // depth 3
     return .{ .vcf_depth = 6, .vcf_nodes = 100, .vct_depth = 0, .vct_nodes = 0 };
