@@ -11,6 +11,7 @@ import { createEmptyBoard } from "@/logic/renjuRules";
 import { placeStonesOnBoard } from "../testUtils";
 import {
   createsDoubleThree,
+  createsFourThree,
   detectWhiteWinningPattern,
 } from "./winningPatterns";
 
@@ -138,5 +139,39 @@ describe("detectWhiteWinningPattern", () => {
     ]);
 
     expect(detectWhiteWinningPattern(board, 7, 8)).toBeNull();
+  });
+});
+
+describe("createsFourThree - issue #121 黒の偽跳び四（ギャップ埋めが長連）", () => {
+  it("偽跳び四は四に数えない（四三ではない）", () => {
+    const board = createEmptyBoard();
+    // 横 8 行目: 黒 C8 D8 _ F8 G8 [H8=着手点]
+    // 縦 H 列: 黒 H10 H9 [H8=着手点] → 両端空きの活三
+    placeStonesOnBoard(board, [
+      { row: 7, col: 2, color: "black" },
+      { row: 7, col: 3, color: "black" },
+      { row: 7, col: 5, color: "black" },
+      { row: 7, col: 6, color: "black" },
+      { row: 5, col: 7, color: "black" },
+      { row: 6, col: 7, color: "black" },
+    ]);
+
+    // H8 に打つと LUT は横方向を跳び四と報告するが、窓（中心 ±4）の外の C8 のせいで
+    // E8 を埋めると C8..H8 の 6 連＝長連。横方向に五点は無く四ではない。
+    expect(createsFourThree(board, 7, 7, "black")).toBe(false);
+  });
+
+  it("同じ形でも白なら本物の四三（回帰・白に長連の制限は無い）", () => {
+    const board = createEmptyBoard();
+    placeStonesOnBoard(board, [
+      { row: 7, col: 2, color: "white" },
+      { row: 7, col: 3, color: "white" },
+      { row: 7, col: 5, color: "white" },
+      { row: 7, col: 6, color: "white" },
+      { row: 5, col: 7, color: "white" },
+      { row: 6, col: 7, color: "white" },
+    ]);
+
+    expect(createsFourThree(board, 7, 7, "white")).toBe(true);
   });
 });

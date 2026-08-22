@@ -120,9 +120,14 @@ pub fn hasOpenThree(cells: []const Cell, color: Cell) bool {
             for (0..4) |i| {
                 const result = ll.queryPatternByCell(row, col, i, color);
 
-                // 連続活三（跳び四の一部は除外）
+                // 連続活三（本物の四の一部は除外＝より強い脅威として別扱い）
+                //
+                // issue #121: 除外条件に LUT の `has_jump_four` をそのまま使うと、
+                // 窓（中心 ±4）の外の自石でギャップ埋めが長連になる黒の形まで四扱いされ、
+                // 三の検出が握り潰されていた。四かどうかは盤面を見る
+                // `threats.isFourInDirection`（五点の列挙）に委ねる。
                 if (result.count == 3 and result.end1 == 0 and result.end2 == 0) {
-                    if (!result.has_jump_four) {
+                    if (!threats.isFourInDirectionWithPattern(cells, row, col, i, color, result)) {
                         return true;
                     }
                 }
@@ -2830,4 +2835,30 @@ test "getThreatDefensePositions: 最も近いギャップが長連でも遠い�
         if (defense.items[i].row == 7 and defense.items[i].col == 6) has_g8 = true;
     }
     try testing.expect(has_g8);
+}
+
+test "hasOpenThree: 偽跳び四に抑止されず三を検出する（issue #121）" {
+    ll.init();
+    // 8 行目に黒 C8 D8 _ F8 G8 H8（col = 2,3,[4],5,6,7）。
+    // LUT は F8/G8/H8 から `D8 _ F8 G8 H8` を跳び四と報告するが、窓（中心 ±4）の外の
+    // C8 のせいで E8 を埋めると 6 連＝長連。四ではないので、三として認識すべき。
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    for ([_]u8{ 2, 3, 5, 6, 7 }) |c| {
+        cells[7 * BOARD_SIZE + c] = .black;
+    }
+    bitboard.initFromCells(&cells);
+
+    try testing.expect(hasOpenThree(&cells, .black));
+}
+
+test "hasOpenThree: 本物の跳び四は三として数えない（回帰）" {
+    ll.init();
+    // 白 E8 F8 G8 _ I8（col = 4,5,6,[7],8）。H8 を埋めれば五 ＝ 本物の跳び四。
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    for ([_]u8{ 4, 5, 6, 8 }) |c| {
+        cells[7 * BOARD_SIZE + c] = .white;
+    }
+    bitboard.initFromCells(&cells);
+
+    try testing.expect(!hasOpenThree(&cells, .white));
 }

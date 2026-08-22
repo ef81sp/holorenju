@@ -7,6 +7,8 @@
 import type { BoardState } from "@/types/game";
 
 import { DIRECTION_INDICES, DIRECTIONS } from "../core/constants";
+// 四判定の SSoT（issue #124）。Zig 側 `threats.isFourInDirection` と対応する。
+import { isFourInDirection } from "../search/threatMoves";
 // #43 PR-3: 図形/禁手の葉プリミティブを Zig アダプタへ委譲（patterns.ts/forbiddenMoves.ts 依存を断つ）。
 // 本ファイルは vctHelpers/winningPatterns（review judgment）から live のため存続。
 import { isForbiddenForBlack } from "../wasm/forbiddenAdapter";
@@ -148,9 +150,15 @@ export function analyzeJumpPatterns(
     }
 
     // 連続四がなく、跳び四がある場合を記録
+    //
+    // issue #121: `checkJumpFour` は中心 ±4 マスの窓しか見ないため、窓の外の自石で
+    // ギャップ埋めが長連（6 連以上）になる黒の形も跳び四として報告する。四かどうかの
+    // 最終判断は五点の列挙（`isFourInDirection`）に委ねる。偽の跳び四を四に数えると
+    // 「四三」でない手をミセ手として生成してしまう。
     if (
       pattern.count !== 4 &&
-      checkJumpFour(board, row, col, dirIndex, color)
+      checkJumpFour(board, row, col, dirIndex, color) &&
+      isFourInDirection(board, row, col, i, color, pattern.count)
     ) {
       jumpFourDirections.add(i);
     }

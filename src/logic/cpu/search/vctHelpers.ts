@@ -28,20 +28,25 @@ import { getJumpThreeDefensePositions } from "../patterns/threatAnalysis";
 // #43 PR-3: 葉プリミティブ（図形/禁手判定）を Zig アダプタへ委譲。TS オーケストレーション
 // （本ファイルの VCT 検証ロジック）は温存し、patterns.ts/forbiddenMoves.ts への依存を断つ。
 import { isForbiddenForBlack } from "../wasm/forbiddenAdapter";
-import { checkJumpFour, checkJumpThree } from "../wasm/patternsAdapter";
-import { classifyThreat } from "./threatMoves";
+import { checkJumpThree } from "../wasm/patternsAdapter";
+import { classifyThreat, isFourInDirection } from "./threatMoves";
 
 /**
- * 連続活三（跳び四の一部でない）かを判定するヘルパー
+ * 連続活三（本物の四の一部でない）かを判定するヘルパー
  *
  * hasOpenThree と getCreatedOpenThreeDefenses で共通使用。
- * detectOpponentThreats は isJumpFour フラグ方式で二重呼び出しを回避しているため適用しない。
+ *
+ * issue #121: 除外条件に `checkJumpFour` をそのまま使うと、窓（中心 ±4）の外の自石で
+ * ギャップ埋めが長連になる黒の形まで四扱いされ、三の検出が握り潰されていた。
+ * 四かどうかは盤面の五点を見る `isFourInDirection` に委ねる。
+ *
+ * @param i DIRECTIONS / DIRECTION_INDICES のインデックス（0..3）
  */
 function isConsecutiveOpenThree(
   board: BoardState,
   row: number,
   col: number,
-  dirIndex: number,
+  i: number,
   color: "black" | "white",
   pattern: DirectionPattern,
 ): boolean {
@@ -49,7 +54,7 @@ function isConsecutiveOpenThree(
     pattern.count === 3 &&
     pattern.end1 === "empty" &&
     pattern.end2 === "empty" &&
-    !checkJumpFour(board, row, col, dirIndex, color)
+    !isFourInDirection(board, row, col, i, color, pattern.count)
   );
 }
 
@@ -123,8 +128,8 @@ export function hasOpenThree(
         }
         const [dr, dc] = direction;
         const pattern = analyzeDirection(board, row, col, dr, dc, color);
-        // 連続活三（跳び四の一部である連続三は活三ではない）
-        if (isConsecutiveOpenThree(board, row, col, dirIndex, color, pattern)) {
+        // 連続活三（本物の四の一部である連続三は活三ではない）
+        if (isConsecutiveOpenThree(board, row, col, i, color, pattern)) {
           return true;
         }
         // 跳び三（○○_○ や ○_○○）
@@ -149,6 +154,12 @@ export function hasOpenThree(
  * 連続活三は跳び四（○○○_○, ○_○○○）の一部を除外する。
  *
  * 225セル × 4方向の走査を 72ライン × ウィンドウスキャンに置換。
+ *
+ * ⚠️ issue #121 の長連ガード（黒でギャップ埋めが 6 連になる形は四ではない）は
+ * **本関数には入っていない**。ビットマスク上で五の長さ規則を再実装することになり、
+ * 「五」の定義（`isFiveLength`）を 3 個目に増やしてしまうため見送った。
+ * lineTable を渡す呼び出し元は現状テストのみで、本番経路（`vctValidation` /
+ * `forcedLossCheck`）はすべて board 版（上の `hasOpenThree` 本体）を通る。
  */
 function hasOpenThreeFast(lt: LineTable, color: "black" | "white"): boolean {
   const ownArr = color === "black" ? lt.blacks : lt.whites;
@@ -438,9 +449,9 @@ export function getCreatedOpenThreeDefenses(
     }
     const [dr, dc] = direction;
     const pattern = analyzeDirection(board, row, col, dr, dc, color);
-    // 連続活三（跳び四の一部は除外、黒の場合はウソの三を除外）
+    // 連続活三（本物の四の一部は除外、黒の場合はウソの三を除外）
     if (
-      isConsecutiveOpenThree(board, row, col, dirIndex, color, pattern) &&
+      isConsecutiveOpenThree(board, row, col, i, color, pattern) &&
       (color !== "black" || isValidConsecutiveThree(board, row, col, dirIndex))
     ) {
       defenses.push(

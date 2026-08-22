@@ -343,3 +343,27 @@ describe("hasOpenThree - lineTable等価性", () => {
     expect(hasOpenThree(board, "black", lt)).toBe(false);
   });
 });
+
+describe("issue #121 - 黒の偽跳び四（ギャップ埋めが長連）", () => {
+  it("hasOpenThree: 偽跳び四に抑止されず三を検出する", () => {
+    // 8 行目に黒 C8 D8 _ F8 G8 H8。E8 を埋めると C8..H8 の 6 連＝長連なので四ではない。
+    const board = createEmptyBoard();
+    placeStonesOnBoard(
+      board,
+      [2, 3, 5, 6, 7].map((col) => ({ row: 7, col, color: "black" as const })),
+    );
+
+    expect(hasOpenThree(board, "black")).toBe(true);
+  });
+
+  it("hasOpenThree: 本物の跳び四は三として数えない（回帰）", () => {
+    // 白 E8 F8 G8 _ I8。H8 を埋めれば五 ＝ 本物の跳び四。
+    const board = createEmptyBoard();
+    placeStonesOnBoard(
+      board,
+      [4, 5, 6, 8].map((col) => ({ row: 7, col, color: "white" as const })),
+    );
+
+    expect(hasOpenThree(board, "white")).toBe(false);
+  });
+});
