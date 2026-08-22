@@ -18,6 +18,7 @@ import {
   fourDefenseBlock,
   getFourDefensePosition,
 } from "./threatPatterns";
+import { hasVCF } from "./vcfCheck";
 
 /**
  * VCT手順の事後検証
@@ -118,10 +119,11 @@ function validateSubsequence(
         // 以降の openThree チェックは次の防御手（i+1）で処理する。
         continue;
       }
-      // 防御手配置後に相手の活三またはミセ手が存在する → 次の攻撃手が四/五連でなければ
-      // VCT手順崩壊（issue #116）。
-      // Zig 探索側も各ノードで同じ判定をするが、本検証は詰み木・手順の最終ゲートとして
-      // 独立に判定する。
+      // 防御手配置後に相手の活三・ミセ手・VCF が存在する → 次の攻撃手が四/五連でなければ
+      // VCT手順崩壊（issue #116 / #118 相当）。
+      // Zig 探索側は各ノードで同じ判定をするが（#118 の VCF はノード深さ <= 1 限定）、
+      // 本検証は詰み木・手順の最終ゲートとして独立に判定する。線形リプレイで局面数が
+      // 少ないため、ここでは深さゲート無しで全局面の相手 VCF まで見る。
       if (opponentBlocksThreePursuit(board, opponentColor)) {
         const nextIdx = i + 1;
         if (nextIdx >= sequence.length) {
@@ -184,7 +186,10 @@ function blockHasThreat(
  * これが真なら、攻撃側の次の一手は四/五でなければならない。三で追っても
  * 相手は受けずに活四・四三・四追いを先行させられるため、手順が崩壊する。
  *
- * 安いほうの hasOpenThree を先に評価して短絡する。
+ * Zig 版は活三 or ミセ手のみで、相手 VCF はノード深さ <= 1 のノードだけで見る
+ * （探索コストのため。issue #118）。本検証は手順の線形リプレイで局面数が少ないので
+ * 深さゲートは移植せず、全局面で VCF まで見る（最終ゲートとして最も安い closure）。
+ * 安い述語から順に評価して短絡する。
  */
 export function opponentBlocksThreePursuit(
   board: BoardState,
@@ -192,7 +197,8 @@ export function opponentBlocksThreePursuit(
 ): boolean {
   return (
     hasOpenThree(board, opponentColor) ||
-    hasFourThreeAvailable(board, opponentColor)
+    hasFourThreeAvailable(board, opponentColor) ||
+    hasVCF(board, opponentColor)
   );
 }
 
@@ -202,8 +208,8 @@ export function opponentBlocksThreePursuit(
  * Zig 側 `vct.zig` の `blockThreatContinues` と同じ意味論（二重実装のため両方を直すこと）。
  * - `none`: 脅威なし → 継続不可
  * - `win` / `four`: 受けは強制 → 継続可（追加チェック不要＝コスト最小）
- * - `three`: 受け手に受ける義務がない。受け手が活三 or ミセ手（1手四三）を持つなら、
- *   受け手はブロックの三を無視して達四・四三を先行させられるので手順は崩壊する。
+ * - `three`: 受け手に受ける義務がない。受け手が活三 / ミセ手（1手四三）/ VCF を持つなら、
+ *   受け手はブロックの三を無視して達四・四三・四追いを先行させられるので手順は崩壊する。
  *
  * `board` はブロック石を配置済みの状態で渡すこと。
  */

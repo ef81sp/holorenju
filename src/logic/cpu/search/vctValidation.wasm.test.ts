@@ -1,8 +1,8 @@
 /**
- * `blockThreatContinues` の回帰テスト（issue #117）
+ * `blockThreatContinues` / `opponentBlocksThreePursuit` の回帰テスト（issue #117 / #118）
  *
  * カウンター四をブロックした石が三しか作らないとき、受け手には受ける義務がない。
- * 受け手が活三/ミセ手を持つなら、その三では追えない（＝VCT 手順は崩壊する）。
+ * 受け手が活三/ミセ手/VCF を持つなら、その三では追えない（＝VCT 手順は崩壊する）。
  * Zig 側 `vct.zig` の同名関数と同じ意味論（二重実装）。
  */
 
@@ -10,9 +10,16 @@ import { beforeAll, describe, expect, it } from "vitest";
 
 import { parseInitialBoard } from "@/logic/boardParser";
 
-import { preloadThreatWasm } from "../wasm/threatAdapter";
+import {
+  hasFourThreeAvailable,
+  hasOpenThree,
+  preloadThreatWasm,
+} from "../wasm/threatAdapter";
 import { checkDefenseCounterThreat } from "./threatPatterns";
-import { blockThreatContinues } from "./vctValidation";
+import {
+  blockThreatContinues,
+  opponentBlocksThreePursuit,
+} from "./vctValidation";
 
 /**
  * issue #117 の再現局面のブロック直後（白 (3,7) 四 → 黒 (3,8) カウンター四 → 白 (3,12) ブロック）
@@ -71,5 +78,42 @@ describe("blockThreatContinues（issue #117）", () => {
   it("ブロック石が脅威を作らなければ継続不可", () => {
     const board = parseInitialBoard(BOARD_AFTER_BLOCK);
     expect(blockThreatContinues("none", board, "black")).toBe(false);
+  });
+});
+
+/**
+ * issue #118 の再現局面（受けは白）。白は活三もミセ手も持たないが (1,4) が四四で VCF を持つ。
+ * Zig 探索側はノード深さ <= 1 でしか VCF を見ないが、本検証は線形リプレイなので
+ * 深さゲート無しで全局面の相手 VCF まで見る。
+ */
+const BOARD_OPPONENT_VCF_ONLY = [
+  "---------------",
+  "xooo-----------",
+  "----o----------",
+  "----o----------",
+  "----o----------",
+  "----x----------",
+  "---------------",
+  "-------xx------",
+  "-----x-----x---",
+  "----x-------x--",
+  "---------------",
+  "---------------",
+  "---------------",
+  "---------------",
+  "---------------",
+];
+
+describe("opponentBlocksThreePursuit（issue #116 / #118）", () => {
+  it("相手が活三もミセ手も持たなくても VCF を持つなら三では追えない", () => {
+    const board = parseInitialBoard(BOARD_OPPONENT_VCF_ONLY);
+    expect(hasOpenThree(board, "white")).toBe(false);
+    expect(hasFourThreeAvailable(board, "white")).toBe(false);
+    expect(opponentBlocksThreePursuit(board, "white")).toBe(true);
+  });
+
+  it("相手に活三・ミセ手・VCF のいずれも無ければ三で追える", () => {
+    const board = parseInitialBoard(BOARD_AFTER_BLOCK_NO_THREE);
+    expect(opponentBlocksThreePursuit(board, "black")).toBe(false);
   });
 });

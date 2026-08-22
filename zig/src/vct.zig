@@ -196,6 +196,67 @@ pub fn hasFourThreeAvailable(cells: []Cell, color: Cell) bool {
 pub fn opponentBlocksThreePursuit(cells: []Cell, opponent: Cell) bool {
     return hasOpenThree(cells, opponent) or hasFourThreeAvailable(cells, opponent);
 }
+
+/// 相手 VCF プローブを実行するノード深さの上限（issue #118）
+///
+/// 全ノードで hasVCF を回すとコストが跳ねるため、根に近いノードだけに限定する。
+/// 深いノードは「相手の受け手が四を作る」ケースを checkDefenseCounterThreat が
+/// `.four` で拾うため、取りこぼしは「受け手の静かな石が別筋の四追いの起点になる」
+/// ケースに限られる。
+///
+/// **実効カバレッジ**: `findVCTSequenceRecursive` は depth 0 をエントリの
+/// フル深度チェックに任せるので、実際にプローブが走るのは**再帰深さ 1 の 1 層だけ**。
+/// `hasVCT` はエントリガードを持たない公開 API なので depth 0 でも走る。
+/// また反復深化（対局 4 回・振り返り 5 回）のイテレーション数が総コストに乗る。
+const OPPONENT_VCF_PROBE_MAX_NODE_DEPTH: u8 = 1;
+
+/// 相手 VCF プローブの探索深度上限（VCF_MAX_DEPTH=8 に対し浅く打ち切る）
+const OPPONENT_VCF_PROBE_DEPTH: u8 = 4;
+
+/// 相手 VCF プローブのノード数上限（コストが跳ねないための保険）
+const OPPONENT_VCF_PROBE_MAX_NODES: u32 = 1000;
+
+/// `opponentBlocksThreePursuit` にノード深さ依存の「浅い相手 VCF」を足した版（issue #118）
+///
+/// 相手が VCF（四追いの強制勝ち）を持つなら、攻撃側の三は必ず先に潰される
+/// ＝三で追ってはいけない。意味論は #116 と同じ「三の攻め手のみ不可、四は継続」。
+/// ただし hasVCF は活三/ミセ手判定よりずっと重いので、
+/// - ノード深さ `OPPONENT_VCF_PROBE_MAX_NODE_DEPTH` 以下
+/// - 深度 `OPPONENT_VCF_PROBE_DEPTH` / ノード数 `OPPONENT_VCF_PROBE_MAX_NODES` で打ち切り
+/// - 三の攻め手に入る直前の遅延評価（呼び出し側）
+/// の3重の制限をかける。安い述語を先に評価して短絡する。
+///
+/// プローブは呼び出し元 `limiter` の開始時刻・時間制限を引き継ぎ（時間切れなら
+/// hasVCF 側が即座に打ち切る）、消費ノードは呼び出し元へ加算する（#119 の部分払い）。
+fn opponentBlocksThreePursuitWithShallowVCF(
+    cells: []Cell,
+    opponent: Cell,
+    node_depth: u8,
+    limiter: *TimeLimiter,
+) bool {
+    if (opponentBlocksThreePursuit(cells, opponent)) return true;
+    if (node_depth > OPPONENT_VCF_PROBE_MAX_NODE_DEPTH) return false;
+
+    var probe_limiter = TimeLimiter{
+        .start_time = limiter.start_time,
+        .time_limit = limiter.time_limit,
+        .nodes = 0,
+        .max_nodes = OPPONENT_VCF_PROBE_MAX_NODES,
+    };
+    const found = vcf_mod.hasVCF(cells, opponent, 0, &probe_limiter, OPPONENT_VCF_PROBE_DEPTH);
+    limiter.nodes +|= probe_limiter.nodes;
+    return found;
+}
+
+/// エントリ（探索開始局面）用の相手脅威チェック
+///
+/// 開始局面は一度しか評価しないので、活三/ミセ手に加えてフル深度の VCF まで見る。
+/// 真なら「三では追えない」＝VCF-only にフォールバックする（呼び出し側の責務）。
+fn opponentBlocksThreePursuitAtRoot(cells: []Cell, opponent: Cell, limiter: *TimeLimiter) bool {
+    return opponentBlocksThreePursuit(cells, opponent) or
+        vcf_mod.hasVCF(cells, opponent, 0, limiter, vcf_mod.VCF_MAX_DEPTH);
+}
+
 // =============================================================================
 // findThreatMoves（TS版 vctHelpers.ts に対応）
 // =============================================================================
@@ -419,13 +480,21 @@ fn blockHasThreat(ct: CounterThreat) bool {
 /// `cells` はブロック石を配置済みの局面、`opponent` は受け手の色。
 /// - `.none`: そもそも脅威なし → 継続不可
 /// - `.win` / `.four`: 受けは強制 → 継続可（追加チェック不要＝コスト最小）
-/// - `.three`: 受け手に受ける義務はない。受け手が活三/ミセ手を持つなら、
-///   受け手はブロックの三を無視して達四・四三を先行させられるので手順は崩壊する
-///   （#116 の「三の攻め手のみ不可、四は継続」と同じ意味論）。
-fn blockThreatContinues(ct: CounterThreat, cells: []Cell, opponent: Cell) bool {
+/// - `.three`: 受け手に受ける義務はない。受け手が活三/ミセ手、または（根に近い
+///   ノードでは）VCF を持つなら、受け手はブロックの三を無視して達四・四三・
+///   四追いを先行させられるので手順は崩壊する
+///   （#116 の「三の攻め手のみ不可、四は継続」と同じ意味論。issue #118 の
+///   浅い VCF プローブもここに掛かる＝`.three` のときだけなのでコストは小さい）。
+fn blockThreatContinues(
+    ct: CounterThreat,
+    cells: []Cell,
+    opponent: Cell,
+    node_depth: u8,
+    limiter: *TimeLimiter,
+) bool {
     if (!blockHasThreat(ct)) return false;
     if (ct != .three) return true;
-    return !opponentBlocksThreePursuit(cells, opponent);
+    return !opponentBlocksThreePursuitWithShallowVCF(cells, opponent, node_depth, limiter);
 }
 
 // =============================================================================
@@ -767,7 +836,7 @@ fn evaluateCounterThreat(
             // 三しか作らない場合は受け手に受ける義務がないので、
             // 受け手が活三/ミセ手を持つならここで打ち切る（issue #117）。
             const block_ct = checkDefenseCounterThreat(cells, bp.row, bp.col, color);
-            if (!blockThreatContinues(block_ct, cells, opponent)) {
+            if (!blockThreatContinues(block_ct, cells, opponent, depth, limiter)) {
                 cells[block_idx] = .empty;
                 bitboard.removeStone(bp.row, bp.col);
                 return false;
@@ -886,11 +955,12 @@ pub fn hasVCT(
 
     for (0..threat_count) |i| {
         // 三の攻め手に入る直前で一度だけ判定（buf は四→活三の順）。
-        // 相手が活三/ミセ手を持つなら三で追っても手順が崩壊するため、
-        // 残り（すべて三）は打ち切る。四で受けを強制して相手の脅威を
-        // 潰してから三で追う手順は、四を先に試すことで保存される。
+        // 相手が活三/ミセ手/（根に近いノードでは）VCF を持つなら三で追っても
+        // 手順が崩壊するため、残り（すべて三）は打ち切る。四で受けを強制して
+        // 相手の脅威を潰してから三で追う手順は、四を先に試すことで保存される。
+        // hasVCT は公開 API でエントリガードを持たないため depth 0 でもプローブする。
         if (i == @as(usize, threat_moves.four_count) and
-            opponentBlocksThreePursuit(cells, opponent)) break;
+            opponentBlocksThreePursuitWithShallowVCF(cells, opponent, depth, limiter)) break;
 
         const move = threat_buf[i];
         const move_idx = @as(u16, move.row) * BOARD_SIZE + move.col;
@@ -1078,8 +1148,9 @@ pub fn findVCTSequence(
     const opponent = color.opposite();
 
     // 相手に活三・ミセ手・VCFがあればVCT不成立（四追いでしか勝てない）
-    if (opponentBlocksThreePursuit(cells, opponent)) return tryVCFOnly(cells, color, &limiter, &result, collect_branches);
-    if (vcf_mod.hasVCF(cells, opponent, 0, &limiter, vcf_mod.VCF_MAX_DEPTH)) return tryVCFOnly(cells, color, &limiter, &result, collect_branches);
+    if (opponentBlocksThreePursuitAtRoot(cells, opponent, &limiter)) {
+        return tryVCFOnly(cells, color, &limiter, &result, collect_branches);
+    }
 
     // VCFが先に成立する場合はVCF手順を返す
     const vcf_seq = vcf_mod.findVCFSequence(cells, color, vcf_mod.VCF_MAX_DEPTH, time_limit, max_nodes);
@@ -1211,12 +1282,20 @@ fn findVCTSequenceRecursive(
 
     for (0..threat_count) |ti| {
         // 三の攻め手に入る直前で一度だけ判定（buf は四→活三の順）。
-        // 相手が活三/ミセ手を持つなら三で追っても手順が崩壊するため、
-        // 残り（すべて三）は打ち切る。四で受けを強制して相手の脅威を
-        // 潰してから三で追う手順は、四を先に試すことで保存される。
+        // 相手が活三/ミセ手/（根に近いノードでは）VCF を持つなら三で追っても
+        // 手順が崩壊するため、残り（すべて三）は打ち切る。四で受けを強制して
+        // 相手の脅威を潰してから三で追う手順は、四を先に試すことで保存される。
         // 石は未配置・アリーナも未取得の位置なので break して安全。
-        if (ti == @as(usize, threat_moves.four_count) and
-            opponentBlocksThreePursuit(cells, opponent)) break;
+        // depth 0 は同一盤面をエントリ（findVCTSequence / findVCTSequenceFromFirstMove）が
+        // フル深度の hasVCF で確認済み。反復深化の各イテレーションで弱いプローブを
+        // 重ねても無駄なので、ここでは安い述語だけにする。
+        if (ti == @as(usize, threat_moves.four_count)) {
+            const blocked = if (depth == 0)
+                opponentBlocksThreePursuit(cells, opponent)
+            else
+                opponentBlocksThreePursuitWithShallowVCF(cells, opponent, depth, limiter);
+            if (blocked) break;
+        }
 
         // この脅威手の探索でアリーナへ積むノードの起点。採用されなければ巻き戻す。
         const threat_snap = g_tree_arena.snapshot();
@@ -1299,7 +1378,7 @@ fn findVCTSequenceRecursive(
 
                 // 三しか作らないブロックは受けを強制できない（issue #117）
                 const block_ct = checkDefenseCounterThreat(cells, bp.row, bp.col, color);
-                if (!blockThreatContinues(block_ct, cells, opponent)) {
+                if (!blockThreatContinues(block_ct, cells, opponent, depth, limiter)) {
                     cells[block_idx] = .empty;
                     bitboard.removeStone(bp.row, bp.col);
                     cells[def_idx] = .empty;
@@ -1688,7 +1767,7 @@ fn buildBlockDefSubSequence(
 
             // 三しか作らないブロックは受けを強制できない（issue #117）
             const nb_threat = checkDefenseCounterThreat(cells, nb.row, nb.col, color);
-            if (!blockThreatContinues(nb_threat, cells, opponent)) {
+            if (!blockThreatContinues(nb_threat, cells, opponent, depth +| 1, limiter)) {
                 cells[nb_idx] = .empty;
                 bitboard.removeStone(nb.row, nb.col);
                 return result;
@@ -1853,8 +1932,7 @@ pub fn findVCTSequenceFromFirstMove(
     const opponent = color.opposite();
 
     // 相手に活三・ミセ手・VCFがあればVCT開始手として無効
-    if (opponentBlocksThreePursuit(cells, opponent)) return result;
-    if (vcf_mod.hasVCF(cells, opponent, 0, &limiter, vcf_mod.VCF_MAX_DEPTH)) return result;
+    if (opponentBlocksThreePursuitAtRoot(cells, opponent, &limiter)) return result;
 
     // 仮配置（bitboard も同期）
     cells[idx] = color;
@@ -1943,7 +2021,7 @@ pub fn findVCTSequenceFromFirstMove(
             bitboard.placeStone(bp.row, bp.col, color);
 
             const block_ct = checkDefenseCounterThreat(cells, bp.row, bp.col, color);
-            if (blockThreatContinues(block_ct, cells, opponent)) {
+            if (blockThreatContinues(block_ct, cells, opponent, 0, &limiter)) {
                 const block_ok = processBlockDefensesSeq(cells, bp, color, 0, max_depth, &limiter, true);
                 if (block_ok.found and block_ok.seq_len_valid) {
                     cont_seq[0] = bp;
@@ -2056,8 +2134,7 @@ pub fn isVCTFirstMove(
     const opponent = color.opposite();
 
     // 相手に活三・ミセ手・VCFがあればVCT開始手として無効
-    if (opponentBlocksThreePursuit(cells, opponent)) return false;
-    if (vcf_mod.hasVCF(cells, opponent, 0, &limiter, vcf_mod.VCF_MAX_DEPTH)) return false;
+    if (opponentBlocksThreePursuitAtRoot(cells, opponent, &limiter)) return false;
 
     // 仮配置（bitboard も同期）
     cells[idx] = color;
@@ -2995,6 +3072,79 @@ test "findVCTSequence: ct=four ブロック経路の偽VCTを返さない（issu
     try testing.expect(!result.found);
 }
 
+/// issue #118 の再現局面（黒番・攻めは黒、受けの白が VCF を持つ）
+///
+/// - 黒 (7,7)(7,8) と斜めの種 (8,5)(9,4) / (8,11)(9,12):
+///   黒 (7,9) で活三ができ、白がどちらの端を受けても黒は四三で勝てる
+///   ＝「三の追い」だけで成立する VCT（四の初手はない）。
+/// - 白 (1,1)(1,2)(1,3)（左は黒(1,0)で止まり）＋ (2,4)(3,4)(4,4)（下は黒(5,4)で止まり）:
+///   白 (1,4) が四四になるため白には VCF がある。ただし白に活三もミセ手もないので
+///   #116 のガード（活三 or ミセ手）では検出できない。
+fn setupIssue118Position(cells: []Cell) void {
+    // 黒（攻め）
+    cells[7 * BOARD_SIZE + 7] = .black;
+    cells[7 * BOARD_SIZE + 8] = .black;
+    cells[8 * BOARD_SIZE + 5] = .black;
+    cells[9 * BOARD_SIZE + 4] = .black;
+    cells[8 * BOARD_SIZE + 11] = .black;
+    cells[9 * BOARD_SIZE + 12] = .black;
+    // 白（受け）の VCF: (1,4) が四四
+    cells[1 * BOARD_SIZE + 1] = .white;
+    cells[1 * BOARD_SIZE + 2] = .white;
+    cells[1 * BOARD_SIZE + 3] = .white;
+    cells[2 * BOARD_SIZE + 4] = .white;
+    cells[3 * BOARD_SIZE + 4] = .white;
+    cells[4 * BOARD_SIZE + 4] = .white;
+    cells[1 * BOARD_SIZE + 0] = .black;
+    cells[5 * BOARD_SIZE + 4] = .black;
+}
+
+test "issue #118 前提: 相手は活三もミセ手も持たないが VCF を持つ" {
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    setupIssue118Position(&cells);
+    bitboard.initFromCells(&cells);
+
+    var limiter = TimeLimiter{
+        .start_time = 0,
+        .time_limit = 0,
+        .nodes = 0,
+        .max_nodes = 0,
+    };
+
+    try testing.expect(!hasOpenThree(&cells, .white));
+    try testing.expect(!hasFourThreeAvailable(&cells, .white));
+    try testing.expect(!opponentBlocksThreePursuit(&cells, .white));
+    try testing.expect(vcf_mod.hasVCF(&cells, .white, 0, &limiter, vcf_mod.VCF_MAX_DEPTH));
+    // 攻め側（黒）に VCF はない＝三で追うしかない
+    try testing.expect(!vcf_mod.hasVCF(&cells, .black, 0, &limiter, vcf_mod.VCF_MAX_DEPTH));
+}
+
+test "hasVCT: 相手が VCF を持つ局面で三の追いによる偽VCTが成立しない（issue #118）" {
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    setupIssue118Position(&cells);
+    bitboard.initFromCells(&cells);
+
+    var limiter = TimeLimiter{
+        .start_time = 0,
+        .time_limit = 0,
+        .nodes = 0,
+        .max_nodes = 0,
+    };
+
+    try testing.expect(!hasVCT(&cells, .black, 0, &limiter, VCT_MAX_DEPTH));
+}
+
+test "findVCTSequence: 相手 VCF を持つ局面の三の追いを VCT として返さない（issue #118）" {
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    setupIssue118Position(&cells);
+
+    const result = findVCTSequence(&cells, .black, VCT_MAX_DEPTH, 0, 0, false, .lenient);
+    try testing.expect(!result.found);
+}
+
 test "blockThreatContinues: 三のブロックは相手の活三で不成立・四/五なら継続（issue #117）" {
     // issue #117 の再現局面のブロック直後（白(3,7)四 → 黒(3,8)カウンター四 → 白(3,12)ブロック）
     ll.init();
@@ -3005,21 +3155,28 @@ test "blockThreatContinues: 三のブロックは相手の活三で不成立・�
     cells[3 * BOARD_SIZE + 12] = .white;
     bitboard.initFromCells(&cells);
 
+    var limiter = TimeLimiter{
+        .start_time = 0,
+        .time_limit = 0,
+        .nodes = 0,
+        .max_nodes = 0,
+    };
+
     // ブロック石は三しか作らない ＆ 黒は活三を持つ → 継続不可
     try testing.expectEqual(CounterThreat.three, checkDefenseCounterThreat(&cells, 3, 12, .white));
-    try testing.expect(!blockThreatContinues(.three, &cells, .black));
+    try testing.expect(!blockThreatContinues(.three, &cells, .black, 0, &limiter));
     // 四/五なら受けは強制なので相手の活三と無関係に継続可
-    try testing.expect(blockThreatContinues(.four, &cells, .black));
-    try testing.expect(blockThreatContinues(.win, &cells, .black));
+    try testing.expect(blockThreatContinues(.four, &cells, .black, 0, &limiter));
+    try testing.expect(blockThreatContinues(.win, &cells, .black, 0, &limiter));
     // 脅威なしは継続不可
-    try testing.expect(!blockThreatContinues(.none, &cells, .black));
+    try testing.expect(!blockThreatContinues(.none, &cells, .black, 0, &limiter));
 
     // 黒の活三（行10）を消すと、三のブロックでも継続可
     cells[10 * BOARD_SIZE + 4] = .empty;
     cells[10 * BOARD_SIZE + 5] = .empty;
     cells[10 * BOARD_SIZE + 6] = .empty;
     bitboard.initFromCells(&cells);
-    try testing.expect(blockThreatContinues(.three, &cells, .black));
+    try testing.expect(blockThreatContinues(.three, &cells, .black, 0, &limiter));
 }
 
 test "findVCTSequenceFromFirstMove: ct=four ブロック経路でも偽VCTを返さない（issue #117）" {
@@ -3035,4 +3192,26 @@ test "findVCTSequenceFromFirstMove: ct=four ブロック経路でも偽VCTを返
 
     const result = findVCTSequenceFromFirstMove(&cells, .{ .row = 3, .col = 7 }, .white, VCT_MAX_DEPTH, 0, 0, false);
     try testing.expect(!result.found);
+}
+
+test "opponentBlocksThreePursuitWithShallowVCF: 相手VCFはノード深さ1まで検出しそれ以降は見ない（issue #118）" {
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    setupIssue118Position(&cells);
+    bitboard.initFromCells(&cells);
+
+    var limiter = TimeLimiter{
+        .start_time = 0,
+        .time_limit = 0,
+        .nodes = 0,
+        .max_nodes = 0,
+    };
+
+    // 白は活三もミセ手も持たないので、検出できるのは VCF プローブのみ
+    try testing.expect(!opponentBlocksThreePursuit(&cells, .white));
+    try testing.expect(opponentBlocksThreePursuitWithShallowVCF(&cells, .white, 0, &limiter));
+    try testing.expect(opponentBlocksThreePursuitWithShallowVCF(&cells, .white, OPPONENT_VCF_PROBE_MAX_NODE_DEPTH, &limiter));
+    try testing.expect(!opponentBlocksThreePursuitWithShallowVCF(&cells, .white, OPPONENT_VCF_PROBE_MAX_NODE_DEPTH + 1, &limiter));
+    // プローブの消費ノードは呼び出し元 limiter に加算される（#119 の部分払い）
+    try testing.expect(limiter.nodes > 0);
 }
