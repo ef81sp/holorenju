@@ -239,25 +239,56 @@ pub fn hasFourThreeAvailable(cells: []Cell, color: Cell) bool {
             if (cells[idx] != .empty) continue;
             if (!threats.isNearFromMask(near_mask, row, col)) continue;
 
+            // 先に四三判定 → 成立した点だけ禁手確認（意味論は同値、黒での全空点
+            // checkForbiddenMove を避けて 16〜22µs → 数µs に短縮）
+            if (!evaluate.createsFourThree(cells, row, col, color)) continue;
+
             if (color == .black) {
                 const fr = forbidden.checkForbiddenMove(cells, row, col);
                 if (fr != .none) continue;
             }
 
-            if (evaluate.createsFourThree(cells, row, col, color)) {
-                return true;
-            }
+            return true;
         }
     }
     return false;
 }
 
 // =============================================================================
+// opponentBlocksThreePursuit
+// =============================================================================
+
+/// 相手が「三の追いを許さない脅威」（活三 or 1手四三＝ミセ手）を持つか
+///
+/// これが真なら、攻撃側の次の一手は四/五でなければならない。三で追っても
+/// 相手は受けずに活四・四三を先行させられるため、手順が崩壊する。
+/// 安いほうの hasOpenThree を先に評価して短絡する。
+pub fn opponentBlocksThreePursuit(cells: []Cell, opponent: Cell) bool {
+    return hasOpenThree(cells, opponent) or hasFourThreeAvailable(cells, opponent);
+}
+
+// =============================================================================
 // findThreatMoves（TS版 vctHelpers.ts に対応）
 // =============================================================================
 
+/// findThreatMovesCounted の結果（四の本数と総数）
+pub const ThreatMoveCounts = struct {
+    /// 列挙された脅威手の総数
+    total: u16,
+    /// うち四を作る手の本数。buf の先頭 four_count 個が四、残りが活三。
+    four_count: u16,
+};
+
 /// 脅威（四・活三）を作れる位置を列挙（四を優先）
 pub fn findThreatMoves(cells: []Cell, color: Cell, buf: *[225]Position) u16 {
+    return findThreatMovesCounted(cells, color, buf).total;
+}
+
+/// findThreatMoves の四/活三の内訳付き版
+///
+/// buf は「四 → 活三」の順に詰められる。四の本数を返すことで、呼び出し側は
+/// 「三の攻め手に入る直前」を検出できる（opponentBlocksThreePursuit の遅延評価用）。
+pub fn findThreatMovesCounted(cells: []Cell, color: Cell, buf: *[225]Position) ThreatMoveCounts {
     var four_count: u16 = 0;
     var three_count: u16 = 0;
     // 四は前から、活三は後ろから格納
@@ -313,7 +344,7 @@ pub fn findThreatMoves(cells: []Cell, color: Cell, buf: *[225]Position) u16 {
         buf[four_count + i] = three_buf[i];
     }
 
-    return four_count + three_count;
+    return .{ .total = four_count + three_count, .four_count = four_count };
 }
 
 // =============================================================================
@@ -321,6 +352,25 @@ pub fn findThreatMoves(cells: []Cell, color: Cell, buf: *[225]Position) u16 {
 // =============================================================================
 
 /// 脅威に対する防御位置を取得
+/// 跳び四の受け点（＝そのラインで「埋めると本当に五になる」空点）を列挙する
+///
+/// 実体は `threats.collectLineFivePoints`（受け点の SSoT。
+/// `quiescence.getFourDefensePosition` も同じ関数を使う）。
+///
+/// 戻り値: 受け点を 1 つ以上追加できたか（false なら四として扱わず、
+/// 呼び出し側で三として受けを広く列挙する＝防御側に有利な健全側に倒す）
+fn addJumpFourDefensePositions(
+    cells: []const Cell,
+    row: u8,
+    col: u8,
+    dr: i8,
+    dc: i8,
+    color: Cell,
+    defense_positions: *PositionList,
+) bool {
+    return threats.collectLineFivePoints(cells, row, col, dr, dc, color, defense_positions) > 0;
+}
+
 pub fn getThreatDefensePositions(cells: []const Cell, row: u8, col: u8, color: Cell) PositionList {
     var defense_positions = PositionList.init();
 
@@ -356,13 +406,18 @@ pub fn getThreatDefensePositions(cells: []const Cell, row: u8, col: u8, color: C
             }
         }
 
-        // 跳び四をチェック
+        // 跳び四をチェック（黒はオーバーライン補正）
+        // ギャップを埋めると長連になる跳び四は五にできない＝四ではないので、
+        // 受けをギャップ 1 点に絞ってはならない。分類側（classifyThreat /
+        // checkDefenseCounterThreat）と同基準に揃える（SSoT）。
+        // 四扱いをやめた結果、同方向は下の活三/跳び三ブランチで受け点を列挙する
+        // （has_jump_four=false の連鎖は意図的。受けが広がる＝防御側に有利な健全側）。
+        // 受け点が取れない場合も同様に三として扱う（受けが広がる側に倒す）。
         var has_jump_four = false;
-        if (result.count != 4 and result.has_jump_four) {
-            has_jump_four = true;
-            if (threats.findJumpGapPosition(cells, row, col, dir.dr, dir.dc, color)) |gap| {
-                defense_positions.addUnique(gap);
-            }
+        if (result.count != 4 and result.has_jump_four and
+            !isJumpFourOverline(cells, row, col, dir.dr, dir.dc, color))
+        {
+            has_jump_four = addJumpFourDefensePositions(cells, row, col, dir.dr, dir.dc, color, &defense_positions);
         }
 
         // 活三をチェック（同方向に跳び四がある場合は不要：跳び四の防御が優先）
@@ -543,7 +598,7 @@ fn checkSequenceBreaksByCF(
             }
 
             // 相手の活三/ミセ手チェック: 次の攻撃手が四/五でなければ手順崩壊
-            if (hasOpenThree(cells, opponent) or hasFourThreeAvailable(cells, opponent)) {
+            if (opponentBlocksThreePursuit(cells, opponent)) {
                 const next_idx = i + 1;
                 if (next_idx >= sequence.len) {
                     breaks = true;
@@ -898,13 +953,19 @@ pub fn hasVCT(
 
     const opponent = color.opposite();
 
-    // 相手に活三があればVCT（三脅威）は不成立
-    if (hasOpenThree(cells, opponent)) return false;
-
     var threat_buf: [225]Position = undefined;
-    const threat_count = findThreatMoves(cells, color, &threat_buf);
+    const threat_moves = findThreatMovesCounted(cells, color, &threat_buf);
+    const threat_count = threat_moves.total;
+    if (threat_count == 0) return false;
 
     for (0..threat_count) |i| {
+        // 三の攻め手に入る直前で一度だけ判定（buf は四→活三の順）。
+        // 相手が活三/ミセ手を持つなら三で追っても手順が崩壊するため、
+        // 残り（すべて三）は打ち切る。四で受けを強制して相手の脅威を
+        // 潰してから三で追う手順は、四を先に試すことで保存される。
+        if (i == @as(usize, threat_moves.four_count) and
+            opponentBlocksThreePursuit(cells, opponent)) break;
+
         const move = threat_buf[i];
         const move_idx = @as(u16, move.row) * BOARD_SIZE + move.col;
         cells[move_idx] = color;
@@ -1091,8 +1152,7 @@ pub fn findVCTSequence(
     const opponent = color.opposite();
 
     // 相手に活三・ミセ手・VCFがあればVCT不成立（四追いでしか勝てない）
-    if (hasOpenThree(cells, opponent)) return tryVCFOnly(cells, color, &limiter, &result, collect_branches);
-    if (hasFourThreeAvailable(cells, opponent)) return tryVCFOnly(cells, color, &limiter, &result, collect_branches);
+    if (opponentBlocksThreePursuit(cells, opponent)) return tryVCFOnly(cells, color, &limiter, &result, collect_branches);
     if (vcf_mod.hasVCF(cells, opponent, 0, &limiter, vcf_mod.VCF_MAX_DEPTH)) return tryVCFOnly(cells, color, &limiter, &result, collect_branches);
 
     // VCFが先に成立する場合はVCF手順を返す
@@ -1206,11 +1266,10 @@ fn findVCTSequenceRecursive(
 
     const opponent = color.opposite();
 
-    // 相手に活三があればVCT不成立
-    if (hasOpenThree(cells, opponent)) return false;
-
     var threat_buf: [225]Position = undefined;
-    const threat_count = findThreatMoves(cells, color, &threat_buf);
+    const threat_moves = findThreatMovesCounted(cells, color, &threat_buf);
+    const threat_count = threat_moves.total;
+    if (threat_count == 0) return false;
 
     // 最短手順の候補を保持（全脅威手を試して最短を選ぶ）
     var best_seq: [64]Position = undefined;
@@ -1225,6 +1284,14 @@ fn findVCTSequenceRecursive(
     var has_best = false;
 
     for (0..threat_count) |ti| {
+        // 三の攻め手に入る直前で一度だけ判定（buf は四→活三の順）。
+        // 相手が活三/ミセ手を持つなら三で追っても手順が崩壊するため、
+        // 残り（すべて三）は打ち切る。四で受けを強制して相手の脅威を
+        // 潰してから三で追う手順は、四を先に試すことで保存される。
+        // 石は未配置・アリーナも未取得の位置なので break して安全。
+        if (ti == @as(usize, threat_moves.four_count) and
+            opponentBlocksThreePursuit(cells, opponent)) break;
+
         // この脅威手の探索でアリーナへ積むノードの起点。採用されなければ巻き戻す。
         const threat_snap = g_tree_arena.snapshot();
         const move = threat_buf[ti];
@@ -1858,8 +1925,7 @@ pub fn findVCTSequenceFromFirstMove(
     const opponent = color.opposite();
 
     // 相手に活三・ミセ手・VCFがあればVCT開始手として無効
-    if (hasOpenThree(cells, opponent)) return result;
-    if (hasFourThreeAvailable(cells, opponent)) return result;
+    if (opponentBlocksThreePursuit(cells, opponent)) return result;
     if (vcf_mod.hasVCF(cells, opponent, 0, &limiter, vcf_mod.VCF_MAX_DEPTH)) return result;
 
     // 仮配置（bitboard も同期）
@@ -2056,8 +2122,7 @@ pub fn isVCTFirstMove(
     const opponent = color.opposite();
 
     // 相手に活三・ミセ手・VCFがあればVCT開始手として無効
-    if (hasOpenThree(cells, opponent)) return false;
-    if (hasFourThreeAvailable(cells, opponent)) return false;
+    if (opponentBlocksThreePursuit(cells, opponent)) return false;
     if (vcf_mod.hasVCF(cells, opponent, 0, &limiter, vcf_mod.VCF_MAX_DEPTH)) return false;
 
     // 仮配置（bitboard も同期）
@@ -2628,4 +2693,201 @@ test "hasVCT: 夏止め済みの三しか作れない局面で偽VCTが成立し
     };
 
     try testing.expect(!hasVCT(&cells, .black, 0, &limiter, VCT_MAX_DEPTH));
+}
+
+/// issue #116 の実戦棋譜の 17 石局面（左下原点・黒先手・白番）
+///
+/// "H8 H9 J10 I9 G9 I7 I8 J8 H10 K9 L10 K7 K10 I10 J9 H7 J7"
+fn setupIssue116Position(cells: []Cell) void {
+    cells[7 * BOARD_SIZE + 7] = .black; // 1. H8
+    cells[6 * BOARD_SIZE + 7] = .white; // 2. H9
+    cells[5 * BOARD_SIZE + 9] = .black; // 3. J10
+    cells[6 * BOARD_SIZE + 8] = .white; // 4. I9
+    cells[6 * BOARD_SIZE + 6] = .black; // 5. G9
+    cells[8 * BOARD_SIZE + 8] = .white; // 6. I7
+    cells[7 * BOARD_SIZE + 8] = .black; // 7. I8
+    cells[7 * BOARD_SIZE + 9] = .white; // 8. J8
+    cells[5 * BOARD_SIZE + 7] = .black; // 9. H10
+    cells[6 * BOARD_SIZE + 10] = .white; // 10. K9
+    cells[5 * BOARD_SIZE + 11] = .black; // 11. L10
+    cells[8 * BOARD_SIZE + 10] = .white; // 12. K7
+    cells[5 * BOARD_SIZE + 10] = .black; // 13. K10
+    cells[5 * BOARD_SIZE + 8] = .white; // 14. I10
+    cells[6 * BOARD_SIZE + 9] = .black; // 15. J9
+    cells[8 * BOARD_SIZE + 7] = .white; // 16. H7
+    cells[8 * BOARD_SIZE + 9] = .black; // 17. J7
+}
+
+test "hasVCT: 相手にミセ手がある局面で三の追いでは偽VCTが成立しない（issue #116）" {
+    // 上記17石局面に、偽VCT手順の分岐 18.白M5 19.黒L6 20.白G8 21.黒J11 を
+    // 進めた局面（白番）。この局面で黒は四三点 J12 を持つ（ミセ手）。
+    // 白は四追いで勝てないため、三で追う手順は黒の四三に先行されて崩れる
+    // ＝VCTは不成立でなければならない。
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    setupIssue116Position(&cells);
+    cells[10 * BOARD_SIZE + 12] = .white; // 18. M5
+    cells[9 * BOARD_SIZE + 11] = .black; // 19. L6
+    cells[7 * BOARD_SIZE + 6] = .white; // 20. G8
+    cells[4 * BOARD_SIZE + 9] = .black; // 21. J11
+    bitboard.initFromCells(&cells);
+
+    // 前提: 黒に活三はないがミセ手はある（＝活三チェックだけでは弾けない）
+    try testing.expect(!hasOpenThree(&cells, .black));
+    try testing.expect(hasFourThreeAvailable(&cells, .black));
+
+    var limiter = TimeLimiter{
+        .start_time = 0,
+        .time_limit = 0,
+        .nodes = 0,
+        .max_nodes = 0,
+    };
+
+    try testing.expect(!hasVCT(&cells, .white, 0, &limiter, VCT_MAX_DEPTH));
+}
+
+test "findVCTSequence: 途中でミセ手を持たれる三の手順をVCTとして返さない（issue #116）" {
+    // 17石局面（白番）。開始局面では黒に活三・ミセ手・VCFがないため
+    // エントリのガードは通過するが、手順の途中（21.黒J11 の後）で黒がミセ手を得る。
+    // 白にVCFはないので、VCTとしても成立してはならない。
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    setupIssue116Position(&cells);
+    // bitboard は findVCTSequence がトップレベルエントリで initFromCells する
+
+    const result = findVCTSequence(&cells, .white, VCT_MAX_DEPTH, 0, 0, false, .lenient);
+    try testing.expect(!result.found);
+}
+
+test "hasVCT: 四で相手の活三を潰してから三で追う手順は成立する（issue #116 の意味論）" {
+    // 1. の意味論（ノード単位の棄却ではなく「三の攻め手のみ不可」）の正当化。
+    // 修正前（相手に活三があれば即 return false）ではこの局面は VCT なしと判定される。
+    //
+    // 白（攻め）: 行7に (7,4)(7,5)(7,6)。(7,3) は黒石なので夏止めの三＝活三ではない。
+    //             (7,7) に打つと四（受けは (7,8) の一点）。
+    //             さらに (7,7) は黒の斜め活三の伸び先でもあるので、この四で黒の活三が消える。
+    // 黒（受け）: 斜めに (4,4)(5,5)(6,6) の活三（伸び先 (3,3)/(7,7)）。
+    // 受けを強制したあと、白は (10,7) の三三で勝つ。
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    // 白の四の種（行7）
+    cells[7 * BOARD_SIZE + 4] = .white;
+    cells[7 * BOARD_SIZE + 5] = .white;
+    cells[7 * BOARD_SIZE + 6] = .white;
+    // 白の三三の種: 行10 と 列7 が (10,7) で交差
+    cells[10 * BOARD_SIZE + 5] = .white;
+    cells[10 * BOARD_SIZE + 6] = .white;
+    cells[11 * BOARD_SIZE + 7] = .white;
+    cells[12 * BOARD_SIZE + 7] = .white;
+    // 黒: 行7の三の片端を止める石と、斜めの活三
+    cells[7 * BOARD_SIZE + 3] = .black;
+    cells[4 * BOARD_SIZE + 4] = .black;
+    cells[5 * BOARD_SIZE + 5] = .black;
+    cells[6 * BOARD_SIZE + 6] = .black;
+    bitboard.initFromCells(&cells);
+
+    var limiter = TimeLimiter{
+        .start_time = 0,
+        .time_limit = 0,
+        .nodes = 0,
+        .max_nodes = 0,
+    };
+
+    // 前提: 黒は活三を持つ（＝旧実装ならこの時点で VCT 不成立と判定された）
+    try testing.expect(opponentBlocksThreePursuit(&cells, .black));
+    // 前提: 白に VCF はない（四追いだけでは勝てない ＝ 三の追いが必要）
+    try testing.expect(!vcf_mod.hasVCF(&cells, .white, 0, &limiter, vcf_mod.VCF_MAX_DEPTH));
+
+    try testing.expect(hasVCT(&cells, .white, 0, &limiter, VCT_MAX_DEPTH));
+}
+
+/// issue #115 の実戦棋譜の 20 石局面（左下原点・黒先手・黒番）
+///
+/// 実戦 14 手 "H8 H7 G8 G9 I10 H9 J9 J10 K8 H11 L9 K9 I11 I9" に
+/// 偽 VCT 手順の先頭 "15.L7 16.M6 17.L8 18.L6 19.J7 20.M10" を進めた局面。
+/// 8 行目は G8 H8 _ J8 K8 L8（黒）で、黒が I8 に打つと 6 連＝長連になるため
+/// J8 は「跳び四」ではなく三でしかない。
+fn setupIssue115BranchPosition(cells: []Cell) void {
+    cells[7 * BOARD_SIZE + 7] = .black; // 1. H8
+    cells[8 * BOARD_SIZE + 7] = .white; // 2. H7
+    cells[7 * BOARD_SIZE + 6] = .black; // 3. G8
+    cells[6 * BOARD_SIZE + 6] = .white; // 4. G9
+    cells[5 * BOARD_SIZE + 8] = .black; // 5. I10
+    cells[6 * BOARD_SIZE + 7] = .white; // 6. H9
+    cells[6 * BOARD_SIZE + 9] = .black; // 7. J9
+    cells[5 * BOARD_SIZE + 9] = .white; // 8. J10
+    cells[7 * BOARD_SIZE + 10] = .black; // 9. K8
+    cells[4 * BOARD_SIZE + 7] = .white; // 10. H11
+    cells[6 * BOARD_SIZE + 11] = .black; // 11. L9
+    cells[6 * BOARD_SIZE + 10] = .white; // 12. K9
+    cells[4 * BOARD_SIZE + 8] = .black; // 13. I11
+    cells[6 * BOARD_SIZE + 8] = .white; // 14. I9
+    cells[8 * BOARD_SIZE + 11] = .black; // 15. L7
+    cells[9 * BOARD_SIZE + 12] = .white; // 16. M6
+    cells[7 * BOARD_SIZE + 11] = .black; // 17. L8
+    cells[9 * BOARD_SIZE + 11] = .white; // 18. L6
+    cells[8 * BOARD_SIZE + 9] = .black; // 19. J7
+    cells[5 * BOARD_SIZE + 12] = .white; // 20. M10
+}
+
+test "getThreatDefensePositions: 長連にしかならない跳び四は受けを1点に絞らない（issue #115）" {
+    // 20 石局面（黒番）に黒 J8 を置いた局面。
+    // 8 行目: G8 H8 _ J8 K8 L8 で、ギャップ I8 は黒が打つと 6 連＝長連。
+    // よって J8 は四ではなく三であり（classifyThreat と同基準）、
+    // 受けを跳び四のギャップ I8 の 1 点に絞ってはならない。
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    setupIssue115BranchPosition(&cells);
+    cells[7 * BOARD_SIZE + 9] = .black; // 21. J8
+    bitboard.initFromCells(&cells);
+
+    // 前提: 分類側は長連補正済みで「四ではない三」と判定している
+    const classification = classifyThreat(&cells, 7, 9, .black);
+    try testing.expect(!classification.creates_four);
+    try testing.expect(classification.creates_open_three);
+
+    // 受け点も同基準でなければならない: I8 の 1 点強制ではなく M8 / I8 / N8
+    const defense = getThreatDefensePositions(&cells, 7, 9, .black);
+    try testing.expectEqual(@as(usize, 3), defense.len);
+
+    var has_m8 = false;
+    var has_i8 = false;
+    var has_n8 = false;
+    for (0..defense.len) |i| {
+        const p = defense.items[i];
+        if (p.row == 7 and p.col == 12) has_m8 = true; // M8
+        if (p.row == 7 and p.col == 8) has_i8 = true; // I8
+        if (p.row == 7 and p.col == 13) has_n8 = true; // N8
+    }
+    try testing.expect(has_m8);
+    try testing.expect(has_i8);
+    try testing.expect(has_n8);
+}
+
+test "getThreatDefensePositions: 同一ラインに長連ギャップと正当なギャップが併存する場合は後者を受けにする（issue #115）" {
+    // 上記 20 石局面に 21.黒K7 22.白M7 23.黒N8 24.白O8 25.黒J8 を進めた局面。
+    // 8 行目は G8 H8 _ J8 K8 L8 _ N8（黒）/ O8（白）。
+    //   - I8 側の窓 (G8 H8 _ J8 K8): 埋めると G8..L8 の 6 連＝長連で五にならない
+    //   - M8 側の窓 (J8 K8 L8 _ N8): 埋めると J8..N8 の五 ＝ こちらが本物の跳び四
+    // J8 は本物の四なので受けは 1 点に絞ってよいが、その 1 点は M8 であって I8 ではない。
+    // findJumpGapPosition は 5 マス窓をラインの先頭から走査して最初のギャップを返すため、
+    // 素通しだと長連ギャップ I8 を受けとして返してしまう。
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    setupIssue115BranchPosition(&cells);
+    cells[8 * BOARD_SIZE + 10] = .black; // 21. K7
+    cells[8 * BOARD_SIZE + 12] = .white; // 22. M7
+    cells[7 * BOARD_SIZE + 13] = .black; // 23. N8
+    cells[7 * BOARD_SIZE + 14] = .white; // 24. O8
+    cells[7 * BOARD_SIZE + 9] = .black; // 25. J8
+    bitboard.initFromCells(&cells);
+
+    // 前提: J8 は本物の四（M8 側の跳び四）
+    try testing.expect(classifyThreat(&cells, 7, 9, .black).creates_four);
+
+    // 受けは M8 の 1 点のみ（I8 は埋めると長連なので五点ではない）
+    const defense = getThreatDefensePositions(&cells, 7, 9, .black);
+    try testing.expectEqual(@as(usize, 1), defense.len);
+    try testing.expectEqual(@as(u8, 7), defense.items[0].row);
+    try testing.expectEqual(@as(u8, 12), defense.items[0].col); // M8
 }

@@ -70,6 +70,27 @@ export interface ThreatWasmContext {
   ) => void;
   /** pattern points バッファの先頭オフセット（memory 内）を返す。 */
   getPatternPointsBuffer: () => number;
+  /**
+   * 指定方向の「埋めると五になる点」を five points バッファに書く（issue #115）。
+   * TS の `collectLineFivePoints`（core/lineAnalysis.ts）とのパリティ検証用。
+   */
+  collectLineFivePointsWasm: (
+    row: number,
+    col: number,
+    dir: number,
+    color: number,
+  ) => void;
+  /** five points バッファの先頭オフセット（memory 内）を返す。 */
+  getFivePointsBuffer: () => number;
+  /**
+   * 四に対する受け点。戻り値は row * 15 + col、受けが無い（null）場合は 255。
+   * TS の `getFourDefensePosition`（search/threatPatterns.ts）とのパリティ検証用。
+   */
+  getFourDefensePositionWasm: (
+    row: number,
+    col: number,
+    color: number,
+  ) => number;
   /** wasm 線形メモリ（バッファ読み取り用）。 */
   memory: WebAssembly.Memory;
 }

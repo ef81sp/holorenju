@@ -113,7 +113,9 @@ function validateSubsequence(
         continue; // openThree チェックはブロック防御以降で処理
       }
       // 防御手配置後に相手の活三またはミセ手が存在する → 次の攻撃手が四/五連でなければVCT手順崩壊
-      // （探索開始時点で相手に活三/ミセ手がないことはfindVCTSequenceRecursiveが保証する）
+      // （issue #116 以降、findVCTSequence のエントリと findVCTSequenceRecursive /
+      //  hasVCT の各ノードでも相手の活三・ミセ手を確認するようになったが、
+      //  本検証は詰み木・手順の最終ゲートとして独立に判定する）
       if (
         hasOpenThree(board, opponentColor) ||
         hasFourThreeAvailable(board, opponentColor)
