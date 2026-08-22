@@ -533,9 +533,27 @@ describe("issue #121 - 黒の偽跳び四（ギャップ埋めが長連）", () 
     expect(threats.openFours).toHaveLength(0);
   });
 
-  it("detectOpponentThreats は偽跳び四に隠れた三の受けを列挙する", () => {
+  it("偽跳び四の裏はウソ三なので脅威として列挙しない", () => {
     const board = createEmptyBoard();
     placeStonesOnBoard(board, ISSUE_121_FALSE_JUMP_FOUR);
+
+    const threats = detectOpponentThreats(board, "black");
+
+    // F8 G8 H8 は LUT 上は「両端空きの 3 連」だが達四にできない＝ウソ三。
+    //   E8 へ伸ばす → C8..H8 の 6 連（長連）
+    //   I8 へ伸ばす → F8..I8 の四。五点は J8 だけ（E8 は長連）＝止め四で達四ではない
+    // openThrees は position_eval の必須防御に直結するので受けを強制してはいけない。
+    expect(threats.openThrees).toEqual([]);
+    expect(threats.fours).toEqual([]);
+  });
+
+  it("窓外の石が無ければ同じ 3 連は本物の活三として受けを列挙する（対比）", () => {
+    const board = createEmptyBoard();
+    // 長連の原因になる C8 D8 を置かない
+    placeStonesOnBoard(
+      board,
+      [5, 6, 7].map((col) => ({ row: 7, col, color: "black" as const })),
+    );
 
     const threats = detectOpponentThreats(board, "black");
 

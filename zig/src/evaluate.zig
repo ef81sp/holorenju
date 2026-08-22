@@ -160,7 +160,9 @@ pub fn createsFourThree(cells: []Cell, row: u8, col: u8, color: Cell) bool {
         const lut = ll.queryPatternByCell(row, col, i, color);
         dir_luts[i] = lut;
 
-        if (lut.count != 4 and lut.has_jump_four and
+        // `isFourInDirectionWithPattern` が LUT の足切り（count==4 or has_jump_four）を
+        // 内部で行うので、ここで重ねてチェックする必要はない。
+        if (lut.count != 4 and
             threats.isFourInDirectionWithPattern(cells, row, col, i, color, lut))
         {
             jump_four_dirs[i] = true;
@@ -176,6 +178,13 @@ pub fn createsFourThree(cells: []Cell, row: u8, col: u8, color: Cell) bool {
 
         // 連続四（片端以上が空き）。端はセル走査で求め、黒は長連補正を適用する
         // （TS analyzeDirection と一致。LUT 端は黒長連補正を持たないため使わない）。
+        //
+        // 跳び四側（1st pass）は五点列挙（`isFourInDirection`）に寄せたが、**連続四側は
+        // 端ベースのまま**。`count == 4` に限れば両者は等価である:
+        //   - 偽陽性なし: 端が空きかつ長連補正を通れば、その端を埋めると必ずちょうど 5
+        //   - 偽陰性なし: 連続 4 連の五点は両端のいずれかにしか存在しえない
+        //     （離れた空点を埋めても 4 連と繋がらない）
+        // 統一（`classifyFourInDirection` への集約）は follow-up issue #134 で扱う。
         if (lut.count == 4) {
             const dir = board_mod.DIRECTIONS[i];
             const pos = board_mod.countInDirectionOnCells(cells, row, col, dir.dr, dir.dc, color);

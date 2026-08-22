@@ -190,6 +190,34 @@ describe("threatAdapter (#37 P3 PR2)", () => {
     }
   });
 
+  // issue #121: ミセ生成（四三判定）でも偽跳び四が四に数えられていた。
+  // 横 8 行目 C8 D8 _ F8 G8 [H8] + 縦 H10 H9 [H8] で、H8 は「横=偽四 + 縦=活三」に見える。
+  it("createsFourThree: wasm == TS（issue #121 黒の偽跳び四）", async () => {
+    await preloadThreatWasm();
+    for (const color of COLORS) {
+      const board = createEmptyBoard();
+      for (const [r, c] of [
+        [7, 2],
+        [7, 3],
+        [7, 5],
+        [7, 6],
+        [5, 7],
+        [6, 7],
+      ] as const) {
+        const boardRow = board[r];
+        // eslint-disable-next-line max-depth
+        if (boardRow) {
+          boardRow[c] = color;
+        }
+      }
+      const w = createsFourThree(board, 7, 7, color);
+      const ts = createsFourThreeTs(board, 7, 7, color);
+      expect(w, `color=${color}`).toBe(ts);
+      // 黒は横が四ではないので四三ではない／白は長連 OK なので四三
+      expect(w, `color=${color}`).toBe(color !== "black");
+    }
+  });
+
   it.each(LEGAL_RECORDS)(
     "createsFourThree: wasm == TS（実戦棋譜 全手数前置・全空き点・両色）: %s",
     async (record) => {

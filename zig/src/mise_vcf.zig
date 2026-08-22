@@ -4,7 +4,6 @@
 /// 手順を探索する。通常のVCF探索では検出できない勝ち筋を発見する。
 ///
 /// TS版 miseVcf.ts に対応
-
 const bitboard = @import("bitboard.zig");
 const board_mod = @import("board.zig");
 const evaluate = @import("evaluate.zig");
@@ -895,4 +894,32 @@ test "findMiseVCFMove: ノリ手で無効なH7をMise-VCF手として返さな�
         const is_h7 = m.row == 8 and m.col == 7;
         try testing.expect(!is_h7);
     }
+}
+
+test "getCreatedOpenThreeDefenses: 偽跳び四の裏はウソ三なので受けを返さない（issue #121）" {
+    ll.init();
+    // 8 行目に黒 C8 D8 _ F8 G8 H8（col = 2,3,[4],5,6,7）。
+    // LUT は跳び四と報告するが E8 埋めは 6 連＝長連で四ではなく、
+    // F8 G8 H8 も達四にできないウソ三。よってどの方向にも受けは無い。
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    for ([_]u8{ 2, 3, 5, 6, 7 }) |c| {
+        cells[7 * BOARD_SIZE + c] = .black;
+    }
+    bitboard.initFromCells(&cells);
+
+    const defenses = getCreatedOpenThreeDefenses(&cells, 7, 6, .black);
+    try testing.expectEqual(@as(u8, 0), defenses.len);
+}
+
+test "getCreatedOpenThreeDefenses: 窓外の石が無ければ本物の活三の受けを返す（対比・issue #121）" {
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    for ([_]u8{ 5, 6, 7 }) |c| {
+        cells[7 * BOARD_SIZE + c] = .black;
+    }
+    bitboard.initFromCells(&cells);
+
+    const defenses = getCreatedOpenThreeDefenses(&cells, 7, 6, .black);
+    try testing.expect(defenses.contains(7, 4));
+    try testing.expect(defenses.contains(7, 8));
 }

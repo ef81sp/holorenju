@@ -13,7 +13,6 @@ import { isFourInDirection } from "../search/threatMoves";
 // 本ファイルは vctHelpers/winningPatterns（review judgment）から live のため存続。
 import { isForbiddenForBlack } from "../wasm/forbiddenAdapter";
 import {
-  checkJumpFour,
   checkJumpThree,
   checkStraightFour,
   getConsecutiveThreeStraightFourPoints,
@@ -155,9 +154,10 @@ export function analyzeJumpPatterns(
     // ギャップ埋めが長連（6 連以上）になる黒の形も跳び四として報告する。四かどうかの
     // 最終判断は五点の列挙（`isFourInDirection`）に委ねる。偽の跳び四を四に数えると
     // 「四三」でない手をミセ手として生成してしまう。
+    // `isFourInDirection` が内部で `checkJumpFour`（wasm 境界の syncCells 225 回）を
+    // 呼ぶので、ここで先に呼ぶと 2 回同期することになる。足切りも含めて一本化する。
     if (
       pattern.count !== 4 &&
-      checkJumpFour(board, row, col, dirIndex, color) &&
       isFourInDirection(board, row, col, i, color, pattern.count)
     ) {
       jumpFourDirections.add(i);
@@ -176,6 +176,12 @@ export function analyzeJumpPatterns(
     }
 
     // 連続四をチェック（少なくとも片端が空いていなければ五を作れないため除外）
+    //
+    // 跳び四側は五点列挙（`isFourInDirection`）に寄せたが、**連続四側は端ベースのまま**
+    // （`analyzeDirection` が黒の長連補正済みの端を返す）。`count === 4` に限れば等価:
+    //   - 偽陽性なし: 端が空きかつ長連補正を通れば、その端を埋めると必ずちょうど 5
+    //   - 偽陰性なし: 連続 4 連の五点は両端のいずれかにしか存在しえない
+    // 統一（`classifyFourInDirection` への集約）は follow-up issue #134 で扱う。
     if (
       pattern.count === 4 &&
       (pattern.end1 === "empty" || pattern.end2 === "empty")

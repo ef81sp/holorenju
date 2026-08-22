@@ -16,12 +16,10 @@ import {
   checkEnds,
   collectLineFivePoints,
   countLine,
-  getLineEnds,
 } from "../core/lineAnalysis";
 // 夏止め済み判定（受け点の基準と活三判定を一致させる SSoT）
 import { getOpenThreeDefensePositions } from "../evaluation/threatDetection";
 import { isNearExistingStone } from "../moveGenerator";
-import { findJumpGapPosition } from "../patterns/threatAnalysis";
 // #43 PR-3: 図形/禁手の葉プリミティブを Zig アダプタへ委譲（patterns.ts/forbiddenMoves.ts 依存を断つ）。
 import { isForbiddenForBlack } from "../wasm/forbiddenAdapter";
 import { checkJumpFour, checkJumpThree } from "../wasm/patternsAdapter";
@@ -186,6 +184,8 @@ export function getFourDefensePosition(
   color: "black" | "white",
 ): FourDefense {
   const { row, col } = lastMove;
+  // NOTE: この「プリフィルタ → collectLineFivePoints → 0/1/2 個で分岐」は
+  // 5 箇所に複製されている。SSoT 統合は issue #134。
   let firstDefense: Position | null = null;
 
   for (let i = 0; i < DIRECTION_INDICES.length; i++) {
@@ -228,38 +228,10 @@ export function getFourDefensePosition(
     : FOUR_DEFENSE_NOT_FOUR;
 }
 
-/**
- * 連続四に対する防御位置を取得
- * @internal テスト用にexport
- */
-export function findDefenseForConsecutiveFour(
-  board: BoardState,
-  row: number,
-  col: number,
-  dr: number,
-  dc: number,
-  color: "black" | "white",
-): Position | null {
-  const ends = getLineEnds(board, row, col, dr, dc, color);
-  // 止め四（片端のみ空き）= 1点で防御、活四（両端空き）= 防御不可
-  return ends.length === 1 ? (ends[0] ?? null) : null;
-}
-
-/**
- * 跳び四に対する防御位置を取得
- * 跳び四は中の空きを埋めるしかない
- * @internal テスト用にexport
- */
-export function findDefenseForJumpFour(
-  board: BoardState,
-  row: number,
-  col: number,
-  dr: number,
-  dc: number,
-  color: "black" | "white",
-): Position | null {
-  return findJumpGapPosition(board, row, col, dr, dc, color);
-}
+// issue #121 / #43: `findDefenseForConsecutiveFour` / `findDefenseForJumpFour` は削除した。
+// 受け点は `getFourDefensePosition`（= `collectLineFivePoints` の五点列挙）に一本化済みで、
+// この 2 つは「連続四なら端の空き / 跳び四なら最も近いギャップ」という旧基準そのものだった。
+// 参照は `search/index.ts` の再 export のみ（live な呼び出し元ゼロ）。
 
 /**
  * 防御手のカウンター脅威をチェック（1パス統合版）

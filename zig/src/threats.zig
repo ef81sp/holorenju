@@ -2,7 +2,6 @@
 ///
 /// 相手の活四・止め四・活三・ミセ手・三三脅威を検出
 /// TS版 threatDetection.ts + threatDetectionFast.ts に対応
-
 const bitboard = @import("bitboard.zig");
 const board_mod = @import("board.zig");
 const evaluate = @import("evaluate.zig");
@@ -346,6 +345,32 @@ pub fn collectLineFivePoints(
     color: Cell,
     out: *PositionList,
 ) u8 {
+    return scanLineFivePoints(cells, row, col, dr, dc, color, out, false);
+}
+
+/// `collectLineFivePoints` の存在判定版（五点が 1 つでもあるか）。
+///
+/// 「四かどうか」を聞くだけの呼び出し（`isFourInDirection` など）は個数も座標も要らない。
+/// 最初の 1 点で打ち切り、`PositionList`（1KB 超）の確保も省く。
+/// **定義は共有**（実体は `scanLineFivePoints`）なので SSoT は保たれる。
+pub fn hasLineFivePoint(cells: []const Cell, row: u8, col: u8, dr: i8, dc: i8, color: Cell) bool {
+    var sink = PositionList.init();
+    return scanLineFivePoints(cells, row, col, dr, dc, color, &sink, true) > 0;
+}
+
+/// 五点走査の本体。`collectLineFivePoints` / `hasLineFivePoint` が共有する唯一の定義。
+///
+/// comptime stop_at_first: true なら最初の 1 点で打ち切る（存在判定用）。
+fn scanLineFivePoints(
+    cells: []const Cell,
+    row: u8,
+    col: u8,
+    dr: i8,
+    dc: i8,
+    color: Cell,
+    out: *PositionList,
+    comptime stop_at_first: bool,
+) u8 {
     var found: u8 = 0;
     var i: i16 = -5;
     while (i <= 5) : (i += 1) {
@@ -368,10 +393,10 @@ pub fn collectLineFivePoints(
 
         out.addUnique(.{ .row = gap_r, .col = gap_c });
         found += 1;
+        if (stop_at_first) return found;
     }
     return found;
 }
-
 
 /// その方向で「四」が成立しているかを判定する（四判定の SSoT・issue #124）
 ///
@@ -405,8 +430,9 @@ pub fn isFourInDirectionWithPattern(
     if (result.count != 4 and !result.has_jump_four) return false;
 
     const dir = DIRECTIONS[dir_idx];
-    var five_points = PositionList.init();
-    return collectLineFivePoints(cells, row, col, dir.dr, dir.dc, color, &five_points) > 0;
+    // boolean 用途なので早期打ち切り版を使う（`countThreatDirections` は候補手ごとに
+    // 4 方向 × 複数回呼ばれる最ホットパス）。定義は collectLineFivePoints と共有。
+    return hasLineFivePoint(cells, row, col, dir.dr, dir.dc, color);
 }
 
 // =========================================================================
@@ -541,7 +567,9 @@ pub fn evaluateMultiThreat(threat_count: u8) i32 {
 /// 相手の脅威を検出
 /// 脅威検出コアループ（四/活四/跳び四/活三/跳び三）
 /// comptime use_cells_query: true ならビットボード不要の cells 直接参照版を使用
-fn detectThreatsCore(cells: []const Cell, opponent_color: Cell, comptime use_cells_query: bool) ThreatInfo {
+/// 注: `isValidConsecutiveThree`（黒のウソ三除外）が仮置きのため `[]Cell` を要求するので
+/// cells は非 const。呼び出し前後で内容は変わらない。
+fn detectThreatsCore(cells: []Cell, opponent_color: Cell, comptime use_cells_query: bool) ThreatInfo {
     var result = ThreatInfo.init();
 
     for (0..BOARD_SIZE) |r_usize| {
@@ -574,6 +602,8 @@ fn detectThreatsCore(cells: []const Cell, opponent_color: Cell, comptime use_cel
                 // ±4 マスの窓しか見ないため、窓の外の自石でギャップ埋めが長連になる
                 // 黒の形を四と誤判定し、しかも `is_jump_four` が活三の受け列挙まで
                 // 抑止していた（issue #121）。
+                // NOTE: この「プリフィルタ → collectLineFivePoints → 0/1/2 個で分岐」は
+                // 5 箇所に複製されている。SSoT 統合は issue #134。
                 var is_four = false;
                 if (lut.count == 4 or lut.has_jump_four) {
                     var five_points = PositionList.init();
@@ -588,13 +618,26 @@ fn detectThreatsCore(cells: []const Cell, opponent_color: Cell, comptime use_cel
                 }
 
                 // 活三: 両端が空いている3連（四が成立している方向は四の受けが優先）
-                if (!is_four and lut.count == 3 and end1 == .empty and end2 == .empty) {
+                //
+                // 黒はウソの三（達四にできない三）を除外する。issue #121 で偽の跳び四が
+                // 四から外れた結果、その裏に隠れていた「四でも三でもない」形が活三として
+                // 流入するようになったため。open_threes は position_eval の必須防御
+                // （-1000000）に直結するので、存在しない三への受けを強制してはいけない。
+                // `countThreatDirections` / `mise_vcf.getCreatedOpenThreeDefenses` /
+                // TS `vctHelpers.isConsecutiveOpenThree` と同じガード。
+                if (!is_four and lut.count == 3 and end1 == .empty and end2 == .empty and
+                    (opponent_color != .black or
+                        patterns.isValidConsecutiveThree(cells, row, col, jp.DIRECTION_INDICES[dir_idx], opponent_color)))
+                {
                     const defense = getOpenThreeDefensePositions(cells, row, col, dir.dr, dir.dc, opponent_color);
                     result.open_threes.addUniqueList(&defense);
                 }
 
-                // 跳び三
-                if (lut.count < 3) {
+                // 跳び三（黒はウソの三を除外。上の活三ブランチと同じ理由）
+                if (lut.count < 3 and
+                    (opponent_color != .black or
+                        patterns.isValidJumpThree(cells, row, col, jp.DIRECTION_INDICES[dir_idx], opponent_color)))
+                {
                     const defense = detectJumpThreePattern(cells, row, col, dir.dr, dir.dc, opponent_color);
                     result.open_threes.addUniqueList(&defense);
                 }
@@ -635,7 +678,7 @@ pub fn detectOpponentThreats(cells: []Cell, opponent_color: Cell) ThreatInfo {
 
 /// 相手の脅威を検出（cells 配列直接参照版、ビットボード不要）
 /// PV 抽出など一時的な石配置でビットボードが未更新の場合に使用
-pub fn detectOpponentThreatsFromCells(cells: []const Cell, opponent_color: Cell) ThreatInfo {
+pub fn detectOpponentThreatsFromCells(cells: []Cell, opponent_color: Cell) ThreatInfo {
     return detectThreatsCore(cells, opponent_color, true);
 }
 
@@ -807,9 +850,6 @@ fn isNearExistingStoneNaive(cells: []const Cell, row: u8, col: u8, comptime dist
     return false;
 }
 
-
-
-
 test "detectOpponentThreatsFromCells: 活四検出（ビットボード未同期）" {
     var cells = [_]Cell{.empty} ** CELL_COUNT;
     // 白の4連: (7,4),(7,5),(7,6),(7,7) 両端空き
@@ -904,7 +944,7 @@ test "detectOpponentThreats: global_bb を不変に保つ（蓄積ドリフト�
         .{ 6, 8 }, .{ 8, 9 }, .{ 9, 6 }, .{ 5, 5 },
     };
     const blacks = [_][2]u8{
-        .{ 7, 7 }, .{ 8, 8 }, .{ 9, 9 }, .{ 6, 6 },
+        .{ 7, 7 },  .{ 8, 8 },  .{ 9, 9 }, .{ 6, 6 },
         .{ 10, 7 }, .{ 7, 10 }, .{ 6, 7 },
     };
     for (whites) |p| cells[@as(u16, p[0]) * BOARD_SIZE + p[1]] = .white;
@@ -987,13 +1027,31 @@ test "issue #121: detectOpponentThreats は偽跳び四を四として受けな�
     try std.testing.expectEqual(@as(u8, 0), result.open_fours.len);
 }
 
-test "issue #121: detectOpponentThreats は偽跳び四に隠れた三の受けを列挙する" {
+test "issue #121: 偽跳び四の裏はウソ三なので脅威として列挙しない" {
     var cells = [_]Cell{.empty} ** CELL_COUNT;
     setupIssue121FalseJumpFour(&cells);
 
     const result = detectOpponentThreats(&cells, .black);
 
-    // F8 G8 H8 の受け: 両端 E8(7,4) / I8(7,8) と、片側が塞がっているので夏止め J8(7,9)
+    // F8 G8 H8 は LUT 上は「両端空きの 3 連」だが達四にできない＝ウソ三。
+    //   E8 へ伸ばす → C8..H8 の 6 連（長連）
+    //   I8 へ伸ばす → F8..I8 の四。五点は J8 だけ（E8 は長連）＝止め四で達四ではない
+    // 四でも三でもないので、受けを強制してはいけない
+    // （open_threes は position_eval の必須防御 -1000000 に直結する）。
+    try std.testing.expectEqual(@as(u8, 0), result.open_threes.len);
+    try std.testing.expectEqual(@as(u8, 0), result.fours.len);
+}
+
+test "issue #121: 窓外の石が無ければ同じ 3 連は本物の活三として受けを列挙する（対比）" {
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    // 長連の原因になる C8 D8 を置かない ＝ F8 G8 H8 だけの素直な活三
+    for ([_]u8{ 5, 6, 7 }) |c| {
+        cells[7 * BOARD_SIZE + c] = .black;
+    }
+    bitboard.initFromCells(&cells);
+
+    const result = detectOpponentThreats(&cells, .black);
+
     try std.testing.expect(result.open_threes.contains(7, 4));
     try std.testing.expect(result.open_threes.contains(7, 8));
 }

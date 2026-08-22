@@ -39,6 +39,9 @@ import { classifyThreat, isFourInDirection } from "./threatMoves";
  * issue #121: 除外条件に `checkJumpFour` をそのまま使うと、窓（中心 ±4）の外の自石で
  * ギャップ埋めが長連になる黒の形まで四扱いされ、三の検出が握り潰されていた。
  * 四かどうかは盤面の五点を見る `isFourInDirection` に委ねる。
+ * ただし偽の四が外れた分「四でも三でもない」形が活三として流入するので、
+ * 黒のウソの三（達四にできない三）も併せて除外する。
+ * Zig `vct.hasOpenThree` / `threats.detectThreatsCore` と同じガード。
  *
  * @param i DIRECTIONS / DIRECTION_INDICES のインデックス（0..3）
  */
@@ -50,11 +53,15 @@ function isConsecutiveOpenThree(
   color: "black" | "white",
   pattern: DirectionPattern,
 ): boolean {
+  const dirIndex = DIRECTION_INDICES[i];
   return (
     pattern.count === 3 &&
     pattern.end1 === "empty" &&
     pattern.end2 === "empty" &&
-    !isFourInDirection(board, row, col, i, color, pattern.count)
+    !isFourInDirection(board, row, col, i, color, pattern.count) &&
+    (color !== "black" ||
+      (dirIndex !== undefined &&
+        isValidConsecutiveThree(board, row, col, dirIndex, color)))
   );
 }
 
@@ -97,21 +104,23 @@ export function hasFourThreeAvailable(
  * 活三を持つ相手がいる場合、相手は三を無視して四を打てるため、
  * VCT（三を含む脅威連続）は成立しない。VCF（四追い）のみが有効。
  *
- * lineTable が渡された場合、ビットマスク走査で高速化。
+ * ⚠️ **本番経路は Zig（`wasm/threatAdapter.hasOpenThree`）**。
+ * `vctValidation` / `forcedLossCheck` はいずれも wasm 版を import しており、
+ * 本関数は振り返り用 TS ヘルパ（`search/index.ts` 再 export）とテストからのみ使う。
+ *
+ * issue #121: LineTable ビットマスク版（`hasOpenThreeFast`）は削除した。
+ * 長連ガードをビットマスク上で再実装すると「五」の定義が 3 個目になる一方、
+ * board 版にだけガードを入れると同一エクスポートが第 3 引数の有無で違う答えを返す。
+ * live な呼び出し元がゼロだったので分岐ごと落とした（#43 の物理削除の流れ）。
  *
  * @param board 盤面
  * @param color チェック対象の色
- * @param lineTable LineTable（高速版使用時）
  * @returns 活三があればtrue
  */
 export function hasOpenThree(
   board: BoardState,
   color: "black" | "white",
-  lineTable?: LineTable,
 ): boolean {
-  if (lineTable) {
-    return hasOpenThreeFast(lineTable, color);
-  }
   for (let row = 0; row < BOARD_SIZE; row++) {
     for (let col = 0; col < BOARD_SIZE; col++) {
       if (board[row]?.[col] !== color) {
@@ -132,10 +141,12 @@ export function hasOpenThree(
         if (isConsecutiveOpenThree(board, row, col, i, color, pattern)) {
           return true;
         }
-        // 跳び三（○○_○ や ○_○○）
+        // 跳び三（○○_○ や ○_○○）。黒はウソの三を除外
         if (
           pattern.count !== 3 &&
-          checkJumpThree(board, row, col, dirIndex, color)
+          checkJumpThree(board, row, col, dirIndex, color) &&
+          (color !== "black" ||
+            isValidJumpThree(board, row, col, dirIndex, color))
         ) {
           return true;
         }
@@ -146,78 +157,6 @@ export function hasOpenThree(
 }
 
 /* eslint-disable no-bitwise -- ビットマスク操作に必要 */
-
-/**
- * LineTable ビットマスクで活三を検出する高速版
- *
- * 72ラインを走査し、連続活三（_○○○_）と跳び三（_○○_○_, _○_○○_）を検出。
- * 連続活三は跳び四（○○○_○, ○_○○○）の一部を除外する。
- *
- * 225セル × 4方向の走査を 72ライン × ウィンドウスキャンに置換。
- *
- * ⚠️ issue #121 の長連ガード（黒でギャップ埋めが 6 連になる形は四ではない）は
- * **本関数には入っていない**。ビットマスク上で五の長さ規則を再実装することになり、
- * 「五」の定義（`isFiveLength`）を 3 個目に増やしてしまうため見送った。
- * lineTable を渡す呼び出し元は現状テストのみで、本番経路（`vctValidation` /
- * `forcedLossCheck`）はすべて board 版（上の `hasOpenThree` 本体）を通る。
- */
-function hasOpenThreeFast(lt: LineTable, color: "black" | "white"): boolean {
-  const ownArr = color === "black" ? lt.blacks : lt.whites;
-  const oppArr = color === "black" ? lt.whites : lt.blacks;
-
-  for (let lineId = 0; lineId < 72; lineId++) {
-    const own = ownArr[lineId] ?? 0;
-    if (!own) {
-      continue;
-    }
-    if (!(own & (own - 1))) {
-      continue;
-    } // popcount < 2 → スキップ
-
-    const opp = oppArr[lineId] ?? 0;
-    const len = LINE_LENGTHS[lineId] ?? 0;
-
-    // 連続活三: _○○○_ (5セルウィンドウ)
-    for (let s = 0; s <= len - 5; s++) {
-      const wm = 0x1f << s;
-      if (opp & wm) {
-        continue;
-      }
-      // own が start+1, start+2, start+3 にちょうど3石
-      const expected = 0x0e << s; // 01110
-      if ((own & wm) !== expected) {
-        continue;
-      }
-      // 跳び四除外: start-1 or start+5 に自石があれば ○_○○○ or ○○○_○
-      if (s >= 1 && own & (1 << (s - 1))) {
-        continue;
-      }
-      if (s + 5 < len && own & (1 << (s + 5))) {
-        continue;
-      }
-      return true;
-    }
-
-    // 跳び三: _○○_○_ / _○_○○_ (6セルウィンドウ)
-    for (let s = 0; s <= len - 6; s++) {
-      const wm6 = 0x3f << s;
-      if (opp & wm6) {
-        continue;
-      }
-      // _○○_○_: bits at s+1, s+2, s+4
-      const p1 = (1 << (s + 1)) | (1 << (s + 2)) | (1 << (s + 4));
-      if ((own & wm6) === p1) {
-        return true;
-      }
-      // _○_○○_: bits at s+1, s+3, s+4
-      const p2 = (1 << (s + 1)) | (1 << (s + 3)) | (1 << (s + 4));
-      if ((own & wm6) === p2) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
 
 /**
  * 脅威（四・活三）を作れる位置を列挙
@@ -449,11 +388,8 @@ export function getCreatedOpenThreeDefenses(
     }
     const [dr, dc] = direction;
     const pattern = analyzeDirection(board, row, col, dr, dc, color);
-    // 連続活三（本物の四の一部は除外、黒の場合はウソの三を除外）
-    if (
-      isConsecutiveOpenThree(board, row, col, i, color, pattern) &&
-      (color !== "black" || isValidConsecutiveThree(board, row, col, dirIndex))
-    ) {
+    // 連続活三（本物の四の一部・黒のウソの三はどちらも isConsecutiveOpenThree が除外）
+    if (isConsecutiveOpenThree(board, row, col, i, color, pattern)) {
       defenses.push(
         ...getOpenThreeDefensePositions(board, row, col, dr, dc, color),
       );

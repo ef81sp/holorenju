@@ -346,6 +346,8 @@ export function detectOpponentThreats(
         // 受けを `getLineEnds` / `findJumpGapPosition` から取っていた。跳び四判定は
         // ±4 マスの窓しか見ないため、窓の外の自石でギャップ埋めが長連になる黒の形を
         // 四と誤判定し、しかも `isJumpFour` が活三の受け列挙まで抑止していた（issue #121）。
+        // NOTE: この「プリフィルタ → collectLineFivePoints → 0/1/2 個で分岐」は
+        // 5 箇所に複製されている。SSoT 統合は issue #134。
         let isFour = false;
         if (
           pattern.count === 4 ||
@@ -372,11 +374,24 @@ export function detectOpponentThreats(
 
         // 活三をチェック（両端が空いている3連）
         // 四が成立している方向は四の受けが優先
+        //
+        // 黒はウソの三（達四にできない三）を除外する。issue #121 で偽の跳び四が
+        // 四から外れた結果、その裏に隠れていた「四でも三でもない」形が活三として
+        // 流入するようになったため。openThrees は position_eval の必須防御に直結する。
+        // `countThreatDirections` / `vctHelpers.isConsecutiveOpenThree` と同じガード。
         if (
           !isFour &&
           pattern.count === 3 &&
           pattern.end1 === "empty" &&
-          pattern.end2 === "empty"
+          pattern.end2 === "empty" &&
+          (opponentColor !== "black" ||
+            isValidConsecutiveThree(
+              board,
+              row,
+              col,
+              renjuDirIndex,
+              opponentColor,
+            ))
         ) {
           // 両端の防御位置を追加
           addUniquePositions(
@@ -393,7 +408,12 @@ export function detectOpponentThreats(
         }
 
         // 跳び三をチェック（連続3石以外のパターン）
-        if (pattern.count < 3) {
+        // 黒はウソの三を除外（上の活三ブランチと同じ理由）
+        if (
+          pattern.count < 3 &&
+          (opponentColor !== "black" ||
+            isValidJumpThree(board, row, col, renjuDirIndex, opponentColor))
+        ) {
           addUniquePositions(
             result.openThrees,
             detectJumpThreePattern(board, row, col, dr, dc, opponentColor),
