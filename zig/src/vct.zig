@@ -702,6 +702,23 @@ fn hasBreakingCounterFour(
         cells[bp_idx] = color;
         bitboard.placeStone(bp.row, bp.col, color);
 
+        // ブロック石が五を作るなら、その CF は手順を壊さない（攻撃側がその場で勝つ）。
+        // 以降の「CF+ブロック後に相手が即時勝ち手段を持つか」を見る意味はないので次の CF へ
+        // （issue #140 の ct=four 短絡と同型。`return false` にしないのは、
+        //   別の CF が手順を壊す可能性が残るため）。
+        //
+        // 判別テストが無いのは構造的な理由による: ブロック点 E は「CF の四」と同じ 5 窓に
+        // 入るので、相手は必ず E 自身にも四を持つ（{A,B,C,D} が四なら {A,B,C,E} も四）。
+        // つまりこの短絡が効く局面では E を CF とする分岐が別に走り、関数全体の戻り値は
+        // そちらで決まってしまう。ここは ct=four 側と意味論を揃えるための一貫性の担保。
+        if (forbidden.checkFive(cells, bp.row, bp.col, color)) {
+            cells[bp_idx] = .empty;
+            bitboard.removeStone(bp.row, bp.col);
+            cells[cf_idx] = .empty;
+            bitboard.removeStone(cf.row, cf.col);
+            continue;
+        }
+
         // ノリ手Tierゲート（strict時のみ・連珠テンポ理論）:
         // この攻撃手は三(Tier2)のみ（呼び出し元 isResilientToCounterFours が
         // 四/五の攻撃手を除外済み）。相手の四(Tier1)はノリ手で先手を奪い、
@@ -709,10 +726,10 @@ fn hasBreakingCounterFour(
         // （= 再逆転のノリ手）でなければテンポは相手に渡り手順は崩壊する。
         // 攻めの探索(lenient)ではこのゲートで真正VCTまで棄却され弱体化するため、
         // 防御側の被詰み判定(strict)でのみ発火させる。
+        // （五を作るブロックは直前の短絡で処理済みなので、ここでは四かどうかだけ見る）
         if (mode == .strict) {
-            const block_makes_five = forbidden.checkFive(cells, bp.row, bp.col, color);
             const block_makes_four = quiescence.createsFour(cells, bp.row, bp.col, color);
-            if (!block_makes_five and !block_makes_four) {
+            if (!block_makes_four) {
                 cells[bp_idx] = .empty;
                 bitboard.removeStone(bp.row, bp.col);
                 cells[cf_idx] = .empty;
@@ -857,10 +874,22 @@ fn evaluateCounterThreat(
             cells[block_idx] = color;
             bitboard.placeStone(bp.row, bp.col, color);
 
+            const block_ct = checkDefenseCounterThreat(cells, bp.row, bp.col, color);
+
+            // ブロック石が五を作った → その場で攻撃側の勝ち（issue #140）。
+            // 受けの列挙に進むと、五と同時に別方向の四/活三も作っている場合に
+            // `.positions` が返って受けごとの探索に入り、真の勝ちを取りこぼす。
+            // `blockThreatContinues` より前に見る（`.win` は無条件継続なので結果は同じ・
+            // 呼び出しコストも省ける。TS 側 `vctValidation.ts` と位置を揃えてある）。
+            if (block_ct == .win) {
+                cells[block_idx] = .empty;
+                bitboard.removeStone(bp.row, bp.col);
+                return true;
+            }
+
             // ブロック石が攻撃側の脅威を作らなければVCT不成立。
             // 三しか作らない場合は受け手に受ける義務がないので、
             // 受け手が活三/ミセ手を持つならここで打ち切る（issue #117）。
-            const block_ct = checkDefenseCounterThreat(cells, bp.row, bp.col, color);
             if (!blockThreatContinues(block_ct, cells, opponent, depth, limiter)) {
                 cells[block_idx] = .empty;
                 bitboard.removeStone(bp.row, bp.col);
@@ -897,6 +926,26 @@ fn evaluateCounterThreat(
 // processBlockDefenses
 // =============================================================================
 
+/// ブロック石は必ず四か活三を持つ、という不変条件のチェック（issue #140）
+///
+/// `processBlockDefenses` / `processBlockDefensesSeq` の呼び出し元はいずれも
+/// `blockThreatContinues` で `block_ct != .none` を、`.win` の早期 return で
+/// `block_ct != .win` を確認済み。したがってブロック石は必ず四か活三を持っており、
+/// `getThreatDefensePositions` の `no_threat` は**到達不能**。
+/// 到達したら `checkDefenseCounterThreat` と `getThreatDefensePositions` の脅威判定基準が
+/// 食い違っているということ（両者は同一基準。PR #139 で 1 対 1 対応を確認済み）。
+///
+/// Debug / ReleaseSafe（= `zig build test`）では食い違いをその場で落として検出する。
+/// wasm ビルド（ReleaseFast）では分岐ごと畳まれるので UB にもコスト増にもならず、
+/// 万一到達しても呼び出し元は**旧挙動（`.unstoppable` と束ねていた頃と同じ「勝ち」）**を
+/// 維持する。issue #140 が挙げた「保守側 = false に倒す」を採らなかったのは、
+/// 到達不能を確信していることと、挙動不変にしておくほうが bench で二分しやすいため。
+fn assertBlockHasThreat() void {
+    if (std.debug.runtime_safety) {
+        @panic("block stone must have four/three threat (#140)");
+    }
+}
+
 /// ブロックの脅威に対する防御サイクルを処理
 fn processBlockDefenses(
     cells: []Cell,
@@ -908,14 +957,13 @@ fn processBlockDefenses(
 ) bool {
     const opponent = color.opposite();
 
-    // 呼び出し元（`evaluateCounterThreat` の ct=four 分岐）は `blockThreatContinues` で
-    // `block_ct != .none` を確認済みなので、ここに来る `no_threat` は
-    // 「ブロック石が五を作った（`block_ct == .win`）」ケースだけ。どちらも攻撃側の勝ち。
-    // なお `.win` を呼び出し元で早期 return しないため、五を作ったブロック石が別方向にも
-    // 脅威を持つと `.positions` に落ちて勝ちを取りこぼしうる（偽陰性・issue #140）。
     const block_def_positions = switch (getThreatDefensePositions(cells, block_pos.row, block_pos.col, color)) {
         // 防御不可 → ブロックの脅威で勝ち
-        .unstoppable, .no_threat => return true,
+        .unstoppable => return true,
+        .no_threat => {
+            assertBlockHasThreat();
+            return true;
+        },
         .positions => |p| p,
     };
 
@@ -1506,9 +1554,11 @@ fn findVCTSequenceRecursive(
                 cells[block_idx] = color;
                 bitboard.placeStone(bp.row, bp.col, color);
 
-                // 三しか作らないブロックは受けを強制できない（issue #117）
                 const block_ct = checkDefenseCounterThreat(cells, bp.row, bp.col, color);
-                if (!blockThreatContinues(block_ct, cells, opponent, depth, limiter)) {
+                // 三しか作らないブロックは受けを強制できない（issue #117）。
+                // 五を作ったブロックは受けを列挙するまでもなく勝ち（issue #140）なので、
+                // `blockThreatContinues` より前に短絡する。
+                if (block_ct != .win and !blockThreatContinues(block_ct, cells, opponent, depth, limiter)) {
                     cells[block_idx] = .empty;
                     bitboard.removeStone(bp.row, bp.col);
                     cells[def_idx] = .empty;
@@ -1517,7 +1567,11 @@ fn findVCTSequenceRecursive(
                     break;
                 }
 
-                const block_ok = processBlockDefensesSeq(cells, bp, color, depth, max_depth, limiter, context.collect_branches or !has_first_defense);
+                // ブロック石が五 → その場で勝ち（issue #140）。手順はブロック石で確定。
+                const block_ok = if (block_ct == .win)
+                    blockWinSeqResult()
+                else
+                    processBlockDefensesSeq(cells, bp, color, depth, max_depth, limiter, context.collect_branches or !has_first_defense);
 
                 if (block_ok.found) {
                     if (pushDefenseEntry(&defense_entries, &defense_entry_count, context.collect_branches)) |entry| {
@@ -1763,6 +1817,20 @@ const BlockDefSeqResult = struct {
     is_forbidden_trap: bool,
 };
 
+/// ブロック石が五を作った（`block_ct == .win`）ときの手順収集結果（issue #140）
+///
+/// 五を作った時点で攻撃側の勝ちなので、ブロック石より先の手順は存在しない。
+/// 呼び出し元がブロック石自身を手順の先頭に積むため、ここは空手順で `found` を立てる。
+fn blockWinSeqResult() BlockDefSeqResult {
+    return BlockDefSeqResult{
+        .found = true,
+        .seq = undefined,
+        .seq_len = 0,
+        .seq_len_valid = true,
+        .is_forbidden_trap = false,
+    };
+}
+
 /// processBlockDefenses のシーケンス収集版
 fn processBlockDefensesSeq(
     cells: []Cell,
@@ -1782,12 +1850,15 @@ fn processBlockDefensesSeq(
     };
 
     const opponent = color.opposite();
-    // `processBlockDefenses` と同じく、呼び出し元が `blockThreatContinues` で
-    // `block_ct != .none` を確認済みなので `no_threat` はブロック石が五を作った場合だけ
-    // （`.win` を早期 return しないことによる偽陰性は issue #140）。
     const block_def_positions = switch (getThreatDefensePositions(cells, block_pos.row, block_pos.col, color)) {
         // 防御不可 → ブロックの脅威で勝ち
-        .unstoppable, .no_threat => {
+        .unstoppable => {
+            result.found = true;
+            result.seq_len_valid = true;
+            return result;
+        },
+        .no_threat => {
+            assertBlockHasThreat();
             result.found = true;
             result.seq_len_valid = true;
             return result;
@@ -1905,15 +1976,20 @@ fn buildBlockDefSubSequence(
             cells[nb_idx] = color;
             bitboard.placeStone(nb.row, nb.col, color);
 
-            // 三しか作らないブロックは受けを強制できない（issue #117）
             const nb_threat = checkDefenseCounterThreat(cells, nb.row, nb.col, color);
-            if (!blockThreatContinues(nb_threat, cells, opponent, depth +| 1, limiter)) {
+            // 三しか作らないブロックは受けを強制できない（issue #117）。
+            // 五を作ったブロックは無条件に勝ちなので短絡する（issue #140）。
+            if (nb_threat != .win and !blockThreatContinues(nb_threat, cells, opponent, depth +| 1, limiter)) {
                 cells[nb_idx] = .empty;
                 bitboard.removeStone(nb.row, nb.col);
                 return result;
             }
 
-            const nested = processBlockDefensesSeq(cells, nb, color, depth + 1, max_depth, limiter, true);
+            // ブロック石が五 → その場で勝ち（issue #140）。手順は nb で確定。
+            const nested = if (nb_threat == .win)
+                blockWinSeqResult()
+            else
+                processBlockDefensesSeq(cells, nb, color, depth + 1, max_depth, limiter, true);
             cells[nb_idx] = .empty;
             bitboard.removeStone(nb.row, nb.col);
             if (!nested.found) return result;
@@ -2173,8 +2249,14 @@ pub fn findVCTSequenceFromFirstMove(
             bitboard.placeStone(bp.row, bp.col, color);
 
             const block_ct = checkDefenseCounterThreat(cells, bp.row, bp.col, color);
-            if (blockThreatContinues(block_ct, cells, opponent, 0, &limiter)) {
-                const block_ok = processBlockDefensesSeq(cells, bp, color, 0, max_depth, &limiter, true);
+            // 五を作ったブロックは受けを列挙するまでもなく勝ち（issue #140）なので、
+            // `blockThreatContinues` より前に短絡する。
+            if (block_ct == .win or blockThreatContinues(block_ct, cells, opponent, 0, &limiter)) {
+                // ブロック石が五 → その場で勝ち（issue #140）。手順はブロック石で確定。
+                const block_ok = if (block_ct == .win)
+                    blockWinSeqResult()
+                else
+                    processBlockDefensesSeq(cells, bp, color, 0, max_depth, &limiter, true);
                 if (block_ok.found and block_ok.seq_len_valid) {
                     cont_seq[0] = bp;
                     var si: u8 = 0;
@@ -3720,4 +3802,178 @@ test "issue #130: 脅威でない初手から VCT は成立しない（isVCTFirs
 
     const seq = findVCTSequenceFromFirstMove(&cells, .{ .row = 0, .col = 0 }, .black, 4, 0, 0, false);
     try testing.expect(!seq.found);
+}
+
+
+// =============================================================================
+// issue #140 の回帰テスト
+// =============================================================================
+
+/// issue #140 の再現局面（黒番・攻めは黒）
+///
+/// 主筋: 黒 (7,7) は「列7の止め四（受けは (8,7) 一点）＋ 行7の活三（受けに (7,8) を含む）」。
+/// - 白が (7,8) で活三を受けると、同時に斜め (4,11)(5,10)(6,9)(7,8) の**カウンター四**に
+///   なる（黒 (3,12) が上端を止めているので五点は (8,7) 一点）。
+/// - 黒はそのカウンター四を (8,7) でブロックする。この石は列7を (4,7)〜(8,7) の**五連**に
+///   する＝その場で黒の勝ち（`block_ct == .win`）。
+/// - ところが (8,7) は斜め (7,6)(8,7)(9,8) の活三も同時に作るので
+///   `getThreatDefensePositions` は `.positions` を返す。`.win` を早期 return しないと
+///   受けの列挙に入り、そこで白 (10,9)（列9の四）に切り返されて「不成立」と判定される
+///   ＝すでに五連ができている勝ちを取りこぼす（偽陰性 = issue #140）。
+///
+/// 攻めを黒にしているのは、五連ができた後の盤面から**もう一度勝ち直せない**ようにするため
+/// （白なら列7を伸ばして長連でも勝てるので、偽陰性が偶然埋め合わされてしまう）。
+/// 白の (5,9)(6,8)(8,6)（跳び三・活四にはできない）は、黒が (8,7) から四で追い始めるのを
+/// 止めるための細工: 黒 (8,7) の四に白が (7,7) で受けるとカウンター四になるので、
+/// 黒に根の VCF は無く、勝ちはこの VCT 手順しかない。
+fn setupIssue140Position(cells: []Cell) void {
+    // 黒（攻め）: 列7の三（上端は白 (3,7) 止め）
+    cells[4 * BOARD_SIZE + 7] = .black;
+    cells[5 * BOARD_SIZE + 7] = .black;
+    cells[6 * BOARD_SIZE + 7] = .black;
+    // 黒: 行7の二（(7,7) を打つと活三）
+    cells[7 * BOARD_SIZE + 5] = .black;
+    cells[7 * BOARD_SIZE + 6] = .black;
+    // 黒: 斜めの相方（ブロック点 (8,7) を打つと (7,6)(8,7)(9,8) の活三＝五連と同時にできる別方向の脅威）
+    cells[9 * BOARD_SIZE + 8] = .black;
+    // 黒: 白の斜め四の上端止め（白のカウンター四の五点を (8,7) 一点にする）
+    cells[3 * BOARD_SIZE + 12] = .black;
+    // 黒: 白の跳び三の上端止め（白のカウンター四の五点を (9,5) 一点にする）
+    cells[4 * BOARD_SIZE + 10] = .black;
+    // 白（受け）
+    cells[3 * BOARD_SIZE + 7] = .white;
+    // 白: (7,8) でカウンター四になる斜め
+    cells[4 * BOARD_SIZE + 11] = .white;
+    cells[5 * BOARD_SIZE + 10] = .white;
+    cells[6 * BOARD_SIZE + 9] = .white;
+    // 白: (7,7) でカウンター四になる跳び三（黒の根 VCF 封じ。五点は (9,5)）
+    cells[5 * BOARD_SIZE + 9] = .white;
+    cells[6 * BOARD_SIZE + 8] = .white;
+    cells[8 * BOARD_SIZE + 6] = .white;
+}
+
+test "issue #140 前提: ブロック石が五連＋別方向の活三を同時に作る" {
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    setupIssue140Position(&cells);
+    bitboard.initFromCells(&cells);
+
+    var limiter = TimeLimiter{
+        .start_time = 0,
+        .time_limit = 0,
+        .nodes = 0,
+        .max_nodes = 0,
+    };
+
+    // 受け手（白）はエントリのガードに掛からない（活三・ミセ手・VCF なし）
+    try testing.expect(!opponentBlocksThreePursuitAtRoot(&cells, .white, &limiter));
+    // 攻め手（黒）に根の VCF はない＝この局面の勝ちは VCT 経路でしか出ない
+    try testing.expect(!vcf_mod.hasVCF(&cells, .black, 0, &limiter, vcf_mod.VCF_MAX_DEPTH));
+
+    // 黒 (7,7): 列7の止め四 ＋ 行7の活三 → 受けに (8,7) と (7,8) を含む
+    cells[7 * BOARD_SIZE + 7] = .black;
+    bitboard.placeStone(7, 7, .black);
+    const def = try expectPositions(getThreatDefensePositions(&cells, 7, 7, .black));
+    try testing.expect(def.contains(8, 7));
+    try testing.expect(def.contains(7, 8));
+
+    // 白 (7,8) はカウンター四、受けは (8,7) 一点
+    cells[7 * BOARD_SIZE + 8] = .white;
+    bitboard.placeStone(7, 8, .white);
+    try testing.expectEqual(CounterThreat.four, checkDefenseCounterThreat(&cells, 7, 8, .white));
+    const bp = quiescence.getFourDefensePosition(&cells, 7, 8, .white).blockPos();
+    try testing.expect(bp != null);
+    try testing.expectEqual(@as(u8, 8), bp.?.row);
+    try testing.expectEqual(@as(u8, 7), bp.?.col);
+
+    // ブロック石 (8,7) は列7の五連＝ .win。かつ斜めの活三も作るので受け点が返る
+    // （＝ `.win` を早期 return しないと受けの列挙に入ってしまう形）
+    cells[8 * BOARD_SIZE + 7] = .black;
+    bitboard.placeStone(8, 7, .black);
+    try testing.expectEqual(CounterThreat.win, checkDefenseCounterThreat(&cells, 8, 7, .black));
+    const block_def = try expectPositions(getThreatDefensePositions(&cells, 8, 7, .black));
+    try testing.expect(block_def.contains(10, 9));
+}
+
+test "evaluateCounterThreat: ブロック石が五連なら受けを列挙せず勝ち（issue #140）" {
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    setupIssue140Position(&cells);
+    // 黒 (7,7) の四三 → 白 (7,8) のカウンター四まで進めた局面
+    cells[7 * BOARD_SIZE + 7] = .black;
+    cells[7 * BOARD_SIZE + 8] = .white;
+    bitboard.initFromCells(&cells);
+
+    var limiter = TimeLimiter{
+        .start_time = 0,
+        .time_limit = 0,
+        .nodes = 0,
+        .max_nodes = 0,
+    };
+
+    // 五連なのだから探索深度に依らず勝ち。修正前はブロック石 (8,7) の斜め活三の受けを
+    // 列挙して再帰していたため、深度 1（＝これ以上潜れない）では false を返していた。
+    try testing.expect(evaluateCounterThreat(
+        .four,
+        &cells,
+        .black,
+        .{ .row = 7, .col = 8 },
+        0,
+        &limiter,
+        1,
+    ));
+    try testing.expect(evaluateCounterThreat(
+        .four,
+        &cells,
+        .black,
+        .{ .row = 7, .col = 8 },
+        0,
+        &limiter,
+        VCT_MAX_DEPTH,
+    ));
+}
+
+test "hasVCT: ブロック石が五連になる VCT を取りこぼさない（issue #140）" {
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    setupIssue140Position(&cells);
+    bitboard.initFromCells(&cells);
+
+    var limiter = TimeLimiter{
+        .start_time = 0,
+        .time_limit = 0,
+        .nodes = 0,
+        .max_nodes = 0,
+    };
+
+    // 手順は「(7,7) → 受け → 継続」の 2 手 + 受けなので浅い深度で足りる。
+    // 修正前は (7,8) の受けに対して五連の勝ちを取りこぼし、その埋め合わせに
+    // 深い探索が必要だった。
+    try testing.expect(hasVCT(&cells, .black, 0, &limiter, 2));
+    try testing.expect(hasVCT(&cells, .black, 0, &limiter, VCT_MAX_DEPTH));
+}
+
+test "findVCTSequence: ブロック石が五連になる VCT を取りこぼさない（issue #140）" {
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    setupIssue140Position(&cells);
+
+    const result = findVCTSequence(&cells, .black, VCT_MAX_DEPTH, 0, 0, false, .lenient);
+    try testing.expect(result.found);
+    try testing.expectEqual(@as(u8, 7), result.sequence[0].row);
+    try testing.expectEqual(@as(u8, 7), result.sequence[0].col);
+}
+
+test "findVCTSequenceFromFirstMove: ブロック石が五連になる VCT を取りこぼさない（issue #140）" {
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    setupIssue140Position(&cells);
+
+    const shallow = findVCTSequenceFromFirstMove(&cells, .{ .row = 7, .col = 7 }, .black, 2, 0, 0, false);
+    try testing.expect(shallow.found);
+
+    const result = findVCTSequenceFromFirstMove(&cells, .{ .row = 7, .col = 7 }, .black, VCT_MAX_DEPTH, 0, 0, false);
+    try testing.expect(result.found);
+    try testing.expectEqual(@as(u8, 7), result.sequence[0].row);
+    try testing.expectEqual(@as(u8, 7), result.sequence[0].col);
 }

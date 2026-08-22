@@ -40,8 +40,9 @@ export function validateVCTSequence(
 /**
  * VCT手順の部分検証（内部ヘルパー）
  *
- * validateVCTSequence と hasBreakingCounterFour の共通ロジック。
- * sequence[startIndex] から末尾までリプレイし、防御の ct 値を検証する。
+ * `sequence[startIndex]` から末尾までリプレイし、防御の ct 値を検証する。
+ * 現在の呼び出し元は `validateVCTSequence` のみ（`startIndex` は手順途中からの
+ * 検証用に残してある）。
  */
 function validateSubsequence(
   board: BoardState,
@@ -109,6 +110,12 @@ function validateSubsequence(
           blockPos.col,
           color,
         );
+        // ブロック石が五を作った → その場で攻撃側の勝ち（issue #140）。
+        // 以降の手順は存在しない（Zig 側もブロック石で手順を確定する）ので検証不要。
+        if (blockThreat === "win") {
+          placed.push(blockPos);
+          break;
+        }
         if (!blockThreatContinues(blockThreat, board, opponentColor)) {
           valid = false;
           break;
