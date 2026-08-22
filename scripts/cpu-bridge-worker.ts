@@ -26,6 +26,7 @@ import type { DifficultyParams } from "../src/types/cpu.ts";
 import type { BoardState, Position } from "../src/types/game.ts";
 import type { EngineParamsSnapshot } from "./lib/workerTelemetry.ts";
 
+import { fingerprintEvalWeights } from "./lib/bridgeWorkerProtocol.ts";
 import { mergeDifficultyParams } from "./lib/difficultyParamsMerge.ts";
 import { EVAL_PARAM_IDS } from "./lib/evalParams.ts";
 import { mulberry32 } from "./lib/mulberry32.ts";
@@ -34,6 +35,11 @@ import {
   loadOpeningBookFromWorktree,
 } from "./lib/openingBookBridge.ts";
 import { encodeEvalOptionsForWasm } from "./lib/wasmEvalOptionsEncoder.ts";
+import {
+  type LivenessChannel,
+  createTimestampProbe,
+  markLivenessRequest,
+} from "./lib/workerLiveness.ts";
 
 // ============================================================================
 // 型定義
@@ -64,6 +70,13 @@ interface BridgeWorkerData {
    * commit-bench で再検証するための実行時レバー。
    */
   threatProbeEnabled?: boolean;
+  /**
+   * #128: ハング診断用の生存信号チャネル（SharedArrayBuffer）。
+   * 指定されると wasm の `getTimestampMsExternal` 呼び出しを計上し、
+   * メインスレッドが「探索ループがまだ回っているか」を観測できるようになる。
+   * 未指定なら完全に従来挙動（後方互換）。
+   */
+  livenessChannel?: LivenessChannel;
 }
 
 interface MoveRequest {
@@ -233,9 +246,12 @@ async function loadWasmFromWorktree(
 
   try {
     const buffer = fs.readFileSync(wasmPath);
+    // #128: 時間チェックのたびに生存信号を更新する。wasm はハング中も
+    // この関数を呼び返すので、メインスレッドは共有メモリ越しに
+    // 「探索が走り続けているか」を観測できる（Zig 側は無改造）。
     const imports = {
       env: {
-        getTimestampMsExternal: () => Math.round(performance.now()),
+        getTimestampMsExternal: createTimestampProbe(data.livenessChannel),
       },
     };
     const { instance } = await WebAssembly.instantiate(buffer, imports);
@@ -672,12 +688,15 @@ async function main(): Promise<void> {
     bookEnabled: bookBridge !== null,
     hasStatsBuffer: typeof wasm?.getStatsBuffer === "function",
     threatProbe: threatProbeState,
+    evalWeightsFingerprint: fingerprintEvalWeights(data.evalWeights),
   };
   parentPort?.postMessage({ ready: true, params: engineParams });
 
   // 着手要求を処理（同期的にCPUを呼び出す）
   parentPort?.on("message", (msg: MoveRequest) => {
     const { requestId, board, color, hangInject, moveSeed } = msg;
+    // #128: 生存信号に「今どの要求を処理中か」を刻む
+    markLivenessRequest(data.livenessChannel, requestId);
     // テスト用: hangInject が立っていれば応答せず沈黙 → 呼び出し側が timeout する
     if (hangInject) {
       console.warn(

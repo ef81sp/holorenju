@@ -10,9 +10,11 @@ import {
   HANG_DUMP_SCHEMA_VERSION,
   type HangDumpBench,
   type HangDumpJson,
+  type HangDumpJsonV1,
+  type HangDumpJsonV2,
   type HangDumpMatch,
   type HangDumpSideConfig,
-  hangSideColor,
+  isHangDumpV2,
   writeHangDump,
 } from "./hangDump.ts";
 
@@ -53,8 +55,8 @@ const context = (): HangContext => ({
       worktreePath: "/tmp/A-480f4f4",
       difficulty: "hard",
       depth: 12,
-      timeLimit: 5000,
-      maxNodes: 3000000,
+      timeLimit: 10000,
+      maxNodes: 1000000,
       randomFactor: 0.02,
       evaluationOptions: { evalBasis: "prospect" },
       engine: "wasm",
@@ -79,11 +81,44 @@ const context = (): HangContext => ({
         color: "white",
         depth: 6,
         score: 40,
-        thinkingTimeMs: 4900,
-        roundTripMs: 4950,
+        interrupted: true,
+        thinkingTimeMs: 29600,
+        roundTripMs: 29650,
         stats: { nodes: 987654 },
       },
     ],
+    recentGames: [
+      {
+        gameIdx: 1,
+        jushuName: "寒星",
+        isABlack: true,
+        gameSeed: 111,
+        moves: [
+          { row: 7, col: 7, isOpening: true },
+          { row: 6, col: 8, isOpening: true },
+          { row: 9, col: 7, isOpening: true },
+          { row: 6, col: 6, isOpening: false },
+        ],
+      },
+    ],
+  },
+  liveness: {
+    timeCheckCount: 918273,
+    lastTimeCheckAt: "2026-08-23T00:00:29.000Z",
+    msSinceLastTimeCheck: 12,
+    requestId: 265,
+    timeCheckDeltaDuringSample: 4211,
+    sampleWindowMs: 250,
+    verdict: "searching",
+  },
+  mainThread: {
+    running: true,
+    intervalMs: 1000,
+    samples: [
+      { at: "2026-08-23T00:00:00.000Z", timerLagMs: 3, clockSkewMs: 0 },
+    ],
+    maxTimerLagMs: 3,
+    maxClockSkewJumpMs: 0,
   },
 });
 
@@ -118,36 +153,33 @@ const sideConfig = (label: string): HangDumpSideConfig => ({
 
 const workerConfigs = { A: sideConfig("aaaaaaa"), B: sideConfig("bbbbbbb") };
 
-function writeAndRead(
-  overrides: Partial<Parameters<typeof writeHangDump>[0]> = {},
-): { outPath: string; dump: HangDumpJson } {
+function writeAndRead(ctx: HangContext = context()): {
+  outPath: string;
+  dump: HangDumpJsonV2;
+} {
   const outputDir = path.join(makeTmpDir(), "hang-dumps");
   const outPath = writeHangDump({
     outputDir,
-    context: context(),
+    context: ctx,
     match,
     bench,
     workerConfigs,
-    ...overrides,
   });
   return {
     outPath,
-    dump: JSON.parse(fs.readFileSync(outPath, "utf-8")) as HangDumpJson,
+    dump: JSON.parse(fs.readFileSync(outPath, "utf-8")) as HangDumpJsonV2,
   };
 }
 
-describe("hangSideColor", () => {
-  it("A側は isABlack のとき黒", () => {
-    expect(hangSideColor("A", true)).toBe("black");
+describe("isHangDumpV2", () => {
+  it("v2 なら true", () => {
+    const { dump } = writeAndRead();
+    expect(isHangDumpV2(dump)).toBe(true);
   });
-  it("A側は isABlack が false なら白", () => {
-    expect(hangSideColor("A", false)).toBe("white");
-  });
-  it("B側は isABlack のとき白", () => {
-    expect(hangSideColor("B", true)).toBe("white");
-  });
-  it("B側は isABlack が false なら黒", () => {
-    expect(hangSideColor("B", false)).toBe("black");
+
+  it("v1 ダンプ（ディスクに残る実データ）は false", () => {
+    const v1 = { schemaVersion: 1 } as HangDumpJsonV1 as HangDumpJson;
+    expect(isHangDumpV2(v1)).toBe(false);
   });
 });
 
@@ -158,7 +190,7 @@ describe("writeHangDump", () => {
     expect(path.basename(outPath)).toMatch(/^hang-.+-g3\.json$/);
   });
 
-  it("schemaVersion は 2（#128 で telemetry/recentGames を追加）", () => {
+  it("schemaVersion は 2（#128 で telemetry/liveness/recentGames を追加）", () => {
     const { dump } = writeAndRead();
     expect(dump.schemaVersion).toBe(HANG_DUMP_SCHEMA_VERSION);
     expect(dump.schemaVersion).toBe(2);
@@ -168,10 +200,39 @@ describe("writeHangDump", () => {
     const { dump } = writeAndRead();
     expect(dump.worker.side).toBe("A");
     expect(dump.worker.commit.shortSha).toBe("aaaaaaa");
-    expect(dump.worker.telemetry?.requestCount).toBe(42);
-    expect(dump.worker.telemetry?.engineParams?.maxNodes).toBe(3000000);
-    expect(dump.worker.telemetry?.pendingRequest?.moveSeed).toBe(12345);
-    expect(dump.worker.telemetry?.recentMoves[0]?.stats?.nodes).toBe(987654);
+    expect(dump.worker.telemetry.requestCount).toBe(42);
+    expect(dump.worker.telemetry.engineParams?.maxNodes).toBe(1000000);
+    expect(dump.worker.telemetry.pendingRequest?.moveSeed).toBe(12345);
+    expect(dump.worker.telemetry.recentMoves[0]?.stats?.nodes).toBe(987654);
+  });
+
+  it("interrupted を保持する（長考が打ち切られたかの判別）", () => {
+    const { dump } = writeAndRead();
+    expect(dump.worker.telemetry.recentMoves[0]?.interrupted).toBe(true);
+  });
+
+  it("生存信号（liveness）を載せる", () => {
+    const { dump } = writeAndRead();
+    expect(dump.hang.liveness.verdict).toBe("searching");
+    expect(dump.hang.liveness.timeCheckDeltaDuringSample).toBe(4211);
+  });
+
+  it("メインスレッドのイベントループ状態を載せる", () => {
+    const { dump } = writeAndRead();
+    expect(dump.hang.mainThread.running).toBe(true);
+    expect(dump.hang.mainThread.maxTimerLagMs).toBe(3);
+  });
+
+  it("recentGames は telemetry から取る（SSoT）", () => {
+    const { dump } = writeAndRead();
+    expect(dump.recentGames).toEqual(context().telemetry.recentGames);
+  });
+
+  it("telemetry に直近局が無ければ空配列", () => {
+    const ctx = context();
+    ctx.telemetry.recentGames = [];
+    const { dump } = writeAndRead(ctx);
+    expect(dump.recentGames).toEqual([]);
   });
 
   it("相手側は opponent に入る", () => {
@@ -180,34 +241,10 @@ describe("writeHangDump", () => {
     expect(dump.opponent.commit.shortSha).toBe("bbbbbbb");
   });
 
-  it("recentGames 未指定なら空配列", () => {
+  it("何が取れて何が取れないかを notes に残す", () => {
     const { dump } = writeAndRead();
-    expect(dump.recentGames).toEqual([]);
-  });
-
-  it("recentGames はそのまま保存される（replay-history の入力）", () => {
-    const recentGames = [
-      {
-        gameIdx: 1,
-        jushuName: "寒星",
-        isABlack: true,
-        gameSeed: 111,
-        moves: [
-          { row: 7, col: 7, isOpening: true },
-          { row: 6, col: 8, isOpening: true },
-          { row: 9, col: 7, isOpening: true },
-          { row: 6, col: 6, isOpening: false },
-        ],
-      },
-    ];
-    const { dump } = writeAndRead({ recentGames });
-    expect(dump.recentGames).toEqual(recentGames);
-  });
-
-  it("wasm live stats が取れない理由を notes に残す", () => {
-    const { dump } = writeAndRead();
-    expect(dump.notes?.length).toBeGreaterThan(0);
-    expect(dump.notes?.[0]).toContain("wasm");
+    expect(dump.notes.length).toBeGreaterThan(0);
+    expect(dump.notes.join("\n")).toContain("liveness");
   });
 
   it("盤面・着手履歴・ハング情報を保持する", () => {

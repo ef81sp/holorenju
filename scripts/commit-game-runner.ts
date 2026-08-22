@@ -10,7 +10,12 @@ import type { Worker } from "node:worker_threads";
 
 import type { BoardState, Position } from "../src/types/game.ts";
 
-import { mixSeed } from "./lib/mulberry32.ts";
+import {
+  type EventLoopSnapshot,
+  snapshotEventLoop,
+} from "./lib/eventLoopSampler.ts";
+import { deriveMoveSeed } from "./lib/hangReplay.ts";
+import { type HangLiveness, diagnoseLiveness } from "./lib/workerLiveness.ts";
 import { WorkerMoveTimeoutError } from "./lib/workerMoveTimeoutError.ts";
 import {
   type WorkerTelemetrySnapshot,
@@ -113,9 +118,20 @@ export interface HangContext {
    *
    * **wasm 側の「現在の探索統計」は取得できない**: worker スレッドは wasm 探索で
    * 同期的にブロックされており、postMessage を送っても event loop が回らないため
-   * 応答できない。直近手の統計（recentMoves）で代替する。
+   * 応答できない。直近手の統計（recentMoves）と liveness で代替する。
    */
   telemetry: WorkerTelemetrySnapshot;
+  /**
+   * #128: 共有メモリ経由の worker 生存信号。wasm が時間チェックを回し続けている
+   * （＝探索が終わらない）のか、探索ループの外で固まっているのかを区別する。
+   */
+  liveness: HangLiveness;
+  /**
+   * #128: メインスレッド自身のイベントループ遅延・時計ずれ。
+   * 実ダンプ g172 のように「経過時間だけが異常に長い」ケースが worker のハングでは
+   * なくメインスレッド停止／マシンのサスペンドである可能性を切り分ける。
+   */
+  mainThread: EventLoopSnapshot;
 }
 
 export class GameHangError extends Error {
@@ -177,7 +193,15 @@ function askWorker(params: AskWorkerParams): Promise<MoveResponse> {
 
     const timer = setTimeout(() => {
       worker.off("message", handler);
-      reject(new WorkerMoveTimeoutError({ requestId, timeoutMs, color, side }));
+      reject(
+        new WorkerMoveTimeoutError({
+          requestId,
+          timeoutMs,
+          color,
+          side,
+          telemetry: telemetry.snapshot(),
+        }),
+      );
     }, timeoutMs);
 
     const handler = (msg: WorkerMessage): void => {
@@ -188,6 +212,9 @@ function askWorker(params: AskWorkerParams): Promise<MoveResponse> {
       clearTimeout(timer);
 
       if ("error" in msg) {
+        // 着手ではないが応答は返っている。pending を残すとダンプの
+        // pendingRequest が「ハングした要求」でなくなるので必ず消す。
+        telemetry.clearPending(requestId);
         reject(new Error(msg.error));
       } else {
         telemetry.recordResponse({
@@ -197,6 +224,7 @@ function askWorker(params: AskWorkerParams): Promise<MoveResponse> {
           color,
           depth: msg.depth,
           score: msg.score,
+          interrupted: msg.interrupted,
           thinkingTimeMs: msg.thinkingTimeMs,
           roundTripMs: performance.now() - sentAtMs,
           stats: msg.stats,
@@ -262,6 +290,10 @@ async function askOrHang(params: AskOrHangParams): Promise<MoveResponse> {
     return await askWorker({ ...askParams, board });
   } catch (err: unknown) {
     if (err instanceof WorkerMoveTimeoutError) {
+      // 生存信号は 2 点サンプリングが要るので await する（ハング経路のみ）。
+      const liveness = await diagnoseLiveness(
+        getWorkerTelemetry(params.worker).getLivenessChannel(),
+      );
       throw new GameHangError({
         requestId: err.requestId,
         timeoutMs: err.timeoutMs,
@@ -271,7 +303,9 @@ async function askOrHang(params: AskOrHangParams): Promise<MoveResponse> {
         moveHistory,
         elapsedMs: performance.now() - gameStartTime,
         moveNumber: params.moveNumber,
-        telemetry: getWorkerTelemetry(params.worker).snapshot(),
+        telemetry: err.telemetry,
+        liveness,
+        mainThread: snapshotEventLoop(),
       });
     }
     throw err;
@@ -378,10 +412,8 @@ export async function runCommitGame(
 
     const moveStartTime = performance.now();
 
-    const moveSeed =
-      options.gameSeed === undefined
-        ? undefined
-        : mixSeed(options.gameSeed, nonOpeningRequestOrdinal);
+    // 導出規則は hangReplay.ts に一本化（replay-hang と必ず一致させるため）
+    const moveSeed = deriveMoveSeed(options.gameSeed, nonOpeningRequestOrdinal);
     const response = await askOrHang({
       worker,
       board,

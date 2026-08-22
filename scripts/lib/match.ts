@@ -17,7 +17,6 @@ import type { DifficultyParams } from "../../src/types/cpu.ts";
 import type { Position } from "../../src/types/game.ts";
 import type { SPRTConfig, WDLCount } from "../types/ab.ts";
 import type { CommitGameResult } from "../types/commit-bench.ts";
-import type { HangDumpRecentGame } from "./hangDump.ts";
 
 import {
   getAllJushuNames,
@@ -29,15 +28,11 @@ import {
   type HangInjectSpec,
   runCommitGame,
 } from "../commit-game-runner.ts";
+import { isReadyMessage, parseEngineParams } from "./bridgeWorkerProtocol.ts";
 import { estimateEloDiff } from "./eloDiff.ts";
 import { updateSPRT } from "./sprt.ts";
-import { extractEngineParams, getWorkerTelemetry } from "./workerTelemetry.ts";
-
-/**
- * #128: ハングダンプに載せる「同一 worker が直前に打った局」の保持数。
- * TT/wasm メモリ蓄積の再現が目的なので直近数局あれば足り、ダンプ肥大も避ける。
- */
-export const RECENT_GAMES_HISTORY_LIMIT = 3;
+import { createLivenessChannel } from "./workerLiveness.ts";
+import { getWorkerTelemetry } from "./workerTelemetry.ts";
 
 /** 1局分の珠型タスク（開始局面＋先後割当）。 */
 export interface MatchTask {
@@ -52,12 +47,6 @@ export interface HangMatchInfo {
   jushuName: string;
   isABlack: boolean;
   pairIdx: number;
-  /**
-   * #128: この worker ペアが**同一インスタンスのまま**直前に打ち終えた局
-   * （古→新、最大 RECENT_GAMES_HISTORY_LIMIT 件）。worker 再生成でクリアされる。
-   * replay-hang の `--replay-history` がこれを再生して蓄積状態を再現する。
-   */
-  recentGames: HangDumpRecentGame[];
 }
 
 /** runMatch の結果（caller が後処理＝性能統計や保存を行う）。 */
@@ -255,6 +244,8 @@ export function createBridgeWorker(
       maxNodes,
       maxDepth,
     );
+    // #128: ハング中でも読める生存信号を共有メモリで用意する
+    const livenessChannel = createLivenessChannel();
 
     const worker = new Worker(workerPath, {
       workerData: {
@@ -264,6 +255,7 @@ export function createBridgeWorker(
         evalWeights,
         bookEnabled,
         threatProbeEnabled,
+        livenessChannel,
       },
       execArgv: [
         "--experimental-strip-types",
@@ -281,20 +273,17 @@ export function createBridgeWorker(
     }, 60000);
 
     const readyHandler = (msg: unknown): void => {
-      if (
-        typeof msg === "object" &&
-        msg !== null &&
-        "ready" in msg &&
-        (msg as { ready: unknown }).ready === true
-      ) {
+      if (isReadyMessage(msg)) {
         clearTimeout(initTimeout);
         worker.off("message", readyHandler);
         // #128: ready 通知に同梱された解決済みエンジンパラメータを worker 計測へ
         // 記録する。ハング中の worker には問い合わせられないため、ここが唯一の
         // 取得機会。古い bridge worker（params 無し）では undefined のまま進む。
-        const engineParams = extractEngineParams(msg);
+        const telemetry = getWorkerTelemetry(worker);
+        telemetry.setLivenessChannel(livenessChannel);
+        const engineParams = parseEngineParams(msg);
         if (engineParams) {
-          getWorkerTelemetry(worker).setEngineParams(engineParams);
+          telemetry.setEngineParams(engineParams);
         }
         resolve(worker);
       }
@@ -375,10 +364,6 @@ export async function runMatch(
     pairRef: { a: Worker; b: Worker },
   ): Promise<void> => {
     let pair = pairRef;
-    // #128: この worker ペアが同一インスタンスのまま打ち終えた直近局（古→新）。
-    // ハング時のダンプに載せ、replay-hang が蓄積状態を再現できるようにする。
-    // worker を再生成したらリセットする（状態が引き継がれないため）。
-    let recentGames: HangDumpRecentGame[] = [];
     while (!stop) {
       const taskIdx = nextTask;
       nextTask += 1;
@@ -422,7 +407,6 @@ export async function runMatch(
               jushuName,
               isABlack,
               pairIdx,
-              recentGames: [...recentGames],
             });
           } catch (dumpErr: unknown) {
             const dm =
@@ -441,8 +425,6 @@ export async function runMatch(
           pair.b.terminate();
           pair = await recreatePair(pairIdx);
           pairs[pairIdx] = pair;
-          // 新しい worker は TT も wasm メモリも空。直近局の履歴は無効になる。
-          recentGames = [];
           console.warn(
             `↳ worker pair (idx=${pairIdx}) 再生成完了。残り局を継続します。`,
           );
@@ -469,8 +451,9 @@ export async function runMatch(
       games.push(result);
       completedGames++;
 
-      // #128: この worker ペアの直近局リング（座標のみ）を更新する。
-      recentGames.push({
+      // #128: 打ち終えた局を両 worker の計測に記録する（履歴再生の入力）。
+      // worker を再生成すると計測ごと作り直されるので、明示的なリセットは不要。
+      const recentGame = {
         gameIdx: taskIdx,
         jushuName,
         isABlack,
@@ -480,10 +463,9 @@ export async function runMatch(
           col: m.col,
           isOpening: m.isOpening,
         })),
-      });
-      while (recentGames.length > RECENT_GAMES_HISTORY_LIMIT) {
-        recentGames.shift();
-      }
+      };
+      getWorkerTelemetry(pair.a).recordGame(recentGame);
+      getWorkerTelemetry(pair.b).recordGame(recentGame);
 
       // 初回ゲーム後のサニティチェック
       if (completedGames === 1) {

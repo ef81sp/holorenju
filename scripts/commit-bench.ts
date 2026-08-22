@@ -42,7 +42,9 @@ import type {
 } from "./types/commit-bench.ts";
 
 import { estimateEloDiff, formatEloDiff } from "./lib/eloDiff.ts";
+import { startEventLoopSampler } from "./lib/eventLoopSampler.ts";
 import { type HangDumpSideConfig, writeHangDump } from "./lib/hangDump.ts";
+import { deriveGameSeed } from "./lib/hangReplay.ts";
 import {
   buildJushuTasks,
   createBridgeWorker,
@@ -50,7 +52,6 @@ import {
   type HangMatchInfo,
   runMatch,
 } from "./lib/match.ts";
-import { mixSeed } from "./lib/mulberry32.ts";
 import { parseHangInjectEnv } from "./lib/parseHangInjectEnv.ts";
 import { DEFAULT_SPRT_CONFIG, formatSPRT, updateSPRT } from "./lib/sprt.ts";
 
@@ -688,6 +689,10 @@ function removeWorktree(worktreePath: string): void {
 async function main(): Promise<void> {
   const options = parseArgs();
   const startTime = performance.now();
+  // #128: メインスレッドのイベントループ遅延・時計ずれを常時サンプリングする。
+  // 「worker がハングした」のか「メインスレッド/マシンが止まっていた」のかを
+  // ハングダンプで切り分けるため（実ダンプ g172 の 38.7 分の空白）。
+  startEventLoopSampler();
 
   // コミット情報を取得
   const commitA = getCommitInfo(options.refA);
@@ -915,10 +920,7 @@ async function main(): Promise<void> {
           jushuName: info.jushuName,
           isABlack: info.isABlack,
           pairIdx: info.pairIdx,
-          gameSeed:
-            seedInEffect === undefined
-              ? undefined
-              : mixSeed(seedInEffect, info.gameIdx),
+          gameSeed: deriveGameSeed(seedInEffect, info.gameIdx),
         },
         bench: {
           tool: "commit-bench",
@@ -929,11 +931,13 @@ async function main(): Promise<void> {
           baseSeed: seedInEffect,
         },
         workerConfigs,
-        recentGames: info.recentGames,
       });
+      const { telemetry, liveness, mainThread } = context;
       console.warn(
-        `⚠ hang detected g${info.gameIdx}, dumped to ${dumpPath} ` +
-          `(requests=${context.telemetry.requestCount}, recentMoves=${context.telemetry.recentMoves.length}, recentGames=${info.recentGames.length})`,
+        `⚠ hang detected g${info.gameIdx}, dumped to ${dumpPath}\n` +
+          `  worker: requests=${telemetry.requestCount} recentMoves=${telemetry.recentMoves.length} recentGames=${telemetry.recentGames.length}\n` +
+          `  liveness: ${liveness.verdict} (timeChecks=${liveness.timeCheckCount}, +${liveness.timeCheckDeltaDuringSample} in ${liveness.sampleWindowMs}ms)\n` +
+          `  mainThread: maxTimerLag=${mainThread.maxTimerLagMs}ms maxClockSkewJump=${mainThread.maxClockSkewJumpMs}ms`,
       );
     };
 
@@ -973,7 +977,8 @@ async function main(): Promise<void> {
         getGameSeed:
           seedInEffect === undefined
             ? undefined
-            : (gameIdx: number): number => mixSeed(seedInEffect, gameIdx),
+            : (gameIdx: number): number =>
+                deriveGameSeed(seedInEffect, gameIdx)!,
       },
     );
 
