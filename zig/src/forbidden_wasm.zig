@@ -19,3 +19,11 @@ export fn boardSet(row: u8, col: u8, value: u8) void {
 export fn checkForbiddenPointWasm(row: u8, col: u8) u8 {
     return @intFromEnum(forbidden.checkForbiddenMove(&board.board_cells, row, col));
 }
+
+/// (row,col) が color の石として**配置済み**の盤面で、そこを含む五が成立するか。
+/// 黒はちょうど 5、白は 5 以上（白に長連禁手はない・#125）。1=五 / 0=五でない。
+/// TS の `renjuRules.checkFive` とのパリティ検証用の面。
+export fn checkFiveWasm(row: u8, col: u8, color: u8) u8 {
+    const c: board.Cell = @enumFromInt(color);
+    return if (forbidden.checkFive(&board.board_cells, row, col, c)) 1 else 0;
+}
