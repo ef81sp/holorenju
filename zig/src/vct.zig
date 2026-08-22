@@ -1132,6 +1132,20 @@ const DefenseSeqEntry = struct {
 
 const MAX_DEFENSE_ENTRIES = 20;
 
+/// `MAX_DEFENSE_ENTRIES` に達して受け分岐を切り捨てたか（issue #122 レバー4）
+///
+/// 収集モードの詰み木は 1 ノードあたり `MAX_DEFENSE_ENTRIES` 件までしか受けを
+/// 持てない。超過分は黙って落ちる（詰み判定は壊れないが、表示の受け分岐が欠ける）。
+/// 受け点を増やす修正（#115 / #121）で到達確率が上がったため、
+/// 少なくとも「起きたかどうか」を観測できるようにしておく。
+/// 探索エントリ（`findVCTSequence` / `findVCTSequenceFromFirstMove`）で false に戻す。
+pub var g_defense_entries_truncated: bool = false;
+
+/// 受け分岐の切り捨てを記録する
+fn noteDefenseEntriesTruncated() void {
+    g_defense_entries_truncated = true;
+}
+
 /// 手順長 α カットの「上限なし」（sequence バッファ長 = 実質無制限）
 const SEQ_LEN_UNBOUNDED: u8 = 64;
 
@@ -1158,6 +1172,7 @@ pub fn findVCTSequence(
 
     // 詰み木アリーナを初期化（collect_branches 時のみ構築する）
     if (collect_branches) g_tree_arena.reset();
+    g_defense_entries_truncated = false;
 
     var result = findVCTSequenceWithLimiter(cells, color, max_depth, &limiter, collect_branches, mode);
     result.nodes = limiter.nodes;
@@ -1449,6 +1464,7 @@ fn findVCTSequenceRecursive(
                 const block_ok = processBlockDefensesSeq(cells, bp, color, depth, max_depth, limiter, context.collect_branches or !has_first_defense);
 
                 if (block_ok.found) {
+                    if (context.collect_branches and defense_entry_count >= MAX_DEFENSE_ENTRIES) noteDefenseEntriesTruncated();
                     if (context.collect_branches and defense_entry_count < MAX_DEFENSE_ENTRIES) {
                         var entry = &defense_entries[defense_entry_count];
                         entry.defense = dp;
@@ -1500,6 +1516,7 @@ fn findVCTSequenceRecursive(
                         all_defense_leads_to_vct = false;
                         break;
                     }
+                    if (context.collect_branches and defense_entry_count >= MAX_DEFENSE_ENTRIES) noteDefenseEntriesTruncated();
                     if (context.collect_branches and defense_entry_count < MAX_DEFENSE_ENTRIES) {
                         var entry = &defense_entries[defense_entry_count];
                         entry.defense = dp;
@@ -1565,6 +1582,7 @@ fn findVCTSequenceRecursive(
                     break;
                 }
 
+                if (context.collect_branches and defense_entry_count >= MAX_DEFENSE_ENTRIES) noteDefenseEntriesTruncated();
                 if (context.collect_branches and defense_entry_count < MAX_DEFENSE_ENTRIES) {
                     var entry = &defense_entries[defense_entry_count];
                     entry.defense = dp;
@@ -2001,6 +2019,7 @@ pub fn findVCTSequenceFromFirstMove(
 
     // 詰み木アリーナを初期化（collect_branches 時のみ構築する。issue #122 レバー1）
     if (collect_branches) g_tree_arena.reset();
+    g_defense_entries_truncated = false;
 
     const opponent = color.opposite();
 
@@ -2188,6 +2207,8 @@ pub fn findVCTSequenceFromFirstMove(
             tree_defenses[tree_defense_count] = dp;
             tree_children[tree_defense_count] = cont_node;
             tree_defense_count += 1;
+        } else if (collect_branches) {
+            noteDefenseEntriesTruncated();
         }
     }
 
@@ -3508,4 +3529,21 @@ test "findVCTSequenceRecursive: max_len 未満の手順しか返さない（issu
             try testing.expectEqual(full.sequence[i].col, seq[i].col);
         }
     }
+}
+
+test "MAX_DEFENSE_ENTRIES: 通常の収集モード探索では受け分岐を切り捨てない（issue #122 レバー4）" {
+    // 詰み木は 1 ノードあたり MAX_DEFENSE_ENTRIES 件までしか受けを持てず、
+    // 超過分は黙って落ちる。受け点を増やす修正（#115 / #121）で到達確率が
+    // 上がったので、切り捨てが起きたかを観測できるようにした。
+    // ここは「普通の局面では起きない」ことを固定するカナリア
+    // （21 点以上の受けを持つ攻め手を人手で構成できなかったため、
+    //   切り捨て側を赤にする判別テストは無い）。
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    setupIssue115BranchPosition(&cells);
+
+    g_defense_entries_truncated = true; // エントリでリセットされることも見る
+    const result = findVCTSequence(&cells, .black, 4, 0, 100_000, true, .lenient);
+    _ = result;
+    try testing.expect(!g_defense_entries_truncated);
 }
