@@ -515,6 +515,28 @@ fn blockThreatContinues(
     return !opponentBlocksThreePursuitWithShallowVCF(cells, opponent, node_depth, limiter);
 }
 
+/// 攻め側がブロック点に実際に打てるか（issue #146）
+///
+/// 受け手のカウンター四をブロックする点は、攻め側が黒のとき禁手（三三 / 四四 / 長連）で
+/// あり得る。そこには打てない＝相手の四を止められない＝その筋の VCT は不成立。
+/// 受け手の防御点 `dp` 側は以前から `forbidden.checkForbiddenMove` を見ていたので、
+/// この関数は攻め側の非対称を解消するもの。
+///
+/// 五連を作る点は禁手に優先して勝ちなので `checkFive` で先に許可する
+/// （`minimax.zig` の遅延禁手判定と同じ順序。`checkForbiddenMove` 自身も五連を
+/// `.none` に落とすので結果は同じだが、重い判定を先に短絡できる）。
+///
+/// 長連になる点は従来 `checkDefenseCounterThreat` が `.none` を返すことで
+/// **偶然**弾かれていた（長連方向は五として数えられない）。ここで明示的に弾く。
+///
+/// **ブロック石を置く前**（対象が空点のうち）に呼ぶこと。
+/// `checkForbiddenMove` は空でないマスに対しては `.none` を返す。
+fn blockIsPlayable(cells: []Cell, bp: Position, color: Cell) bool {
+    if (color != .black) return true;
+    if (forbidden.checkFive(cells, bp.row, bp.col, .black)) return true;
+    return forbidden.checkForbiddenMove(cells, bp.row, bp.col) == .none;
+}
+
 // =============================================================================
 // カウンターフォー耐性検証（TS版 vctValidation.ts に対応）
 //
@@ -868,6 +890,9 @@ fn evaluateCounterThreat(
                 return false;
             }
             const bp = block_pos.?;
+
+            // 攻め側が黒でブロック点が禁手 → そこには打てない＝四を止められない（issue #146）
+            if (!blockIsPlayable(cells, bp, color)) return false;
 
             // ブロック配置（bitboard も同期）
             const block_idx = @as(u16, bp.row) * BOARD_SIZE + bp.col;
@@ -1550,6 +1575,15 @@ fn findVCTSequenceRecursive(
                     break;
                 }
                 const bp = block_pos.?;
+
+                // 攻め側が黒でブロック点が禁手 → そこには打てない＝四を止められない（issue #146）
+                if (!blockIsPlayable(cells, bp, color)) {
+                    cells[def_idx] = .empty;
+                    bitboard.removeStone(dp.row, dp.col);
+                    all_defense_leads_to_vct = false;
+                    break;
+                }
+
                 const block_idx = @as(u16, bp.row) * BOARD_SIZE + bp.col;
                 cells[block_idx] = color;
                 bitboard.placeStone(bp.row, bp.col, color);
@@ -1972,6 +2006,10 @@ fn buildBlockDefSubSequence(
             const nested_block = quiescence.getFourDefensePosition(cells, defense_pos.row, defense_pos.col, opponent).blockPos();
             if (nested_block == null) return result;
             const nb = nested_block.?;
+
+            // 攻め側が黒でブロック点が禁手 → そこには打てない＝四を止められない（issue #146）
+            if (!blockIsPlayable(cells, nb, color)) return result;
+
             const nb_idx = @as(u16, nb.row) * BOARD_SIZE + nb.col;
             cells[nb_idx] = color;
             bitboard.placeStone(nb.row, nb.col, color);
@@ -2244,34 +2282,39 @@ pub fn findVCTSequenceFromFirstMove(
                 return result;
             }
             const bp = block_pos.?;
-            const block_idx = @as(u16, bp.row) * BOARD_SIZE + bp.col;
-            cells[block_idx] = color;
-            bitboard.placeStone(bp.row, bp.col, color);
 
-            const block_ct = checkDefenseCounterThreat(cells, bp.row, bp.col, color);
-            // 五を作ったブロックは受けを列挙するまでもなく勝ち（issue #140）なので、
-            // `blockThreatContinues` より前に短絡する。
-            if (block_ct == .win or blockThreatContinues(block_ct, cells, opponent, 0, &limiter)) {
-                // ブロック石が五 → その場で勝ち（issue #140）。手順はブロック石で確定。
-                const block_ok = if (block_ct == .win)
-                    blockWinSeqResult()
-                else
-                    processBlockDefensesSeq(cells, bp, color, 0, max_depth, &limiter, true);
-                if (block_ok.found and block_ok.seq_len_valid) {
-                    cont_seq[0] = bp;
-                    var si: u8 = 0;
-                    while (si < block_ok.seq_len) : (si += 1) {
-                        cont_seq[1 + si] = block_ok.seq[si];
+            // 攻め側が黒でブロック点が禁手 → そこには打てない＝四を止められない（issue #146）。
+            // その場合は continuation_found が false のままになり、この受けで手順が切れる。
+            if (blockIsPlayable(cells, bp, color)) {
+                const block_idx = @as(u16, bp.row) * BOARD_SIZE + bp.col;
+                cells[block_idx] = color;
+                bitboard.placeStone(bp.row, bp.col, color);
+
+                const block_ct = checkDefenseCounterThreat(cells, bp.row, bp.col, color);
+                // 五を作ったブロックは受けを列挙するまでもなく勝ち（issue #140）なので、
+                // `blockThreatContinues` より前に短絡する。
+                if (block_ct == .win or blockThreatContinues(block_ct, cells, opponent, 0, &limiter)) {
+                    // ブロック石が五 → その場で勝ち（issue #140）。手順はブロック石で確定。
+                    const block_ok = if (block_ct == .win)
+                        blockWinSeqResult()
+                    else
+                        processBlockDefensesSeq(cells, bp, color, 0, max_depth, &limiter, true);
+                    if (block_ok.found and block_ok.seq_len_valid) {
+                        cont_seq[0] = bp;
+                        var si: u8 = 0;
+                        while (si < block_ok.seq_len) : (si += 1) {
+                            cont_seq[1 + si] = block_ok.seq[si];
+                        }
+                        cont_len = 1 + block_ok.seq_len;
+                        cont_is_forbidden = block_ok.is_forbidden_trap;
+                        continuation_found = true;
+                        // ブロック四追いは受け一意の線形手順 → 線形チェイン木
+                        if (use_collect) cont_node = g_tree_arena.buildLinearChain(cont_seq[0..], cont_len);
                     }
-                    cont_len = 1 + block_ok.seq_len;
-                    cont_is_forbidden = block_ok.is_forbidden_trap;
-                    continuation_found = true;
-                    // ブロック四追いは受け一意の線形手順 → 線形チェイン木
-                    if (use_collect) cont_node = g_tree_arena.buildLinearChain(cont_seq[0..], cont_len);
                 }
+                cells[block_idx] = .empty;
+                bitboard.removeStone(bp.row, bp.col);
             }
-            cells[block_idx] = .empty;
-            bitboard.removeStone(bp.row, bp.col);
         } else if (ct == .three) {
             const vcf_depth = @min(CT_THREE_VCF_MAX_DEPTH, vcf_mod.VCF_MAX_DEPTH);
             const vcf_result = vcf_mod.findVCFSequence(cells, color, vcf_depth, 0, 0);
@@ -3976,4 +4019,166 @@ test "findVCTSequenceFromFirstMove: ブロック石が五連になる VCT を取
     try testing.expect(result.found);
     try testing.expectEqual(@as(u8, 7), result.sequence[0].row);
     try testing.expectEqual(@as(u8, 7), result.sequence[0].col);
+}
+
+
+// =============================================================================
+// issue #146 の回帰テスト
+// =============================================================================
+
+/// issue #146 の再現局面（黒番・攻めは黒）
+///
+/// 主筋: 黒 (7,8) は行7の止め四（受けは (7,9) 一点）。
+/// - 白 (7,9) はその受けであると同時に、列9 (7,9)(8,9)(9,9)(10,9) の**カウンター四**に
+///   なる（黒 (11,9) が下端を止めているので五点は (6,9) 一点）。
+/// - 黒はこのカウンター四を (6,9) でブロックしたい。この石は行6 (6,9)〜(6,12) の四と
+///   斜め (8,7)(7,8)(6,9)(5,10) の四を同時に作る＝**四四の禁手**なので、実戦では黒は
+///   そこに打てない。つまり黒は白の四を止められず、この筋の VCT は不成立。
+/// - ところが修正前は `getFourDefensePosition` の結果をそのまま置石しており、
+///   ブロック点の禁手を確認していなかった。ブロック石は `.four` と分類され、
+///   四四（受け点 2 個を両方は塞げない）で「勝ち」と判定される＝**偽 VCT**。
+///
+/// 斜めの四は黒の攻め手 (7,8) が完成させるので、**根の時点では (6,9) は四三で合法**。
+/// これにより「白 (7,9) の四を黒が止められない＝白の根 VCF」にならず、
+/// `findVCTSequence` のエントリガード（相手 VCF）が先に発火しない
+/// （＝ `hasVCT` だけでなく `findVCTSequence` でも判別力がある）。
+///
+/// 白 (9,6) は斜めの上端止め（黒の四を活四にしないため）、
+/// 白 (7,4) / (6,13) は黒の三の端止め（黒の四点を (7,8) と (6,9) の 2 つに限定するため）。
+fn setupIssue146Position(cells: []Cell) void {
+    // 黒: 行7の三（左端は白 (7,4) 止め → 四点は (7,8) 一点）
+    cells[7 * BOARD_SIZE + 5] = .black;
+    cells[7 * BOARD_SIZE + 6] = .black;
+    cells[7 * BOARD_SIZE + 7] = .black;
+    // 黒: 行6の三（右端は白 (6,13) 止め → 四点は (6,9) 一点）
+    cells[6 * BOARD_SIZE + 10] = .black;
+    cells[6 * BOARD_SIZE + 11] = .black;
+    cells[6 * BOARD_SIZE + 12] = .black;
+    // 黒: 斜めの相方（(7,8) と (6,9) が揃うと四）
+    cells[8 * BOARD_SIZE + 7] = .black;
+    cells[5 * BOARD_SIZE + 10] = .black;
+    // 黒: 白の列9の四の下端止め（五点を (6,9) 一点にする）
+    cells[11 * BOARD_SIZE + 9] = .black;
+    // 白: 黒の行7の三の左端止め
+    cells[7 * BOARD_SIZE + 4] = .white;
+    // 白: 黒の行6の三の右端止め
+    cells[6 * BOARD_SIZE + 13] = .white;
+    // 白: 黒の斜めの端止め（(6,9) の斜め四を活四にしない）
+    cells[9 * BOARD_SIZE + 6] = .white;
+    // 白: (7,9) でカウンター四になる列9の三
+    cells[8 * BOARD_SIZE + 9] = .white;
+    cells[9 * BOARD_SIZE + 9] = .white;
+    cells[10 * BOARD_SIZE + 9] = .white;
+}
+
+test "issue #146 前提: ブロック点は根では合法・攻め手の後に四四の禁手になる" {
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    setupIssue146Position(&cells);
+    bitboard.initFromCells(&cells);
+
+    var limiter = TimeLimiter{
+        .start_time = 0,
+        .time_limit = 0,
+        .nodes = 0,
+        .max_nodes = 0,
+    };
+
+    // 受け手（白）はエントリのガードに掛からない（活三・ミセ手・VCF なし）。
+    // ＝根では黒がブロック点 (6,9) に打てるので白の四は止まる。
+    try testing.expect(!opponentBlocksThreePursuitAtRoot(&cells, .white, &limiter));
+    // 攻め手（黒）に根の VCF はない＝この局面の「勝ち」は VCT 経路でしか出ない
+    try testing.expect(!vcf_mod.hasVCF(&cells, .black, 0, &limiter, vcf_mod.VCF_MAX_DEPTH));
+    // 根では (6,9) は四三＝合法
+    try testing.expectEqual(forbidden.ForbiddenType.none, forbidden.checkForbiddenMove(&cells, 6, 9));
+
+    // 黒 (7,8): 行7の止め四 → 受けは (7,9) を含む
+    cells[7 * BOARD_SIZE + 8] = .black;
+    bitboard.placeStone(7, 8, .black);
+    const def = try expectPositions(getThreatDefensePositions(&cells, 7, 8, .black));
+    try testing.expect(def.contains(7, 9));
+
+    // 白 (7,9) はカウンター四、ブロック点は (6,9) 一点
+    cells[7 * BOARD_SIZE + 9] = .white;
+    bitboard.placeStone(7, 9, .white);
+    try testing.expectEqual(CounterThreat.four, checkDefenseCounterThreat(&cells, 7, 9, .white));
+    const bp = quiescence.getFourDefensePosition(&cells, 7, 9, .white).blockPos();
+    try testing.expect(bp != null);
+    try testing.expectEqual(@as(u8, 6), bp.?.row);
+    try testing.expectEqual(@as(u8, 9), bp.?.col);
+
+    // そのブロック点は黒の四四＝禁手（五連は作らないので禁手が優先する）
+    try testing.expect(!forbidden.checkFive(&cells, 6, 9, .black));
+    try testing.expectEqual(forbidden.ForbiddenType.double_four, forbidden.checkForbiddenMove(&cells, 6, 9));
+
+    // それでもブロック石自体は `.four` と分類され、受け点 2 個の四四になる
+    // （＝禁手を見ないと「両方は塞げない＝勝ち」と読んでしまう形そのもの）
+    cells[6 * BOARD_SIZE + 9] = .black;
+    bitboard.placeStone(6, 9, .black);
+    try testing.expectEqual(CounterThreat.four, checkDefenseCounterThreat(&cells, 6, 9, .black));
+    const block_def = try expectPositions(getThreatDefensePositions(&cells, 6, 9, .black));
+    try testing.expect(block_def.contains(6, 8));
+    try testing.expect(block_def.contains(4, 11));
+}
+
+test "evaluateCounterThreat: ブロック点が黒の禁手なら VCT 不成立（issue #146）" {
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    setupIssue146Position(&cells);
+    // 黒 (7,8) の四 → 白 (7,9) のカウンター四まで進めた局面
+    cells[7 * BOARD_SIZE + 8] = .black;
+    cells[7 * BOARD_SIZE + 9] = .white;
+    bitboard.initFromCells(&cells);
+
+    var limiter = TimeLimiter{
+        .start_time = 0,
+        .time_limit = 0,
+        .nodes = 0,
+        .max_nodes = 0,
+    };
+
+    try testing.expect(!evaluateCounterThreat(
+        .four,
+        &cells,
+        .black,
+        .{ .row = 7, .col = 9 },
+        0,
+        &limiter,
+        VCT_MAX_DEPTH,
+    ));
+}
+
+test "findVCTMove / isVCTFirstMove: ブロック点が黒の禁手なら偽 VCT を主張しない（issue #146）" {
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    setupIssue146Position(&cells);
+    bitboard.initFromCells(&cells);
+
+    // 対局 CPU 経路。修正前はこの偽 VCT の初手 (7,8) をそのまま着手として返していた。
+    try testing.expect(findVCTMove(&cells, .black, VCT_MAX_DEPTH, 0) == null);
+    // 筋を固定した VCT 初手判定（修正前は true）
+    try testing.expect(!isVCTFirstMove(&cells, .{ .row = 7, .col = 8 }, .black, VCT_MAX_DEPTH, 0, 0));
+
+    // 注: 局面全体の `hasVCT`（エントリガード・カウンターフォー耐性検証を通さない
+    // 再帰本体の公開 API）は (7,8) 以外の初手でも true を返すため、この局面では
+    // 判別材料にならない。判別は上の 2 本と `evaluateCounterThreat`（筋を固定した
+    // 単体テスト）で行う。
+}
+
+test "findVCTSequence: ブロック点が黒の禁手なら偽 VCT を主張しない（issue #146）" {
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    setupIssue146Position(&cells);
+
+    const result = findVCTSequence(&cells, .black, VCT_MAX_DEPTH, 0, 0, false, .lenient);
+    try testing.expect(!result.found);
+}
+
+test "findVCTSequenceFromFirstMove: ブロック点が黒の禁手なら偽 VCT を主張しない（issue #146）" {
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    setupIssue146Position(&cells);
+
+    const result = findVCTSequenceFromFirstMove(&cells, .{ .row = 7, .col = 8 }, .black, VCT_MAX_DEPTH, 0, 0, false);
+    try testing.expect(!result.found);
 }

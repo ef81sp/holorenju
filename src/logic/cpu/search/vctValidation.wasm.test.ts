@@ -11,6 +11,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { parseInitialBoard } from "@/logic/boardParser";
 
 import { BOARD_ISSUE_140 } from "../review/vctBlockFiveFixture";
+import { BOARD_ISSUE_146 } from "../review/vctBlockForbiddenFixture";
 import {
   hasFourThreeAvailable,
   hasOpenThree,
@@ -137,5 +138,24 @@ describe("validateVCTSequence: ブロック石が五連なら手順はそこで�
       { row: 8, col: 7 },
     ];
     expect(validateVCTSequence(board, "black", sequence)).toBe(true);
+  });
+});
+
+/**
+ * issue #146: 黒 (7,8)（行7の止め四）→ 白 (7,9)（受け兼カウンター四）
+ * → 黒 (6,9)（カウンター四のブロック。ただし行6の四と斜めの四で**四四の禁手**）。
+ *
+ * ブロック点に打てない以上この手順は成立しない。修正前は禁手を見ずにブロック石を
+ * 置き、`blockThreat === "four"` で継続扱いにして有効を返していた（＝判別力あり）。
+ */
+describe("validateVCTSequence: ブロック点が黒の禁手なら手順は無効（issue #146）", () => {
+  it("四四の禁手点でブロックする手順は無効", () => {
+    const board = parseInitialBoard(BOARD_ISSUE_146);
+    const sequence = [
+      { row: 7, col: 8 },
+      { row: 7, col: 9 },
+      { row: 6, col: 9 },
+    ];
+    expect(validateVCTSequence(board, "black", sequence)).toBe(false);
   });
 });

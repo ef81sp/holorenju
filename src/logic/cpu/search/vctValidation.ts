@@ -10,6 +10,7 @@ import type { BoardState, Position } from "@/types/game";
 import { checkFive } from "@/logic/renjuRules";
 
 // #37 P3 PR6: VCT検証ヘルパーを Zig 単一ソース経由に（合法局面で TS と一致、未ロード時 TS フォールバック）。
+import { isForbiddenForBlack } from "../wasm/forbiddenAdapter";
 import { hasFourThreeAvailable, hasOpenThree } from "../wasm/threatAdapter";
 import { createsFour } from "./threatMoves";
 import {
@@ -96,6 +97,12 @@ function validateSubsequence(
           nextPos.row !== blockPos.row ||
           nextPos.col !== blockPos.col
         ) {
+          valid = false;
+          break;
+        }
+        // 攻め側が黒でブロック点が禁手 → そこには打てない＝相手の四を止められない
+        // ＝この手順は成立しない（issue #146）
+        if (!blockIsPlayable(board, blockPos, color)) {
           valid = false;
           break;
         }
@@ -207,6 +214,30 @@ export function opponentBlocksThreePursuit(
     hasFourThreeAvailable(board, opponentColor) ||
     hasVCF(board, opponentColor)
   );
+}
+
+/**
+ * 攻め側がブロック点に実際に打てるか判定する（issue #146）。
+ *
+ * Zig 側 `vct.zig` の `blockIsPlayable` と同じ意味論（二重実装のため両方を直すこと）。
+ * 受け手のカウンター四をブロックする点は、攻め側が黒のとき禁手（三三 / 四四 / 長連）で
+ * あり得る。そこには打てない＝相手の四を止められない＝その筋の VCT は不成立。
+ * 五連を作る点は禁手に優先して勝ちなので `checkFive` で先に許可する。
+ *
+ * `board` はブロック石を**配置する前**（対象が空点）の状態で渡すこと。
+ */
+export function blockIsPlayable(
+  board: BoardState,
+  blockPos: Position,
+  color: "black" | "white",
+): boolean {
+  if (color !== "black") {
+    return true;
+  }
+  if (checkFive(board, blockPos.row, blockPos.col, "black")) {
+    return true;
+  }
+  return !isForbiddenForBlack(board, blockPos.row, blockPos.col);
 }
 
 /**
