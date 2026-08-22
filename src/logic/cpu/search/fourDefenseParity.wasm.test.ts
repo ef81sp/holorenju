@@ -25,7 +25,8 @@ import { createEmptyBoard } from "@/logic/renjuRules";
 import { collectLineFivePoints } from "../core/lineAnalysis";
 import { getThreatWasm, preloadThreatWasm } from "../wasm/threatLoader";
 import { CELL } from "../wasm/types";
-import { getFourDefensePosition } from "./threatPatterns";
+import { createsFour } from "./threatMoves";
+import { type FourDefense, getFourDefensePosition } from "./threatPatterns";
 
 await preloadThreatWasm();
 
@@ -35,8 +36,9 @@ const LINE_START = 3;
 const LINE_LEN = 9;
 /** 横方向（DIRECTIONS[0]）。TS/Zig で並び一致を確認済み */
 const DIR_INDEX = 0;
-/** getFourDefensePositionWasm が「受けなし（null）」を表す番兵 */
-const NO_DEFENSE = 255;
+/** getFourDefensePositionWasm の番兵（issue #124 で 3 値化） */
+const WASM_UNSTOPPABLE = 255;
+const WASM_NOT_FOUR = 254;
 
 type PlayerColor = "black" | "white";
 
@@ -81,24 +83,37 @@ function readFivePointsFromWasm(
   return points;
 }
 
-function fourDefenseFromWasm(
+/** wasm の戻り値を TS の FourDefense と同じ文字列表現へ */
+function fourDefenseKeyFromWasm(
   row: number,
   col: number,
   color: PlayerColor,
-): Position | null {
+): string {
   const wasm = getThreatWasm();
   const encoded = wasm.getFourDefensePositionWasm(
     row,
     col,
     color === "black" ? CELL.BLACK : CELL.WHITE,
   );
-  if (encoded === NO_DEFENSE) {
-    return null;
+  if (encoded === WASM_UNSTOPPABLE) {
+    return "unstoppable";
   }
-  return {
-    row: Math.floor(encoded / BOARD_SIZE),
-    col: encoded % BOARD_SIZE,
-  };
+  if (encoded === WASM_NOT_FOUR) {
+    return "not_four";
+  }
+  return `${Math.floor(encoded / BOARD_SIZE)},${encoded % BOARD_SIZE}`;
+}
+
+/** TS の FourDefense を wasm と同じ文字列表現へ */
+function fourDefenseKey(defense: FourDefense): string {
+  switch (defense.kind) {
+    case "unstoppable":
+      return "unstoppable";
+    case "not_four":
+      return "not_four";
+    default:
+      return `${defense.position.row},${defense.position.col}`;
+  }
 }
 
 function buildBoard(cells: (PlayerColor | null)[]): BoardState {
@@ -160,16 +175,34 @@ describe("受け点の TS⇄Zig パリティ（1ライン全列挙・issue #115�
             { row: LINE_ROW, col },
             color,
           );
-          const zigDefense = fourDefenseFromWasm(LINE_ROW, col, color);
-          const tsKey = tsDefense
-            ? `${tsDefense.row},${tsDefense.col}`
-            : "null";
-          const zigKey = zigDefense
-            ? `${zigDefense.row},${zigDefense.col}`
-            : "null";
+          const tsKey = fourDefenseKey(tsDefense);
+          const zigKey = fourDefenseKeyFromWasm(LINE_ROW, col, color);
           if (tsKey !== zigKey) {
             mismatches.push(
               `getFourDefensePosition code=${code} color=${color} col=${col}: ts=${tsKey} zig=${zigKey}`,
+            );
+          }
+
+          // #124: 四判定と受け点判定は同一基準（SSoT）。
+          // 「四なのに受け点 0 個」＝偽 VCF の温床が構造的に起きないことを凍結する。
+          const tsFour = createsFour(board, LINE_ROW, col, color);
+          if (tsFour !== (tsDefense.kind !== "not_four")) {
+            mismatches.push(
+              `createsFour/getFourDefensePosition 不整合 code=${code} color=${color} col=${col}: createsFour=${tsFour} defense=${tsKey}`,
+            );
+          }
+          // classifyThreatWasm の bit0 = createsFour（bit1 = createsOpenThree）
+          const zigFour =
+            getThreatWasm().classifyThreatWasm(
+              LINE_ROW,
+              col,
+              color === "black" ? CELL.BLACK : CELL.WHITE,
+            ) %
+              2 ===
+            1;
+          if (zigFour !== tsFour) {
+            mismatches.push(
+              `createsFour code=${code} color=${color} col=${col}: ts=${tsFour} zig=${zigFour}`,
             );
           }
         }
