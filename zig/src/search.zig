@@ -810,7 +810,7 @@ test "findPreSearchMove: white open four at J9" {
     cells[idx_j9] = .empty;
     bitboard.initFromCells(&cells);
     try testing.expect(j9_creates_four); // J9 creates a four
-    try testing.expect(j9_defense == null); // open four = unblockable
+    try testing.expect(j9_defense == .unstoppable); // open four = unblockable
 
     // VCF should find J9 (open four on diagonal)
     const vcf_move = vcf_mod.findVCFMove(&cells, .white, vcf_mod.VCF_MAX_DEPTH, 0);

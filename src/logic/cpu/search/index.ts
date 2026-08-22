@@ -27,10 +27,10 @@ export { hasVCF } from "./vcfCheck";
 
 // 脅威パターン
 export {
-  findDefenseForConsecutiveFour,
-  findDefenseForJumpFour,
+  type FourDefense,
   findFourMoves,
   findWinningMove,
+  fourDefenseBlock,
   getFourDefensePosition,
   checkDefenseCounterThreat,
 } from "./threatPatterns";

@@ -2,7 +2,6 @@
 ///
 /// 相手の活四・止め四・活三・ミセ手・三三脅威を検出
 /// TS版 threatDetection.ts + threatDetectionFast.ts に対応
-
 const bitboard = @import("bitboard.zig");
 const board_mod = @import("board.zig");
 const evaluate = @import("evaluate.zig");
@@ -91,11 +90,6 @@ pub const ThreatInfo = struct {
         };
     }
 };
-
-/// 活四の防御位置を取得（両端の空きマス）
-pub fn getOpenFourDefensePositions(cells: []const Cell, row: u8, col: u8, dr: i8, dc: i8, color: Cell) PositionList {
-    return getLineEnds(cells, row, col, dr, dc, color);
-}
 
 /// 連の両端の空き位置を取得（lineAnalysis.ts の getLineEnds 相当）
 pub fn getLineEnds(cells: []const Cell, row: u8, col: u8, dr: i8, dc: i8, color: Cell) PositionList {
@@ -318,10 +312,11 @@ pub fn detectJumpThreePattern(cells: []const Cell, row: u8, col: u8, dr: i8, dc:
 }
 /// ライン上の空点のうち、その方向で「埋めるとちょうど五になる」点を列挙する
 ///
-/// 受け点（四を止める点）の SSoT。`getThreatDefensePositions`（vct.zig）と
-/// `getFourDefensePosition`（quiescence.zig）の両方がこれを使う。
+/// 受け点（四を止める点）の SSoT。`getThreatDefensePositions`（vct.zig）・
+/// `getFourDefensePosition`（quiescence.zig）・`detectThreatsCore`（本モジュール）が
+/// すべてこれを使う。
 ///
-/// 「跳び四のギャップを探して返す」方式（`findJumpGapPosition`）は、5 マス窓を
+/// 「跳び四のギャップを探して返す」方式（削除済みの `findJumpGapPosition`）は、5 マス窓を
 /// ラインの先頭から走査して最初のギャップを返すため、同一ライン上に
 /// 「埋めると長連になるギャップ」と「埋めると五になる正当なギャップ」が
 /// 併存すると前者を返してしまう（issue #115）。
@@ -334,9 +329,8 @@ pub fn detectJumpThreePattern(cells: []const Cell, row: u8, col: u8, dr: i8, dc:
 /// - 黒: ちょうど 5（6 以上は長連なので五ではない）
 /// - 白: 5 以上（白に長連の制限は無い）
 ///
-/// 白を `>= 5` にしているのは意図的である。`forbidden.checkFive` は白でも `== 5` で
-/// 判定しており、白の長連（6 連以上）を五と認めない（定義不一致・#125）。
-/// 連珠ルール上は白の長連は勝ちなので、受け点の列挙ではルールに従って `>= 5` を採る。
+/// 五の判定そのものは `forbidden.isFiveLength`（SSoT）に委ねる。#125 で
+/// `forbidden.checkFive` 側も白 `>= 5` に揃えたので、定義は 1 つになっている。
 ///
 /// **方向限定**である点が重要: `forbidden.checkFive` は 4 方向すべてを見るため、
 /// 別ラインの五点まで拾ってしまい「この四の受け」という意味からずれる。
@@ -350,6 +344,32 @@ pub fn collectLineFivePoints(
     dc: i8,
     color: Cell,
     out: *PositionList,
+) u8 {
+    return scanLineFivePoints(cells, row, col, dr, dc, color, out, false);
+}
+
+/// `collectLineFivePoints` の存在判定版（五点が 1 つでもあるか）。
+///
+/// 「四かどうか」を聞くだけの呼び出し（`isFourInDirection` など）は個数も座標も要らない。
+/// 最初の 1 点で打ち切り、`PositionList`（1KB 超）の確保も省く。
+/// **定義は共有**（実体は `scanLineFivePoints`）なので SSoT は保たれる。
+pub fn hasLineFivePoint(cells: []const Cell, row: u8, col: u8, dr: i8, dc: i8, color: Cell) bool {
+    var sink = PositionList.init();
+    return scanLineFivePoints(cells, row, col, dr, dc, color, &sink, true) > 0;
+}
+
+/// 五点走査の本体。`collectLineFivePoints` / `hasLineFivePoint` が共有する唯一の定義。
+///
+/// comptime stop_at_first: true なら最初の 1 点で打ち切る（存在判定用）。
+fn scanLineFivePoints(
+    cells: []const Cell,
+    row: u8,
+    col: u8,
+    dr: i8,
+    dc: i8,
+    color: Cell,
+    out: *PositionList,
+    comptime stop_at_first: bool,
 ) u8 {
     var found: u8 = 0;
     var i: i16 = -5;
@@ -367,89 +387,52 @@ pub fn collectLineFivePoints(
         const neg_result = board_mod.countInDirectionOnCells(cells, gap_r, gap_c, -dr, -dc, color);
         const total = @as(u16, pos_result.count) + neg_result.count + 1;
 
-        const is_five = if (color == .black) total == 5 else total >= 5;
-        if (!is_five) continue;
+        // 五の定義は forbidden.isFiveLength（SSoT・#125）に委ねる。
+        // total は最大 BOARD_SIZE(15) なので u8 に収まる。
+        if (!forbidden.isFiveLength(@intCast(total), color)) continue;
 
         out.addUnique(.{ .row = gap_r, .col = gap_c });
         found += 1;
+        if (stop_at_first) return found;
     }
     return found;
 }
 
+/// その方向で「四」が成立しているかを判定する（四判定の SSoT・issue #124）
+///
+/// **四の定義**: あと 1 手で五にできる点がその方向に存在すること。
+/// これは `collectLineFivePoints` が列挙する五点が 1 つ以上あることと同値である。
+///
+/// 以前は「連続四なら端の空きを見る（黒は `isOverlineEnd` 補正）／跳び四なら
+/// 最も近いギャップだけを `isJumpFourOverline` で見る」という別基準で判定しており、
+/// 受け点側（`collectLineFivePoints`）と食い違っていた。同一ライン上に
+/// 「埋めると長連になるギャップ」と「埋めても五にならないギャップ」が併存すると
+/// 四でない手が四と判定され、受け点 0 個 → 防御不可 → 偽 VCF になっていた（issue #124）。
+///
+/// LUT (`queryPatternByCell`) の四パターン判定は候補の絞り込み（高速な足切り）にのみ使う。
+/// 最終判断は必ず五点の列挙で行う。
+pub fn isFourInDirection(cells: []const Cell, row: u8, col: u8, dir_idx: usize, color: Cell) bool {
+    return isFourInDirectionWithPattern(cells, row, col, dir_idx, color, ll.queryPatternByCell(row, col, dir_idx, color));
+}
 
-/// 跳び四の空き位置（ギャップ）を検出
-pub fn findJumpGapPosition(cells: []const Cell, row: u8, col: u8, dr: i8, dc: i8, color: Cell) ?Position {
-    const r: i16 = row;
-    const c: i16 = col;
+/// `isFourInDirection` の LUT 結果を呼び出し側から渡す版。
+///
+/// 呼び出し側が既に `queryPatternByCell` を引いている場合（`classifyThreat` /
+/// `checkDefenseCounterThreat`）に同じクエリを二重に走らせないため。
+pub fn isFourInDirectionWithPattern(
+    cells: []const Cell,
+    row: u8,
+    col: u8,
+    dir_idx: usize,
+    color: Cell,
+    result: ll.PatternResult,
+) bool {
+    if (result.count != 4 and !result.has_jump_four) return false;
 
-    // ラインを走査（-5 ~ +5）して跳び四パターンの空きを探す
-    var line_stones: [11]Cell = undefined;
-    var line_rows: [11]i16 = undefined;
-    var line_cols: [11]i16 = undefined;
-    var line_len: u8 = 0;
-
-    // 負方向に5マス
-    var i: i16 = 5;
-    while (i >= 1) : (i -= 1) {
-        const pr = r - dr * i;
-        const pc = c - dc * i;
-        if (board_mod.isValid(pr, pc)) {
-            line_rows[line_len] = pr;
-            line_cols[line_len] = pc;
-            line_stones[line_len] = cellAt(cells, pr, pc);
-            line_len += 1;
-        }
-    }
-
-    // 置いた位置
-    line_rows[line_len] = r;
-    line_cols[line_len] = c;
-    line_stones[line_len] = color;
-    line_len += 1;
-
-    // 正方向に5マス
-    i = 1;
-    while (i <= 5) : (i += 1) {
-        const pr = r + dr * i;
-        const pc = c + dc * i;
-        if (board_mod.isValid(pr, pc)) {
-            line_rows[line_len] = pr;
-            line_cols[line_len] = pc;
-            line_stones[line_len] = cellAt(cells, pr, pc);
-            line_len += 1;
-        }
-    }
-
-    // 5マスのウィンドウで跳び四パターンを探す
-    if (line_len < 5) return null;
-    var start: u8 = 0;
-    while (start + 4 < line_len) : (start += 1) {
-        const s0 = line_stones[start];
-        const s1 = line_stones[start + 1];
-        const s2 = line_stones[start + 2];
-        const s3 = line_stones[start + 3];
-        const s4 = line_stones[start + 4];
-
-        // 両端が同色でなければスキップ
-        if (s0 != color or s4 != color) continue;
-
-        // パターン1: ●●●・●
-        if (s1 == color and s2 == color and s3 == .empty) {
-            return .{ .row = @intCast(line_rows[start + 3]), .col = @intCast(line_cols[start + 3]) };
-        }
-
-        // パターン2: ●●・●●
-        if (s1 == color and s2 == .empty and s3 == color) {
-            return .{ .row = @intCast(line_rows[start + 2]), .col = @intCast(line_cols[start + 2]) };
-        }
-
-        // パターン3: ●・●●●
-        if (s1 == .empty and s2 == color and s3 == color) {
-            return .{ .row = @intCast(line_rows[start + 1]), .col = @intCast(line_cols[start + 1]) };
-        }
-    }
-
-    return null;
+    const dir = DIRECTIONS[dir_idx];
+    // boolean 用途なので早期打ち切り版を使う（`countThreatDirections` は候補手ごとに
+    // 4 方向 × 複数回呼ばれる最ホットパス）。定義は collectLineFivePoints と共有。
+    return hasLineFivePoint(cells, row, col, dir.dr, dir.dc, color);
 }
 
 // =========================================================================
@@ -542,14 +525,14 @@ pub fn countThreatDirections(cells: []Cell, row: u8, col: u8, color: Cell) u8 {
         const end2 = lutEnd(lut.end2);
         const dir_index = jp.DIRECTION_INDICES[i];
 
-        // 活四 or 止め四
-        if (lut.count == 4 and (end1 == .empty or end2 == .empty)) {
-            threat_count += 1;
-            continue;
-        }
-
-        // 跳び四 (LUT版)
-        if (lut.count != 4 and lut.has_jump_four) {
+        // 四（連続四・跳び四とも `isFourInDirection` に一本化・issue #121 / #124）
+        //
+        // LUT は盤面を見ないため、黒は「ギャップを埋めると長連（6 連以上）になる
+        // だけで五にはできない」形も跳び四として報告する。四かどうかの最終判断は
+        // ライン上の五点列挙（`collectLineFivePoints`）に委ねる。
+        //
+        // 四でなければ下の活三/跳び三ブランチに落ちる（＝偽の四で三を握り潰さない）。
+        if (isFourInDirectionWithPattern(cells, row, col, i, color, lut)) {
             threat_count += 1;
             continue;
         }
@@ -584,7 +567,9 @@ pub fn evaluateMultiThreat(threat_count: u8) i32 {
 /// 相手の脅威を検出
 /// 脅威検出コアループ（四/活四/跳び四/活三/跳び三）
 /// comptime use_cells_query: true ならビットボード不要の cells 直接参照版を使用
-fn detectThreatsCore(cells: []const Cell, opponent_color: Cell, comptime use_cells_query: bool) ThreatInfo {
+/// 注: `isValidConsecutiveThree`（黒のウソ三除外）が仮置きのため `[]Cell` を要求するので
+/// cells は非 const。呼び出し前後で内容は変わらない。
+fn detectThreatsCore(cells: []Cell, opponent_color: Cell, comptime use_cells_query: bool) ThreatInfo {
     var result = ThreatInfo.init();
 
     for (0..BOARD_SIZE) |r_usize| {
@@ -601,38 +586,58 @@ fn detectThreatsCore(cells: []const Cell, opponent_color: Cell, comptime use_cel
                 const end1 = lutEnd(lut.end1);
                 const end2 = lutEnd(lut.end2);
 
-                // 活四: 両端が空いている4連
-                if (lut.count == 4 and end1 == .empty and end2 == .empty) {
-                    const defense = getOpenFourDefensePositions(cells, row, col, dir.dr, dir.dc, opponent_color);
-                    result.open_fours.addUniqueList(&defense);
-                }
-
-                // 止め四: 片側だけ空いている4連
-                if (lut.count == 4 and
-                    ((end1 == .empty and end2 != .empty) or
-                    (end1 != .empty and end2 == .empty)))
-                {
-                    const defense = getOpenFourDefensePositions(cells, row, col, dir.dr, dir.dc, opponent_color);
-                    result.fours.addUniqueList(&defense);
-                }
-
-                // 跳び四 (LUT版)
-                var is_jump_four = false;
-                if (lut.count != 4 and lut.has_jump_four) {
-                    is_jump_four = true;
-                    if (findJumpGapPosition(cells, row, col, dir.dr, dir.dc, opponent_color)) |gap_pos| {
-                        result.fours.addUnique(gap_pos);
+                // 四（連続四・跳び四とも五点の列挙に一本化・issue #121 / #124）
+                //
+                // 「四の受け＝そのラインで埋めると本当に五になる点」という一つの基準
+                // （`collectLineFivePoints`。`quiescence.getFourDefensePosition` /
+                // `vct.getThreatDefensePositions` と同じ SSoT）で判定する。
+                //
+                // - 五点 2 個以上: どちらを塞いでも五にされる ＝ 活四
+                // - 五点 1 個: 止め四。その 1 点が受け
+                // - 五点 0 個: この方向は四ではない（黒の長連にしかならない）
+                //   → 四扱いをやめ、下の活三ブランチで受けを列挙する
+                //
+                // 旧実装は LUT の `count == 4` / `has_jump_four` をそのまま四とみなし、
+                // 受けを `getLineEnds` / 旧 `findJumpGapPosition` から取っていた。LUT は
+                // ±4 マスの窓しか見ないため、窓の外の自石でギャップ埋めが長連になる
+                // 黒の形を四と誤判定し、しかも `is_jump_four` が活三の受け列挙まで
+                // 抑止していた（issue #121）。
+                // NOTE: この「プリフィルタ → collectLineFivePoints → 0/1/2 個で分岐」は
+                // 5 箇所に複製されている。SSoT 統合は issue #134。
+                var is_four = false;
+                if (lut.count == 4 or lut.has_jump_four) {
+                    var five_points = PositionList.init();
+                    const five_count = collectLineFivePoints(cells, row, col, dir.dr, dir.dc, opponent_color, &five_points);
+                    if (five_count >= 2) {
+                        is_four = true;
+                        result.open_fours.addUniqueList(&five_points);
+                    } else if (five_count == 1) {
+                        is_four = true;
+                        result.fours.addUniqueList(&five_points);
                     }
                 }
 
-                // 活三: 両端が空いている3連（跳び四の一部でない）
-                if (!is_jump_four and lut.count == 3 and end1 == .empty and end2 == .empty) {
+                // 活三: 両端が空いている3連（四が成立している方向は四の受けが優先）
+                //
+                // 黒はウソの三（達四にできない三）を除外する。issue #121 で偽の跳び四が
+                // 四から外れた結果、その裏に隠れていた「四でも三でもない」形が活三として
+                // 流入するようになったため。open_threes は position_eval の必須防御
+                // （-1000000）に直結するので、存在しない三への受けを強制してはいけない。
+                // `countThreatDirections` / `mise_vcf.getCreatedOpenThreeDefenses` /
+                // TS `vctHelpers.isConsecutiveOpenThree` と同じガード。
+                if (!is_four and lut.count == 3 and end1 == .empty and end2 == .empty and
+                    (opponent_color != .black or
+                        patterns.isValidConsecutiveThree(cells, row, col, jp.DIRECTION_INDICES[dir_idx], opponent_color)))
+                {
                     const defense = getOpenThreeDefensePositions(cells, row, col, dir.dr, dir.dc, opponent_color);
                     result.open_threes.addUniqueList(&defense);
                 }
 
-                // 跳び三
-                if (lut.count < 3) {
+                // 跳び三（黒はウソの三を除外。上の活三ブランチと同じ理由）
+                if (lut.count < 3 and
+                    (opponent_color != .black or
+                        patterns.isValidJumpThree(cells, row, col, jp.DIRECTION_INDICES[dir_idx], opponent_color)))
+                {
                     const defense = detectJumpThreePattern(cells, row, col, dir.dr, dir.dc, opponent_color);
                     result.open_threes.addUniqueList(&defense);
                 }
@@ -673,7 +678,7 @@ pub fn detectOpponentThreats(cells: []Cell, opponent_color: Cell) ThreatInfo {
 
 /// 相手の脅威を検出（cells 配列直接参照版、ビットボード不要）
 /// PV 抽出など一時的な石配置でビットボードが未更新の場合に使用
-pub fn detectOpponentThreatsFromCells(cells: []const Cell, opponent_color: Cell) ThreatInfo {
+pub fn detectOpponentThreatsFromCells(cells: []Cell, opponent_color: Cell) ThreatInfo {
     return detectThreatsCore(cells, opponent_color, true);
 }
 
@@ -845,52 +850,6 @@ fn isNearExistingStoneNaive(cells: []const Cell, row: u8, col: u8, comptime dist
     return false;
 }
 
-test "findJumpGapPosition: ●●●・●" {
-    var cells = [_]Cell{.empty} ** CELL_COUNT;
-    // 白の跳び四: (7,4),(7,5),(7,6),空,(7,8)
-    cells[7 * BOARD_SIZE + 4] = .white;
-    cells[7 * BOARD_SIZE + 5] = .white;
-    cells[7 * BOARD_SIZE + 6] = .white;
-    cells[7 * BOARD_SIZE + 8] = .white;
-
-    // (7,4)から見て横方向(0,1)の跳び四ギャップ = (7,7)
-    const gap = findJumpGapPosition(&cells, 7, 4, 0, 1, .white);
-    try std.testing.expect(gap != null);
-    const g = gap.?;
-    try std.testing.expectEqual(@as(u8, 7), g.row);
-    try std.testing.expectEqual(@as(u8, 7), g.col);
-}
-
-test "findJumpGapPosition: ●・●●●" {
-    var cells = [_]Cell{.empty} ** CELL_COUNT;
-    // 白の跳び四: (7,4),空,(7,6),(7,7),(7,8)
-    cells[7 * BOARD_SIZE + 4] = .white;
-    cells[7 * BOARD_SIZE + 6] = .white;
-    cells[7 * BOARD_SIZE + 7] = .white;
-    cells[7 * BOARD_SIZE + 8] = .white;
-
-    const gap = findJumpGapPosition(&cells, 7, 4, 0, 1, .white);
-    try std.testing.expect(gap != null);
-    const g = gap.?;
-    try std.testing.expectEqual(@as(u8, 7), g.row);
-    try std.testing.expectEqual(@as(u8, 5), g.col);
-}
-
-test "findJumpGapPosition: ●●・●●" {
-    var cells = [_]Cell{.empty} ** CELL_COUNT;
-    // 白の跳び四: (7,4),(7,5),空,(7,7),(7,8)
-    cells[7 * BOARD_SIZE + 4] = .white;
-    cells[7 * BOARD_SIZE + 5] = .white;
-    cells[7 * BOARD_SIZE + 7] = .white;
-    cells[7 * BOARD_SIZE + 8] = .white;
-
-    const gap = findJumpGapPosition(&cells, 7, 4, 0, 1, .white);
-    try std.testing.expect(gap != null);
-    const g = gap.?;
-    try std.testing.expectEqual(@as(u8, 7), g.row);
-    try std.testing.expectEqual(@as(u8, 6), g.col);
-}
-
 test "detectOpponentThreatsFromCells: 活四検出（ビットボード未同期）" {
     var cells = [_]Cell{.empty} ** CELL_COUNT;
     // 白の4連: (7,4),(7,5),(7,6),(7,7) 両端空き
@@ -985,7 +944,7 @@ test "detectOpponentThreats: global_bb を不変に保つ（蓄積ドリフト�
         .{ 6, 8 }, .{ 8, 9 }, .{ 9, 6 }, .{ 5, 5 },
     };
     const blacks = [_][2]u8{
-        .{ 7, 7 }, .{ 8, 8 }, .{ 9, 9 }, .{ 6, 6 },
+        .{ 7, 7 },  .{ 8, 8 },  .{ 9, 9 }, .{ 6, 6 },
         .{ 10, 7 }, .{ 7, 10 }, .{ 6, 7 },
     };
     for (whites) |p| cells[@as(u16, p[0]) * BOARD_SIZE + p[1]] = .white;
@@ -1021,4 +980,102 @@ test "createsFourThree: 空き候補なら global_bb 不変・占有候補なら
     // 呼び出し側は必ず空き点を渡すこと（detectOpponentThreats はガード済み）。
     _ = evaluate.createsFourThree(&cells, 7, 7, .white);
     try std.testing.expect(!bbEqual(snapshot, bitboard.global_bb));
+}
+
+// === issue #121: 黒の偽跳び四（ギャップ埋めが長連）に対するガード ===
+
+/// issue #121 の再現局面を作る。
+///
+/// 8 行目（row=7）に黒: C8 D8 _ F8 G8 H8（col = 2,3,[4],5,6,7）
+///
+/// LUT (`line_lookup`) の窓は中心 ±4 マスしか見ないため、F8/G8/H8 から見ると
+/// `D8 _ F8 G8 H8` が「跳び四（O_OOO）」に見える。しかし窓の外にある C8 のせいで
+/// ギャップ E8 を埋めると C8..H8 の **6 連＝長連**になり、黒は五にできない。
+/// つまりこのラインに黒の五点は 1 つも無く、四ではない。
+///
+/// 一方 F8 G8 H8 は LUT 上は「両端空きの 3 連」であり、
+/// 受け（E8 / I8 / 夏止め J8）を列挙すべき対象である。
+fn setupIssue121FalseJumpFour(cells: *[CELL_COUNT]Cell) void {
+    for ([_]u8{ 2, 3, 5, 6, 7 }) |c| {
+        cells[7 * BOARD_SIZE + c] = .black;
+    }
+    bitboard.initFromCells(cells);
+}
+
+test "issue #121: 偽跳び四のギャップはこのラインの五点ではない（前提の確認）" {
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    setupIssue121FalseJumpFour(&cells);
+
+    // LUT は跳び四だと言うが……
+    const lut = ll.queryPatternByCell(7, 6, 0, .black);
+    try std.testing.expect(lut.has_jump_four);
+    try std.testing.expectEqual(@as(u4, 3), lut.count);
+
+    // 実際にはこのラインに黒の五点は無い＝四ではない
+    try std.testing.expect(!isFourInDirection(&cells, 7, 6, 0, .black));
+}
+
+test "issue #121: detectOpponentThreats は偽跳び四を四として受けない" {
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    setupIssue121FalseJumpFour(&cells);
+
+    const result = detectOpponentThreats(&cells, .black);
+
+    // E8(7,4) は埋めると長連になるだけで五にはならない。四の受けではない。
+    try std.testing.expect(!result.fours.contains(7, 4));
+    try std.testing.expectEqual(@as(u8, 0), result.fours.len);
+    try std.testing.expectEqual(@as(u8, 0), result.open_fours.len);
+}
+
+test "issue #121: 偽跳び四の裏はウソ三なので脅威として列挙しない" {
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    setupIssue121FalseJumpFour(&cells);
+
+    const result = detectOpponentThreats(&cells, .black);
+
+    // F8 G8 H8 は LUT 上は「両端空きの 3 連」だが達四にできない＝ウソ三。
+    //   E8 へ伸ばす → C8..H8 の 6 連（長連）
+    //   I8 へ伸ばす → F8..I8 の四。五点は J8 だけ（E8 は長連）＝止め四で達四ではない
+    // 四でも三でもないので、受けを強制してはいけない
+    // （open_threes は position_eval の必須防御 -1000000 に直結する）。
+    try std.testing.expectEqual(@as(u8, 0), result.open_threes.len);
+    try std.testing.expectEqual(@as(u8, 0), result.fours.len);
+}
+
+test "issue #121: 窓外の石が無ければ同じ 3 連は本物の活三として受けを列挙する（対比）" {
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    // 長連の原因になる C8 D8 を置かない ＝ F8 G8 H8 だけの素直な活三
+    for ([_]u8{ 5, 6, 7 }) |c| {
+        cells[7 * BOARD_SIZE + c] = .black;
+    }
+    bitboard.initFromCells(&cells);
+
+    const result = detectOpponentThreats(&cells, .black);
+
+    try std.testing.expect(result.open_threes.contains(7, 4));
+    try std.testing.expect(result.open_threes.contains(7, 8));
+}
+
+test "issue #121: countThreatDirections は偽跳び四を脅威に数えない" {
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    setupIssue121FalseJumpFour(&cells);
+
+    // G8: LUT は跳び四だが五点ゼロ。連続三も黒のウソ三（活四にできない）なので脅威ではない。
+    try std.testing.expectEqual(@as(u8, 0), countThreatDirections(&cells, 7, 6, .black));
+    // D8: 同上（連続 2 なので三でもない）
+    try std.testing.expectEqual(@as(u8, 0), countThreatDirections(&cells, 7, 3, .black));
+}
+
+test "issue #121: 白なら同じ形は本物の跳び四（長連が禁じられていない）" {
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    for ([_]u8{ 2, 3, 5, 6, 7 }) |c| {
+        cells[7 * BOARD_SIZE + c] = .white;
+    }
+    bitboard.initFromCells(&cells);
+
+    // 白は 6 連以上でも五（#125）なので E8 を埋めれば勝ち＝四
+    try std.testing.expect(isFourInDirection(&cells, 7, 6, 0, .white));
+    const result = detectOpponentThreats(&cells, .white);
+    try std.testing.expect(result.fours.contains(7, 4));
+    try std.testing.expectEqual(@as(u8, 1), countThreatDirections(&cells, 7, 6, .white));
 }

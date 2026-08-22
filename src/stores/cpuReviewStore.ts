@@ -78,9 +78,9 @@ function detectWinnerFromMoves(
     }
   }
 
-  // 最終手で五連したか確認
+  // 最終手で五連したか確認（色が null の手は棋譜として不正なので判定しない）
   const lastMove = moves[moves.length - 1];
-  if (lastMove && checkWin(board, lastMove.position, lastMove.color)) {
+  if (lastMove?.color && checkWin(board, lastMove.position, lastMove.color)) {
     // 最終手で五連した色がわかった → playerSide次第でwin/lose
     // ここでは勝った色だけ返す（呼び出し側でwin/loseを判定）
     return lastMove.color === "black" ? "win" : "lose";

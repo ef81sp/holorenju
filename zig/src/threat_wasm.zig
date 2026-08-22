@@ -4,7 +4,9 @@
 // （= 四 / 活三 判定）を **Zig 単一ソース**経由で使うための最小 wasm。
 //
 // 橋の本体は `vct.classifyThreat`（vct.zig）。これは TS `threatMoves.ts` の `classifyThreat`
-// と 1:1 構造一致し、**黒長連除外（isJumpFourOverline / isOverlineEnd）を内包**する。
+// と 1:1 構造一致し、四判定を `threats.isFourInDirection`（= その方向に「埋めると本当に
+// 五になる点」があるか）に一本化している（issue #124）。黒の長連は五点に数えないので
+// 長連除外はこの基準に内包される。
 // 注意: `main.zig` の `classifyPointWasm` は生パターンビット（長連除外なし）なので**使わない**。
 //
 // forbidden_wasm.zig との唯一の構造差: `vct.classifyThreat` は `line_lookup.queryPatternByCell`
@@ -265,9 +267,15 @@ export fn collectLineFivePointsWasm(row: u8, col: u8, dir_index: u8, color: u8) 
     }
 }
 
-/// 四に対する受け点。戻り値は row * 15 + col、受けが無い(null)場合は 255。
+/// 四に対する受け点（3 値・issue #124）。
+/// - 止め四: `row * 15 + col`（0..224）
+/// - 活四（防御不可）: `quiescence.FOUR_DEFENSE_UNSTOPPABLE`（255）
+/// - そもそも四ではない: `quiescence.FOUR_DEFENSE_NOT_FOUR`（254）
 export fn getFourDefensePositionWasm(row: u8, col: u8, color: u8) u8 {
     const c: board.Cell = @enumFromInt(color);
-    const d = quiescence.getFourDefensePosition(&board.board_cells, row, col, c) orelse return 255;
-    return d.row * board.BOARD_SIZE + d.col;
+    return switch (quiescence.getFourDefensePosition(&board.board_cells, row, col, c)) {
+        .not_four => quiescence.FOUR_DEFENSE_NOT_FOUR,
+        .unstoppable => quiescence.FOUR_DEFENSE_UNSTOPPABLE,
+        .block => |d| d.row * board.BOARD_SIZE + d.col,
+    };
 }

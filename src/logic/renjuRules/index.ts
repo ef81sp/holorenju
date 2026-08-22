@@ -20,5 +20,6 @@ export {
   DIRECTIONS,
   DRAW_MOVE_LIMIT,
   getLineLength,
+  isFiveLength,
   isValidPosition,
 } from "./core";

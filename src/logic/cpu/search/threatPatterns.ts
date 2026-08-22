@@ -14,19 +14,16 @@ import { checkFive } from "@/logic/renjuRules";
 import { DIRECTION_INDICES, DIRECTIONS } from "../core/constants";
 import {
   checkEnds,
-  checkEndsForFour,
   collectLineFivePoints,
   countLine,
-  getLineEnds,
 } from "../core/lineAnalysis";
 // 夏止め済み判定（受け点の基準と活三判定を一致させる SSoT）
 import { getOpenThreeDefensePositions } from "../evaluation/threatDetection";
 import { isNearExistingStone } from "../moveGenerator";
-import { findJumpGapPosition } from "../patterns/threatAnalysis";
 // #43 PR-3: 図形/禁手の葉プリミティブを Zig アダプタへ委譲（patterns.ts/forbiddenMoves.ts 依存を断つ）。
 import { isForbiddenForBlack } from "../wasm/forbiddenAdapter";
 import { checkJumpFour, checkJumpThree } from "../wasm/patternsAdapter";
-import { createsFour, isJumpFourOverline } from "./threatMoves";
+import { createsFour, isFourInDirection } from "./threatMoves";
 
 /**
  * 即勝ち手を探す（五連を完成できる位置）
@@ -126,36 +123,69 @@ export function findFourMoves(
 }
 
 /**
+ * `getFourDefensePosition` の結果（issue #124 で 3 値化）
+ *
+ * 以前は `Position | null` で、`null` が「防御不可（活四）」と「そもそも四ではない」の
+ * 両方を意味していた。VCF 経路は `null` を即勝ちとして扱うため、四の判定側が
+ * 偽陽性を出すと「四ですらない手」で VCF が成立してしまっていた。
+ * Zig 側 `quiescence.FourDefense` と対応する。
+ */
+export type FourDefense =
+  /** どの方向でも四になっていない（五点 0 個）。脅威ではない。 */
+  | { kind: "not_four" }
+  /** 四だが受け点が 2 つ以上ある ＝ 活四。1 手では止められない。 */
+  | { kind: "unstoppable" }
+  /** 止め四。この 1 点で受かる。 */
+  | { kind: "block"; position: Position };
+
+export const FOUR_DEFENSE_NOT_FOUR: FourDefense = Object.freeze({
+  kind: "not_four",
+});
+export const FOUR_DEFENSE_UNSTOPPABLE: FourDefense = Object.freeze({
+  kind: "unstoppable",
+});
+
+/**
+ * 受け点があれば返す。`not_four` / `unstoppable` はどちらも `null`。
+ *
+ * 「四なら必ず受ける／それ以外は保守的に打ち切る」呼び出し側（VCT 検証）向け。
+ * VCF 経路では `unstoppable` だけが勝ちなので、この関数を使ってはならない。
+ */
+export function fourDefenseBlock(defense: FourDefense): Position | null {
+  return defense.kind === "block" ? defense.position : null;
+}
+
+/**
  * 四に対する防御位置を取得
  * 四は1点でしか止められないので、その位置を返す
  *
  * 方向ごとに `collectLineFivePoints` で「その方向で埋めると五になる点」を列挙する
  * （受け点の SSoT。Zig 側 `quiescence.getFourDefensePosition` と同じ基準）。
  * - 五点 0 個: この方向は四ではない（黒の長連にしかならない四）→ 無視
- * - 五点 2 個以上: 両方は塞げない ＝ 活四（防御不可）→ null
- * - 五点 1 個: 止め四。その点が受け
- *
- * 注意（戻り値 null の多義性・#124）: null は「防御不可（五点 2 個以上＝活四）」と
- * 「そもそも四ではない（五点 0 個）」の両方を表す。VCF 経路は null を勝ちとして
- * 扱うため、四の生成側が偽陽性を出すと偽 VCF になる既存経路がある。
- * 一方 VCT 経路は四ゲート内で null を「不成立」＝保守側に倒しているので健全である。
+ * - 五点 2 個以上: 両方は塞げない ＝ 活四（防御不可）→ `unstoppable`
+ * - 五点 1 個: 止め四。その点が受け → `block`
+ * - どの方向も四でなかった → `not_four`
  *
  * issue #115: 以前は跳び四で `findJumpGapPosition` の返り値を検証せずに使っており、
  * 同一ライン上に長連ギャップと正当なギャップが併存すると長連ギャップを返していた。
  * また連続四では `getLineEnds` の両端空きを無条件に活四としており、黒の片端が
  * 長連になる `_XXXX_`（実際は止め四で受けられる）を防御不可と誤判定していた。
  *
+ * issue #124: 戻り値を 3 値化し、「四ではない」と「防御不可」を区別した。
+ * `createsFour`（`isFourInDirection`）も同じ基準なので両者は常に整合する。
+ *
  * @param board 盤面（四が作られた状態）
  * @param lastMove 最後に置かれた手
  * @param color 四を作った手番
- * @returns 防御位置（止められない場合はnull）
  */
 export function getFourDefensePosition(
   board: BoardState,
   lastMove: Position,
   color: "black" | "white",
-): Position | null {
+): FourDefense {
   const { row, col } = lastMove;
+  // NOTE: この「プリフィルタ → collectLineFivePoints → 0/1/2 個で分岐」は
+  // 5 箇所に複製されている。SSoT 統合は issue #134。
   let firstDefense: Position | null = null;
 
   for (let i = 0; i < DIRECTION_INDICES.length; i++) {
@@ -186,48 +216,22 @@ export function getFourDefensePosition(
     }
     if (fivePoints.length >= 2) {
       // 両方は塞げない = 活四（防御不可能）
-      return null;
+      return FOUR_DEFENSE_UNSTOPPABLE;
     }
     if (!firstDefense) {
       firstDefense = fivePoints[0] ?? null;
     }
   }
 
-  return firstDefense;
+  return firstDefense
+    ? { kind: "block", position: firstDefense }
+    : FOUR_DEFENSE_NOT_FOUR;
 }
 
-/**
- * 連続四に対する防御位置を取得
- * @internal テスト用にexport
- */
-export function findDefenseForConsecutiveFour(
-  board: BoardState,
-  row: number,
-  col: number,
-  dr: number,
-  dc: number,
-  color: "black" | "white",
-): Position | null {
-  const ends = getLineEnds(board, row, col, dr, dc, color);
-  // 止め四（片端のみ空き）= 1点で防御、活四（両端空き）= 防御不可
-  return ends.length === 1 ? (ends[0] ?? null) : null;
-}
-
-/**
- * 跳び四に対する防御位置を取得
- * 跳び四は中の空きを埋めるしかない
- * @internal テスト用にexport
- */
-export function findDefenseForJumpFour(
-  board: BoardState,
-  row: number,
-  col: number,
-  dr: number,
-  dc: number,
-  color: "black" | "white",
-): Position | null {
-  return findJumpGapPosition(board, row, col, dr, dc, color);
-}
+// issue #121 / #43: `findDefenseForConsecutiveFour` / `findDefenseForJumpFour` は削除した。
+// 受け点は `getFourDefensePosition`（= `collectLineFivePoints` の五点列挙）に一本化済みで、
+// この 2 つは「連続四なら端の空き / 跳び四なら最も近いギャップ」という旧基準そのものだった。
+// 参照は `search/index.ts` の再 export のみ（live な呼び出し元ゼロ）。
 
 /**
  * 防御手のカウンター脅威をチェック（1パス統合版）
@@ -267,29 +271,11 @@ export function checkDefenseCounterThreat(
     const [dr, dc] = direction;
     const count = countLine(board, row, col, dr, dc, opponentColor);
 
-    // 連続四 → 即リターン（黒は長連チェック付き）
-    if (count === 4) {
-      const { end1Open, end2Open } = checkEndsForFour(
-        board,
-        row,
-        col,
-        dr,
-        dc,
-        opponentColor,
-      );
-      if (end1Open || end2Open) {
-        return "four";
-      }
-    }
-
-    // 跳び四
-    if (
-      count !== 4 &&
-      checkJumpFour(board, row, col, dirIndex, opponentColor)
-    ) {
-      if (!isJumpFourOverline(board, row, col, dr, dc, opponentColor)) {
-        return "four";
-      }
+    // 四（連続四・跳び四とも isFourInDirection に一本化・issue #124）。
+    // ここを getFourDefensePosition と同一基準にしておかないと、
+    // 「four と分類されたのに受け点が 0 個」という不整合が起きる。
+    if (isFourInDirection(board, row, col, i, opponentColor, count)) {
+      return "four";
     }
 
     // 連続活三

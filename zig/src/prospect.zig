@@ -34,6 +34,7 @@
 const std = @import("std");
 const board_mod = @import("board.zig");
 const bitboard = @import("bitboard.zig");
+const forbidden = @import("forbidden.zig");
 const ll = @import("line_lookup.zig");
 const scores = @import("scores.zig");
 
@@ -144,11 +145,8 @@ pub fn classifyDirection(own_no_center: u9, block: u9, color: Cell) DirCode {
     // 黒の長連（窓内で観測できる範囲のみ。窓外は近似で見逃す＝§2.1-1）。
     if (color == .black and pt.count >= 6) return .dead;
 
-    if (color == .black) {
-        if (pt.count == 5) return .f5;
-    } else {
-        if (pt.count >= 5) return .f5;
-    }
+    // 五の定義は forbidden.isFiveLength（SSoT・#125）。黒はちょうど 5、白は 5 以上。
+    if (forbidden.isFiveLength(pt.count, color)) return .f5;
 
     if (pt.count == 4) {
         var end1_open = pt.end1 == 0;
@@ -899,7 +897,6 @@ pub fn getStateEval(perspective: Cell, stm: StmMode) i32 {
 // Tests
 // ============================================================================
 
-const forbidden = @import("forbidden.zig");
 const evaluate = @import("evaluate.zig");
 
 test "initProspectTables runs and is idempotent" {

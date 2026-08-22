@@ -110,7 +110,7 @@ describe("checkFiveBit vs checkFive", () => {
     expect(checkFive(board, 7, 8, "black")).toBe(false);
   });
 
-  it("六連（長連）では false", () => {
+  it("黒の六連（長連）では false", () => {
     const board = emptyBoard();
     for (let c = 4; c <= 8; c++) {
       setCell(board, 7, c, "black");
@@ -118,9 +118,22 @@ describe("checkFiveBit vs checkFive", () => {
     const lt = buildLineTable(board);
     setCell(board, 7, 9, "black");
     placeStone(lt, 7, 9, "black");
-    // 6連 → checkFive は false（exactly 5 のみ）
+    // 黒は exactly 5 のみ五
     expect(checkFiveBit(lt.blacks, lt.whites, 7, 9, "black")).toBe(false);
     expect(checkFive(board, 7, 9, "black")).toBe(false);
+  });
+
+  // #125: 白に長連禁手はないので 6 連以上も五
+  it("白の六連（長連）では true", () => {
+    const board = emptyBoard();
+    for (let c = 4; c <= 8; c++) {
+      setCell(board, 7, c, "white");
+    }
+    const lt = buildLineTable(board);
+    setCell(board, 7, 9, "white");
+    placeStone(lt, 7, 9, "white");
+    expect(checkFiveBit(lt.blacks, lt.whites, 7, 9, "white")).toBe(true);
+    expect(checkFive(board, 7, 9, "white")).toBe(true);
   });
 
   it("斜め↗方向の五連", () => {

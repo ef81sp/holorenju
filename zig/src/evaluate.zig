@@ -6,6 +6,9 @@ const ll = @import("line_lookup.zig");
 const patterns = @import("patterns.zig");
 const prospect = @import("prospect.zig");
 const scores = @import("scores.zig");
+// 四判定の SSoT（`isFourInDirection`）を借りるための相互 import。
+// threats.zig 側も createsFourThree / findMiseTargets のためにここを import している。
+const threats = @import("threats.zig");
 const std = @import("std");
 
 const Cell = board_mod.Cell;
@@ -83,8 +86,6 @@ pub fn stmModeFromLastMover(last_mover_is_perspective: LastMoverIsPerspective) p
     };
 }
 
-const threats = @import("threats.zig");
-
 /// 隣接マス（距離1）に石があるかチェック
 fn isNearExistingStone(cells: []const Cell, row: u8, col: u8) bool {
     const occupied = threats.computeOccupiedRows(cells);
@@ -150,11 +151,20 @@ pub fn createsFourThree(cells: []Cell, row: u8, col: u8, color: Cell) bool {
     var jump_four_dirs: [4]bool = [_]bool{false} ** 4;
 
     // 1st pass: 連続パターン + 跳び四検出 (LUT版)
+    //
+    // issue #121: LUT の `has_jump_four` は盤面を見ないため、窓（中心 ±4）の外の自石で
+    // ギャップ埋めが長連（6 連以上）になる黒の形も跳び四として報告する。四かどうかの
+    // 最終判断は五点の列挙（`threats.isFourInDirection`）に委ねる。偽の跳び四を四に
+    // 数えると「四三」でない手をミセ手として生成してしまう。
     for (0..4) |i| {
         const lut = ll.queryPatternByCell(row, col, i, color);
         dir_luts[i] = lut;
 
-        if (lut.count != 4 and lut.has_jump_four) {
+        // `isFourInDirectionWithPattern` が LUT の足切り（count==4 or has_jump_four）を
+        // 内部で行うので、ここで重ねてチェックする必要はない。
+        if (lut.count != 4 and
+            threats.isFourInDirectionWithPattern(cells, row, col, i, color, lut))
+        {
             jump_four_dirs[i] = true;
         }
     }
@@ -168,6 +178,13 @@ pub fn createsFourThree(cells: []Cell, row: u8, col: u8, color: Cell) bool {
 
         // 連続四（片端以上が空き）。端はセル走査で求め、黒は長連補正を適用する
         // （TS analyzeDirection と一致。LUT 端は黒長連補正を持たないため使わない）。
+        //
+        // 跳び四側（1st pass）は五点列挙（`isFourInDirection`）に寄せたが、**連続四側は
+        // 端ベースのまま**。`count == 4` に限れば両者は等価である:
+        //   - 偽陽性なし: 端が空きかつ長連補正を通れば、その端を埋めると必ずちょうど 5
+        //   - 偽陰性なし: 連続 4 連の五点は両端のいずれかにしか存在しえない
+        //     （離れた空点を埋めても 4 連と繋がらない）
+        // 統一（`classifyFourInDirection` への集約）は follow-up issue #134 で扱う。
         if (lut.count == 4) {
             const dir = board_mod.DIRECTIONS[i];
             const pos = board_mod.countInDirectionOnCells(cells, row, col, dir.dr, dir.dc, color);
@@ -725,4 +742,36 @@ test "evaluateBoardOnCells: eval_basis=.prospect のとき prospect.evaluateFull
     const via_dispatch = evaluateBoardOnCells(&cells, .black, opts);
     const direct = prospect.evaluateFull(&cells, .black, .average);
     try std.testing.expectEqual(direct, via_dispatch);
+}
+
+test "createsFourThree: 偽跳び四（ギャップ埋めが長連）は四に数えない（issue #121）" {
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    // 横 8 行目: 黒 C8 D8 _ F8 G8 [H8=着手点]
+    cells[7 * BOARD_SIZE + 2] = .black;
+    cells[7 * BOARD_SIZE + 3] = .black;
+    cells[7 * BOARD_SIZE + 5] = .black;
+    cells[7 * BOARD_SIZE + 6] = .black;
+    // 縦 H 列: 黒 H10 H9 [H8=着手点] → 両端空きの活三になる
+    cells[5 * BOARD_SIZE + 7] = .black;
+    cells[6 * BOARD_SIZE + 7] = .black;
+    bitboard.initFromCells(&cells);
+
+    // H8 に打つと LUT は横方向を跳び四と報告するが、窓（中心 ±4）の外の C8 のせいで
+    // E8 を埋めると C8..H8 の 6 連＝長連。横方向に五点は無く四ではないので、四三ではない。
+    try std.testing.expect(!createsFourThree(&cells, 7, 7, .black));
+}
+
+test "createsFourThree: 同じ形でも白なら本物の四三（回帰・白に長連の制限は無い）" {
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[7 * BOARD_SIZE + 2] = .white;
+    cells[7 * BOARD_SIZE + 3] = .white;
+    cells[7 * BOARD_SIZE + 5] = .white;
+    cells[7 * BOARD_SIZE + 6] = .white;
+    cells[5 * BOARD_SIZE + 7] = .white;
+    cells[6 * BOARD_SIZE + 7] = .white;
+    bitboard.initFromCells(&cells);
+
+    try std.testing.expect(createsFourThree(&cells, 7, 7, .white));
 }

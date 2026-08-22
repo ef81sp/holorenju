@@ -142,14 +142,22 @@ pub fn hasVCF(
         // 相手の応手（四を止める）
         const defense_pos = quiescence.getFourDefensePosition(cells, move.row, move.col, color);
 
-        if (defense_pos == null) {
-            // 止められない = 勝利
-            cells[idx] = .empty;
-            bitboard.removeStone(move.row, move.col);
-            return true;
-        }
-
-        const dp = defense_pos.?;
+        // #124: 勝ちは `.unstoppable`（活四）のみ。`.not_four` は四ですらないのでスキップ。
+        // 網羅 switch にして、将来 variant が増えたときに黙って保守側へ落ちないようにする。
+        const dp = switch (defense_pos) {
+            .unstoppable => {
+                // 止められない = 勝利
+                cells[idx] = .empty;
+                bitboard.removeStone(move.row, move.col);
+                return true;
+            },
+            .not_four => {
+                cells[idx] = .empty;
+                bitboard.removeStone(move.row, move.col);
+                continue;
+            },
+            .block => |p| p,
+        };
 
         // 白番の場合、黒の防御位置が禁手ならVCF成立
         if (color == .white) {
@@ -264,12 +272,12 @@ fn findVCFMoveRecursive(
         cells[idx] = .empty;
         bitboard.removeStone(move.row, move.col);
 
-        // 活四（防御不能） → 即勝ち
-        if (defense_pos == null) {
-            return move;
-        }
-
-        const dp = defense_pos.?;
+        // 活四（防御不能） → 即勝ち。`.not_four` は四ですらないのでスキップ（#124）
+        const dp = switch (defense_pos) {
+            .unstoppable => return move,
+            .not_four => continue,
+            .block => |p| p,
+        };
 
         // 白番: 黒の防御位置が禁手 → 即勝ち
         if (color == .white) {
@@ -422,17 +430,24 @@ pub fn findVCFSequenceFromFirstMove(
 
     // 防御位置を取得
     const defense_pos = quiescence.getFourDefensePosition(cells, first_move.row, first_move.col, color);
-    if (defense_pos == null) {
-        // 活四 → 防御不可能 → VCF成立
-        cells[idx] = .empty;
-        bitboard.removeStone(first_move.row, first_move.col);
-        result.sequence[0] = first_move;
-        result.len = 1;
-        result.found = true;
-        return result;
-    }
-
-    const dp = defense_pos.?;
+    // `.not_four` は createsFour を通っているので理論上到達しないが、保守側に倒す（#124）
+    const dp = switch (defense_pos) {
+        .unstoppable => {
+            // 活四 → 防御不可能 → VCF成立
+            cells[idx] = .empty;
+            bitboard.removeStone(first_move.row, first_move.col);
+            result.sequence[0] = first_move;
+            result.len = 1;
+            result.found = true;
+            return result;
+        },
+        .not_four => {
+            cells[idx] = .empty;
+            bitboard.removeStone(first_move.row, first_move.col);
+            return result;
+        },
+        .block => |p| p,
+    };
 
     // 白番: 黒の防御位置が禁手 → 即勝ち
     if (color == .white) {
@@ -525,14 +540,16 @@ fn findVCFSequenceRecursive(
         cells[idx] = .empty;
         bitboard.removeStone(move.row, move.col);
 
-        // 活四（防御不能） → 即勝ち
-        if (defense_pos == null) {
-            sequence[seq_len.*] = move;
-            seq_len.* += 1;
-            return true;
-        }
-
-        const dp = defense_pos.?;
+        // 活四（防御不能） → 即勝ち。`.not_four` は四ですらないのでスキップ（#124）
+        const dp = switch (defense_pos) {
+            .unstoppable => {
+                sequence[seq_len.*] = move;
+                seq_len.* += 1;
+                return true;
+            },
+            .not_four => continue,
+            .block => |p| p,
+        };
 
         // 白番: 黒の防御位置が禁手 → 即勝ち
         if (color == .white) {
@@ -785,4 +802,25 @@ test "findVCFSequenceFromFirstMove: occupied cell returns not found" {
 
     const result = findVCFSequenceFromFirstMove(&cells, .{ .row = 7, .col = 7 }, .black, VCF_MAX_DEPTH, 0, 0);
     try testing.expect(!result.found);
+}
+
+test "findVCFSequence: 五点 0 個の偽四で VCF 成立にしない（issue #124）" {
+    // 8 行目（row=7）: A8白 B8白 C8黒 D8黒 E8黒 F8空 G8空 H8黒 I8空 J8黒 K8空 L8白
+    // 黒番。G8 に打っても五点はゼロ（F8 は 6 連＝長連、I8 は 4 連）なので四ですらない。
+    // 旧実装は G8 を「止められない四」として len=1 の VCF を返していた。
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[7 * BOARD_SIZE + 0] = .white; // A8
+    cells[7 * BOARD_SIZE + 1] = .white; // B8
+    cells[7 * BOARD_SIZE + 2] = .black; // C8
+    cells[7 * BOARD_SIZE + 3] = .black; // D8
+    cells[7 * BOARD_SIZE + 4] = .black; // E8
+    cells[7 * BOARD_SIZE + 7] = .black; // H8
+    cells[7 * BOARD_SIZE + 9] = .black; // J8
+    cells[7 * BOARD_SIZE + 11] = .white; // L8
+
+    const result = findVCFSequence(&cells, .black, VCF_MAX_DEPTH, 0, 0);
+    try testing.expect(!result.found);
+
+    const from_g8 = findVCFSequenceFromFirstMove(&cells, .{ .row = 7, .col = 6 }, .black, VCF_MAX_DEPTH, 0, 0);
+    try testing.expect(!from_g8.found);
 }
