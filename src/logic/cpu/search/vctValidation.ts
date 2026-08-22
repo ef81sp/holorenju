@@ -108,22 +108,21 @@ function validateSubsequence(
           blockPos.col,
           color,
         );
-        if (!blockHasThreat(blockThreat)) {
+        if (!blockThreatContinues(blockThreat, board, opponentColor)) {
           valid = false;
           break;
         }
         placed.push(blockPos);
         i++; // ブロック要素をスキップ（先行配置済み）
-        continue; // openThree チェックはブロック防御以降で処理
+        // ブロック石自身の活三/ミセ手チェックは blockThreatContinues で済み（#117）。
+        // 以降の openThree チェックは次の防御手（i+1）で処理する。
+        continue;
       }
-      // 防御手配置後に相手の活三またはミセ手が存在する → 次の攻撃手が四/五連でなければVCT手順崩壊
-      // （issue #116 以降、findVCTSequence のエントリと findVCTSequenceRecursive /
-      //  hasVCT の各ノードでも相手の活三・ミセ手を確認するようになったが、
-      //  本検証は詰み木・手順の最終ゲートとして独立に判定する）
-      if (
-        hasOpenThree(board, opponentColor) ||
-        hasFourThreeAvailable(board, opponentColor)
-      ) {
+      // 防御手配置後に相手の活三またはミセ手が存在する → 次の攻撃手が四/五連でなければ
+      // VCT手順崩壊（issue #116）。
+      // Zig 探索側も各ノードで同じ判定をするが、本検証は詰み木・手順の最終ゲートとして
+      // 独立に判定する。
+      if (opponentBlocksThreePursuit(board, opponentColor)) {
         const nextIdx = i + 1;
         if (nextIdx >= sequence.length) {
           valid = false;
@@ -173,10 +172,53 @@ function validateSubsequence(
  * checkDefenseCounterThreat で四/活三を検出 → true（脅威あり）。
  * いずれもなければ false（脅威なし → VCT不成立）。
  */
-export function blockHasThreat(
+function blockHasThreat(
   blockThreat: "win" | "four" | "three" | "none",
 ): boolean {
   return blockThreat !== "none";
+}
+
+/**
+ * 相手が「三の追いを許さない脅威」を持つか（Zig `vct.opponentBlocksThreePursuit` 対応）。
+ *
+ * これが真なら、攻撃側の次の一手は四/五でなければならない。三で追っても
+ * 相手は受けずに活四・四三・四追いを先行させられるため、手順が崩壊する。
+ *
+ * 安いほうの hasOpenThree を先に評価して短絡する。
+ */
+export function opponentBlocksThreePursuit(
+  board: BoardState,
+  opponentColor: "black" | "white",
+): boolean {
+  return (
+    hasOpenThree(board, opponentColor) ||
+    hasFourThreeAvailable(board, opponentColor)
+  );
+}
+
+/**
+ * カウンター四をブロックした石で攻撃を継続できるか判定する（issue #117）。
+ *
+ * Zig 側 `vct.zig` の `blockThreatContinues` と同じ意味論（二重実装のため両方を直すこと）。
+ * - `none`: 脅威なし → 継続不可
+ * - `win` / `four`: 受けは強制 → 継続可（追加チェック不要＝コスト最小）
+ * - `three`: 受け手に受ける義務がない。受け手が活三 or ミセ手（1手四三）を持つなら、
+ *   受け手はブロックの三を無視して達四・四三を先行させられるので手順は崩壊する。
+ *
+ * `board` はブロック石を配置済みの状態で渡すこと。
+ */
+export function blockThreatContinues(
+  blockThreat: "win" | "four" | "three" | "none",
+  board: BoardState,
+  opponentColor: "black" | "white",
+): boolean {
+  if (!blockHasThreat(blockThreat)) {
+    return false;
+  }
+  if (blockThreat !== "three") {
+    return true;
+  }
+  return !opponentBlocksThreePursuit(board, opponentColor);
 }
 
 /**

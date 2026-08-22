@@ -196,7 +196,6 @@ pub fn hasFourThreeAvailable(cells: []Cell, color: Cell) bool {
 pub fn opponentBlocksThreePursuit(cells: []Cell, opponent: Cell) bool {
     return hasOpenThree(cells, opponent) or hasFourThreeAvailable(cells, opponent);
 }
-
 // =============================================================================
 // findThreatMoves（TS版 vctHelpers.ts に対応）
 // =============================================================================
@@ -410,6 +409,23 @@ pub fn checkDefenseCounterThreat(cells: []const Cell, row: u8, col: u8, opponent
 /// ブロック石が攻撃継続に必要な脅威を持つか判定
 fn blockHasThreat(ct: CounterThreat) bool {
     return ct != .none;
+}
+
+/// カウンター四をブロックした石で攻撃を継続できるか判定（issue #117）
+///
+/// TS 側 `src/logic/cpu/search/vctValidation.ts` の `blockThreatContinues` と
+/// 同じ意味論（脅威系は二重実装。どちらかを変えたら必ず両方直すこと）。
+///
+/// `cells` はブロック石を配置済みの局面、`opponent` は受け手の色。
+/// - `.none`: そもそも脅威なし → 継続不可
+/// - `.win` / `.four`: 受けは強制 → 継続可（追加チェック不要＝コスト最小）
+/// - `.three`: 受け手に受ける義務はない。受け手が活三/ミセ手を持つなら、
+///   受け手はブロックの三を無視して達四・四三を先行させられるので手順は崩壊する
+///   （#116 の「三の攻め手のみ不可、四は継続」と同じ意味論）。
+fn blockThreatContinues(ct: CounterThreat, cells: []Cell, opponent: Cell) bool {
+    if (!blockHasThreat(ct)) return false;
+    if (ct != .three) return true;
+    return !opponentBlocksThreePursuit(cells, opponent);
 }
 
 // =============================================================================
@@ -747,9 +763,11 @@ fn evaluateCounterThreat(
             cells[block_idx] = color;
             bitboard.placeStone(bp.row, bp.col, color);
 
-            // ブロック石が攻撃側の脅威を作らなければVCT不成立
+            // ブロック石が攻撃側の脅威を作らなければVCT不成立。
+            // 三しか作らない場合は受け手に受ける義務がないので、
+            // 受け手が活三/ミセ手を持つならここで打ち切る（issue #117）。
             const block_ct = checkDefenseCounterThreat(cells, bp.row, bp.col, color);
-            if (!blockHasThreat(block_ct)) {
+            if (!blockThreatContinues(block_ct, cells, opponent)) {
                 cells[block_idx] = .empty;
                 bitboard.removeStone(bp.row, bp.col);
                 return false;
@@ -1279,8 +1297,9 @@ fn findVCTSequenceRecursive(
                 cells[block_idx] = color;
                 bitboard.placeStone(bp.row, bp.col, color);
 
+                // 三しか作らないブロックは受けを強制できない（issue #117）
                 const block_ct = checkDefenseCounterThreat(cells, bp.row, bp.col, color);
-                if (!blockHasThreat(block_ct)) {
+                if (!blockThreatContinues(block_ct, cells, opponent)) {
                     cells[block_idx] = .empty;
                     bitboard.removeStone(bp.row, bp.col);
                     cells[def_idx] = .empty;
@@ -1667,8 +1686,9 @@ fn buildBlockDefSubSequence(
             cells[nb_idx] = color;
             bitboard.placeStone(nb.row, nb.col, color);
 
+            // 三しか作らないブロックは受けを強制できない（issue #117）
             const nb_threat = checkDefenseCounterThreat(cells, nb.row, nb.col, color);
-            if (!blockHasThreat(nb_threat)) {
+            if (!blockThreatContinues(nb_threat, cells, opponent)) {
                 cells[nb_idx] = .empty;
                 bitboard.removeStone(nb.row, nb.col);
                 return result;
@@ -1923,7 +1943,7 @@ pub fn findVCTSequenceFromFirstMove(
             bitboard.placeStone(bp.row, bp.col, color);
 
             const block_ct = checkDefenseCounterThreat(cells, bp.row, bp.col, color);
-            if (blockHasThreat(block_ct)) {
+            if (blockThreatContinues(block_ct, cells, opponent)) {
                 const block_ok = processBlockDefensesSeq(cells, bp, color, 0, max_depth, &limiter, true);
                 if (block_ok.found and block_ok.seq_len_valid) {
                     cont_seq[0] = bp;
@@ -2888,4 +2908,131 @@ test "hasOpenThree: 本物の跳び四は三として数えない（回帰）" {
     bitboard.initFromCells(&cells);
 
     try testing.expect(!hasOpenThree(&cells, .white));
+}
+
+// =============================================================================
+// issue #117 / #118 の回帰テスト
+// =============================================================================
+
+/// issue #117 の再現局面（白番・攻めは白）
+///
+/// - 行3: 黒(3,3) / 白(3,4)(3,5)(3,6) / 空(3,7)(3,8) / 黒(3,9)(3,10)(3,11) / 空(3,12)
+///   白 (3,7) が四（受けは (3,8) 一点）。黒 (3,8) は黒の四（受けは (3,12) 一点）。
+/// - 白 (4,12)(5,12) と (4,11)(5,10): ブロック点 (3,12) に打つと縦横斜めの活三が 2 本
+///   できる（＝block_ct は .three。四ではないので黒に受ける義務はない）。
+/// - 黒 (10,4)(10,5)(10,6): ブロック後の局面で黒が持つ活三。黒は白の三を無視して
+///   達四を作れるため、白の「三の追い」は間に合わない＝VCT は不成立。
+fn setupIssue117Position(cells: []Cell) void {
+    cells[3 * BOARD_SIZE + 3] = .black;
+    cells[3 * BOARD_SIZE + 4] = .white;
+    cells[3 * BOARD_SIZE + 5] = .white;
+    cells[3 * BOARD_SIZE + 6] = .white;
+    cells[3 * BOARD_SIZE + 9] = .black;
+    cells[3 * BOARD_SIZE + 10] = .black;
+    cells[3 * BOARD_SIZE + 11] = .black;
+    cells[4 * BOARD_SIZE + 12] = .white;
+    cells[5 * BOARD_SIZE + 12] = .white;
+    cells[4 * BOARD_SIZE + 11] = .white;
+    cells[5 * BOARD_SIZE + 10] = .white;
+    cells[10 * BOARD_SIZE + 4] = .black;
+    cells[10 * BOARD_SIZE + 5] = .black;
+    cells[10 * BOARD_SIZE + 6] = .black;
+}
+
+test "issue #117 前提: カウンター四のブロック石は三しか作らず、その局面で相手は活三を持つ" {
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    setupIssue117Position(&cells);
+    bitboard.initFromCells(&cells);
+
+    // 白の四 (3,7) の受けは (3,8) 一点
+    cells[3 * BOARD_SIZE + 7] = .white;
+    bitboard.placeStone(3, 7, .white);
+    const def = getThreatDefensePositions(&cells, 3, 7, .white);
+    try testing.expectEqual(@as(usize, 1), def.len);
+    try testing.expectEqual(@as(u8, 3), def.items[0].row);
+    try testing.expectEqual(@as(u8, 8), def.items[0].col);
+
+    // 黒 (3,8) はカウンター四、受けは (3,12) 一点
+    cells[3 * BOARD_SIZE + 8] = .black;
+    bitboard.placeStone(3, 8, .black);
+    try testing.expectEqual(CounterThreat.four, checkDefenseCounterThreat(&cells, 3, 8, .black));
+    const bp = quiescence.getFourDefensePosition(&cells, 3, 8, .black).blockPos();
+    try testing.expect(bp != null);
+    try testing.expectEqual(@as(u8, 3), bp.?.row);
+    try testing.expectEqual(@as(u8, 12), bp.?.col);
+
+    // ブロック石 (3,12) は四ではなく三しか作らない
+    cells[3 * BOARD_SIZE + 12] = .white;
+    bitboard.placeStone(3, 12, .white);
+    try testing.expectEqual(CounterThreat.three, checkDefenseCounterThreat(&cells, 3, 12, .white));
+    // その局面で黒は活三を持つ（＝白の三を無視して達四を作れる）
+    try testing.expect(opponentBlocksThreePursuit(&cells, .black));
+}
+
+test "hasVCT: カウンター四のブロックが三しか作らず相手に活三がある場合は偽VCT（issue #117）" {
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    setupIssue117Position(&cells);
+    bitboard.initFromCells(&cells);
+
+    var limiter = TimeLimiter{
+        .start_time = 0,
+        .time_limit = 0,
+        .nodes = 0,
+        .max_nodes = 0,
+    };
+
+    try testing.expect(!hasVCT(&cells, .white, 0, &limiter, VCT_MAX_DEPTH));
+}
+
+test "findVCTSequence: ct=four ブロック経路の偽VCTを返さない（issue #117）" {
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    setupIssue117Position(&cells);
+
+    const result = findVCTSequence(&cells, .white, VCT_MAX_DEPTH, 0, 0, false, .lenient);
+    try testing.expect(!result.found);
+}
+
+test "blockThreatContinues: 三のブロックは相手の活三で不成立・四/五なら継続（issue #117）" {
+    // issue #117 の再現局面のブロック直後（白(3,7)四 → 黒(3,8)カウンター四 → 白(3,12)ブロック）
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    setupIssue117Position(&cells);
+    cells[3 * BOARD_SIZE + 7] = .white;
+    cells[3 * BOARD_SIZE + 8] = .black;
+    cells[3 * BOARD_SIZE + 12] = .white;
+    bitboard.initFromCells(&cells);
+
+    // ブロック石は三しか作らない ＆ 黒は活三を持つ → 継続不可
+    try testing.expectEqual(CounterThreat.three, checkDefenseCounterThreat(&cells, 3, 12, .white));
+    try testing.expect(!blockThreatContinues(.three, &cells, .black));
+    // 四/五なら受けは強制なので相手の活三と無関係に継続可
+    try testing.expect(blockThreatContinues(.four, &cells, .black));
+    try testing.expect(blockThreatContinues(.win, &cells, .black));
+    // 脅威なしは継続不可
+    try testing.expect(!blockThreatContinues(.none, &cells, .black));
+
+    // 黒の活三（行10）を消すと、三のブロックでも継続可
+    cells[10 * BOARD_SIZE + 4] = .empty;
+    cells[10 * BOARD_SIZE + 5] = .empty;
+    cells[10 * BOARD_SIZE + 6] = .empty;
+    bitboard.initFromCells(&cells);
+    try testing.expect(blockThreatContinues(.three, &cells, .black));
+}
+
+test "findVCTSequenceFromFirstMove: ct=four ブロック経路でも偽VCTを返さない（issue #117）" {
+    // findVCTByFirstMoveIteration（振り返り）から wasm 経由で呼ばれる live 経路。
+    // この局面はエントリのガード（黒の活三）で棄却されるため修正前から緑だが、
+    // 判別力のあるテストは上の hasVCT / blockThreatContinues 側にある。
+    // エントリをすり抜ける局面（ブロック後にはじめて受け手が脅威を得る形）は、
+    // 「受け手の counter-four の石が新たに脅威を作る」＝その石が根の時点で
+    // 四三点（ミセ手）になるため、エントリのミセ手ガードが必ず先に発火する。
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    setupIssue117Position(&cells);
+
+    const result = findVCTSequenceFromFirstMove(&cells, .{ .row = 3, .col = 7 }, .white, VCT_MAX_DEPTH, 0, 0, false);
+    try testing.expect(!result.found);
 }
