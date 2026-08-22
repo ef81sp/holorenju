@@ -40,6 +40,42 @@ export function collectLineFivePoints(
   dc: number,
   color: "black" | "white",
 ): Position[] {
+  return scanLineFivePoints(board, row, col, dr, dc, color, false);
+}
+
+/**
+ * `collectLineFivePoints` の存在判定版（五点が 1 つでもあるか）
+ *
+ * 「四かどうか」を聞くだけの呼び出し（`isFourInDirection` など）は個数も座標も要らない。
+ * 最初の 1 点で打ち切り、配列の確保も省く。
+ * **定義は共有**（実体は `scanLineFivePoints`）なので SSoT は保たれる。
+ * Zig 側 `threats.hasLineFivePoint` と対応する。
+ */
+export function hasLineFivePoint(
+  board: BoardState,
+  row: number,
+  col: number,
+  dr: number,
+  dc: number,
+  color: "black" | "white",
+): boolean {
+  return scanLineFivePoints(board, row, col, dr, dc, color, true).length > 0;
+}
+
+/**
+ * 五点走査の本体。`collectLineFivePoints` / `hasLineFivePoint` が共有する唯一の定義。
+ *
+ * @param stopAtFirst true なら最初の 1 点で打ち切る（存在判定用）
+ */
+function scanLineFivePoints(
+  board: BoardState,
+  row: number,
+  col: number,
+  dr: number,
+  dc: number,
+  color: "black" | "white",
+  stopAtFirst: boolean,
+): Position[] {
   const points: Position[] = [];
   for (let i = -5; i <= 5; i++) {
     if (i === 0) {
@@ -55,6 +91,9 @@ export function collectLineFivePoints(
     const total = countLine(board, r, c, dr, dc, color);
     if (isFiveLength(total, color)) {
       points.push({ row: r, col: c });
+      if (stopAtFirst) {
+        return points;
+      }
     }
   }
   return points;

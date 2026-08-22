@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import type { BoardState } from "@/types/game";
+
 import { createEmptyBoard } from "@/logic/renjuRules";
 
 import { buildLineTable } from "../lineTable/lineTable";
@@ -247,7 +249,7 @@ describe("findThreatMoves - lineTable等価性", () => {
   });
 });
 
-describe("hasOpenThree - lineTable等価性", () => {
+describe("hasOpenThree", () => {
   it("連続活三を検出する", () => {
     const board = createEmptyBoard();
     placeStonesOnBoard(board, [
@@ -255,9 +257,7 @@ describe("hasOpenThree - lineTable等価性", () => {
       { row: 7, col: 6, color: "black" },
       { row: 7, col: 7, color: "black" },
     ]);
-    const lt = buildLineTable(board);
     expect(hasOpenThree(board, "black")).toBe(true);
-    expect(hasOpenThree(board, "black", lt)).toBe(true);
   });
 
   it("活三なしを正しく判定する", () => {
@@ -266,9 +266,7 @@ describe("hasOpenThree - lineTable等価性", () => {
       { row: 7, col: 5, color: "black" },
       { row: 7, col: 6, color: "black" },
     ]);
-    const lt = buildLineTable(board);
     expect(hasOpenThree(board, "black")).toBe(false);
-    expect(hasOpenThree(board, "black", lt)).toBe(false);
   });
 
   it("跳び三を検出する（○○_○）", () => {
@@ -279,9 +277,7 @@ describe("hasOpenThree - lineTable等価性", () => {
       // gap at col 7
       { row: 7, col: 8, color: "black" },
     ]);
-    const lt = buildLineTable(board);
     expect(hasOpenThree(board, "black")).toBe(true);
-    expect(hasOpenThree(board, "black", lt)).toBe(true);
   });
 
   it("跳び三を検出する（○_○○）", () => {
@@ -292,9 +288,7 @@ describe("hasOpenThree - lineTable等価性", () => {
       { row: 7, col: 7, color: "black" },
       { row: 7, col: 8, color: "black" },
     ]);
-    const lt = buildLineTable(board);
     expect(hasOpenThree(board, "black")).toBe(true);
-    expect(hasOpenThree(board, "black", lt)).toBe(true);
   });
 
   it("跳び四の一部である連続三を活三として検出しない", () => {
@@ -307,9 +301,7 @@ describe("hasOpenThree - lineTable等価性", () => {
       // gap at col 7
       { row: 7, col: 8, color: "black" },
     ]);
-    const lt = buildLineTable(board);
     expect(hasOpenThree(board, "black")).toBe(false);
-    expect(hasOpenThree(board, "black", lt)).toBe(false);
   });
 
   it("端に片方が塞がれた三は活三ではない", () => {
@@ -320,9 +312,7 @@ describe("hasOpenThree - lineTable等価性", () => {
       { row: 7, col: 7, color: "black" },
       { row: 7, col: 4, color: "white" }, // 片端ブロック
     ]);
-    const lt = buildLineTable(board);
     expect(hasOpenThree(board, "black")).toBe(false);
-    expect(hasOpenThree(board, "black", lt)).toBe(false);
   });
 
   it("斜め方向の活三を検出する", () => {
@@ -332,14 +322,70 @@ describe("hasOpenThree - lineTable等価性", () => {
       { row: 6, col: 6, color: "white" },
       { row: 7, col: 7, color: "white" },
     ]);
-    const lt = buildLineTable(board);
     expect(hasOpenThree(board, "white")).toBe(true);
-    expect(hasOpenThree(board, "white", lt)).toBe(true);
   });
 
   it("空盤面では活三なし", () => {
     const board = createEmptyBoard();
-    const lt = buildLineTable(board);
-    expect(hasOpenThree(board, "black", lt)).toBe(false);
+    expect(hasOpenThree(board, "black")).toBe(false);
+  });
+});
+
+describe("issue #121 - 黒の偽跳び四（ギャップ埋めが長連）", () => {
+  const falseJumpFourBoard = (): BoardState => {
+    // 8 行目に黒 C8 D8 _ F8 G8 H8。E8 を埋めると C8..H8 の 6 連＝長連なので四ではない。
+    // かつ F8 G8 H8 は達四にできない（E8 側は長連・I8 側は止め四）ウソ三でもある。
+    const board = createEmptyBoard();
+    placeStonesOnBoard(
+      board,
+      [2, 3, 5, 6, 7].map((col) => ({ row: 7, col, color: "black" as const })),
+    );
+    return board;
+  };
+
+  const genuineOpenThreeBoard = (): BoardState => {
+    // 長連の原因になる C8 D8 を置かない ＝ F8 G8 H8 だけの素直な活三
+    const board = createEmptyBoard();
+    placeStonesOnBoard(
+      board,
+      [5, 6, 7].map((col) => ({ row: 7, col, color: "black" as const })),
+    );
+    return board;
+  };
+
+  it("hasOpenThree: 偽跳び四の裏はウソ三なので活三としない", () => {
+    expect(hasOpenThree(falseJumpFourBoard(), "black")).toBe(false);
+  });
+
+  it("hasOpenThree: 窓外の石が無ければ同じ 3 連は本物の活三（対比）", () => {
+    expect(hasOpenThree(genuineOpenThreeBoard(), "black")).toBe(true);
+  });
+
+  it("getCreatedOpenThreeDefenses: 偽跳び四の裏はウソ三なので受けを返さない", () => {
+    expect(
+      getCreatedOpenThreeDefenses(falseJumpFourBoard(), 7, 6, "black"),
+    ).toEqual([]);
+  });
+
+  it("getCreatedOpenThreeDefenses: 本物の活三なら受けを返す（対比）", () => {
+    const defenses = getCreatedOpenThreeDefenses(
+      genuineOpenThreeBoard(),
+      7,
+      6,
+      "black",
+    );
+    expect(defenses).toContainEqual({ row: 7, col: 4 });
+    expect(defenses).toContainEqual({ row: 7, col: 8 });
+  });
+
+  it("hasOpenThree: 本物の跳び四は三として数えない（回帰）", () => {
+    // 白 E8 F8 G8 _ I8。H8 を埋めれば五 ＝ 本物の跳び四。
+    const board = createEmptyBoard();
+    placeStonesOnBoard(
+      board,
+      [4, 5, 6, 8].map((col) => ({ row: 7, col, color: "white" as const })),
+    );
+
+    expect(hasOpenThree(board, "white")).toBe(false);
   });
 });

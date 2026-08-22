@@ -4,7 +4,6 @@
 /// 手順を探索する。通常のVCF探索では検出できない勝ち筋を発見する。
 ///
 /// TS版 miseVcf.ts に対応
-
 const bitboard = @import("bitboard.zig");
 const board_mod = @import("board.zig");
 const evaluate = @import("evaluate.zig");
@@ -133,9 +132,14 @@ fn getCreatedOpenThreeDefenses(cells: []Cell, row: u8, col: u8, color: Cell) thr
         const dir_index = jp.DIRECTION_INDICES[i];
         const analysis = ll.queryPatternByCell(row, col, i, color);
 
-        // 連続活三（跳び四の一部は除外、黒の場合はウソの三を除外）
+        // 連続活三（本物の四の一部は除外、黒の場合はウソの三を除外）
+        //
+        // issue #121: 除外条件は LUT の has_jump_four ではなく盤面を見る
+        // `threats.isFourInDirection`（五点の列挙）に委ねる。黒の「ギャップ埋めが長連」
+        // の形は四ではないので、三の受けを握り潰してはいけない。
+        // （TS 版 vctHelpers.isConsecutiveOpenThree と同じ基準）
         if (analysis.count == 3 and analysis.end1 == 0 and analysis.end2 == 0 and
-            !analysis.has_jump_four and
+            !threats.isFourInDirectionWithPattern(cells, row, col, i, color, analysis) and
             (color != .black or patterns.isValidConsecutiveThree(cells, row, col, dir_index, color)))
         {
             const open_three_defenses = threats.getOpenThreeDefensePositions(cells, row, col, dir.dr, dir.dc, color);
@@ -890,4 +894,32 @@ test "findMiseVCFMove: ノリ手で無効なH7をMise-VCF手として返さな�
         const is_h7 = m.row == 8 and m.col == 7;
         try testing.expect(!is_h7);
     }
+}
+
+test "getCreatedOpenThreeDefenses: 偽跳び四の裏はウソ三なので受けを返さない（issue #121）" {
+    ll.init();
+    // 8 行目に黒 C8 D8 _ F8 G8 H8（col = 2,3,[4],5,6,7）。
+    // LUT は跳び四と報告するが E8 埋めは 6 連＝長連で四ではなく、
+    // F8 G8 H8 も達四にできないウソ三。よってどの方向にも受けは無い。
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    for ([_]u8{ 2, 3, 5, 6, 7 }) |c| {
+        cells[7 * BOARD_SIZE + c] = .black;
+    }
+    bitboard.initFromCells(&cells);
+
+    const defenses = getCreatedOpenThreeDefenses(&cells, 7, 6, .black);
+    try testing.expectEqual(@as(u8, 0), defenses.len);
+}
+
+test "getCreatedOpenThreeDefenses: 窓外の石が無ければ本物の活三の受けを返す（対比・issue #121）" {
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    for ([_]u8{ 5, 6, 7 }) |c| {
+        cells[7 * BOARD_SIZE + c] = .black;
+    }
+    bitboard.initFromCells(&cells);
+
+    const defenses = getCreatedOpenThreeDefenses(&cells, 7, 6, .black);
+    try testing.expect(defenses.contains(7, 4));
+    try testing.expect(defenses.contains(7, 8));
 }

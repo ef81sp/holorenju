@@ -7,11 +7,7 @@
 import type { BoardState } from "@/types/game";
 
 import { DIRECTION_INDICES, DIRECTIONS } from "../core/constants";
-import {
-  checkEnds,
-  collectLineFivePoints,
-  countLine,
-} from "../core/lineAnalysis";
+import { checkEnds, countLine, hasLineFivePoint } from "../core/lineAnalysis";
 // 夏止め済み判定（受け点の基準と活三判定を一致させる SSoT）
 import { getOpenThreeDefensePositions } from "../evaluation/threatDetection";
 // #43 PR-3: 跳び四/三の図形判定を Zig アダプタへ委譲（patterns.ts 依存を断つ）。
@@ -65,9 +61,12 @@ export function isFourInDirection(
   i: number,
   color: "black" | "white",
   /**
-   * 呼び出し側が既に計算済みの `countLine(board, row, col, dr, dc, color)`。
+   * 呼び出し側が既に計算済みの、その方向の連続自石数。
    * 渡せば同じ走査を二重に行わずに済む（`classifyThreat` /
    * `checkDefenseCounterThreat` はループ内で先に計算している）。
+   *
+   * `countLine(board, row, col, dr, dc, color)` のほか、
+   * `analyzeDirection().count` / `getDirectionPattern().count` も同義なのでそのまま渡せる。
    */
   knownCount?: number,
 ): boolean {
@@ -83,7 +82,8 @@ export function isFourInDirection(
     return false;
   }
 
-  return collectLineFivePoints(board, row, col, dr, dc, color).length > 0;
+  // boolean 用途なので早期打ち切り版（定義は collectLineFivePoints と共有）を使う。
+  return hasLineFivePoint(board, row, col, dr, dc, color);
 }
 
 /**

@@ -3,12 +3,12 @@
 /// 四と活三を含む脅威手を連続して打つことで勝利する手順を探索する。
 /// VCFより広い脅威（活三を含む）を扱う。
 /// TS版 vct.ts + vctHelpers.ts + threatMoves.ts + threatPatterns.ts に対応
-
 const bitboard = @import("bitboard.zig");
 const board_mod = @import("board.zig");
 const evaluate = @import("evaluate.zig");
 const forbidden = @import("forbidden.zig");
 const ft = @import("forced_win_tree.zig");
+const jp = @import("jump_patterns.zig");
 const ll = @import("line_lookup.zig");
 const patterns = @import("patterns.zig");
 const quiescence = @import("quiescence.zig");
@@ -104,13 +104,15 @@ pub fn isThreat(cells: []const Cell, row: u8, col: u8, color: Cell) bool {
     return result.creates_four or result.creates_open_three;
 }
 
-
 // =============================================================================
 // hasOpenThree（TS版 vctHelpers.ts に対応）
 // =============================================================================
 
 /// 指定色が活三を持っているかチェック
-pub fn hasOpenThree(cells: []const Cell, color: Cell) bool {
+///
+/// 注: `isValidConsecutiveThree`（黒のウソ三除外）が仮置きのため cells は非 const。
+/// 呼び出し前後で内容は変わらない。
+pub fn hasOpenThree(cells: []Cell, color: Cell) bool {
     for (0..BOARD_SIZE) |r_usize| {
         const row: u8 = @intCast(r_usize);
         for (0..BOARD_SIZE) |c_usize| {
@@ -120,15 +122,30 @@ pub fn hasOpenThree(cells: []const Cell, color: Cell) bool {
             for (0..4) |i| {
                 const result = ll.queryPatternByCell(row, col, i, color);
 
-                // 連続活三（跳び四の一部は除外）
+                // 連続活三（本物の四の一部は除外＝より強い脅威として別扱い）
+                //
+                // issue #121: 除外条件に LUT の `has_jump_four` をそのまま使うと、
+                // 窓（中心 ±4）の外の自石でギャップ埋めが長連になる黒の形まで四扱いされ、
+                // 三の検出が握り潰されていた。四かどうかは盤面を見る
+                // `threats.isFourInDirection`（五点の列挙）に委ねる。
+                //
+                // あわせて黒のウソの三（達四にできない三）も除外する。偽の四が外れた分、
+                // 「四でも三でもない」形が活三として流入してしまうため。
+                // TS `vctHelpers.isConsecutiveOpenThree` と同じガード。
                 if (result.count == 3 and result.end1 == 0 and result.end2 == 0) {
-                    if (!result.has_jump_four) {
+                    if (!threats.isFourInDirectionWithPattern(cells, row, col, i, color, result) and
+                        (color != .black or
+                            patterns.isValidConsecutiveThree(cells, row, col, jp.DIRECTION_INDICES[i], color)))
+                    {
                         return true;
                     }
                 }
 
-                // 跳び三
-                if (result.count != 3 and result.has_jump_three) {
+                // 跳び三（黒はウソの三を除外）
+                if (result.count != 3 and result.has_jump_three and
+                    (color != .black or
+                        patterns.isValidJumpThree(cells, row, col, jp.DIRECTION_INDICES[i], color)))
+                {
                     return true;
                 }
             }
@@ -307,6 +324,7 @@ pub fn getThreatDefensePositions(cells: []const Cell, row: u8, col: u8, color: C
         // 「最も近いギャップ 1 つ」（`isJumpFourOverline`）で見ており、
         // 同一ライン上に長連ギャップと本物の五点が併存すると四ブランチごと落ちて
         // 受け 0 点になっていた（#124 レビュー指摘）。
+        // NOTE: この分岐は 5 箇所に複製されている。SSoT 統合は issue #134。
         var has_four = false;
         if (result.count == 4 or result.has_jump_four) {
             var five_points = PositionList.init();
@@ -2830,4 +2848,44 @@ test "getThreatDefensePositions: 最も近いギャップが長連でも遠い�
         if (defense.items[i].row == 7 and defense.items[i].col == 6) has_g8 = true;
     }
     try testing.expect(has_g8);
+}
+
+test "hasOpenThree: 偽跳び四の裏はウソ三なので活三としない（issue #121）" {
+    ll.init();
+    // 8 行目に黒 C8 D8 _ F8 G8 H8（col = 2,3,[4],5,6,7）。
+    // LUT は F8/G8/H8 から `D8 _ F8 G8 H8` を跳び四と報告するが、窓（中心 ±4）の外の
+    // C8 のせいで E8 を埋めると 6 連＝長連。四ではない。
+    // かつ F8 G8 H8 は達四にできない（E8 側は長連・I8 側は止め四）ウソ三でもある。
+    // 四判定を五点列挙に寄せた（#121）だけだとここが活三として流入するので、
+    // 黒のウソ三ガードも併せて入れてある。
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    for ([_]u8{ 2, 3, 5, 6, 7 }) |c| {
+        cells[7 * BOARD_SIZE + c] = .black;
+    }
+    bitboard.initFromCells(&cells);
+
+    try testing.expect(!hasOpenThree(&cells, .black));
+}
+
+test "hasOpenThree: 窓外の石が無ければ同じ 3 連は本物の活三（対比・issue #121）" {
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    for ([_]u8{ 5, 6, 7 }) |c| {
+        cells[7 * BOARD_SIZE + c] = .black;
+    }
+    bitboard.initFromCells(&cells);
+
+    try testing.expect(hasOpenThree(&cells, .black));
+}
+
+test "hasOpenThree: 本物の跳び四は三として数えない（回帰）" {
+    ll.init();
+    // 白 E8 F8 G8 _ I8（col = 4,5,6,[7],8）。H8 を埋めれば五 ＝ 本物の跳び四。
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    for ([_]u8{ 4, 5, 6, 8 }) |c| {
+        cells[7 * BOARD_SIZE + c] = .white;
+    }
+    bitboard.initFromCells(&cells);
+
+    try testing.expect(!hasOpenThree(&cells, .white));
 }
