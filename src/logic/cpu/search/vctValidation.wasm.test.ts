@@ -11,6 +11,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { parseInitialBoard } from "@/logic/boardParser";
 
 import { BOARD_ISSUE_140 } from "../review/vctBlockFiveFixture";
+import { BOARD_ISSUE_146 } from "../review/vctBlockForbiddenFixture";
 import {
   hasFourThreeAvailable,
   hasOpenThree,
@@ -19,6 +20,7 @@ import {
 import { checkDefenseCounterThreat } from "./threatPatterns";
 import {
   blockThreatContinues,
+  classifyBlock,
   opponentBlocksThreePursuit,
   validateVCTSequence,
 } from "./vctValidation";
@@ -137,5 +139,62 @@ describe("validateVCTSequence: ブロック石が五連なら手順はそこで�
       { row: 8, col: 7 },
     ];
     expect(validateVCTSequence(board, "black", sequence)).toBe(true);
+  });
+});
+
+/**
+ * issue #145: ブロック後の 3 分岐（Zig `classifyBlock` と 1 対 1）
+ *
+ * 同じブロック点 (6,9) が、攻め手 (7,8) の有無で continue_search / stop に分かれる
+ * （(7,8) が斜めの四を完成させるので (6,9) が四三 → 四四の禁手になる）。
+ */
+const BOARD_146_BEFORE_ATTACK = BOARD_ISSUE_146.map((line, row) =>
+  row === 7 ? "----oxxx-o-----" : line,
+);
+const BOARD_146_AFTER_ATTACK = BOARD_ISSUE_146.map((line, row) =>
+  row === 7 ? "----oxxxxo-----" : line,
+);
+/** issue #140 の局面で 黒 (7,7)（四三）→ 白 (7,8)（カウンター四）まで進めたもの */
+const BOARD_140_BEFORE_BLOCK = BOARD_ISSUE_140.map((line, row) =>
+  row === 7 ? "-----xxxo------" : line,
+);
+
+describe("classifyBlock（issue #145）", () => {
+  it("ブロック点が合法で四を作るなら continue_search（盤面は復元される）", () => {
+    const board = parseInitialBoard(BOARD_146_BEFORE_ATTACK);
+    expect(classifyBlock(board, { row: 6, col: 9 }, "black")).toBe(
+      "continue_search",
+    );
+    expect(board[6]?.[9]).toBeNull();
+  });
+
+  it("ブロック点が黒の禁手なら stop（issue #146）", () => {
+    const board = parseInitialBoard(BOARD_146_AFTER_ATTACK);
+    expect(classifyBlock(board, { row: 6, col: 9 }, "black")).toBe("stop");
+    expect(board[6]?.[9]).toBeNull();
+  });
+
+  it("ブロック石が五連なら win_now（issue #140）", () => {
+    const board = parseInitialBoard(BOARD_140_BEFORE_BLOCK);
+    expect(classifyBlock(board, { row: 8, col: 7 }, "black")).toBe("win_now");
+  });
+});
+
+/**
+ * issue #146: 黒 (7,8)（行7の止め四）→ 白 (7,9)（受け兼カウンター四）
+ * → 黒 (6,9)（カウンター四のブロック。ただし行6の四と斜めの四で**四四の禁手**）。
+ *
+ * ブロック点に打てない以上この手順は成立しない。修正前は禁手を見ずにブロック石を
+ * 置き、`blockThreat === "four"` で継続扱いにして有効を返していた（＝判別力あり）。
+ */
+describe("validateVCTSequence: ブロック点が黒の禁手なら手順は無効（issue #146）", () => {
+  it("四四の禁手点でブロックする手順は無効", () => {
+    const board = parseInitialBoard(BOARD_ISSUE_146);
+    const sequence = [
+      { row: 7, col: 8 },
+      { row: 7, col: 9 },
+      { row: 6, col: 9 },
+    ];
+    expect(validateVCTSequence(board, "black", sequence)).toBe(false);
   });
 });

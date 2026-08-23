@@ -10,6 +10,7 @@ import type { BoardState, Position } from "@/types/game";
 import { checkFive } from "@/logic/renjuRules";
 
 // #37 P3 PR6: VCT検証ヘルパーを Zig 単一ソース経由に（合法局面で TS と一致、未ロード時 TS フォールバック）。
+import { isForbiddenForBlack } from "../wasm/forbiddenAdapter";
 import { hasFourThreeAvailable, hasOpenThree } from "../wasm/threatAdapter";
 import { createsFour } from "./threatMoves";
 import {
@@ -99,30 +100,27 @@ function validateSubsequence(
           valid = false;
           break;
         }
-        // ブロックを先行配置し、脅威チェック
+        // ブロック後の分岐は classifyBlock に集約（issue #145）。
+        // 判定のあいだだけブロック石を置いて外すので、ここではまだ盤面は変わっていない。
+        const outcome = classifyBlock(board, blockPos, color);
+        if (outcome === "stop") {
+          // 禁手で打てない（#146）/ 脅威なし / 三しか作らず受け手に反撃がある（#117）
+          valid = false;
+          break;
+        }
+        // ブロックを配置（以降の検証はブロック石込みの盤面で行う）
         const bRow = board[blockPos.row];
         if (bRow) {
           bRow[blockPos.col] = color;
         }
-        const blockThreat = checkDefenseCounterThreat(
-          board,
-          blockPos.row,
-          blockPos.col,
-          color,
-        );
-        // ブロック石が五を作った → その場で攻撃側の勝ち（issue #140）。
-        // 以降の手順は存在しない（Zig 側もブロック石で手順を確定する）ので検証不要。
-        if (blockThreat === "win") {
-          placed.push(blockPos);
-          break;
-        }
-        if (!blockThreatContinues(blockThreat, board, opponentColor)) {
-          valid = false;
-          break;
-        }
         placed.push(blockPos);
+        if (outcome === "win_now") {
+          // ブロック石が五を作った → その場で攻撃側の勝ち（issue #140）。
+          // 以降の手順は存在しない（Zig 側もブロック石で手順を確定する）ので検証不要。
+          break;
+        }
         i++; // ブロック要素をスキップ（先行配置済み）
-        // ブロック石自身の活三/ミセ手チェックは blockThreatContinues で済み（#117）。
+        // ブロック石自身の活三/ミセ手チェックは classifyBlock で済み（#117）。
         // 以降の openThree チェックは次の防御手（i+1）で処理する。
         continue;
       }
@@ -210,7 +208,92 @@ export function opponentBlocksThreePursuit(
 }
 
 /**
+ * 攻め側がブロック点に実際に打てるか判定する（issue #146）。
+ *
+ * Zig 側 `vct.zig` の `blockIsPlayable` と同じ意味論（二重実装のため両方を直すこと）。
+ * 受け手のカウンター四をブロックする点は、攻め側が黒のとき禁手（三三 / 四四 / 長連）で
+ * あり得る。そこには打てない＝相手の四を止められない＝その筋の VCT は不成立。
+ * 五連を作る点は禁手に優先して勝ちなので `checkFive` で先に許可する。
+ *
+ * `board` はブロック石を**配置する前**（対象が空点）の状態で渡すこと。
+ */
+export function blockIsPlayable(
+  board: BoardState,
+  blockPos: Position,
+  color: "black" | "white",
+): boolean {
+  if (color !== "black") {
+    return true;
+  }
+  if (checkFive(board, blockPos.row, blockPos.col, "black")) {
+    return true;
+  }
+  return !isForbiddenForBlack(board, blockPos.row, blockPos.col);
+}
+
+/** カウンター四をブロックしたあとの分岐（issue #145。Zig `vct.BlockOutcome` と 1 対 1） */
+export type BlockOutcome = "stop" | "win_now" | "continue_search";
+
+/**
+ * カウンター四をブロックしたあとの分岐を 1 箇所に集約する（issue #145）。
+ *
+ * Zig 側 `vct.zig` の `classifyBlock` と 1 対 1（二重実装のため両方を直すこと）。
+ * - `stop`: ブロック点が禁手（#146）/ ブロック石が脅威を作らない / 三しか作らず
+ *   受け手が活三・ミセ手・VCF を持つ（#117 / #118）→ この筋は不成立
+ * - `win_now`: ブロック石が五連 → その場で勝ち（#140）
+ * - `continue_search`: 受けの検証に進む
+ *
+ * `board` はブロック点が**空のまま**の状態で渡すこと（禁手判定は空点でしかできない）。
+ * 判定のあいだだけブロック石を置いて外すので、戻ったときの `board` は呼び出し前と同一。
+ */
+export function classifyBlock(
+  board: BoardState,
+  blockPos: Position,
+  color: "black" | "white",
+): BlockOutcome {
+  if (!blockIsPlayable(board, blockPos, color)) {
+    return "stop";
+  }
+  const row = board[blockPos.row];
+  if (!row) {
+    return "stop";
+  }
+  const opponentColor = color === "black" ? "white" : "black";
+
+  row[blockPos.col] = color;
+  const outcome = classifyPlacedBlock(board, blockPos, color, opponentColor);
+  row[blockPos.col] = null;
+
+  return outcome;
+}
+
+/** `classifyBlock` の本体（ブロック石を配置済みの盤面で判定する） */
+function classifyPlacedBlock(
+  board: BoardState,
+  blockPos: Position,
+  color: "black" | "white",
+  opponentColor: "black" | "white",
+): BlockOutcome {
+  const blockThreat = checkDefenseCounterThreat(
+    board,
+    blockPos.row,
+    blockPos.col,
+    color,
+  );
+  // 五連は受けの検証に進むまでもなく勝ち（issue #140）。
+  // blockThreatContinues より前に見る（"win" は無条件継続なので結果は同じ）。
+  if (blockThreat === "win") {
+    return "win_now";
+  }
+  return blockThreatContinues(blockThreat, board, opponentColor)
+    ? "continue_search"
+    : "stop";
+}
+
+/**
  * カウンター四をブロックした石で攻撃を継続できるか判定する（issue #117）。
+ *
+ * 呼び出し元は `classifyBlock` だけ（issue #145 で分岐を集約した）。
  *
  * Zig 側 `vct.zig` の `blockThreatContinues` と同じ意味論（二重実装のため両方を直すこと）。
  * - `none`: 脅威なし → 継続不可
