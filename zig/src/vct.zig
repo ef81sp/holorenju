@@ -524,18 +524,18 @@ fn blockThreatContinues(
 /// この関数は攻め側の非対称を解消するもの。
 ///
 /// 五連を作る点は禁手に優先して勝ちなので `checkFive` で先に許可する
-/// （`minimax.zig` の遅延禁手判定と同じ順序。`checkForbiddenMove` 自身も五連を
-/// `.none` に落とすので結果は同じだが、重い判定を先に短絡できる）。
+/// （`minimax.zig` の遅延禁手判定と同じ順序）。
 ///
 /// 長連になる点は従来 `checkDefenseCounterThreat` が `.none` を返すことで
 /// **偶然**弾かれていた（長連方向は五として数えられない）。ここで明示的に弾く。
 ///
 /// **ブロック石を置く前**（対象が空点のうち）に呼ぶこと。
 /// `checkForbiddenMove` は空でないマスに対しては `.none` を返す。
+///
+/// 判定そのものは `forbidden.isPlayable`（「打てる点か」の SSoT）に委譲する。
+/// 同じ述語を `move_gen` の候補生成と `quiescence`（issue #142）も使う。
 fn blockIsPlayable(cells: []Cell, bp: Position, color: Cell) bool {
-    if (color != .black) return true;
-    if (forbidden.checkFive(cells, bp.row, bp.col, .black)) return true;
-    return forbidden.checkForbiddenMove(cells, bp.row, bp.col) == .none;
+    return forbidden.isPlayable(cells, bp.row, bp.col, color);
 }
 
 /// カウンター四をブロックしたあとの分岐（issue #145）

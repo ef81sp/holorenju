@@ -350,6 +350,25 @@ pub fn checkForbiddenMove(cells: []Cell, row: u8, col: u8) ForbiddenType {
     return checkForbiddenMoveRecursive(cells, row, col, &ctx);
 }
 
+/// その空点に `color` が実際に着手できるか（「打てる点か」の SSoT）
+///
+/// - 白: 禁手が無いので常に打てる。
+/// - 黒: 五連ができる点は禁手に優先して合法。それ以外は三三・四四・長連なら打てない。
+///
+/// `checkForbiddenMoveInternal` 自身も五連を `.none` に落とすので `checkFive` を
+/// 先に見なくても結果は同じだが、重い禁手判定を短絡できるので順序はこのまま
+/// （`move_gen.zig` の黒番候補フィルタが以前から使っている順序）。
+///
+/// **対象が空点のうちに呼ぶこと**（`checkForbiddenMove` は空でないマスに `.none` を返す）。
+///
+/// 呼び出し元: `move_gen.generateMoves`（候補生成）/ `vct.blockIsPlayable`（issue #146）/
+/// `quiescence.forcedBlockOrLoss`・`quiescence.generateTacticalMoves`（issue #142）。
+pub fn isPlayable(cells: []Cell, row: u8, col: u8, color: Cell) bool {
+    if (color != .black) return true;
+    if (checkFive(cells, row, col, .black)) return true;
+    return checkForbiddenMove(cells, row, col) == .none;
+}
+
 // === Zig unit tests ===
 
 test "checkFive: 5連検出" {
