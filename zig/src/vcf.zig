@@ -42,6 +42,13 @@ pub const TimeLimiter = struct {
     nodes: u32,
     max_nodes: u32, // 0 = 無制限
 
+    /// 生成時点で親の予算が尽きていたことを表すフラグ（issue #147 B）
+    ///
+    /// `time_limit == 0` / `max_nodes == 0` はどちらも「無制限」を意味するため、
+    /// 「残り 0」を数値で表現できない。`child()` が親の使い切りを検出したときに
+    /// これを立て、`exceeded()` が最優先で見る。
+    exhausted: bool = false,
+
     /// 探索ノードを 1 つ計上する
     pub fn bump(self: *TimeLimiter) void {
         self.nodes +|= 1;
@@ -59,6 +66,7 @@ pub const TimeLimiter = struct {
     /// limiter でも打ち切られるよう、短絡より **前** にデッドラインを評価する。
     /// 時刻取得は 1 回だけで、従来より頻度が増えないようにしてある。
     pub fn exceeded(self: *const TimeLimiter) bool {
+        if (self.exhausted) return true;
         if (self.max_nodes > 0 and self.nodes >= self.max_nodes) {
             return true;
         }
@@ -78,6 +86,65 @@ pub const TimeLimiter = struct {
     pub fn remainingNodes(self: *const TimeLimiter) u32 {
         if (self.max_nodes == 0) return 0;
         return self.max_nodes -| self.nodes;
+    }
+
+    /// 残りの壁時計予算（ms）。`null` = 無制限、`0` = 使い切り（issue #147 B）
+    ///
+    /// ネイティブテスト（擬似時計が 0 = 時計なし）では満額を返す。
+    pub fn remainingMs(self: *const TimeLimiter) ?u32 {
+        if (self.exhausted) return 0;
+        if (self.time_limit == 0) return null;
+        const now = getTimestampMs();
+        if (now == 0) return self.time_limit; // 時計なし＝満額
+        const elapsed = now -| self.start_time;
+        if (elapsed >= self.time_limit) return 0;
+        return self.time_limit - elapsed;
+    }
+
+    /// 子探索用の limiter を作る（issue #147 B の SSoT）
+    ///
+    /// 原則: **子の壁時計予算は親の残りを超えない。予算は復活しない。**
+    /// エントリ関数（`findVCFSequence` / `findVCTSequence` など）は `start_time` を
+    /// 現在時刻にリセットするため、親の中で呼ぶたびに予算が満額に戻っていた
+    /// （プローブ 50ms → 実測 141ms、pre-search VCT 300ms → 494ms）。
+    ///
+    /// - 壁時計: 親が無制限なら `own_budget_ms` のまま、そうでなければ
+    ///   `min(own_budget_ms, 親の残り)`（`own_budget_ms == 0`＝子は無制限を望む
+    ///   場合は親の残りをそのまま継承）。
+    /// - ノード: `own_max_nodes != 0` ならその値、`0` なら親の残りノード。
+    ///   壁時計と違い `min` を取らないのは、ノード予算は #119 の `charge()` で
+    ///   親へ払い戻される設計になっており、二重に絞ると既存の探索が変わるため。
+    pub fn child(self: *const TimeLimiter, own_budget_ms: u32, own_max_nodes: u32) TimeLimiter {
+        const parent_rem = self.remainingMs();
+        const nodes_left = self.remainingNodes();
+        const time_budget: u32 = if (parent_rem) |rem|
+            (if (own_budget_ms == 0) rem else @min(own_budget_ms, rem))
+        else
+            own_budget_ms;
+        return .{
+            .start_time = getTimestampMs(),
+            .time_limit = time_budget,
+            .nodes = 0,
+            .max_nodes = if (own_max_nodes != 0) own_max_nodes else nodes_left,
+            .exhausted = self.exhausted or
+                (parent_rem != null and parent_rem.? == 0) or
+                (self.max_nodes != 0 and nodes_left == 0),
+        };
+    }
+
+    /// 絶対時刻のデッドラインを「親 limiter」として表現する（issue #147 B）
+    ///
+    /// `SearchContext.deadline` のように limiter を持たない親（メイン探索）の
+    /// 残り時間を `child()` に渡すためのアダプタ。`deadline_ms == 0` は無制限。
+    pub fn untilDeadline(deadline_ms: u32) TimeLimiter {
+        const unlimited = TimeLimiter{ .start_time = 0, .time_limit = 0, .nodes = 0, .max_nodes = 0 };
+        if (deadline_ms == 0) return unlimited;
+        const now = getTimestampMs();
+        if (now == 0) return unlimited; // ネイティブテスト（時計なし）
+        if (now >= deadline_ms) {
+            return .{ .start_time = now, .time_limit = 1, .nodes = 0, .max_nodes = 0, .exhausted = true };
+        }
+        return .{ .start_time = now, .time_limit = deadline_ms - now, .nodes = 0, .max_nodes = 0 };
     }
 };
 
@@ -380,16 +447,43 @@ pub fn findVCFSequence(
     time_limit: u32,
     max_nodes: u32,
 ) VCFSequenceResult {
-    // トップレベルエントリ: bitboard を cells と同期
-    bitboard.initFromCells(cells);
-    ll.init();
-
     var limiter = TimeLimiter{
         .start_time = getTimestampMs(),
         .time_limit = time_limit,
         .nodes = 0,
         .max_nodes = max_nodes,
     };
+    return findVCFSequenceWithLimiter(cells, color, max_depth, &limiter);
+}
+
+/// 親 limiter の残り予算を継承した子 limiter で VCF 手順を探す（issue #147 B）
+///
+/// 子の消費ノードは呼び出し後に親へ計上する（#119 の部分払い）ので、
+/// 呼び出し側で `charge()` を重ねて呼んではいけない。
+pub fn findVCFSequenceWithParent(
+    cells: []Cell,
+    color: Cell,
+    max_depth: u8,
+    own_time_limit: u32,
+    own_max_nodes: u32,
+    parent: *TimeLimiter,
+) VCFSequenceResult {
+    var limiter = parent.child(own_time_limit, own_max_nodes);
+    const result = findVCFSequenceWithLimiter(cells, color, max_depth, &limiter);
+    parent.charge(limiter.nodes);
+    return result;
+}
+
+/// `findVCFSequence` の本体（limiter を受け取る版）
+fn findVCFSequenceWithLimiter(
+    cells: []Cell,
+    color: Cell,
+    max_depth: u8,
+    limiter: *TimeLimiter,
+) VCFSequenceResult {
+    // トップレベルエントリ: bitboard を cells と同期
+    bitboard.initFromCells(cells);
+    ll.init();
 
     var result = VCFSequenceResult{
         .sequence = undefined,
@@ -405,7 +499,7 @@ pub fn findVCFSequence(
 
         var seq_len: u8 = 0;
         var is_forbidden_trap = false;
-        const found = findVCFSequenceRecursive(cells, color, 0, &limiter, depth, &result.sequence, &seq_len, &is_forbidden_trap);
+        const found = findVCFSequenceRecursive(cells, color, 0, limiter, depth, &result.sequence, &seq_len, &is_forbidden_trap);
         if (found) {
             result.len = seq_len;
             result.is_forbidden_trap = is_forbidden_trap;
@@ -892,6 +986,132 @@ test "TimeLimiter.exceeded: グローバル 0 ならノード予算の判定は�
 
     var loose = TimeLimiter{ .start_time = 0, .time_limit = 0, .nodes = 2, .max_nodes = 3 };
     try testing.expect(!loose.exceeded());
+}
+
+// --- issue #147 B: 入れ子 limiter の予算継承 ---
+
+test "TimeLimiter.remainingMs: 親の残り時間を返す（#147 B）" {
+    deadline.clear();
+    deadline.test_now_ms = 1020;
+    defer deadline.test_now_ms = 0;
+
+    // 予算 50ms・開始 1000ms・現在 1020ms → 残り 30ms
+    const limited = TimeLimiter{ .start_time = 1000, .time_limit = 50, .nodes = 0, .max_nodes = 0 };
+    try testing.expectEqual(@as(?u32, 30), limited.remainingMs());
+
+    // 使い切り
+    const spent = TimeLimiter{ .start_time = 900, .time_limit = 50, .nodes = 0, .max_nodes = 0 };
+    try testing.expectEqual(@as(?u32, 0), spent.remainingMs());
+
+    // 壁時計無制限は null（＝無制限）
+    const unlimited = TimeLimiter{ .start_time = 0, .time_limit = 0, .nodes = 0, .max_nodes = 0 };
+    try testing.expectEqual(@as(?u32, null), unlimited.remainingMs());
+}
+
+test "TimeLimiter.child: 子の予算は min(独自予算, 親の残り)（#147 B）" {
+    deadline.clear();
+    deadline.test_now_ms = 1020;
+    defer deadline.test_now_ms = 0;
+
+    // 親の残り 30ms < 子の独自予算 50ms → 30ms
+    const parent = TimeLimiter{ .start_time = 1000, .time_limit = 50, .nodes = 0, .max_nodes = 0 };
+    const c = parent.child(50, 0);
+    try testing.expectEqual(@as(u32, 30), c.time_limit);
+    try testing.expectEqual(@as(u32, 1020), c.start_time);
+    try testing.expect(!c.exhausted);
+
+    // 子の独自予算 10ms < 親の残り 30ms → 10ms
+    const tight = parent.child(10, 0);
+    try testing.expectEqual(@as(u32, 10), tight.time_limit);
+
+    // 子が壁時計無制限（0）を望んでも親の残りを継承する
+    const inherit = parent.child(0, 0);
+    try testing.expectEqual(@as(u32, 30), inherit.time_limit);
+}
+
+test "TimeLimiter.child: 親が無制限なら独自予算のまま（#147 B）" {
+    deadline.clear();
+    deadline.test_now_ms = 1020;
+    defer deadline.test_now_ms = 0;
+
+    const parent = TimeLimiter{ .start_time = 0, .time_limit = 0, .nodes = 0, .max_nodes = 0 };
+    const c = parent.child(50, 0);
+    try testing.expectEqual(@as(u32, 50), c.time_limit);
+    try testing.expect(!c.exhausted);
+
+    // 独自予算も 0 なら無制限のまま
+    const u = parent.child(0, 0);
+    try testing.expectEqual(@as(u32, 0), u.time_limit);
+}
+
+test "TimeLimiter.child: 親が予算を使い切っていれば子は即打ち切り（#147 B）" {
+    deadline.clear();
+    deadline.test_now_ms = 1020;
+    defer deadline.test_now_ms = 0;
+
+    // 壁時計を使い切った親
+    const spent = TimeLimiter{ .start_time = 900, .time_limit = 50, .nodes = 0, .max_nodes = 0 };
+    var c = spent.child(50, 0);
+    try testing.expect(c.exhausted);
+    try testing.expect(c.exceeded());
+
+    // ノード予算を使い切った親
+    const spent_nodes = TimeLimiter{ .start_time = 1020, .time_limit = 0, .nodes = 100, .max_nodes = 100 };
+    var cn = spent_nodes.child(50, 0);
+    try testing.expect(cn.exceeded());
+}
+
+test "TimeLimiter.child: ノード予算は独自値、無指定なら親の残り（#147 B）" {
+    deadline.clear();
+    const parent = TimeLimiter{ .start_time = 0, .time_limit = 0, .nodes = 40, .max_nodes = 100 };
+    try testing.expectEqual(@as(u32, 10), parent.child(0, 10).max_nodes);
+    try testing.expectEqual(@as(u32, 60), parent.child(0, 0).max_nodes);
+
+    const unlimited = TimeLimiter{ .start_time = 0, .time_limit = 0, .nodes = 0, .max_nodes = 0 };
+    try testing.expectEqual(@as(u32, 0), unlimited.child(0, 0).max_nodes);
+}
+
+test "TimeLimiter.untilDeadline: デッドラインまでの残りを親として表現する（#147 B）" {
+    deadline.clear();
+    deadline.test_now_ms = 1000;
+    defer deadline.test_now_ms = 0;
+
+    // 残り 200ms の親 → 子の 500ms 要求は 200ms に切り詰められる
+    const parent = TimeLimiter.untilDeadline(1200);
+    try testing.expectEqual(@as(?u32, 200), parent.remainingMs());
+    try testing.expectEqual(@as(u32, 200), parent.child(500, 0).time_limit);
+
+    // デッドライン超過 → 子は即打ち切り
+    var past = TimeLimiter.untilDeadline(900).child(50, 0);
+    try testing.expect(past.exceeded());
+
+    // 0 は無制限
+    const none = TimeLimiter.untilDeadline(0);
+    try testing.expectEqual(@as(?u32, null), none.remainingMs());
+}
+
+test "findVCFSequenceWithParent: 親の残り時間を継承する（#147 B）" {
+    deadline.clear();
+    deadline.test_now_ms = 1020;
+    defer deadline.test_now_ms = 0;
+
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[7 * BOARD_SIZE + 4] = .black;
+    cells[7 * BOARD_SIZE + 5] = .black;
+    cells[7 * BOARD_SIZE + 6] = .black;
+    cells[7 * BOARD_SIZE + 7] = .black;
+
+    // 親は壁時計を使い切っている → 子は探索せず不成立を返す
+    var spent = TimeLimiter{ .start_time = 900, .time_limit = 50, .nodes = 0, .max_nodes = 0 };
+    const blocked = findVCFSequenceWithParent(&cells, .black, VCF_MAX_DEPTH, 0, 0, &spent);
+    try testing.expect(!blocked.found);
+
+    // 親に余裕があれば従来どおり見つかる
+    var fresh = TimeLimiter{ .start_time = 1000, .time_limit = 50, .nodes = 0, .max_nodes = 0 };
+    const ok = findVCFSequenceWithParent(&cells, .black, VCF_MAX_DEPTH, 0, 0, &fresh);
+    try testing.expect(ok.found);
+    // 消費ノードは親へ計上される
+    try testing.expect(fresh.nodes > 0);
 }
 
 test "findVCFSequence: グローバル絶対デッドライン超過で即打ち切り（#147）" {

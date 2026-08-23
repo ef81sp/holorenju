@@ -227,8 +227,8 @@ const OPPONENT_VCF_PROBE_MAX_NODES: u32 = 1000;
 /// - 三の攻め手に入る直前の遅延評価（呼び出し側）
 /// の3重の制限をかける。安い述語を先に評価して短絡する。
 ///
-/// プローブは呼び出し元 `limiter` の開始時刻・時間制限を引き継ぎ（時間切れなら
-/// hasVCF 側が即座に打ち切る）、消費ノードは呼び出し元へ加算する（#119 の部分払い）。
+/// プローブは呼び出し元 `limiter` の残り時間を継承し（`TimeLimiter.child` が SSoT。
+/// issue #147 B）、消費ノードは呼び出し元へ加算する（#119 の部分払い）。
 fn opponentBlocksThreePursuitWithShallowVCF(
     cells: []Cell,
     opponent: Cell,
@@ -238,14 +238,9 @@ fn opponentBlocksThreePursuitWithShallowVCF(
     if (opponentBlocksThreePursuit(cells, opponent)) return true;
     if (node_depth > OPPONENT_VCF_PROBE_MAX_NODE_DEPTH) return false;
 
-    var probe_limiter = TimeLimiter{
-        .start_time = limiter.start_time,
-        .time_limit = limiter.time_limit,
-        .nodes = 0,
-        .max_nodes = OPPONENT_VCF_PROBE_MAX_NODES,
-    };
+    var probe_limiter = limiter.child(0, OPPONENT_VCF_PROBE_MAX_NODES);
     const found = vcf_mod.hasVCF(cells, opponent, 0, &probe_limiter, OPPONENT_VCF_PROBE_DEPTH);
-    limiter.nodes +|= probe_limiter.nodes;
+    limiter.charge(probe_limiter.nodes);
     return found;
 }
 
@@ -824,12 +819,16 @@ fn hasBreakingCounterFour(
             if (hasFourThreeAvailable(cells, opponent)) break :blk true;
             // 白相手の場合、三三・四四も即勝ち
             if (opponent == .white and hasDoubleThreeForWhite(cells)) break :blk true;
-            var probe_limiter = TimeLimiter{
-                .start_time = if (limiter) |l| l.start_time else 0,
-                .time_limit = if (limiter) |l| l.time_limit else 0,
-                .nodes = 0,
-                .max_nodes = COUNTER_FOUR_VCF_PROBE_MAX_NODES,
-            };
+            // 親の残り予算を継承した子 limiter（issue #147 B）
+            var probe_limiter = if (limiter) |l|
+                l.child(0, COUNTER_FOUR_VCF_PROBE_MAX_NODES)
+            else
+                TimeLimiter{
+                    .start_time = 0,
+                    .time_limit = 0,
+                    .nodes = 0,
+                    .max_nodes = COUNTER_FOUR_VCF_PROBE_MAX_NODES,
+                };
             const found = vcf_mod.hasVCF(cells, opponent, 0, &probe_limiter, vcf_mod.VCF_MAX_DEPTH);
             // プローブの消費ノードも親の予算に計上する（issue #119）
             if (limiter) |l| l.charge(probe_limiter.nodes);
@@ -1359,9 +1358,8 @@ fn findVCTSequenceInner(
         return tryVCFOnly(cells, color, limiter, &result, collect_branches);
     }
 
-    // VCFが先に成立する場合はVCF手順を返す（予算は残額。満額だと親の予算を超える）
-    const vcf_seq = vcf_mod.findVCFSequence(cells, color, vcf_mod.VCF_MAX_DEPTH, limiter.time_limit, limiter.remainingNodes());
-    limiter.charge(vcf_seq.nodes);
+    // VCFが先に成立する場合はVCF手順を返す（予算は親の残額。issue #147 B）
+    const vcf_seq = vcf_mod.findVCFSequenceWithParent(cells, color, vcf_mod.VCF_MAX_DEPTH, 0, 0, limiter);
     if (vcf_seq.found) {
         var i: u8 = 0;
         while (i < vcf_seq.len) : (i += 1) {
@@ -1422,8 +1420,7 @@ fn findVCTSequenceInner(
 
 /// VCF-onlyフォールバック: 相手にVCT阻害要因があるとき
 fn tryVCFOnly(cells: []Cell, color: Cell, limiter: *TimeLimiter, result: *VCTSequenceResult, collect_branches: bool) VCTSequenceResult {
-    const vcf_seq = vcf_mod.findVCFSequence(cells, color, vcf_mod.VCF_MAX_DEPTH, limiter.time_limit, limiter.remainingNodes());
-    limiter.charge(vcf_seq.nodes);
+    const vcf_seq = vcf_mod.findVCFSequenceWithParent(cells, color, vcf_mod.VCF_MAX_DEPTH, 0, 0, limiter);
     if (vcf_seq.found) {
         var i: u8 = 0;
         while (i < vcf_seq.len) : (i += 1) {
@@ -1469,8 +1466,7 @@ fn findVCTSequenceRecursive(
     // 深さを絞ると「VCF は在るが長すぎる」と「VCF が無い」を区別できなくなり、
     // 前者のとき脅威手探索に落ちて**より短い別解**を返してしまう（＝結果が変わる）。
     // 長すぎる VCF はここで false にして親に捨てさせるのが α カットの健全な形。
-    const vcf_seq = vcf_mod.findVCFSequence(cells, color, vcf_mod.VCF_MAX_DEPTH, 0, 0);
-    limiter.charge(vcf_seq.nodes);
+    const vcf_seq = vcf_mod.findVCFSequenceWithParent(cells, color, vcf_mod.VCF_MAX_DEPTH, 0, 0, limiter);
     if (vcf_seq.found and vcf_seq.len >= max_len) return false;
     if (vcf_seq.found) {
         var i: u8 = 0;
@@ -1674,8 +1670,7 @@ fn findVCTSequenceRecursive(
                 // ct=three: VCFのみで勝てるか
                 const vcf_depth = @min(CT_THREE_VCF_MAX_DEPTH, vcf_mod.VCF_MAX_DEPTH);
                 if (context.collect_branches or !has_first_defense) {
-                    const vcf_result = vcf_mod.findVCFSequence(cells, color, vcf_depth, 0, 0);
-                    limiter.charge(vcf_result.nodes);
+                    const vcf_result = vcf_mod.findVCFSequenceWithParent(cells, color, vcf_depth, 0, 0, limiter);
                     if (!vcf_result.found) {
                         cells[def_idx] = .empty;
                         bitboard.removeStone(dp.row, dp.col);
@@ -2014,8 +2009,7 @@ fn buildBlockDefSubSequence(
         .win => return result,
         .three => {
             const vcf_depth = @min(CT_THREE_VCF_MAX_DEPTH, vcf_mod.VCF_MAX_DEPTH);
-            const vcf_result = vcf_mod.findVCFSequence(cells, color, vcf_depth, 0, 0);
-            limiter.charge(vcf_result.nodes);
+            const vcf_result = vcf_mod.findVCFSequenceWithParent(cells, color, vcf_depth, 0, 0, limiter);
             if (!vcf_result.found) return result;
             var i: u8 = 0;
             while (i < vcf_result.len) : (i += 1) {
@@ -2332,8 +2326,7 @@ pub fn findVCTSequenceFromFirstMove(
             }
         } else if (ct == .three) {
             const vcf_depth = @min(CT_THREE_VCF_MAX_DEPTH, vcf_mod.VCF_MAX_DEPTH);
-            const vcf_result = vcf_mod.findVCFSequence(cells, color, vcf_depth, 0, 0);
-            limiter.charge(vcf_result.nodes);
+            const vcf_result = vcf_mod.findVCFSequenceWithParent(cells, color, vcf_depth, 0, 0, &limiter);
             if (vcf_result.found) {
                 var si: u8 = 0;
                 while (si < vcf_result.len) : (si += 1) {
@@ -2352,14 +2345,9 @@ pub fn findVCTSequenceFromFirstMove(
             // まるごとリセットされていた（＝予算が受けの数だけ倍加していた）。
             // アリーナを reset しない内部版を使うのは、collect 時に
             // ここまで積んだ詰み木ノードを壊さないため（#122 レバー1）。
-            var sub_limiter = TimeLimiter{
-                .start_time = limiter.start_time,
-                .time_limit = limiter.time_limit,
-                .nodes = 0,
-                .max_nodes = limiter.remainingNodes(),
-            };
+            var sub_limiter = limiter.child(0, 0);
             const sub = findVCTSequenceWithLimiter(cells, color, max_depth, &sub_limiter, use_collect, .lenient);
-            limiter.nodes +|= sub_limiter.nodes;
+            limiter.charge(sub_limiter.nodes);
             if (sub.found) {
                 var si: u8 = 0;
                 while (si < sub.len) : (si += 1) {

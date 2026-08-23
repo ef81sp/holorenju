@@ -340,38 +340,49 @@ fn threatProbe(
     // 防御ノード（相手の被詰み判定）では strict 耐性検証で偽の追い詰め
     // （幻の被詰み）を棄却する。攻めノードは lenient で真正VCTを取りこぼさない。
     defensive: bool,
+    /// メイン探索の締切（絶対時刻 ms、0 = 無制限）。プローブはこの残り時間を超えない
+    /// （issue #147 B）。
+    search_deadline: u32,
 ) ?Position {
     const budget = getThreatBudget(minimax_depth);
 
+    // プローブの親＝メイン探索の残り時間。プローブ独自の 20ms / 50ms は
+    // 親の残りとの min を取る（`TimeLimiter.child` が SSoT）。
+    const parent = vcf_mod.TimeLimiter.untilDeadline(if (no_time_limit) 0 else search_deadline);
+
     // VCF探索（軽量・常にチェック）。VCFは受け一意で偽陽性が出にくいため常に lenient。
     const vcf_time: u32 = if (no_time_limit) 0 else 20;
+    var vcf_budget = parent.child(vcf_time, budget.vcf_nodes);
+    if (vcf_budget.exceeded()) return null;
     const vcf_move = vcf_mod.findVCFMoveWithBudget(
         cells,
         color,
         budget.vcf_depth,
-        vcf_time,
-        budget.vcf_nodes,
+        vcf_budget.time_limit,
+        vcf_budget.max_nodes,
     );
     if (vcf_move) |m| return m;
 
     // VCT探索（予算が許す場合のみ）
     if (budget.vct_depth > 0) {
         const vct_time: u32 = if (no_time_limit) 0 else 50;
+        var vct_budget = parent.child(vct_time, budget.vct_nodes);
+        if (vct_budget.exceeded()) return null;
         const vct_move = if (defensive)
             vct_mod.findVCTMoveWithBudgetStrict(
                 cells,
                 color,
                 budget.vct_depth,
-                vct_time,
-                budget.vct_nodes,
+                vct_budget.time_limit,
+                vct_budget.max_nodes,
             )
         else
             vct_mod.findVCTMoveWithBudget(
                 cells,
                 color,
                 budget.vct_depth,
-                vct_time,
-                budget.vct_nodes,
+                vct_budget.time_limit,
+                vct_budget.max_nodes,
             );
         if (vct_move) |m| return m;
     }
@@ -521,6 +532,7 @@ pub fn minimaxWithTT(
             depth,
             ctx.no_time_limit,
             !is_maximizing,
+            ctx.deadline,
         );
         if (threat_result) |threat_move| {
             ctx.stats.threat_probe_cutoffs += 1;
@@ -1020,6 +1032,29 @@ fn getTimestampMs() u32 {
 // === Tests ===
 
 const testing = std.testing;
+
+test "threatProbe: メイン探索の残り時間を超えない（issue #147 B）" {
+    // 黒の四連（VCF 即検出）。プローブ独自の 20ms 予算があっても、
+    // 親（メイン探索）の締切を過ぎていれば探索せず null を返す。
+    var cells = [_]Cell{.empty} ** board_mod.CELL_COUNT;
+    cells[7 * BOARD_SIZE + 4] = .black;
+    cells[7 * BOARD_SIZE + 5] = .black;
+    cells[7 * BOARD_SIZE + 6] = .black;
+    cells[7 * BOARD_SIZE + 7] = .black;
+
+    deadline.clear();
+    deadline.test_now_ms = 1000;
+    defer deadline.test_now_ms = 0;
+
+    // 親に余裕がある（締切 1200ms、現在 1000ms）→ 従来どおり検出する
+    try testing.expect(threatProbe(&cells, .black, 4, false, false, 1200) != null);
+
+    // 親の締切を過ぎている（締切 900ms、現在 1000ms）→ プローブは走らない
+    try testing.expect(threatProbe(&cells, .black, 4, false, false, 900) == null);
+
+    // 締切 0（無制限）は従来どおり
+    try testing.expect(threatProbe(&cells, .black, 4, false, false, 0) != null);
+}
 
 test "threat_probe_enabled=false: threatProbeによるcutoffが発生しない（深さ3以上、VCFがある局面）" {
     defer threat_probe_enabled = true;
