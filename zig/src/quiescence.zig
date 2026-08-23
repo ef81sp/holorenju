@@ -134,24 +134,73 @@ pub fn getFourDefensePosition(cells: []const Cell, last_row: u8, last_col: u8, c
     return .not_four;
 }
 
+/// 相手の四に対する「強制ブロック」の判定結果（issue #142）
+///
+/// 以前は `generateTacticalMoves` が「受け 1 点」と「受けなし」を同じ
+/// `count == 0 / 1` に潰していたため、**黒の受け点が禁手で打てない**ケースが
+/// 「脅威手なし＝静止した局面」として stand-pat で評価されていた。
+/// 実際には受けられない＝次に相手が五を作るので、その局面は現手番の負けである。
+pub const ForcedBlock = union(enum) {
+    /// 相手の直前手は四ではない（または活四で 1 点では受からない）→ 通常の四追いに進む
+    none,
+    /// 止め四。この 1 点で受かる（かつ攻め側がそこに打てる）
+    block: Position,
+    /// 止め四だが受け点が黒の禁手 → 受けられない＝現手番の負け
+    forced_loss,
+};
+
+/// 相手の直前手が止め四のとき、その受けが打てるかを判定する（issue #142）
+///
+/// `color` は**受ける側（現手番）**の色。`last_move` は相手の直前手。
+///
+/// 黒は三三・四四・長連の点に打てないので、受け点が禁手なら黒には合法な受けが
+/// 存在しない。連珠のルール上そこに打つことは「できない」（打てば反則負け）ので、
+/// 受け点を打った局面を探索するのは誤り。`.forced_loss` を返して呼び出し側に
+/// 終局として扱わせる。
+///
+/// 五連は禁手に優先するので、受け点が黒の五点でもある場合は打てる
+/// （`forbidden.isPlayable` が `checkFive` を先に見る。`move_gen.zig` の
+/// 黒番候補フィルタ・`vct.zig` の `blockIsPlayable` と同一の述語＝SSoT）。
+///
+/// `.unstoppable`（活四）は 1 点では受からないので `.none` を返し、従来どおり
+/// (2) のカウンター四探索に落とす（issue #142 の対象外・挙動不変）。
+pub fn forcedBlockOrLoss(cells: []Cell, color: Cell, last_move: ?Position) ForcedBlock {
+    const lm = last_move orelse return .none;
+    const defense_pos = getFourDefensePosition(cells, lm.row, lm.col, color.opposite());
+    const dp = defense_pos.blockPos() orelse return .none;
+    if (!forbidden.isPlayable(cells, dp.row, dp.col, color)) return .forced_loss;
+    return .{ .block = dp };
+}
+
 /// 脅威手（四を作る手 + 相手の四へのブロック）を生成
-/// TS版 quiescence.ts の generateTacticalMoves に対応
+///
+/// `forced` は呼び出し側が `forcedBlockOrLoss` で 1 度だけ計算した結果を渡す
+/// （`quiescenceSearch` は stand-pat の前に同じ判定が必要なので、ここで再計算すると
+/// 1 ノードあたり `getFourDefensePosition` + 禁手判定が 2 回走ってしまう）。
+/// `.forced_loss` は呼び出し側が終局として先に処理する想定なので、ここでは
+/// 「合法な脅威手なし」＝ 0 を返す。
+///
+/// TS 側に静止探索の対応物は存在しない（探索本体は Zig 単一実装。TS の
+/// `search/threatPatterns.ts` などは四の受け点プリミティブのみで、そちらは
+/// `fourDefenseParity.wasm.test.ts` でパリティを取っている）。
 pub fn generateTacticalMoves(
     cells: []Cell,
     color: Cell,
-    last_move: ?Position,
+    forced: ForcedBlock,
     result_buf: *[225]Position,
 ) u16 {
-    const opponent_color = color.opposite();
     var count: u16 = 0;
 
     // 1. 相手の直前手が四を作っていれば → ブロック手のみ
-    if (last_move) |lm| {
-        const defense_pos = getFourDefensePosition(cells, lm.row, lm.col, opponent_color);
-        if (defense_pos.blockPos()) |dp| {
+    switch (forced) {
+        .block => |dp| {
             result_buf[0] = dp;
             return 1;
-        }
+        },
+        // 受けられない（黒の禁手）→ 呼び出し側が終局として扱う。ここで四追いを
+        // 続けると「受けずに自分の四で反撃できる」ことになり誤り。
+        .forced_loss => return 0,
+        .none => {},
     }
 
     // 2. 自分が四を作れる手を列挙
@@ -171,10 +220,15 @@ pub fn generateTacticalMoves(
             cells[idx] = .empty;
             bitboard.removeStone(r, c);
 
-            if (is_four) {
-                result_buf[count] = .{ .row = r, .col = c };
-                count += 1;
-            }
+            if (!is_four) continue;
+            // 黒の禁手点は打てないので候補から外す（issue #142）。
+            // `createsFour` は五点ベース（issue #124）なので長連だけの偽四は
+            // すでに落ちている。ここで残るのは四四・四と三三の共存など。
+            // コストは四候補にしか掛からない（大半の空点は `is_four == false`）。
+            if (!forbidden.isPlayable(cells, r, c, color)) continue;
+
+            result_buf[count] = .{ .row = r, .col = c };
+            count += 1;
         }
     }
     return count;
@@ -259,6 +313,20 @@ pub fn quiescenceSearch(
         return incremental_eval.getEvaluation(cells, perspective, eval_opts);
     }
 
+    // 現在の手番
+    const current_color = if (is_maximizing) perspective else perspective.opposite();
+
+    // 終端条件: 相手の止め四に対する受けが黒の禁手 → 受けられない＝現手番の負け（issue #142）。
+    //
+    // stand-pat の**前**に置く。stand-pat は「何もしなければこの評価」という仮定だが、
+    // ここでは「何もしない」ことが許されない（次に相手が五を作る）ので、静的評価より
+    // 終局判定が優先される。スコア規約は `minimax.zig` の終端条件（五連完成）と同じで
+    // perspective 基準・ply 補正なし。
+    const forced = forcedBlockOrLoss(cells, current_color, last_move);
+    if (forced == .forced_loss) {
+        return if (current_color == perspective) -scores.FIVE else scores.FIVE;
+    }
+
     // Stand-pat: 何もしない場合の評価（インクリメンタル評価を使用）
     const stand_pat = incremental_eval.getEvaluation(cells, perspective, eval_opts);
 
@@ -279,10 +347,9 @@ pub fn quiescenceSearch(
         return stand_pat;
     }
 
-    // 脅威手生成
-    const current_color = if (is_maximizing) perspective else perspective.opposite();
+    // 脅威手生成（`forced` は stand-pat 前に計算済みのものを再利用する）
     var move_buf: [225]Position = undefined;
-    const move_count = generateTacticalMoves(cells, current_color, last_move, &move_buf);
+    const move_count = generateTacticalMoves(cells, current_color, forced, &move_buf);
 
     if (move_count == 0) {
         return stand_pat;
@@ -405,9 +472,166 @@ test "generateTacticalMoves finds four moves" {
     bitboard.initFromCells(&cells);
 
     var buf: [225]Position = undefined;
-    const count = generateTacticalMoves(&cells, .black, null, &buf);
+    const count = generateTacticalMoves(&cells, .black, .none, &buf);
     // (7,4) と (7,8) が四を作る
     try std.testing.expect(count >= 2);
+}
+
+// --- issue #142: 静止探索の黒禁手フィルタ ---
+
+/// 候補列に指定の点が含まれるか
+fn containsMove(buf: []const Position, count: u16, row: u8, col: u8) bool {
+    for (buf[0..count]) |m| {
+        if (m.row == row and m.col == col) return true;
+    }
+    return false;
+}
+
+/// 黒が (7,7) に打つと縦と斜めの二方向で四になる（＝四四の禁手点）配置。
+///
+/// - 縦: (4,7) (5,7) (6,7) ＋ (7,7) → 四
+/// - 斜め ↘: (4,4) (5,5) (6,6) ＋ (7,7) → 四
+///
+/// どちらも「4 石 + 空 1」の窓が 1 セットしかない（＝各方向 1 つの四）ので
+/// 合計 2 つの四 ＝ 四四。五連にはならない。
+fn setupBlackDoubleFourAt77(cells: []Cell) void {
+    cells[4 * BOARD_SIZE + 7] = .black;
+    cells[5 * BOARD_SIZE + 7] = .black;
+    cells[6 * BOARD_SIZE + 7] = .black;
+    cells[4 * BOARD_SIZE + 4] = .black;
+    cells[5 * BOARD_SIZE + 5] = .black;
+    cells[6 * BOARD_SIZE + 6] = .black;
+}
+
+/// 白の止め四 (7,3)-(7,6)（(7,2) は黒で塞がれている）＝受けは (7,7) の 1 点のみ。
+fn setupWhiteBlockedFourRow7(cells: []Cell) void {
+    cells[7 * BOARD_SIZE + 2] = .black; // 左端を塞ぐ
+    cells[7 * BOARD_SIZE + 3] = .white;
+    cells[7 * BOARD_SIZE + 4] = .white;
+    cells[7 * BOARD_SIZE + 5] = .white;
+    cells[7 * BOARD_SIZE + 6] = .white;
+}
+
+const test_eval_options = evaluate.EvalOptions{
+    .enable_leaf_mise = false,
+    .last_mover_is_perspective = .unset,
+    .single_four_penalty_multiplier = 100,
+    .connectivity_bonus = scores.CONNECTIVITY_BONUS,
+};
+
+/// テスト用に quiescenceSearch を黒視点・黒手番で走らせる
+fn runQuiescenceAsBlack(cells: []Cell, last_move: ?Position) i32 {
+    incremental_eval.initFromBoard(cells, .{
+        .connectivity_bonus = scores.CONNECTIVITY_BONUS,
+        .single_four_penalty_multiplier = 100,
+    });
+    var stats = QSearchStats{};
+    var timeout_flag = false;
+    var node_counter: u32 = 0;
+    var tt = tt_mod.TranspositionTable{
+        .entries = &tt_mod.global_tt_storage,
+        .current_generation = 0,
+    };
+    tt.clear();
+
+    return quiescenceSearch(
+        cells,
+        0,
+        true, // is_maximizing（黒視点の黒手番）
+        .black,
+        -scores.INFINITY,
+        scores.INFINITY,
+        last_move,
+        test_eval_options,
+        MAX_QUIESCENCE_DEPTH,
+        &stats,
+        .{ .node_counter = &node_counter, .no_time_limit = true, .timeout_flag = &timeout_flag },
+        &tt,
+    );
+}
+
+test "issue #142: 白の止め四の受け点が黒の四四なら受けられない＝黒の負け" {
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    setupWhiteBlockedFourRow7(&cells);
+    setupBlackDoubleFourAt77(&cells);
+    bitboard.initFromCells(&cells);
+
+    // 前提の確認: 受けは (7,7) の 1 点で、そこは黒の禁手（四四）
+    try std.testing.expectEqual(
+        Position{ .row = 7, .col = 7 },
+        getFourDefensePosition(&cells, 7, 6, .white).blockPos().?,
+    );
+    try std.testing.expect(!forbidden.checkFive(&cells, 7, 7, .black));
+    try std.testing.expect(forbidden.checkForbiddenMove(&cells, 7, 7) != .none);
+
+    try std.testing.expectEqual(ForcedBlock.forced_loss, forcedBlockOrLoss(&cells, .black, .{ .row = 7, .col = 6 }));
+
+    // 受けられない＝次に白が五。黒視点・黒手番なので -FIVE。
+    try std.testing.expectEqual(-scores.FIVE, runQuiescenceAsBlack(&cells, .{ .row = 7, .col = 6 }));
+}
+
+test "issue #142: 受け点が黒の五点なら禁手でも打てる（五が禁手に優先）" {
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    setupWhiteBlockedFourRow7(&cells);
+    // (7,7) は縦 (3,7)-(6,7) の五点。加えて斜め 2 方向で四を作る（＝五連が無ければ四四）。
+    cells[3 * BOARD_SIZE + 7] = .black;
+    cells[4 * BOARD_SIZE + 7] = .black;
+    cells[5 * BOARD_SIZE + 7] = .black;
+    cells[6 * BOARD_SIZE + 7] = .black;
+    cells[4 * BOARD_SIZE + 4] = .black; // ↘ の三
+    cells[5 * BOARD_SIZE + 5] = .black;
+    cells[6 * BOARD_SIZE + 6] = .black;
+    cells[4 * BOARD_SIZE + 10] = .black; // ↙ の三
+    cells[5 * BOARD_SIZE + 9] = .black;
+    cells[6 * BOARD_SIZE + 8] = .black;
+    bitboard.initFromCells(&cells);
+
+    // 前提: (7,7) は黒の五点（＝禁手判定は .none に落ちる）
+    try std.testing.expect(forbidden.checkFive(&cells, 7, 7, .black));
+
+    const forced = forcedBlockOrLoss(&cells, .black, .{ .row = 7, .col = 6 });
+    try std.testing.expectEqual(Position{ .row = 7, .col = 7 }, forced.block);
+
+    var buf: [225]Position = undefined;
+    try std.testing.expectEqual(@as(u16, 1), generateTacticalMoves(&cells, .black, forced, &buf));
+    try std.testing.expectEqual(Position{ .row = 7, .col = 7 }, buf[0]);
+
+    // 受けられる＝負け確定ではない（黒は受けて五を作れる）
+    try std.testing.expect(runQuiescenceAsBlack(&cells, .{ .row = 7, .col = 6 }) > -scores.FIVE);
+}
+
+test "issue #142: 黒の四四点は四候補から除外される（白は除外しない）" {
+    ll.init();
+    var buf: [225]Position = undefined;
+
+    // 黒: (7,7) は四を作るが四四の禁手 → 候補に含まれない
+    var black_cells = [_]Cell{.empty} ** CELL_COUNT;
+    setupBlackDoubleFourAt77(&black_cells);
+    bitboard.initFromCells(&black_cells);
+    // 前提: (7,7) は四を作る点（＝フィルタが無ければ候補に入る）だが禁手
+    black_cells[7 * BOARD_SIZE + 7] = .black;
+    bitboard.placeStone(7, 7, .black);
+    const black_is_four = createsFour(&black_cells, 7, 7, .black);
+    black_cells[7 * BOARD_SIZE + 7] = .empty;
+    bitboard.removeStone(7, 7);
+    try std.testing.expect(black_is_four);
+    try std.testing.expectEqual(forbidden.ForbiddenType.double_four, forbidden.checkForbiddenMove(&black_cells, 7, 7));
+
+    const black_count = generateTacticalMoves(&black_cells, .black, .none, &buf);
+    try std.testing.expect(!containsMove(&buf, black_count, 7, 7));
+
+    // 白: 同じ形でも白に禁手は無いので候補に含まれる
+    var white_cells = [_]Cell{.empty} ** CELL_COUNT;
+    setupBlackDoubleFourAt77(&white_cells);
+    for (&white_cells) |*cell| {
+        if (cell.* == .black) cell.* = .white;
+    }
+    bitboard.initFromCells(&white_cells);
+
+    const white_count = generateTacticalMoves(&white_cells, .white, .none, &buf);
+    try std.testing.expect(containsMove(&buf, white_count, 7, 7));
 }
 
 test "quiescenceSearch stand-pat on empty" {
