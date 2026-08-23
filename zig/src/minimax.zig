@@ -220,20 +220,37 @@ fn hasFourInDirection(cells: []const Cell, row: u8, col: u8, dr: i8, dc: i8, col
 
 /// analyzeFourAndThree: 四と活三の有無を分析（石配置済み前提）
 ///
-/// ⚠️ `has_five` の判定が色盲（`count >= 5`）で、黒の長連（6 連以上＝禁手で五ではない）も
-/// 五として返す。#125 では「勝敗に効く五判定」（`forbidden.checkFive`）のみを
-/// `forbidden.isFiveLength` に揃え、ここは**意図的に未変更**とした
-/// （評価・move ordering 系の色盲な五扱いはまとめて別 issue #132 で扱う）。
+/// 五の判定は `forbidden.isFiveLength`（SSoT・#125）。黒はちょうど 5 連、白は 5 連以上。
+/// 黒の長連（`forbidden.isOverlineLength`）は禁手なので五でも四でもなく、
+/// **その着手自体が打てない**ため全フィールド false を返す（#132）。
+///
+/// 五と長連が同時に成立する黒の着手は**五が優先**（連珠ルール）。方向順に依存して
+/// 結果が変わらないよう、長連を見つけても即 return せず全方向をスキャンしてから
+/// 判定する。これは主探索の遅延禁手判定（`checkFive` を先に見て、五なら禁手判定を
+/// スキップする）と同じ優先順位。
+///
+/// ⚠️ 現状の消費者（`isThreatExtensionCandidate` / LMR 調整 / `demotePlainFourIfNeeded`）は
+/// いずれも `has_four` と `has_open_three` しか見ないため、黒長連での all-false 化は
+/// **挙動としては no-op**（禁手手は主探索では遅延禁手判定で先に捨てられ、ここには届かない）。
+/// あくまで構造体の契約（「has_five は五である」）を正しくするための変更。
 pub fn analyzeFourAndThree(cells: []const Cell, row: u8, col: u8, color: Cell) struct { has_five: bool, has_four: bool, has_open_three: bool } {
     const jp = @import("jump_patterns.zig");
     var has_four = false;
     var has_open_three = false;
+    var has_overline = false;
 
     for (DIRECTIONS, 0..) |dir, i| {
         const result = board_mod.analyzeDirectionOnCells(cells, row, col, dir.dr, dir.dc, color);
 
-        if (result.count >= 5) {
+        // 五は長連より優先。1 方向でも五があればその時点で確定。
+        if (forbidden.isFiveLength(result.count, color)) {
             return .{ .has_five = true, .has_four = false, .has_open_three = false };
+        }
+
+        // 黒の長連＝禁手。他方向に五がないか見終わるまで判定は保留する。
+        if (forbidden.isOverlineLength(result.count, color)) {
+            has_overline = true;
+            continue;
         }
 
         // 四チェック
@@ -251,6 +268,11 @@ pub fn analyzeFourAndThree(cells: []const Cell, row: u8, col: u8, color: Cell) s
         if (result.count == 3 and result.end1 == .empty and result.end2 == .empty) {
             has_open_three = true;
         }
+    }
+
+    // 五が無く長連がある＝禁手。着手不可なので脅威として扱わない。
+    if (has_overline) {
+        return .{ .has_five = false, .has_four = false, .has_open_three = false };
     }
 
     return .{ .has_five = false, .has_four = has_four, .has_open_three = has_open_three };
@@ -1152,6 +1174,63 @@ test "LMR table values" {
     try testing.expectEqual(getLMRReduction(0, 5), 0);
     // moveIndex=0 → 0
     try testing.expectEqual(getLMRReduction(5, 0), 0);
+}
+
+// #132: analyzeFourAndThree の五判定を forbidden.isFiveLength に揃えた回帰テスト
+test "analyzeFourAndThree: 黒の長連は五でも四でもない" {
+    const CELL_COUNT = board_mod.CELL_COUNT;
+    var cells: [CELL_COUNT]Cell = [_]Cell{.empty} ** CELL_COUNT;
+
+    // 横に黒 6 連（col 3..8、着手点は col 7）＝長連
+    for (3..9) |c| cells[7 * BOARD_SIZE + c] = .black;
+    // 同じ着手点に縦の活三（row 6,7,8 で両端空き）も作っておく
+    cells[6 * BOARD_SIZE + 7] = .black;
+    cells[8 * BOARD_SIZE + 7] = .black;
+
+    const r = analyzeFourAndThree(&cells, 7, 7, .black);
+    try testing.expect(!r.has_five);
+    try testing.expect(!r.has_four);
+    try testing.expect(!r.has_open_three);
+}
+
+// #132 レビュー指摘: 五と長連が同居する黒の着手は、方向順に関係なく五が優先される
+// （主探索の遅延禁手判定 checkFive → checkForbiddenMove と同じ順位）。
+test "analyzeFourAndThree: 五と長連が同居する黒は方向順に関係なく五" {
+    const CELL_COUNT = board_mod.CELL_COUNT;
+
+    // (a) 横（先に走査される方向）に長連・縦に五
+    {
+        var cells: [CELL_COUNT]Cell = [_]Cell{.empty} ** CELL_COUNT;
+        for (3..9) |c| cells[7 * BOARD_SIZE + c] = .black; // 横 6 連
+        for (3..7) |r| cells[r * BOARD_SIZE + 7] = .black; // 縦: row 3..6 + 着手点 7 = 5 連
+        const r = analyzeFourAndThree(&cells, 7, 7, .black);
+        try testing.expect(r.has_five);
+    }
+
+    // (b) 縦に長連・横に五（(a) と方向を入れ替えても同じ結論）
+    {
+        var cells: [CELL_COUNT]Cell = [_]Cell{.empty} ** CELL_COUNT;
+        for (3..9) |r| cells[r * BOARD_SIZE + 7] = .black; // 縦 6 連
+        for (3..7) |c| cells[7 * BOARD_SIZE + c] = .black; // 横: col 3..6 + 着手点 7 = 5 連
+        const r = analyzeFourAndThree(&cells, 7, 7, .black);
+        try testing.expect(r.has_five);
+    }
+}
+
+test "analyzeFourAndThree: 白の長連は五・黒のちょうど五は五" {
+    const CELL_COUNT = board_mod.CELL_COUNT;
+    var cells: [CELL_COUNT]Cell = [_]Cell{.empty} ** CELL_COUNT;
+
+    // 白 6 連
+    for (3..9) |c| cells[7 * BOARD_SIZE + c] = .white;
+    const w = analyzeFourAndThree(&cells, 7, 7, .white);
+    try testing.expect(w.has_five);
+
+    // 黒ちょうど 5 連
+    @memset(&cells, .empty);
+    for (3..8) |c| cells[7 * BOARD_SIZE + c] = .black;
+    const b = analyzeFourAndThree(&cells, 7, 7, .black);
+    try testing.expect(b.has_five);
 }
 
 /// 序盤の均衡局面（minimax テスト用）。

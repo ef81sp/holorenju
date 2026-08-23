@@ -331,6 +331,33 @@ test "HistoryTable basic" {
     try std.testing.expectEqual(history.getScore(.{ .row = 7, .col = 7 }), 0);
 }
 
+// #132 回帰: 黒番は skip_forbidden_check=true で候補を作るため、長連点も候補に入る。
+// 修正前は getPatternScore が黒の 6 連を FIVE(100000) として返し、静的評価で
+// 長連点が先頭に来ていた（探索直前に遅延禁手判定で捨てられるだけの無駄なソート）。
+test "sortMoves: 黒の長連点が静的評価で先頭に来ない" {
+    const ll = @import("line_lookup.zig");
+    const bitboard = @import("bitboard.zig");
+    ll.init();
+
+    const CELL_COUNT = board_mod.CELL_COUNT;
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    // row 7 に BBB_BB（col 3,4,5 / 7,8）。col 6 を埋めると col 3..8 の 6 連＝長連。
+    for ([_]usize{ 3, 4, 5, 7, 8 }) |c| cells[7 * BOARD_SIZE + c] = .black;
+    bitboard.initFromCells(&cells);
+
+    var moves_list = move_gen.MoveList.init();
+    moves_list.push(.{ .row = 7, .col = 6 }); // 長連点
+    moves_list.push(.{ .row = 6, .col = 6 });
+    moves_list.push(.{ .row = 8, .col = 8 });
+
+    const result = sortMoves(&moves_list, &cells, .black, .{
+        .use_static_eval = true,
+    });
+
+    const first = result.moves.items[0];
+    try std.testing.expect(!(first.row == 7 and first.col == 6));
+}
+
 test "sortMoves: TT move first" {
     const CELL_COUNT = board_mod.CELL_COUNT;
     var cells = [_]Cell{.empty} ** CELL_COUNT;

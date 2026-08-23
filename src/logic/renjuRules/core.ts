@@ -10,7 +10,7 @@ import type { BoardState, Position, StoneColor } from "@/types/game";
 import { incrementBoardCopies } from "@/logic/cpu/profiling/counters";
 
 /** 実際に盤上に置かれる石の色（`StoneColor` から空点 `null` を除いたもの） */
-type PlayerColor = Exclude<StoneColor, null>;
+export type PlayerColor = Exclude<StoneColor, null>;
 
 // =============================================================================
 // 引き分けルール
@@ -151,6 +151,20 @@ export function getLineLength(
  */
 export function isFiveLength(length: number, color: PlayerColor): boolean {
   return color === "white" ? length >= 5 : length === 5;
+}
+
+/**
+ * 連の長さが「長連」かどうか（色別の連珠ルール）
+ *
+ * - 黒: 6 以上（＝禁手。五でも四でもない）
+ * - 白: 常に false（白に長連の制限は無い。6 連以上は `isFiveLength` で五になる）
+ *
+ * `isFiveLength` の対となる述語（issue #132）。評価・move ordering が
+ * 「黒の長連」を弾く箇所はこの述語を経由すること。
+ * Zig 側の SSoT は `zig/src/forbidden.zig` の `isOverlineLength`。
+ */
+export function isOverlineLength(length: number, color: PlayerColor): boolean {
+  return color !== "white" && length >= 6;
 }
 
 /**

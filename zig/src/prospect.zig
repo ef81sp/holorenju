@@ -143,7 +143,8 @@ pub fn classifyDirection(own_no_center: u9, block: u9, color: Cell) DirCode {
     const pt = ll.computePattern(own, block);
 
     // 黒の長連（窓内で観測できる範囲のみ。窓外は近似で見逃す＝§2.1-1）。
-    if (color == .black and pt.count >= 6) return .dead;
+    // 長連の定義は forbidden.isOverlineLength（SSoT・#132）。
+    if (forbidden.isOverlineLength(pt.count, color)) return .dead;
 
     // 五の定義は forbidden.isFiveLength（SSoT・#125）。黒はちょうど 5、白は 5 以上。
     if (forbidden.isFiveLength(pt.count, color)) return .f5;

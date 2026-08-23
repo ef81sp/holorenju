@@ -93,86 +93,136 @@ describe("analyzeDirection", () => {
 
 describe("getPatternScore", () => {
   it("五連はFIVEスコア", () => {
-    const score = getPatternScore({ count: 5, end1: "empty", end2: "empty" });
+    const score = getPatternScore(
+      { count: 5, end1: "empty", end2: "empty" },
+      "black",
+    );
     expect(score).toBe(PATTERN_SCORES.FIVE);
   });
 
   it("活四はOPEN_FOURスコア", () => {
-    const score = getPatternScore({ count: 4, end1: "empty", end2: "empty" });
+    const score = getPatternScore(
+      { count: 4, end1: "empty", end2: "empty" },
+      "black",
+    );
     expect(score).toBe(PATTERN_SCORES.OPEN_FOUR);
   });
 
   it("止め四はFOURスコア", () => {
-    const score = getPatternScore({
-      count: 4,
-      end1: "empty",
-      end2: "opponent",
-    });
+    const score = getPatternScore(
+      { count: 4, end1: "empty", end2: "opponent" },
+      "black",
+    );
     expect(score).toBe(PATTERN_SCORES.FOUR);
   });
 
   it("両端塞がりの四は0", () => {
-    const score = getPatternScore({
-      count: 4,
-      end1: "opponent",
-      end2: "opponent",
-    });
+    const score = getPatternScore(
+      { count: 4, end1: "opponent", end2: "opponent" },
+      "black",
+    );
     expect(score).toBe(0);
   });
 
   it("活三はOPEN_THREEスコア", () => {
-    const score = getPatternScore({ count: 3, end1: "empty", end2: "empty" });
+    const score = getPatternScore(
+      { count: 3, end1: "empty", end2: "empty" },
+      "black",
+    );
     expect(score).toBe(PATTERN_SCORES.OPEN_THREE);
   });
 
   it("止め三はTHREEスコア", () => {
-    const score = getPatternScore({ count: 3, end1: "empty", end2: "edge" });
+    const score = getPatternScore(
+      { count: 3, end1: "empty", end2: "edge" },
+      "black",
+    );
     expect(score).toBe(PATTERN_SCORES.THREE);
   });
 
   it("活二はOPEN_TWOスコア", () => {
-    const score = getPatternScore({ count: 2, end1: "empty", end2: "empty" });
+    const score = getPatternScore(
+      { count: 2, end1: "empty", end2: "empty" },
+      "black",
+    );
     expect(score).toBe(PATTERN_SCORES.OPEN_TWO);
   });
 
   it("止め二はTWOスコア", () => {
-    const score = getPatternScore({
-      count: 2,
-      end1: "empty",
-      end2: "opponent",
-    });
+    const score = getPatternScore(
+      { count: 2, end1: "empty", end2: "opponent" },
+      "black",
+    );
     expect(score).toBe(PATTERN_SCORES.TWO);
   });
 
-  it("長連（6以上）はFIVEスコア", () => {
-    const score = getPatternScore({ count: 6, end1: "empty", end2: "empty" });
-    expect(score).toBe(PATTERN_SCORES.FIVE);
+  // #132: 黒の長連は禁手なので五でも四でもない。白の長連は五（#125）。
+  it("黒の長連（6以上）は0点", () => {
+    for (let count = 6; count <= 10; count++) {
+      expect(
+        getPatternScore({ count, end1: "empty", end2: "empty" }, "black"),
+        `count=${count} bothOpen`,
+      ).toBe(0);
+      expect(
+        getPatternScore({ count, end1: "opponent", end2: "opponent" }, "black"),
+        `count=${count} blocked`,
+      ).toBe(0);
+    }
+  });
+
+  it("白の長連（6以上）はFIVEスコア", () => {
+    for (let count = 6; count <= 10; count++) {
+      expect(
+        getPatternScore({ count, end1: "empty", end2: "empty" }, "white"),
+        `count=${count}`,
+      ).toBe(PATTERN_SCORES.FIVE);
+    }
+  });
+
+  it("ちょうど五連は黒白ともFIVEスコア", () => {
+    expect(
+      getPatternScore({ count: 5, end1: "empty", end2: "empty" }, "white"),
+    ).toBe(PATTERN_SCORES.FIVE);
   });
 });
 
 describe("getPatternType", () => {
   it("五連はfive", () => {
-    expect(getPatternType({ count: 5, end1: "empty", end2: "empty" })).toBe(
-      "five",
-    );
+    expect(
+      getPatternType({ count: 5, end1: "empty", end2: "empty" }, "black"),
+    ).toBe("five");
   });
 
   it("活四はopenFour", () => {
-    expect(getPatternType({ count: 4, end1: "empty", end2: "empty" })).toBe(
-      "openFour",
-    );
+    expect(
+      getPatternType({ count: 4, end1: "empty", end2: "empty" }, "black"),
+    ).toBe("openFour");
   });
 
   it("止め四はfour", () => {
-    expect(getPatternType({ count: 4, end1: "empty", end2: "opponent" })).toBe(
-      "four",
-    );
+    expect(
+      getPatternType({ count: 4, end1: "empty", end2: "opponent" }, "black"),
+    ).toBe("four");
   });
 
   it("両端塞がりはnull", () => {
     expect(
-      getPatternType({ count: 4, end1: "opponent", end2: "opponent" }),
+      getPatternType({ count: 4, end1: "opponent", end2: "opponent" }, "black"),
     ).toBeNull();
+  });
+
+  // #132: 黒の長連は五でも四でもない
+  it("黒の長連（6以上）はnull・白の長連はfive", () => {
+    for (let count = 6; count <= 10; count++) {
+      expect(
+        getPatternType({ count, end1: "empty", end2: "empty" }, "black"),
+        `black count=${count}`,
+      ).toBeNull();
+      expect(
+        getPatternType({ count, end1: "empty", end2: "empty" }, "white"),
+        `white count=${count}`,
+      ).toBe("five");
+    }
   });
 });
 

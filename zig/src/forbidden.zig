@@ -60,6 +60,21 @@ pub fn isFiveLength(length: u8, color: Cell) bool {
     return if (color == .white) length >= 5 else length == 5;
 }
 
+/// 連の長さが「長連」かどうか（色別の連珠ルール）
+///
+/// - 黒: 6 以上（＝禁手。五でも四でもない）
+/// - 白: 常に false（白に長連の制限は無い。6 連以上は `isFiveLength` で五になる）
+///
+/// `isFiveLength` の対となる述語（issue #132）。評価・move ordering・プロスペクトが
+/// 「黒の長連」を弾く箇所はこの述語を経由すること。TS 側の SSoT は
+/// `src/logic/renjuRules/core.ts` の `isOverlineLength`。
+///
+/// `.empty` は黒扱いになるが、呼び出し元は必ず実際の石の色を渡す
+/// （`isFiveLength` と同じく空点を数える経路では使わない）。
+pub fn isOverlineLength(length: u8, color: Cell) bool {
+    return color != .white and length >= 6;
+}
+
 /// 五連をチェック（白は長連＝6連以上も五）
 pub fn checkFive(cells: []const Cell, row: u8, col: u8, color: Cell) bool {
     // `.empty` は「石の色」ではない。getLineLength は空点も数えるので、

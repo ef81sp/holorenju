@@ -39,8 +39,8 @@ export fn analyzeDirection(row: u8, col: u8, dr: i8, dc: i8, color: u8) u32 {
 export fn evaluateDirectionScores(row: u8, col: u8, color: u8) i32 {
     return patterns.evaluateDirectionScores(row, col, color);
 }
-export fn wasmGetPatternScore(count: u8, end1: u8, end2: u8) i32 {
-    return patterns.wasmGetPatternScore(count, end1, end2);
+export fn wasmGetPatternScore(count: u8, end1: u8, end2: u8, color: u8) i32 {
+    return patterns.wasmGetPatternScore(count, end1, end2, color);
 }
 
 // --- eval 重み実行時注入（bench 専用。重みごとリビルド不要にする） ---
@@ -109,8 +109,8 @@ export fn extractProspectFeatures(perspective: u8, stm_is_perspective: u8) u32 {
     }
     return prospect.PROSPECT_PARAM_COUNT;
 }
-export fn wasmGetPatternType(count: u8, end1: u8, end2: u8) u8 {
-    return patterns.wasmGetPatternType(count, end1, end2);
+export fn wasmGetPatternType(count: u8, end1: u8, end2: u8, color: u8) u8 {
+    return patterns.wasmGetPatternType(count, end1, end2, color);
 }
 
 // === パリティテスト用 export（#21）===
