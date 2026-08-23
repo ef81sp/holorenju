@@ -90,11 +90,27 @@ fn findWinningMove(cells: []Cell, color: Cell) ?Position {
     return null;
 }
 
+/// pre-search 全体の壁時計上限（ms）
+///
+/// 内訳は自分の VCF 150 + 相手 VCF 150 + VCT 300。issue #147 B 以前は各段が
+/// 独立した予算を持ち、しかも内部の VCF/VCT が予算を復活させていたため
+/// 名目 300ms の VCT が実測 494ms まで伸びていた。ここを親 limiter にして
+/// 各段を `child()` で作ることで「前段が食った分だけ後段が短くなる」ようにする。
+pub const PRE_SEARCH_TIME_LIMIT: u32 = vcf_mod.VCF_TIME_LIMIT * 2 + vct.VCT_TIME_LIMIT;
+
 /// 必須手の事前チェック
 pub fn findPreSearchMove(
     cells: []Cell,
     color: Cell,
 ) PreSearchResult {
+    // pre-search 全体の予算（issue #147 B）。各段はこの残りを継承した子で回る。
+    var pre_limiter = vcf_mod.TimeLimiter{
+        .start_time = getTimestampMs(),
+        .time_limit = PRE_SEARCH_TIME_LIMIT,
+        .nodes = 0,
+        .max_nodes = 0,
+    };
+
     // 即勝ち手
     const win_move = findWinningMove(cells, color);
     if (win_move) |wm| {
@@ -141,7 +157,8 @@ pub fn findPreSearchMove(
     }
 
     // VCF勝ち手を探す
-    const vcf_move = vcf_mod.findVCFMove(cells, color, vcf_mod.VCF_MAX_DEPTH, vcf_mod.VCF_TIME_LIMIT);
+    const vcf_budget = pre_limiter.child(vcf_mod.VCF_TIME_LIMIT, 0);
+    const vcf_move = vcf_mod.findVCFMove(cells, color, vcf_mod.VCF_MAX_DEPTH, vcf_budget.time_limit);
     if (vcf_move) |vm| {
         return .{
             .immediate_move = vm,
@@ -151,19 +168,14 @@ pub fn findPreSearchMove(
 
     // 相手VCFチェック（Mise-VCFスキップ判定用）
     const opponent_has_vcf = blk: {
-        var opp_limiter = vcf_mod.TimeLimiter{
-            .start_time = getTimestampMs(),
-            .time_limit = vcf_mod.VCF_TIME_LIMIT,
-            .nodes = 0,
-            .max_nodes = 3000,
-        };
+        var opp_limiter = pre_limiter.child(vcf_mod.VCF_TIME_LIMIT, 3000);
         break :blk vcf_mod.hasVCF(cells, opponent_color, 0, &opp_limiter, vcf_mod.VCF_MAX_DEPTH);
     };
 
     // Mise-VCF（ミセ→強制応手→VCF勝ち）
     // 相手VCFがある場合は間に合わないのでスキップ
     if (!opponent_has_vcf) {
-        const mise_move = mise_vcf.findMiseVCFMove(cells, color);
+        const mise_move = mise_vcf.findMiseVCFMoveWithParent(cells, color, &pre_limiter);
         if (mise_move) |mm| {
             // 黒番の禁手チェック
             if (color == .black) {
@@ -184,7 +196,8 @@ pub fn findPreSearchMove(
     }
 
     // VCT勝ち手を探す
-    const vct_move = vct.findVCTMove(cells, color, vct.VCT_MAX_DEPTH, vct.VCT_TIME_LIMIT);
+    const vct_budget = pre_limiter.child(vct.VCT_TIME_LIMIT, 0);
+    const vct_move = vct.findVCTMove(cells, color, vct.VCT_MAX_DEPTH, vct_budget.time_limit);
     if (vct_move) |vm| {
         return .{
             .immediate_move = vm,

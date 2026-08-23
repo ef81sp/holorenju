@@ -192,6 +192,7 @@ fn isInvalidatedByNoriTe(
     cells: []Cell,
     color: Cell,
     three_defenses: *const threats.PositionList,
+    parent: *vcf.TimeLimiter,
 ) NoriTeResult {
     const opponent = color.opposite();
 
@@ -202,13 +203,10 @@ fn isInvalidatedByNoriTe(
         cells[def_idx] = opponent;
         bitboard.placeStone(defense.row, defense.col, opponent);
 
-        var limiter = vcf.TimeLimiter{
-            .start_time = 0,
-            .time_limit = 0,
-            .nodes = 0,
-            .max_nodes = NORI_TE_VCF_NODES,
-        };
+        // 親の残り壁時計予算を継承（issue #147 B。従来は time_limit=0＝壁時計無制限）
+        var limiter = parent.child(0, NORI_TE_VCF_NODES);
         const vcf_ok = vcf.hasVCF(cells, color, 0, &limiter, MISE_VCF_DEPTH);
+        parent.charge(limiter.nodes);
 
         cells[def_idx] = .empty;
         bitboard.removeStone(defense.row, defense.col);
@@ -241,7 +239,19 @@ fn isInvalidatedByNoriTe(
 ///    h. hasVCFでVCF判定
 ///    i. VCF成立 → MがMise-VCF勝ち手
 ///    j. 全てundo
+///
+/// 親 limiter を持たない呼び出し（テスト・解析）用のエントリ。壁時計は無制限で、
+/// 内部 VCF はノード数上限のみで縛られる（従来どおり）。
 pub fn findMiseVCFMove(cells: []Cell, color: Cell) ?Position {
+    var unlimited = vcf.TimeLimiter{ .start_time = 0, .time_limit = 0, .nodes = 0, .max_nodes = 0 };
+    return findMiseVCFMoveWithParent(cells, color, &unlimited);
+}
+
+/// `findMiseVCFMove` の親 limiter 付き版（issue #147 B）
+///
+/// 内部の VCF 判定はすべて `parent.child(...)` で作った limiter で回るので、
+/// 親（pre-search）の残り壁時計予算を超えて走らない。
+pub fn findMiseVCFMoveWithParent(cells: []Cell, color: Cell, parent: *vcf.TimeLimiter) ?Position {
     // トップレベルエントリ: bitboard を cells と同期
     bitboard.initFromCells(cells);
     ll.init();
@@ -308,7 +318,7 @@ pub fn findMiseVCFMove(cells: []Cell, color: Cell) ?Position {
             }
 
             // ノリ手チェック
-            const nori_result = isInvalidatedByNoriTe(cells, color, &three_defenses);
+            const nori_result = isInvalidatedByNoriTe(cells, color, &three_defenses, parent);
             if (nori_result == .invalidated) {
                 cells[idx] = .empty;
                 bitboard.removeStone(r, c);
@@ -326,13 +336,10 @@ pub fn findMiseVCFMove(cells: []Cell, color: Cell) ?Position {
                 bitboard.placeStone(target.row, target.col, opponent);
 
                 // VCF探索
-                var limiter = vcf.TimeLimiter{
-                    .start_time = 0,
-                    .time_limit = 0,
-                    .nodes = 0,
-                    .max_nodes = MISE_VCF_NODES,
-                };
+                // 親の残り壁時計予算を継承（issue #147 B。従来は time_limit=0＝壁時計無制限）
+                var limiter = parent.child(0, MISE_VCF_NODES);
                 const vcf_ok = vcf.hasVCF(cells, color, 0, &limiter, MISE_VCF_DEPTH);
+                parent.charge(limiter.nodes);
 
                 cells[target_idx] = .empty;
                 bitboard.removeStone(target.row, target.col);
@@ -410,6 +417,10 @@ pub fn findMiseVCFSequence(
     bitboard.initFromCells(cells);
     ll.init();
 
+    // 振り返り経路（親 limiter なし）。ノリ手チェックの予算は従来どおり
+    // ノード数上限のみ（issue #147 B で挙動を変えない）。
+    var review_limiter = vcf.TimeLimiter{ .start_time = 0, .time_limit = 0, .nodes = 0, .max_nodes = 0 };
+
     var result = MiseVCFSequenceResult{
         .sequence = undefined,
         .len = 0,
@@ -479,7 +490,7 @@ pub fn findMiseVCFSequence(
             }
 
             // ノリ手チェック
-            const nori_result = isInvalidatedByNoriTe(cells, color, &three_defenses);
+            const nori_result = isInvalidatedByNoriTe(cells, color, &three_defenses, &review_limiter);
             if (nori_result == .invalidated) {
                 cells[idx] = .empty;
                 bitboard.removeStone(r, c);
