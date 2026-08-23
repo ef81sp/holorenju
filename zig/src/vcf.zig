@@ -6,6 +6,7 @@
 
 const bitboard = @import("bitboard.zig");
 const board_mod = @import("board.zig");
+const deadline = @import("deadline.zig");
 const forbidden = @import("forbidden.zig");
 const jp = @import("jump_patterns.zig");
 const ll = @import("line_lookup.zig");
@@ -52,13 +53,21 @@ pub const TimeLimiter = struct {
     }
 
     /// 予算（ノード数 or 時間）を超えたか
+    ///
+    /// issue #147: 自前の予算に加えて **グローバル絶対デッドライン**
+    /// （`deadline.g_absolute_deadline_ms`）も見る。`time_limit == 0`（壁時計無制限）の
+    /// limiter でも打ち切られるよう、短絡より **前** にデッドラインを評価する。
+    /// 時刻取得は 1 回だけで、従来より頻度が増えないようにしてある。
     pub fn exceeded(self: *const TimeLimiter) bool {
         if (self.max_nodes > 0 and self.nodes >= self.max_nodes) {
             return true;
         }
-        if (self.time_limit == 0) return false;
+        const absolute = deadline.g_absolute_deadline_ms;
+        if (self.time_limit == 0 and absolute == 0) return false;
         const now = getTimestampMs();
-        if (now == 0) return false; // ネイティブテスト
+        if (now == 0) return false; // ネイティブテスト（時計なし）
+        if (absolute != 0 and now >= absolute) return true;
+        if (self.time_limit == 0) return false;
         return (now - self.start_time) >= self.time_limit;
     }
 
@@ -644,13 +653,9 @@ fn findVCFSequenceRecursive(
 // タイムスタンプ取得
 // =============================================================================
 
-extern fn getTimestampMsExternal() u32;
-
+/// 壁時計（ms）。時計の SSoT は `deadline.nowMs`（ネイティブテストでは擬似時計）。
 fn getTimestampMs() u32 {
-    if (@import("builtin").cpu.arch == .wasm32) {
-        return getTimestampMsExternal();
-    }
-    return 0;
+    return deadline.nowMs();
 }
 
 // === Tests ===
@@ -849,4 +854,63 @@ test "findVCFSequence: 五点 0 個の偽四で VCF 成立にしない（issue #
 
     const from_g8 = findVCFSequenceFromFirstMove(&cells, .{ .row = 7, .col = 6 }, .black, VCF_MAX_DEPTH, 0, 0);
     try testing.expect(!from_g8.found);
+}
+
+// --- issue #147: グローバル絶対デッドライン ---
+
+test "TimeLimiter.exceeded: グローバル絶対デッドラインを超えていれば true（#147）" {
+    // 予算無制限（time_limit=0 / max_nodes=0）の limiter でも、
+    // グローバル絶対デッドラインを過ぎていれば打ち切られる。
+    deadline.test_now_ms = 5000;
+    defer deadline.test_now_ms = 0;
+
+    var limiter = TimeLimiter{ .start_time = 0, .time_limit = 0, .nodes = 0, .max_nodes = 0 };
+    try testing.expect(!limiter.exceeded());
+
+    deadline.set(1000);
+    defer deadline.clear();
+    try testing.expect(limiter.exceeded());
+
+    deadline.clear();
+    try testing.expect(!limiter.exceeded());
+}
+
+test "TimeLimiter.exceeded: デッドライン未到達なら従来どおり false（#147）" {
+    deadline.test_now_ms = 500;
+    defer deadline.test_now_ms = 0;
+    deadline.set(1000);
+    defer deadline.clear();
+
+    var limiter = TimeLimiter{ .start_time = 0, .time_limit = 0, .nodes = 0, .max_nodes = 0 };
+    try testing.expect(!limiter.exceeded());
+}
+
+test "TimeLimiter.exceeded: グローバル 0 ならノード予算の判定は不変（#147）" {
+    deadline.clear();
+    var limiter = TimeLimiter{ .start_time = 0, .time_limit = 0, .nodes = 3, .max_nodes = 3 };
+    try testing.expect(limiter.exceeded());
+
+    var loose = TimeLimiter{ .start_time = 0, .time_limit = 0, .nodes = 2, .max_nodes = 3 };
+    try testing.expect(!loose.exceeded());
+}
+
+test "findVCFSequence: グローバル絶対デッドライン超過で即打ち切り（#147）" {
+    // 「two-step VCF」と同じ盤面。通常は found=true になる。
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[4 * BOARD_SIZE + 7] = .black;
+    cells[5 * BOARD_SIZE + 7] = .black;
+    cells[6 * BOARD_SIZE + 7] = .black;
+    cells[7 * BOARD_SIZE + 5] = .black;
+    cells[7 * BOARD_SIZE + 6] = .black;
+    cells[7 * BOARD_SIZE + 7] = .black;
+
+    try testing.expect(findVCFSequence(&cells, .black, VCF_MAX_DEPTH, 0, 0).found);
+
+    deadline.test_now_ms = 5000;
+    defer deadline.test_now_ms = 0;
+    deadline.set(1000);
+    defer deadline.clear();
+
+    const result = findVCFSequence(&cells, .black, VCF_MAX_DEPTH, 0, 0);
+    try testing.expect(!result.found);
 }

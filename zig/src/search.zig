@@ -4,6 +4,7 @@
 /// TS版 iterativeDeepening.ts + preSearch.ts に対応
 const bitboard = @import("bitboard.zig");
 const board_mod = @import("board.zig");
+const deadline_mod = @import("deadline.zig");
 const evaluate = @import("evaluate.zig");
 const forbidden = @import("forbidden.zig");
 const incremental_eval = @import("incremental_eval.zig");
@@ -321,6 +322,28 @@ pub fn findBestMoveIterative(
     const start_time = getTimestampMs();
     aspiration_research_count = 0;
 
+    // =========================================================================
+    // 絶対デッドライン（issue #147）
+    // =========================================================================
+    //
+    // ここが「値の SSoT」。同じ `absolute_deadline` を
+    //   - `ctx.absolute_deadline`（メイン探索 / quiescence が参照）
+    //   - `deadline.g_absolute_deadline_ms`（全 `TimeLimiter` が参照）
+    // の両方へ配る。二重に計算しないので divergence は起きない。
+    //
+    // 事前探索（`findPreSearchMove` → VCF / ミセVCF / VCT）より **前** に立てるのが要点。
+    // 事前探索は独自 limiter で回り、`mise_vcf.zig` には壁時計無制限（`time_limit = 0`）の
+    // limiter も残っているので、ここより後ろで立てると事前探索が天井の外に出てしまう。
+    //
+    // `no_time_limit`（計測モード・解析）の場合は 0＝無効のまま。
+    const no_time_limit = params.time_limit == 0;
+    const absolute_deadline = if (no_time_limit) @as(u32, 0) else start_time + params.absolute_time_limit;
+    deadline_mod.set(absolute_deadline);
+    // 早期 return（即決手・唯一手）を含め、抜けるときは必ず解除する。
+    // 解除し忘れると、以降の振り返り経路（`findVCTSequence` 直接呼び出し）まで
+    // 過去のデッドラインで打ち切られてしまう。
+    defer deadline_mod.clear();
+
     // Aspiration Windowsの幅を選択
     const effective_widths: []const i32 = if (params.aspiration_mode == 1)
         &ASPIRATION_WIDTHS
@@ -436,7 +459,6 @@ pub fn findBestMoveIterative(
     // 時間制限設定
     // =========================================================================
 
-    const no_time_limit = params.time_limit == 0;
     const stone_count = countStones(cells);
     const dynamic_time_limit = if (no_time_limit)
         @as(u32, 0)
@@ -444,7 +466,6 @@ pub fn findBestMoveIterative(
         calculateDynamicTimeLimit(params.time_limit, stone_count, moves.len);
 
     const search_deadline = if (no_time_limit) @as(u32, 0) else start_time + dynamic_time_limit;
-    const absolute_deadline = if (no_time_limit) @as(u32, 0) else start_time + params.absolute_time_limit;
     const loop_deadline = if (no_time_limit) @as(u32, 0) else start_time + dynamic_time_limit * 80 / 100;
 
     ctx.deadline = search_deadline;
@@ -662,13 +683,9 @@ pub fn findBestMoveIterative(
 // タイムスタンプ取得
 // =============================================================================
 
-extern fn getTimestampMsExternal() u32;
-
+/// 壁時計（ms）。時計の SSoT は `deadline.nowMs`（ネイティブテストでは擬似時計）。
 fn getTimestampMs() u32 {
-    if (@import("builtin").cpu.arch == .wasm32) {
-        return getTimestampMsExternal();
-    }
-    return 0;
+    return deadline_mod.nowMs();
 }
 
 // === Tests ===
@@ -719,6 +736,65 @@ test "findBestMoveIterative basic" {
     try testing.expect(result.position.col < BOARD_SIZE);
     try testing.expect(result.completed_depth >= 1);
     try testing.expect(result.stats.nodes > 0);
+}
+
+// --- issue #147: グローバル絶対デッドライン ---
+
+test "findBestMoveIterative: 出口でグローバル絶対デッドラインが 0 に戻る（#147）" {
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[7 * BOARD_SIZE + 7] = .black;
+    cells[7 * BOARD_SIZE + 8] = .white;
+
+    tt_mod.global_tt.clear();
+    // 前の呼び出しの残骸があっても、抜けたら必ず 0。
+    deadline_mod.set(12345);
+    _ = findBestMoveIterative(&cells, .black, .{
+        .max_depth = 2,
+        .time_limit = 1000,
+        .max_nodes = 10000,
+    });
+    try testing.expectEqual(@as(u32, 0), deadline_mod.g_absolute_deadline_ms);
+}
+
+test "findBestMoveIterative: 事前探索の即決で早期 return してもデッドラインが残らない（#147）" {
+    // 黒の4連 → 事前探索が五連完成手を即決して返す（反復深化に入らない経路）。
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[7 * BOARD_SIZE + 4] = .black;
+    cells[7 * BOARD_SIZE + 5] = .black;
+    cells[7 * BOARD_SIZE + 6] = .black;
+    cells[7 * BOARD_SIZE + 7] = .black;
+
+    tt_mod.global_tt.clear();
+    deadline_mod.set(12345);
+    const result = findBestMoveIterative(&cells, .black, .{
+        .max_depth = 2,
+        .time_limit = 1000,
+    });
+    try testing.expectEqual(@as(u8, 0), result.completed_depth); // 即決経路
+    try testing.expectEqual(@as(u32, 0), deadline_mod.g_absolute_deadline_ms);
+}
+
+test "findBestMoveIterative: no_time_limit ではデッドラインを立てない（#147）" {
+    // 振り返り・計測モード（time_limit = 0）では絶対デッドラインは無効のまま。
+    // 擬似時計を進めても VCF/VCT が打ち切られないことで確認する。
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[7 * BOARD_SIZE + 4] = .black;
+    cells[7 * BOARD_SIZE + 5] = .black;
+    cells[7 * BOARD_SIZE + 6] = .black;
+    cells[7 * BOARD_SIZE + 7] = .black;
+
+    deadline_mod.test_now_ms = 5000;
+    defer deadline_mod.test_now_ms = 0;
+
+    tt_mod.global_tt.clear();
+    const result = findBestMoveIterative(&cells, .black, .{
+        .max_depth = 2,
+        .time_limit = 0,
+    });
+    try testing.expectEqual(@as(u32, 0), deadline_mod.g_absolute_deadline_ms);
+    // 五連完成手（(7,3) or (7,8)）が返る＝事前探索が打ち切られていない
+    try testing.expectEqual(@as(u8, 7), result.position.row);
+    try testing.expect(result.position.col == 3 or result.position.col == 8);
 }
 
 test "aspiration_research_count: findBestMoveIterativeの呼び出しごとにリセットされる（累積しない）" {

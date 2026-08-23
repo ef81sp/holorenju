@@ -5,6 +5,7 @@
 /// TS版 vct.ts + vctHelpers.ts + threatMoves.ts + threatPatterns.ts に対応
 const bitboard = @import("bitboard.zig");
 const board_mod = @import("board.zig");
+const deadline = @import("deadline.zig");
 const evaluate = @import("evaluate.zig");
 const forbidden = @import("forbidden.zig");
 const ft = @import("forced_win_tree.zig");
@@ -2542,13 +2543,9 @@ fn cellAt(cells: []const Cell, r: i16, c: i16) Cell {
 // タイムスタンプ取得
 // =============================================================================
 
-extern fn getTimestampMsExternal() u32;
-
+/// 壁時計（ms）。時計の SSoT は `deadline.nowMs`（ネイティブテストでは擬似時計）。
 fn getTimestampMs() u32 {
-    if (@import("builtin").cpu.arch == .wasm32) {
-        return getTimestampMsExternal();
-    }
-    return 0;
+    return deadline.nowMs();
 }
 
 // === Tests ===
@@ -2728,6 +2725,27 @@ test "findVCTSequence: immediate five via VCF" {
     const result = findVCTSequence(&cells, .black, VCT_MAX_DEPTH, 0, 0, false, .lenient);
     try testing.expect(result.found);
     try testing.expect(result.len >= 1);
+}
+
+test "findVCTSequence: グローバル絶対デッドライン超過で即打ち切り（#147）" {
+    // 「immediate five via VCF」と同じ盤面。通常は found=true。
+    // 壁時計無制限（time_limit=0）で呼んでも、グローバル絶対デッドラインで止まる。
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[7 * BOARD_SIZE + 4] = .black;
+    cells[7 * BOARD_SIZE + 5] = .black;
+    cells[7 * BOARD_SIZE + 6] = .black;
+    cells[7 * BOARD_SIZE + 7] = .black;
+
+    try testing.expect(findVCTSequence(&cells, .black, VCT_MAX_DEPTH, 0, 0, false, .lenient).found);
+
+    deadline.test_now_ms = 5000;
+    defer deadline.test_now_ms = 0;
+    deadline.set(1000);
+    defer deadline.clear();
+
+    const result = findVCTSequence(&cells, .black, VCT_MAX_DEPTH, 0, 0, false, .lenient);
+    try testing.expect(!result.found);
+    try testing.expectEqual(@as(u8, 0), result.len);
 }
 
 test "findVCTSequence: no VCT" {

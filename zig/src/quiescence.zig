@@ -6,6 +6,7 @@
 /// TS版 quiescence.ts に対応
 const bitboard = @import("bitboard.zig");
 const board_mod = @import("board.zig");
+const deadline = @import("deadline.zig");
 const evaluate = @import("evaluate.zig");
 const forbidden = @import("forbidden.zig");
 const incremental_eval = @import("incremental_eval.zig");
@@ -58,14 +59,9 @@ pub const QLimits = struct {
     timeout_flag: *bool,
 };
 
-extern fn getTimestampMsExternal() u32;
-
-/// 壁時計（ms）。ネイティブ（テスト）では 0 を返し時間制限なし。
+/// 壁時計（ms）。時計の SSoT は `deadline.nowMs`（ネイティブテストでは擬似時計）。
 fn getTimestampMs() u32 {
-    if (@import("builtin").cpu.arch == .wasm32) {
-        return getTimestampMsExternal();
-    }
-    return 0;
+    return deadline.nowMs();
 }
 
 /// 四を作るかチェック（石配置済み前提、bitboard も同期済み前提）
