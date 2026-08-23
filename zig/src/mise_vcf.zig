@@ -6,6 +6,7 @@
 /// TS版 miseVcf.ts に対応
 const bitboard = @import("bitboard.zig");
 const board_mod = @import("board.zig");
+const deadline = @import("deadline.zig");
 const evaluate = @import("evaluate.zig");
 const forbidden = @import("forbidden.zig");
 const ft = @import("forced_win_tree.zig");
@@ -645,6 +646,34 @@ test "findMiseVCFMove: 12手目局面でG7がMise-VCF手として検出される
     // G7: row=8, col=6
     try testing.expectEqual(move.?.row, 8);
     try testing.expectEqual(move.?.col, 6);
+}
+
+test "findMiseVCFMove: グローバル絶対デッドライン超過で打ち切られる（#147）" {
+    // ここの VCF limiter は `time_limit = 0`（壁時計無制限・ノード上限のみ）だが、
+    // グローバル絶対デッドラインの網で止まることを確認する（設計メモ C）。
+    // 盤面は「12手目局面でG7がMise-VCF手として検出される」と同じ。
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[7 * BOARD_SIZE + 7] = .black;
+    cells[6 * BOARD_SIZE + 8] = .white;
+    cells[8 * BOARD_SIZE + 8] = .black;
+    cells[6 * BOARD_SIZE + 6] = .white;
+    cells[7 * BOARD_SIZE + 9] = .black;
+    cells[5 * BOARD_SIZE + 7] = .white;
+    cells[9 * BOARD_SIZE + 7] = .black;
+    cells[6 * BOARD_SIZE + 10] = .white;
+    cells[8 * BOARD_SIZE + 7] = .black;
+    cells[6 * BOARD_SIZE + 7] = .white;
+    cells[6 * BOARD_SIZE + 9] = .black;
+    cells[5 * BOARD_SIZE + 8] = .white;
+
+    try testing.expect(findMiseVCFMove(&cells, .black) != null);
+
+    deadline.test_now_ms = 5000;
+    defer deadline.test_now_ms = 0;
+    deadline.set(1000);
+    defer deadline.clear();
+
+    try testing.expect(findMiseVCFMove(&cells, .black) == null);
 }
 
 test "findMiseVCFMove: 初期局面ではnull" {

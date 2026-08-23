@@ -4,6 +4,7 @@
 /// TS版 minimaxCore.ts に対応
 const bitboard = @import("bitboard.zig");
 const board_mod = @import("board.zig");
+const deadline = @import("deadline.zig");
 const evaluate = @import("evaluate.zig");
 const forbidden = @import("forbidden.zig");
 const incremental_eval = @import("incremental_eval.zig");
@@ -989,17 +990,9 @@ fn sortMoveScores(entries: []MoveScoreEntry) void {
 // タイムスタンプ取得（WASM用）
 // =============================================================================
 
-/// WASM外部関数: タイムスタンプ（ミリ秒）を取得
-/// WASM環境ではJSから注入
-extern fn getTimestampMsExternal() u32;
-
-/// ネイティブテスト時は0を返す（タイムアウトなし）
+/// 壁時計（ms）。時計の SSoT は `deadline.nowMs`（ネイティブテストでは擬似時計）。
 fn getTimestampMs() u32 {
-    if (@import("builtin").cpu.arch == .wasm32) {
-        return getTimestampMsExternal();
-    }
-    // ネイティブテストでは時間制限なし
-    return 0;
+    return deadline.nowMs();
 }
 
 // === Tests ===
