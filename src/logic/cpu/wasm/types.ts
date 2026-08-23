@@ -34,8 +34,19 @@ export interface WasmModuleContext {
 
   // Pattern scoring
   evaluateDirectionScores: (row: number, col: number, color: number) => number;
-  wasmGetPatternScore: (count: number, end1: number, end2: number) => number;
-  wasmGetPatternType: (count: number, end1: number, end2: number) => number;
+  // #132: 黒の長連（6 連以上＝禁手）を五から外すため color を受け取る
+  wasmGetPatternScore: (
+    count: number,
+    end1: number,
+    end2: number,
+    color: number,
+  ) => number;
+  wasmGetPatternType: (
+    count: number,
+    end1: number,
+    end2: number,
+    color: number,
+  ) => number;
 
   // Board evaluation
   evaluateBoard: (perspective: number, optionsFlags: number) => number;
@@ -142,6 +153,10 @@ export interface WasmModuleContext {
     maxNodes: number,
   ) => number;
   getVCTSequenceBuffer: () => number;
+  /** 直近の詰み木でアリーナ上限超過が起きたか（1/0。issue #122） */
+  getLastForcedWinTreeOverflow: () => number;
+  /** 直近の詰み木で1ノードの受けが切り捨てられたか（1/0。issue #122） */
+  getLastForcedWinTreeDefenseTruncated: () => number;
 }
 
 /** Cell values matching Zig Cell enum */

@@ -4,9 +4,9 @@
 /// 手順を探索する。通常のVCF探索では検出できない勝ち筋を発見する。
 ///
 /// TS版 miseVcf.ts に対応
-
 const bitboard = @import("bitboard.zig");
 const board_mod = @import("board.zig");
+const deadline = @import("deadline.zig");
 const evaluate = @import("evaluate.zig");
 const forbidden = @import("forbidden.zig");
 const ft = @import("forced_win_tree.zig");
@@ -133,9 +133,14 @@ fn getCreatedOpenThreeDefenses(cells: []Cell, row: u8, col: u8, color: Cell) thr
         const dir_index = jp.DIRECTION_INDICES[i];
         const analysis = ll.queryPatternByCell(row, col, i, color);
 
-        // 連続活三（跳び四の一部は除外、黒の場合はウソの三を除外）
+        // 連続活三（本物の四の一部は除外、黒の場合はウソの三を除外）
+        //
+        // issue #121: 除外条件は LUT の has_jump_four ではなく盤面を見る
+        // `threats.isFourInDirection`（五点の列挙）に委ねる。黒の「ギャップ埋めが長連」
+        // の形は四ではないので、三の受けを握り潰してはいけない。
+        // （TS 版 vctHelpers.isConsecutiveOpenThree と同じ基準）
         if (analysis.count == 3 and analysis.end1 == 0 and analysis.end2 == 0 and
-            !analysis.has_jump_four and
+            !threats.isFourInDirectionWithPattern(cells, row, col, i, color, analysis) and
             (color != .black or patterns.isValidConsecutiveThree(cells, row, col, dir_index, color)))
         {
             const open_three_defenses = threats.getOpenThreeDefensePositions(cells, row, col, dir.dr, dir.dc, color);
@@ -187,6 +192,7 @@ fn isInvalidatedByNoriTe(
     cells: []Cell,
     color: Cell,
     three_defenses: *const threats.PositionList,
+    parent: *vcf.TimeLimiter,
 ) NoriTeResult {
     const opponent = color.opposite();
 
@@ -197,13 +203,10 @@ fn isInvalidatedByNoriTe(
         cells[def_idx] = opponent;
         bitboard.placeStone(defense.row, defense.col, opponent);
 
-        var limiter = vcf.TimeLimiter{
-            .start_time = 0,
-            .time_limit = 0,
-            .nodes = 0,
-            .max_nodes = NORI_TE_VCF_NODES,
-        };
+        // 親の残り壁時計予算を継承（issue #147 B。従来は time_limit=0＝壁時計無制限）
+        var limiter = parent.child(0, NORI_TE_VCF_NODES);
         const vcf_ok = vcf.hasVCF(cells, color, 0, &limiter, MISE_VCF_DEPTH);
+        parent.charge(limiter.nodes);
 
         cells[def_idx] = .empty;
         bitboard.removeStone(defense.row, defense.col);
@@ -236,7 +239,19 @@ fn isInvalidatedByNoriTe(
 ///    h. hasVCFでVCF判定
 ///    i. VCF成立 → MがMise-VCF勝ち手
 ///    j. 全てundo
+///
+/// 親 limiter を持たない呼び出し（テスト・解析）用のエントリ。壁時計は無制限で、
+/// 内部 VCF はノード数上限のみで縛られる（従来どおり）。
 pub fn findMiseVCFMove(cells: []Cell, color: Cell) ?Position {
+    var unlimited = vcf.TimeLimiter{ .start_time = 0, .time_limit = 0, .nodes = 0, .max_nodes = 0 };
+    return findMiseVCFMoveWithParent(cells, color, &unlimited);
+}
+
+/// `findMiseVCFMove` の親 limiter 付き版（issue #147 B）
+///
+/// 内部の VCF 判定はすべて `parent.child(...)` で作った limiter で回るので、
+/// 親（pre-search）の残り壁時計予算を超えて走らない。
+pub fn findMiseVCFMoveWithParent(cells: []Cell, color: Cell, parent: *vcf.TimeLimiter) ?Position {
     // トップレベルエントリ: bitboard を cells と同期
     bitboard.initFromCells(cells);
     ll.init();
@@ -303,7 +318,7 @@ pub fn findMiseVCFMove(cells: []Cell, color: Cell) ?Position {
             }
 
             // ノリ手チェック
-            const nori_result = isInvalidatedByNoriTe(cells, color, &three_defenses);
+            const nori_result = isInvalidatedByNoriTe(cells, color, &three_defenses, parent);
             if (nori_result == .invalidated) {
                 cells[idx] = .empty;
                 bitboard.removeStone(r, c);
@@ -321,13 +336,10 @@ pub fn findMiseVCFMove(cells: []Cell, color: Cell) ?Position {
                 bitboard.placeStone(target.row, target.col, opponent);
 
                 // VCF探索
-                var limiter = vcf.TimeLimiter{
-                    .start_time = 0,
-                    .time_limit = 0,
-                    .nodes = 0,
-                    .max_nodes = MISE_VCF_NODES,
-                };
+                // 親の残り壁時計予算を継承（issue #147 B。従来は time_limit=0＝壁時計無制限）
+                var limiter = parent.child(0, MISE_VCF_NODES);
                 const vcf_ok = vcf.hasVCF(cells, color, 0, &limiter, MISE_VCF_DEPTH);
+                parent.charge(limiter.nodes);
 
                 cells[target_idx] = .empty;
                 bitboard.removeStone(target.row, target.col);
@@ -405,6 +417,10 @@ pub fn findMiseVCFSequence(
     bitboard.initFromCells(cells);
     ll.init();
 
+    // 振り返り経路（親 limiter なし）。ノリ手チェックの予算は従来どおり
+    // ノード数上限のみ（issue #147 B で挙動を変えない）。
+    var review_limiter = vcf.TimeLimiter{ .start_time = 0, .time_limit = 0, .nodes = 0, .max_nodes = 0 };
+
     var result = MiseVCFSequenceResult{
         .sequence = undefined,
         .len = 0,
@@ -474,7 +490,7 @@ pub fn findMiseVCFSequence(
             }
 
             // ノリ手チェック
-            const nori_result = isInvalidatedByNoriTe(cells, color, &three_defenses);
+            const nori_result = isInvalidatedByNoriTe(cells, color, &three_defenses, &review_limiter);
             if (nori_result == .invalidated) {
                 cells[idx] = .empty;
                 bitboard.removeStone(r, c);
@@ -562,15 +578,18 @@ pub fn findMiseVCFSequence(
                                 br.continuation_len,
                             );
                         }
-                        // defenses を contiguous に積む（子は全て構築済み）
-                        const def_start = g_tree_arena.defense_count;
-                        g_tree_arena.addDefense(result.sequence[1], child_nodes[0]);
+                        // 受け一覧（メインライン = index 0）を組んでノードを構築
+                        var node_defenses: [1 + MAX_MISE_BRANCHES]ft.TreeDefense = undefined;
+                        node_defenses[0] = .{ .defender = result.sequence[1], .child_node = child_nodes[0] };
                         di = 0;
                         while (di < result.branch_count) : (di += 1) {
-                            g_tree_arena.addDefense(result.branches[di].defense_move, child_nodes[1 + di]);
+                            node_defenses[1 + di] = .{
+                                .defender = result.branches[di].defense_move,
+                                .child_node = child_nodes[1 + di],
+                            };
                         }
-                        const total_def: u16 = 1 + @as(u16, result.branch_count);
-                        result.tree_root = g_tree_arena.addNode(result.sequence[0], def_start, total_def);
+                        const total_def: usize = 1 + @as(usize, result.branch_count);
+                        result.tree_root = g_tree_arena.addNodeMainFirst(result.sequence[0], node_defenses[0..total_def], 0);
                     }
 
                     cells[idx] = .empty;
@@ -638,6 +657,34 @@ test "findMiseVCFMove: 12手目局面でG7がMise-VCF手として検出される
     // G7: row=8, col=6
     try testing.expectEqual(move.?.row, 8);
     try testing.expectEqual(move.?.col, 6);
+}
+
+test "findMiseVCFMove: グローバル絶対デッドライン超過で打ち切られる（#147）" {
+    // ここの VCF limiter は `time_limit = 0`（壁時計無制限・ノード上限のみ）だが、
+    // グローバル絶対デッドラインの網で止まることを確認する（設計メモ C）。
+    // 盤面は「12手目局面でG7がMise-VCF手として検出される」と同じ。
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[7 * BOARD_SIZE + 7] = .black;
+    cells[6 * BOARD_SIZE + 8] = .white;
+    cells[8 * BOARD_SIZE + 8] = .black;
+    cells[6 * BOARD_SIZE + 6] = .white;
+    cells[7 * BOARD_SIZE + 9] = .black;
+    cells[5 * BOARD_SIZE + 7] = .white;
+    cells[9 * BOARD_SIZE + 7] = .black;
+    cells[6 * BOARD_SIZE + 10] = .white;
+    cells[8 * BOARD_SIZE + 7] = .black;
+    cells[6 * BOARD_SIZE + 7] = .white;
+    cells[6 * BOARD_SIZE + 9] = .black;
+    cells[5 * BOARD_SIZE + 8] = .white;
+
+    try testing.expect(findMiseVCFMove(&cells, .black) != null);
+
+    deadline.test_now_ms = 5000;
+    defer deadline.test_now_ms = 0;
+    deadline.set(1000);
+    defer deadline.clear();
+
+    try testing.expect(findMiseVCFMove(&cells, .black) == null);
 }
 
 test "findMiseVCFMove: 初期局面ではnull" {
@@ -890,4 +937,32 @@ test "findMiseVCFMove: ノリ手で無効なH7をMise-VCF手として返さな�
         const is_h7 = m.row == 8 and m.col == 7;
         try testing.expect(!is_h7);
     }
+}
+
+test "getCreatedOpenThreeDefenses: 偽跳び四の裏はウソ三なので受けを返さない（issue #121）" {
+    ll.init();
+    // 8 行目に黒 C8 D8 _ F8 G8 H8（col = 2,3,[4],5,6,7）。
+    // LUT は跳び四と報告するが E8 埋めは 6 連＝長連で四ではなく、
+    // F8 G8 H8 も達四にできないウソ三。よってどの方向にも受けは無い。
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    for ([_]u8{ 2, 3, 5, 6, 7 }) |c| {
+        cells[7 * BOARD_SIZE + c] = .black;
+    }
+    bitboard.initFromCells(&cells);
+
+    const defenses = getCreatedOpenThreeDefenses(&cells, 7, 6, .black);
+    try testing.expectEqual(@as(u8, 0), defenses.len);
+}
+
+test "getCreatedOpenThreeDefenses: 窓外の石が無ければ本物の活三の受けを返す（対比・issue #121）" {
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    for ([_]u8{ 5, 6, 7 }) |c| {
+        cells[7 * BOARD_SIZE + c] = .black;
+    }
+    bitboard.initFromCells(&cells);
+
+    const defenses = getCreatedOpenThreeDefenses(&cells, 7, 6, .black);
+    try testing.expect(defenses.contains(7, 4));
+    try testing.expect(defenses.contains(7, 8));
 }

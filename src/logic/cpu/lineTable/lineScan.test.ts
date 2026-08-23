@@ -15,6 +15,7 @@ import {
   getPatternScore,
   getPatternType,
 } from "../evaluation/directionAnalysis";
+import { PATTERN_SCORES } from "../evaluation/patternScores";
 import { getDirectionPattern } from "./adapter";
 import { CELL_LINES_FLAT } from "./lineMapping";
 import {
@@ -80,23 +81,35 @@ function randomBoard(rng: () => number, stoneCount: number): BoardState {
   return board;
 }
 
+const COLORS = ["black", "white"] as const;
+
 describe("PACKED_TO_SCORE", () => {
-  it("256全エントリが getPatternScore と一致", () => {
+  it.each(COLORS)("256全エントリが getPatternScore と一致 (%s)", (color) => {
     for (let packed = 0; packed < 256; packed++) {
       const { count, end1, end2 } = unpackPattern(packed);
       if (count === 0) {
-        expect(PACKED_TO_SCORE[packed]).toBe(0);
+        expect(PACKED_TO_SCORE[color][packed]).toBe(0);
         continue;
       }
-      const expected = getPatternScore({ count, end1, end2 });
-      // FIVE(100000) は Int16 clamp されるが、count>=5 は早期リターンで使われない
-      if (count >= 5) {
+      const expected = getPatternScore({ count, end1, end2 }, color);
+      // FIVE(100000) は Int16 clamp される。五になる packed 値は minimax の
+      // 勝敗判定で処理されるため参照されない（黒の長連 = 0 は比較対象に残す）
+      if (expected === PATTERN_SCORES.FIVE) {
         continue;
       }
       expect(
-        PACKED_TO_SCORE[packed],
+        PACKED_TO_SCORE[color][packed],
         `packed=${packed} count=${count} e1=${end1} e2=${end2}`,
       ).toBe(expected);
+    }
+  });
+
+  // #132: 黒の長連は五ではないのでテーブルが色で分かれる
+  it("黒テーブルは count>=6 が 0・白テーブルは FIVE 相当", () => {
+    for (let count = 6; count <= 15; count++) {
+      const packed = (count << 4) | (2 << 2) | 2; // eslint-disable-line no-bitwise
+      expect(PACKED_TO_SCORE.black[packed], `black count=${count}`).toBe(0);
+      expect(PACKED_TO_SCORE.white[packed], `white count=${count}`).not.toBe(0);
     }
   });
 });
@@ -113,15 +126,16 @@ describe("PACKED_TO_TYPE", () => {
     7: "two",
   };
 
-  it("256全エントリが getPatternType と一致", () => {
+  it.each(COLORS)("256全エントリが getPatternType と一致 (%s)", (color) => {
     for (let packed = 0; packed < 256; packed++) {
       const { count, end1, end2 } = unpackPattern(packed);
       if (count === 0) {
-        expect(PACKED_TO_TYPE[packed]).toBe(0);
+        expect(PACKED_TO_TYPE[color][packed]).toBe(0);
         continue;
       }
-      const expected = getPatternType({ count, end1, end2 });
-      const actual = TYPE_CODE_TO_NAME[PACKED_TO_TYPE[packed] ?? 0] ?? null;
+      const expected = getPatternType({ count, end1, end2 }, color);
+      const actual =
+        TYPE_CODE_TO_NAME[PACKED_TO_TYPE[color][packed] ?? 0] ?? null;
       expect(
         actual,
         `packed=${packed} count=${count} e1=${end1} e2=${end2}`,
@@ -135,12 +149,8 @@ describe("rebuildPackedTables", () => {
     rebuildPackedTables();
     // count=4, end1=empty, end2=empty → OPEN_FOUR
     const packed = (4 << 4) | (2 << 2) | 2; // eslint-disable-line no-bitwise
-    expect(PACKED_TO_SCORE[packed]).toBe(
-      getPatternScore({
-        count: 4,
-        end1: "empty",
-        end2: "empty",
-      }),
+    expect(PACKED_TO_SCORE.black[packed]).toBe(
+      getPatternScore({ count: 4, end1: "empty", end2: "empty" }, "black"),
     );
   });
 });

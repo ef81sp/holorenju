@@ -28,8 +28,11 @@ import {
   type HangInjectSpec,
   runCommitGame,
 } from "../commit-game-runner.ts";
+import { isReadyMessage, parseEngineParams } from "./bridgeWorkerProtocol.ts";
 import { estimateEloDiff } from "./eloDiff.ts";
 import { updateSPRT } from "./sprt.ts";
+import { createLivenessChannel } from "./workerLiveness.ts";
+import { getWorkerTelemetry } from "./workerTelemetry.ts";
 
 /** 1局分の珠型タスク（開始局面＋先後割当）。 */
 export interface MatchTask {
@@ -241,6 +244,8 @@ export function createBridgeWorker(
       maxNodes,
       maxDepth,
     );
+    // #128: ハング中でも読める生存信号を共有メモリで用意する
+    const livenessChannel = createLivenessChannel();
 
     const worker = new Worker(workerPath, {
       workerData: {
@@ -250,6 +255,7 @@ export function createBridgeWorker(
         evalWeights,
         bookEnabled,
         threatProbeEnabled,
+        livenessChannel,
       },
       execArgv: [
         "--experimental-strip-types",
@@ -267,14 +273,18 @@ export function createBridgeWorker(
     }, 60000);
 
     const readyHandler = (msg: unknown): void => {
-      if (
-        typeof msg === "object" &&
-        msg !== null &&
-        "ready" in msg &&
-        (msg as { ready: unknown }).ready === true
-      ) {
+      if (isReadyMessage(msg)) {
         clearTimeout(initTimeout);
         worker.off("message", readyHandler);
+        // #128: ready 通知に同梱された解決済みエンジンパラメータを worker 計測へ
+        // 記録する。ハング中の worker には問い合わせられないため、ここが唯一の
+        // 取得機会。古い bridge worker（params 無し）では undefined のまま進む。
+        const telemetry = getWorkerTelemetry(worker);
+        telemetry.setLivenessChannel(livenessChannel);
+        const engineParams = parseEngineParams(msg);
+        if (engineParams) {
+          telemetry.setEngineParams(engineParams);
+        }
         resolve(worker);
       }
     };
@@ -375,6 +385,7 @@ export async function runMatch(
           openingMoves: positions,
           hangInject: injectHere,
           gameSeed,
+          gameIdx: taskIdx,
         });
         result = { ...r, jushuName };
       } catch (err: unknown) {
@@ -439,6 +450,22 @@ export async function runMatch(
 
       games.push(result);
       completedGames++;
+
+      // #128: 打ち終えた局を両 worker の計測に記録する（履歴再生の入力）。
+      // worker を再生成すると計測ごと作り直されるので、明示的なリセットは不要。
+      const recentGame = {
+        gameIdx: taskIdx,
+        jushuName,
+        isABlack,
+        gameSeed,
+        moves: result.moveHistory.map((m) => ({
+          row: m.row,
+          col: m.col,
+          isOpening: m.isOpening,
+        })),
+      };
+      getWorkerTelemetry(pair.a).recordGame(recentGame);
+      getWorkerTelemetry(pair.b).recordGame(recentGame);
 
       // 初回ゲーム後のサニティチェック
       if (completedGames === 1) {

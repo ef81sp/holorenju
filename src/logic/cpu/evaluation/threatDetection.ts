@@ -13,13 +13,16 @@ import type { LineTable } from "../lineTable/lineTable";
 
 import { includesPosition } from "../core/boardUtils";
 import { DIRECTION_INDICES, DIRECTIONS } from "../core/constants";
-import { getLineEnds } from "../core/lineAnalysis";
 import { getDirectionPattern } from "../lineTable/adapter";
 import { isNearExistingStone } from "../moveGenerator";
-import { findJumpGapPosition } from "../patterns/threatAnalysis";
+// 四判定の SSoT（issue #124 / #134）。Zig 側 `threats.classifyFourInDirection` と対応する。
+import {
+  classifyFourInDirection,
+  isFourInDirection,
+} from "../search/threatMoves";
 // #43 PR-3: 跳び四/三の図形判定を Zig アダプタへ委譲（patterns.ts 依存を断つ）。
 // getOpenThreeDefensePositions が vctHelpers（review judgment）から live のため存続。
-import { checkJumpFour, checkJumpThree } from "../wasm/patternsAdapter";
+import { checkJumpThree } from "../wasm/patternsAdapter";
 import { analyzeDirection } from "./directionAnalysis";
 import { isValidConsecutiveThree, isValidJumpThree } from "./jumpPatterns";
 import { type ThreatInfo, PATTERN_SCORES } from "./patternScores";
@@ -83,26 +86,19 @@ export function countThreatDirections(
 
     const pattern = getDirectionPattern(board, row, col, i, color, lineTable);
 
-    // 活四 or 止め四
-    if (
-      pattern.count === 4 &&
-      (pattern.end1 === "empty" || pattern.end2 === "empty")
-    ) {
+    // 四（連続四・跳び四とも `isFourInDirection` に一本化・issue #121 / #124）
+    //
+    // LUT は盤面を見ないため、黒は「ギャップを埋めると長連（6 連以上）になるだけで
+    // 五にはできない」形も跳び四として報告する。四かどうかの最終判断はライン上の
+    // 五点列挙（`collectLineFivePoints`）に委ねる。
+    //
+    // 四でなければ下の活三/跳び三ブランチに落ちる（＝偽の四で三を握り潰さない）。
+    if (isFourInDirection(board, row, col, i, color, pattern.count)) {
       threatCount++;
       continue;
     }
 
-    // 跳び四をチェック（連続四がない場合のみ）
-    // 跳び四の一部である連続三を活三と誤分類しないよう、活三チェックの前に実施
-    if (
-      pattern.count !== 4 &&
-      checkJumpFour(board, row, col, dirIndex, color)
-    ) {
-      threatCount++;
-      continue;
-    }
-
-    // 活三（跳び四チェックで continue 済みのため、跳び四の一部は到達しない）
+    // 活三（四チェックで continue 済みのため、本物の跳び四の一部は到達しない）
     if (
       pattern.count === 3 &&
       pattern.end1 === "empty" &&
@@ -142,20 +138,6 @@ export function evaluateMultiThreat(threatCount: number): number {
   return threatCount >= 2
     ? PATTERN_SCORES.MULTI_THREAT_BONUS * (threatCount - 1)
     : 0;
-}
-
-/**
- * 活四の防御位置を取得（両端の空きマス）
- */
-export function getOpenFourDefensePositions(
-  board: BoardState,
-  row: number,
-  col: number,
-  dr: number,
-  dc: number,
-  color: "black" | "white",
-): { row: number; col: number }[] {
-  return getLineEnds(board, row, col, dr, dc, color);
 }
 
 /**
@@ -352,63 +334,69 @@ export function detectOpponentThreats(
           opponentColor,
         );
 
-        // 活四をチェック（両端が空いている4連）
-        if (
-          pattern.count === 4 &&
-          pattern.end1 === "empty" &&
-          pattern.end2 === "empty"
-        ) {
-          // 両端の防御位置を追加
-          addUniquePositions(
-            result.openFours,
-            getOpenFourDefensePositions(board, row, col, dr, dc, opponentColor),
-          );
-        }
-
-        // 止め四をチェック（片側だけ空いている4連）
-        if (
-          pattern.count === 4 &&
-          ((pattern.end1 === "empty" && pattern.end2 !== "empty") ||
-            (pattern.end1 !== "empty" && pattern.end2 === "empty"))
-        ) {
-          // 空いている側の防御位置を追加（止め四は1点のみ）
-          addUniquePositions(
-            result.fours,
-            getOpenFourDefensePositions(board, row, col, dr, dc, opponentColor),
-          );
-        }
-
-        // 跳び四をチェック（●●・●● など、連続4石以外のパターン）
-        // 跳び四は中の空きを埋めると五連になるため、止め四と同等の脅威
-        let isJumpFour = false;
-        if (
-          pattern.count !== 4 &&
-          renjuDirIndex >= 0 &&
-          checkJumpFour(board, row, col, renjuDirIndex, opponentColor)
-        ) {
-          isJumpFour = true;
-          // 跳び四の防御位置は中の空きマス（埋めると五連になる）
-          const gapPos = findJumpGapPosition(
-            board,
-            row,
-            col,
-            dr,
-            dc,
-            opponentColor,
-          );
-          // eslint-disable-next-line max-depth
-          if (gapPos) {
-            addUniquePosition(result.fours, gapPos);
+        // 四（連続四・跳び四とも五点の列挙に一本化・issue #121 / #124）
+        //
+        // 「四の受け＝そのラインで埋めると本当に五になる点」という一つの基準
+        // （`collectLineFivePoints`。Zig `threats.detectThreatsCore` と同じ SSoT）で判定する。
+        //
+        // - 五点 2 個以上: どちらを塞いでも五にされる ＝ 活四
+        // - 五点 1 個: 止め四。その 1 点が受け
+        // - 五点 0 個: この方向は四ではない（黒の長連にしかならない）
+        //   → 四扱いをやめ、下の活三ブランチで受けを列挙する
+        //
+        // 旧実装は `pattern.count === 4` / `checkJumpFour` をそのまま四とみなし、
+        // 受けを `getLineEnds` / `findJumpGapPosition` から取っていた。跳び四判定は
+        // ±4 マスの窓しか見ないため、窓の外の自石でギャップ埋めが長連になる黒の形を
+        // 四と誤判定し、しかも `isJumpFour` が活三の受け列挙まで抑止していた（issue #121）。
+        //
+        // issue #134: 分岐そのものは `classifyFourInDirection`（SSoT）に一本化した。
+        const fourClass = classifyFourInDirection(
+          board,
+          row,
+          col,
+          dirIdx,
+          opponentColor,
+          pattern.count,
+        );
+        const isFour = fourClass.kind !== "not_four";
+        switch (fourClass.kind) {
+          case "unstoppable":
+            // classifyFourInDirection は unstoppable なら必ず fivePoints を埋める
+            // （optional なのは受け点を持たない畳み込み結果 FourDefense と型を共有するため）
+            addUniquePositions(result.openFours, fourClass.fivePoints ?? []);
+            break;
+          case "block":
+            addUniquePositions(result.fours, [fourClass.position]);
+            break;
+          case "not_four":
+            // この方向は四ではない → 下の活三ブランチへ落とす
+            break;
+          default: {
+            const exhaustive: never = fourClass;
+            return exhaustive;
           }
         }
 
         // 活三をチェック（両端が空いている3連）
-        // 跳び四の一部である連続三は活三ではない
+        // 四が成立している方向は四の受けが優先
+        //
+        // 黒はウソの三（達四にできない三）を除外する。issue #121 で偽の跳び四が
+        // 四から外れた結果、その裏に隠れていた「四でも三でもない」形が活三として
+        // 流入するようになったため。openThrees は position_eval の必須防御に直結する。
+        // `countThreatDirections` / `vctHelpers.isConsecutiveOpenThree` と同じガード。
         if (
-          !isJumpFour &&
+          !isFour &&
           pattern.count === 3 &&
           pattern.end1 === "empty" &&
-          pattern.end2 === "empty"
+          pattern.end2 === "empty" &&
+          (opponentColor !== "black" ||
+            isValidConsecutiveThree(
+              board,
+              row,
+              col,
+              renjuDirIndex,
+              opponentColor,
+            ))
         ) {
           // 両端の防御位置を追加
           addUniquePositions(
@@ -425,7 +413,12 @@ export function detectOpponentThreats(
         }
 
         // 跳び三をチェック（連続3石以外のパターン）
-        if (pattern.count < 3) {
+        // 黒はウソの三を除外（上の活三ブランチと同じ理由）
+        if (
+          pattern.count < 3 &&
+          (opponentColor !== "black" ||
+            isValidJumpThree(board, row, col, renjuDirIndex, opponentColor))
+        ) {
           addUniquePositions(
             result.openThrees,
             detectJumpThreePattern(board, row, col, dr, dc, opponentColor),

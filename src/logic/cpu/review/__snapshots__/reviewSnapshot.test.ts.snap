@@ -30,12 +30,18 @@ exports[`review 図形プリミティブ出力スナップショット (#43 PR-3
 exports[`review 図形プリミティブ出力スナップショット (#43 PR-3 安全網) > getFourDefensePosition: 止め四・跳び四 1`] = `
 {
   "closedFour": {
-    "col": 9,
-    "row": 7,
+    "kind": "block",
+    "position": {
+      "col": 9,
+      "row": 7,
+    },
   },
   "jumpFour": {
-    "col": 6,
-    "row": 7,
+    "kind": "block",
+    "position": {
+      "col": 6,
+      "row": 7,
+    },
   },
 }
 `;

@@ -10,8 +10,17 @@ import type { Worker } from "node:worker_threads";
 
 import type { BoardState, Position } from "../src/types/game.ts";
 
-import { mixSeed } from "./lib/mulberry32.ts";
+import {
+  type EventLoopSnapshot,
+  snapshotEventLoop,
+} from "./lib/eventLoopSampler.ts";
+import { deriveMoveSeed } from "./lib/hangReplay.ts";
+import { type HangLiveness, diagnoseLiveness } from "./lib/workerLiveness.ts";
 import { WorkerMoveTimeoutError } from "./lib/workerMoveTimeoutError.ts";
+import {
+  type WorkerTelemetrySnapshot,
+  getWorkerTelemetry,
+} from "./lib/workerTelemetry.ts";
 
 /** 着手記録 */
 export interface MoveRecord {
@@ -102,6 +111,27 @@ export interface HangContext {
    * moveHistory の直後に打とうとしていた手の番号（= moveHistory.length + 1）。
    */
   moveNumber: number;
+  /**
+   * #128: ハングした worker についてメインスレッドが保持していた計測。
+   * 起動時の解決済みパラメータ・起動からの要求数・ハングした要求のパラメータ・
+   * 直近 N 手の思考統計を含む。
+   *
+   * **wasm 側の「現在の探索統計」は取得できない**: worker スレッドは wasm 探索で
+   * 同期的にブロックされており、postMessage を送っても event loop が回らないため
+   * 応答できない。直近手の統計（recentMoves）と liveness で代替する。
+   */
+  telemetry: WorkerTelemetrySnapshot;
+  /**
+   * #128: 共有メモリ経由の worker 生存信号。wasm が時間チェックを回し続けている
+   * （＝探索が終わらない）のか、探索ループの外で固まっているのかを区別する。
+   */
+  liveness: HangLiveness;
+  /**
+   * #128: メインスレッド自身のイベントループ遅延・時計ずれ。
+   * 実ダンプ g172 のように「経過時間だけが異常に長い」ケースが worker のハングでは
+   * なくメインスレッド停止／マシンのサスペンドである可能性を切り分ける。
+   */
+  mainThread: EventLoopSnapshot;
 }
 
 export class GameHangError extends Error {
@@ -130,21 +160,48 @@ interface AskWorkerParams {
    * 未指定なら worker 側は非決定的（Math.random）にフォールバック。
    */
   moveSeed?: number;
+  /** #128: 計測用メタ（ダンプ以外の挙動には影響しない） */
+  moveNumber: number;
+  nonOpeningOrdinal: number;
+  gameIdx?: number;
 }
 
 /**
  * workerに着手を要求し、レスポンスを待つ。
  * timeout 時は WorkerMoveTimeoutError を throw（runCommitGame が context を付与する）。
+ *
+ * #128: 送信/受信を worker 単位の telemetry に記録する。ハング時にはこの記録が
+ * 「メインスレッドから見た worker の最後の状態」としてダンプに載る。
  */
 function askWorker(params: AskWorkerParams): Promise<MoveResponse> {
-  const { worker, board, color, timeoutMs, side, hangInject, moveSeed } =
-    params;
+  const {
+    worker,
+    board,
+    color,
+    timeoutMs,
+    side,
+    hangInject,
+    moveSeed,
+    moveNumber,
+    nonOpeningOrdinal,
+    gameIdx,
+  } = params;
+  const telemetry = getWorkerTelemetry(worker);
   return new Promise<MoveResponse>((resolve, reject) => {
     const requestId = nextRequestId++;
+    const sentAtMs = performance.now();
 
     const timer = setTimeout(() => {
       worker.off("message", handler);
-      reject(new WorkerMoveTimeoutError({ requestId, timeoutMs, color, side }));
+      reject(
+        new WorkerMoveTimeoutError({
+          requestId,
+          timeoutMs,
+          color,
+          side,
+          telemetry: telemetry.snapshot(),
+        }),
+      );
     }, timeoutMs);
 
     const handler = (msg: WorkerMessage): void => {
@@ -155,12 +212,36 @@ function askWorker(params: AskWorkerParams): Promise<MoveResponse> {
       clearTimeout(timer);
 
       if ("error" in msg) {
+        // 着手ではないが応答は返っている。pending を残すとダンプの
+        // pendingRequest が「ハングした要求」でなくなるので必ず消す。
+        telemetry.clearPending(requestId);
         reject(new Error(msg.error));
       } else {
+        telemetry.recordResponse({
+          requestId,
+          gameIdx,
+          moveNumber,
+          color,
+          depth: msg.depth,
+          score: msg.score,
+          interrupted: msg.interrupted,
+          thinkingTimeMs: msg.thinkingTimeMs,
+          roundTripMs: performance.now() - sentAtMs,
+          stats: msg.stats,
+        });
         resolve(msg);
       }
     };
 
+    telemetry.recordRequest({
+      requestId,
+      gameIdx,
+      moveNumber,
+      color,
+      nonOpeningOrdinal,
+      moveSeed,
+      sentAt: new Date().toISOString(),
+    });
     worker.on("message", handler);
     worker.postMessage({ requestId, board, color, hangInject, moveSeed });
   });
@@ -197,7 +278,6 @@ export interface HangInjectSpec {
 interface AskOrHangParams extends AskWorkerParams {
   moveHistory: MoveRecord[];
   gameStartTime: number;
-  moveCount: number;
 }
 
 /**
@@ -205,11 +285,15 @@ interface AskOrHangParams extends AskWorkerParams {
  * ループ内クロージャで no-loop-func 警告を出さないため、ループ外の関数として切り出す。
  */
 async function askOrHang(params: AskOrHangParams): Promise<MoveResponse> {
-  const { board, moveHistory, gameStartTime, moveCount, ...askParams } = params;
+  const { board, moveHistory, gameStartTime, ...askParams } = params;
   try {
     return await askWorker({ ...askParams, board });
   } catch (err: unknown) {
     if (err instanceof WorkerMoveTimeoutError) {
+      // 生存信号は 2 点サンプリングが要るので await する（ハング経路のみ）。
+      const liveness = await diagnoseLiveness(
+        getWorkerTelemetry(params.worker).getLivenessChannel(),
+      );
       throw new GameHangError({
         requestId: err.requestId,
         timeoutMs: err.timeoutMs,
@@ -218,7 +302,10 @@ async function askOrHang(params: AskOrHangParams): Promise<MoveResponse> {
         board,
         moveHistory,
         elapsedMs: performance.now() - gameStartTime,
-        moveNumber: moveCount + 1,
+        moveNumber: params.moveNumber,
+        telemetry: err.telemetry,
+        liveness,
+        mainThread: snapshotEventLoop(),
       });
     }
     throw err;
@@ -250,6 +337,11 @@ export async function runCommitGame(
      * 選択を決定的にする。未指定なら bridge worker は Math.random にフォールバック。
      */
     gameSeed?: number;
+    /**
+     * #128: ベンチのタスク index（0-based）。worker 計測に記録するだけで
+     * 対局挙動には影響しない。ハングダンプで「どの局の要求か」を辿るのに使う。
+     */
+    gameIdx?: number;
   } = {},
 ): Promise<GameResult> {
   // #43 PR-6: 禁手判定(forbidden) と脅威検出(detectOpponentThreats→threat) はどちらも
@@ -320,10 +412,8 @@ export async function runCommitGame(
 
     const moveStartTime = performance.now();
 
-    const moveSeed =
-      options.gameSeed === undefined
-        ? undefined
-        : mixSeed(options.gameSeed, nonOpeningRequestOrdinal);
+    // 導出規則は hangReplay.ts に一本化（replay-hang と必ず一致させるため）
+    const moveSeed = deriveMoveSeed(options.gameSeed, nonOpeningRequestOrdinal);
     const response = await askOrHang({
       worker,
       board,
@@ -334,7 +424,9 @@ export async function runCommitGame(
       moveSeed,
       moveHistory,
       gameStartTime: startTime,
-      moveCount,
+      moveNumber: moveCount + 1,
+      nonOpeningOrdinal: nonOpeningRequestOrdinal,
+      gameIdx: options.gameIdx,
     });
     const moveTime = performance.now() - moveStartTime;
 

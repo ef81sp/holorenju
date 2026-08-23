@@ -9,6 +9,9 @@ import type { BoardState, Position, StoneColor } from "@/types/game";
 
 import { incrementBoardCopies } from "@/logic/cpu/profiling/counters";
 
+/** 実際に盤上に置かれる石の色（`StoneColor` から空点 `null` を除いたもの） */
+export type PlayerColor = Exclude<StoneColor, null>;
+
 // =============================================================================
 // 引き分けルール
 // =============================================================================
@@ -132,14 +135,47 @@ export function getLineLength(
 // =============================================================================
 
 /**
+ * 連の長さが「五」かどうか（色別の連珠ルール）
+ *
+ * - 黒: ちょうど 5（6 以上は長連＝禁手なので五ではない）
+ * - 白: 5 以上（白に長連の制限は無い＝長連も勝ち）
+ *
+ * 「五」の定義の SSoT（issue #125）。`checkFive` / `checkFiveBit`（LineTable 版）/
+ * `collectLineFivePoints`（受け点列挙）はすべてこの述語を経由すること。
+ * Zig 側の SSoT は `zig/src/forbidden.zig` の `isFiveLength`。
+ *
+ * `color` は `null`（空点）を受け付けない。`StoneColor` のまま白を `>= 5` の
+ * else 節で拾うと、`getLineLength(board, ..., null)` が空点を数えて空盤でも
+ * true になってしまうため、型で弾いている。分岐も「白なら `>= 5`」と書いて
+ * 白以外が緩い側に落ちないようにする（Zig の `forbidden.isFiveLength` と同形）。
+ */
+export function isFiveLength(length: number, color: PlayerColor): boolean {
+  return color === "white" ? length >= 5 : length === 5;
+}
+
+/**
+ * 連の長さが「長連」かどうか（色別の連珠ルール）
+ *
+ * - 黒: 6 以上（＝禁手。五でも四でもない）
+ * - 白: 常に false（白に長連の制限は無い。6 連以上は `isFiveLength` で五になる）
+ *
+ * `isFiveLength` の対となる述語（issue #132）。評価・move ordering が
+ * 「黒の長連」を弾く箇所はこの述語を経由すること。
+ * Zig 側の SSoT は `zig/src/forbidden.zig` の `isOverlineLength`。
+ */
+export function isOverlineLength(length: number, color: PlayerColor): boolean {
+  return color !== "white" && length >= 6;
+}
+
+/**
  * 五連をチェック
- * @returns 五連が成立する場合true
+ * @returns 五連が成立する場合true（白は長連＝6連以上も五）
  */
 export function checkFive(
   board: BoardState,
   row: number,
   col: number,
-  color: StoneColor,
+  color: PlayerColor,
 ): boolean {
   for (let i = 0; i < 4; i++) {
     const pair = DIRECTION_PAIRS[i];
@@ -151,7 +187,7 @@ export function checkFive(
       continue;
     }
     const length = getLineLength(board, row, col, dir1Index, color);
-    if (length === 5) {
+    if (isFiveLength(length, color)) {
       return true;
     }
   }
@@ -187,7 +223,7 @@ export function checkOverline(
 export function checkWin(
   board: BoardState,
   lastMove: Position,
-  color: StoneColor,
+  color: PlayerColor,
 ): boolean {
   return checkFive(board, lastMove.row, lastMove.col, color);
 }

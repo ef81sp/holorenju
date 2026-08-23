@@ -24,7 +24,9 @@ import { parentPort, workerData } from "node:worker_threads";
 
 import type { DifficultyParams } from "../src/types/cpu.ts";
 import type { BoardState, Position } from "../src/types/game.ts";
+import type { EngineParamsSnapshot } from "./lib/workerTelemetry.ts";
 
+import { fingerprintEvalWeights } from "./lib/bridgeWorkerProtocol.ts";
 import { mergeDifficultyParams } from "./lib/difficultyParamsMerge.ts";
 import { EVAL_PARAM_IDS } from "./lib/evalParams.ts";
 import { mulberry32 } from "./lib/mulberry32.ts";
@@ -33,6 +35,11 @@ import {
   loadOpeningBookFromWorktree,
 } from "./lib/openingBookBridge.ts";
 import { encodeEvalOptionsForWasm } from "./lib/wasmEvalOptionsEncoder.ts";
+import {
+  type LivenessChannel,
+  createTimestampProbe,
+  markLivenessRequest,
+} from "./lib/workerLiveness.ts";
 
 // ============================================================================
 // 型定義
@@ -63,6 +70,13 @@ interface BridgeWorkerData {
    * commit-bench で再検証するための実行時レバー。
    */
   threatProbeEnabled?: boolean;
+  /**
+   * #128: ハング診断用の生存信号チャネル（SharedArrayBuffer）。
+   * 指定されると wasm の `getTimestampMsExternal` 呼び出しを計上し、
+   * メインスレッドが「探索ループがまだ回っているか」を観測できるようになる。
+   * 未指定なら完全に従来挙動（後方互換）。
+   */
+  livenessChannel?: LivenessChannel;
 }
 
 interface MoveRequest {
@@ -232,9 +246,12 @@ async function loadWasmFromWorktree(
 
   try {
     const buffer = fs.readFileSync(wasmPath);
+    // #128: 時間チェックのたびに生存信号を更新する。wasm はハング中も
+    // この関数を呼び返すので、メインスレッドは共有メモリ越しに
+    // 「探索が走り続けているか」を観測できる（Zig 側は無改造）。
     const imports = {
       env: {
-        getTimestampMsExternal: () => Math.round(performance.now()),
+        getTimestampMsExternal: createTimestampProbe(data.livenessChannel),
       },
     };
     const { instance } = await WebAssembly.instantiate(buffer, imports);
@@ -616,6 +633,8 @@ async function main(): Promise<void> {
   const wasm = await loadWasmFromWorktree(worktreePath);
   let wasmHandler: WasmSearchHandler | null = null;
   let tsFindBestMove: FindBestMoveFn | null = null;
+  // #128: ready 通知（EngineParamsSnapshot）にも載せるためブロック外で保持する
+  let threatProbeState = "ON(default)";
 
   if (wasm) {
     wasmHandler = createWasmSearchHandler(wasm);
@@ -623,7 +642,6 @@ async function main(): Promise<void> {
     applyEvalWeights(wasm, data.evalWeights);
     // 脅威プローブトグル（Gate 0 計測用）。既定 true=従来挙動、false のときのみ
     // 明示 off。setThreatProbeEnabled が無い古い wasm は warn してスキップ。
-    let threatProbeState = "ON(default)";
     if (data.threatProbeEnabled === false) {
       if (typeof wasm.setThreatProbeEnabled === "function") {
         wasm.setThreatProbeEnabled(0);
@@ -654,12 +672,31 @@ async function main(): Promise<void> {
     );
   }
 
-  // 初期化完了を通知
-  parentPort?.postMessage({ ready: true });
+  // 初期化完了を通知。#128: 解決済みのエンジンパラメータを同梱し、メインスレッド
+  // 側（workerTelemetry）がハングダンプに載せられるようにする。ハング中の worker
+  // は問い合わせに応答できないため、この「起動時の自己申告」が唯一の入手経路。
+  const engineParams: EngineParamsSnapshot = {
+    worktreePath,
+    difficulty: data.difficulty,
+    depth: params.depth,
+    timeLimit: params.timeLimit,
+    maxNodes: params.maxNodes,
+    randomFactor: params.randomFactor,
+    randomCriticalScoreThreshold: params.randomCriticalScoreThreshold,
+    evaluationOptions: params.evaluationOptions,
+    engine: wasmHandler ? "wasm" : "ts",
+    bookEnabled: bookBridge !== null,
+    hasStatsBuffer: typeof wasm?.getStatsBuffer === "function",
+    threatProbe: threatProbeState,
+    evalWeightsFingerprint: fingerprintEvalWeights(data.evalWeights),
+  };
+  parentPort?.postMessage({ ready: true, params: engineParams });
 
   // 着手要求を処理（同期的にCPUを呼び出す）
   parentPort?.on("message", (msg: MoveRequest) => {
     const { requestId, board, color, hangInject, moveSeed } = msg;
+    // #128: 生存信号に「今どの要求を処理中か」を刻む
+    markLivenessRequest(data.livenessChannel, requestId);
     // テスト用: hangInject が立っていれば応答せず沈黙 → 呼び出し側が timeout する
     if (hangInject) {
       console.warn(

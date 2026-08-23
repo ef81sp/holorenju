@@ -6,6 +6,7 @@
 
 const bitboard = @import("bitboard.zig");
 const board_mod = @import("board.zig");
+const deadline = @import("deadline.zig");
 const forbidden = @import("forbidden.zig");
 const jp = @import("jump_patterns.zig");
 const ll = @import("line_lookup.zig");
@@ -30,26 +31,122 @@ pub const VCF_TIME_LIMIT: u32 = 150;
 // TimeLimiter
 // =============================================================================
 
+/// 探索の予算（時間 / ノード数）
+///
+/// 予算操作は VCF / VCT の両方から使うので、ここのメソッドを SSoT にする
+/// （かつては `vcf.zig` と `vct.zig` に同名の自由関数が二重定義されていて、
+///  片方が飽和加算・片方が通常加算という差もあった）。
 pub const TimeLimiter = struct {
     start_time: u32,
     time_limit: u32,
     nodes: u32,
     max_nodes: u32, // 0 = 無制限
-};
 
-fn isTimeExceeded(limiter: *const TimeLimiter) bool {
-    if (limiter.max_nodes > 0 and limiter.nodes >= limiter.max_nodes) {
-        return true;
+    /// 生成時点で親の予算が尽きていたことを表すフラグ（issue #147 B）
+    ///
+    /// `time_limit == 0` / `max_nodes == 0` はどちらも「無制限」を意味するため、
+    /// 「残り 0」を数値で表現できない。`child()` が親の使い切りを検出したときに
+    /// これを立て、`exceeded()` が最優先で見る。
+    exhausted: bool = false,
+
+    /// 探索ノードを 1 つ計上する
+    pub fn bump(self: *TimeLimiter) void {
+        self.nodes +|= 1;
     }
-    if (limiter.time_limit == 0) return false;
-    const now = getTimestampMs();
-    if (now == 0) return false; // ネイティブテスト
-    return (now - limiter.start_time) >= limiter.time_limit;
-}
 
-fn incrementNodes(limiter: *TimeLimiter) void {
-    limiter.nodes += 1;
-}
+    /// 別 limiter で回した探索の消費ノードを取り込む（issue #119）
+    pub fn charge(self: *TimeLimiter, consumed: u32) void {
+        self.nodes +|= consumed;
+    }
+
+    /// 予算（ノード数 or 時間）を超えたか
+    ///
+    /// issue #147: 自前の予算に加えて **グローバル絶対デッドライン**
+    /// （`deadline.g_absolute_deadline_ms`）も見る。`time_limit == 0`（壁時計無制限）の
+    /// limiter でも打ち切られるよう、短絡より **前** にデッドラインを評価する。
+    /// 時刻取得は 1 回だけで、従来より頻度が増えないようにしてある。
+    pub fn exceeded(self: *const TimeLimiter) bool {
+        if (self.exhausted) return true;
+        if (self.max_nodes > 0 and self.nodes >= self.max_nodes) {
+            return true;
+        }
+        const absolute = deadline.g_absolute_deadline_ms;
+        if (self.time_limit == 0 and absolute == 0) return false;
+        const now = getTimestampMs();
+        if (now == 0) return false; // ネイティブテスト（時計なし）
+        if (absolute != 0 and now >= absolute) return true;
+        if (self.time_limit == 0) return false;
+        return (now - self.start_time) >= self.time_limit;
+    }
+
+    /// 子探索へ渡す残りノード予算（0 = 無制限。issue #119 / レビュー should-8）
+    ///
+    /// 子探索は独自 limiter で回るので、満額の `max_nodes` を渡すと
+    /// 「親の予算 × 子の数」まで使えてしまう。
+    pub fn remainingNodes(self: *const TimeLimiter) u32 {
+        if (self.max_nodes == 0) return 0;
+        return self.max_nodes -| self.nodes;
+    }
+
+    /// 残りの壁時計予算（ms）。`null` = 無制限、`0` = 使い切り（issue #147 B）
+    ///
+    /// ネイティブテスト（擬似時計が 0 = 時計なし）では満額を返す。
+    pub fn remainingMs(self: *const TimeLimiter) ?u32 {
+        if (self.exhausted) return 0;
+        if (self.time_limit == 0) return null;
+        const now = getTimestampMs();
+        if (now == 0) return self.time_limit; // 時計なし＝満額
+        const elapsed = now -| self.start_time;
+        if (elapsed >= self.time_limit) return 0;
+        return self.time_limit - elapsed;
+    }
+
+    /// 子探索用の limiter を作る（issue #147 B の SSoT）
+    ///
+    /// 原則: **子の壁時計予算は親の残りを超えない。予算は復活しない。**
+    /// エントリ関数（`findVCFSequence` / `findVCTSequence` など）は `start_time` を
+    /// 現在時刻にリセットするため、親の中で呼ぶたびに予算が満額に戻っていた
+    /// （プローブ 50ms → 実測 141ms、pre-search VCT 300ms → 494ms）。
+    ///
+    /// - 壁時計: 親が無制限なら `own_budget_ms` のまま、そうでなければ
+    ///   `min(own_budget_ms, 親の残り)`（`own_budget_ms == 0`＝子は無制限を望む
+    ///   場合は親の残りをそのまま継承）。
+    /// - ノード: `own_max_nodes != 0` ならその値、`0` なら親の残りノード。
+    ///   壁時計と違い `min` を取らないのは、ノード予算は #119 の `charge()` で
+    ///   親へ払い戻される設計になっており、二重に絞ると既存の探索が変わるため。
+    pub fn child(self: *const TimeLimiter, own_budget_ms: u32, own_max_nodes: u32) TimeLimiter {
+        const parent_rem = self.remainingMs();
+        const nodes_left = self.remainingNodes();
+        const time_budget: u32 = if (parent_rem) |rem|
+            (if (own_budget_ms == 0) rem else @min(own_budget_ms, rem))
+        else
+            own_budget_ms;
+        return .{
+            .start_time = getTimestampMs(),
+            .time_limit = time_budget,
+            .nodes = 0,
+            .max_nodes = if (own_max_nodes != 0) own_max_nodes else nodes_left,
+            .exhausted = self.exhausted or
+                (parent_rem != null and parent_rem.? == 0) or
+                (self.max_nodes != 0 and nodes_left == 0),
+        };
+    }
+
+    /// 絶対時刻のデッドラインを「親 limiter」として表現する（issue #147 B）
+    ///
+    /// `SearchContext.deadline` のように limiter を持たない親（メイン探索）の
+    /// 残り時間を `child()` に渡すためのアダプタ。`deadline_ms == 0` は無制限。
+    pub fn untilDeadline(deadline_ms: u32) TimeLimiter {
+        const unlimited = TimeLimiter{ .start_time = 0, .time_limit = 0, .nodes = 0, .max_nodes = 0 };
+        if (deadline_ms == 0) return unlimited;
+        const now = getTimestampMs();
+        if (now == 0) return unlimited; // ネイティブテスト（時計なし）
+        if (now >= deadline_ms) {
+            return .{ .start_time = now, .time_limit = 1, .nodes = 0, .max_nodes = 0, .exhausted = true };
+        }
+        return .{ .start_time = now, .time_limit = deadline_ms - now, .nodes = 0, .max_nodes = 0 };
+    }
+};
 
 // =============================================================================
 // 四を作れる手の列挙
@@ -115,7 +212,7 @@ pub fn hasVCF(
     limiter: *TimeLimiter,
     max_depth: u8,
 ) bool {
-    if (isTimeExceeded(limiter)) return false;
+    if (limiter.exceeded()) return false;
     if (depth >= max_depth) return false;
 
     var buf: [225]Position = undefined;
@@ -125,7 +222,7 @@ pub fn hasVCF(
 
     for (0..four_count) |i| {
         const move = buf[i];
-        incrementNodes(limiter);
+        limiter.bump();
 
         // 四を作る（インプレース、bitboard も同期）
         const idx = @as(u16, move.row) * BOARD_SIZE + move.col;
@@ -142,14 +239,22 @@ pub fn hasVCF(
         // 相手の応手（四を止める）
         const defense_pos = quiescence.getFourDefensePosition(cells, move.row, move.col, color);
 
-        if (defense_pos == null) {
-            // 止められない = 勝利
-            cells[idx] = .empty;
-            bitboard.removeStone(move.row, move.col);
-            return true;
-        }
-
-        const dp = defense_pos.?;
+        // #124: 勝ちは `.unstoppable`（活四）のみ。`.not_four` は四ですらないのでスキップ。
+        // 網羅 switch にして、将来 variant が増えたときに黙って保守側へ落ちないようにする。
+        const dp = switch (defense_pos) {
+            .unstoppable => {
+                // 止められない = 勝利
+                cells[idx] = .empty;
+                bitboard.removeStone(move.row, move.col);
+                return true;
+            },
+            .not_four => {
+                cells[idx] = .empty;
+                bitboard.removeStone(move.row, move.col);
+                continue;
+            },
+            .block => |p| p,
+        };
 
         // 白番の場合、黒の防御位置が禁手ならVCF成立
         if (color == .white) {
@@ -214,7 +319,7 @@ pub fn findVCFMoveWithBudget(cells: []Cell, color: Cell, max_depth: u8, time_lim
     // 反復深化: 浅い深度から探索し最短VCFを優先
     var depth: u8 = 1;
     while (depth <= max_depth) : (depth += 1) {
-        if (isTimeExceeded(&limiter)) return null;
+        if (limiter.exceeded()) return null;
         const result = findVCFMoveRecursive(cells, color, 0, &limiter, depth);
         if (result) |_| return result;
     }
@@ -231,7 +336,7 @@ fn findVCFMoveRecursive(
     max_depth: u8,
 ) ?Position {
     if (depth >= max_depth) return null;
-    if (isTimeExceeded(limiter)) return null;
+    if (limiter.exceeded()) return null;
 
     var buf: [225]Position = undefined;
     const four_count = findFourMoves(cells, color, &buf);
@@ -246,8 +351,8 @@ fn findVCFMoveRecursive(
 
     for (0..four_count) |i| {
         const move = buf[i];
-        incrementNodes(limiter);
-        if (isTimeExceeded(limiter)) return null;
+        limiter.bump();
+        if (limiter.exceeded()) return null;
 
         const idx = @as(u16, move.row) * BOARD_SIZE + move.col;
         cells[idx] = color;
@@ -264,12 +369,12 @@ fn findVCFMoveRecursive(
         cells[idx] = .empty;
         bitboard.removeStone(move.row, move.col);
 
-        // 活四（防御不能） → 即勝ち
-        if (defense_pos == null) {
-            return move;
-        }
-
-        const dp = defense_pos.?;
+        // 活四（防御不能） → 即勝ち。`.not_four` は四ですらないのでスキップ（#124）
+        const dp = switch (defense_pos) {
+            .unstoppable => return move,
+            .not_four => continue,
+            .block => |p| p,
+        };
 
         // 白番: 黒の防御位置が禁手 → 即勝ち
         if (color == .white) {
@@ -330,6 +435,8 @@ pub const VCFSequenceResult = struct {
     len: u8,
     is_forbidden_trap: bool,
     found: bool,
+    /// この探索が消費したノード数（呼び出し側の共有 limiter へ加算するため。issue #119）
+    nodes: u32 = 0,
 };
 
 /// VCF手順全体を返す（反復深化）
@@ -340,16 +447,43 @@ pub fn findVCFSequence(
     time_limit: u32,
     max_nodes: u32,
 ) VCFSequenceResult {
-    // トップレベルエントリ: bitboard を cells と同期
-    bitboard.initFromCells(cells);
-    ll.init();
-
     var limiter = TimeLimiter{
         .start_time = getTimestampMs(),
         .time_limit = time_limit,
         .nodes = 0,
         .max_nodes = max_nodes,
     };
+    return findVCFSequenceWithLimiter(cells, color, max_depth, &limiter);
+}
+
+/// 親 limiter の残り予算を継承した子 limiter で VCF 手順を探す（issue #147 B）
+///
+/// 子の消費ノードは呼び出し後に親へ計上する（#119 の部分払い）ので、
+/// 呼び出し側で `charge()` を重ねて呼んではいけない。
+pub fn findVCFSequenceWithParent(
+    cells: []Cell,
+    color: Cell,
+    max_depth: u8,
+    own_time_limit: u32,
+    own_max_nodes: u32,
+    parent: *TimeLimiter,
+) VCFSequenceResult {
+    var limiter = parent.child(own_time_limit, own_max_nodes);
+    const result = findVCFSequenceWithLimiter(cells, color, max_depth, &limiter);
+    parent.charge(limiter.nodes);
+    return result;
+}
+
+/// `findVCFSequence` の本体（limiter を受け取る版）
+fn findVCFSequenceWithLimiter(
+    cells: []Cell,
+    color: Cell,
+    max_depth: u8,
+    limiter: *TimeLimiter,
+) VCFSequenceResult {
+    // トップレベルエントリ: bitboard を cells と同期
+    bitboard.initFromCells(cells);
+    ll.init();
 
     var result = VCFSequenceResult{
         .sequence = undefined,
@@ -361,18 +495,20 @@ pub fn findVCFSequence(
     // 反復深化: 浅い深度から探索し最短手順を優先
     var depth: u8 = 1;
     while (depth <= max_depth) : (depth += 1) {
-        if (isTimeExceeded(&limiter)) return result;
+        if (limiter.exceeded()) break;
 
         var seq_len: u8 = 0;
         var is_forbidden_trap = false;
-        const found = findVCFSequenceRecursive(cells, color, 0, &limiter, depth, &result.sequence, &seq_len, &is_forbidden_trap);
+        const found = findVCFSequenceRecursive(cells, color, 0, limiter, depth, &result.sequence, &seq_len, &is_forbidden_trap);
         if (found) {
             result.len = seq_len;
             result.is_forbidden_trap = is_forbidden_trap;
             result.found = true;
-            return result;
+            break;
         }
     }
+    // 呼び出し側（vct.zig など）が共有 limiter へ加算できるよう消費ノード数を返す（#119）
+    result.nodes = limiter.nodes;
     return result;
 }
 
@@ -422,17 +558,24 @@ pub fn findVCFSequenceFromFirstMove(
 
     // 防御位置を取得
     const defense_pos = quiescence.getFourDefensePosition(cells, first_move.row, first_move.col, color);
-    if (defense_pos == null) {
-        // 活四 → 防御不可能 → VCF成立
-        cells[idx] = .empty;
-        bitboard.removeStone(first_move.row, first_move.col);
-        result.sequence[0] = first_move;
-        result.len = 1;
-        result.found = true;
-        return result;
-    }
-
-    const dp = defense_pos.?;
+    // `.not_four` は createsFour を通っているので理論上到達しないが、保守側に倒す（#124）
+    const dp = switch (defense_pos) {
+        .unstoppable => {
+            // 活四 → 防御不可能 → VCF成立
+            cells[idx] = .empty;
+            bitboard.removeStone(first_move.row, first_move.col);
+            result.sequence[0] = first_move;
+            result.len = 1;
+            result.found = true;
+            return result;
+        },
+        .not_four => {
+            cells[idx] = .empty;
+            bitboard.removeStone(first_move.row, first_move.col);
+            return result;
+        },
+        .block => |p| p,
+    };
 
     // 白番: 黒の防御位置が禁手 → 即勝ち
     if (color == .white) {
@@ -462,6 +605,7 @@ pub fn findVCFSequenceFromFirstMove(
     cells[idx] = .empty;
     bitboard.removeStone(first_move.row, first_move.col);
 
+    result.nodes = continuation.nodes;
     if (!continuation.found) return result;
 
     // 手順を組み立て: [初手, 防御手, 継続手順...]
@@ -490,7 +634,7 @@ fn findVCFSequenceRecursive(
     is_forbidden_trap: *bool,
 ) bool {
     if (depth >= max_depth) return false;
-    if (isTimeExceeded(limiter)) return false;
+    if (limiter.exceeded()) return false;
 
     var buf: [225]Position = undefined;
     const four_count = findFourMoves(cells, color, &buf);
@@ -505,8 +649,8 @@ fn findVCFSequenceRecursive(
 
     for (0..four_count) |i| {
         const move = buf[i];
-        incrementNodes(limiter);
-        if (isTimeExceeded(limiter)) return false;
+        limiter.bump();
+        if (limiter.exceeded()) return false;
 
         const idx = @as(u16, move.row) * BOARD_SIZE + move.col;
         cells[idx] = color;
@@ -525,14 +669,16 @@ fn findVCFSequenceRecursive(
         cells[idx] = .empty;
         bitboard.removeStone(move.row, move.col);
 
-        // 活四（防御不能） → 即勝ち
-        if (defense_pos == null) {
-            sequence[seq_len.*] = move;
-            seq_len.* += 1;
-            return true;
-        }
-
-        const dp = defense_pos.?;
+        // 活四（防御不能） → 即勝ち。`.not_four` は四ですらないのでスキップ（#124）
+        const dp = switch (defense_pos) {
+            .unstoppable => {
+                sequence[seq_len.*] = move;
+                seq_len.* += 1;
+                return true;
+            },
+            .not_four => continue,
+            .block => |p| p,
+        };
 
         // 白番: 黒の防御位置が禁手 → 即勝ち
         if (color == .white) {
@@ -601,13 +747,9 @@ fn findVCFSequenceRecursive(
 // タイムスタンプ取得
 // =============================================================================
 
-extern fn getTimestampMsExternal() u32;
-
+/// 壁時計（ms）。時計の SSoT は `deadline.nowMs`（ネイティブテストでは擬似時計）。
 fn getTimestampMs() u32 {
-    if (@import("builtin").cpu.arch == .wasm32) {
-        return getTimestampMsExternal();
-    }
-    return 0;
+    return deadline.nowMs();
 }
 
 // === Tests ===
@@ -784,5 +926,211 @@ test "findVCFSequenceFromFirstMove: occupied cell returns not found" {
     cells[7 * BOARD_SIZE + 7] = .black;
 
     const result = findVCFSequenceFromFirstMove(&cells, .{ .row = 7, .col = 7 }, .black, VCF_MAX_DEPTH, 0, 0);
+    try testing.expect(!result.found);
+}
+
+test "findVCFSequence: 五点 0 個の偽四で VCF 成立にしない（issue #124）" {
+    // 8 行目（row=7）: A8白 B8白 C8黒 D8黒 E8黒 F8空 G8空 H8黒 I8空 J8黒 K8空 L8白
+    // 黒番。G8 に打っても五点はゼロ（F8 は 6 連＝長連、I8 は 4 連）なので四ですらない。
+    // 旧実装は G8 を「止められない四」として len=1 の VCF を返していた。
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[7 * BOARD_SIZE + 0] = .white; // A8
+    cells[7 * BOARD_SIZE + 1] = .white; // B8
+    cells[7 * BOARD_SIZE + 2] = .black; // C8
+    cells[7 * BOARD_SIZE + 3] = .black; // D8
+    cells[7 * BOARD_SIZE + 4] = .black; // E8
+    cells[7 * BOARD_SIZE + 7] = .black; // H8
+    cells[7 * BOARD_SIZE + 9] = .black; // J8
+    cells[7 * BOARD_SIZE + 11] = .white; // L8
+
+    const result = findVCFSequence(&cells, .black, VCF_MAX_DEPTH, 0, 0);
+    try testing.expect(!result.found);
+
+    const from_g8 = findVCFSequenceFromFirstMove(&cells, .{ .row = 7, .col = 6 }, .black, VCF_MAX_DEPTH, 0, 0);
+    try testing.expect(!from_g8.found);
+}
+
+// --- issue #147: グローバル絶対デッドライン ---
+
+test "TimeLimiter.exceeded: グローバル絶対デッドラインを超えていれば true（#147）" {
+    // 予算無制限（time_limit=0 / max_nodes=0）の limiter でも、
+    // グローバル絶対デッドラインを過ぎていれば打ち切られる。
+    deadline.test_now_ms = 5000;
+    defer deadline.test_now_ms = 0;
+
+    var limiter = TimeLimiter{ .start_time = 0, .time_limit = 0, .nodes = 0, .max_nodes = 0 };
+    try testing.expect(!limiter.exceeded());
+
+    deadline.set(1000);
+    defer deadline.clear();
+    try testing.expect(limiter.exceeded());
+
+    deadline.clear();
+    try testing.expect(!limiter.exceeded());
+}
+
+test "TimeLimiter.exceeded: デッドライン未到達なら従来どおり false（#147）" {
+    deadline.test_now_ms = 500;
+    defer deadline.test_now_ms = 0;
+    deadline.set(1000);
+    defer deadline.clear();
+
+    var limiter = TimeLimiter{ .start_time = 0, .time_limit = 0, .nodes = 0, .max_nodes = 0 };
+    try testing.expect(!limiter.exceeded());
+}
+
+test "TimeLimiter.exceeded: グローバル 0 ならノード予算の判定は不変（#147）" {
+    deadline.clear();
+    var limiter = TimeLimiter{ .start_time = 0, .time_limit = 0, .nodes = 3, .max_nodes = 3 };
+    try testing.expect(limiter.exceeded());
+
+    var loose = TimeLimiter{ .start_time = 0, .time_limit = 0, .nodes = 2, .max_nodes = 3 };
+    try testing.expect(!loose.exceeded());
+}
+
+// --- issue #147 B: 入れ子 limiter の予算継承 ---
+
+test "TimeLimiter.remainingMs: 親の残り時間を返す（#147 B）" {
+    deadline.clear();
+    deadline.test_now_ms = 1020;
+    defer deadline.test_now_ms = 0;
+
+    // 予算 50ms・開始 1000ms・現在 1020ms → 残り 30ms
+    const limited = TimeLimiter{ .start_time = 1000, .time_limit = 50, .nodes = 0, .max_nodes = 0 };
+    try testing.expectEqual(@as(?u32, 30), limited.remainingMs());
+
+    // 使い切り
+    const spent = TimeLimiter{ .start_time = 900, .time_limit = 50, .nodes = 0, .max_nodes = 0 };
+    try testing.expectEqual(@as(?u32, 0), spent.remainingMs());
+
+    // 壁時計無制限は null（＝無制限）
+    const unlimited = TimeLimiter{ .start_time = 0, .time_limit = 0, .nodes = 0, .max_nodes = 0 };
+    try testing.expectEqual(@as(?u32, null), unlimited.remainingMs());
+}
+
+test "TimeLimiter.child: 子の予算は min(独自予算, 親の残り)（#147 B）" {
+    deadline.clear();
+    deadline.test_now_ms = 1020;
+    defer deadline.test_now_ms = 0;
+
+    // 親の残り 30ms < 子の独自予算 50ms → 30ms
+    const parent = TimeLimiter{ .start_time = 1000, .time_limit = 50, .nodes = 0, .max_nodes = 0 };
+    const c = parent.child(50, 0);
+    try testing.expectEqual(@as(u32, 30), c.time_limit);
+    try testing.expectEqual(@as(u32, 1020), c.start_time);
+    try testing.expect(!c.exhausted);
+
+    // 子の独自予算 10ms < 親の残り 30ms → 10ms
+    const tight = parent.child(10, 0);
+    try testing.expectEqual(@as(u32, 10), tight.time_limit);
+
+    // 子が壁時計無制限（0）を望んでも親の残りを継承する
+    const inherit = parent.child(0, 0);
+    try testing.expectEqual(@as(u32, 30), inherit.time_limit);
+}
+
+test "TimeLimiter.child: 親が無制限なら独自予算のまま（#147 B）" {
+    deadline.clear();
+    deadline.test_now_ms = 1020;
+    defer deadline.test_now_ms = 0;
+
+    const parent = TimeLimiter{ .start_time = 0, .time_limit = 0, .nodes = 0, .max_nodes = 0 };
+    const c = parent.child(50, 0);
+    try testing.expectEqual(@as(u32, 50), c.time_limit);
+    try testing.expect(!c.exhausted);
+
+    // 独自予算も 0 なら無制限のまま
+    const u = parent.child(0, 0);
+    try testing.expectEqual(@as(u32, 0), u.time_limit);
+}
+
+test "TimeLimiter.child: 親が予算を使い切っていれば子は即打ち切り（#147 B）" {
+    deadline.clear();
+    deadline.test_now_ms = 1020;
+    defer deadline.test_now_ms = 0;
+
+    // 壁時計を使い切った親
+    const spent = TimeLimiter{ .start_time = 900, .time_limit = 50, .nodes = 0, .max_nodes = 0 };
+    var c = spent.child(50, 0);
+    try testing.expect(c.exhausted);
+    try testing.expect(c.exceeded());
+
+    // ノード予算を使い切った親
+    const spent_nodes = TimeLimiter{ .start_time = 1020, .time_limit = 0, .nodes = 100, .max_nodes = 100 };
+    var cn = spent_nodes.child(50, 0);
+    try testing.expect(cn.exceeded());
+}
+
+test "TimeLimiter.child: ノード予算は独自値、無指定なら親の残り（#147 B）" {
+    deadline.clear();
+    const parent = TimeLimiter{ .start_time = 0, .time_limit = 0, .nodes = 40, .max_nodes = 100 };
+    try testing.expectEqual(@as(u32, 10), parent.child(0, 10).max_nodes);
+    try testing.expectEqual(@as(u32, 60), parent.child(0, 0).max_nodes);
+
+    const unlimited = TimeLimiter{ .start_time = 0, .time_limit = 0, .nodes = 0, .max_nodes = 0 };
+    try testing.expectEqual(@as(u32, 0), unlimited.child(0, 0).max_nodes);
+}
+
+test "TimeLimiter.untilDeadline: デッドラインまでの残りを親として表現する（#147 B）" {
+    deadline.clear();
+    deadline.test_now_ms = 1000;
+    defer deadline.test_now_ms = 0;
+
+    // 残り 200ms の親 → 子の 500ms 要求は 200ms に切り詰められる
+    const parent = TimeLimiter.untilDeadline(1200);
+    try testing.expectEqual(@as(?u32, 200), parent.remainingMs());
+    try testing.expectEqual(@as(u32, 200), parent.child(500, 0).time_limit);
+
+    // デッドライン超過 → 子は即打ち切り
+    var past = TimeLimiter.untilDeadline(900).child(50, 0);
+    try testing.expect(past.exceeded());
+
+    // 0 は無制限
+    const none = TimeLimiter.untilDeadline(0);
+    try testing.expectEqual(@as(?u32, null), none.remainingMs());
+}
+
+test "findVCFSequenceWithParent: 親の残り時間を継承する（#147 B）" {
+    deadline.clear();
+    deadline.test_now_ms = 1020;
+    defer deadline.test_now_ms = 0;
+
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[7 * BOARD_SIZE + 4] = .black;
+    cells[7 * BOARD_SIZE + 5] = .black;
+    cells[7 * BOARD_SIZE + 6] = .black;
+    cells[7 * BOARD_SIZE + 7] = .black;
+
+    // 親は壁時計を使い切っている → 子は探索せず不成立を返す
+    var spent = TimeLimiter{ .start_time = 900, .time_limit = 50, .nodes = 0, .max_nodes = 0 };
+    const blocked = findVCFSequenceWithParent(&cells, .black, VCF_MAX_DEPTH, 0, 0, &spent);
+    try testing.expect(!blocked.found);
+
+    // 親に余裕があれば従来どおり見つかる
+    var fresh = TimeLimiter{ .start_time = 1000, .time_limit = 50, .nodes = 0, .max_nodes = 0 };
+    const ok = findVCFSequenceWithParent(&cells, .black, VCF_MAX_DEPTH, 0, 0, &fresh);
+    try testing.expect(ok.found);
+    // 消費ノードは親へ計上される
+    try testing.expect(fresh.nodes > 0);
+}
+
+test "findVCFSequence: グローバル絶対デッドライン超過で即打ち切り（#147）" {
+    // 「two-step VCF」と同じ盤面。通常は found=true になる。
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[4 * BOARD_SIZE + 7] = .black;
+    cells[5 * BOARD_SIZE + 7] = .black;
+    cells[6 * BOARD_SIZE + 7] = .black;
+    cells[7 * BOARD_SIZE + 5] = .black;
+    cells[7 * BOARD_SIZE + 6] = .black;
+    cells[7 * BOARD_SIZE + 7] = .black;
+
+    try testing.expect(findVCFSequence(&cells, .black, VCF_MAX_DEPTH, 0, 0).found);
+
+    deadline.test_now_ms = 5000;
+    defer deadline.test_now_ms = 0;
+    deadline.set(1000);
+    defer deadline.clear();
+
+    const result = findVCFSequence(&cells, .black, VCF_MAX_DEPTH, 0, 0);
     try testing.expect(!result.found);
 }

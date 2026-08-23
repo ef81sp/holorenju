@@ -20,5 +20,8 @@ export {
   DIRECTIONS,
   DRAW_MOVE_LIMIT,
   getLineLength,
+  isFiveLength,
+  isOverlineLength,
   isValidPosition,
 } from "./core";
+export type { PlayerColor } from "./core";

@@ -45,11 +45,6 @@ pub const GenerateMovesOptions = struct {
     skip_forbidden_check: bool = false,
 };
 
-/// 五連チェック（forbidden.zig の checkFive を使用）
-fn checkFive(cells: []const Cell, row: u8, col: u8, color: Cell) bool {
-    return forbidden.checkFive(cells, row, col, color);
-}
-
 /// 候補手を生成
 pub fn generateMoves(cells: []Cell, color: Cell, options: GenerateMovesOptions) MoveList {
     var moves = MoveList.init();
@@ -87,17 +82,10 @@ pub fn generateMoves(cells: []Cell, color: Cell, options: GenerateMovesOptions) 
             // 既存石の周囲でなければスキップ
             if (!threats.isNearFromMask(near_mask, row, col)) continue;
 
-            // 黒番の場合は禁手チェック
+            // 黒番の場合は禁手チェック（五連は禁手に優先＝`forbidden.isPlayable` が
+            // 「打てる点か」の SSoT。vct / quiescence も同じ述語を使う）
             if (is_black and !options.skip_forbidden_check) {
-                // 五連が作れる場合は禁手でも候補に含める
-                if (checkFive(cells, row, col, .black)) {
-                    moves.push(.{ .row = row, .col = col });
-                    continue;
-                }
-
-                // 禁手チェック
-                const forbidden_result = forbidden.checkForbiddenMove(cells, row, col);
-                if (forbidden_result != .none) continue;
+                if (!forbidden.isPlayable(cells, row, col, .black)) continue;
             }
 
             moves.push(.{ .row = row, .col = col });

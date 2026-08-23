@@ -4,6 +4,7 @@
 /// TS版 iterativeDeepening.ts + preSearch.ts に対応
 const bitboard = @import("bitboard.zig");
 const board_mod = @import("board.zig");
+const deadline_mod = @import("deadline.zig");
 const evaluate = @import("evaluate.zig");
 const forbidden = @import("forbidden.zig");
 const incremental_eval = @import("incremental_eval.zig");
@@ -89,11 +90,27 @@ fn findWinningMove(cells: []Cell, color: Cell) ?Position {
     return null;
 }
 
+/// pre-search 全体の壁時計上限（ms）
+///
+/// 内訳は自分の VCF 150 + 相手 VCF 150 + VCT 300。issue #147 B 以前は各段が
+/// 独立した予算を持ち、しかも内部の VCF/VCT が予算を復活させていたため
+/// 名目 300ms の VCT が実測 494ms まで伸びていた。ここを親 limiter にして
+/// 各段を `child()` で作ることで「前段が食った分だけ後段が短くなる」ようにする。
+pub const PRE_SEARCH_TIME_LIMIT: u32 = vcf_mod.VCF_TIME_LIMIT * 2 + vct.VCT_TIME_LIMIT;
+
 /// 必須手の事前チェック
 pub fn findPreSearchMove(
     cells: []Cell,
     color: Cell,
 ) PreSearchResult {
+    // pre-search 全体の予算（issue #147 B）。各段はこの残りを継承した子で回る。
+    var pre_limiter = vcf_mod.TimeLimiter{
+        .start_time = getTimestampMs(),
+        .time_limit = PRE_SEARCH_TIME_LIMIT,
+        .nodes = 0,
+        .max_nodes = 0,
+    };
+
     // 即勝ち手
     const win_move = findWinningMove(cells, color);
     if (win_move) |wm| {
@@ -140,7 +157,8 @@ pub fn findPreSearchMove(
     }
 
     // VCF勝ち手を探す
-    const vcf_move = vcf_mod.findVCFMove(cells, color, vcf_mod.VCF_MAX_DEPTH, vcf_mod.VCF_TIME_LIMIT);
+    const vcf_budget = pre_limiter.child(vcf_mod.VCF_TIME_LIMIT, 0);
+    const vcf_move = vcf_mod.findVCFMove(cells, color, vcf_mod.VCF_MAX_DEPTH, vcf_budget.time_limit);
     if (vcf_move) |vm| {
         return .{
             .immediate_move = vm,
@@ -150,19 +168,14 @@ pub fn findPreSearchMove(
 
     // 相手VCFチェック（Mise-VCFスキップ判定用）
     const opponent_has_vcf = blk: {
-        var opp_limiter = vcf_mod.TimeLimiter{
-            .start_time = getTimestampMs(),
-            .time_limit = vcf_mod.VCF_TIME_LIMIT,
-            .nodes = 0,
-            .max_nodes = 3000,
-        };
+        var opp_limiter = pre_limiter.child(vcf_mod.VCF_TIME_LIMIT, 3000);
         break :blk vcf_mod.hasVCF(cells, opponent_color, 0, &opp_limiter, vcf_mod.VCF_MAX_DEPTH);
     };
 
     // Mise-VCF（ミセ→強制応手→VCF勝ち）
     // 相手VCFがある場合は間に合わないのでスキップ
     if (!opponent_has_vcf) {
-        const mise_move = mise_vcf.findMiseVCFMove(cells, color);
+        const mise_move = mise_vcf.findMiseVCFMoveWithParent(cells, color, &pre_limiter);
         if (mise_move) |mm| {
             // 黒番の禁手チェック
             if (color == .black) {
@@ -183,7 +196,8 @@ pub fn findPreSearchMove(
     }
 
     // VCT勝ち手を探す
-    const vct_move = vct.findVCTMove(cells, color, vct.VCT_MAX_DEPTH, vct.VCT_TIME_LIMIT);
+    const vct_budget = pre_limiter.child(vct.VCT_TIME_LIMIT, 0);
+    const vct_move = vct.findVCTMove(cells, color, vct.VCT_MAX_DEPTH, vct_budget.time_limit);
     if (vct_move) |vm| {
         return .{
             .immediate_move = vm,
@@ -321,6 +335,28 @@ pub fn findBestMoveIterative(
     const start_time = getTimestampMs();
     aspiration_research_count = 0;
 
+    // =========================================================================
+    // 絶対デッドライン（issue #147）
+    // =========================================================================
+    //
+    // ここが「値の SSoT」。同じ `absolute_deadline` を
+    //   - `ctx.absolute_deadline`（メイン探索 / quiescence が参照）
+    //   - `deadline.g_absolute_deadline_ms`（全 `TimeLimiter` が参照）
+    // の両方へ配る。二重に計算しないので divergence は起きない。
+    //
+    // 事前探索（`findPreSearchMove` → VCF / ミセVCF / VCT）より **前** に立てるのが要点。
+    // 事前探索は独自 limiter で回り、`mise_vcf.zig` には壁時計無制限（`time_limit = 0`）の
+    // limiter も残っているので、ここより後ろで立てると事前探索が天井の外に出てしまう。
+    //
+    // `no_time_limit`（計測モード・解析）の場合は 0＝無効のまま。
+    const no_time_limit = params.time_limit == 0;
+    const absolute_deadline = if (no_time_limit) @as(u32, 0) else start_time + params.absolute_time_limit;
+    deadline_mod.set(absolute_deadline);
+    // 早期 return（即決手・唯一手）を含め、抜けるときは必ず解除する。
+    // 解除し忘れると、以降の振り返り経路（`findVCTSequence` 直接呼び出し）まで
+    // 過去のデッドラインで打ち切られてしまう。
+    defer deadline_mod.clear();
+
     // Aspiration Windowsの幅を選択
     const effective_widths: []const i32 = if (params.aspiration_mode == 1)
         &ASPIRATION_WIDTHS
@@ -436,7 +472,6 @@ pub fn findBestMoveIterative(
     // 時間制限設定
     // =========================================================================
 
-    const no_time_limit = params.time_limit == 0;
     const stone_count = countStones(cells);
     const dynamic_time_limit = if (no_time_limit)
         @as(u32, 0)
@@ -444,7 +479,6 @@ pub fn findBestMoveIterative(
         calculateDynamicTimeLimit(params.time_limit, stone_count, moves.len);
 
     const search_deadline = if (no_time_limit) @as(u32, 0) else start_time + dynamic_time_limit;
-    const absolute_deadline = if (no_time_limit) @as(u32, 0) else start_time + params.absolute_time_limit;
     const loop_deadline = if (no_time_limit) @as(u32, 0) else start_time + dynamic_time_limit * 80 / 100;
 
     ctx.deadline = search_deadline;
@@ -662,13 +696,9 @@ pub fn findBestMoveIterative(
 // タイムスタンプ取得
 // =============================================================================
 
-extern fn getTimestampMsExternal() u32;
-
+/// 壁時計（ms）。時計の SSoT は `deadline.nowMs`（ネイティブテストでは擬似時計）。
 fn getTimestampMs() u32 {
-    if (@import("builtin").cpu.arch == .wasm32) {
-        return getTimestampMsExternal();
-    }
-    return 0;
+    return deadline_mod.nowMs();
 }
 
 // === Tests ===
@@ -719,6 +749,65 @@ test "findBestMoveIterative basic" {
     try testing.expect(result.position.col < BOARD_SIZE);
     try testing.expect(result.completed_depth >= 1);
     try testing.expect(result.stats.nodes > 0);
+}
+
+// --- issue #147: グローバル絶対デッドライン ---
+
+test "findBestMoveIterative: 出口でグローバル絶対デッドラインが 0 に戻る（#147）" {
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[7 * BOARD_SIZE + 7] = .black;
+    cells[7 * BOARD_SIZE + 8] = .white;
+
+    tt_mod.global_tt.clear();
+    // 前の呼び出しの残骸があっても、抜けたら必ず 0。
+    deadline_mod.set(12345);
+    _ = findBestMoveIterative(&cells, .black, .{
+        .max_depth = 2,
+        .time_limit = 1000,
+        .max_nodes = 10000,
+    });
+    try testing.expectEqual(@as(u32, 0), deadline_mod.g_absolute_deadline_ms);
+}
+
+test "findBestMoveIterative: 事前探索の即決で早期 return してもデッドラインが残らない（#147）" {
+    // 黒の4連 → 事前探索が五連完成手を即決して返す（反復深化に入らない経路）。
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[7 * BOARD_SIZE + 4] = .black;
+    cells[7 * BOARD_SIZE + 5] = .black;
+    cells[7 * BOARD_SIZE + 6] = .black;
+    cells[7 * BOARD_SIZE + 7] = .black;
+
+    tt_mod.global_tt.clear();
+    deadline_mod.set(12345);
+    const result = findBestMoveIterative(&cells, .black, .{
+        .max_depth = 2,
+        .time_limit = 1000,
+    });
+    try testing.expectEqual(@as(u8, 0), result.completed_depth); // 即決経路
+    try testing.expectEqual(@as(u32, 0), deadline_mod.g_absolute_deadline_ms);
+}
+
+test "findBestMoveIterative: no_time_limit ではデッドラインを立てない（#147）" {
+    // 振り返り・計測モード（time_limit = 0）では絶対デッドラインは無効のまま。
+    // 擬似時計を進めても VCF/VCT が打ち切られないことで確認する。
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[7 * BOARD_SIZE + 4] = .black;
+    cells[7 * BOARD_SIZE + 5] = .black;
+    cells[7 * BOARD_SIZE + 6] = .black;
+    cells[7 * BOARD_SIZE + 7] = .black;
+
+    deadline_mod.test_now_ms = 5000;
+    defer deadline_mod.test_now_ms = 0;
+
+    tt_mod.global_tt.clear();
+    const result = findBestMoveIterative(&cells, .black, .{
+        .max_depth = 2,
+        .time_limit = 0,
+    });
+    try testing.expectEqual(@as(u32, 0), deadline_mod.g_absolute_deadline_ms);
+    // 五連完成手（(7,3) or (7,8)）が返る＝事前探索が打ち切られていない
+    try testing.expectEqual(@as(u8, 7), result.position.row);
+    try testing.expect(result.position.col == 3 or result.position.col == 8);
 }
 
 test "aspiration_research_count: findBestMoveIterativeの呼び出しごとにリセットされる（累積しない）" {
@@ -810,7 +899,7 @@ test "findPreSearchMove: white open four at J9" {
     cells[idx_j9] = .empty;
     bitboard.initFromCells(&cells);
     try testing.expect(j9_creates_four); // J9 creates a four
-    try testing.expect(j9_defense == null); // open four = unblockable
+    try testing.expect(j9_defense == .unstoppable); // open four = unblockable
 
     // VCF should find J9 (open four on diagonal)
     const vcf_move = vcf_mod.findVCFMove(&cells, .white, vcf_mod.VCF_MAX_DEPTH, 0);

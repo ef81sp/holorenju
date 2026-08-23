@@ -4,6 +4,7 @@
 /// TS版 minimaxCore.ts に対応
 const bitboard = @import("bitboard.zig");
 const board_mod = @import("board.zig");
+const deadline = @import("deadline.zig");
 const evaluate = @import("evaluate.zig");
 const forbidden = @import("forbidden.zig");
 const incremental_eval = @import("incremental_eval.zig");
@@ -219,16 +220,38 @@ fn hasFourInDirection(cells: []const Cell, row: u8, col: u8, dr: i8, dc: i8, col
 // =============================================================================
 
 /// analyzeFourAndThree: 四と活三の有無を分析（石配置済み前提）
+///
+/// 五の判定は `forbidden.isFiveLength`（SSoT・#125）。黒はちょうど 5 連、白は 5 連以上。
+/// 黒の長連（`forbidden.isOverlineLength`）は禁手なので五でも四でもなく、
+/// **その着手自体が打てない**ため全フィールド false を返す（#132）。
+///
+/// 五と長連が同時に成立する黒の着手は**五が優先**（連珠ルール）。方向順に依存して
+/// 結果が変わらないよう、長連を見つけても即 return せず全方向をスキャンしてから
+/// 判定する。これは主探索の遅延禁手判定（`checkFive` を先に見て、五なら禁手判定を
+/// スキップする）と同じ優先順位。
+///
+/// ⚠️ 現状の消費者（`isThreatExtensionCandidate` / LMR 調整 / `demotePlainFourIfNeeded`）は
+/// いずれも `has_four` と `has_open_three` しか見ないため、黒長連での all-false 化は
+/// **挙動としては no-op**（禁手手は主探索では遅延禁手判定で先に捨てられ、ここには届かない）。
+/// あくまで構造体の契約（「has_five は五である」）を正しくするための変更。
 pub fn analyzeFourAndThree(cells: []const Cell, row: u8, col: u8, color: Cell) struct { has_five: bool, has_four: bool, has_open_three: bool } {
     const jp = @import("jump_patterns.zig");
     var has_four = false;
     var has_open_three = false;
+    var has_overline = false;
 
     for (DIRECTIONS, 0..) |dir, i| {
         const result = board_mod.analyzeDirectionOnCells(cells, row, col, dir.dr, dir.dc, color);
 
-        if (result.count >= 5) {
+        // 五は長連より優先。1 方向でも五があればその時点で確定。
+        if (forbidden.isFiveLength(result.count, color)) {
             return .{ .has_five = true, .has_four = false, .has_open_three = false };
+        }
+
+        // 黒の長連＝禁手。他方向に五がないか見終わるまで判定は保留する。
+        if (forbidden.isOverlineLength(result.count, color)) {
+            has_overline = true;
+            continue;
         }
 
         // 四チェック
@@ -246,6 +269,11 @@ pub fn analyzeFourAndThree(cells: []const Cell, row: u8, col: u8, color: Cell) s
         if (result.count == 3 and result.end1 == .empty and result.end2 == .empty) {
             has_open_three = true;
         }
+    }
+
+    // 五が無く長連がある＝禁手。着手不可なので脅威として扱わない。
+    if (has_overline) {
+        return .{ .has_five = false, .has_four = false, .has_open_three = false };
     }
 
     return .{ .has_five = false, .has_four = has_four, .has_open_three = has_open_three };
@@ -275,9 +303,28 @@ const ThreatBudget = struct {
     vct_nodes: u32,
 };
 
+/// **issue #119 注意: `vct_nodes = 0` は「旧挙動の維持」ではなく意図的な緩和**
+///
+/// #119 以前、VCT 経路は攻め手をノードとして計上していなかったが、`limiter` を
+/// 共有する VCF 経路（`opponentBlocksThreePursuitAtRoot` のフル深度 `hasVCF` や
+/// `hasVCT` 冒頭の `hasVCF` など）ではノードが進んでいたため、旧 `vct_nodes = 500`
+/// は**部分的に効く上限**で、実際しばしば食い潰されていた。
+///
+/// #119 で攻め手も計上するようになると 500 は全域で効く上限になり、
+/// 41,442 ノード級の真正 VCT でも届かなくなる＝対局 CPU の挙動が大きく変わる。
+/// #119 の目的は振り返りフォールバックの予算を効かせることなので、ここでは
+/// `vct_nodes = 0`（`max_nodes` 無効）にして**ノード制限を外す**。
+///
+/// つまり対局側の VCT プローブは `threatProbe` の 50ms（解析モードでは無制限）
+/// だけで縛られる形になり、**旧実装より深く探せる（＝挙動は変わる）**。
+/// あわせて攻め手ごとに `exceeded()` を見るようになったので 50ms の粒度も細かくなり、
+/// 手順長の α カットも非収集モード＝対局経路に効く。
+/// **予算値は未較正**なので、較正は別 issue（#137）で bench に基づいて行う。
+///
+/// `vcf_nodes` は `vcf.zig` が元から計上していた実効値。こちらは据え置き。
 fn getThreatBudget(minimax_depth: u8) ThreatBudget {
     if (minimax_depth >= 4) {
-        return .{ .vcf_depth = 8, .vcf_nodes = 200, .vct_depth = 4, .vct_nodes = 500 };
+        return .{ .vcf_depth = 8, .vcf_nodes = 200, .vct_depth = 4, .vct_nodes = 0 };
     }
     // depth 3
     return .{ .vcf_depth = 6, .vcf_nodes = 100, .vct_depth = 0, .vct_nodes = 0 };
@@ -293,38 +340,49 @@ fn threatProbe(
     // 防御ノード（相手の被詰み判定）では strict 耐性検証で偽の追い詰め
     // （幻の被詰み）を棄却する。攻めノードは lenient で真正VCTを取りこぼさない。
     defensive: bool,
+    /// メイン探索の締切（絶対時刻 ms、0 = 無制限）。プローブはこの残り時間を超えない
+    /// （issue #147 B）。
+    search_deadline: u32,
 ) ?Position {
     const budget = getThreatBudget(minimax_depth);
 
+    // プローブの親＝メイン探索の残り時間。プローブ独自の 20ms / 50ms は
+    // 親の残りとの min を取る（`TimeLimiter.child` が SSoT）。
+    const parent = vcf_mod.TimeLimiter.untilDeadline(if (no_time_limit) 0 else search_deadline);
+
     // VCF探索（軽量・常にチェック）。VCFは受け一意で偽陽性が出にくいため常に lenient。
     const vcf_time: u32 = if (no_time_limit) 0 else 20;
+    var vcf_budget = parent.child(vcf_time, budget.vcf_nodes);
+    if (vcf_budget.exceeded()) return null;
     const vcf_move = vcf_mod.findVCFMoveWithBudget(
         cells,
         color,
         budget.vcf_depth,
-        vcf_time,
-        budget.vcf_nodes,
+        vcf_budget.time_limit,
+        vcf_budget.max_nodes,
     );
     if (vcf_move) |m| return m;
 
     // VCT探索（予算が許す場合のみ）
     if (budget.vct_depth > 0) {
         const vct_time: u32 = if (no_time_limit) 0 else 50;
+        var vct_budget = parent.child(vct_time, budget.vct_nodes);
+        if (vct_budget.exceeded()) return null;
         const vct_move = if (defensive)
             vct_mod.findVCTMoveWithBudgetStrict(
                 cells,
                 color,
                 budget.vct_depth,
-                vct_time,
-                budget.vct_nodes,
+                vct_budget.time_limit,
+                vct_budget.max_nodes,
             )
         else
             vct_mod.findVCTMoveWithBudget(
                 cells,
                 color,
                 budget.vct_depth,
-                vct_time,
-                budget.vct_nodes,
+                vct_budget.time_limit,
+                vct_budget.max_nodes,
             );
         if (vct_move) |m| return m;
     }
@@ -474,6 +532,7 @@ pub fn minimaxWithTT(
             depth,
             ctx.no_time_limit,
             !is_maximizing,
+            ctx.deadline,
         );
         if (threat_result) |threat_move| {
             ctx.stats.threat_probe_cutoffs += 1;
@@ -965,22 +1024,37 @@ fn sortMoveScores(entries: []MoveScoreEntry) void {
 // タイムスタンプ取得（WASM用）
 // =============================================================================
 
-/// WASM外部関数: タイムスタンプ（ミリ秒）を取得
-/// WASM環境ではJSから注入
-extern fn getTimestampMsExternal() u32;
-
-/// ネイティブテスト時は0を返す（タイムアウトなし）
+/// 壁時計（ms）。時計の SSoT は `deadline.nowMs`（ネイティブテストでは擬似時計）。
 fn getTimestampMs() u32 {
-    if (@import("builtin").cpu.arch == .wasm32) {
-        return getTimestampMsExternal();
-    }
-    // ネイティブテストでは時間制限なし
-    return 0;
+    return deadline.nowMs();
 }
 
 // === Tests ===
 
 const testing = std.testing;
+
+test "threatProbe: メイン探索の残り時間を超えない（issue #147 B）" {
+    // 黒の四連（VCF 即検出）。プローブ独自の 20ms 予算があっても、
+    // 親（メイン探索）の締切を過ぎていれば探索せず null を返す。
+    var cells = [_]Cell{.empty} ** board_mod.CELL_COUNT;
+    cells[7 * BOARD_SIZE + 4] = .black;
+    cells[7 * BOARD_SIZE + 5] = .black;
+    cells[7 * BOARD_SIZE + 6] = .black;
+    cells[7 * BOARD_SIZE + 7] = .black;
+
+    deadline.clear();
+    deadline.test_now_ms = 1000;
+    defer deadline.test_now_ms = 0;
+
+    // 親に余裕がある（締切 1200ms、現在 1000ms）→ 従来どおり検出する
+    try testing.expect(threatProbe(&cells, .black, 4, false, false, 1200) != null);
+
+    // 親の締切を過ぎている（締切 900ms、現在 1000ms）→ プローブは走らない
+    try testing.expect(threatProbe(&cells, .black, 4, false, false, 900) == null);
+
+    // 締切 0（無制限）は従来どおり
+    try testing.expect(threatProbe(&cells, .black, 4, false, false, 0) != null);
+}
 
 test "threat_probe_enabled=false: threatProbeによるcutoffが発生しない（深さ3以上、VCFがある局面）" {
     defer threat_probe_enabled = true;
@@ -1128,6 +1202,63 @@ test "LMR table values" {
     try testing.expectEqual(getLMRReduction(0, 5), 0);
     // moveIndex=0 → 0
     try testing.expectEqual(getLMRReduction(5, 0), 0);
+}
+
+// #132: analyzeFourAndThree の五判定を forbidden.isFiveLength に揃えた回帰テスト
+test "analyzeFourAndThree: 黒の長連は五でも四でもない" {
+    const CELL_COUNT = board_mod.CELL_COUNT;
+    var cells: [CELL_COUNT]Cell = [_]Cell{.empty} ** CELL_COUNT;
+
+    // 横に黒 6 連（col 3..8、着手点は col 7）＝長連
+    for (3..9) |c| cells[7 * BOARD_SIZE + c] = .black;
+    // 同じ着手点に縦の活三（row 6,7,8 で両端空き）も作っておく
+    cells[6 * BOARD_SIZE + 7] = .black;
+    cells[8 * BOARD_SIZE + 7] = .black;
+
+    const r = analyzeFourAndThree(&cells, 7, 7, .black);
+    try testing.expect(!r.has_five);
+    try testing.expect(!r.has_four);
+    try testing.expect(!r.has_open_three);
+}
+
+// #132 レビュー指摘: 五と長連が同居する黒の着手は、方向順に関係なく五が優先される
+// （主探索の遅延禁手判定 checkFive → checkForbiddenMove と同じ順位）。
+test "analyzeFourAndThree: 五と長連が同居する黒は方向順に関係なく五" {
+    const CELL_COUNT = board_mod.CELL_COUNT;
+
+    // (a) 横（先に走査される方向）に長連・縦に五
+    {
+        var cells: [CELL_COUNT]Cell = [_]Cell{.empty} ** CELL_COUNT;
+        for (3..9) |c| cells[7 * BOARD_SIZE + c] = .black; // 横 6 連
+        for (3..7) |r| cells[r * BOARD_SIZE + 7] = .black; // 縦: row 3..6 + 着手点 7 = 5 連
+        const r = analyzeFourAndThree(&cells, 7, 7, .black);
+        try testing.expect(r.has_five);
+    }
+
+    // (b) 縦に長連・横に五（(a) と方向を入れ替えても同じ結論）
+    {
+        var cells: [CELL_COUNT]Cell = [_]Cell{.empty} ** CELL_COUNT;
+        for (3..9) |r| cells[r * BOARD_SIZE + 7] = .black; // 縦 6 連
+        for (3..7) |c| cells[7 * BOARD_SIZE + c] = .black; // 横: col 3..6 + 着手点 7 = 5 連
+        const r = analyzeFourAndThree(&cells, 7, 7, .black);
+        try testing.expect(r.has_five);
+    }
+}
+
+test "analyzeFourAndThree: 白の長連は五・黒のちょうど五は五" {
+    const CELL_COUNT = board_mod.CELL_COUNT;
+    var cells: [CELL_COUNT]Cell = [_]Cell{.empty} ** CELL_COUNT;
+
+    // 白 6 連
+    for (3..9) |c| cells[7 * BOARD_SIZE + c] = .white;
+    const w = analyzeFourAndThree(&cells, 7, 7, .white);
+    try testing.expect(w.has_five);
+
+    // 黒ちょうど 5 連
+    @memset(&cells, .empty);
+    for (3..8) |c| cells[7 * BOARD_SIZE + c] = .black;
+    const b = analyzeFourAndThree(&cells, 7, 7, .black);
+    try testing.expect(b.has_five);
 }
 
 /// 序盤の均衡局面（minimax テスト用）。

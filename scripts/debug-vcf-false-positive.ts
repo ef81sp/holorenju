@@ -148,11 +148,16 @@ function verifyVCFSequence(
       console.log("  -> 四を形成");
 
       // 防御位置の確認
-      const defensePos = getFourDefensePosition(testBoard, pos, moveColor);
-      if (!defensePos) {
+      const defense = getFourDefensePosition(testBoard, pos, moveColor);
+      if (defense.kind === "unstoppable") {
         console.log("  -> 活四（防御不能）！ VCF成功");
         return;
       }
+      if (defense.kind === "not_four") {
+        console.log("  *** 四ではない（五点0個）！ 偽 VCF ***");
+        return;
+      }
+      const defensePos = defense.position;
       console.log(`  防御位置: ${posToStr(defensePos)}`);
 
       // 白攻撃の場合、黒の防御位置が禁手かチェック
@@ -201,9 +206,9 @@ function verifyVCFSequence(
           pos,
           moveColor,
         );
-        if (counterDefense) {
+        if (counterDefense.kind === "block") {
           console.log(
-            `    カウンターフォーの防御位置: ${posToStr(counterDefense)}`,
+            `    カウンターフォーの防御位置: ${posToStr(counterDefense.position)}`,
           );
         } else {
           console.log("    カウンターフォーが活四！ VCF失敗");

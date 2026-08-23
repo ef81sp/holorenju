@@ -8,16 +8,7 @@
 
 import type { BoardState } from "@/types/game";
 
-import type { DirectionPattern } from "./patternScores";
-
 import { DIRECTION_INDICES, DIRECTIONS } from "../core/constants";
-import { CELL_LINES_FLAT } from "../lineTable/lineMapping";
-import { analyzeLinePattern } from "../lineTable/linePatterns";
-import {
-  placeStone,
-  removeStone,
-  type LineTable,
-} from "../lineTable/lineTable";
 // #43 PR-3: 跳び四/三の図形判定を Zig アダプタへ委譲（patterns.ts 依存を断つ）。
 // detectWhiteWinningPattern は forcedLossCheck から live なため本ファイルは存続。
 import { checkJumpFour, checkJumpThree } from "../wasm/patternsAdapter";
@@ -273,66 +264,8 @@ export function createsFourThree(
   return result;
 }
 
-/**
- * createsFourThree のハイブリッド版
- *
- * 連続パターン検出を LineTable 版 (analyzeLinePattern) に置換し、
- * board 走査の ~80 reads を 4× ビットマスク演算に削減。
- *
- * 跳びパターン検出 (checkJumpFour/checkJumpThree) は
- * renjuRules.ts の board ベース実装をそのまま使用（board place/remove が必要）。
- *
- * analyzeJumpPatterns の precomputed パラメータ経由で
- * LineTable から得た DirectionPattern[] を渡す。
- */
-export function createsFourThreeBit(
-  board: BoardState,
-  lineTable: LineTable,
-  row: number,
-  col: number,
-  color: "black" | "white",
-): boolean {
-  // 盤面 + LineTable 両方に仮置き
-  const targetRow = board[row];
-  if (targetRow) {
-    targetRow[col] = color;
-  }
-  placeStone(lineTable, row, col, color);
-
-  // LineTable から4方向の DirectionPattern を取得（board 走査を回避）
-  const patterns: DirectionPattern[] = [];
-  const base = (row * 15 + col) * 4;
-  for (let d = 0; d < 4; d++) {
-    const packed = CELL_LINES_FLAT[base + d] ?? 0xffff;
-    if (packed === 0xffff) {
-      patterns.push({ count: 1, end1: "edge", end2: "edge" });
-      continue;
-    }
-    const lineId = packed >> 8;
-    const bitPos = packed & 0xff;
-    patterns.push(
-      analyzeLinePattern(
-        lineTable.blacks,
-        lineTable.whites,
-        lineId,
-        bitPos,
-        color,
-        d === 3,
-      ),
-    );
-  }
-
-  // analyzeJumpPatterns に precomputed patterns を渡す
-  // → 内部の computePatterns (= 4× analyzeDirection board走査) をスキップ
-  // → checkJumpFour/checkJumpThree は board を使用（仮置き済み）
-  const jumpResult = analyzeJumpPatterns(board, row, col, color, patterns);
-  const result = jumpResult.hasFour && jumpResult.hasValidOpenThree;
-
-  // 復元
-  if (targetRow) {
-    targetRow[col] = null;
-  }
-  removeStone(lineTable, row, col, color);
-
-  return result;
-}
+// issue #134 / #43: `createsFourThreeBit`（createsFourThree の LineTable ハイブリッド版）は
+// 削除した。参照ゼロ（本番経路は Zig `evaluate.createsFourThree`）で、`analyzeJumpPatterns` の
+// `precomputed` 経路を使う唯一の呼び出し元だったため、四判定を五点列挙へ統一した #134 の
+// 新旧等価性が検証されないまま残るのは害のほうが大きい。
+// 必要になったら `analyzeJumpPatterns(board, row, col, color, precomputed)` から作り直すこと。

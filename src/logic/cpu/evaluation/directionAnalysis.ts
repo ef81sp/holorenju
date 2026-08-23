@@ -6,7 +6,11 @@
 
 import type { BoardState } from "@/types/game";
 
-import { isValidPosition } from "@/logic/renjuRules";
+import {
+  isFiveLength,
+  isValidPosition,
+  type PlayerColor,
+} from "@/logic/renjuRules";
 
 import {
   type DirectionPattern,
@@ -109,17 +113,37 @@ export function analyzeDirection(
 /**
  * パターンからスコアを計算
  *
+ * 五の判定は `renjuRules.isFiveLength` に委ねる（SSoT・#125）。黒はちょうど 5 連、
+ * 白は 5 連以上が五。**黒の 6 連以上は長連＝禁手なので五でも四でもなく 0 点**（#132、
+ * `renjuRules.isOverlineLength` と同値）。
+ *
+ * Zig 側の対は `zig/src/patterns.zig` の `getPatternScore`。
+ * パリティテスト: `patternScoreParity.wasm.test.ts`
+ *
+ * ⚠️ **本番探索からの消費者はゼロ**（探索は WASM 専用）。live な呼び出し元は
+ * `lineTable/lineScan.ts` のテーブル構築とテストのみで、実質 Zig 実装のパリティ用
+ * 参照実装として残っている（#43 の死蔵棚卸し候補）。
+ *
  * @param pattern パターン分析結果
+ * @param color 石の色（黒の長連を五から除外するために必要）
  * @returns スコア
  */
-export function getPatternScore(pattern: DirectionPattern): number {
+export function getPatternScore(
+  pattern: DirectionPattern,
+  color: PlayerColor,
+): number {
   const { count, end1, end2 } = pattern;
+  // count >= 5 は「五」か「黒の長連」のいずれか。isFiveLength が false なら
+  // 残るのは黒の長連だけ（= isOverlineLength(count, color)）。
+  // count 0..4 を 1 比較で switch に落とすためにこの形にしている。
+  if (count >= 5) {
+    return isFiveLength(count, color) ? PATTERN_SCORES.FIVE : 0;
+  }
+
   const bothOpen = end1 === "empty" && end2 === "empty";
   const oneOpen = end1 === "empty" || end2 === "empty";
 
   switch (count) {
-    case 5:
-      return PATTERN_SCORES.FIVE;
     case 4:
       if (bothOpen) {
         return PATTERN_SCORES.OPEN_FOUR;
@@ -145,10 +169,6 @@ export function getPatternScore(pattern: DirectionPattern): number {
       }
       return 0;
     default:
-      // 6以上は長連（黒の禁手だが白には有利）
-      if (count >= 6) {
-        return PATTERN_SCORES.FIVE;
-      }
       return 0;
   }
 }
@@ -169,15 +189,23 @@ export function getCenterBonus(row: number, col: number): number {
 
 /**
  * パターンタイプを取得
+ *
+ * 五の判定は `getPatternScore` と同じく `renjuRules.isFiveLength`（#125）。
+ * 黒の 6 連以上（長連＝禁手）は `null`（#132）。
  */
-export function getPatternType(pattern: DirectionPattern): PatternType {
+export function getPatternType(
+  pattern: DirectionPattern,
+  color: PlayerColor,
+): PatternType {
   const { count, end1, end2 } = pattern;
+  if (count >= 5) {
+    return isFiveLength(count, color) ? "five" : null;
+  }
+
   const bothOpen = end1 === "empty" && end2 === "empty";
   const oneOpen = end1 === "empty" || end2 === "empty";
 
   switch (count) {
-    case 5:
-      return "five";
     case 4:
       if (bothOpen) {
         return "openFour";
@@ -203,9 +231,6 @@ export function getPatternType(pattern: DirectionPattern): PatternType {
       }
       return null;
     default:
-      if (count >= 6) {
-        return "five";
-      }
       return null;
   }
 }

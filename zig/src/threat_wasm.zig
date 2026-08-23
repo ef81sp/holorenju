@@ -4,7 +4,9 @@
 // （= 四 / 活三 判定）を **Zig 単一ソース**経由で使うための最小 wasm。
 //
 // 橋の本体は `vct.classifyThreat`（vct.zig）。これは TS `threatMoves.ts` の `classifyThreat`
-// と 1:1 構造一致し、**黒長連除外（isJumpFourOverline / isOverlineEnd）を内包**する。
+// と 1:1 構造一致し、四判定を `threats.isFourInDirection`（= その方向に「埋めると本当に
+// 五になる点」があるか）に一本化している（issue #124）。黒の長連は五点に数えないので
+// 長連除外はこの基準に内包される。
 // 注意: `main.zig` の `classifyPointWasm` は生パターンビット（長連除外なし）なので**使わない**。
 //
 // forbidden_wasm.zig との唯一の構造差: `vct.classifyThreat` は `line_lookup.queryPatternByCell`
@@ -17,6 +19,7 @@ const bitboard = @import("bitboard.zig");
 const board = @import("board.zig");
 const evaluate = @import("evaluate.zig");
 const jp = @import("jump_patterns.zig");
+const quiescence = @import("quiescence.zig");
 const threats = @import("threats.zig");
 const vct = @import("vct.zig");
 
@@ -233,4 +236,46 @@ export fn getJumpThreeStraightFourPointsWasm(row: u8, col: u8, dir_index: u8, co
     } else {
         pattern_points_buffer[0] = 0;
     }
+}
+
+// =============================================================================
+// 受け点（四を止める点）のパリティ検証用 export（issue #115 / #124）
+// =============================================================================
+
+// collectLineFivePoints の結果を [u8 count][count*(row,col)] でシリアライズ。
+// 1 ライン上の五点はたかだか数点なので 1+2*8 で十分。
+var five_points_buffer: [32]u8 = undefined;
+
+export fn getFivePointsBuffer() [*]u8 {
+    return &five_points_buffer;
+}
+
+/// 指定方向の「埋めると五になる点」を five_points_buffer に書く。
+/// dir_index は board.DIRECTIONS のインデックス（0..3）。
+export fn collectLineFivePointsWasm(row: u8, col: u8, dir_index: u8, color: u8) void {
+    const c: board.Cell = @enumFromInt(color);
+    const dir = board.DIRECTIONS[dir_index];
+    var list = threats.PositionList.init();
+    _ = threats.collectLineFivePoints(&board.board_cells, row, col, dir.dr, dir.dc, c, &list);
+
+    five_points_buffer[0] = list.len;
+    var o: usize = 1;
+    for (0..list.len) |i| {
+        five_points_buffer[o] = list.items[i].row;
+        five_points_buffer[o + 1] = list.items[i].col;
+        o += 2;
+    }
+}
+
+/// 四に対する受け点（3 値・issue #124）。
+/// - 止め四: `row * 15 + col`（0..224）
+/// - 活四（防御不可）: `quiescence.FOUR_DEFENSE_UNSTOPPABLE`（255）
+/// - そもそも四ではない: `quiescence.FOUR_DEFENSE_NOT_FOUR`（254）
+export fn getFourDefensePositionWasm(row: u8, col: u8, color: u8) u8 {
+    const c: board.Cell = @enumFromInt(color);
+    return switch (quiescence.getFourDefensePosition(&board.board_cells, row, col, c)) {
+        .not_four => quiescence.FOUR_DEFENSE_NOT_FOUR,
+        .unstoppable => quiescence.FOUR_DEFENSE_UNSTOPPABLE,
+        .block => |d| d.row * board.BOARD_SIZE + d.col,
+    };
 }

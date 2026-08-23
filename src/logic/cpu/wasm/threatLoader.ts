@@ -70,6 +70,32 @@ export interface ThreatWasmContext {
   ) => void;
   /** pattern points バッファの先頭オフセット（memory 内）を返す。 */
   getPatternPointsBuffer: () => number;
+  /**
+   * 指定方向の「埋めると五になる点」を five points バッファに書く（issue #115）。
+   * TS の `collectLineFivePoints`（core/lineAnalysis.ts）とのパリティ検証用。
+   */
+  collectLineFivePointsWasm: (
+    row: number,
+    col: number,
+    dir: number,
+    color: number,
+  ) => void;
+  /** five points バッファの先頭オフセット（memory 内）を返す。 */
+  getFivePointsBuffer: () => number;
+  /**
+   * 四に対する受け点（3 値・issue #124）。
+   * Zig 側の番兵定数は `quiescence.FOUR_DEFENSE_UNSTOPPABLE` / `FOUR_DEFENSE_NOT_FOUR`。
+   * - 止め四: `row * 15 + col`（0..224）
+   * - 活四（防御不可・`unstoppable`）: 255
+   * - そもそも四ではない（`not_four`）: 254
+   *
+   * TS の `getFourDefensePosition`（search/threatPatterns.ts）とのパリティ検証用。
+   */
+  getFourDefensePositionWasm: (
+    row: number,
+    col: number,
+    color: number,
+  ) => number;
   /** wasm 線形メモリ（バッファ読み取り用）。 */
   memory: WebAssembly.Memory;
 }

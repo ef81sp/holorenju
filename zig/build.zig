@@ -224,7 +224,15 @@ pub fn build(b: *std.Build) void {
         }),
     });
 
+    const test_deadline = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/deadline.zig"),
+            .target = native_target,
+        }),
+    });
+
     const test_step = b.step("test", "Run unit tests");
+    test_step.dependOn(&b.addRunArtifact(test_deadline).step);
     test_step.dependOn(&b.addRunArtifact(test_board).step);
     test_step.dependOn(&b.addRunArtifact(test_patterns).step);
     test_step.dependOn(&b.addRunArtifact(test_evaluate).step);

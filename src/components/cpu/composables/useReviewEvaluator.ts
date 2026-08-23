@@ -35,6 +35,27 @@ export { sortReviewQueue } from "@/logic/cpu/review/reviewQueue";
 /** Workerプールサイズ（最大8、最低2） */
 const POOL_SIZE = Math.max(2, Math.min(8, navigator.hardwareConcurrency ?? 4));
 
+/**
+ * Worker が応答しないと判定するまでの猶予（ms）。
+ *
+ * 目的は iOS Safari のメモリ圧迫による silent kill から復帰することであり、
+ * 健全だが探索の長い手を誤 kill してはいけない。
+ * 関連する探索側 time budget（すべて bounded 済み, #104）:
+ * - FAST minimax: absoluteTimeLimit 10s
+ * - PRECISE minimax: absoluteTimeLimit 20s
+ * - Phase 2 VCT: 10s + VCF 3s
+ * - REVIEW_VCT_OPTIONS_WITH_BRANCHES: 10s
+ * - forcedWinDetection fallback: 5s/手
+ * - verifyCandidates: 5s
+ * → 単発タスク worst case ≒ 55s、8 並列 CPU 競合込みで 90s 程度
+ *
+ * 120s は上記に 30% 程度の安全余裕を持たせつつ、真の hang を過度に待たせない値。
+ */
+const WORKER_WATCHDOG_MS = 120_000;
+
+/** watchdog タイムアウト後、同一タスクを再投入する最大回数 */
+const WORKER_MAX_RETRIES = 1;
+
 export interface UseReviewEvaluatorReturn {
   /** 評価中かどうか */
   isEvaluating: Ref<boolean>;
@@ -44,6 +65,8 @@ export interface UseReviewEvaluatorReturn {
   completedCount: Ref<number>;
   /** 評価する総手数 */
   totalCount: Ref<number>;
+  /** 再試行を含めても応答が返らなかった手数（silent kill 判定） */
+  failedCount: Ref<number>;
   /** 全プレイヤーの手を並列評価 */
   evaluate: (
     moveHistory: string,
@@ -65,6 +88,7 @@ export function useReviewEvaluator(): UseReviewEvaluatorReturn {
   const progress = ref(0);
   const completedCount = ref(0);
   const totalCount = ref(0);
+  const failedCount = ref(0);
 
   let workers: Worker[] = [];
   let cancelled = false;
@@ -85,6 +109,10 @@ export function useReviewEvaluator(): UseReviewEvaluatorReturn {
       w.terminate();
     }
     workers = [];
+  }
+
+  function createReplacementWorker(): Worker {
+    return new ReviewWorker();
   }
 
   /** 進捗を1手分進める */
@@ -124,10 +152,21 @@ export function useReviewEvaluator(): UseReviewEvaluatorReturn {
     completedCount.value = 0;
     totalCount.value = allMoveItems.length;
     progress.value = 0;
+    failedCount.value = 0;
 
     const pool = initPool();
     const results: (FullEvalResult | LightEvalResult)[] = [];
     const isCancelled = (): boolean => cancelled;
+
+    /** watchdog 共通設定（silent kill 対策、#104） */
+    const watchdogConfig = {
+      timeoutMs: WORKER_WATCHDOG_MS,
+      maxRetries: WORKER_MAX_RETRIES,
+      createWorker: createReplacementWorker,
+      onTaskFailed: (): void => {
+        failedCount.value++;
+      },
+    };
 
     // キャンセル時に runWorkerPool の await を解除するための Promise
     const cancelPromise = new Promise<void>((resolve) => {
@@ -158,6 +197,7 @@ export function useReviewEvaluator(): UseReviewEvaluatorReturn {
       },
       onProgress: advanceProgress,
       isCancelled,
+      ...watchdogConfig,
     });
 
     if (cancelled) {
@@ -193,6 +233,7 @@ export function useReviewEvaluator(): UseReviewEvaluatorReturn {
         },
         onProgress: advanceProgress,
         isCancelled,
+        ...watchdogConfig,
       });
     }
 
@@ -244,6 +285,7 @@ export function useReviewEvaluator(): UseReviewEvaluatorReturn {
           },
           onProgress: advanceProgress,
           isCancelled,
+          ...watchdogConfig,
         });
       }
 
@@ -280,6 +322,7 @@ export function useReviewEvaluator(): UseReviewEvaluatorReturn {
     progress,
     completedCount,
     totalCount,
+    failedCount,
     evaluate,
     cancel,
   };
