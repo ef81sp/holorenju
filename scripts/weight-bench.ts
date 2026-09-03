@@ -20,9 +20,13 @@ import { fileURLToPath } from "node:url";
 import { Worker } from "node:worker_threads";
 
 import type { CpuDifficulty } from "../src/types/cpu.ts";
-import type { SPRTConfig } from "./types/ab.ts";
+import type { SPRTConfig, WeightBenchResult } from "./types/ab.ts";
 
-import { estimateEloDiff, formatEloDiff } from "./lib/eloDiff.ts";
+import {
+  computeBenchGameStats,
+  formatBenchGameStats,
+} from "./lib/benchGameStats.ts";
+import { formatEloDiff } from "./lib/eloDiff.ts";
 import { parseWeightOverrides } from "./lib/evalParams.ts";
 import {
   buildJushuTasks,
@@ -30,7 +34,8 @@ import {
   gamesPerSet as computeGamesPerSet,
   runMatch,
 } from "./lib/match.ts";
-import { DEFAULT_SPRT_CONFIG, formatSPRT, updateSPRT } from "./lib/sprt.ts";
+import { formatPairedStats } from "./lib/pairedStats.ts";
+import { DEFAULT_SPRT_CONFIG, formatSPRT } from "./lib/sprt.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, "..");
@@ -253,7 +258,7 @@ async function main(): Promise<void> {
     console.log("初期化完了\n");
 
     const tasks = buildJushuTasks(options.sets);
-    const { wdl, completedGames } = await runMatch({
+    const { wdl, games, completedGames, stats } = await runMatch({
       pairs,
       tasks,
       totalGames,
@@ -279,21 +284,20 @@ async function main(): Promise<void> {
     console.log(
       `WDL (baseline=A 視点): +${wdl.wins} =${wdl.draws} -${wdl.losses}`,
     );
-    const eloDiffResult = estimateEloDiff(wdl);
-    console.log(formatEloDiff(eloDiffResult));
+    // 三項（旧・1 局単位）とペア（新・pentanomial）を並記。停止判定はペア。
+    console.log(`[三項] ${formatEloDiff(stats.trinomialElo)}`);
     console.log("(正Elo=baseline強い=変種が弱い / 負Elo=変種が強い)");
-
-    let sprtState = null;
-    if (sprtConfig) {
-      sprtState = updateSPRT(wdl, sprtConfig);
-      console.log(formatSPRT(sprtState, wdl));
+    if (stats.sprtTrinomial) {
+      console.log(formatSPRT(stats.sprtTrinomial, wdl));
     }
+    console.log(`[ペア] ${formatPairedStats(stats.paired)}`);
+    console.log(formatBenchGameStats(computeBenchGameStats(games)));
     console.log(`所要時間: ${elapsedSeconds.toFixed(1)}秒`);
 
     if (!fs.existsSync(OUTPUT_DIR)) {
       fs.mkdirSync(OUTPUT_DIR, { recursive: true });
     }
-    const result = {
+    const result: WeightBenchResult = {
       type: "weight-bench",
       timestamp: new Date().toISOString(),
       weights: options.weights,
@@ -306,8 +310,14 @@ async function main(): Promise<void> {
       },
       totalGames: completedGames,
       wdl,
-      eloDiff: eloDiffResult,
-      sprt: sprtState,
+      /** 三項（1 局単位）。参考値 */
+      eloDiff: stats.trinomialElo,
+      /** 停止に使った判定＝ペア LLR */
+      sprt: stats.paired.sprt,
+      sprtTrinomial: stats.sprtTrinomial,
+      paired: stats.paired,
+      /** 再集計（bench-reanalyze）用に棋譜を保存 */
+      games,
       elapsedSeconds,
     };
     const ts = result.timestamp.replace(/[:.]/g, "-");

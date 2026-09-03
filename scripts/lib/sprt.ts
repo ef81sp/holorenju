@@ -12,6 +12,8 @@ import type {
   WDLCount,
 } from "../types/ab.ts";
 
+import { eloToScore } from "./eloDiff.ts";
+
 /** デフォルトSPRT設定 */
 export const DEFAULT_SPRT_CONFIG: SPRTConfig = {
   elo0: 0,
@@ -19,16 +21,6 @@ export const DEFAULT_SPRT_CONFIG: SPRTConfig = {
   alpha: 0.05,
   beta: 0.05,
 };
-
-/**
- * Elo差からスコア期待値を計算
- *
- * @param eloDiff Elo差
- * @returns 期待勝率（0-1）
- */
-function eloToScore(eloDiff: number): number {
-  return 1 / (1 + 10 ** (-eloDiff / 400));
-}
 
 /**
  * WDLからスコア（勝率）を計算
@@ -146,18 +138,25 @@ export function updateSPRT(wdl: WDLCount, config: SPRTConfig): SPRTState {
   };
 }
 
+/** SPRT 判定のラベル（三項・ペアで共用）。 */
+export function formatSPRTDecision(decision: SPRTDecision): string {
+  switch (decision) {
+    case "H1":
+      return "H1 (有意な改善)";
+    case "H0":
+      return "H0 (改善なし)";
+    default:
+      return "continue";
+  }
+}
+
 /**
  * SPRT状態をフォーマット
  */
 export function formatSPRT(state: SPRTState, wdl: WDLCount): string {
   const total = wdl.wins + wdl.draws + wdl.losses;
   const score = wdlToScore(wdl);
-  const decisionLabels: Record<SPRTDecision, string> = {
-    H1: "H1 (有意な改善)",
-    H0: "H0 (改善なし)",
-    continue: "continue",
-  };
-  const decisionStr = decisionLabels[state.decision];
+  const decisionStr = formatSPRTDecision(state.decision);
 
   return [
     `SPRT: LLR=${state.llr.toFixed(2)} [${state.lowerBound.toFixed(2)}, ${state.upperBound.toFixed(2)}]`,

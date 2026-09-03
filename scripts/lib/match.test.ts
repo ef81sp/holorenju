@@ -12,7 +12,7 @@ import { describe, expect, it } from "vitest";
 
 import { DIFFICULTY_PARAMS } from "../../src/types/cpu.ts";
 import { mergeDifficultyParams } from "./difficultyParamsMerge.ts";
-import { buildBridgeCustomParams } from "./match.ts";
+import { buildBridgeCustomParams, buildJushuTasks } from "./match.ts";
 import { encodeEvalOptionsForWasm } from "./wasmEvalOptionsEncoder.ts";
 
 describe("buildBridgeCustomParams", () => {
@@ -165,5 +165,29 @@ describe("evalBasis 配線の end-to-end（silent 事故防止）", () => {
 
     expect(flagsA & (1 << 18)).not.toBe(0);
     expect(flagsB & (1 << 18)).toBe(0);
+  });
+});
+
+describe("buildJushuTasks", () => {
+  it("各珠型に A黒/A白 の 2 局を隣接して出し、pairId は set:珠型", () => {
+    const tasks = buildJushuTasks(2);
+    expect(tasks.length % 2).toBe(0);
+    for (let i = 0; i < tasks.length; i += 2) {
+      const black = tasks[i]!;
+      const white = tasks[i + 1]!;
+      expect(black.isABlack).toBe(true);
+      expect(white.isABlack).toBe(false);
+      expect(black.pairId).toBe(white.pairId);
+      expect(black.openingId).toBe(white.openingId);
+      expect(black.pairId).toBe(
+        `${i < tasks.length / 2 ? 0 : 1}:${black.openingId}`,
+      );
+    }
+  });
+
+  it("pairId はセット間で異なる（同一珠型でも別ペア）", () => {
+    const tasks = buildJushuTasks(2);
+    const ids = new Set(tasks.map((t) => t.pairId));
+    expect(ids.size).toBe(tasks.length / 2);
   });
 });

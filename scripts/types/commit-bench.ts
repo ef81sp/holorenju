@@ -5,11 +5,23 @@
 import type { EvaluationOptions } from "../../src/logic/cpu/evaluation/patternScores.ts";
 import type { CpuDifficulty } from "../../src/types/cpu.ts";
 import type { GameResult } from "../commit-game-runner.ts";
-import type { EloDiffResult, SPRTConfig, SPRTState, WDLCount } from "./ab.ts";
+import type {
+  EloDiffResult,
+  PairedStats,
+  SPRTConfig,
+  SPRTState,
+  WDLCount,
+} from "./ab.ts";
 
-/** 珠型名付き対局結果 */
+/** 開局ラベル付き対局結果 */
 export interface CommitGameResult extends GameResult {
+  /** 開局ラベル（珠型名または開局 id） */
   jushuName: string;
+  /**
+   * ペア id（同一開局の A黒/A白 2 局が同じ値を持つ）。
+   * 旧 JSON には無い（その場合は jushuName でペアリングする）。
+   */
+  pairId?: string;
 }
 
 /** コミット情報 */
@@ -95,10 +107,17 @@ export interface CommitBenchResult {
   abortsBySide?: { A: number; B: number };
   /** WDL（commitA視点） */
   wdl: WDLCount;
-  /** Elo差推定 */
+  /** Elo差推定（三項＝1 局単位。参考値） */
   eloDiff: EloDiffResult;
-  /** SPRT状態（SPRT有効時のみ） */
+  /**
+   * SPRT状態（SPRT有効時のみ）。**停止に使った判定＝ペア LLR**。
+   * paired が無い旧 JSON では三項判定が入っている。
+   */
   sprt: SPRTState | null;
+  /** 三項（1 局単位）の SPRT 判定。参考用。 */
+  sprtTrinomial?: SPRTState | null;
+  /** ペア統計（pentanomial）。旧 JSON には無い（bench-reanalyze で再集計可） */
+  paired?: PairedStats;
   /** 個別対局結果（棋譜付き） */
   games: CommitGameResult[];
   /** 所要時間（秒） */

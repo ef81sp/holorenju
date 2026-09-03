@@ -29,14 +29,16 @@ import {
   runCommitGame,
 } from "../commit-game-runner.ts";
 import { isReadyMessage, parseEngineParams } from "./bridgeWorkerProtocol.ts";
-import { estimateEloDiff } from "./eloDiff.ts";
-import { updateSPRT } from "./sprt.ts";
+import { type MatchStatsSnapshot, MatchStatsTracker } from "./matchStats.ts";
 import { createLivenessChannel } from "./workerLiveness.ts";
 import { getWorkerTelemetry } from "./workerTelemetry.ts";
 
-/** 1局分の珠型タスク（開始局面＋先後割当）。 */
+/** 1局分の対局タスク（開始局面＋先後割当）。 */
 export interface MatchTask {
-  jushuName: string;
+  /** 開局ラベル（珠型名または開局 id）。結果の jushuName に入る */
+  openingId: string;
+  /** ペア id。同一開局の A黒/A白 2 局が同じ値を持つ（珠型モードは `${set}:${珠型}`） */
+  pairId: string;
   positions: [Position, Position, Position];
   isABlack: boolean;
 }
@@ -51,7 +53,10 @@ export interface HangMatchInfo {
 
 /** runMatch の結果（caller が後処理＝性能統計や保存を行う）。 */
 export interface RunMatchResult {
+  /** stats.wdl の別名（既存 caller との互換）。 */
   wdl: WDLCount;
+  /** 最終統計（三項 Elo / 三項 SPRT / ペア統計）。 */
+  stats: MatchStatsSnapshot;
   games: CommitGameResult[];
   completedGames: number;
   stoppedBySprt: boolean;
@@ -122,7 +127,12 @@ export function buildJushuTasks(sets: number): MatchTask[] {
         continue;
       }
       for (const ab of [true, false]) {
-        tasks.push({ jushuName: jn, positions: pos, isABlack: ab });
+        tasks.push({
+          openingId: jn,
+          pairId: `${set}:${jn}`,
+          positions: pos,
+          isABlack: ab,
+        });
       }
     }
   }
@@ -325,6 +335,7 @@ const newAcc = (): Acc => ({ depthSum: 0, timeSum: 0, count: 0, maxDepth: 0 });
 /**
  * 珠型タスクを pairs（--jobs 組）でワークスティール並列消化する。
  * 結果処理（WDL/統計/ステータス/SPRT）は await を挟まず同期実行＝競合しない。
+ * 統計は MatchStatsTracker に委譲し、**SPRT の停止判定はペア LLR**で行う。
  *
  * **1局隔離**: runCommitGame が throw（move timeout/worker死）しても、その局だけ
  * 「敗北扱い」で記録して残りを続行する。ハングした worker は terminate→再生成し、
@@ -347,7 +358,7 @@ export async function runMatch(
     getGameSeed,
   } = params;
 
-  const wdl: WDLCount = { wins: 0, draws: 0, losses: 0 };
+  const stats = new MatchStatsTracker(sprtConfig);
   const games: CommitGameResult[] = [];
   let completedGames = 0;
   let stoppedBySprt = false;
@@ -370,7 +381,8 @@ export async function runMatch(
       if (taskIdx >= tasks.length) {
         break;
       }
-      const { jushuName, positions, isABlack } = tasks[taskIdx]!;
+      const { openingId, pairId, positions, isABlack } = tasks[taskIdx]!;
+      const jushuName = openingId;
 
       let result: CommitGameResult | null = null;
       const injectHere =
@@ -387,7 +399,7 @@ export async function runMatch(
           gameSeed,
           gameIdx: taskIdx,
         });
-        result = { ...r, jushuName };
+        result = { ...r, jushuName, pairId };
       } catch (err: unknown) {
         // recreatePair 未指定なら旧挙動でエラー伝播（commit-bench 出力同一）。
         if (!recreatePair) {
@@ -439,14 +451,9 @@ export async function runMatch(
         break;
       }
 
-      // WDL更新（A=playerA 視点）
-      if (result.winner === "draw") {
-        wdl.draws++;
-      } else if (result.winner === "A") {
-        wdl.wins++;
-      } else {
-        wdl.losses++;
-      }
+      // WDL / Elo / ペア統計 / SPRT 更新（A=playerA 視点）
+      const snap = stats.push(result);
+      const { wdl } = snap;
 
       games.push(result);
       completedGames++;
@@ -518,17 +525,18 @@ export async function runMatch(
 
       // ステータス表示
       const elapsed = ((performance.now() - startTime) / 1000).toFixed(0);
-      const elo = estimateEloDiff(wdl);
-      let statusMsg = `[${elapsed}s] ${completedGames}/${totalGames} ${jushuName} ${isABlack ? "A黒" : "A白"} +${wdl.wins}=${wdl.draws}-${wdl.losses} Elo:${elo.eloDiff > 0 ? "+" : ""}${elo.eloDiff}`;
+      const elo = snap.trinomialElo;
+      const pElo = snap.paired.elo;
+      let statusMsg = `[${elapsed}s] ${completedGames}/${totalGames} ${jushuName} ${isABlack ? "A黒" : "A白"} +${wdl.wins}=${wdl.draws}-${wdl.losses} Elo:${elo.eloDiff > 0 ? "+" : ""}${elo.eloDiff} ペア(${snap.paired.pairs}):${pElo.eloDiff > 0 ? "+" : ""}${pElo.eloDiff}`;
 
-      if (sprtConfig) {
-        const sprt = updateSPRT(wdl, sprtConfig);
+      if (snap.paired.sprt) {
+        const { sprt } = snap.paired;
         statusMsg += ` LLR:${sprt.llr.toFixed(2)}`;
         if (sprt.decision !== "continue") {
           writeStatus(statusMsg);
           clearStatus();
           console.log(
-            `SPRT判定: ${sprt.decision} (${completedGames}局目で停止)`,
+            `SPRT判定(ペア): ${sprt.decision} (${completedGames}局目 / ${snap.paired.pairs}ペアで停止)`,
           );
           stop = true;
           stoppedBySprt = true;
@@ -555,5 +563,14 @@ export async function runMatch(
 
   clearStatus();
 
-  return { wdl, games, completedGames, stoppedBySprt, aborts, abortsBySide };
+  const finalSnap = stats.snapshot();
+  return {
+    wdl: finalSnap.wdl,
+    games,
+    completedGames,
+    stoppedBySprt,
+    aborts,
+    abortsBySide,
+    stats: finalSnap,
+  };
 }
