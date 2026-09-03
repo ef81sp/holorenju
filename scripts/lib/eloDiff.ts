@@ -35,7 +35,7 @@ export function eloToScore(eloDiff: number): number {
  */
 export function scoreIntervalToElo(mean: number, se: number): EloDiffResult {
   const z = 1.96;
-  const eloDiff = Math.round(scoreToElo(mean) * 10) / 10;
+  const eloDiff = round1(scoreToElo(mean));
   const winRate = Math.round(mean * 1000) / 1000;
   if (!Number.isFinite(se)) {
     return { eloDiff, ci95Lower: -Infinity, ci95Upper: Infinity, winRate };
@@ -44,10 +44,15 @@ export function scoreIntervalToElo(mean: number, se: number): EloDiffResult {
   const scoreUpper = Math.min(0.999, mean + z * se);
   return {
     eloDiff,
-    ci95Lower: Math.round(scoreToElo(scoreLower) * 10) / 10,
-    ci95Upper: Math.round(scoreToElo(scoreUpper) * 10) / 10,
+    ci95Lower: round1(scoreToElo(scoreLower)),
+    ci95Upper: round1(scoreToElo(scoreUpper)),
     winRate,
   };
+}
+
+/** 小数 1 桁に丸める（-0 は +0 に正規化）。 */
+function round1(v: number): number {
+  return Math.round(v * 10) / 10 + 0;
 }
 
 /**
