@@ -41,7 +41,11 @@ import type {
   PlayerPerformanceStats,
 } from "./types/commit-bench.ts";
 
-import { estimateEloDiff, formatEloDiff } from "./lib/eloDiff.ts";
+import {
+  computeBenchGameStats,
+  formatBenchGameStats,
+} from "./lib/benchGameStats.ts";
+import { formatEloDiff } from "./lib/eloDiff.ts";
 import { startEventLoopSampler } from "./lib/eventLoopSampler.ts";
 import { type HangDumpSideConfig, writeHangDump } from "./lib/hangDump.ts";
 import { deriveGameSeed } from "./lib/hangReplay.ts";
@@ -52,8 +56,9 @@ import {
   type HangMatchInfo,
   runMatch,
 } from "./lib/match.ts";
+import { formatPairedStats } from "./lib/pairedStats.ts";
 import { parseHangInjectEnv } from "./lib/parseHangInjectEnv.ts";
-import { DEFAULT_SPRT_CONFIG, formatSPRT, updateSPRT } from "./lib/sprt.ts";
+import { DEFAULT_SPRT_CONFIG, formatSPRT } from "./lib/sprt.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, "..");
@@ -953,8 +958,8 @@ async function main(): Promise<void> {
       );
     }
 
-    const { wdl, games, completedGames, aborts, abortsBySide } = await runMatch(
-      {
+    const { wdl, games, completedGames, aborts, abortsBySide, stats } =
+      await runMatch({
         pairs,
         tasks,
         totalGames: tasks.length,
@@ -979,8 +984,7 @@ async function main(): Promise<void> {
             ? undefined
             : (gameIdx: number): number =>
                 deriveGameSeed(seedInEffect, gameIdx)!,
-      },
-    );
+      });
 
     const elapsedSeconds = (performance.now() - startTime) / 1000;
 
@@ -1004,14 +1008,13 @@ async function main(): Promise<void> {
     }
     console.log(`WDL (commitA視点): +${wdl.wins} =${wdl.draws} -${wdl.losses}`);
 
-    const eloDiffResult = estimateEloDiff(wdl);
-    console.log(formatEloDiff(eloDiffResult));
-
-    let sprtState = null;
-    if (sprtConfig) {
-      sprtState = updateSPRT(wdl, sprtConfig);
-      console.log(formatSPRT(sprtState, wdl));
+    // 三項（旧・1 局単位）とペア（新・pentanomial）を並記。停止判定はペア。
+    console.log(`[三項] ${formatEloDiff(stats.trinomialElo)}`);
+    if (stats.sprtTrinomial) {
+      console.log(formatSPRT(stats.sprtTrinomial, wdl));
     }
+    console.log(`[ペア] ${formatPairedStats(stats.paired)}`);
+    console.log(formatBenchGameStats(computeBenchGameStats(games)));
 
     console.log(`所要時間: ${elapsedSeconds.toFixed(1)}秒`);
 
@@ -1075,8 +1078,10 @@ async function main(): Promise<void> {
       aborts,
       abortsBySide,
       wdl,
-      eloDiff: eloDiffResult,
-      sprt: sprtState,
+      eloDiff: stats.trinomialElo,
+      sprt: stats.paired.sprt,
+      sprtTrinomial: stats.sprtTrinomial,
+      paired: stats.paired,
       games,
       elapsedSeconds,
       performanceStats,
