@@ -1011,7 +1011,7 @@ async function main(): Promise<void> {
     // 三項（旧・1 局単位）とペア（新・pentanomial）を並記。停止判定はペア。
     console.log(`[三項] ${formatEloDiff(stats.trinomialElo)}`);
     if (stats.sprtTrinomial) {
-      console.log(formatSPRT(stats.sprtTrinomial, wdl));
+      console.log(`(三項・参考) ${formatSPRT(stats.sprtTrinomial, wdl)}`);
     }
     console.log(`[ペア] ${formatPairedStats(stats.paired)}`);
     console.log(formatBenchGameStats(computeBenchGameStats(games)));

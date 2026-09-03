@@ -39,7 +39,8 @@ function game(
   };
 }
 
-// 開局 3 手 + 続き。先頭 n 手で比較するので長さ 20 の手順を用意する。
+// 開局 3 手（isOpening）+ 続き。開局後 n 手で比較するので長さ 20 の手順を用意する。
+// divergeAt(k) は moveHistory の index k から分岐 = 開局後 (k−3) 手目から分岐。
 const base = Array.from({ length: 20 }, (_, i) => `${i},${i}`).join(" ");
 const divergeAt = (ply: number): string =>
   Array.from({ length: 20 }, (_, i) =>
@@ -52,9 +53,10 @@ describe("countDistinctKifu", () => {
     expect(r).toEqual({ byPly: { 8: 1, 12: 1, 16: 1 }, full: 1 });
   });
 
-  it("分岐位置に応じて ply 別の distinct が変わる", () => {
-    const games = [game(base), game(divergeAt(10)), game(divergeAt(14))];
-    // @8: 全部同じ / @12: base と 10分岐が違う（14分岐は base と同じ）/ @16: 3 通り
+  it("分岐位置に応じて開局後 ply 別の distinct が変わる（開局石は数えない）", () => {
+    // 開局後 10 手目 / 14 手目から分岐
+    const games = [game(base), game(divergeAt(13)), game(divergeAt(17))];
+    // @8: 全部同じ / @12: base と 13分岐が違う（17分岐は base と同じ）/ @16: 3 通り
     expect(countDistinctKifu(games)).toEqual({
       byPly: { 8: 1, 12: 2, 16: 3 },
       full: 3,
@@ -67,6 +69,12 @@ describe("countDistinctKifu", () => {
       game(base, { isABlack: false }),
     ]);
     expect(r).toEqual({ byPly: { 8: 2, 12: 2, 16: 2 }, full: 2 });
+  });
+
+  it("開局石だけ違い開局後が同じ棋譜は別（開局ラベルは同じでも局面が違う）", () => {
+    const a = game("0,0 1,1 2,2 5,5 6,6");
+    const b = game("0,0 1,1 3,3 5,5 6,6");
+    expect(countDistinctKifu([a, b]).byPly[8]).toBe(2);
   });
 
   it("短い棋譜（n 手未満）はそのまま比較される", () => {
@@ -131,7 +139,8 @@ describe("countOpeningResults", () => {
 
 describe("computeBenchGameStats / formatBenchGameStats", () => {
   it("全部まとめて返し、文字列に distinct と黒勝率が出る", () => {
-    const games = [game(base), game(divergeAt(10), { winner: "B" })];
+    // 開局後 10 手目から分岐 → @8 は同一、@12 以降と完全一致は別
+    const games = [game(base), game(divergeAt(13), { winner: "B" })];
     const st = computeBenchGameStats(games);
     expect(st.totalGames).toBe(2);
     expect(st.distinct.full).toBe(2);
@@ -139,7 +148,7 @@ describe("computeBenchGameStats / formatBenchGameStats", () => {
     expect(st.openings).toHaveLength(1);
     const s = formatBenchGameStats(st);
     expect(s).toContain("distinct");
-    expect(s).toContain("@8=1");
+    expect(s).toContain("開局後@8=1");
     expect(s).toContain("完全=2/2");
     expect(s).toContain("黒勝率");
   });

@@ -20,7 +20,7 @@ import { fileURLToPath } from "node:url";
 import { Worker } from "node:worker_threads";
 
 import type { CpuDifficulty } from "../src/types/cpu.ts";
-import type { PairedStats, SPRTConfig } from "./types/ab.ts";
+import type { SPRTConfig, WeightBenchResult } from "./types/ab.ts";
 
 import {
   computeBenchGameStats,
@@ -297,7 +297,7 @@ async function main(): Promise<void> {
     if (!fs.existsSync(OUTPUT_DIR)) {
       fs.mkdirSync(OUTPUT_DIR, { recursive: true });
     }
-    const result = {
+    const result: WeightBenchResult = {
       type: "weight-bench",
       timestamp: new Date().toISOString(),
       weights: options.weights,
@@ -315,7 +315,7 @@ async function main(): Promise<void> {
       /** 停止に使った判定＝ペア LLR */
       sprt: stats.paired.sprt,
       sprtTrinomial: stats.sprtTrinomial,
-      paired: stats.paired satisfies PairedStats,
+      paired: stats.paired,
       /** 再集計（bench-reanalyze）用に棋譜を保存 */
       games,
       elapsedSeconds,

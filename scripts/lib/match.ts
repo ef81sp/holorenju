@@ -53,6 +53,7 @@ export interface HangMatchInfo {
 
 /** runMatch の結果（caller が後処理＝性能統計や保存を行う）。 */
 export interface RunMatchResult {
+  /** stats.wdl の別名（既存 caller との互換）。 */
   wdl: WDLCount;
   /** 最終統計（三項 Elo / 三項 SPRT / ペア統計）。 */
   stats: MatchStatsSnapshot;

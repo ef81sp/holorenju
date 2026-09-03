@@ -8,6 +8,7 @@ import type { SPRTConfig } from "../types/ab.ts";
 
 import { eloToScore, scoreToElo } from "./eloDiff.ts";
 import {
+  PAIR_VARIANCE_FLOOR,
   type PairScore,
   type PairableGame,
   buildPairs,
@@ -16,6 +17,7 @@ import {
   estimatePairedElo,
   formatPairedStats,
   pairedLLR,
+  toPairableGame,
   toPairableGames,
   updatePairedSPRT,
 } from "./pairedStats.ts";
@@ -43,6 +45,12 @@ function scored(score: number, n: number): PairScore[] {
 }
 
 describe("toPairableGames", () => {
+  it("toPairableGame（単局版）は pairId ?? jushuName", () => {
+    expect(
+      toPairableGame({ jushuName: "直接", isABlack: true, winner: "A" }),
+    ).toEqual({ pairId: "直接", isABlack: true, winner: "A" });
+  });
+
   it("pairId があればそれを使い、無ければ jushuName を pairId にする", () => {
     const out = toPairableGames([
       { pairId: "0:直接", jushuName: "直接", isABlack: true, winner: "A" },
@@ -140,20 +148,21 @@ describe("estimatePairedElo", () => {
     });
   });
 
-  it("全ペア 1-1（σ²=0）なら Elo 0 でガード（CI ±Infinity）", () => {
+  it("全ペア 1-1（σ²=0）なら Elo 0、CI は分散フロア 0.05 で有限", () => {
     const r = estimatePairedElo(scored(0.5, 40));
     expect(r.eloDiff).toBeCloseTo(0, 12);
-    expect(r.ci95Lower).toBe(-Infinity);
-    expect(r.ci95Upper).toBe(Infinity);
+    const se = Math.sqrt(PAIR_VARIANCE_FLOOR / 40);
+    expect(r.ci95Lower).toBe(Math.round(scoreToElo(0.5 - 1.96 * se) * 10) / 10);
+    expect(r.ci95Upper).toBe(Math.round(scoreToElo(0.5 + 1.96 * se) * 10) / 10);
     expect(r.winRate).toBe(0.5);
   });
 
-  it("ww×20 は Elo 上限クランプ（score 0.999 相当）", () => {
+  it("ww×20 は Elo 上限クランプ（score 0.999 相当）、CI は分散フロアで有限", () => {
     const r = estimatePairedElo(scored(1, 20));
     expect(r.eloDiff).toBe(Math.round(scoreToElo(0.999) * 10) / 10);
     expect(r.winRate).toBe(1);
-    // σ²=0 なのでガード
-    expect(r.ci95Upper).toBe(Infinity);
+    expect(Number.isFinite(r.ci95Lower)).toBe(true);
+    expect(r.ci95Upper).toBe(r.eloDiff);
   });
 
   it("ペア数 < 16 なら CI ±Infinity（点推定は出す）", () => {
@@ -195,9 +204,37 @@ describe("pairedLLR / updatePairedSPRT", () => {
     expect(updatePairedSPRT(pairs, SPRT).decision).toBe("continue");
   });
 
-  it("ガード: σ² < 1e-4 は LLR 0・continue", () => {
-    expect(pairedLLR(scored(1, 100), SPRT)).toBe(0);
-    expect(updatePairedSPRT(scored(0.5, 100), SPRT).decision).toBe("continue");
+  it("分散フロア: 99 dd + 1 ww は観測 σ² が小さくても H0 に誤停止しない", () => {
+    // 観測 σ² ≈ 0.0025 → フロア 0.05。旧ガード無しの生分散では LLR ≈ −28.8 で H0 誤停止
+    const pairs = [...scored(0.5, 99), ...scored(1, 1)];
+    const st = updatePairedSPRT(pairs, SPRT);
+    const s0 = eloToScore(0);
+    const s1 = eloToScore(30);
+    const expected =
+      (100 * (s1 - s0) * (2 * 0.505 - s0 - s1)) / (2 * PAIR_VARIANCE_FLOOR);
+    expect(st.llr).toBeCloseTo(expected, 10);
+    expect(st.llr).toBeLessThan(0);
+    expect(Math.abs(st.llr)).toBeLessThan(2.94);
+    expect(st.decision).toBe("continue");
+  });
+
+  it("分散フロア: 20 ww は σ²=0 でも H1 で停止する", () => {
+    const st = updatePairedSPRT(scored(1, 20), SPRT);
+    expect(st.decision).toBe("H1");
+  });
+
+  it("観測 σ² > フロアなら LLR は生分散のまま（既存の混合ケースが不変）", () => {
+    const pairs = [
+      ...scored(1, 8),
+      ...scored(0.75, 4),
+      ...scored(0.5, 6),
+      ...scored(0.25, 2),
+    ];
+    expect(0.068125).toBeGreaterThan(PAIR_VARIANCE_FLOOR);
+    const s0 = eloToScore(0);
+    const s1 = eloToScore(30);
+    const expected = (20 * (s1 - s0) * (2 * 0.725 - s0 - s1)) / (2 * 0.068125);
+    expect(pairedLLR(pairs, SPRT)).toBeCloseTo(expected, 10);
   });
 
   it("正規近似 N·(s1−s0)·(2s̄−s0−s1)/(2σ²) と一致", () => {

@@ -16,15 +16,16 @@ import type {
   SPRTDecision,
   SPRTState,
 } from "../types/ab.ts";
+import type { GameWinner } from "./wdl.ts";
 
 import { eloToScore, scoreIntervalToElo } from "./eloDiff.ts";
-import { calculateBounds } from "./sprt.ts";
+import { calculateBounds, formatSPRTDecision } from "./sprt.ts";
 
 /** ペアリングに必要な最小限の対局情報。 */
 export interface PairableGame {
   pairId: string;
   isABlack: boolean;
-  winner: "A" | "B" | "draw";
+  winner: GameWinner;
 }
 
 /** 完成ペアの得点（A 視点）。 */
@@ -40,11 +41,21 @@ export interface PairScore {
 
 /** ガード: これ未満のペア数では正規近似を使わない（LLR=0, CI ±∞）。 */
 export const MIN_PAIRS_FOR_NORMAL = 16;
-/** ガード: これ未満の分散では正規近似を使わない（全ペア同一得点など）。 */
-export const MIN_VARIANCE_FOR_NORMAL = 1e-4;
+/**
+ * ペア得点分散のフロア。LLR と CI の両方で `max(観測 σ², フロア)` を使う。
+ *
+ * 理論根拠: 引き分けの無い決着局のみのモデルで、ある開局の黒勝率を p とすると
+ * ペア得点（A黒局 + A白局 の平均）の分散は p(1−p)/2。等力（p=0.5）で 0.125、
+ * p≈0.11（26 珠型中の極端な色有利、新月 17% / 松月 83% 相当）でも ≈0.05。
+ * 観測分散がこれを下回るのはサンプル不足（序盤で dd ばかり、または全ペア同一
+ * 得点）であり、生分散をそのまま使うと LLR が発散して H0/H1 に誤停止する
+ * （例: 99 dd + 1 ww で LLR ≈ −28.8）。逆に σ²=0 を「LLR=0」で潰すと
+ * 20 ww でも永遠に continue になる。フロアで両方を防ぐ。
+ */
+export const PAIR_VARIANCE_FLOOR = 0.05;
 
 /** 勝者 → A 視点の得点。 */
-export function winnerToScore(winner: "A" | "B" | "draw"): number {
+export function winnerToScore(winner: GameWinner): number {
   switch (winner) {
     case "A":
       return 1;
@@ -55,24 +66,32 @@ export function winnerToScore(winner: "A" | "B" | "draw"): number {
   }
 }
 
+/** ペアリングに必要な最小限の対局結果（CommitGameResult のサブセット）。 */
+export interface PairableGameInput {
+  pairId?: string;
+  jushuName: string;
+  isABlack: boolean;
+  winner: GameWinner;
+}
+
 /**
- * 対局結果を PairableGame に正規化する。
+ * 1 局を PairableGame に正規化する（SSoT）。
  * pairId があればそれを、無ければ jushuName を pairId にする（旧 JSON 規則。
- * 並列実行では出現順がタスク順と一致しないので unpaired が出うる）。
+ * この規則では同一珠型のセット跨ぎで A黒/A白 を取り違えてペアにしうるが、
+ * 珠型ごとに A黒/A白 が同数なのでペア数は変わらない。unpaired が出るのは
+ * abort 等で片方の局が欠落したときだけ）。
  */
-export function toPairableGames(
-  games: {
-    pairId?: string;
-    jushuName: string;
-    isABlack: boolean;
-    winner: "A" | "B" | "draw";
-  }[],
-): PairableGame[] {
-  return games.map((g) => ({
+export function toPairableGame(g: PairableGameInput): PairableGame {
+  return {
     pairId: g.pairId ?? g.jushuName,
     isABlack: g.isABlack,
     winner: g.winner,
-  }));
+  };
+}
+
+/** toPairableGame の配列版。 */
+export function toPairableGames(games: PairableGameInput[]): PairableGame[] {
+  return games.map(toPairableGame);
 }
 
 /**
@@ -155,35 +174,40 @@ function meanAndVariance(pairs: PairScore[]): {
   return { mean, variance: sq / n };
 }
 
-/** 正規近似を使ってよいか（ペア数と分散のガード）。 */
-function normalApproxOk(n: number, variance: number): boolean {
-  return n >= MIN_PAIRS_FOR_NORMAL && variance >= MIN_VARIANCE_FOR_NORMAL;
+/** 正規近似に使う分散（フロア適用）。 */
+function flooredVariance(observed: number): number {
+  return Math.max(observed, PAIR_VARIANCE_FLOOR);
 }
 
 /**
- * ペア得点の平均・分散から Elo 差と 95% CI を求める。
- * ガードに掛かる場合は点推定のみ返し CI は ±Infinity。
+ * ペア得点の平均・分散（フロア適用）から Elo 差と 95% CI を求める。
+ * ペア数 < MIN_PAIRS_FOR_NORMAL なら点推定のみ返し CI は ±Infinity。
  */
 export function estimatePairedElo(pairs: PairScore[]): EloDiffResult {
   const n = pairs.length;
   const { mean, variance } = meanAndVariance(pairs);
-  const se = normalApproxOk(n, variance) ? Math.sqrt(variance / n) : Infinity;
+  const se =
+    n >= MIN_PAIRS_FOR_NORMAL
+      ? Math.sqrt(flooredVariance(variance) / n)
+      : Infinity;
   return scoreIntervalToElo(mean, se);
 }
 
 /**
- * ペア LLR（正規近似）: N·(s1−s0)·(2s̄−s0−s1)/(2σ²)。
- * ガードに掛かる場合は 0。
+ * ペア LLR（正規近似）: N·(s1−s0)·(2s̄−s0−s1)/(2σ²)、σ² はフロア適用後。
+ * ペア数 < MIN_PAIRS_FOR_NORMAL なら 0。
  */
 export function pairedLLR(pairs: PairScore[], config: SPRTConfig): number {
   const n = pairs.length;
-  const { mean, variance } = meanAndVariance(pairs);
-  if (!normalApproxOk(n, variance)) {
+  if (n < MIN_PAIRS_FOR_NORMAL) {
     return 0;
   }
+  const { mean, variance } = meanAndVariance(pairs);
   const s0 = eloToScore(config.elo0);
   const s1 = eloToScore(config.elo1);
-  return (n * (s1 - s0) * (2 * mean - s0 - s1)) / (2 * variance);
+  return (
+    (n * (s1 - s0) * (2 * mean - s0 - s1)) / (2 * flooredVariance(variance))
+  );
 }
 
 /** ペア LLR による SPRT 状態。境界は三項 SPRT と同じ（calculateBounds）。 */
@@ -234,13 +258,8 @@ export function formatPairedStats(stats: PairedStats): string {
     `  ${stats.pairs}ペア (未ペア ${stats.unpaired}局): ll=${p.ll} ld=${p.ld} dd=${p.dd} wd=${p.wd} ww=${p.ww}`,
   ];
   if (stats.sprt) {
-    const labels: Record<SPRTDecision, string> = {
-      H1: "H1 (有意な改善)",
-      H0: "H0 (改善なし)",
-      continue: "continue",
-    };
     lines.push(
-      `  ペア SPRT: LLR=${stats.sprt.llr.toFixed(2)} [${stats.sprt.lowerBound.toFixed(2)}, ${stats.sprt.upperBound.toFixed(2)}] 判定: ${labels[stats.sprt.decision]}`,
+      `  ペア SPRT: LLR=${stats.sprt.llr.toFixed(2)} [${stats.sprt.lowerBound.toFixed(2)}, ${stats.sprt.upperBound.toFixed(2)}] 判定: ${formatSPRTDecision(stats.sprt.decision)}`,
     );
   }
   return lines.join("\n");

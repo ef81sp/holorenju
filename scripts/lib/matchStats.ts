@@ -15,8 +15,14 @@ import type {
 } from "../types/ab.ts";
 
 import { estimateEloDiff } from "./eloDiff.ts";
-import { type PairableGame, computePairedStats } from "./pairedStats.ts";
+import {
+  type PairableGame,
+  type PairableGameInput,
+  computePairedStats,
+  toPairableGame,
+} from "./pairedStats.ts";
 import { updateSPRT } from "./sprt.ts";
+import { addResultToWdl, createWdl } from "./wdl.ts";
 
 /** push 後の統計スナップショット。 */
 export interface MatchStatsSnapshot {
@@ -33,15 +39,10 @@ export interface MatchStatsSnapshot {
 }
 
 /** push に必要な最小限の対局情報（CommitGameResult のサブセット）。 */
-export interface MatchStatsGame {
-  pairId?: string;
-  jushuName: string;
-  isABlack: boolean;
-  winner: "A" | "B" | "draw";
-}
+export type MatchStatsGame = PairableGameInput;
 
 export class MatchStatsTracker {
-  private readonly wdl: WDLCount = { wins: 0, draws: 0, losses: 0 };
+  private readonly wdl: WDLCount = createWdl();
   private readonly games: PairableGame[] = [];
   private readonly sprtConfig: SPRTConfig | null;
 
@@ -51,21 +52,8 @@ export class MatchStatsTracker {
 
   /** 1 局を加えて更新後のスナップショットを返す。 */
   push(game: MatchStatsGame): MatchStatsSnapshot {
-    switch (game.winner) {
-      case "A":
-        this.wdl.wins++;
-        break;
-      case "B":
-        this.wdl.losses++;
-        break;
-      default:
-        this.wdl.draws++;
-    }
-    this.games.push({
-      pairId: game.pairId ?? game.jushuName,
-      isABlack: game.isABlack,
-      winner: game.winner,
-    });
+    addResultToWdl(this.wdl, game.winner);
+    this.games.push(toPairableGame(game));
     return this.snapshot();
   }
 

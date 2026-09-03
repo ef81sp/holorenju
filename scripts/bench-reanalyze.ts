@@ -8,8 +8,10 @@
  *   - 色別勝率・開局ラベル別の勝敗
  * を表示する。docs/plans/bench-precision-2026-09-04.md §1 の分析を恒久化したもの。
  *
- * 旧 JSON（pairId 無し）は jushuName でペアリングする（toPairableGames の規則。
- * 並列実行では出現順がタスク順でないので unpaired が出うる）。
+ * 旧 JSON（pairId 無し）は jushuName でペアリングする（toPairableGame の規則。
+ * セット跨ぎで A黒/A白 を取り違えうるがペア数は同じ。unpaired が出るのは
+ * abort 等で片方の局が欠落したときだけ）。
+ * 三項 WDL は JSON の wdl ではなく常に games から計算する（SSoT）。
  *
  * Usage:
  *   pnpm bench:reanalyze [file...]
@@ -21,8 +23,8 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import type { SPRTConfig, WDLCount } from "./types/ab.ts";
-import type { CommitGameResult } from "./types/commit-bench.ts";
+import type { SPRTConfig, WeightBenchResult } from "./types/ab.ts";
+import type { CommitBenchResult } from "./types/commit-bench.ts";
 
 import {
   computeBenchGameStats,
@@ -35,6 +37,7 @@ import {
   toPairableGames,
 } from "./lib/pairedStats.ts";
 import { DEFAULT_SPRT_CONFIG, formatSPRT, updateSPRT } from "./lib/sprt.ts";
+import { wdlFromWinners } from "./lib/wdl.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const RESULTS_DIR = path.join(__dirname, "..", "bench-results");
@@ -55,9 +58,9 @@ function parseArgs(): Options {
     if (arg === "--openings") {
       options.showOpenings = true;
     } else if (arg.startsWith("--elo0=")) {
-      options.sprt.elo0 = parseFloat(arg.slice("--elo0=".length));
+      options.sprt.elo0 = parseEloArg(arg, "--elo0=");
     } else if (arg.startsWith("--elo1=")) {
-      options.sprt.elo1 = parseFloat(arg.slice("--elo1=".length));
+      options.sprt.elo1 = parseEloArg(arg, "--elo1=");
     } else if (arg === "--help" || arg === "-h") {
       console.log(
         [
@@ -75,6 +78,16 @@ function parseArgs(): Options {
   return options;
 }
 
+/** `--eloN=<数値>` を検証付きでパースする。 */
+function parseEloArg(arg: string, prefix: string): number {
+  const raw = arg.slice(prefix.length);
+  const v = Number(raw);
+  if (raw === "" || !Number.isFinite(v)) {
+    throw new Error(`${prefix.slice(0, -1)} は数値で指定 (got: ${raw})`);
+  }
+  return v;
+}
+
 /** bench-results/ の commit-bench-*.json のうち名前順で最後（= 最新）。 */
 function findLatestCommitBench(): string {
   const names = fs
@@ -88,30 +101,27 @@ function findLatestCommitBench(): string {
   return path.join(RESULTS_DIR, last);
 }
 
-/** 再集計に必要な最小限の JSON 形（commit-bench / weight-bench 共通部分）。 */
-interface BenchJson {
-  type?: string;
-  timestamp?: string;
-  commitA?: { shortSha: string; message?: string };
-  commitB?: { shortSha: string; message?: string };
-  config?: { difficulty?: string; sets?: number; randomFactor?: number };
-  totalGames?: number;
-  wdl?: WDLCount;
-  games?: CommitGameResult[];
-}
+/**
+ * 再集計対象の JSON 形。commit-bench / weight-bench の結果型から導出する
+ * （旧 JSON は新フィールドを欠くので Partial）。
+ */
+type BenchJson = Partial<CommitBenchResult> | Partial<WeightBenchResult>;
 
-function wdlFromGames(games: CommitGameResult[]): WDLCount {
-  const wdl: WDLCount = { wins: 0, draws: 0, losses: 0 };
-  for (const g of games) {
-    if (g.winner === "A") {
-      wdl.wins++;
-    } else if (g.winner === "B") {
-      wdl.losses++;
-    } else {
-      wdl.draws++;
-    }
+function describeHeader(json: BenchJson): string {
+  const head: string[] = [];
+  if (json.type) {
+    head.push(json.type);
   }
-  return wdl;
+  if ("commitA" in json && json.commitA && json.commitB) {
+    head.push(`A=${json.commitA.shortSha} B=${json.commitB.shortSha}`);
+  }
+  if (json.config) {
+    const c = json.config;
+    head.push(
+      `difficulty=${c.difficulty} sets=${c.sets}${c.randomFactor === undefined ? "" : ` r=${c.randomFactor}`}`,
+    );
+  }
+  return head.join(" | ");
 }
 
 function analyzeFile(file: string, options: Options): void {
@@ -125,27 +135,14 @@ function analyzeFile(file: string, options: Options): void {
   }
 
   console.log(`\n=== ${path.basename(file)} ===`);
-  const head: string[] = [];
-  if (json.type) {
-    head.push(json.type);
-  }
-  if (json.commitA && json.commitB) {
-    head.push(`A=${json.commitA.shortSha} B=${json.commitB.shortSha}`);
-  }
-  if (json.config) {
-    const c = json.config;
-    head.push(
-      `difficulty=${c.difficulty ?? "?"} sets=${c.sets ?? "?"}${c.randomFactor === undefined ? "" : ` r=${c.randomFactor}`}`,
-    );
-  }
-  console.log(`  ${head.join(" | ")}`);
+  console.log(`  ${describeHeader(json)}`);
   const hasPairId = games.some((g) => g.pairId !== undefined);
   console.log(
     `  局数: ${games.length}  ペアリング: ${hasPairId ? "pairId" : "jushuName（旧 JSON 規則）"}`,
   );
 
-  // 三項（旧）
-  const wdl = json.wdl ?? wdlFromGames(games);
+  // 三項（旧）。WDL は常に games から（SSoT）
+  const wdl = wdlFromWinners(games.map((g) => g.winner));
   console.log(`\n[三項] WDL(A視点): +${wdl.wins} =${wdl.draws} -${wdl.losses}`);
   console.log(`  ${formatEloDiff(estimateEloDiff(wdl))}`);
   console.log(

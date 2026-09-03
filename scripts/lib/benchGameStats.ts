@@ -1,8 +1,10 @@
 /**
  * ベンチ棋譜の集計（純粋関数）。
  *
- * - distinct 棋譜数（moveHistory 先頭 8/12/16 手と完全一致。先後割当 isABlack も
- *   キーに含める＝同じ手順でも A が黒か白かで別の局）
+ * - distinct 棋譜数（**開局石（isOpening）を除いた開局後** 8/12/16 手と完全一致。
+ *   先後割当 isABlack もキーに含める＝同じ手順でも A が黒か白かで別の局。
+ *   開局石を除くのは、珠型 3 石と開局スイート 7 石で「先頭 n 手」の意味が
+ *   変わらないようにするため）
  *   同一開局の反復で棋譜が重複すると独立サンプルとして数えられない
  *   （docs/plans/bench-precision-2026-09-04.md §1.2）。毎回「distinct = 局数」を確認する。
  * - 色別勝率（黒勝/白勝/引分）: 開局スイートの均衡度の目安
@@ -13,7 +15,9 @@
 import type { WDLCount } from "../types/ab.ts";
 import type { CommitGameResult } from "../types/commit-bench.ts";
 
-/** distinct 棋譜数。byPly[n] = 先頭 n 手で見た distinct、full = 完全一致。 */
+import { addResultToWdl, createWdl } from "./wdl.ts";
+
+/** distinct 棋譜数。byPly[n] = 開局後 n 手で見た distinct、full = 完全一致。 */
 export interface DistinctKifuCount {
   byPly: Record<number, number>;
   full: number;
@@ -51,16 +55,24 @@ export const DEFAULT_DISTINCT_PLIES = [8, 12, 16];
 type KifuGame = Pick<CommitGameResult, "moveHistory" | "isABlack">;
 
 function kifuKey(game: KifuGame, ply: number): string {
-  const n = Math.min(ply, game.moveHistory.length);
   const parts: string[] = [game.isABlack ? "A黒" : "A白"];
-  for (let i = 0; i < n; i++) {
-    const m = game.moveHistory[i]!;
+  let counted = 0;
+  for (const m of game.moveHistory) {
+    if (counted >= ply) {
+      break;
+    }
+    if (m.isOpening) {
+      // 開局石は数えないがキーには含める（開局が違えば別局面）
+      parts.push(`o${m.row},${m.col}`);
+      continue;
+    }
     parts.push(`${m.row},${m.col}`);
+    counted++;
   }
   return parts.join(" ");
 }
 
-/** 先頭 n 手（plies ごと）と完全一致で見た distinct 棋譜数（先後割当込み）。 */
+/** 開局後 n 手（plies ごと）と完全一致で見た distinct 棋譜数（先後割当込み）。 */
 export function countDistinctKifu(
   games: KifuGame[],
   plies: number[] = DEFAULT_DISTINCT_PLIES,
@@ -119,7 +131,7 @@ export function countOpeningResults(
       r = {
         openingId: g.jushuName,
         games: 0,
-        wdl: { wins: 0, draws: 0, losses: 0 },
+        wdl: createWdl(),
         blackWins: 0,
         whiteWins: 0,
         draws: 0,
@@ -127,13 +139,7 @@ export function countOpeningResults(
       map.set(g.jushuName, r);
     }
     r.games++;
-    if (g.winner === "A") {
-      r.wdl.wins++;
-    } else if (g.winner === "B") {
-      r.wdl.losses++;
-    } else {
-      r.wdl.draws++;
-    }
+    addResultToWdl(r.wdl, g.winner);
     const c = winnerColor(g);
     if (c === "black") {
       r.blackWins++;
@@ -164,7 +170,7 @@ export function formatBenchGameStats(stats: BenchGameStats): string {
   const plyParts = Object.keys(d.byPly)
     .map(Number)
     .sort((a, b) => a - b)
-    .map((p) => `@${p}=${d.byPly[p]}`)
+    .map((p) => `開局後@${p}=${d.byPly[p]}`)
     .join(" ");
   const c = stats.color;
   const lines = [
