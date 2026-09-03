@@ -1,7 +1,8 @@
 /**
  * ベンチ棋譜の集計（純粋関数）。
  *
- * - distinct 棋譜数（moveHistory 先頭 8/12/16 手と完全一致）
+ * - distinct 棋譜数（moveHistory 先頭 8/12/16 手と完全一致。先後割当 isABlack も
+ *   キーに含める＝同じ手順でも A が黒か白かで別の局）
  *   同一開局の反復で棋譜が重複すると独立サンプルとして数えられない
  *   （docs/plans/bench-precision-2026-09-04.md §1.2）。毎回「distinct = 局数」を確認する。
  * - 色別勝率（黒勝/白勝/引分）: 開局スイートの均衡度の目安
@@ -47,11 +48,11 @@ export interface BenchGameStats {
 
 export const DEFAULT_DISTINCT_PLIES = [8, 12, 16];
 
-type KifuGame = Pick<CommitGameResult, "moveHistory">;
+type KifuGame = Pick<CommitGameResult, "moveHistory" | "isABlack">;
 
 function kifuKey(game: KifuGame, ply: number): string {
   const n = Math.min(ply, game.moveHistory.length);
-  const parts: string[] = [];
+  const parts: string[] = [game.isABlack ? "A黒" : "A白"];
   for (let i = 0; i < n; i++) {
     const m = game.moveHistory[i]!;
     parts.push(`${m.row},${m.col}`);
@@ -59,7 +60,7 @@ function kifuKey(game: KifuGame, ply: number): string {
   return parts.join(" ");
 }
 
-/** 先頭 n 手（plies ごと）と完全一致で見た distinct 棋譜数。 */
+/** 先頭 n 手（plies ごと）と完全一致で見た distinct 棋譜数（先後割当込み）。 */
 export function countDistinctKifu(
   games: KifuGame[],
   plies: number[] = DEFAULT_DISTINCT_PLIES,

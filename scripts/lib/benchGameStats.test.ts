@@ -61,6 +61,14 @@ describe("countDistinctKifu", () => {
     });
   });
 
+  it("同じ手順でも先後割当（isABlack）が違えば別の局", () => {
+    const r = countDistinctKifu([
+      game(base, { isABlack: true }),
+      game(base, { isABlack: false }),
+    ]);
+    expect(r).toEqual({ byPly: { 8: 2, 12: 2, 16: 2 }, full: 2 });
+  });
+
   it("短い棋譜（n 手未満）はそのまま比較される", () => {
     const games = [game("0,0 1,1 2,2 3,3"), game("0,0 1,1 2,2 3,3 4,4")];
     expect(countDistinctKifu(games).byPly[8]).toBe(2);
