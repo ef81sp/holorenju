@@ -43,8 +43,11 @@ export interface MatchStatsGame {
 export class MatchStatsTracker {
   private readonly wdl: WDLCount = { wins: 0, draws: 0, losses: 0 };
   private readonly games: PairableGame[] = [];
+  private readonly sprtConfig: SPRTConfig | null;
 
-  constructor(private readonly sprtConfig: SPRTConfig | null) {}
+  constructor(sprtConfig: SPRTConfig | null) {
+    this.sprtConfig = sprtConfig;
+  }
 
   /** 1 局を加えて更新後のスナップショットを返す。 */
   push(game: MatchStatsGame): MatchStatsSnapshot {
