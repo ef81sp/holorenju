@@ -52,6 +52,36 @@ export interface EloDiffResult {
 }
 
 // ============================================================================
+// ペア統計（pentanomial）
+// ============================================================================
+
+/**
+ * pentanomial カウント。同一開局を色を入れ替えて 2 局打つ「ペア」の得点
+ * （A 視点、勝 1 / 分 0.5 / 負 0 の平均）を 5 区分に集計したもの。
+ * ll=0 / ld=0.25 / dd=0.5 / wd=0.75 / ww=1。
+ */
+export interface PentanomialCount {
+  ll: number;
+  ld: number;
+  dd: number;
+  wd: number;
+  ww: number;
+}
+
+/** ペア統計（commit-bench / weight-bench 共用）。 */
+export interface PairedStats {
+  /** 完成ペア数 */
+  pairs: number;
+  /** 相方が無い局数 */
+  unpaired: number;
+  pentanomial: PentanomialCount;
+  /** ペア得点の平均・分散から求めた Elo 差 */
+  elo: EloDiffResult;
+  /** ペア LLR による判定（停止に使ったもの）。SPRT 無効時は null */
+  sprt: SPRTState | null;
+}
+
+// ============================================================================
 // A/Bベンチマーク設定・結果
 // ============================================================================
 

@@ -12,6 +12,8 @@ import type {
   WDLCount,
 } from "../types/ab.ts";
 
+import { eloToScore } from "./eloDiff.ts";
+
 /** デフォルトSPRT設定 */
 export const DEFAULT_SPRT_CONFIG: SPRTConfig = {
   elo0: 0,
@@ -19,16 +21,6 @@ export const DEFAULT_SPRT_CONFIG: SPRTConfig = {
   alpha: 0.05,
   beta: 0.05,
 };
-
-/**
- * Elo差からスコア期待値を計算
- *
- * @param eloDiff Elo差
- * @returns 期待勝率（0-1）
- */
-function eloToScore(eloDiff: number): number {
-  return 1 / (1 + 10 ** (-eloDiff / 400));
-}
 
 /**
  * WDLからスコア（勝率）を計算
