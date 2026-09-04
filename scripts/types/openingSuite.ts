@@ -34,3 +34,42 @@ export interface OpeningSuiteConfig {
   /** `--opening-offset` の値 */
   offset: number;
 }
+
+/** 生成時の均衡フィルタ設定（gen-opening-suite.ts の CLI オプションに対応） */
+export interface OpeningSuiteFilter {
+  /** 白番 root スコアの |score| しきい値 */
+  scoreAbsMax: number;
+  /** root スコア探索の maxNodes */
+  nodes: number;
+  /** root スコア探索の depth */
+  depth: number;
+  /** 親（白 3 石構成）ごとの上限件数 */
+  parentCap: number;
+  /** 層化順序のシャッフル seed */
+  seed: number;
+}
+
+/** 生成時の候補数・棄却数の集計 */
+export interface OpeningSuiteStats {
+  /** 7 石・白番の候補総数 */
+  candidates: number;
+  /** しきい値で分類した候補数（--from-raw では全候補） */
+  evaluated: number;
+  rejectedByScore: number;
+  rejectedByWhiteWin: number;
+  rejectedByBlackWin: number;
+  /** 採用可能数（層化・target 前）。worker モードでは null */
+  eligible: number | null;
+  /** 最終採用数（openings.length） */
+  accepted: number;
+}
+
+/** 生成側が書き出す完全形（消費側は OpeningSuiteFile だけに依存する）。 */
+export interface GeneratedOpeningSuiteFile extends OpeningSuiteFile {
+  generatedAt: string;
+  gitRev: string;
+  /** opening-book-hard.json の weightGeneration */
+  weightGeneration: string | null;
+  filter: OpeningSuiteFilter;
+  stats: OpeningSuiteStats;
+}

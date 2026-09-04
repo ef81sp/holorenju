@@ -9,11 +9,14 @@ import { getJushuPositions } from "@/logic/cpu/opening";
 import { createBoardFromRecord, formatMove } from "@/logic/gameRecordParser";
 
 import {
+  assertRawMeta,
   boardToPseudoMoves,
   buildCandidateOrder,
+  classifyRaw,
   detectRootJushu,
   parentKey,
   parseBoardKey,
+  parseRawLines,
   partitionByRaw,
   type RawEvaluation,
   selectOpenings,
@@ -272,5 +275,77 @@ describe("partitionByRaw", () => {
     expect(() =>
       partitionByRaw([{ key: "x", parent: "X", root: null }], new Map(), 300),
     ).toThrow(/未評価/);
+  });
+});
+
+describe("classifyRaw", () => {
+  const cand: SuiteCandidate = { key: "k", parent: "P", root: null };
+  it("|score| > しきい値なら score、それ以外は生評価の勝ち判定", () => {
+    expect(
+      classifyRaw(
+        { score: 400, bestMove: "H9", reject: null, elapsedMs: 1 },
+        cand,
+        300,
+      ),
+    ).toBe("score");
+    expect(
+      classifyRaw(
+        { score: 10, bestMove: "H9", reject: "whiteWin", elapsedMs: 1 },
+        cand,
+        300,
+      ),
+    ).toBe("whiteWin");
+    expect(
+      classifyRaw(
+        { score: -300, bestMove: "H9", reject: null, elapsedMs: 1 },
+        cand,
+        300,
+      ),
+    ).toBeNull();
+  });
+});
+
+describe("parseRawLines / assertRawMeta", () => {
+  const rec = (key: string, nodes = 100000, depth = 7): string =>
+    JSON.stringify({
+      key,
+      parent: "P",
+      root: null,
+      score: 0,
+      bestMove: "H9",
+      reject: null,
+      elapsedMs: 1,
+      scoreAbsMax: 1000,
+      nodes,
+      depth,
+    });
+
+  it("JSONL を results と meta（nodes/depth/scoreAbsMax）に分ける。空行は無視", () => {
+    const { results, meta } = parseRawLines(`${rec("a")}\n\n${rec("b")}\n`);
+    expect([...results.keys()]).toEqual(["a", "b"]);
+    expect(meta).toEqual({ nodes: 100000, depth: 7, scoreAbsMax: 1000 });
+  });
+
+  it("空入力なら meta は null", () => {
+    expect(parseRawLines("").meta).toBeNull();
+  });
+
+  it("行ごとに nodes/depth が食い違っていれば例外", () => {
+    expect(() => parseRawLines(`${rec("a")}\n${rec("b", 50000)}`)).toThrow(
+      /nodes\/depth/,
+    );
+  });
+
+  it("assertRawMeta は CLI 指定と raw の nodes/depth 不一致で例外", () => {
+    const meta = { nodes: 100000, depth: 7, scoreAbsMax: 1000 };
+    expect(() =>
+      assertRawMeta(meta, { nodes: 100000, depth: 7 }),
+    ).not.toThrow();
+    expect(() => assertRawMeta(meta, { nodes: 200000, depth: 7 })).toThrow(
+      /--nodes/,
+    );
+    expect(() => assertRawMeta(meta, { nodes: 100000, depth: 5 })).toThrow(
+      /--depth/,
+    );
   });
 });

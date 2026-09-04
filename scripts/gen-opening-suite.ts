@@ -22,16 +22,16 @@
  *     --raw-out=bench-results/opening-suite-raw.jsonl --out=/dev/null
  *   # 生評価から選抜
  *   pnpm gen:opening-suite --from-raw=bench-results/opening-suite-raw.jsonl \
- *     --score-max=300 --parent-cap=6
+ *     --score-max=500 --parent-cap=8
  *
  * オプション:
  *   --target=<n>       採用件数（既定 600）
  *   --workers=<n>      worker 数（既定 8）
  *   --seed=<n>         シャッフル seed（既定 20260904）
- *   --score-max=<n>    |score| しきい値（既定 300）
+ *   --score-max=<n>    |score| しきい値（既定 500。v1 の採用値）
  *   --nodes=<n>        root スコア探索の maxNodes（既定 100000）
  *   --depth=<n>        root スコア探索の depth（既定 7）
- *   --parent-cap=<n>   親ごとの上限件数（既定 3）
+ *   --parent-cap=<n>   親ごとの上限件数（既定 8。v1 の採用値）
  *   --out=<path>       出力先（既定 scripts/data/opening-suite-v1.json）
  *   --raw-out=<path>   生評価を JSONL に追記保存（既存分は再利用）
  *   --from-raw=<path>  生評価を読み、worker を起動せずに選抜だけ行う
@@ -56,21 +56,27 @@ import type {
   SuiteWorkerData,
 } from "./gen-opening-suite-worker.ts";
 import type {
+  GeneratedOpeningSuiteFile,
   OpeningSuiteEntry as SuiteOpening,
-  OpeningSuiteFile,
+  OpeningSuiteStats as SuiteStats,
 } from "./types/openingSuite.ts";
 
 import {
+  assertRawMeta,
   boardToPseudoMoves,
   buildCandidateOrder,
+  classifyRaw,
   detectRootJushu,
   parentKey,
   parseBoardKey,
+  parseRawLines,
   partitionByRaw,
   selectOpenings,
   selectSevenStoneWhiteKeys,
   type EvaluatedCandidate,
   type RawEvaluation,
+  type RawMeta,
+  type RawRecord,
   type SuiteCandidate,
   type SuiteRejectReason,
 } from "./lib/openingSuite.ts";
@@ -96,18 +102,21 @@ const DEFAULTS: Options = {
   target: 600,
   workers: 8,
   seed: 20260904,
-  scoreAbsMax: 300,
+  scoreAbsMax: 500,
   nodes: 100_000,
   depth: 7,
-  parentCap: 3,
+  parentCap: 8,
   out: path.join(ROOT_DIR, "scripts/data/opening-suite-v1.json"),
   rawOut: null,
   fromRaw: null,
 };
 
 /**
- * 安全弁。maxNodes が実質上限になるよう十分大きく設定する（forcedWinCheck と同方針）。
- * ただし Zig 側の absolute_time_limit 既定（10,000 ms、#147）で先に頭打ちになる。
+ * root スコア探索の timeLimit。forcedWinCheck と同じく「maxNodes を実質上限にする」
+ * つもりの値だが、実態は Zig 側の absolute_time_limit 既定 10,000 ms（main.zig、#147）
+ * が先に効く: v1 生成では p90 が 10.0 s に張り付き、5,595 件中 1,350 件（24%）が
+ * 100k ノード未達のまま時間打ち切りになった。その分の score は負荷依存（ノード決定的
+ * でない）。
  */
 const ROOT_TIME_LIMIT_MS = 60_000;
 
@@ -172,30 +181,6 @@ interface BookAssetLike {
   entries: Record<string, unknown>;
 }
 
-interface SuiteStats {
-  /** 7 石・白番の候補総数 */
-  candidates: number;
-  /** しきい値で分類した候補数（--from-raw では全候補） */
-  evaluated: number;
-  rejectedByScore: number;
-  rejectedByWhiteWin: number;
-  rejectedByBlackWin: number;
-  /** 採用可能数（層化・target 前）。worker モードでは null */
-  eligible: number | null;
-  /** 最終採用数（openings.length） */
-  accepted: number;
-}
-
-/** --raw-out の 1 行。生評価時の設定も残す（再判定可否の判断用）。 */
-interface RawRecord extends RawEvaluation {
-  key: string;
-  parent: string;
-  root: string | null;
-  scoreAbsMax: number;
-  nodes: number;
-  depth: number;
-}
-
 function gitRev(): string {
   try {
     return execSync("git rev-parse HEAD", {
@@ -220,24 +205,14 @@ function loadCandidates(bookPath: string): {
   return { book, candidates };
 }
 
-function loadRaw(file: string): Map<string, RawEvaluation> {
-  const map = new Map<string, RawEvaluation>();
+function loadRaw(file: string): {
+  results: Map<string, RawEvaluation>;
+  meta: RawMeta | null;
+} {
   if (!existsSync(file)) {
-    return map;
+    return { results: new Map(), meta: null };
   }
-  for (const line of readFileSync(file, "utf8").split("\n")) {
-    if (line.trim() === "") {
-      continue;
-    }
-    const r = JSON.parse(line) as RawRecord;
-    map.set(r.key, {
-      score: r.score,
-      bestMove: r.bestMove,
-      reject: r.reject,
-      elapsedMs: r.elapsedMs,
-    });
-  }
-  return map;
+  return parseRawLines(readFileSync(file, "utf8"));
 }
 
 function log(msg: string): void {
@@ -277,7 +252,7 @@ function evaluateCandidates(
         break;
       }
       settled++;
-      if (r.reject === null && Math.abs(r.score) <= opts.scoreAbsMax) {
+      if (classifyRaw(r, c, opts.scoreAbsMax) === null) {
         accepted++;
       }
       if (accepted >= opts.target) {
@@ -484,7 +459,11 @@ function selectFromRaw(
   rawFile: string,
   opts: Options,
 ): Selection {
-  const results = loadRaw(rawFile);
+  const { results, meta } = loadRaw(rawFile);
+  if (!meta) {
+    throw new Error(`生評価が空: ${rawFile}`);
+  }
+  assertRawMeta(meta, opts);
   log(
     `生評価 ${results.size} 件を ${rawFile} から読み込み（worker は起動しない）`,
   );
@@ -520,7 +499,12 @@ async function selectWithWorkers(
     seed: opts.seed,
     parentCap: opts.parentCap,
   });
-  const known = opts.rawOut ? loadRaw(opts.rawOut) : new Map();
+  const { results: known, meta } = opts.rawOut
+    ? loadRaw(opts.rawOut)
+    : { results: new Map<string, RawEvaluation>(), meta: null };
+  if (meta) {
+    assertRawMeta(meta, opts);
+  }
   if (known.size > 0) {
     log(`生評価 ${known.size} 件を ${opts.rawOut} から再利用`);
   }
@@ -565,7 +549,7 @@ async function main(): Promise<void> {
     };
   });
 
-  const output: OpeningSuiteFile & Record<string, unknown> = {
+  const output: GeneratedOpeningSuiteFile = {
     version: 1,
     generatedAt: new Date().toISOString(),
     gitRev: gitRev(),

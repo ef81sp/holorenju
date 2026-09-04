@@ -258,7 +258,8 @@ export interface SelectOptions {
   target: number;
 }
 
-function classify(
+/** 採否規則の SSoT: |score| > しきい値なら "score"、それ以外は生評価の勝ち判定に従う。 */
+export function classifyRaw(
   raw: RawEvaluation,
   candidate: SuiteCandidate,
   scoreAbsMax: number,
@@ -298,7 +299,7 @@ export function selectOpenings(
     }
     const e: EvaluatedCandidate = {
       ...raw,
-      reject: classify(raw, candidate, options.scoreAbsMax),
+      reject: classifyRaw(raw, candidate, options.scoreAbsMax),
       candidate,
     };
     evaluated.push(e);
@@ -339,7 +340,7 @@ export function partitionByRaw(
     if (!raw) {
       throw new Error(`未評価の候補: ${candidate.key}`);
     }
-    const reject = classify(raw, candidate, scoreAbsMax);
+    const reject = classifyRaw(raw, candidate, scoreAbsMax);
     if (reject === null) {
       counts.accepted++;
       eligible.push(candidate);
@@ -348,4 +349,71 @@ export function partitionByRaw(
     }
   }
   return { eligible, counts };
+}
+
+/** --raw-out の 1 行。生評価時の設定も残す（再判定可否・再利用可否の判断用）。 */
+export interface RawRecord extends RawEvaluation {
+  key: string;
+  parent: string;
+  root: string | null;
+  scoreAbsMax: number;
+  nodes: number;
+  depth: number;
+}
+
+/** raw JSONL 全体で共通の生評価設定 */
+export interface RawMeta {
+  nodes: number;
+  depth: number;
+  scoreAbsMax: number;
+}
+
+/**
+ * raw JSONL を results と meta に分ける（純粋）。空行は無視。
+ * 行ごとに nodes/depth が食い違う（別設定の評価が混在している）場合は例外。
+ * scoreAbsMax は行ごとに異なりうる（再判定可否は classifyRaw が行単位で見る）ので、
+ * meta には最後の行の値を入れる。
+ */
+export function parseRawLines(text: string): {
+  results: Map<string, RawEvaluation>;
+  meta: RawMeta | null;
+} {
+  const results = new Map<string, RawEvaluation>();
+  let meta: RawMeta | null = null;
+  for (const line of text.split("\n")) {
+    if (line.trim() === "") {
+      continue;
+    }
+    const r = JSON.parse(line) as RawRecord;
+    if (meta && (meta.nodes !== r.nodes || meta.depth !== r.depth)) {
+      throw new Error(
+        `raw の nodes/depth が行ごとに食い違う: ${meta.nodes}/${meta.depth} vs ${r.nodes}/${r.depth}（key ${r.key.slice(0, 20)}...）`,
+      );
+    }
+    meta = { nodes: r.nodes, depth: r.depth, scoreAbsMax: r.scoreAbsMax };
+    results.set(r.key, {
+      score: r.score,
+      bestMove: r.bestMove,
+      reject: r.reject,
+      elapsedMs: r.elapsedMs,
+    });
+  }
+  return { results, meta };
+}
+
+/** CLI の --nodes/--depth が raw の生評価設定と一致することを確認する（黙って古い生評価を再利用しない）。 */
+export function assertRawMeta(
+  meta: RawMeta,
+  opts: { nodes: number; depth: number },
+): void {
+  if (meta.nodes !== opts.nodes) {
+    throw new Error(
+      `--nodes=${opts.nodes} が raw の nodes=${meta.nodes} と不一致。raw を再生成するか --nodes を合わせること`,
+    );
+  }
+  if (meta.depth !== opts.depth) {
+    throw new Error(
+      `--depth=${opts.depth} が raw の depth=${meta.depth} と不一致。raw を再生成するか --depth を合わせること`,
+    );
+  }
 }
