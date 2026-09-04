@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "generatedAt": "2026-09-04T00:00:00.000Z",
+  "gitRev": "fixture",
+  "weightGeneration": null,
+  "filter": {
+    "scoreAbsMax": 300,
+    "nodes": 100000,
+    "depth": 7,
+    "parentCap": 3,
+    "seed": 1
+  },
+  "stats": {
+    "candidates": 3,
+    "evaluated": 3,
+    "rejectedByScore": 0,
+    "rejectedByWhiteWin": 0,
+    "rejectedByBlackWin": 0,
+    "accepted": 3
+  },
+  "openings": [
+    {
+      "id": "fx-0001",
+      "root": "花月",
+      "parent": "G9 H9 I9",
+      "moves": "H8 I9 G7 H9 I7 G9 J8",
+      "score": 12
+    },
+    {
+      "id": "fx-0002",
+      "root": "浦月",
+      "parent": "G7 I7 I9",
+      "moves": "H8 I9 G9 I7 J8 G7 F8",
+      "score": -40
+    },
+    {
+      "id": "fx-0003",
+      "root": "山月",
+      "parent": "G8 H7 I9",
+      "moves": "H8 I9 J10 H7 F8 G8 G10",
+      "score": 85
+    }
+  ]
+}

@@ -99,7 +99,7 @@ export interface RecentGameRecord {
   isABlack: boolean;
   /** この局の PRNG seed（未指定 bench なら undefined） */
   gameSeed?: number;
-  /** opening 3手を含む全着手（打たれた順、座標のみ） */
+  /** 開局手（isOpening）を含む全着手（打たれた順、座標のみ） */
   moves: ReplayMove[];
 }
 

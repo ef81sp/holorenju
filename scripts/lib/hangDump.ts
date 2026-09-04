@@ -93,7 +93,7 @@ export interface HangDumpHangBase {
   requestId: number;
   timeoutMs: number;
   elapsedMs: number;
-  /** 何手目でハングしたか（1-based, opening 3手を含む） */
+  /** 何手目でハングしたか（1-based, 開局手を含む） */
   moveNumber: number;
 }
 
@@ -148,7 +148,7 @@ interface HangDumpCommon {
   opponent: HangDumpOpponent;
   /** ハング直前の盤面（そのままリクエストとして送れる形） */
   board: BoardState;
-  /** ハング直前までの着手履歴（opening 3手を含む。row/col/isOpening/time…） */
+  /** ハング直前までの着手履歴（開局手を含む。row/col/isOpening/time…） */
   moveHistory: MoveRecord[];
 }
 

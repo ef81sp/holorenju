@@ -12,6 +12,7 @@ import type {
   SPRTState,
   WDLCount,
 } from "./ab.ts";
+import type { OpeningSuiteConfig } from "./openingSuite.ts";
 
 /** 開局ラベル付き対局結果 */
 export interface CommitGameResult extends GameResult {
@@ -60,10 +61,14 @@ export interface CommitBenchResult {
   /** 設定 */
   config: {
     difficulty: CpuDifficulty;
+    /** 珠型モードではセット数、開局スイートではスイートの周回数 */
     sets: number;
+    /** 1 周回あたりの局数（珠型 26×2、スイートは (count−offset)×2） */
     gamesPerSet: number;
     randomFactor?: number;
     sprt: SPRTConfig | null;
+    /** `--openings` 指定時の開局スイート情報。未指定（珠型モード）なら無い */
+    openings?: OpeningSuiteConfig;
     /** Gate 2: A/B 側それぞれの evaluationOptions オーバーライド（例: evalBasis=prospect）。 */
     evalOptionsA?: Partial<EvaluationOptions>;
     evalOptionsB?: Partial<EvaluationOptions>;

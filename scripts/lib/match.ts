@@ -2,7 +2,7 @@
  * 対局オーケストレーション共有モジュール。
  *
  * commit-bench（worktree 比較）と weight-bench（ローカル wasm + 重み注入）の
- * 両方で使う「珠型タスク生成 / bridge worker 生成 / ワークスティール並列ループ＋
+ * 両方で使う「タスク生成（珠型/開局スイート） / bridge worker 生成 / ワークスティール並列ループ＋
  * WDL・Elo・SPRT・状態表示」を集約する。両ベンチの差は
  *   (1) worker ペアの作り方（worktree vs ローカル wasm + evalWeights）
  *   (2) 結果の保存形式・ラベル
@@ -37,10 +37,18 @@ import { getWorkerTelemetry } from "./workerTelemetry.ts";
 export interface MatchTask {
   /** 開局ラベル（珠型名または開局 id）。結果の jushuName に入る */
   openingId: string;
-  /** ペア id。同一開局の A黒/A白 2 局が同じ値を持つ（珠型モードは `${set}:${珠型}`） */
+  /** ペア id。同一開局の A黒/A白 2 局が同じ値を持つ（`${set}:${openingId}`） */
   pairId: string;
-  positions: [Position, Position, Position];
+  /** 開局の擬似手順（黒から交互）。珠型は 3 手、開局スイートは 7 手。 */
+  positions: Position[];
   isABlack: boolean;
+}
+
+/** 開局の供給元（珠型アダプタ jushuOpenings() または開局スイートのローダ）。 */
+export interface OpeningSource {
+  id: string;
+  /** 黒から交互の擬似手順。手番は長さの偶奇で決まる */
+  positions: Position[];
 }
 
 /** ハング局のメタ情報（caller のダンプ作成用） */
@@ -76,9 +84,9 @@ export interface RunMatchResult {
 export interface RunMatchParams {
   /** A/B bridge worker のペア群（--jobs 組）。生成方法は caller が決める。 */
   pairs: { a: Worker; b: Worker }[];
-  /** 消化する珠型タスク列（buildJushuTasks 等で生成）。 */
+  /** 消化するタスク列（buildTasks で生成）。 */
   tasks: MatchTask[];
-  /** 進捗表示の分母。 */
+  /** 進捗表示の分母（tasks.length を渡す）。 */
   totalGames: number;
   sprtConfig: SPRTConfig | null;
   moveTimeoutMs: number;
@@ -113,35 +121,57 @@ export interface RunMatchParams {
 }
 
 // ============================================================================
-// 珠型タスク生成
+// タスク生成
 // ============================================================================
 
-/** sets セット分の珠型タスク（各セット = 全珠型 × 2色）をフラット化して返す。 */
-export function buildJushuTasks(sets: number): MatchTask[] {
-  const jushuNames = getAllJushuNames();
+export interface BuildTasksOptions {
+  /** 開局列の n 番目から使う（末尾で折り返さない）。既定 0 */
+  offset?: number;
+  /** タスクを先頭 N 局に切り詰める（ペア境界＝偶数に切り下げ）。0 なら無効 */
+  maxGames?: number;
+}
+
+/**
+ * 開局列 × sets 周回 × 2 色のタスクをフラット化して返す（唯一のタスク生成経路）。
+ * 各開局について A黒 → A白 の 2 局を隣接して出し、`pairId = ${set}:${id}`。
+ * 返り値の長さがベンチの totalGames の唯一の源。
+ */
+export function buildTasks(
+  source: OpeningSource[],
+  sets: number,
+  options: BuildTasksOptions = {},
+): MatchTask[] {
+  const { offset = 0, maxGames = 0 } = options;
+  const usable = source.slice(offset);
   const tasks: MatchTask[] = [];
   for (let set = 0; set < sets; set++) {
-    for (const jn of jushuNames) {
-      const pos = getJushuPositions(jn, true);
-      if (!pos) {
-        continue;
-      }
-      for (const ab of [true, false]) {
+    for (const { id, positions } of usable) {
+      for (const isABlack of [true, false]) {
         tasks.push({
-          openingId: jn,
-          pairId: `${set}:${jn}`,
-          positions: pos,
-          isABlack: ab,
+          openingId: id,
+          pairId: `${set}:${id}`,
+          positions,
+          isABlack,
         });
       }
     }
   }
+  if (maxGames > 0 && maxGames < tasks.length) {
+    return tasks.slice(0, maxGames - (maxGames % 2));
+  }
   return tasks;
 }
 
-/** 1セットあたりの局数（全珠型 × 2色）。 */
-export function gamesPerSet(): number {
-  return getAllJushuNames().length * 2;
+/** 26 珠型（天元黒・白 2 手目・黒 3 手目）を OpeningSource として供給するアダプタ。 */
+export function jushuOpenings(): OpeningSource[] {
+  const out: OpeningSource[] = [];
+  for (const id of getAllJushuNames()) {
+    const positions = getJushuPositions(id, true);
+    if (positions) {
+      out.push({ id, positions });
+    }
+  }
+  return out;
 }
 
 // ============================================================================
@@ -333,7 +363,7 @@ interface Acc {
 const newAcc = (): Acc => ({ depthSum: 0, timeSum: 0, count: 0, maxDepth: 0 });
 
 /**
- * 珠型タスクを pairs（--jobs 組）でワークスティール並列消化する。
+ * タスク列を pairs（--jobs 組）でワークスティール並列消化する。
  * 結果処理（WDL/統計/ステータス/SPRT）は await を挟まず同期実行＝競合しない。
  * 統計は MatchStatsTracker に委譲し、**SPRT の停止判定はペア LLR**で行う。
  *
