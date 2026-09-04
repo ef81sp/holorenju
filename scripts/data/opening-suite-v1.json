@@ -1,0 +1,4224 @@
+{
+  "version": 1,
+  "generatedAt": "2026-09-04T07:12:00.300Z",
+  "gitRev": "11215345208a55847eaaf0e043ce8ab9c9314c68",
+  "weightGeneration": "texel-r2-rapfi-v2",
+  "filter": {
+    "scoreAbsMax": 500,
+    "nodes": 100000,
+    "depth": 7,
+    "parentCap": 8,
+    "seed": 20260904
+  },
+  "stats": {
+    "candidates": 5595,
+    "evaluated": 5595,
+    "rejectedByScore": 4754,
+    "rejectedByWhiteWin": 27,
+    "rejectedByBlackWin": 5,
+    "accepted": 600,
+    "eligible": 809
+  },
+  "openings": [
+    {
+      "id": "s1-0001",
+      "root": "雲月",
+      "parent": "G8 I7 I9",
+      "moves": "H8 I9 I8 G8 F6 I7 G6",
+      "score": -11
+    },
+    {
+      "id": "s1-0002",
+      "root": "斜月",
+      "parent": "I8 I9 J9",
+      "moves": "H8 I9 F7 J9 G7 I8 H7",
+      "score": 230
+    },
+    {
+      "id": "s1-0003",
+      "root": "浦月",
+      "parent": "G7 G8 H9",
+      "moves": "I9 H9 H8 G8 I7 G7 I6",
+      "score": 211
+    },
+    {
+      "id": "s1-0004",
+      "root": "恒星",
+      "parent": "I7 I9 J7",
+      "moves": "F8 I9 H8 I7 F6 J7 H6",
+      "score": -358
+    },
+    {
+      "id": "s1-0005",
+      "root": "峡月",
+      "parent": "G7 H7 I8",
+      "moves": "H9 I8 I9 G7 H8 H7 F7",
+      "score": 378
+    },
+    {
+      "id": "s1-0006",
+      "root": "水月",
+      "parent": "G8 I7 I9",
+      "moves": "H8 I9 F7 G8 F6 I7 G6",
+      "score": 4
+    },
+    {
+      "id": "s1-0007",
+      "root": "寒星",
+      "parent": "H5 H7 I6",
+      "moves": "H8 H7 H6 I6 J6 H5 I5",
+      "score": -258
+    },
+    {
+      "id": "s1-0008",
+      "root": "渓月",
+      "parent": "F6 G8 H7",
+      "moves": "H8 G8 J8 H7 G7 F6 I6",
+      "score": -16
+    },
+    {
+      "id": "s1-0009",
+      "root": null,
+      "parent": "H6 I5 I7",
+      "moves": "H8 I7 K8 H6 H5 I5 I4",
+      "score": 448
+    },
+    {
+      "id": "s1-0010",
+      "root": "花月",
+      "parent": "G6 H7 J6",
+      "moves": "H8 H7 I7 G6 G5 J6 I5",
+      "score": 354
+    },
+    {
+      "id": "s1-0011",
+      "root": "疎星",
+      "parent": "H7 I5 I8",
+      "moves": "H8 I8 K7 H7 J6 I5 L6",
+      "score": 123
+    },
+    {
+      "id": "s1-0012",
+      "root": "名月",
+      "parent": "I7 I9 J7",
+      "moves": "H8 I9 F7 I7 F6 J7 F5",
+      "score": 379
+    },
+    {
+      "id": "s1-0013",
+      "root": "明星",
+      "parent": "F7 G7 G9",
+      "moves": "J9 G9 H8 F7 J8 G7 J6",
+      "score": 497
+    },
+    {
+      "id": "s1-0014",
+      "root": "長星",
+      "parent": "H5 H7 I7",
+      "moves": "H8 H7 J7 I7 H6 H5 J6",
+      "score": -355
+    },
+    {
+      "id": "s1-0015",
+      "root": "彗星",
+      "parent": "H7 I7 I9",
+      "moves": "H8 I9 F6 H7 G5 I7 H4",
+      "score": 281
+    },
+    {
+      "id": "s1-0016",
+      "root": "雨月",
+      "parent": "H9 I10 J8",
+      "moves": "G8 I10 H8 H9 I8 J8 D2",
+      "score": 236
+    },
+    {
+      "id": "s1-0017",
+      "root": "流星",
+      "parent": "G6 G7 H7",
+      "moves": "H8 G7 L8 H7 J6 G6 I5",
+      "score": 275
+    },
+    {
+      "id": "s1-0018",
+      "root": "残月",
+      "parent": "H6 I8 J5",
+      "moves": "H8 I8 F7 H6 H7 J5 I6",
+      "score": 114
+    },
+    {
+      "id": "s1-0019",
+      "root": "銀月",
+      "parent": "I9 J8 J9",
+      "moves": "F8 I9 G8 J9 H8 J8 F6",
+      "score": 253
+    },
+    {
+      "id": "s1-0020",
+      "root": "雲月",
+      "parent": "G7 G8 I7",
+      "moves": "H8 G8 L8 G7 H7 I7 I5",
+      "score": 449
+    },
+    {
+      "id": "s1-0021",
+      "root": "斜月",
+      "parent": "G8 I5 I9",
+      "moves": "H8 I9 G7 G8 H6 I5 I6",
+      "score": -263
+    },
+    {
+      "id": "s1-0022",
+      "root": "浦月",
+      "parent": "H6 I7 I9",
+      "moves": "F8 I9 H8 I7 G7 H6 G5",
+      "score": 319
+    },
+    {
+      "id": "s1-0023",
+      "root": "恒星",
+      "parent": "F8 I9 K8",
+      "moves": "G8 I9 H8 F8 J8 K8 G5",
+      "score": 148
+    },
+    {
+      "id": "s1-0024",
+      "root": "峡月",
+      "parent": "H6 I5 I7",
+      "moves": "H8 I7 K8 H6 I6 I5 H5",
+      "score": 445
+    },
+    {
+      "id": "s1-0025",
+      "root": "水月",
+      "parent": "H7 I9 J8",
+      "moves": "G8 I9 H8 J8 J7 H7 J6",
+      "score": 488
+    },
+    {
+      "id": "s1-0026",
+      "root": "寒星",
+      "parent": "F5 H5 H7",
+      "moves": "I9 H7 H8 F5 H6 H5 I6",
+      "score": -7
+    },
+    {
+      "id": "s1-0027",
+      "root": "渓月",
+      "parent": "F5 H7 I8",
+      "moves": "J9 I8 H8 H7 I6 F5 M6",
+      "score": -31
+    },
+    {
+      "id": "s1-0028",
+      "root": null,
+      "parent": "G6 H7 I6",
+      "moves": "H8 H7 F5 G6 H5 I6 J5",
+      "score": 339
+    },
+    {
+      "id": "s1-0029",
+      "root": "花月",
+      "parent": "F6 G8 H7",
+      "moves": "J10 G8 H8 H7 J8 F6 G7",
+      "score": 287
+    },
+    {
+      "id": "s1-0030",
+      "root": "疎星",
+      "parent": "G6 H7 J5",
+      "moves": "H8 H7 J6 G6 I5 J5 K5",
+      "score": -179
+    },
+    {
+      "id": "s1-0031",
+      "root": "名月",
+      "parent": "G9 I9 J8",
+      "moves": "H8 G9 K7 I9 F6 J8 I6",
+      "score": 391
+    },
+    {
+      "id": "s1-0032",
+      "root": "明星",
+      "parent": "I8 I9 J9",
+      "moves": "F8 I9 H8 J9 F7 I8 F6",
+      "score": 415
+    },
+    {
+      "id": "s1-0033",
+      "root": "長星",
+      "parent": "G7 I5 I7",
+      "moves": "H8 G7 J8 I7 K7 I5 J6",
+      "score": -265
+    },
+    {
+      "id": "s1-0034",
+      "root": "彗星",
+      "parent": "I7 I9 J9",
+      "moves": "H8 I9 E7 J9 F6 I7 G5",
+      "score": 209
+    },
+    {
+      "id": "s1-0035",
+      "root": "雨月",
+      "parent": "G6 H7 I6",
+      "moves": "H8 H7 I8 G6 H5 I6 J5",
+      "score": -224
+    },
+    {
+      "id": "s1-0036",
+      "root": "流星",
+      "parent": "H7 I6 I7",
+      "moves": "H8 H7 F6 I7 G5 I6 I3",
+      "score": 139
+    },
+    {
+      "id": "s1-0037",
+      "root": "残月",
+      "parent": "H7 J8 K6",
+      "moves": "G8 J8 H8 H7 I8 K6 J7",
+      "score": -164
+    },
+    {
+      "id": "s1-0038",
+      "root": "銀月",
+      "parent": "H6 I7 I9",
+      "moves": "F8 I9 G8 I7 H8 H6 F7",
+      "score": -438
+    },
+    {
+      "id": "s1-0039",
+      "root": "雲月",
+      "parent": "F6 G8 I7",
+      "moves": "H8 G8 I8 I7 K8 F6 G7",
+      "score": -33
+    },
+    {
+      "id": "s1-0040",
+      "root": "斜月",
+      "parent": "H7 I8 I9",
+      "moves": "E8 I9 H8 I8 G7 H7 G6",
+      "score": 135
+    },
+    {
+      "id": "s1-0041",
+      "root": "浦月",
+      "parent": "G8 I9 J6",
+      "moves": "H8 I9 G7 G8 I7 J6 K7",
+      "score": 365
+    },
+    {
+      "id": "s1-0042",
+      "root": "恒星",
+      "parent": "G6 H5 I7",
+      "moves": "H8 I7 I8 G6 H7 H5 H6",
+      "score": -6
+    },
+    {
+      "id": "s1-0043",
+      "root": "峡月",
+      "parent": "G7 I8 J6",
+      "moves": "G8 I8 H8 G7 F7 J6 I7",
+      "score": 56
+    },
+    {
+      "id": "s1-0044",
+      "root": "水月",
+      "parent": "G8 H9 I9",
+      "moves": "H8 H9 F7 I9 H7 G8 J7",
+      "score": 421
+    },
+    {
+      "id": "s1-0045",
+      "root": "寒星",
+      "parent": "F6 G8 H7",
+      "moves": "H8 G8 J8 H7 G7 F6 H6",
+      "score": 259
+    },
+    {
+      "id": "s1-0046",
+      "root": "渓月",
+      "parent": "G6 G8 H7",
+      "moves": "H8 G8 J8 H7 I7 G6 I6",
+      "score": -197
+    },
+    {
+      "id": "s1-0047",
+      "root": null,
+      "parent": "H7 I7 I8",
+      "moves": "H8 I8 J5 H7 I4 I7 H3",
+      "score": 477
+    },
+    {
+      "id": "s1-0048",
+      "root": "花月",
+      "parent": "H9 I8 J6",
+      "moves": "I9 H9 H8 I8 I7 J6 F6",
+      "score": 446
+    },
+    {
+      "id": "s1-0049",
+      "root": "疎星",
+      "parent": "G6 G8 H7",
+      "moves": "H8 G8 J8 H7 I7 G6 J6",
+      "score": 242
+    },
+    {
+      "id": "s1-0050",
+      "root": "名月",
+      "parent": "F7 G7 G9",
+      "moves": "J9 G9 H8 F7 J7 G7 J6",
+      "score": 126
+    },
+    {
+      "id": "s1-0051",
+      "root": "明星",
+      "parent": "G7 G8 H7",
+      "moves": "J9 G8 H8 G7 J8 H7 J6",
+      "score": 243
+    },
+    {
+      "id": "s1-0052",
+      "root": "長星",
+      "parent": "G7 H9 I8",
+      "moves": "H8 H9 F7 I8 F6 G7 I6",
+      "score": 300
+    },
+    {
+      "id": "s1-0053",
+      "root": "彗星",
+      "parent": "I7 I9 J9",
+      "moves": "H8 I9 F6 J9 G5 I7 H4",
+      "score": 88
+    },
+    {
+      "id": "s1-0054",
+      "root": "雨月",
+      "parent": "F8 G6 H7",
+      "moves": "G8 F8 H8 H7 I8 G6 L8",
+      "score": 412
+    },
+    {
+      "id": "s1-0055",
+      "root": "流星",
+      "parent": "G6 G7 H7",
+      "moves": "H8 G7 K7 H7 J6 G6 I5",
+      "score": -247
+    },
+    {
+      "id": "s1-0056",
+      "root": "残月",
+      "parent": "H6 I8 J5",
+      "moves": "H8 I8 G7 H6 H7 J5 I6",
+      "score": -248
+    },
+    {
+      "id": "s1-0057",
+      "root": "銀月",
+      "parent": "I7 I9 J8",
+      "moves": "F8 I9 G8 J8 H8 I7 F7",
+      "score": -385
+    },
+    {
+      "id": "s1-0058",
+      "root": "雲月",
+      "parent": "H6 I7 J8",
+      "moves": "H8 J8 I8 I7 G5 H6 J5",
+      "score": 306
+    },
+    {
+      "id": "s1-0059",
+      "root": "斜月",
+      "parent": "H9 I8 I9",
+      "moves": "F8 H9 H8 I9 G7 I8 H6",
+      "score": 438
+    },
+    {
+      "id": "s1-0060",
+      "root": "浦月",
+      "parent": "H9 I8 I9",
+      "moves": "H8 H9 F7 I9 G7 I8 I7",
+      "score": 203
+    },
+    {
+      "id": "s1-0061",
+      "root": "恒星",
+      "parent": "G5 H6 I7",
+      "moves": "H8 I7 J8 H6 H5 G5 I5",
+      "score": 296
+    },
+    {
+      "id": "s1-0062",
+      "root": "峡月",
+      "parent": "H5 I5 I7",
+      "moves": "H8 I7 G7 H5 H6 I5 I6",
+      "score": -104
+    },
+    {
+      "id": "s1-0063",
+      "root": "水月",
+      "parent": "G5 G7 I8",
+      "moves": "L9 I8 H8 G7 J7 G5 I6",
+      "score": 100
+    },
+    {
+      "id": "s1-0064",
+      "root": "寒星",
+      "parent": "G6 H5 H7",
+      "moves": "H8 H7 I7 G6 H6 H5 I5",
+      "score": -126
+    },
+    {
+      "id": "s1-0065",
+      "root": "渓月",
+      "parent": "H7 I6 I8",
+      "moves": "H8 I8 F6 H7 G6 I6 J5",
+      "score": 170
+    },
+    {
+      "id": "s1-0066",
+      "root": null,
+      "parent": "G7 I5 I7",
+      "moves": "H8 G7 G5 I7 H5 I5 I4",
+      "score": 441
+    },
+    {
+      "id": "s1-0067",
+      "root": "花月",
+      "parent": "G6 H7 J5",
+      "moves": "H8 H7 I7 G6 I5 J5 K5",
+      "score": 356
+    },
+    {
+      "id": "s1-0068",
+      "root": "疎星",
+      "parent": "H7 I6 I8",
+      "moves": "I9 I8 F8 H7 H8 I6 F6",
+      "score": -266
+    },
+    {
+      "id": "s1-0069",
+      "root": "名月",
+      "parent": "G6 I7 I9",
+      "moves": "H8 I9 F7 I7 F5 G6 H5",
+      "score": -73
+    },
+    {
+      "id": "s1-0070",
+      "root": "明星",
+      "parent": "I7 I9 J8",
+      "moves": "F8 I9 H8 J8 F7 I7 F5",
+      "score": 238
+    },
+    {
+      "id": "s1-0071",
+      "root": "長星",
+      "parent": "F5 G7 I8",
+      "moves": "J9 I8 H8 G7 F7 F5 F6",
+      "score": 399
+    },
+    {
+      "id": "s1-0072",
+      "root": "雨月",
+      "parent": "F5 H7 I6",
+      "moves": "H8 H7 I8 I6 E5 F5 G5",
+      "score": 327
+    },
+    {
+      "id": "s1-0073",
+      "root": "流星",
+      "parent": "H7 I6 I7",
+      "moves": "H8 H7 F6 I7 G5 I6 H4",
+      "score": -49
+    },
+    {
+      "id": "s1-0074",
+      "root": "残月",
+      "parent": "H7 J8 K6",
+      "moves": "H8 J8 I8 H7 J7 K6 K7",
+      "score": 227
+    },
+    {
+      "id": "s1-0075",
+      "root": "銀月",
+      "parent": "G6 G7 H7",
+      "moves": "H8 G7 I8 H7 I5 G6 J5",
+      "score": -53
+    },
+    {
+      "id": "s1-0076",
+      "root": "雲月",
+      "parent": "G7 H6 I8",
+      "moves": "G8 I8 H8 G7 J7 H6 J5",
+      "score": 419
+    },
+    {
+      "id": "s1-0077",
+      "root": "斜月",
+      "parent": "G7 H7 I8",
+      "moves": "I9 I8 J9 G7 H8 H7 J6",
+      "score": 9
+    },
+    {
+      "id": "s1-0078",
+      "root": "浦月",
+      "parent": "I9 J8 J9",
+      "moves": "H8 I9 F7 J9 H7 J8 I7",
+      "score": 371
+    },
+    {
+      "id": "s1-0079",
+      "root": "恒星",
+      "parent": "I6 I7 K8",
+      "moves": "H8 K8 J8 I7 H7 I6 H5",
+      "score": -408
+    },
+    {
+      "id": "s1-0080",
+      "root": "峡月",
+      "parent": "G7 I7 I8",
+      "moves": "H8 I8 F7 G7 G5 I7 H4",
+      "score": 405
+    },
+    {
+      "id": "s1-0081",
+      "root": "水月",
+      "parent": "G9 H9 I8",
+      "moves": "J9 G9 H8 H9 F7 I8 J7",
+      "score": 66
+    },
+    {
+      "id": "s1-0082",
+      "root": "寒星",
+      "parent": "G6 G8 H7",
+      "moves": "H8 G8 J8 H7 I7 G6 H6",
+      "score": 110
+    },
+    {
+      "id": "s1-0083",
+      "root": "渓月",
+      "parent": "G8 H7 H9",
+      "moves": "H8 H9 J8 G8 F7 H7 I6",
+      "score": 197
+    },
+    {
+      "id": "s1-0084",
+      "root": null,
+      "parent": "F5 H7 I6",
+      "moves": "H8 H7 E5 I6 G5 F5 F4",
+      "score": 500
+    },
+    {
+      "id": "s1-0085",
+      "root": "花月",
+      "parent": "H7 I6 J7",
+      "moves": "H8 H7 J8 J7 I7 I6 G5",
+      "score": -259
+    },
+    {
+      "id": "s1-0086",
+      "root": "疎星",
+      "parent": "G8 H7 I8",
+      "moves": "I9 G8 H8 I8 F6 H7 J6",
+      "score": 320
+    },
+    {
+      "id": "s1-0087",
+      "root": "名月",
+      "parent": "G7 H7 I8",
+      "moves": "J9 I8 H8 G7 J7 H7 K6",
+      "score": 169
+    },
+    {
+      "id": "s1-0088",
+      "root": "明星",
+      "parent": "F7 G7 H7",
+      "moves": "J9 F7 H8 G7 J8 H7 E7",
+      "score": 166
+    },
+    {
+      "id": "s1-0089",
+      "root": "長星",
+      "parent": "H6 I7 J7",
+      "moves": "H8 I7 H7 J7 J6 H6 J5",
+      "score": 452
+    },
+    {
+      "id": "s1-0090",
+      "root": "雨月",
+      "parent": "G6 H7 J5",
+      "moves": "H8 H7 I8 G6 I5 J5 K5",
+      "score": -64
+    },
+    {
+      "id": "s1-0091",
+      "root": "残月",
+      "parent": "H6 I8 J5",
+      "moves": "G8 I8 H8 H6 H7 J5 I6",
+      "score": -44
+    },
+    {
+      "id": "s1-0092",
+      "root": "銀月",
+      "parent": "F7 G7 H7",
+      "moves": "H9 F7 J9 G7 H8 H7 E7",
+      "score": 299
+    },
+    {
+      "id": "s1-0093",
+      "root": "雲月",
+      "parent": "G7 I7 I8",
+      "moves": "H8 I8 H7 G7 G5 I7 G4",
+      "score": 292
+    },
+    {
+      "id": "s1-0094",
+      "root": "斜月",
+      "parent": "H7 I6 I9",
+      "moves": "H8 I9 G7 H7 E5 I6 D4",
+      "score": 0
+    },
+    {
+      "id": "s1-0095",
+      "root": "浦月",
+      "parent": "G7 G8 H7",
+      "moves": "J9 G8 H8 G7 K8 H7 I7",
+      "score": 403
+    },
+    {
+      "id": "s1-0096",
+      "root": "恒星",
+      "parent": "F6 H6 I7",
+      "moves": "H8 I7 J8 F6 G7 H6 H5",
+      "score": 303
+    },
+    {
+      "id": "s1-0097",
+      "root": "峡月",
+      "parent": "G8 H7 I9",
+      "moves": "J9 I9 H8 G8 I8 H7 J7",
+      "score": 173
+    },
+    {
+      "id": "s1-0098",
+      "root": "水月",
+      "parent": "G7 G8 H9",
+      "moves": "I9 H9 H8 G8 I6 G7 J6",
+      "score": 493
+    },
+    {
+      "id": "s1-0099",
+      "root": "寒星",
+      "parent": "G5 H5 H7",
+      "moves": "H8 H7 J8 G5 H6 H5 I5",
+      "score": 281
+    },
+    {
+      "id": "s1-0100",
+      "root": "渓月",
+      "parent": "H7 I8 J5",
+      "moves": "H8 I8 J7 H7 I6 J5 J6",
+      "score": -236
+    },
+    {
+      "id": "s1-0101",
+      "root": null,
+      "parent": "G5 H6 I7",
+      "moves": "H8 I7 H5 H6 I5 G5 F4",
+      "score": 386
+    },
+    {
+      "id": "s1-0102",
+      "root": "花月",
+      "parent": "G6 G8 H7",
+      "moves": "G9 G8 J9 H7 H8 G6 J5",
+      "score": 410
+    },
+    {
+      "id": "s1-0103",
+      "root": "疎星",
+      "parent": "H7 I8 K7",
+      "moves": "H8 I8 G7 H7 J6 K7 I5",
+      "score": -171
+    },
+    {
+      "id": "s1-0104",
+      "root": "名月",
+      "parent": "I7 I9 J7",
+      "moves": "H8 I9 F7 I7 F6 J7 F4",
+      "score": 497
+    },
+    {
+      "id": "s1-0105",
+      "root": "明星",
+      "parent": "H6 I7 I9",
+      "moves": "F8 I9 H8 I7 F6 H6 G5",
+      "score": 109
+    },
+    {
+      "id": "s1-0106",
+      "root": "長星",
+      "parent": "H7 I7 I8",
+      "moves": "H8 I8 G7 H7 G6 I7 J6",
+      "score": -235
+    },
+    {
+      "id": "s1-0107",
+      "root": "残月",
+      "parent": "H7 J8 K6",
+      "moves": "H8 J8 I8 H7 J7 K6 E6",
+      "score": 314
+    },
+    {
+      "id": "s1-0108",
+      "root": "雲月",
+      "parent": "G8 H7 I9",
+      "moves": "H9 I9 H8 G8 I8 H7 G7",
+      "score": 254
+    },
+    {
+      "id": "s1-0109",
+      "root": "斜月",
+      "parent": "G8 H9 I9",
+      "moves": "H8 H9 F7 I9 G7 G8 J6",
+      "score": 239
+    },
+    {
+      "id": "s1-0110",
+      "root": "浦月",
+      "parent": "H9 I7 I8",
+      "moves": "G9 H9 I9 I8 H8 I7 F6",
+      "score": 173
+    },
+    {
+      "id": "s1-0111",
+      "root": "恒星",
+      "parent": "H9 I7 I9",
+      "moves": "F8 H9 H8 I9 I8 I7 H6",
+      "score": -212
+    },
+    {
+      "id": "s1-0112",
+      "root": "峡月",
+      "parent": "H9 I7 I9",
+      "moves": "G8 H9 H8 I9 F6 I7 I6",
+      "score": 197
+    },
+    {
+      "id": "s1-0113",
+      "root": "水月",
+      "parent": "H9 I7 I9",
+      "moves": "E8 H9 H8 I9 F7 I7 G6",
+      "score": -333
+    },
+    {
+      "id": "s1-0114",
+      "root": "寒星",
+      "parent": "F6 H7 I8",
+      "moves": "H8 I8 G7 H7 I7 F6 H6",
+      "score": 211
+    },
+    {
+      "id": "s1-0115",
+      "root": "渓月",
+      "parent": "G8 H7 I8",
+      "moves": "I9 G8 H8 I8 F6 H7 I6",
+      "score": -144
+    },
+    {
+      "id": "s1-0116",
+      "root": null,
+      "parent": "H7 I6 I7",
+      "moves": "H8 H7 E5 I7 F5 I6 G5",
+      "score": 487
+    },
+    {
+      "id": "s1-0117",
+      "root": "花月",
+      "parent": "F6 H7 I8",
+      "moves": "H8 I8 G7 H7 I7 F6 K5",
+      "score": 293
+    },
+    {
+      "id": "s1-0118",
+      "root": "疎星",
+      "parent": "G6 H7 I6",
+      "moves": "H8 H7 J6 G6 F5 I6 H5",
+      "score": 303
+    },
+    {
+      "id": "s1-0119",
+      "root": "名月",
+      "parent": "G6 I7 I9",
+      "moves": "H8 I9 F7 I7 F6 G6 H5",
+      "score": 411
+    },
+    {
+      "id": "s1-0120",
+      "root": "明星",
+      "parent": "I9 J8 J9",
+      "moves": "F9 I9 F8 J9 H8 J8 F6",
+      "score": 167
+    },
+    {
+      "id": "s1-0121",
+      "root": "長星",
+      "parent": "I7 I9 K7",
+      "moves": "F8 I9 H8 I7 H6 K7 J6",
+      "score": 101
+    },
+    {
+      "id": "s1-0122",
+      "root": "雲月",
+      "parent": "H7 I9 J8",
+      "moves": "G8 I9 H8 J8 I8 H7 I7",
+      "score": 375
+    },
+    {
+      "id": "s1-0123",
+      "root": "斜月",
+      "parent": "I8 I9 J9",
+      "moves": "H8 I9 F7 J9 G7 I8 G6",
+      "score": 229
+    },
+    {
+      "id": "s1-0124",
+      "root": "浦月",
+      "parent": "G6 I7 I9",
+      "moves": "G9 I9 G8 I7 H8 G6 G7",
+      "score": 482
+    },
+    {
+      "id": "s1-0125",
+      "root": "恒星",
+      "parent": "F8 G7 I7",
+      "moves": "H9 F8 I9 G7 H8 I7 H6",
+      "score": 15
+    },
+    {
+      "id": "s1-0126",
+      "root": "峡月",
+      "parent": "H9 I7 J7",
+      "moves": "I9 H9 H8 I7 I6 J7 E4",
+      "score": 485
+    },
+    {
+      "id": "s1-0127",
+      "root": "水月",
+      "parent": "G7 I8 J7",
+      "moves": "H8 I8 I6 G7 J6 J7 H5",
+      "score": 388
+    },
+    {
+      "id": "s1-0128",
+      "root": "寒星",
+      "parent": "G6 H7 J6",
+      "moves": "H8 H7 I7 G6 H6 J6 I5",
+      "score": -485
+    },
+    {
+      "id": "s1-0129",
+      "root": "渓月",
+      "parent": "G6 H7 J7",
+      "moves": "H8 H7 I6 J7 F5 G6 H5",
+      "score": 388
+    },
+    {
+      "id": "s1-0130",
+      "root": null,
+      "parent": "H7 I7 I9",
+      "moves": "H8 I9 F5 H7 G5 I7 H5",
+      "score": 174
+    },
+    {
+      "id": "s1-0131",
+      "root": "花月",
+      "parent": "H7 I6 I8",
+      "moves": "H9 I8 I9 H7 H8 I6 F5",
+      "score": 459
+    },
+    {
+      "id": "s1-0132",
+      "root": "疎星",
+      "parent": "G8 H7 H9",
+      "moves": "I9 H9 H8 G8 I7 H7 F6",
+      "score": -314
+    },
+    {
+      "id": "s1-0133",
+      "root": "名月",
+      "parent": "G7 H7 I8",
+      "moves": "J9 I8 H8 G7 K6 H7 J5",
+      "score": 302
+    },
+    {
+      "id": "s1-0134",
+      "root": "長星",
+      "parent": "G7 H5 I7",
+      "moves": "H8 G7 G6 I7 H6 H5 J6",
+      "score": -49
+    },
+    {
+      "id": "s1-0135",
+      "root": "雲月",
+      "parent": "H6 I7 I8",
+      "moves": "H8 I8 G7 I7 H7 H6 G5",
+      "score": 279
+    },
+    {
+      "id": "s1-0136",
+      "root": "斜月",
+      "parent": "G8 I5 I9",
+      "moves": "E8 I9 H8 G8 G7 I5 H6",
+      "score": 334
+    },
+    {
+      "id": "s1-0137",
+      "root": "浦月",
+      "parent": "H9 I7 I9",
+      "moves": "H8 H9 G7 I9 F6 I7 E5",
+      "score": 0
+    },
+    {
+      "id": "s1-0138",
+      "root": "恒星",
+      "parent": "G8 H6 I7",
+      "moves": "H9 G8 H8 I7 J8 H6 G6",
+      "score": 196
+    },
+    {
+      "id": "s1-0139",
+      "root": "峡月",
+      "parent": "F8 G9 I9",
+      "moves": "J9 G9 H8 I9 L8 F8 J6",
+      "score": 242
+    },
+    {
+      "id": "s1-0140",
+      "root": "水月",
+      "parent": "H9 I7 J8",
+      "moves": "J9 H9 K9 J8 H8 I7 A4",
+      "score": 475
+    },
+    {
+      "id": "s1-0141",
+      "root": "寒星",
+      "parent": "I8 K10 K8",
+      "moves": "H8 K10 J8 I8 G7 K8 E5",
+      "score": 478
+    },
+    {
+      "id": "s1-0142",
+      "root": "渓月",
+      "parent": "H7 I8 J7",
+      "moves": "J9 I8 H8 H7 F6 J7 G6",
+      "score": 223
+    },
+    {
+      "id": "s1-0143",
+      "root": null,
+      "parent": "G5 G7 I7",
+      "moves": "H8 G7 K7 I7 I5 G5 H4",
+      "score": 231
+    },
+    {
+      "id": "s1-0144",
+      "root": "花月",
+      "parent": "H7 I8 J7",
+      "moves": "I9 I8 H8 H7 G7 J7 D4",
+      "score": 485
+    },
+    {
+      "id": "s1-0145",
+      "root": "疎星",
+      "parent": "H7 J7 J8",
+      "moves": "H8 J8 I8 H7 J6 J7 K6",
+      "score": 439
+    },
+    {
+      "id": "s1-0146",
+      "root": "長星",
+      "parent": "H6 I6 I7",
+      "moves": "H8 I7 J8 H6 J6 I6 J5",
+      "score": 378
+    },
+    {
+      "id": "s1-0147",
+      "root": "雲月",
+      "parent": "I7 I9 J7",
+      "moves": "H9 I9 H8 I7 F7 J7 F6",
+      "score": 419
+    },
+    {
+      "id": "s1-0148",
+      "root": "斜月",
+      "parent": "H7 I8 I9",
+      "moves": "F8 I9 H8 I8 G7 H7 G6",
+      "score": -44
+    },
+    {
+      "id": "s1-0149",
+      "root": "浦月",
+      "parent": "G7 G8 I7",
+      "moves": "I9 G8 J9 G7 K9 I7 H8",
+      "score": 438
+    },
+    {
+      "id": "s1-0150",
+      "root": "恒星",
+      "parent": "F8 I7 K8",
+      "moves": "G8 F8 H8 K8 J8 I7 F7",
+      "score": -136
+    },
+    {
+      "id": "s1-0151",
+      "root": "峡月",
+      "parent": "G8 I6 I7",
+      "moves": "H8 G8 K8 I7 J7 I6 K6",
+      "score": 17
+    },
+    {
+      "id": "s1-0152",
+      "root": "水月",
+      "parent": "G7 I7 J7",
+      "moves": "J9 G7 K9 I7 H8 J7 K7",
+      "score": -406
+    },
+    {
+      "id": "s1-0153",
+      "root": "寒星",
+      "parent": "I8 J7 K8",
+      "moves": "H8 I8 J8 K8 G7 J7 I7",
+      "score": 286
+    },
+    {
+      "id": "s1-0154",
+      "root": "渓月",
+      "parent": "F5 H7 I6",
+      "moves": "H8 H7 G6 I6 E5 F5 G5",
+      "score": 459
+    },
+    {
+      "id": "s1-0155",
+      "root": null,
+      "parent": "H6 I5 I7",
+      "moves": "H8 I7 G5 H6 H5 I5 J4",
+      "score": 498
+    },
+    {
+      "id": "s1-0156",
+      "root": "花月",
+      "parent": "F7 G6 H7",
+      "moves": "J10 F7 H8 H7 G7 G6 I5",
+      "score": 489
+    },
+    {
+      "id": "s1-0157",
+      "root": "疎星",
+      "parent": "F6 G8 H7",
+      "moves": "H8 G8 J8 H7 G7 F6 J6",
+      "score": 192
+    },
+    {
+      "id": "s1-0158",
+      "root": "長星",
+      "parent": "I5 I7 I8",
+      "moves": "H8 I8 F6 I7 I6 I5 J6",
+      "score": -404
+    },
+    {
+      "id": "s1-0159",
+      "root": "雲月",
+      "parent": "F8 G7 I7",
+      "moves": "J9 F8 G8 G7 H8 I7 H7",
+      "score": 444
+    },
+    {
+      "id": "s1-0160",
+      "root": "斜月",
+      "parent": "H7 I6 I9",
+      "moves": "H8 I9 G7 H7 F6 I6 E5",
+      "score": 0
+    },
+    {
+      "id": "s1-0161",
+      "root": "浦月",
+      "parent": "G8 H9 I9",
+      "moves": "H8 H9 G7 I9 I7 G8 E6",
+      "score": 450
+    },
+    {
+      "id": "s1-0162",
+      "root": "恒星",
+      "parent": "G8 I5 I9",
+      "moves": "H8 I9 J8 G8 G7 I5 H6",
+      "score": -56
+    },
+    {
+      "id": "s1-0163",
+      "root": "峡月",
+      "parent": "G7 I7 J9",
+      "moves": "G9 J9 I9 G7 H8 I7 J7",
+      "score": 109
+    },
+    {
+      "id": "s1-0164",
+      "root": "水月",
+      "parent": "G8 I7 I9",
+      "moves": "H8 I9 E7 G8 F6 I7 G6",
+      "score": 431
+    },
+    {
+      "id": "s1-0165",
+      "root": "寒星",
+      "parent": "G8 H7 I8",
+      "moves": "I9 G8 H8 I8 J8 H7 J6",
+      "score": 266
+    },
+    {
+      "id": "s1-0166",
+      "root": "渓月",
+      "parent": "F6 H7 I8",
+      "moves": "J9 I8 H8 H7 G7 F6 J6",
+      "score": -340
+    },
+    {
+      "id": "s1-0167",
+      "root": null,
+      "parent": "G6 H7 I6",
+      "moves": "H8 H7 H5 G6 J5 I6 K5",
+      "score": 410
+    },
+    {
+      "id": "s1-0168",
+      "root": "花月",
+      "parent": "F6 G8 H9",
+      "moves": "I9 H9 H8 G8 J8 F6 G7",
+      "score": 407
+    },
+    {
+      "id": "s1-0169",
+      "root": "疎星",
+      "parent": "H7 J8 K6",
+      "moves": "H8 J8 I8 H7 J7 K6 J6",
+      "score": 391
+    },
+    {
+      "id": "s1-0170",
+      "root": "長星",
+      "parent": "I7 J7 K7",
+      "moves": "H8 I7 J8 J7 H7 K7 J6",
+      "score": 335
+    },
+    {
+      "id": "s1-0171",
+      "root": "雲月",
+      "parent": "H6 I7 I9",
+      "moves": "F8 I9 H8 I7 I8 H6 F7",
+      "score": 168
+    },
+    {
+      "id": "s1-0172",
+      "root": "斜月",
+      "parent": "G8 I5 I9",
+      "moves": "H8 I9 G7 G8 H6 I5 H5",
+      "score": -202
+    },
+    {
+      "id": "s1-0173",
+      "root": "浦月",
+      "parent": "G8 I5 I9",
+      "moves": "H8 I9 G7 G8 I7 I5 H6",
+      "score": -497
+    },
+    {
+      "id": "s1-0174",
+      "root": "恒星",
+      "parent": "I7 J7 J8",
+      "moves": "H8 J8 G7 I7 H6 J7 K6",
+      "score": -88
+    },
+    {
+      "id": "s1-0175",
+      "root": "峡月",
+      "parent": "G7 H7 I7",
+      "moves": "I9 G7 H8 H7 F7 I7 H6",
+      "score": 478
+    },
+    {
+      "id": "s1-0176",
+      "root": "水月",
+      "parent": "H7 I9 J8",
+      "moves": "G8 I9 H8 J8 J7 H7 H5",
+      "score": 311
+    },
+    {
+      "id": "s1-0177",
+      "root": "寒星",
+      "parent": "H7 I8 K7",
+      "moves": "H8 I8 H6 H7 J6 K7 I5",
+      "score": -126
+    },
+    {
+      "id": "s1-0178",
+      "root": "渓月",
+      "parent": "H7 I8 K10",
+      "moves": "E8 K10 H8 I8 J7 H7 G6",
+      "score": -31
+    },
+    {
+      "id": "s1-0179",
+      "root": null,
+      "parent": "H7 I7 I8",
+      "moves": "H8 I8 K6 H7 J5 I7 I4",
+      "score": 324
+    },
+    {
+      "id": "s1-0180",
+      "root": "花月",
+      "parent": "G8 H7 I6",
+      "moves": "J9 G8 H8 H7 I7 I6 J5",
+      "score": 159
+    },
+    {
+      "id": "s1-0181",
+      "root": "疎星",
+      "parent": "H7 I6 J8",
+      "moves": "H8 J8 I8 H7 I7 I6 J6",
+      "score": -313
+    },
+    {
+      "id": "s1-0182",
+      "root": "長星",
+      "parent": "G8 I7 J5",
+      "moves": "H8 G8 J8 I7 J7 J5 J6",
+      "score": -172
+    },
+    {
+      "id": "s1-0183",
+      "root": "雲月",
+      "parent": "G8 H6 I7",
+      "moves": "H9 G8 H8 I7 K8 H6 H7",
+      "score": 374
+    },
+    {
+      "id": "s1-0184",
+      "root": "斜月",
+      "parent": "H7 I8 I9",
+      "moves": "G8 I9 H8 I8 G7 H7 G5",
+      "score": 440
+    },
+    {
+      "id": "s1-0185",
+      "root": "浦月",
+      "parent": "H9 I9 J9",
+      "moves": "G9 H9 H8 I9 F7 J9 H5",
+      "score": -445
+    },
+    {
+      "id": "s1-0186",
+      "root": "恒星",
+      "parent": "G7 G8 I7",
+      "moves": "I9 G8 H8 G7 J8 I7 L6",
+      "score": 320
+    },
+    {
+      "id": "s1-0187",
+      "root": "峡月",
+      "parent": "G7 G8 I7",
+      "moves": "J9 G8 H8 G7 K8 I7 J7",
+      "score": -299
+    },
+    {
+      "id": "s1-0188",
+      "root": "水月",
+      "parent": "G8 H9 I9",
+      "moves": "H8 H9 F7 I9 G7 G8 J7",
+      "score": 372
+    },
+    {
+      "id": "s1-0189",
+      "root": "寒星",
+      "parent": "H5 H7 I6",
+      "moves": "H8 H7 I7 I6 F6 H5 H6",
+      "score": 279
+    },
+    {
+      "id": "s1-0190",
+      "root": "渓月",
+      "parent": "H7 I5 I8",
+      "moves": "H8 I8 K7 H7 I6 I5 J6",
+      "score": 17
+    },
+    {
+      "id": "s1-0191",
+      "root": null,
+      "parent": "G7 I5 I7",
+      "moves": "H8 G7 G5 I7 H4 I5 I3",
+      "score": 18
+    },
+    {
+      "id": "s1-0192",
+      "root": "花月",
+      "parent": "G8 H7 J6",
+      "moves": "I9 G8 H8 H7 G7 J6 I7",
+      "score": -305
+    },
+    {
+      "id": "s1-0193",
+      "root": "疎星",
+      "parent": "E7 G8 H7",
+      "moves": "H8 G8 J8 E7 F6 H7 G5",
+      "score": 279
+    },
+    {
+      "id": "s1-0194",
+      "root": "長星",
+      "parent": "G5 G7 I7",
+      "moves": "H8 G7 J6 I7 I5 G5 H4",
+      "score": -84
+    },
+    {
+      "id": "s1-0195",
+      "root": "雲月",
+      "parent": "H7 I6 I9",
+      "moves": "H8 I9 I8 H7 G7 I6 E5",
+      "score": 267
+    },
+    {
+      "id": "s1-0196",
+      "root": "斜月",
+      "parent": "H7 I6 I9",
+      "moves": "F8 I9 H8 H7 G7 I6 E5",
+      "score": -72
+    },
+    {
+      "id": "s1-0197",
+      "root": "浦月",
+      "parent": "G7 I6 I7",
+      "moves": "G9 G7 I9 I7 J9 I6 H8",
+      "score": 148
+    },
+    {
+      "id": "s1-0198",
+      "root": "恒星",
+      "parent": "G7 H6 I7",
+      "moves": "H8 G7 J8 I7 H5 H6 I5",
+      "score": -83
+    },
+    {
+      "id": "s1-0199",
+      "root": "峡月",
+      "parent": "G7 H6 I7",
+      "moves": "H8 G7 J8 I7 J7 H6 K5",
+      "score": 211
+    },
+    {
+      "id": "s1-0200",
+      "root": "水月",
+      "parent": "G5 G7 I8",
+      "moves": "H8 I8 J7 G7 I6 G5 G4",
+      "score": -248
+    },
+    {
+      "id": "s1-0201",
+      "root": "寒星",
+      "parent": "F5 H5 H7",
+      "moves": "I9 H7 H8 F5 G7 H5 H6",
+      "score": 36
+    },
+    {
+      "id": "s1-0202",
+      "root": "渓月",
+      "parent": "H7 I8 J6",
+      "moves": "J9 I8 F8 H7 H8 J6 I7",
+      "score": 479
+    },
+    {
+      "id": "s1-0203",
+      "root": null,
+      "parent": "F5 H7 I6",
+      "moves": "H8 H7 E5 I6 G5 F5 E4",
+      "score": 430
+    },
+    {
+      "id": "s1-0204",
+      "root": "花月",
+      "parent": "F8 G6 H7",
+      "moves": "G8 F8 H8 H7 L8 G6 I7",
+      "score": 435
+    },
+    {
+      "id": "s1-0205",
+      "root": "疎星",
+      "parent": "G8 H9 I8",
+      "moves": "I9 H9 H8 G8 F6 I8 H6",
+      "score": 45
+    },
+    {
+      "id": "s1-0206",
+      "root": "長星",
+      "parent": "F7 G7 I7",
+      "moves": "J9 F7 H8 G7 J7 I7 J6",
+      "score": 389
+    },
+    {
+      "id": "s1-0207",
+      "root": "雲月",
+      "parent": "G5 G7 I8",
+      "moves": "H8 I8 H7 G7 J7 G5 I6",
+      "score": -297
+    },
+    {
+      "id": "s1-0208",
+      "root": "斜月",
+      "parent": "G8 I5 I9",
+      "moves": "H8 I9 G7 G8 H6 I5 G5",
+      "score": -76
+    },
+    {
+      "id": "s1-0209",
+      "root": "浦月",
+      "parent": "I7 I9 J7",
+      "moves": "G9 I9 G8 I7 H8 J7 G6",
+      "score": -50
+    },
+    {
+      "id": "s1-0210",
+      "root": "恒星",
+      "parent": "F7 G7 H5",
+      "moves": "H8 F7 I8 G7 J8 H5 H6",
+      "score": 118
+    },
+    {
+      "id": "s1-0211",
+      "root": "峡月",
+      "parent": "G8 I7 I9",
+      "moves": "G9 I9 H8 G8 F6 I7 I6",
+      "score": -28
+    },
+    {
+      "id": "s1-0212",
+      "root": "水月",
+      "parent": "H9 I7 I9",
+      "moves": "H8 H9 F7 I9 G6 I7 H5",
+      "score": -141
+    },
+    {
+      "id": "s1-0213",
+      "root": "寒星",
+      "parent": "G6 H5 H7",
+      "moves": "H8 H7 J8 G6 G7 H5 H6",
+      "score": 14
+    },
+    {
+      "id": "s1-0214",
+      "root": "渓月",
+      "parent": "H7 I8 J9",
+      "moves": "F9 J9 H9 I8 H8 H7 G6",
+      "score": 331
+    },
+    {
+      "id": "s1-0215",
+      "root": null,
+      "parent": "H7 I7 I9",
+      "moves": "H8 I9 E5 H7 G5 I7 H5",
+      "score": 179
+    },
+    {
+      "id": "s1-0216",
+      "root": "花月",
+      "parent": "H9 I8 J10",
+      "moves": "I9 J10 F8 H9 H8 I8 H6",
+      "score": 378
+    },
+    {
+      "id": "s1-0217",
+      "root": "疎星",
+      "parent": "H7 I5 I8",
+      "moves": "H8 I8 K7 H7 J6 I5 K6",
+      "score": 236
+    },
+    {
+      "id": "s1-0218",
+      "root": "長星",
+      "parent": "H5 H7 I7",
+      "moves": "H8 H7 H6 I7 J6 H5 I5",
+      "score": -12
+    },
+    {
+      "id": "s1-0219",
+      "root": "雲月",
+      "parent": "G9 I9 J8",
+      "moves": "H8 G9 I8 I9 F7 J8 K7",
+      "score": 497
+    },
+    {
+      "id": "s1-0220",
+      "root": "斜月",
+      "parent": "H7 I8 I9",
+      "moves": "H8 I9 G7 I8 F6 H7 G6",
+      "score": 276
+    },
+    {
+      "id": "s1-0221",
+      "root": "浦月",
+      "parent": "G5 G7 I8",
+      "moves": "H8 I8 I7 G7 J7 G5 I6",
+      "score": -30
+    },
+    {
+      "id": "s1-0222",
+      "root": "恒星",
+      "parent": "H7 I6 I7",
+      "moves": "G8 H7 H8 I7 J8 I6 G5",
+      "score": 500
+    },
+    {
+      "id": "s1-0223",
+      "root": "峡月",
+      "parent": "G7 H9 I8",
+      "moves": "H8 H9 F7 I8 I6 G7 H5",
+      "score": 339
+    },
+    {
+      "id": "s1-0224",
+      "root": "水月",
+      "parent": "G7 I8 J7",
+      "moves": "H8 I8 I6 G7 H5 J7 I4",
+      "score": 229
+    },
+    {
+      "id": "s1-0225",
+      "root": "寒星",
+      "parent": "G5 H5 H7",
+      "moves": "H8 H7 J8 G5 G7 H5 H6",
+      "score": 274
+    },
+    {
+      "id": "s1-0226",
+      "root": "渓月",
+      "parent": "E6 G8 H7",
+      "moves": "I9 G8 H8 H7 F6 E6 G6",
+      "score": 284
+    },
+    {
+      "id": "s1-0227",
+      "root": null,
+      "parent": "H7 I7 I8",
+      "moves": "H8 I8 K6 H7 J5 I7 K5",
+      "score": 357
+    },
+    {
+      "id": "s1-0228",
+      "root": "花月",
+      "parent": "G6 H7 I8",
+      "moves": "G8 I8 H8 H7 G7 G6 F5",
+      "score": 366
+    },
+    {
+      "id": "s1-0229",
+      "root": "疎星",
+      "parent": "G8 H7 I8",
+      "moves": "H9 G8 I9 I8 H8 H7 J6",
+      "score": 172
+    },
+    {
+      "id": "s1-0230",
+      "root": "長星",
+      "parent": "G7 I5 I7",
+      "moves": "I9 G7 H8 I7 J8 I5 J6",
+      "score": -281
+    },
+    {
+      "id": "s1-0231",
+      "root": "雲月",
+      "parent": "H9 I7 J8",
+      "moves": "H8 H9 I8 J8 F6 I7 G6",
+      "score": 83
+    },
+    {
+      "id": "s1-0232",
+      "root": "斜月",
+      "parent": "H7 I6 I9",
+      "moves": "G8 I9 H8 H7 G7 I6 E5",
+      "score": 454
+    },
+    {
+      "id": "s1-0233",
+      "root": "浦月",
+      "parent": "H7 I9 J8",
+      "moves": "G8 I9 H8 J8 I7 H7 J7",
+      "score": 227
+    },
+    {
+      "id": "s1-0234",
+      "root": "恒星",
+      "parent": "G5 G7 H5",
+      "moves": "H8 G7 J8 G5 H6 H5 F5",
+      "score": 132
+    },
+    {
+      "id": "s1-0235",
+      "root": "峡月",
+      "parent": "G8 H9 I9",
+      "moves": "J9 H9 H8 I9 F7 G8 J7",
+      "score": -74
+    },
+    {
+      "id": "s1-0236",
+      "root": "水月",
+      "parent": "G8 I7 I9",
+      "moves": "H8 I9 F6 G8 G6 I7 F5",
+      "score": 373
+    },
+    {
+      "id": "s1-0237",
+      "root": "寒星",
+      "parent": "H5 H7 I6",
+      "moves": "H8 H7 I7 I6 H6 H5 G4",
+      "score": -211
+    },
+    {
+      "id": "s1-0238",
+      "root": "渓月",
+      "parent": "H7 I8 K6",
+      "moves": "H8 I8 I6 H7 J6 K6 L5",
+      "score": 241
+    },
+    {
+      "id": "s1-0239",
+      "root": "花月",
+      "parent": "H6 I8 J7",
+      "moves": "H8 I8 G7 J7 H7 H6 I7",
+      "score": -86
+    },
+    {
+      "id": "s1-0240",
+      "root": "疎星",
+      "parent": "G6 H7 I6",
+      "moves": "H8 H7 J6 G6 H5 I6 J5",
+      "score": -231
+    },
+    {
+      "id": "s1-0241",
+      "root": "長星",
+      "parent": "F5 G7 I8",
+      "moves": "G8 I8 H8 G7 F7 F5 F6",
+      "score": 271
+    },
+    {
+      "id": "s1-0242",
+      "root": "雲月",
+      "parent": "I7 I9 J8",
+      "moves": "H9 I9 E8 J8 H8 I7 F7",
+      "score": 499
+    },
+    {
+      "id": "s1-0243",
+      "root": "斜月",
+      "parent": "G8 I5 I9",
+      "moves": "H8 I9 G7 G8 F6 I5 H6",
+      "score": -272
+    },
+    {
+      "id": "s1-0244",
+      "root": "浦月",
+      "parent": "H7 I8 I9",
+      "moves": "G8 I9 H8 I8 G7 H7 I7",
+      "score": 451
+    },
+    {
+      "id": "s1-0245",
+      "root": "恒星",
+      "parent": "G7 H5 I6",
+      "moves": "H8 G7 I8 I6 H7 H5 H6",
+      "score": -240
+    },
+    {
+      "id": "s1-0246",
+      "root": "峡月",
+      "parent": "I7 I8 I9",
+      "moves": "G8 I9 H8 I8 G7 I7 I6",
+      "score": -121
+    },
+    {
+      "id": "s1-0247",
+      "root": "水月",
+      "parent": "H7 I9 J8",
+      "moves": "G8 I9 H8 J8 G7 H7 J7",
+      "score": 221
+    },
+    {
+      "id": "s1-0248",
+      "root": "寒星",
+      "parent": "F5 H5 H7",
+      "moves": "I9 H7 H8 F5 H6 H5 I5",
+      "score": 377
+    },
+    {
+      "id": "s1-0249",
+      "root": "渓月",
+      "parent": "G6 H7 I8",
+      "moves": "G9 I8 J9 H7 H8 G6 G7",
+      "score": -277
+    },
+    {
+      "id": "s1-0250",
+      "root": "花月",
+      "parent": "H9 I8 J9",
+      "moves": "G9 H9 F8 J9 H8 I8 K6",
+      "score": 216
+    },
+    {
+      "id": "s1-0251",
+      "root": "疎星",
+      "parent": "G8 H7 H9",
+      "moves": "H8 H9 J8 G8 G7 H7 J6",
+      "score": 380
+    },
+    {
+      "id": "s1-0252",
+      "root": "長星",
+      "parent": "H7 I7 I8",
+      "moves": "H8 I8 I6 H7 J6 I7 K6",
+      "score": 422
+    },
+    {
+      "id": "s1-0253",
+      "root": "雲月",
+      "parent": "G8 I9 J6",
+      "moves": "H8 I9 I8 G8 G7 J6 I7",
+      "score": 389
+    },
+    {
+      "id": "s1-0254",
+      "root": "斜月",
+      "parent": "H7 I8 I9",
+      "moves": "G8 I9 H8 I8 G7 H7 G6",
+      "score": 91
+    },
+    {
+      "id": "s1-0255",
+      "root": "浦月",
+      "parent": "F7 G7 H7",
+      "moves": "J9 F7 H8 G7 I8 H7 I7",
+      "score": -436
+    },
+    {
+      "id": "s1-0256",
+      "root": "恒星",
+      "parent": "G8 H9 I9",
+      "moves": "H8 H9 J8 I9 F7 G8 J7",
+      "score": 316
+    },
+    {
+      "id": "s1-0257",
+      "root": "峡月",
+      "parent": "G7 G8 H9",
+      "moves": "I9 H9 H8 G8 G6 G7 I6",
+      "score": 371
+    },
+    {
+      "id": "s1-0258",
+      "root": "水月",
+      "parent": "G8 H9 I9",
+      "moves": "H8 H9 K8 I9 F7 G8 J7",
+      "score": 425
+    },
+    {
+      "id": "s1-0259",
+      "root": "寒星",
+      "parent": "G6 H5 H7",
+      "moves": "H8 H7 I7 G6 F6 H5 H6",
+      "score": 250
+    },
+    {
+      "id": "s1-0260",
+      "root": "渓月",
+      "parent": "G8 H9 I8",
+      "moves": "H8 H9 G7 G8 J7 I8 H6",
+      "score": -84
+    },
+    {
+      "id": "s1-0261",
+      "root": "花月",
+      "parent": "H6 I6 I8",
+      "moves": "G8 I8 H8 H6 H7 I6 I7",
+      "score": 166
+    },
+    {
+      "id": "s1-0262",
+      "root": "疎星",
+      "parent": "H7 I6 J8",
+      "moves": "H8 J8 I8 H7 I7 I6 F6",
+      "score": 470
+    },
+    {
+      "id": "s1-0263",
+      "root": "長星",
+      "parent": "G7 H5 I7",
+      "moves": "H8 G7 J7 I7 F6 H5 H6",
+      "score": 432
+    },
+    {
+      "id": "s1-0264",
+      "root": "雲月",
+      "parent": "F7 G6 G7",
+      "moves": "H9 F7 J9 G7 H8 G6 H7",
+      "score": -88
+    },
+    {
+      "id": "s1-0265",
+      "root": "斜月",
+      "parent": "H7 I6 I9",
+      "moves": "H8 I9 G7 H7 E5 I6 I5",
+      "score": 185
+    },
+    {
+      "id": "s1-0266",
+      "root": "浦月",
+      "parent": "G7 I7 J8",
+      "moves": "G9 J8 I9 G7 K9 I7 H8",
+      "score": 341
+    },
+    {
+      "id": "s1-0267",
+      "root": "恒星",
+      "parent": "I7 I9 J8",
+      "moves": "G8 I9 H8 J8 G6 I7 H6",
+      "score": 264
+    },
+    {
+      "id": "s1-0268",
+      "root": "峡月",
+      "parent": "G8 I6 I9",
+      "moves": "J9 I9 H8 G8 J8 I6 H7",
+      "score": -485
+    },
+    {
+      "id": "s1-0269",
+      "root": "水月",
+      "parent": "G5 G7 I8",
+      "moves": "H8 I8 J7 G7 I6 G5 J6",
+      "score": 100
+    },
+    {
+      "id": "s1-0270",
+      "root": "寒星",
+      "parent": "G5 H5 H7",
+      "moves": "H8 H7 J8 G5 H6 H5 J6",
+      "score": 310
+    },
+    {
+      "id": "s1-0271",
+      "root": "渓月",
+      "parent": "H7 I8 J10",
+      "moves": "I9 J10 E8 I8 H8 H7 G6",
+      "score": 336
+    },
+    {
+      "id": "s1-0272",
+      "root": "花月",
+      "parent": "F5 H7 I6",
+      "moves": "H8 H7 I7 I6 E5 F5 G5",
+      "score": 423
+    },
+    {
+      "id": "s1-0273",
+      "root": "疎星",
+      "parent": "H7 I5 I8",
+      "moves": "H8 I8 K7 H7 F6 I5 J6",
+      "score": 415
+    },
+    {
+      "id": "s1-0274",
+      "root": "長星",
+      "parent": "G7 I5 I7",
+      "moves": "H8 G7 J8 I7 J6 I5 L6",
+      "score": 267
+    },
+    {
+      "id": "s1-0275",
+      "root": "雲月",
+      "parent": "G7 H7 I6",
+      "moves": "I9 G7 G8 H7 H8 I6 G5",
+      "score": 492
+    },
+    {
+      "id": "s1-0276",
+      "root": "斜月",
+      "parent": "G8 I5 I9",
+      "moves": "F8 I9 H8 G8 G7 I5 H6",
+      "score": -128
+    },
+    {
+      "id": "s1-0277",
+      "root": "浦月",
+      "parent": "G7 I8 J7",
+      "moves": "H8 I8 I7 G7 I6 J7 H5",
+      "score": 109
+    },
+    {
+      "id": "s1-0278",
+      "root": "恒星",
+      "parent": "F8 I7 I9",
+      "moves": "H8 I9 G7 F8 H6 I7 G5",
+      "score": 375
+    },
+    {
+      "id": "s1-0279",
+      "root": "峡月",
+      "parent": "F7 G7 H5",
+      "moves": "H8 F7 I8 G7 G6 H5 H6",
+      "score": -220
+    },
+    {
+      "id": "s1-0280",
+      "root": "寒星",
+      "parent": "H5 H7 I6",
+      "moves": "H8 H7 H6 I6 G5 H5 G4",
+      "score": 207
+    },
+    {
+      "id": "s1-0281",
+      "root": "渓月",
+      "parent": "H7 J8 K6",
+      "moves": "H8 J8 I8 H7 J7 K6 I6",
+      "score": -154
+    },
+    {
+      "id": "s1-0282",
+      "root": "花月",
+      "parent": "G6 H7 J6",
+      "moves": "H8 H7 G7 G6 I7 J6 I5",
+      "score": -338
+    },
+    {
+      "id": "s1-0283",
+      "root": "疎星",
+      "parent": "H7 I5 I8",
+      "moves": "H8 I8 I7 H7 K7 I5 J6",
+      "score": -154
+    },
+    {
+      "id": "s1-0284",
+      "root": "長星",
+      "parent": "F5 G7 I8",
+      "moves": "H8 I8 F7 G7 F6 F5 G6",
+      "score": -4
+    },
+    {
+      "id": "s1-0285",
+      "root": "雲月",
+      "parent": "G6 I7 I9",
+      "moves": "H9 I9 H8 I7 F7 G6 H5",
+      "score": 328
+    },
+    {
+      "id": "s1-0286",
+      "root": "斜月",
+      "parent": "H7 I8 I9",
+      "moves": "H8 I9 F7 I8 G7 H7 G6",
+      "score": -8
+    },
+    {
+      "id": "s1-0287",
+      "root": "浦月",
+      "parent": "F6 H6 I7",
+      "moves": "H8 I7 G7 F6 G5 H6 H5",
+      "score": 344
+    },
+    {
+      "id": "s1-0288",
+      "root": "恒星",
+      "parent": "G8 I9 J6",
+      "moves": "H8 I9 J8 G8 G7 J6 I7",
+      "score": -200
+    },
+    {
+      "id": "s1-0289",
+      "root": "峡月",
+      "parent": "G6 G7 I7",
+      "moves": "H8 G7 L8 I7 F7 G6 I5",
+      "score": 382
+    },
+    {
+      "id": "s1-0290",
+      "root": "寒星",
+      "parent": "F5 H5 H7",
+      "moves": "I9 H7 H8 F5 I7 H5 H6",
+      "score": 83
+    },
+    {
+      "id": "s1-0291",
+      "root": "渓月",
+      "parent": "F5 H7 I8",
+      "moves": "J9 I8 L9 H7 H8 F5 I6",
+      "score": -26
+    },
+    {
+      "id": "s1-0292",
+      "root": "花月",
+      "parent": "F6 G8 H7",
+      "moves": "I9 G8 H8 H7 J8 F6 G7",
+      "score": 331
+    },
+    {
+      "id": "s1-0293",
+      "root": "長星",
+      "parent": "H7 I7 I8",
+      "moves": "H8 I8 G6 H7 I6 I7 J6",
+      "score": -288
+    },
+    {
+      "id": "s1-0294",
+      "root": "雲月",
+      "parent": "G7 I8 J6",
+      "moves": "G8 I8 H8 G7 I7 J6 I6",
+      "score": 273
+    },
+    {
+      "id": "s1-0295",
+      "root": "浦月",
+      "parent": "G7 G8 H9",
+      "moves": "I9 H9 H8 G8 I7 G7 J6",
+      "score": 402
+    },
+    {
+      "id": "s1-0296",
+      "root": "恒星",
+      "parent": "H5 I5 I7",
+      "moves": "I9 I7 H8 H5 G7 I5 H6",
+      "score": -42
+    },
+    {
+      "id": "s1-0297",
+      "root": "峡月",
+      "parent": "F8 G7 I7",
+      "moves": "J10 F8 H8 G7 J7 I7 I5",
+      "score": 350
+    },
+    {
+      "id": "s1-0298",
+      "root": "寒星",
+      "parent": "G6 H5 H7",
+      "moves": "H8 H7 I8 G6 H6 H5 I5",
+      "score": 235
+    },
+    {
+      "id": "s1-0299",
+      "root": "渓月",
+      "parent": "G6 G8 H7",
+      "moves": "J9 G8 H8 H7 I7 G6 I6",
+      "score": -477
+    },
+    {
+      "id": "s1-0300",
+      "root": "花月",
+      "parent": "H7 I6 J7",
+      "moves": "H8 H7 I8 J7 I7 I6 G5",
+      "score": 211
+    },
+    {
+      "id": "s1-0301",
+      "root": "長星",
+      "parent": "G7 H5 I7",
+      "moves": "H8 G7 J8 I7 H6 H5 J6",
+      "score": 170
+    },
+    {
+      "id": "s1-0302",
+      "root": "雲月",
+      "parent": "G7 I6 I7",
+      "moves": "G9 G7 J9 I7 H8 I6 H7",
+      "score": 440
+    },
+    {
+      "id": "s1-0303",
+      "root": "浦月",
+      "parent": "H6 I7 I9",
+      "moves": "G9 I9 F8 I7 G8 H6 H8",
+      "score": 77
+    },
+    {
+      "id": "s1-0304",
+      "root": "恒星",
+      "parent": "G7 I8 J6",
+      "moves": "G8 I8 H8 G7 I7 J6 H6",
+      "score": -154
+    },
+    {
+      "id": "s1-0305",
+      "root": "峡月",
+      "parent": "G7 H7 I6",
+      "moves": "I9 G7 H8 H7 F7 I6 G5",
+      "score": 471
+    },
+    {
+      "id": "s1-0306",
+      "root": "寒星",
+      "parent": "G5 H5 H7",
+      "moves": "H8 H7 J8 G5 H6 H5 F5",
+      "score": 59
+    },
+    {
+      "id": "s1-0307",
+      "root": "渓月",
+      "parent": "H7 I6 I8",
+      "moves": "H8 I8 D6 H7 F6 I6 G6",
+      "score": -339
+    },
+    {
+      "id": "s1-0308",
+      "root": "花月",
+      "parent": "G6 G8 H7",
+      "moves": "K9 G8 H8 H7 J8 G6 I7",
+      "score": 39
+    },
+    {
+      "id": "s1-0309",
+      "root": "長星",
+      "parent": "G7 I5 I7",
+      "moves": "H8 G7 J8 I7 H6 I5 J6",
+      "score": 81
+    },
+    {
+      "id": "s1-0310",
+      "root": "雲月",
+      "parent": "G6 G7 I7",
+      "moves": "H8 G7 L8 I7 H7 G6 I5",
+      "score": 386
+    },
+    {
+      "id": "s1-0311",
+      "root": "浦月",
+      "parent": "G8 I9 J6",
+      "moves": "E8 I9 H8 G8 G7 J6 I7",
+      "score": 476
+    },
+    {
+      "id": "s1-0312",
+      "root": "恒星",
+      "parent": "G9 I9 J8",
+      "moves": "F8 G9 H8 I9 H6 J8 J6",
+      "score": 207
+    },
+    {
+      "id": "s1-0313",
+      "root": "峡月",
+      "parent": "G9 I8 I9",
+      "moves": "J9 G9 F8 I9 H8 I8 H6",
+      "score": 418
+    },
+    {
+      "id": "s1-0314",
+      "root": "寒星",
+      "parent": "H5 H7 I6",
+      "moves": "H8 H7 I7 I6 H6 H5 J6",
+      "score": -322
+    },
+    {
+      "id": "s1-0315",
+      "root": "渓月",
+      "parent": "G8 H7 H9",
+      "moves": "H8 H9 J8 G8 F7 H7 I7",
+      "score": 36
+    },
+    {
+      "id": "s1-0316",
+      "root": "花月",
+      "parent": "H7 I6 I8",
+      "moves": "I9 I8 H8 H7 G7 I6 F5",
+      "score": -249
+    },
+    {
+      "id": "s1-0317",
+      "root": "長星",
+      "parent": "F5 G7 I8",
+      "moves": "H9 I8 H8 G7 F7 F5 F6",
+      "score": 493
+    },
+    {
+      "id": "s1-0318",
+      "root": "雲月",
+      "parent": "G7 H6 I7",
+      "moves": "H9 G7 G8 I7 H8 H6 I8",
+      "score": 104
+    },
+    {
+      "id": "s1-0319",
+      "root": "浦月",
+      "parent": "H9 I8 I9",
+      "moves": "E8 H9 H8 I9 F7 I8 I7",
+      "score": 487
+    },
+    {
+      "id": "s1-0320",
+      "root": "恒星",
+      "parent": "G8 H9 I7",
+      "moves": "H8 H9 I8 G8 J8 I7 G7",
+      "score": -200
+    },
+    {
+      "id": "s1-0321",
+      "root": "峡月",
+      "parent": "G7 G8 G9",
+      "moves": "J9 G9 H8 G8 I8 G7 G6",
+      "score": 369
+    },
+    {
+      "id": "s1-0322",
+      "root": "寒星",
+      "parent": "F5 H5 H7",
+      "moves": "I9 H7 H8 F5 J8 H5 H6",
+      "score": 321
+    },
+    {
+      "id": "s1-0323",
+      "root": "渓月",
+      "parent": "G8 H7 I8",
+      "moves": "N10 G8 F9 I8 H8 H7 G6",
+      "score": 433
+    },
+    {
+      "id": "s1-0324",
+      "root": "花月",
+      "parent": "F7 G6 H7",
+      "moves": "H8 F7 I8 H7 G7 G6 I5",
+      "score": 134
+    },
+    {
+      "id": "s1-0325",
+      "root": "長星",
+      "parent": "G7 I5 I7",
+      "moves": "H8 G7 J8 I7 J6 I5 J5",
+      "score": 471
+    },
+    {
+      "id": "s1-0326",
+      "root": "雲月",
+      "parent": "G7 H9 I8",
+      "moves": "H8 H9 H7 I8 J7 G7 D3",
+      "score": 497
+    },
+    {
+      "id": "s1-0327",
+      "root": "浦月",
+      "parent": "I9 J8 J9",
+      "moves": "H8 I9 F7 J9 I7 J8 J7",
+      "score": 15
+    },
+    {
+      "id": "s1-0328",
+      "root": "恒星",
+      "parent": "H5 I7 J7",
+      "moves": "H8 I7 I8 J7 F6 H5 H6",
+      "score": -129
+    },
+    {
+      "id": "s1-0329",
+      "root": "峡月",
+      "parent": "G7 H9 I7",
+      "moves": "I9 H9 J9 G7 H8 I7 F7",
+      "score": 18
+    },
+    {
+      "id": "s1-0330",
+      "root": "寒星",
+      "parent": "G6 H5 H7",
+      "moves": "H8 H7 I8 G6 H6 H5 I6",
+      "score": 328
+    },
+    {
+      "id": "s1-0331",
+      "root": "渓月",
+      "parent": "G6 H7 J7",
+      "moves": "H8 H7 I8 J7 I6 G6 H5",
+      "score": 486
+    },
+    {
+      "id": "s1-0332",
+      "root": "花月",
+      "parent": "F6 G8 H9",
+      "moves": "I9 H9 H8 G8 G7 F6 I7",
+      "score": -431
+    },
+    {
+      "id": "s1-0333",
+      "root": "雲月",
+      "parent": "H6 I5 I7",
+      "moves": "H8 I7 I8 H6 G5 I5 H5",
+      "score": 379
+    },
+    {
+      "id": "s1-0334",
+      "root": "浦月",
+      "parent": "G7 G8 H7",
+      "moves": "J9 G8 H8 G7 J8 H7 I7",
+      "score": 494
+    },
+    {
+      "id": "s1-0335",
+      "root": "恒星",
+      "parent": "G6 G7 I8",
+      "moves": "H8 I8 H7 G7 H6 G6 I6",
+      "score": -490
+    },
+    {
+      "id": "s1-0336",
+      "root": "峡月",
+      "parent": "G7 I6 I7",
+      "moves": "K9 G7 F8 I7 H8 I6 F7",
+      "score": 327
+    },
+    {
+      "id": "s1-0337",
+      "root": "寒星",
+      "parent": "H5 H7 I6",
+      "moves": "H8 H7 J8 I6 I7 H5 H6",
+      "score": -322
+    },
+    {
+      "id": "s1-0338",
+      "root": "渓月",
+      "parent": "H7 I8 J7",
+      "moves": "J9 I8 H8 H7 G7 J7 G6",
+      "score": 42
+    },
+    {
+      "id": "s1-0339",
+      "root": "花月",
+      "parent": "G8 H7 I6",
+      "moves": "I9 G8 H8 H7 I7 I6 J5",
+      "score": -35
+    },
+    {
+      "id": "s1-0340",
+      "root": "雲月",
+      "parent": "G8 H9 I7",
+      "moves": "J9 H9 H8 G8 I8 I7 F7",
+      "score": -43
+    },
+    {
+      "id": "s1-0341",
+      "root": "浦月",
+      "parent": "G8 H9 I9",
+      "moves": "H8 H9 F7 I9 G7 G8 I7",
+      "score": -132
+    },
+    {
+      "id": "s1-0342",
+      "root": "恒星",
+      "parent": "F8 G7 G9",
+      "moves": "J10 G9 H8 F8 J8 G7 H6",
+      "score": 218
+    },
+    {
+      "id": "s1-0343",
+      "root": "峡月",
+      "parent": "I6 I7 K8",
+      "moves": "H8 K8 J8 I7 J7 I6 D4",
+      "score": 353
+    },
+    {
+      "id": "s1-0344",
+      "root": "寒星",
+      "parent": "H5 H7 I6",
+      "moves": "H8 H7 I8 I6 I7 H5 H6",
+      "score": -8
+    },
+    {
+      "id": "s1-0345",
+      "root": "渓月",
+      "parent": "F6 H7 I8",
+      "moves": "J9 I8 F8 H7 H8 F6 G7",
+      "score": 70
+    },
+    {
+      "id": "s1-0346",
+      "root": "花月",
+      "parent": "G8 H7 J6",
+      "moves": "H8 G8 J8 H7 G7 J6 I7",
+      "score": 147
+    },
+    {
+      "id": "s1-0347",
+      "root": "雲月",
+      "parent": "G7 I8 J7",
+      "moves": "H8 I8 H7 G7 I6 J7 H5",
+      "score": 109
+    },
+    {
+      "id": "s1-0348",
+      "root": "浦月",
+      "parent": "G7 G8 H9",
+      "moves": "I9 H9 H8 G8 I8 G7 I7",
+      "score": 398
+    },
+    {
+      "id": "s1-0349",
+      "root": "恒星",
+      "parent": "G7 G9 H6",
+      "moves": "J10 G9 F8 G7 H8 H6 J7",
+      "score": 411
+    },
+    {
+      "id": "s1-0350",
+      "root": "峡月",
+      "parent": "G8 H9 I7",
+      "moves": "J9 H9 H8 G8 G6 I7 I6",
+      "score": 23
+    },
+    {
+      "id": "s1-0351",
+      "root": "寒星",
+      "parent": "H5 H7 I6",
+      "moves": "H8 H7 I7 I6 J7 H5 H6",
+      "score": -32
+    },
+    {
+      "id": "s1-0352",
+      "root": "渓月",
+      "parent": "H7 I8 K10",
+      "moves": "H8 K10 J7 I8 F6 H7 G6",
+      "score": -171
+    },
+    {
+      "id": "s1-0353",
+      "root": "花月",
+      "parent": "H6 I8 J7",
+      "moves": "H8 I8 F7 J7 H7 H6 I7",
+      "score": 159
+    },
+    {
+      "id": "s1-0354",
+      "root": "雲月",
+      "parent": "G7 I5 I7",
+      "moves": "H8 G7 H7 I7 G5 I5 H5",
+      "score": 189
+    },
+    {
+      "id": "s1-0355",
+      "root": "浦月",
+      "parent": "H6 I7 I9",
+      "moves": "F8 I9 G8 I7 H8 H6 G7",
+      "score": 43
+    },
+    {
+      "id": "s1-0356",
+      "root": "恒星",
+      "parent": "G9 H7 I9",
+      "moves": "H8 G9 J8 I9 I7 H7 F6",
+      "score": 113
+    },
+    {
+      "id": "s1-0357",
+      "root": "峡月",
+      "parent": "G9 H9 I9",
+      "moves": "J9 G9 F8 H9 H8 I9 F6",
+      "score": 377
+    },
+    {
+      "id": "s1-0358",
+      "root": "渓月",
+      "parent": "H7 I8 K6",
+      "moves": "H8 I8 G6 H7 I6 K6 J6",
+      "score": 351
+    },
+    {
+      "id": "s1-0359",
+      "root": "花月",
+      "parent": "G6 H7 J6",
+      "moves": "H8 H7 I8 G6 I7 J6 I5",
+      "score": 217
+    },
+    {
+      "id": "s1-0360",
+      "root": "雲月",
+      "parent": "I9 J8 J9",
+      "moves": "H9 I9 H8 J9 F7 J8 I7",
+      "score": 265
+    },
+    {
+      "id": "s1-0361",
+      "root": "浦月",
+      "parent": "G8 I9 J6",
+      "moves": "H8 I9 G7 G8 I7 J6 G5",
+      "score": 329
+    },
+    {
+      "id": "s1-0362",
+      "root": "恒星",
+      "parent": "G7 I7 J7",
+      "moves": "J9 G7 H8 I7 J8 J7 K7",
+      "score": -133
+    },
+    {
+      "id": "s1-0363",
+      "root": "峡月",
+      "parent": "G7 I7 J7",
+      "moves": "J9 G7 K9 I7 H8 J7 F7",
+      "score": 55
+    },
+    {
+      "id": "s1-0364",
+      "root": "渓月",
+      "parent": "G6 H7 I8",
+      "moves": "J9 I8 G8 H7 H8 G6 G7",
+      "score": 399
+    },
+    {
+      "id": "s1-0365",
+      "root": "花月",
+      "parent": "F6 G8 H7",
+      "moves": "H8 G8 J8 H7 G7 F6 I7",
+      "score": 68
+    },
+    {
+      "id": "s1-0366",
+      "root": "雲月",
+      "parent": "H6 I6 I7",
+      "moves": "G8 I7 H8 H6 I8 I6 J5",
+      "score": 124
+    },
+    {
+      "id": "s1-0367",
+      "root": "浦月",
+      "parent": "H9 I8 I9",
+      "moves": "F8 H9 H8 I9 I7 I8 F6",
+      "score": 345
+    },
+    {
+      "id": "s1-0368",
+      "root": "恒星",
+      "parent": "H6 I5 I7",
+      "moves": "H8 I7 J8 H6 K8 I5 H5",
+      "score": 445
+    },
+    {
+      "id": "s1-0369",
+      "root": "峡月",
+      "parent": "G8 G9 I9",
+      "moves": "J9 G9 H8 I9 G6 G8 J6",
+      "score": 103
+    },
+    {
+      "id": "s1-0370",
+      "root": "渓月",
+      "parent": "G8 H9 I8",
+      "moves": "H8 H9 J7 G8 F6 I8 H6",
+      "score": 476
+    },
+    {
+      "id": "s1-0371",
+      "root": "花月",
+      "parent": "H7 I6 J7",
+      "moves": "H8 H7 I7 J7 G5 I6 K5",
+      "score": 370
+    },
+    {
+      "id": "s1-0372",
+      "root": "雲月",
+      "parent": "G7 I7 J7",
+      "moves": "J9 G7 K9 I7 H8 J7 H7",
+      "score": -318
+    },
+    {
+      "id": "s1-0373",
+      "root": "浦月",
+      "parent": "H6 I7 I9",
+      "moves": "G9 I9 G8 I7 H8 H6 G6",
+      "score": 402
+    },
+    {
+      "id": "s1-0374",
+      "root": "恒星",
+      "parent": "I7 J9 K8",
+      "moves": "G8 J9 H8 K8 I8 I7 J8",
+      "score": 0
+    },
+    {
+      "id": "s1-0375",
+      "root": "峡月",
+      "parent": "G7 H9 J7",
+      "moves": "H8 H9 F7 G7 G6 J7 H6",
+      "score": -338
+    },
+    {
+      "id": "s1-0376",
+      "root": "渓月",
+      "parent": "F5 H7 I8",
+      "moves": "J9 I8 H8 H7 D6 F5 I6",
+      "score": 376
+    },
+    {
+      "id": "s1-0377",
+      "root": "花月",
+      "parent": "G6 H7 J6",
+      "moves": "H8 H7 I7 G6 K6 J6 I5",
+      "score": 309
+    },
+    {
+      "id": "s1-0378",
+      "root": "雲月",
+      "parent": "G7 I7 J9",
+      "moves": "G9 J9 I9 G7 H8 I7 H7",
+      "score": 12
+    },
+    {
+      "id": "s1-0379",
+      "root": "浦月",
+      "parent": "G8 I9 J6",
+      "moves": "F8 I9 H8 G8 G7 J6 I7",
+      "score": -228
+    },
+    {
+      "id": "s1-0380",
+      "root": "恒星",
+      "parent": "G9 H6 I9",
+      "moves": "F8 G9 H8 I9 J8 H6 I7",
+      "score": 347
+    },
+    {
+      "id": "s1-0381",
+      "root": "峡月",
+      "parent": "G6 G7 I8",
+      "moves": "J9 I8 E8 G7 H8 G6 F7",
+      "score": 440
+    },
+    {
+      "id": "s1-0382",
+      "root": "渓月",
+      "parent": "G6 G8 H7",
+      "moves": "I9 G8 J9 H7 H8 G6 I6",
+      "score": 94
+    },
+    {
+      "id": "s1-0383",
+      "root": "花月",
+      "parent": "F6 G8 H7",
+      "moves": "H8 G8 J8 H7 G7 F6 I5",
+      "score": 425
+    },
+    {
+      "id": "s1-0384",
+      "root": "雲月",
+      "parent": "H9 I7 J10",
+      "moves": "I9 J10 H8 H9 H7 I7 E3",
+      "score": 498
+    },
+    {
+      "id": "s1-0385",
+      "root": "浦月",
+      "parent": "H9 I8 I9",
+      "moves": "F8 H9 H8 I9 I7 I8 H6",
+      "score": 428
+    },
+    {
+      "id": "s1-0386",
+      "root": "恒星",
+      "parent": "H6 I6 I7",
+      "moves": "H8 I7 J8 H6 K8 I6 J5",
+      "score": 180
+    },
+    {
+      "id": "s1-0387",
+      "root": "峡月",
+      "parent": "I7 I9 J8",
+      "moves": "G8 I9 H8 J8 H7 I7 I6",
+      "score": -105
+    },
+    {
+      "id": "s1-0388",
+      "root": "渓月",
+      "parent": "H7 I6 I8",
+      "moves": "H9 I8 H8 H7 F7 I6 G6",
+      "score": -99
+    },
+    {
+      "id": "s1-0389",
+      "root": "花月",
+      "parent": "H7 I6 J7",
+      "moves": "H8 H7 I7 J7 G5 I6 J5",
+      "score": -265
+    },
+    {
+      "id": "s1-0390",
+      "root": "雲月",
+      "parent": "G7 I7 J8",
+      "moves": "H9 J8 G8 G7 H8 I7 I8",
+      "score": -80
+    },
+    {
+      "id": "s1-0391",
+      "root": "浦月",
+      "parent": "G8 I9 J6",
+      "moves": "H8 I9 G7 G8 I7 J6 D2",
+      "score": 483
+    },
+    {
+      "id": "s1-0392",
+      "root": "恒星",
+      "parent": "G7 I6 I7",
+      "moves": "K9 G7 F8 I7 H8 I6 I8",
+      "score": 449
+    },
+    {
+      "id": "s1-0393",
+      "root": "峡月",
+      "parent": "G8 H7 I7",
+      "moves": "H9 G8 I9 H7 H8 I7 J7",
+      "score": -368
+    },
+    {
+      "id": "s1-0394",
+      "root": "渓月",
+      "parent": "G8 H7 H9",
+      "moves": "H8 H9 J8 G8 I6 H7 G5",
+      "score": 416
+    },
+    {
+      "id": "s1-0395",
+      "root": "花月",
+      "parent": "F6 G8 H7",
+      "moves": "H8 G8 J8 H7 G7 F6 J5",
+      "score": 294
+    },
+    {
+      "id": "s1-0396",
+      "root": "雲月",
+      "parent": "G8 I7 I9",
+      "moves": "H8 I9 I8 G8 G7 I7 G6",
+      "score": 220
+    },
+    {
+      "id": "s1-0397",
+      "root": "浦月",
+      "parent": "H9 I8 I9",
+      "moves": "H8 H9 I7 I9 F6 I8 G5",
+      "score": 476
+    },
+    {
+      "id": "s1-0398",
+      "root": "恒星",
+      "parent": "H9 I7 J8",
+      "moves": "H8 H9 H7 J8 H6 I7 D1",
+      "score": 479
+    },
+    {
+      "id": "s1-0399",
+      "root": "峡月",
+      "parent": "G9 H7 I9",
+      "moves": "J9 G9 H8 I9 I7 H7 F6",
+      "score": 352
+    },
+    {
+      "id": "s1-0400",
+      "root": "渓月",
+      "parent": "G8 H7 I8",
+      "moves": "I9 G8 H8 I8 I6 H7 L6",
+      "score": 487
+    },
+    {
+      "id": "s1-0401",
+      "root": "花月",
+      "parent": "H7 I6 J7",
+      "moves": "H8 H7 I7 J7 G5 I6 F4",
+      "score": -53
+    },
+    {
+      "id": "s1-0402",
+      "root": "雲月",
+      "parent": "G7 G8 I7",
+      "moves": "J9 G8 H8 G7 K8 I7 H7",
+      "score": 124
+    },
+    {
+      "id": "s1-0403",
+      "root": "浦月",
+      "parent": "H9 I8 I9",
+      "moves": "H8 H9 F7 I9 I7 I8 G6",
+      "score": 379
+    },
+    {
+      "id": "s1-0404",
+      "root": "恒星",
+      "parent": "G7 G9 J8",
+      "moves": "J9 G9 H8 J8 I7 G7 H6",
+      "score": 243
+    },
+    {
+      "id": "s1-0405",
+      "root": "峡月",
+      "parent": "G7 I8 J7",
+      "moves": "H8 I8 G6 G7 I6 J7 H5",
+      "score": -3
+    },
+    {
+      "id": "s1-0406",
+      "root": "渓月",
+      "parent": "G6 H7 J7",
+      "moves": "H8 H7 I7 J7 I6 G6 H5",
+      "score": 201
+    },
+    {
+      "id": "s1-0407",
+      "root": "花月",
+      "parent": "H7 I6 J7",
+      "moves": "H8 H7 G7 J7 I7 I6 G5",
+      "score": -323
+    },
+    {
+      "id": "s1-0408",
+      "root": "雲月",
+      "parent": "F6 G8 I7",
+      "moves": "K9 G8 H8 I7 I8 F6 G7",
+      "score": 247
+    },
+    {
+      "id": "s1-0409",
+      "root": "浦月",
+      "parent": "H9 I8 I9",
+      "moves": "H8 H9 F7 I9 H7 I8 I7",
+      "score": 252
+    },
+    {
+      "id": "s1-0410",
+      "root": "恒星",
+      "parent": "G5 G7 H6",
+      "moves": "J10 G7 F8 H6 H8 G5 L8",
+      "score": 365
+    },
+    {
+      "id": "s1-0411",
+      "root": "峡月",
+      "parent": "G7 H6 I8",
+      "moves": "H8 I8 H7 G7 G6 H6 H5",
+      "score": 471
+    },
+    {
+      "id": "s1-0412",
+      "root": "渓月",
+      "parent": "H7 I8 J7",
+      "moves": "J9 I8 G8 H7 H8 J7 G7",
+      "score": -353
+    },
+    {
+      "id": "s1-0413",
+      "root": "雲月",
+      "parent": "H6 I7 J8",
+      "moves": "H8 J8 I8 I7 G5 H6 H5",
+      "score": 153
+    },
+    {
+      "id": "s1-0414",
+      "root": "恒星",
+      "parent": "I9 K8 K9",
+      "moves": "F8 I9 H8 K9 J8 K8 H6",
+      "score": 489
+    },
+    {
+      "id": "s1-0415",
+      "root": "峡月",
+      "parent": "H5 I6 I7",
+      "moves": "H8 I7 J7 I6 H6 H5 G5",
+      "score": 299
+    },
+    {
+      "id": "s1-0416",
+      "root": "渓月",
+      "parent": "F6 H7 I8",
+      "moves": "G9 I8 J9 H7 H8 F6 G7",
+      "score": -424
+    },
+    {
+      "id": "s1-0417",
+      "root": "雲月",
+      "parent": "G7 H6 I8",
+      "moves": "H8 I8 H7 G7 L7 H6 I5",
+      "score": 169
+    },
+    {
+      "id": "s1-0418",
+      "root": "恒星",
+      "parent": "G6 H6 I7",
+      "moves": "H8 I7 J8 G6 G7 H6 K5",
+      "score": 335
+    },
+    {
+      "id": "s1-0419",
+      "root": "峡月",
+      "parent": "H7 I8 I9",
+      "moves": "J9 I9 G8 I8 H8 H7 G7",
+      "score": -121
+    },
+    {
+      "id": "s1-0420",
+      "root": "渓月",
+      "parent": "H7 I8 K6",
+      "moves": "H8 I8 I7 H7 I6 K6 J6",
+      "score": 281
+    },
+    {
+      "id": "s1-0421",
+      "root": "雲月",
+      "parent": "G7 I7 I8",
+      "moves": "H8 I8 H7 G7 G5 I7 H4",
+      "score": -183
+    },
+    {
+      "id": "s1-0422",
+      "root": "恒星",
+      "parent": "G7 I7 J8",
+      "moves": "G9 J8 I9 G7 F8 I7 H8",
+      "score": 399
+    },
+    {
+      "id": "s1-0423",
+      "root": "峡月",
+      "parent": "G8 I9 J6",
+      "moves": "J9 I9 H8 G8 G7 J6 I7",
+      "score": 264
+    },
+    {
+      "id": "s1-0424",
+      "root": "渓月",
+      "parent": "G6 H7 I8",
+      "moves": "F9 I8 J9 H7 H8 G6 G7",
+      "score": 192
+    },
+    {
+      "id": "s1-0425",
+      "root": "雲月",
+      "parent": "G8 H7 I9",
+      "moves": "H8 I9 I8 G8 J7 H7 H5",
+      "score": 350
+    },
+    {
+      "id": "s1-0426",
+      "root": "恒星",
+      "parent": "G7 I7 J9",
+      "moves": "G9 J9 I9 G7 F8 I7 H8",
+      "score": 240
+    },
+    {
+      "id": "s1-0427",
+      "root": "峡月",
+      "parent": "F7 H9 I7",
+      "moves": "H8 H9 K8 F7 H6 I7 I6",
+      "score": -81
+    },
+    {
+      "id": "s1-0428",
+      "root": "渓月",
+      "parent": "G8 H9 I8",
+      "moves": "H8 H9 J7 G8 B6 I8 J6",
+      "score": 263
+    },
+    {
+      "id": "s1-0429",
+      "root": "雲月",
+      "parent": "H7 I9 J8",
+      "moves": "G8 I9 H8 J8 I8 H7 J7",
+      "score": -199
+    },
+    {
+      "id": "s1-0430",
+      "root": "恒星",
+      "parent": "G7 H6 I5",
+      "moves": "J10 G7 F8 H6 H8 I5 J6",
+      "score": 478
+    },
+    {
+      "id": "s1-0431",
+      "root": "峡月",
+      "parent": "G7 H9 J6",
+      "moves": "I9 H9 H8 G7 F7 J6 I7",
+      "score": 100
+    },
+    {
+      "id": "s1-0432",
+      "root": "渓月",
+      "parent": "F5 H7 I8",
+      "moves": "I9 I8 J9 H7 H8 F5 I6",
+      "score": -147
+    },
+    {
+      "id": "s1-0433",
+      "root": "雲月",
+      "parent": "F8 G7 I7",
+      "moves": "H9 F8 I9 G7 H8 I7 H7",
+      "score": 44
+    },
+    {
+      "id": "s1-0434",
+      "root": "恒星",
+      "parent": "I7 K7 K8",
+      "moves": "I9 K8 H8 I7 J8 K7 F6",
+      "score": 211
+    },
+    {
+      "id": "s1-0435",
+      "root": "峡月",
+      "parent": "F8 I7 I9",
+      "moves": "J9 I9 H8 F8 G7 I7 H6",
+      "score": -53
+    },
+    {
+      "id": "s1-0436",
+      "root": "渓月",
+      "parent": "G6 G8 H7",
+      "moves": "H8 G8 K8 H7 I7 G6 I6",
+      "score": -29
+    },
+    {
+      "id": "s1-0437",
+      "root": "雲月",
+      "parent": "H6 I7 I9",
+      "moves": "G8 I9 H8 I7 F7 H6 H7",
+      "score": 207
+    },
+    {
+      "id": "s1-0438",
+      "root": "恒星",
+      "parent": "F8 I9 K8",
+      "moves": "G8 I9 H8 F8 J8 K8 M4",
+      "score": 461
+    },
+    {
+      "id": "s1-0439",
+      "root": "峡月",
+      "parent": "F7 G7 I7",
+      "moves": "K9 F7 H8 G7 H7 I7 I6",
+      "score": 101
+    },
+    {
+      "id": "s1-0440",
+      "root": "渓月",
+      "parent": "H7 I6 I8",
+      "moves": "J9 I8 H8 H7 G7 I6 K6",
+      "score": -1
+    },
+    {
+      "id": "s1-0441",
+      "root": "雲月",
+      "parent": "G8 H6 I7",
+      "moves": "J9 G8 H8 I7 H7 H6 G6",
+      "score": 181
+    },
+    {
+      "id": "s1-0442",
+      "root": "恒星",
+      "parent": "G6 H5 I7",
+      "moves": "H8 I7 G7 G6 H7 H5 H6",
+      "score": -180
+    },
+    {
+      "id": "s1-0443",
+      "root": "峡月",
+      "parent": "F8 I7 K8",
+      "moves": "G8 F8 H8 K8 J8 I7 J7",
+      "score": -127
+    },
+    {
+      "id": "s1-0444",
+      "root": "渓月",
+      "parent": "G8 H7 H9",
+      "moves": "I9 H9 H8 G8 F7 H7 I7",
+      "score": -309
+    },
+    {
+      "id": "s1-0445",
+      "root": "雲月",
+      "parent": "G5 G7 I8",
+      "moves": "G8 I8 H8 G7 J7 G5 I6",
+      "score": -184
+    },
+    {
+      "id": "s1-0446",
+      "root": "恒星",
+      "parent": "I6 I7 K8",
+      "moves": "H8 K8 J8 I7 H7 I6 K6",
+      "score": 429
+    },
+    {
+      "id": "s1-0447",
+      "root": "峡月",
+      "parent": "G6 H5 I7",
+      "moves": "H8 I7 H7 G6 H6 H5 I6",
+      "score": 339
+    },
+    {
+      "id": "s1-0448",
+      "root": "渓月",
+      "parent": "G8 H7 I8",
+      "moves": "I9 G8 L9 I8 H8 H7 I6",
+      "score": 114
+    },
+    {
+      "id": "s1-0449",
+      "root": "雲月",
+      "parent": "F7 G6 G7",
+      "moves": "J9 F7 G8 G7 H8 G6 H7",
+      "score": -304
+    },
+    {
+      "id": "s1-0450",
+      "root": "恒星",
+      "parent": "F8 G7 I7",
+      "moves": "H9 F8 I9 G7 H8 I7 J8",
+      "score": 400
+    },
+    {
+      "id": "s1-0451",
+      "root": "峡月",
+      "parent": "H6 I7 I8",
+      "moves": "H8 I8 G7 I7 H7 H6 I6",
+      "score": -157
+    },
+    {
+      "id": "s1-0452",
+      "root": "渓月",
+      "parent": "H7 I8 J7",
+      "moves": "J9 I8 F8 H7 H8 J7 G7",
+      "score": -108
+    },
+    {
+      "id": "s1-0453",
+      "root": "雲月",
+      "parent": "G6 I7 I9",
+      "moves": "H8 I9 I8 I7 F7 G6 H5",
+      "score": 310
+    },
+    {
+      "id": "s1-0454",
+      "root": "恒星",
+      "parent": "G8 H6 I7",
+      "moves": "H8 G8 I8 I7 J8 H6 H7",
+      "score": 240
+    },
+    {
+      "id": "s1-0455",
+      "root": "峡月",
+      "parent": "G7 H7 I8",
+      "moves": "H9 I8 G8 G7 H8 H7 F7",
+      "score": -423
+    },
+    {
+      "id": "s1-0456",
+      "root": "渓月",
+      "parent": "F6 H7 I8",
+      "moves": "J9 I8 H8 H7 G7 F6 E4",
+      "score": 134
+    },
+    {
+      "id": "s1-0457",
+      "root": "雲月",
+      "parent": "G7 I8 J6",
+      "moves": "G8 I8 H8 G7 I7 J6 J7",
+      "score": 190
+    },
+    {
+      "id": "s1-0458",
+      "root": "恒星",
+      "parent": "F8 I7 K8",
+      "moves": "G8 F8 H8 K8 J8 I7 G7",
+      "score": -180
+    },
+    {
+      "id": "s1-0459",
+      "root": "峡月",
+      "parent": "G7 I7 I8",
+      "moves": "H8 I8 F7 G7 J7 I7 I5",
+      "score": 203
+    },
+    {
+      "id": "s1-0460",
+      "root": "渓月",
+      "parent": "F5 H7 I8",
+      "moves": "J9 I8 H8 H7 F6 F5 I6",
+      "score": 255
+    },
+    {
+      "id": "s1-0461",
+      "root": "雲月",
+      "parent": "G8 H9 I7",
+      "moves": "I9 H9 H8 G8 F7 I7 H7",
+      "score": -481
+    },
+    {
+      "id": "s1-0462",
+      "root": "恒星",
+      "parent": "G7 H6 I7",
+      "moves": "J10 G7 F8 I7 H8 H6 L8",
+      "score": 449
+    },
+    {
+      "id": "s1-0463",
+      "root": "峡月",
+      "parent": "H9 I7 I9",
+      "moves": "F8 H9 H8 I9 F6 I7 I6",
+      "score": 162
+    },
+    {
+      "id": "s1-0464",
+      "root": "渓月",
+      "parent": "H7 I6 I8",
+      "moves": "I9 I8 E8 H7 H8 I6 G6",
+      "score": -70
+    },
+    {
+      "id": "s1-0465",
+      "root": "雲月",
+      "parent": "I9 J8 J9",
+      "moves": "H9 I9 H8 J9 F6 J8 H6",
+      "score": 310
+    },
+    {
+      "id": "s1-0466",
+      "root": "恒星",
+      "parent": "G5 G7 H5",
+      "moves": "H8 G7 I8 G5 I7 H5 H6",
+      "score": 35
+    },
+    {
+      "id": "s1-0467",
+      "root": "峡月",
+      "parent": "H9 I7 J7",
+      "moves": "H8 H9 F6 I7 I6 J7 H5",
+      "score": 206
+    },
+    {
+      "id": "s1-0468",
+      "root": "渓月",
+      "parent": "G8 H7 H9",
+      "moves": "H8 H9 J8 G8 K8 H7 I6",
+      "score": 91
+    },
+    {
+      "id": "s1-0469",
+      "root": "雲月",
+      "parent": "G8 I7 I9",
+      "moves": "G9 I9 H8 G8 I8 I7 F6",
+      "score": 393
+    },
+    {
+      "id": "s1-0470",
+      "root": "恒星",
+      "parent": "G7 H5 I6",
+      "moves": "H8 G7 J8 I6 H7 H5 H6",
+      "score": 3
+    },
+    {
+      "id": "s1-0471",
+      "root": "峡月",
+      "parent": "F8 G9 I9",
+      "moves": "J9 G9 H8 I9 J8 F8 J6",
+      "score": 8
+    },
+    {
+      "id": "s1-0472",
+      "root": "渓月",
+      "parent": "G8 H7 I8",
+      "moves": "I9 G8 H8 I8 I6 H7 G5",
+      "score": 309
+    },
+    {
+      "id": "s1-0473",
+      "root": "雲月",
+      "parent": "F6 G8 I7",
+      "moves": "K10 G8 H8 I7 I8 F6 G7",
+      "score": 154
+    },
+    {
+      "id": "s1-0474",
+      "root": "恒星",
+      "parent": "I7 I9 J8",
+      "moves": "H9 I9 H8 J8 F7 I7 H6",
+      "score": 454
+    },
+    {
+      "id": "s1-0475",
+      "root": "峡月",
+      "parent": "G8 I6 I7",
+      "moves": "H8 G8 J8 I7 K8 I6 J7",
+      "score": 196
+    },
+    {
+      "id": "s1-0476",
+      "root": "渓月",
+      "parent": "H7 I8 J7",
+      "moves": "J9 I8 F8 H7 H8 J7 I7",
+      "score": 213
+    },
+    {
+      "id": "s1-0477",
+      "root": "雲月",
+      "parent": "H6 I7 J8",
+      "moves": "H8 J8 K8 I7 H7 H6 G5",
+      "score": 389
+    },
+    {
+      "id": "s1-0478",
+      "root": "恒星",
+      "parent": "F8 I7 I9",
+      "moves": "H8 I9 G7 F8 F6 I7 H6",
+      "score": -43
+    },
+    {
+      "id": "s1-0479",
+      "root": "峡月",
+      "parent": "G7 H7 I7",
+      "moves": "H8 G7 I8 H7 J7 I7 I5",
+      "score": 467
+    },
+    {
+      "id": "s1-0480",
+      "root": "渓月",
+      "parent": "F6 H7 I8",
+      "moves": "J9 I8 G8 H7 H8 F6 G7",
+      "score": 425
+    },
+    {
+      "id": "s1-0481",
+      "root": "雲月",
+      "parent": "G7 H6 I8",
+      "moves": "G8 I8 H8 G7 I7 H6 J7",
+      "score": 227
+    },
+    {
+      "id": "s1-0482",
+      "root": "恒星",
+      "parent": "H5 I5 I7",
+      "moves": "H8 I7 K8 H5 G7 I5 H6",
+      "score": 368
+    },
+    {
+      "id": "s1-0483",
+      "root": "峡月",
+      "parent": "G7 G8 I7",
+      "moves": "I9 G8 F8 G7 H8 I7 F7",
+      "score": 470
+    },
+    {
+      "id": "s1-0484",
+      "root": "渓月",
+      "parent": "F5 H7 I8",
+      "moves": "J9 I8 H8 H7 I7 F5 I6",
+      "score": -138
+    },
+    {
+      "id": "s1-0485",
+      "root": "雲月",
+      "parent": "G8 H7 I9",
+      "moves": "H8 I9 I8 G8 G7 H7 I6",
+      "score": 209
+    },
+    {
+      "id": "s1-0486",
+      "root": "恒星",
+      "parent": "H5 I7 J7",
+      "moves": "G8 I7 H8 J7 I8 H5 H6",
+      "score": -119
+    },
+    {
+      "id": "s1-0487",
+      "root": "峡月",
+      "parent": "G7 H6 I7",
+      "moves": "H8 G7 J8 I7 F7 H6 H5",
+      "score": 378
+    },
+    {
+      "id": "s1-0488",
+      "root": "渓月",
+      "parent": "G8 H7 H9",
+      "moves": "H8 H9 J8 G8 I7 H7 I6",
+      "score": -362
+    },
+    {
+      "id": "s1-0489",
+      "root": "雲月",
+      "parent": "H7 I9 J8",
+      "moves": "F8 I9 H8 J8 I8 H7 F6",
+      "score": 416
+    },
+    {
+      "id": "s1-0490",
+      "root": "恒星",
+      "parent": "G6 G7 I8",
+      "moves": "H8 I8 H6 G7 I6 G6 G5",
+      "score": 282
+    },
+    {
+      "id": "s1-0491",
+      "root": "峡月",
+      "parent": "G8 I7 I9",
+      "moves": "H8 I9 G7 G8 G6 I7 I6",
+      "score": -214
+    },
+    {
+      "id": "s1-0492",
+      "root": "渓月",
+      "parent": "H7 I8 J7",
+      "moves": "I9 I8 J9 H7 F8 J7 H8",
+      "score": 90
+    },
+    {
+      "id": "s1-0493",
+      "root": "雲月",
+      "parent": "F8 G7 I7",
+      "moves": "H9 F8 I9 G7 H8 I7 I8",
+      "score": 412
+    },
+    {
+      "id": "s1-0494",
+      "root": "恒星",
+      "parent": "F8 G7 G9",
+      "moves": "J10 G9 K9 F8 H8 G7 H6",
+      "score": 344
+    },
+    {
+      "id": "s1-0495",
+      "root": "峡月",
+      "parent": "G7 H9 I8",
+      "moves": "H8 H9 F7 I8 H7 G7 G6",
+      "score": 294
+    },
+    {
+      "id": "s1-0496",
+      "root": "渓月",
+      "parent": "F6 H7 I8",
+      "moves": "J9 I8 H8 H7 G7 F6 I7",
+      "score": -324
+    },
+    {
+      "id": "s1-0497",
+      "root": "雲月",
+      "parent": "G8 H6 I7",
+      "moves": "J9 G8 H8 I7 K8 H6 H7",
+      "score": 12
+    },
+    {
+      "id": "s1-0498",
+      "root": "恒星",
+      "parent": "G7 I7 J7",
+      "moves": "J9 G7 H8 I7 J8 J7 H7",
+      "score": 308
+    },
+    {
+      "id": "s1-0499",
+      "root": "峡月",
+      "parent": "I7 I8 I9",
+      "moves": "F8 I9 H8 I8 H7 I7 I6",
+      "score": -22
+    },
+    {
+      "id": "s1-0500",
+      "root": "渓月",
+      "parent": "F5 H7 I8",
+      "moves": "J9 I8 H8 H7 J7 F5 I6",
+      "score": -401
+    },
+    {
+      "id": "s1-0501",
+      "root": "雲月",
+      "parent": "F7 G6 G7",
+      "moves": "G9 F7 J9 G7 H8 G6 H7",
+      "score": 337
+    },
+    {
+      "id": "s1-0502",
+      "root": "恒星",
+      "parent": "H6 I6 I7",
+      "moves": "G8 I7 H8 H6 J8 I6 J5",
+      "score": 379
+    },
+    {
+      "id": "s1-0503",
+      "root": "峡月",
+      "parent": "G7 G8 H9",
+      "moves": "I9 H9 H8 G8 F7 G7 J6",
+      "score": 277
+    },
+    {
+      "id": "s1-0504",
+      "root": "渓月",
+      "parent": "H7 I8 J7",
+      "moves": "J9 I8 G8 H7 H8 J7 K7",
+      "score": 140
+    },
+    {
+      "id": "s1-0505",
+      "root": "雲月",
+      "parent": "G7 I8 J6",
+      "moves": "H9 I8 G8 G7 H8 J6 I7",
+      "score": -248
+    },
+    {
+      "id": "s1-0506",
+      "root": "恒星",
+      "parent": "H9 I7 J8",
+      "moves": "H8 H9 H7 J8 H6 I7 F1",
+      "score": 435
+    },
+    {
+      "id": "s1-0507",
+      "root": "峡月",
+      "parent": "G8 I6 I9",
+      "moves": "J9 I9 H8 G8 J8 I6 I7",
+      "score": -301
+    },
+    {
+      "id": "s1-0508",
+      "root": "渓月",
+      "parent": "F5 H7 I8",
+      "moves": "H9 I8 J9 H7 H8 F5 I6",
+      "score": 88
+    },
+    {
+      "id": "s1-0509",
+      "root": "雲月",
+      "parent": "F6 G8 I7",
+      "moves": "N10 G8 H8 I7 I8 F6 G7",
+      "score": 345
+    },
+    {
+      "id": "s1-0510",
+      "root": "恒星",
+      "parent": "F8 I9 K8",
+      "moves": "G8 I9 H8 F8 J8 K8 J5",
+      "score": 36
+    },
+    {
+      "id": "s1-0511",
+      "root": "峡月",
+      "parent": "F8 G7 I7",
+      "moves": "J10 F8 H8 G7 J7 I7 H6",
+      "score": -116
+    },
+    {
+      "id": "s1-0512",
+      "root": "雲月",
+      "parent": "G7 H6 I8",
+      "moves": "G8 I8 H8 G7 J7 H6 J4",
+      "score": 436
+    },
+    {
+      "id": "s1-0513",
+      "root": "恒星",
+      "parent": "G6 H5 I7",
+      "moves": "H8 I7 H7 G6 H6 H5 I5",
+      "score": -203
+    },
+    {
+      "id": "s1-0514",
+      "root": "峡月",
+      "parent": "G9 I8 I9",
+      "moves": "J9 G9 H8 I9 F7 I8 G6",
+      "score": 325
+    },
+    {
+      "id": "s1-0515",
+      "root": "雲月",
+      "parent": "G8 H7 I9",
+      "moves": "H8 I9 I8 G8 J7 H7 I6",
+      "score": -346
+    },
+    {
+      "id": "s1-0516",
+      "root": "恒星",
+      "parent": "I6 I7 K8",
+      "moves": "H8 K8 J8 I7 H7 I6 H6",
+      "score": 11
+    },
+    {
+      "id": "s1-0517",
+      "root": "峡月",
+      "parent": "G7 G8 G9",
+      "moves": "J9 G9 H8 G8 I7 G7 G6",
+      "score": 187
+    },
+    {
+      "id": "s1-0518",
+      "root": "雲月",
+      "parent": "H7 I9 J8",
+      "moves": "G8 I9 H8 J8 I8 H7 G7",
+      "score": 66
+    },
+    {
+      "id": "s1-0519",
+      "root": "恒星",
+      "parent": "G8 H6 I7",
+      "moves": "H8 G8 I8 I7 J8 H6 F7",
+      "score": -94
+    },
+    {
+      "id": "s1-0520",
+      "root": "峡月",
+      "parent": "G8 H9 I7",
+      "moves": "J9 H9 H8 G8 F7 I7 I6",
+      "score": 344
+    },
+    {
+      "id": "s1-0521",
+      "root": "雲月",
+      "parent": "G8 H6 I7",
+      "moves": "H9 G8 J9 I7 H8 H6 H7",
+      "score": 291
+    },
+    {
+      "id": "s1-0522",
+      "root": "恒星",
+      "parent": "F8 I7 K8",
+      "moves": "I9 F8 G8 K8 H8 I7 J8",
+      "score": 149
+    },
+    {
+      "id": "s1-0523",
+      "root": "峡月",
+      "parent": "G9 H9 I9",
+      "moves": "J9 G9 D8 H9 H8 I9 F6",
+      "score": 156
+    },
+    {
+      "id": "s1-0524",
+      "root": "雲月",
+      "parent": "F6 G8 I7",
+      "moves": "I9 G8 H8 I7 I8 F6 G7",
+      "score": -135
+    },
+    {
+      "id": "s1-0525",
+      "root": "恒星",
+      "parent": "G7 H6 I7",
+      "moves": "H8 G7 I8 I7 J8 H6 H5",
+      "score": -163
+    },
+    {
+      "id": "s1-0526",
+      "root": "峡月",
+      "parent": "G7 I7 J7",
+      "moves": "J9 G7 H8 I7 J8 J7 F7",
+      "score": 194
+    },
+    {
+      "id": "s1-0527",
+      "root": "雲月",
+      "parent": "G7 H6 I8",
+      "moves": "H8 I8 H7 G7 I6 H6 H5",
+      "score": 228
+    },
+    {
+      "id": "s1-0528",
+      "root": "恒星",
+      "parent": "G5 G7 H5",
+      "moves": "H8 G7 J8 G5 I7 H5 H6",
+      "score": 474
+    },
+    {
+      "id": "s1-0529",
+      "root": "峡月",
+      "parent": "G6 G7 I8",
+      "moves": "H8 I8 F7 G7 H7 G6 I7",
+      "score": 287
+    },
+    {
+      "id": "s1-0530",
+      "root": "雲月",
+      "parent": "G8 H7 I9",
+      "moves": "H8 I9 I8 G8 F6 H7 I6",
+      "score": 203
+    },
+    {
+      "id": "s1-0531",
+      "root": "恒星",
+      "parent": "I7 I9 J8",
+      "moves": "F8 I9 H8 J8 F7 I7 H6",
+      "score": 352
+    },
+    {
+      "id": "s1-0532",
+      "root": "峡月",
+      "parent": "G8 H7 I7",
+      "moves": "H9 G8 J9 H7 H8 I7 J7",
+      "score": 114
+    },
+    {
+      "id": "s1-0533",
+      "root": "雲月",
+      "parent": "G8 H6 I7",
+      "moves": "J9 G8 H8 I7 G7 H6 H7",
+      "score": 185
+    },
+    {
+      "id": "s1-0534",
+      "root": "恒星",
+      "parent": "F8 I7 I9",
+      "moves": "G8 I9 H8 F8 G7 I7 H6",
+      "score": 337
+    },
+    {
+      "id": "s1-0535",
+      "root": "峡月",
+      "parent": "G7 H7 I8",
+      "moves": "H9 I8 H8 G7 F7 H7 G6",
+      "score": -480
+    },
+    {
+      "id": "s1-0536",
+      "root": "雲月",
+      "parent": "G7 H6 I8",
+      "moves": "G8 I8 H8 G7 J7 H6 J6",
+      "score": 356
+    },
+    {
+      "id": "s1-0537",
+      "root": "恒星",
+      "parent": "H5 I5 I7",
+      "moves": "H8 I7 G7 H5 F6 I5 H6",
+      "score": -73
+    },
+    {
+      "id": "s1-0538",
+      "root": "峡月",
+      "parent": "G7 I7 I8",
+      "moves": "H8 I8 H7 G7 J7 I7 G5",
+      "score": 254
+    },
+    {
+      "id": "s1-0539",
+      "root": "雲月",
+      "parent": "G8 H7 I9",
+      "moves": "H8 I9 I8 G8 I6 H7 K6",
+      "score": 29
+    },
+    {
+      "id": "s1-0540",
+      "root": "恒星",
+      "parent": "H5 I7 J7",
+      "moves": "H8 I7 I8 J7 G7 H5 H6",
+      "score": 463
+    },
+    {
+      "id": "s1-0541",
+      "root": "峡月",
+      "parent": "H9 I7 I9",
+      "moves": "H8 H9 H7 I9 F6 I7 I6",
+      "score": 340
+    },
+    {
+      "id": "s1-0542",
+      "root": "雲月",
+      "parent": "G7 H6 I8",
+      "moves": "H8 I8 H7 G7 I5 H6 N3",
+      "score": 343
+    },
+    {
+      "id": "s1-0543",
+      "root": "恒星",
+      "parent": "F8 I9 K8",
+      "moves": "G8 I9 H8 F8 J8 K8 H6",
+      "score": -331
+    },
+    {
+      "id": "s1-0544",
+      "root": "峡月",
+      "parent": "F8 G9 I9",
+      "moves": "J9 G9 H8 I9 J7 F8 J6",
+      "score": 107
+    },
+    {
+      "id": "s1-0545",
+      "root": "雲月",
+      "parent": "G8 H7 I9",
+      "moves": "H9 I9 H8 G8 I8 H7 I7",
+      "score": 97
+    },
+    {
+      "id": "s1-0546",
+      "root": "恒星",
+      "parent": "I6 I7 K8",
+      "moves": "H8 K8 J8 I7 H7 I6 I5",
+      "score": 237
+    },
+    {
+      "id": "s1-0547",
+      "root": "峡月",
+      "parent": "G8 I6 I7",
+      "moves": "H8 G8 K8 I7 J7 I6 J5",
+      "score": 183
+    },
+    {
+      "id": "s1-0548",
+      "root": "恒星",
+      "parent": "F8 I7 K8",
+      "moves": "G8 F8 H8 K8 J8 I7 F2",
+      "score": 460
+    },
+    {
+      "id": "s1-0549",
+      "root": "峡月",
+      "parent": "G7 H7 I7",
+      "moves": "I9 G7 J9 H7 H8 I7 J7",
+      "score": -398
+    },
+    {
+      "id": "s1-0550",
+      "root": "恒星",
+      "parent": "G7 H6 I7",
+      "moves": "J10 G7 F8 I7 H8 H6 J8",
+      "score": 340
+    },
+    {
+      "id": "s1-0551",
+      "root": "峡月",
+      "parent": "G7 G8 I7",
+      "moves": "H8 G8 J8 G7 J7 I7 I5",
+      "score": 182
+    },
+    {
+      "id": "s1-0552",
+      "root": "恒星",
+      "parent": "G5 G7 H5",
+      "moves": "H8 G7 J8 G5 K8 H5 H6",
+      "score": 363
+    },
+    {
+      "id": "s1-0553",
+      "root": "峡月",
+      "parent": "G7 H6 I7",
+      "moves": "H8 G7 J8 I7 J7 H6 H5",
+      "score": -57
+    },
+    {
+      "id": "s1-0554",
+      "root": "恒星",
+      "parent": "I7 I9 J8",
+      "moves": "H8 I9 F7 J8 K7 I7 H6",
+      "score": 413
+    },
+    {
+      "id": "s1-0555",
+      "root": "峡月",
+      "parent": "G7 H9 I8",
+      "moves": "H8 H9 F7 I8 I6 G7 I4",
+      "score": 480
+    },
+    {
+      "id": "s1-0556",
+      "root": "恒星",
+      "parent": "F8 I7 I9",
+      "moves": "H8 I9 G7 F8 H7 I7 H6",
+      "score": -238
+    },
+    {
+      "id": "s1-0557",
+      "root": "峡月",
+      "parent": "I7 I8 I9",
+      "moves": "G8 I9 H8 I8 I6 I7 G5",
+      "score": 203
+    },
+    {
+      "id": "s1-0558",
+      "root": "恒星",
+      "parent": "H5 I5 I7",
+      "moves": "H8 I7 G7 H5 H6 I5 E5",
+      "score": 450
+    },
+    {
+      "id": "s1-0559",
+      "root": "峡月",
+      "parent": "G8 I6 I9",
+      "moves": "J9 I9 H8 G8 J8 I6 K8",
+      "score": -295
+    },
+    {
+      "id": "s1-0560",
+      "root": "恒星",
+      "parent": "H5 I7 J7",
+      "moves": "H8 I7 I8 J7 G6 H5 H6",
+      "score": 154
+    },
+    {
+      "id": "s1-0561",
+      "root": "峡月",
+      "parent": "G7 G8 G9",
+      "moves": "I9 G9 J9 G8 H8 G7 G6",
+      "score": 221
+    },
+    {
+      "id": "s1-0562",
+      "root": "恒星",
+      "parent": "F8 I9 K8",
+      "moves": "G8 I9 H8 F8 J8 K8 J6",
+      "score": 84
+    },
+    {
+      "id": "s1-0563",
+      "root": "峡月",
+      "parent": "G8 H9 I7",
+      "moves": "J9 H9 H8 G8 G7 I7 I6",
+      "score": -211
+    },
+    {
+      "id": "s1-0564",
+      "root": "恒星",
+      "parent": "I6 I7 K8",
+      "moves": "G8 K8 H8 I7 J8 I6 H7",
+      "score": 475
+    },
+    {
+      "id": "s1-0565",
+      "root": "峡月",
+      "parent": "G9 H9 I9",
+      "moves": "J9 G9 H8 H9 F7 I9 H5",
+      "score": 410
+    },
+    {
+      "id": "s1-0566",
+      "root": "恒星",
+      "parent": "F8 I7 K8",
+      "moves": "G8 F8 H8 K8 J8 I7 H7",
+      "score": -236
+    },
+    {
+      "id": "s1-0567",
+      "root": "峡月",
+      "parent": "G6 G7 I8",
+      "moves": "G8 I8 H8 G7 F7 G6 I7",
+      "score": 105
+    },
+    {
+      "id": "s1-0568",
+      "root": "恒星",
+      "parent": "G5 G7 H5",
+      "moves": "G8 G7 H8 G5 J8 H5 H6",
+      "score": 293
+    },
+    {
+      "id": "s1-0569",
+      "root": "峡月",
+      "parent": "G8 H7 I7",
+      "moves": "H9 G8 L9 H7 H8 I7 J7",
+      "score": 331
+    },
+    {
+      "id": "s1-0570",
+      "root": "恒星",
+      "parent": "F8 I7 I9",
+      "moves": "H8 I9 I8 F8 G7 I7 H6",
+      "score": -391
+    },
+    {
+      "id": "s1-0571",
+      "root": "峡月",
+      "parent": "G7 H7 I8",
+      "moves": "H9 I8 H8 G7 F7 H7 F5",
+      "score": -33
+    },
+    {
+      "id": "s1-0572",
+      "root": "恒星",
+      "parent": "H5 I7 J7",
+      "moves": "G8 I7 H8 J7 K8 H5 H6",
+      "score": 371
+    },
+    {
+      "id": "s1-0573",
+      "root": "峡月",
+      "parent": "G7 I7 I8",
+      "moves": "H8 I8 F7 G7 D5 I7 G5",
+      "score": 485
+    },
+    {
+      "id": "s1-0574",
+      "root": "恒星",
+      "parent": "F8 I9 K8",
+      "moves": "G8 I9 H8 F8 J8 K8 H7",
+      "score": -146
+    },
+    {
+      "id": "s1-0575",
+      "root": "峡月",
+      "parent": "H9 I7 I9",
+      "moves": "K9 H9 H8 I9 F6 I7 I6",
+      "score": 452
+    },
+    {
+      "id": "s1-0576",
+      "root": "恒星",
+      "parent": "I6 I7 K8",
+      "moves": "H8 K8 J8 I7 G7 I6 H7",
+      "score": -62
+    },
+    {
+      "id": "s1-0577",
+      "root": "峡月",
+      "parent": "F8 G9 I9",
+      "moves": "J9 G9 H8 I9 E7 F8 J6",
+      "score": 197
+    },
+    {
+      "id": "s1-0578",
+      "root": "恒星",
+      "parent": "F8 I7 K8",
+      "moves": "G8 F8 H8 K8 J8 I7 B5",
+      "score": 460
+    },
+    {
+      "id": "s1-0579",
+      "root": "峡月",
+      "parent": "G8 I6 I7",
+      "moves": "H8 G8 I8 I7 K8 I6 J7",
+      "score": -341
+    },
+    {
+      "id": "s1-0580",
+      "root": "恒星",
+      "parent": "F8 I7 I9",
+      "moves": "G9 I9 H8 F8 G7 I7 H6",
+      "score": 152
+    },
+    {
+      "id": "s1-0581",
+      "root": "峡月",
+      "parent": "G7 H7 I7",
+      "moves": "H9 G7 K9 H7 H8 I7 F7",
+      "score": 365
+    },
+    {
+      "id": "s1-0582",
+      "root": "恒星",
+      "parent": "H5 I7 J7",
+      "moves": "H8 I7 I8 J7 H7 H5 H6",
+      "score": -472
+    },
+    {
+      "id": "s1-0583",
+      "root": "峡月",
+      "parent": "G7 G8 I7",
+      "moves": "H8 G8 J8 G7 J7 I7 G5",
+      "score": 206
+    },
+    {
+      "id": "s1-0584",
+      "root": "恒星",
+      "parent": "F8 I7 I9",
+      "moves": "H8 I9 G7 F8 G6 I7 H6",
+      "score": -29
+    },
+    {
+      "id": "s1-0585",
+      "root": "峡月",
+      "parent": "G7 H9 I8",
+      "moves": "G8 H9 H8 I8 F7 G7 I6",
+      "score": 419
+    },
+    {
+      "id": "s1-0586",
+      "root": "峡月",
+      "parent": "I7 I8 I9",
+      "moves": "H8 I9 F6 I8 H6 I7 I6",
+      "score": -250
+    },
+    {
+      "id": "s1-0587",
+      "root": "峡月",
+      "parent": "G8 I6 I9",
+      "moves": "F9 I9 J9 G8 H8 I6 J8",
+      "score": -89
+    },
+    {
+      "id": "s1-0588",
+      "root": "峡月",
+      "parent": "G8 H9 I7",
+      "moves": "H8 H9 J8 G8 J7 I7 G6",
+      "score": 449
+    },
+    {
+      "id": "s1-0589",
+      "root": "峡月",
+      "parent": "G6 G7 I8",
+      "moves": "G8 I8 H8 G7 F7 G6 L4",
+      "score": 471
+    },
+    {
+      "id": "s1-0590",
+      "root": "峡月",
+      "parent": "G8 H7 I7",
+      "moves": "H9 G8 H8 H7 J8 I7 J7",
+      "score": 105
+    },
+    {
+      "id": "s1-0591",
+      "root": "峡月",
+      "parent": "G7 H7 I8",
+      "moves": "H9 I8 H8 G7 F7 H7 I5",
+      "score": 331
+    },
+    {
+      "id": "s1-0592",
+      "root": "峡月",
+      "parent": "G7 I7 I8",
+      "moves": "H9 I8 H8 G7 F7 I7 I5",
+      "score": 91
+    },
+    {
+      "id": "s1-0593",
+      "root": "峡月",
+      "parent": "F8 G9 I9",
+      "moves": "J9 G9 H8 I9 G6 F8 J6",
+      "score": 410
+    },
+    {
+      "id": "s1-0594",
+      "root": "峡月",
+      "parent": "G8 I6 I7",
+      "moves": "H9 G8 H8 I7 K8 I6 J7",
+      "score": 491
+    },
+    {
+      "id": "s1-0595",
+      "root": "峡月",
+      "parent": "G7 H7 I7",
+      "moves": "I9 G7 J9 H7 H8 I7 F7",
+      "score": 157
+    },
+    {
+      "id": "s1-0596",
+      "root": "峡月",
+      "parent": "G7 H9 I8",
+      "moves": "H8 H9 F7 I8 G6 G7 I6",
+      "score": -99
+    },
+    {
+      "id": "s1-0597",
+      "root": "峡月",
+      "parent": "I7 I8 I9",
+      "moves": "G8 I9 H8 I8 F7 I7 I6",
+      "score": 334
+    },
+    {
+      "id": "s1-0598",
+      "root": "峡月",
+      "parent": "G8 I6 I9",
+      "moves": "J9 I9 H8 G8 I8 I6 J8",
+      "score": -219
+    },
+    {
+      "id": "s1-0599",
+      "root": "峡月",
+      "parent": "G8 H9 I7",
+      "moves": "J9 H9 H8 G8 F6 I7 I6",
+      "score": 418
+    },
+    {
+      "id": "s1-0600",
+      "root": "峡月",
+      "parent": "G6 G7 I8",
+      "moves": "H8 I8 F7 G7 F5 G6 H5",
+      "score": -5
+    }
+  ]
+}
