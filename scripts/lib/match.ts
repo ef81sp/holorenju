@@ -84,7 +84,7 @@ export interface RunMatchResult {
 export interface RunMatchParams {
   /** A/B bridge worker のペア群（--jobs 組）。生成方法は caller が決める。 */
   pairs: { a: Worker; b: Worker }[];
-  /** 消化するタスク列（buildTasks / buildJushuTasks で生成）。 */
+  /** 消化するタスク列（buildTasks で生成）。 */
   tasks: MatchTask[];
   /** 進捗表示の分母（tasks.length を渡す）。 */
   totalGames: number;
@@ -172,20 +172,6 @@ export function jushuOpenings(): OpeningSource[] {
     }
   }
   return out;
-}
-
-/** sets セット分の珠型タスク（buildTasks(jushuOpenings(), sets) の薄いラッパ、互換維持）。 */
-export function buildJushuTasks(sets: number): MatchTask[] {
-  return buildTasks(jushuOpenings(), sets);
-}
-
-/**
- * 1セットあたりの局数（全珠型 × 2色）。珠型モード専用。
- * ベンチの totalGames は buildTasks の結果長を使うこと（ここは結果 JSON の
- * config.gamesPerSet 互換のためだけに残す）。
- */
-export function gamesPerSet(): number {
-  return getAllJushuNames().length * 2;
 }
 
 // ============================================================================

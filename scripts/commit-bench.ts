@@ -41,11 +41,7 @@ import type {
   PlayerPerformanceStats,
 } from "./types/commit-bench.ts";
 
-import {
-  normalizeMaxGames,
-  openingsRepeatWarning,
-  validateOpeningsFlags,
-} from "./lib/benchCliChecks.ts";
+import { normalizeMaxGames } from "./lib/benchCliChecks.ts";
 import {
   computeBenchGameStats,
   formatBenchGameStats,
@@ -55,16 +51,11 @@ import { startEventLoopSampler } from "./lib/eventLoopSampler.ts";
 import { type HangDumpSideConfig, writeHangDump } from "./lib/hangDump.ts";
 import { deriveGameSeed } from "./lib/hangReplay.ts";
 import {
-  buildTasks,
   createBridgeWorker,
   type HangMatchInfo,
-  jushuOpenings,
   runMatch,
 } from "./lib/match.ts";
-import {
-  type LoadedOpeningSuite,
-  loadOpeningSuite,
-} from "./lib/openingSuiteLoader.ts";
+import { resolveOpenings } from "./lib/openingSuiteLoader.ts";
 import { formatPairedStats } from "./lib/pairedStats.ts";
 import { parseHangInjectEnv } from "./lib/parseHangInjectEnv.ts";
 import { DEFAULT_SPRT_CONFIG, formatSPRT } from "./lib/sprt.ts";
@@ -749,6 +740,27 @@ function removeWorktree(worktreePath: string): void {
 // メイン処理
 // ============================================================================
 
+function resolveOpeningsOrExit(
+  options: CliOptions,
+): ReturnType<typeof resolveOpenings> {
+  try {
+    return resolveOpenings({
+      openings: options.openings,
+      openingOffset: options.openingOffset,
+      sets: options.sets,
+      maxGames: options.maxGames,
+      bookA: options.bookA,
+      bookB: options.bookB,
+      randomFactor: options.randomFactor,
+      rootDir: PROJECT_ROOT,
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`Error: ${msg}`);
+    process.exit(1);
+  }
+}
+
 async function main(): Promise<void> {
   const options = parseArgs();
   const startTime = performance.now();
@@ -770,47 +782,10 @@ async function main(): Promise<void> {
       }
     : null;
 
-  const flagError = validateOpeningsFlags({
-    openings: options.openings,
-    bookA: options.bookA,
-    bookB: options.bookB,
-    openingOffset: options.openingOffset,
-  });
-  if (flagError) {
-    console.error(`Error: ${flagError}`);
-    process.exit(1);
-  }
-
-  // 開局の供給元: --openings ならスイート、未指定なら 26 珠型（従来どおり）。
-  let suite: LoadedOpeningSuite | null = null;
-  if (options.openings !== undefined) {
-    try {
-      suite = loadOpeningSuite(options.openings, PROJECT_ROOT);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error(`Error: ${msg}`);
-      process.exit(1);
-    }
-  }
-  const openingSource = suite ? suite.openings : jushuOpenings();
-
-  // タスク列（ペア隣接）。totalGames はこの長さが唯一の源（--max-games 切り詰め後）。
-  const tasks = buildTasks(openingSource, options.sets, {
-    offset: options.openingOffset,
-    maxGames: options.maxGames,
-  });
-  const untruncatedGames =
-    Math.max(0, openingSource.length - options.openingOffset) *
-    2 *
-    options.sets;
-  const gamesPerSet = options.sets > 0 ? untruncatedGames / options.sets : 0;
-  const totalGames = tasks.length;
-  if (totalGames === 0) {
-    console.error(
-      `Error: 対局タスクが 0 件です（開局 ${openingSource.length} 件, offset=${options.openingOffset}）`,
-    );
-    process.exit(1);
-  }
+  // 開局の供給元（--openings ならスイート、未指定なら 26 珠型）とタスク列を解決する。
+  // totalGames は tasks.length（--max-games 切り詰め後）が唯一の源。
+  const resolved = resolveOpeningsOrExit(options);
+  const { suite, tasks, totalGames, gamesPerSet } = resolved;
 
   console.log(`\n=== コミット間CPU強度比較ベンチマーク ===`);
   console.log(
@@ -822,30 +797,11 @@ async function main(): Promise<void> {
   console.log(
     `難易度: ${options.difficulty}${options.randomFactor === undefined ? "" : ` (randomFactor=${options.randomFactor})`}`,
   );
-  if (suite) {
-    console.log(
-      `開局スイート: ${suite.file} (version ${suite.version}, ${suite.count} 開局, offset=${options.openingOffset} → ${openingSource.length - options.openingOffset} 開局使用)`,
-    );
-    console.log(
-      `周回数: ${options.sets} (${gamesPerSet}局/周, 計${totalGames}局)`,
-    );
-  } else {
-    console.log(
-      `セット数: ${options.sets} (${gamesPerSet}局/セット, 計${totalGames}局)`,
-    );
+  for (const line of resolved.summaryLines) {
+    console.log(line);
   }
-  if (totalGames < untruncatedGames) {
-    console.log(
-      `--max-games=${options.maxGames} 指定により ${untruncatedGames}→${totalGames} 局に切り詰め`,
-    );
-  }
-  const repeatWarning = openingsRepeatWarning({
-    openings: options.openings,
-    sets: options.sets,
-    randomFactor: options.randomFactor,
-  });
-  if (repeatWarning) {
-    console.warn(`⚠ ${repeatWarning}`);
+  for (const w of resolved.warnings) {
+    console.warn(`⚠ ${w}`);
   }
   if (options.evalOptionsA || options.evalOptionsB) {
     console.log(
@@ -1176,14 +1132,7 @@ async function main(): Promise<void> {
         gamesPerSet,
         randomFactor: options.randomFactor,
         sprt: sprtConfig,
-        openings: suite
-          ? {
-              file: suite.file,
-              version: suite.version,
-              count: suite.count,
-              offset: options.openingOffset,
-            }
-          : undefined,
+        openings: resolved.config,
         evalOptionsA: options.evalOptionsA,
         evalOptionsB: options.evalOptionsB,
         bookA: options.bookA,

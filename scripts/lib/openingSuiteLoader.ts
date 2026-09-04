@@ -10,13 +10,23 @@ import * as path from "node:path";
 
 import type { Position } from "../../src/types/game.ts";
 import type {
+  OpeningSuiteConfig,
   OpeningSuiteEntry,
   OpeningSuiteFile,
 } from "../types/openingSuite.ts";
-import type { OpeningSource } from "./match.ts";
 
 import { BOARD_SIZE } from "../../src/constants/index.ts";
 import { parseMove } from "../../src/logic/gameRecordParser.ts";
+import {
+  openingsRepeatWarning,
+  validateOpeningsFlags,
+} from "./benchCliChecks.ts";
+import {
+  type MatchTask,
+  type OpeningSource,
+  buildTasks,
+  jushuOpenings,
+} from "./match.ts";
 
 const MOVE_RE = /^[A-O](?:1[0-5]|[1-9])$/;
 
@@ -71,7 +81,10 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
-function parseEntry(raw: unknown, index: number): OpeningSuiteEntry {
+function parseEntry(
+  raw: unknown,
+  index: number,
+): Pick<OpeningSuiteEntry, "id" | "moves"> {
   if (!isRecord(raw)) {
     throw new Error(`openings[${index}] がオブジェクトでない`);
   }
@@ -82,13 +95,7 @@ function parseEntry(raw: unknown, index: number): OpeningSuiteEntry {
   if (typeof moves !== "string") {
     throw new Error(`openings[${index}] (${id}).moves が文字列でない`);
   }
-  return {
-    id,
-    root: typeof raw.root === "string" ? raw.root : null,
-    parent: typeof raw.parent === "string" ? raw.parent : "",
-    moves,
-    score: typeof raw.score === "number" ? raw.score : Number.NaN,
-  };
+  return { id, moves };
 }
 
 /**
@@ -163,4 +170,135 @@ export function loadOpeningSuite(
   const json = parseSuiteJson(text, file);
   const { version, openings } = parseOpeningSuite(json);
   return { file, version, count: openings.length, openings };
+}
+
+// ============================================================================
+// ベンチ CLI 共通: 開局の解決（珠型 or スイート）
+// ============================================================================
+
+export interface ResolveOpeningsInput {
+  /** `--openings=<file>`（未指定なら珠型） */
+  openings: string | undefined;
+  /** `--opening-offset` */
+  openingOffset: number;
+  /** セット数（スイートでは周回数） */
+  sets: number;
+  /** `--max-games`（0/未指定なら無効）。ペア境界で切る */
+  maxGames?: number;
+  bookA?: boolean;
+  bookB?: boolean;
+  randomFactor: number | undefined;
+  /** 相対パスの基準（リポジトリルート） */
+  rootDir: string;
+}
+
+export interface ResolvedOpenings {
+  /** スイート指定時のみ。珠型なら null */
+  suite: LoadedOpeningSuite | null;
+  source: OpeningSource[];
+  /** 消化するタスク列（--max-games 切り詰め後）。totalGames はこの長さ */
+  tasks: MatchTask[];
+  totalGames: number;
+  /** 切り詰め前の局数（buildTasks を maxGames 無しで呼んだ長さ） */
+  untruncatedGames: number;
+  /** 1 セット（周回）あたりの局数（結果 JSON の config.gamesPerSet） */
+  gamesPerSet: number;
+  /** 起動時に表示する説明行（開局スイート / セット数 / 切り詰め） */
+  summaryLines: string[];
+  /** 起動時に warn する行（同一開局反復など） */
+  warnings: string[];
+  /** 結果 JSON の config.openings（珠型なら undefined） */
+  config: OpeningSuiteConfig | undefined;
+}
+
+/** 結果 JSON の config.openings を組み立てる。 */
+export function toOpeningSuiteConfig(
+  suite: LoadedOpeningSuite,
+  offset: number,
+): OpeningSuiteConfig {
+  return {
+    file: suite.file,
+    version: suite.version,
+    count: suite.count,
+    offset,
+  };
+}
+
+/**
+ * CLI 引数から開局の供給元とタスク列を解決する（commit-bench / weight-bench 共通）。
+ * フラグ不整合・スイート読込失敗・タスク 0 件は Error を throw する
+ * （process.exit や console は呼ばない。表示は summaryLines / warnings を caller が出す）。
+ */
+export function resolveOpenings(input: ResolveOpeningsInput): ResolvedOpenings {
+  const {
+    openings,
+    openingOffset,
+    sets,
+    maxGames = 0,
+    bookA = false,
+    bookB = false,
+    randomFactor,
+    rootDir,
+  } = input;
+  const flagError = validateOpeningsFlags({
+    openings,
+    bookA,
+    bookB,
+    openingOffset,
+  });
+  if (flagError) {
+    throw new Error(flagError);
+  }
+  const suite =
+    openings === undefined ? null : loadOpeningSuite(openings, rootDir);
+  const source = suite ? suite.openings : jushuOpenings();
+
+  const untruncated = buildTasks(source, sets, { offset: openingOffset });
+  const tasks =
+    maxGames > 0
+      ? buildTasks(source, sets, { offset: openingOffset, maxGames })
+      : untruncated;
+  const totalGames = tasks.length;
+  if (totalGames === 0) {
+    throw new Error(
+      `対局タスクが 0 件です（開局 ${source.length} 件, offset=${openingOffset}）`,
+    );
+  }
+  const gamesPerSet = sets > 0 ? untruncated.length / sets : 0;
+
+  const summaryLines: string[] = [];
+  if (suite) {
+    summaryLines.push(
+      `開局スイート: ${suite.file} (version ${suite.version}, ${suite.count} 開局, offset=${openingOffset} → ${source.length - openingOffset} 開局使用)`,
+    );
+    summaryLines.push(
+      `周回数: ${sets} (${gamesPerSet}局/周, 計${totalGames}局)`,
+    );
+  } else {
+    summaryLines.push(
+      `セット数: ${sets} (${gamesPerSet}局/セット, 計${totalGames}局)`,
+    );
+  }
+  if (totalGames < untruncated.length) {
+    summaryLines.push(
+      `--max-games=${maxGames} 指定により ${untruncated.length}→${totalGames} 局に切り詰め`,
+    );
+  }
+  const warnings: string[] = [];
+  const repeatWarning = openingsRepeatWarning({ openings, sets, randomFactor });
+  if (repeatWarning) {
+    warnings.push(repeatWarning);
+  }
+
+  return {
+    suite,
+    source,
+    tasks,
+    totalGames,
+    untruncatedGames: untruncated.length,
+    gamesPerSet,
+    summaryLines,
+    warnings,
+    config: suite ? toOpeningSuiteConfig(suite, openingOffset) : undefined,
+  };
 }

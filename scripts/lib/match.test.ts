@@ -15,7 +15,6 @@ import { mergeDifficultyParams } from "./difficultyParamsMerge.ts";
 import {
   type OpeningSource,
   buildBridgeCustomParams,
-  buildJushuTasks,
   buildTasks,
   jushuOpenings,
 } from "./match.ts";
@@ -174,9 +173,9 @@ describe("evalBasis 配線の end-to-end（silent 事故防止）", () => {
   });
 });
 
-describe("buildJushuTasks", () => {
+describe("buildTasks(jushuOpenings()) — 珠型モードの後方互換", () => {
   it("各珠型に A黒/A白 の 2 局を隣接して出し、pairId は set:珠型", () => {
-    const tasks = buildJushuTasks(2);
+    const tasks = buildTasks(jushuOpenings(), 2);
     expect(tasks.length % 2).toBe(0);
     for (let i = 0; i < tasks.length; i += 2) {
       const black = tasks[i]!;
@@ -192,7 +191,7 @@ describe("buildJushuTasks", () => {
   });
 
   it("pairId はセット間で異なる（同一珠型でも別ペア）", () => {
-    const tasks = buildJushuTasks(2);
+    const tasks = buildTasks(jushuOpenings(), 2);
     const ids = new Set(tasks.map((t) => t.pairId));
     expect(ids.size).toBe(tasks.length / 2);
   });
@@ -208,8 +207,8 @@ describe("jushuOpenings", () => {
     }
   });
 
-  it("buildJushuTasks は buildTasks(jushuOpenings(), sets) と同一（後方互換）", () => {
-    expect(buildJushuTasks(2)).toEqual(buildTasks(jushuOpenings(), 2));
+  it("珠型モードの 1 セットは 26 × 2 = 52 局", () => {
+    expect(buildTasks(jushuOpenings(), 1)).toHaveLength(52);
   });
 });
 

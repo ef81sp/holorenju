@@ -23,25 +23,13 @@ import type { CpuDifficulty } from "../src/types/cpu.ts";
 import type { SPRTConfig, WeightBenchResult } from "./types/ab.ts";
 
 import {
-  openingsRepeatWarning,
-  validateOpeningsFlags,
-} from "./lib/benchCliChecks.ts";
-import {
   computeBenchGameStats,
   formatBenchGameStats,
 } from "./lib/benchGameStats.ts";
 import { formatEloDiff } from "./lib/eloDiff.ts";
 import { parseWeightOverrides } from "./lib/evalParams.ts";
-import {
-  buildTasks,
-  createBridgeWorker,
-  jushuOpenings,
-  runMatch,
-} from "./lib/match.ts";
-import {
-  type LoadedOpeningSuite,
-  loadOpeningSuite,
-} from "./lib/openingSuiteLoader.ts";
+import { createBridgeWorker, runMatch } from "./lib/match.ts";
+import { resolveOpenings } from "./lib/openingSuiteLoader.ts";
 import { formatPairedStats } from "./lib/pairedStats.ts";
 import { DEFAULT_SPRT_CONFIG, formatSPRT } from "./lib/sprt.ts";
 
@@ -218,6 +206,24 @@ function ensureFreshWasm(): void {
   );
 }
 
+function resolveOpeningsOrExit(
+  options: CliOptions,
+): ReturnType<typeof resolveOpenings> {
+  try {
+    return resolveOpenings({
+      openings: options.openings,
+      openingOffset: options.openingOffset,
+      sets: options.sets,
+      randomFactor: options.randomFactor,
+      rootDir: PROJECT_ROOT,
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`Error: ${msg}`);
+    process.exit(1);
+  }
+}
+
 async function main(): Promise<void> {
   const options = parseArgs();
   const startTime = performance.now();
@@ -233,39 +239,9 @@ async function main(): Promise<void> {
       }
     : null;
 
-  const flagError = validateOpeningsFlags({
-    openings: options.openings,
-    bookA: false,
-    bookB: false,
-    openingOffset: options.openingOffset,
-  });
-  if (flagError) {
-    console.error(`Error: ${flagError}`);
-    process.exit(1);
-  }
-  let suite: LoadedOpeningSuite | null = null;
-  if (options.openings !== undefined) {
-    try {
-      suite = loadOpeningSuite(options.openings, PROJECT_ROOT);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error(`Error: ${msg}`);
-      process.exit(1);
-    }
-  }
-  const openingSource = suite ? suite.openings : jushuOpenings();
-  // totalGames は tasks.length が唯一の源
-  const tasks = buildTasks(openingSource, options.sets, {
-    offset: options.openingOffset,
-  });
-  const totalGames = tasks.length;
-  const gamesPerSet = options.sets > 0 ? totalGames / options.sets : 0;
-  if (totalGames === 0) {
-    console.error(
-      `Error: 対局タスクが 0 件です（開局 ${openingSource.length} 件, offset=${options.openingOffset}）`,
-    );
-    process.exit(1);
-  }
+  // 開局の供給元とタスク列（totalGames は tasks.length が唯一の源）
+  const resolved = resolveOpeningsOrExit(options);
+  const { suite, tasks, totalGames, gamesPerSet } = resolved;
   const isNullTest = Object.keys(options.weights).length === 0;
 
   console.log(`\n=== eval 形系重み A/B ベンチマーク ===`);
@@ -276,25 +252,12 @@ async function main(): Promise<void> {
   console.log(
     `難易度: ${options.difficulty}${options.randomFactor === undefined ? "" : ` (randomFactor=${options.randomFactor})`}`,
   );
-  if (suite) {
-    console.log(
-      `開局スイート: ${suite.file} (version ${suite.version}, ${suite.count} 開局, offset=${options.openingOffset} → ${openingSource.length - options.openingOffset} 開局使用)`,
-    );
-    console.log(
-      `周回数: ${options.sets} (${gamesPerSet}局/周, 計${totalGames}局) jobs=${options.jobs}`,
-    );
-  } else {
-    console.log(
-      `セット数: ${options.sets} (${gamesPerSet}局/セット, 計${totalGames}局) jobs=${options.jobs}`,
-    );
+  for (const line of resolved.summaryLines) {
+    console.log(line);
   }
-  const repeatWarning = openingsRepeatWarning({
-    openings: options.openings,
-    sets: options.sets,
-    randomFactor: options.randomFactor,
-  });
-  if (repeatWarning) {
-    console.warn(`⚠ ${repeatWarning}`);
+  console.log(`jobs=${options.jobs}`);
+  for (const w of resolved.warnings) {
+    console.warn(`⚠ ${w}`);
   }
   console.log();
 
@@ -394,14 +357,7 @@ async function main(): Promise<void> {
         gamesPerSet,
         randomFactor: options.randomFactor,
         sprt: sprtConfig,
-        openings: suite
-          ? {
-              file: suite.file,
-              version: suite.version,
-              count: suite.count,
-              offset: options.openingOffset,
-            }
-          : undefined,
+        openings: resolved.config,
       },
       totalGames: completedGames,
       wdl,
