@@ -102,12 +102,12 @@ export interface HangContext {
   color: "black" | "white";
   /** ハング直前の盤面（再現の起点） */
   board: BoardState;
-  /** ハング直前までの着手履歴（opening 3手を含む） */
+  /** ハング直前までの着手履歴（開局手を含む） */
   moveHistory: MoveRecord[];
   /** ゲーム開始からの経過ミリ秒 */
   elapsedMs: number;
   /**
-   * ハング時の手数（1-based, opening 3手を含む）。
+   * ハング時の手数（1-based, 開局手を含む）。
    * moveHistory の直後に打とうとしていた手の番号（= moveHistory.length + 1）。
    */
   moveNumber: number;
@@ -328,7 +328,11 @@ export async function runCommitGame(
   options: {
     verbose?: boolean;
     moveTimeoutMs?: number;
-    openingMoves?: [Position, Position, Position];
+    /**
+     * 開局の擬似手順（黒から交互に置く。珠型 3 手・開局スイート 7 手など長さ任意）。
+     * 置いた後の手番は長さの偶奇で決まる（奇数=白番、偶数=黒番）。
+     */
+    openingMoves?: Position[];
     /** テスト用: 特定の要求番目でハングを注入する */
     hangInject?: HangInjectSpec;
     /**
@@ -371,14 +375,8 @@ export async function runCommitGame(
 
   // 開局手が指定されている場合、盤面に配置
   if (options.openingMoves) {
-    const [pos1, pos2, pos3] = options.openingMoves;
-    const openingEntries: [Position, "black" | "white"][] = [
-      [pos1, "black"],
-      [pos2, "white"],
-      [pos3, "black"],
-    ];
-    for (const [pos, color] of openingEntries) {
-      board = applyMove(board, pos, color);
+    for (const pos of options.openingMoves) {
+      board = applyMove(board, pos, currentColor);
       moveHistory.push({
         row: pos.row,
         col: pos.col,
@@ -387,8 +385,8 @@ export async function runCommitGame(
       });
       moveCount++;
       log(`Move ${moveCount}: opening at (${pos.row}, ${pos.col})`);
+      currentColor = currentColor === "black" ? "white" : "black";
     }
-    currentColor = "white";
   }
 
   // 非オープニング手のリクエスト番号（1-based）。ハング注入の照合用。

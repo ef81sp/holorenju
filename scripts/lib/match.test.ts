@@ -12,7 +12,13 @@ import { describe, expect, it } from "vitest";
 
 import { DIFFICULTY_PARAMS } from "../../src/types/cpu.ts";
 import { mergeDifficultyParams } from "./difficultyParamsMerge.ts";
-import { buildBridgeCustomParams, buildJushuTasks } from "./match.ts";
+import {
+  type OpeningSource,
+  buildBridgeCustomParams,
+  buildJushuTasks,
+  buildTasks,
+  jushuOpenings,
+} from "./match.ts";
 import { encodeEvalOptionsForWasm } from "./wasmEvalOptionsEncoder.ts";
 
 describe("buildBridgeCustomParams", () => {
@@ -189,5 +195,87 @@ describe("buildJushuTasks", () => {
     const tasks = buildJushuTasks(2);
     const ids = new Set(tasks.map((t) => t.pairId));
     expect(ids.size).toBe(tasks.length / 2);
+  });
+});
+
+describe("jushuOpenings", () => {
+  it("26 珠型を 3 石の OpeningSource として返す", () => {
+    const src = jushuOpenings();
+    expect(src.length).toBe(26);
+    for (const o of src) {
+      expect(o.positions).toHaveLength(3);
+      expect(o.positions[0]).toEqual({ row: 7, col: 7 });
+    }
+  });
+
+  it("buildJushuTasks は buildTasks(jushuOpenings(), sets) と同一（後方互換）", () => {
+    expect(buildJushuTasks(2)).toEqual(buildTasks(jushuOpenings(), 2));
+  });
+});
+
+const SRC: OpeningSource[] = [
+  { id: "o1", positions: [{ row: 7, col: 7 }] },
+  {
+    id: "o2",
+    positions: [
+      { row: 7, col: 7 },
+      { row: 6, col: 8 },
+    ],
+  },
+  {
+    id: "o3",
+    positions: [
+      { row: 7, col: 7 },
+      { row: 6, col: 8 },
+      { row: 8, col: 6 },
+    ],
+  },
+];
+
+describe("buildTasks", () => {
+  it("各開局に A黒→A白 を隣接して出し、pairId は set:id、positions は source を透過する", () => {
+    const tasks = buildTasks(SRC, 1);
+    expect(tasks.map((t) => [t.openingId, t.isABlack, t.pairId])).toEqual([
+      ["o1", true, "0:o1"],
+      ["o1", false, "0:o1"],
+      ["o2", true, "0:o2"],
+      ["o2", false, "0:o2"],
+      ["o3", true, "0:o3"],
+      ["o3", false, "0:o3"],
+    ]);
+    expect(tasks[2]!.positions).toBe(SRC[1]!.positions);
+    expect(tasks[5]!.positions).toHaveLength(3);
+  });
+
+  it("sets はスイートの周回数（各周回で pairId の set が進む）", () => {
+    const tasks = buildTasks(SRC, 2);
+    expect(tasks).toHaveLength(12);
+    expect(tasks[0]!.pairId).toBe("0:o1");
+    expect(tasks[6]!.pairId).toBe("1:o1");
+    expect(tasks[11]!.pairId).toBe("1:o3");
+  });
+
+  it("offset は n 番目の開局から使い、末尾で折り返さない", () => {
+    const tasks = buildTasks(SRC, 2, { offset: 2 });
+    expect(tasks.map((t) => t.pairId)).toEqual([
+      "0:o3",
+      "0:o3",
+      "1:o3",
+      "1:o3",
+    ]);
+    expect(buildTasks(SRC, 1, { offset: 3 })).toEqual([]);
+    expect(buildTasks(SRC, 1, { offset: 99 })).toEqual([]);
+  });
+
+  it("maxGames はペア境界で切る（奇数なら偶数に切り下げ）", () => {
+    expect(buildTasks(SRC, 1, { maxGames: 4 }).map((t) => t.pairId)).toEqual([
+      "0:o1",
+      "0:o1",
+      "0:o2",
+      "0:o2",
+    ]);
+    expect(buildTasks(SRC, 1, { maxGames: 3 })).toHaveLength(2);
+    expect(buildTasks(SRC, 1, { maxGames: 0 })).toHaveLength(6);
+    expect(buildTasks(SRC, 1, { maxGames: 100 })).toHaveLength(6);
   });
 });
