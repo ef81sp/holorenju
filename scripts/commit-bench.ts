@@ -42,6 +42,11 @@ import type {
 } from "./types/commit-bench.ts";
 
 import {
+  normalizeMaxGames,
+  openingsRepeatWarning,
+  validateOpeningsFlags,
+} from "./lib/benchCliChecks.ts";
+import {
   computeBenchGameStats,
   formatBenchGameStats,
 } from "./lib/benchGameStats.ts";
@@ -50,12 +55,16 @@ import { startEventLoopSampler } from "./lib/eventLoopSampler.ts";
 import { type HangDumpSideConfig, writeHangDump } from "./lib/hangDump.ts";
 import { deriveGameSeed } from "./lib/hangReplay.ts";
 import {
-  buildJushuTasks,
+  buildTasks,
   createBridgeWorker,
-  gamesPerSet as computeGamesPerSet,
   type HangMatchInfo,
+  jushuOpenings,
   runMatch,
 } from "./lib/match.ts";
+import {
+  type LoadedOpeningSuite,
+  loadOpeningSuite,
+} from "./lib/openingSuiteLoader.ts";
 import { formatPairedStats } from "./lib/pairedStats.ts";
 import { parseHangInjectEnv } from "./lib/parseHangInjectEnv.ts";
 import { DEFAULT_SPRT_CONFIG, formatSPRT } from "./lib/sprt.ts";
@@ -147,10 +156,18 @@ interface CliOptions {
   maxDepthB?: number;
   /**
    * デバッグ/スモークテスト用: タスクを先頭 N 局に切り詰める（0 なら無効）。
-   * ハング計装の e2e 検証で少局数（例: 4局）を回すために追加。
-   * 通常のベンチ運用では 0（無効＝全 sets を消化）。
+   * ペア境界で切る（奇数は偶数に切り下げ）。ハング計装の e2e 検証で少局数
+   * （例: 4局）を回すために追加。通常のベンチ運用では 0（無効＝全 sets を消化）。
    */
   maxGames: number;
+  /**
+   * 開局スイート JSON（bench-precision-2026-09-04.md §2.2）。相対パスはリポジトリ
+   * ルート基準。未指定なら従来どおり 26 珠型（後方互換）。指定時 --sets は
+   * スイートの周回数になる。--book-a/--book-b とは併用不可。
+   */
+  openings?: string;
+  /** スイートの n 番目から使う（末尾で折り返さない）。既定 0 */
+  openingOffset: number;
   /**
    * ハングした側 worker の 1 手あたりタイムアウト（ms）。
    * 通常は 30000 で運用。ハング計装のテスト時は短くして待ち時間を減らす。
@@ -183,6 +200,7 @@ function parseArgs(): CliOptions {
     probeEnabledA: true,
     probeEnabledB: true,
     maxGames: 0,
+    openingOffset: 0,
     moveTimeoutMs: 30000,
     seed: Date.now() | 0,
   };
@@ -292,10 +310,36 @@ function parseArgs(): CliOptions {
     } else if (arg.startsWith("--max-games=")) {
       const value = parseInt(arg.slice("--max-games=".length), 10);
       if (!isNaN(value) && value >= 0) {
-        options.maxGames = value;
+        const norm = normalizeMaxGames(value);
+        if (!norm.ok) {
+          console.error(`Error: ${norm.error}`);
+          process.exit(1);
+        }
+        if (norm.warning) {
+          console.warn(`⚠ ${norm.warning}`);
+        }
+        options.maxGames = norm.maxGames;
       } else {
         console.error(
           `Error: --max-games は 0 以上の整数で指定 (got: ${arg.slice("--max-games=".length)})`,
+        );
+        process.exit(1);
+      }
+    } else if (arg.startsWith("--openings=")) {
+      const value = arg.slice("--openings=".length);
+      if (value.length === 0) {
+        console.error("Error: --openings にはファイルパスを指定してください");
+        process.exit(1);
+      }
+      options.openings = value;
+    } else if (arg.startsWith("--opening-offset=")) {
+      const raw = arg.slice("--opening-offset=".length);
+      const value = parseInt(raw, 10);
+      if (Number.isFinite(value) && value >= 0) {
+        options.openingOffset = value;
+      } else {
+        console.error(
+          `Error: --opening-offset は 0 以上の整数で指定 (got: ${raw})`,
         );
         process.exit(1);
       }
@@ -370,7 +414,8 @@ Usage:
 Options:
   --commitA=<sha|ref>    比較元コミット (default: HEAD~1)
   --commitB=<sha|ref>    比較先コミット (default: HEAD)
-  --sets=<n>             セット数 (1セット = 26珠型 × 2色 = 52局, default: 1)
+  --sets=<n>             セット数 (1セット = 26珠型 × 2色 = 52局, default: 1)。
+                         --openings 指定時はスイートの周回数
   --difficulty=<d>       難易度 beginner|easy|medium|hard (default: hard)
   --sprt                 SPRT早期停止を有効化
   --elo0=<n>             SPRT帰無仮説Elo差 (default: 0)
@@ -394,7 +439,13 @@ Options:
                          binding だと差が出ないので併用する
   --max-depth-b=<n>      B側の depth cap を上書き（既定=difficulty 既定）
   --max-games=<n>        タスクを先頭 N 局に切り詰め（0=無効, default: 0）。
-                         ハング計装のスモークテスト用
+                         ペア境界で切る（奇数は偶数に切り下げ）。スモークテスト用
+  --openings=<file>      開局スイート JSON（gen:opening-suite の成果物。相対パスは
+                         リポジトリルート基準）。指定時は珠型の代わりにスイートの各
+                         開局 × 2 色で対局し、--sets はスイートの周回数になる。
+                         --book-a/--book-b とは併用不可
+  --opening-offset=<n>   スイートの n 番目の開局から使う（末尾で折り返さない。
+                         互いに素な部分集合での再現性検証用, default: 0）
   --move-timeout-ms=<n>  1手あたりのタイムアウト (default: 30000)
   --seed=<n>             randomFactor 使用時の PRNG baseSeed（integer）。
                          同一 seed なら同一棋譜を再現。default: Date.now()（非決定的）
@@ -419,6 +470,13 @@ Examples:
   # （B3仕様③: コミット差の交絡を排除、worktree1本で済む）
   pnpm commit:bench --commitA=HEAD --commitB=HEAD --sets=8 --randomFactor=0.02 \\
     --book-a
+
+  # 開局スイート（600 開局 × 2 色 = 1,200 局、randomFactor 無し）
+  pnpm commit:bench --commitA=80f1c4f --commitB=f1bdc9a --jobs=5 \\
+    --openings=scripts/data/opening-suite-v1.json
+  # 後半 300 開局だけ（再現性検証）
+  pnpm commit:bench --commitA=80f1c4f --commitB=f1bdc9a --jobs=5 \\
+    --openings=scripts/data/opening-suite-v1.json --opening-offset=300
 
   # ハング計装スモークテスト（4局・jobs=2・5秒タイムアウト・g1 の 2 手目で注入）
   HANG_INJECT=1:2 pnpm commit:bench --commitA=HEAD --commitB=HEAD \\
@@ -712,8 +770,47 @@ async function main(): Promise<void> {
       }
     : null;
 
-  const gamesPerSet = computeGamesPerSet(); // 全珠型 × 2色
-  const totalGames = options.sets * gamesPerSet;
+  const flagError = validateOpeningsFlags({
+    openings: options.openings,
+    bookA: options.bookA,
+    bookB: options.bookB,
+    openingOffset: options.openingOffset,
+  });
+  if (flagError) {
+    console.error(`Error: ${flagError}`);
+    process.exit(1);
+  }
+
+  // 開局の供給元: --openings ならスイート、未指定なら 26 珠型（従来どおり）。
+  let suite: LoadedOpeningSuite | null = null;
+  if (options.openings !== undefined) {
+    try {
+      suite = loadOpeningSuite(options.openings, PROJECT_ROOT);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`Error: ${msg}`);
+      process.exit(1);
+    }
+  }
+  const openingSource = suite ? suite.openings : jushuOpenings();
+
+  // タスク列（ペア隣接）。totalGames はこの長さが唯一の源（--max-games 切り詰め後）。
+  const tasks = buildTasks(openingSource, options.sets, {
+    offset: options.openingOffset,
+    maxGames: options.maxGames,
+  });
+  const untruncatedGames =
+    Math.max(0, openingSource.length - options.openingOffset) *
+    2 *
+    options.sets;
+  const gamesPerSet = options.sets > 0 ? untruncatedGames / options.sets : 0;
+  const totalGames = tasks.length;
+  if (totalGames === 0) {
+    console.error(
+      `Error: 対局タスクが 0 件です（開局 ${openingSource.length} 件, offset=${options.openingOffset}）`,
+    );
+    process.exit(1);
+  }
 
   console.log(`\n=== コミット間CPU強度比較ベンチマーク ===`);
   console.log(
@@ -725,9 +822,31 @@ async function main(): Promise<void> {
   console.log(
     `難易度: ${options.difficulty}${options.randomFactor === undefined ? "" : ` (randomFactor=${options.randomFactor})`}`,
   );
-  console.log(
-    `セット数: ${options.sets} (${gamesPerSet}局/セット, 計${totalGames}局)`,
-  );
+  if (suite) {
+    console.log(
+      `開局スイート: ${suite.file} (version ${suite.version}, ${suite.count} 開局, offset=${options.openingOffset} → ${openingSource.length - options.openingOffset} 開局使用)`,
+    );
+    console.log(
+      `周回数: ${options.sets} (${gamesPerSet}局/周, 計${totalGames}局)`,
+    );
+  } else {
+    console.log(
+      `セット数: ${options.sets} (${gamesPerSet}局/セット, 計${totalGames}局)`,
+    );
+  }
+  if (totalGames < untruncatedGames) {
+    console.log(
+      `--max-games=${options.maxGames} 指定により ${untruncatedGames}→${totalGames} 局に切り詰め`,
+    );
+  }
+  const repeatWarning = openingsRepeatWarning({
+    openings: options.openings,
+    sets: options.sets,
+    randomFactor: options.randomFactor,
+  });
+  if (repeatWarning) {
+    console.warn(`⚠ ${repeatWarning}`);
+  }
   if (options.evalOptionsA || options.evalOptionsB) {
     console.log(
       `evalOptions A: ${options.evalOptionsA ? JSON.stringify(options.evalOptionsA) : "(既定=legacy)"}`,
@@ -849,21 +968,11 @@ async function main(): Promise<void> {
     pairs.push(...createdPairs);
     console.log("Bridge worker初期化完了\n");
 
-    // 珠型タスクを生成し、共有の対局ループ（runMatch）で消化する。
+    // タスク列（珠型 or 開局スイート）を共有の対局ループ（runMatch）で消化する。
     //
     // ハング耐性: move-request timeout（GameHangError）が起きたら、当該局を破棄しつつ
     // 再現ダンプ（bench-results/hang-dumps/hang-*.json）を書き、当該 pair の worker を
     // 再生成して残り局を続行する。プロセス全体を落とさない。
-    const allTasks = buildJushuTasks(options.sets);
-    const tasks =
-      options.maxGames > 0 && options.maxGames < allTasks.length
-        ? allTasks.slice(0, options.maxGames)
-        : allTasks;
-    if (options.maxGames > 0 && options.maxGames < allTasks.length) {
-      console.log(
-        `--max-games=${options.maxGames} 指定により ${allTasks.length}→${tasks.length} 局に切り詰め`,
-      );
-    }
 
     // ダンプ用の side メタ（worker 再生成にも再利用）
     const workerConfigs: { A: HangDumpSideConfig; B: HangDumpSideConfig } = {
@@ -962,7 +1071,7 @@ async function main(): Promise<void> {
       await runMatch({
         pairs,
         tasks,
-        totalGames: tasks.length,
+        totalGames,
         sprtConfig,
         moveTimeoutMs: options.moveTimeoutMs,
         verbose: options.verbose,
@@ -992,6 +1101,11 @@ async function main(): Promise<void> {
     console.log(`\n=== 結果 ===`);
     console.log(`commitA: ${commitA.shortSha} "${commitA.message}"`);
     console.log(`commitB: ${commitB.shortSha} "${commitB.message}"`);
+    if (suite) {
+      console.log(
+        `開局スイート: ${suite.file} (version ${suite.version}, offset=${options.openingOffset})`,
+      );
+    }
     console.log(
       `対局数: ${completedGames}${aborts > 0 ? ` (abort: ${aborts} = A側${abortsBySide.A} / B側${abortsBySide.B})` : ""}`,
     );
@@ -1062,6 +1176,14 @@ async function main(): Promise<void> {
         gamesPerSet,
         randomFactor: options.randomFactor,
         sprt: sprtConfig,
+        openings: suite
+          ? {
+              file: suite.file,
+              version: suite.version,
+              count: suite.count,
+              offset: options.openingOffset,
+            }
+          : undefined,
         evalOptionsA: options.evalOptionsA,
         evalOptionsB: options.evalOptionsB,
         bookA: options.bookA,

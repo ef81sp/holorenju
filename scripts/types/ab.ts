@@ -4,6 +4,7 @@
 
 import type { CpuDifficulty, DifficultyParams } from "../../src/types/cpu.ts";
 import type { CommitGameResult } from "./commit-bench.ts";
+import type { OpeningSuiteConfig } from "./openingSuite.ts";
 
 // ============================================================================
 // SPRT (Sequential Probability Ratio Test)
@@ -138,10 +139,14 @@ export interface WeightBenchResult {
   weights: Record<string, number>;
   config: {
     difficulty: CpuDifficulty;
+    /** 珠型モードではセット数、開局スイートではスイートの周回数 */
     sets: number;
+    /** 1 周回あたりの局数（珠型 26×2、スイートは (count−offset)×2） */
     gamesPerSet: number;
     randomFactor?: number;
     sprt: SPRTConfig | null;
+    /** `--openings` 指定時の開局スイート情報。未指定（珠型モード）なら無い */
+    openings?: OpeningSuiteConfig;
   };
   totalGames: number;
   /** WDL（baseline=A 視点） */

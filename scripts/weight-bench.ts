@@ -23,17 +23,25 @@ import type { CpuDifficulty } from "../src/types/cpu.ts";
 import type { SPRTConfig, WeightBenchResult } from "./types/ab.ts";
 
 import {
+  openingsRepeatWarning,
+  validateOpeningsFlags,
+} from "./lib/benchCliChecks.ts";
+import {
   computeBenchGameStats,
   formatBenchGameStats,
 } from "./lib/benchGameStats.ts";
 import { formatEloDiff } from "./lib/eloDiff.ts";
 import { parseWeightOverrides } from "./lib/evalParams.ts";
 import {
-  buildJushuTasks,
+  buildTasks,
   createBridgeWorker,
-  gamesPerSet as computeGamesPerSet,
+  jushuOpenings,
   runMatch,
 } from "./lib/match.ts";
+import {
+  type LoadedOpeningSuite,
+  loadOpeningSuite,
+} from "./lib/openingSuiteLoader.ts";
 import { formatPairedStats } from "./lib/pairedStats.ts";
 import { DEFAULT_SPRT_CONFIG, formatSPRT } from "./lib/sprt.ts";
 
@@ -61,6 +69,10 @@ interface CliOptions {
   sprtElo0: number;
   sprtElo1: number;
   verbose: boolean;
+  /** 開局スイート JSON（未指定なら 26 珠型）。指定時 --sets は周回数 */
+  openings?: string;
+  /** スイートの n 番目から使う（末尾で折り返さない）。既定 0 */
+  openingOffset: number;
 }
 
 function parseArgs(): CliOptions {
@@ -76,6 +88,7 @@ function parseArgs(): CliOptions {
     sprtElo0: DEFAULT_SPRT_CONFIG.elo0,
     sprtElo1: DEFAULT_SPRT_CONFIG.elo1,
     verbose: false,
+    openingOffset: 0,
   };
 
   for (const arg of args) {
@@ -118,6 +131,24 @@ function parseArgs(): CliOptions {
     } else if (arg.startsWith("--elo1=")) {
       options.sprtElo1 = parseFloat(arg.slice("--elo1=".length));
       options.useSPRT = true;
+    } else if (arg.startsWith("--openings=")) {
+      const value = arg.slice("--openings=".length);
+      if (value.length === 0) {
+        console.error("Error: --openings にはファイルパスを指定してください");
+        process.exit(1);
+      }
+      options.openings = value;
+    } else if (arg.startsWith("--opening-offset=")) {
+      const raw = arg.slice("--opening-offset=".length);
+      const v = parseInt(raw, 10);
+      if (Number.isFinite(v) && v >= 0) {
+        options.openingOffset = v;
+      } else {
+        console.error(
+          `Error: --opening-offset は 0 以上の整数で指定 (got: ${raw})`,
+        );
+        process.exit(1);
+      }
     } else if (arg === "--verbose" || arg === "-v") {
       options.verbose = true;
     } else if (arg === "--help" || arg === "-h") {
@@ -140,7 +171,11 @@ Usage:
 
 Options:
   --weights=<K:V,...>   side B に注入する重み (例: "OPEN_THREE:600,OPEN_TWO:25")
-  --sets=<n>            セット数 (1セット = 全珠型 × 2色, default: 1)
+  --sets=<n>            セット数 (1セット = 全珠型 × 2色, default: 1)。
+                        --openings 指定時はスイートの周回数
+  --openings=<file>     開局スイート JSON（相対パスはリポジトリルート基準）。
+                        指定時は珠型の代わりにスイートの各開局 × 2 色で対局
+  --opening-offset=<n>  スイートの n 番目の開局から使う（末尾で折り返さない, default: 0）
   --difficulty=<d>      beginner|easy|medium|hard (default: hard)
   --randomFactor=<n>    探索ゆらぎ 0〜1 (default: なし)
   --jobs=<n>            同時対局ペア数 (default: 1)
@@ -198,8 +233,39 @@ async function main(): Promise<void> {
       }
     : null;
 
-  const gamesPerSet = computeGamesPerSet();
-  const totalGames = options.sets * gamesPerSet;
+  const flagError = validateOpeningsFlags({
+    openings: options.openings,
+    bookA: false,
+    bookB: false,
+    openingOffset: options.openingOffset,
+  });
+  if (flagError) {
+    console.error(`Error: ${flagError}`);
+    process.exit(1);
+  }
+  let suite: LoadedOpeningSuite | null = null;
+  if (options.openings !== undefined) {
+    try {
+      suite = loadOpeningSuite(options.openings, PROJECT_ROOT);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`Error: ${msg}`);
+      process.exit(1);
+    }
+  }
+  const openingSource = suite ? suite.openings : jushuOpenings();
+  // totalGames は tasks.length が唯一の源
+  const tasks = buildTasks(openingSource, options.sets, {
+    offset: options.openingOffset,
+  });
+  const totalGames = tasks.length;
+  const gamesPerSet = options.sets > 0 ? totalGames / options.sets : 0;
+  if (totalGames === 0) {
+    console.error(
+      `Error: 対局タスクが 0 件です（開局 ${openingSource.length} 件, offset=${options.openingOffset}）`,
+    );
+    process.exit(1);
+  }
   const isNullTest = Object.keys(options.weights).length === 0;
 
   console.log(`\n=== eval 形系重み A/B ベンチマーク ===`);
@@ -210,9 +276,26 @@ async function main(): Promise<void> {
   console.log(
     `難易度: ${options.difficulty}${options.randomFactor === undefined ? "" : ` (randomFactor=${options.randomFactor})`}`,
   );
-  console.log(
-    `セット数: ${options.sets} (${gamesPerSet}局/セット, 計${totalGames}局) jobs=${options.jobs}`,
-  );
+  if (suite) {
+    console.log(
+      `開局スイート: ${suite.file} (version ${suite.version}, ${suite.count} 開局, offset=${options.openingOffset} → ${openingSource.length - options.openingOffset} 開局使用)`,
+    );
+    console.log(
+      `周回数: ${options.sets} (${gamesPerSet}局/周, 計${totalGames}局) jobs=${options.jobs}`,
+    );
+  } else {
+    console.log(
+      `セット数: ${options.sets} (${gamesPerSet}局/セット, 計${totalGames}局) jobs=${options.jobs}`,
+    );
+  }
+  const repeatWarning = openingsRepeatWarning({
+    openings: options.openings,
+    sets: options.sets,
+    randomFactor: options.randomFactor,
+  });
+  if (repeatWarning) {
+    console.warn(`⚠ ${repeatWarning}`);
+  }
   console.log();
 
   const workerPath = path.join(__dirname, "cpu-bridge-worker.ts");
@@ -257,7 +340,6 @@ async function main(): Promise<void> {
     pairs.push(...created);
     console.log("初期化完了\n");
 
-    const tasks = buildJushuTasks(options.sets);
     const { wdl, games, completedGames, stats } = await runMatch({
       pairs,
       tasks,
@@ -280,6 +362,11 @@ async function main(): Promise<void> {
     console.log(
       `variant(B): ${isNullTest ? "null test" : JSON.stringify(options.weights)}`,
     );
+    if (suite) {
+      console.log(
+        `開局スイート: ${suite.file} (version ${suite.version}, offset=${options.openingOffset})`,
+      );
+    }
     console.log(`対局数: ${completedGames}`);
     console.log(
       `WDL (baseline=A 視点): +${wdl.wins} =${wdl.draws} -${wdl.losses}`,
@@ -307,6 +394,14 @@ async function main(): Promise<void> {
         gamesPerSet,
         randomFactor: options.randomFactor,
         sprt: sprtConfig,
+        openings: suite
+          ? {
+              file: suite.file,
+              version: suite.version,
+              count: suite.count,
+              offset: options.openingOffset,
+            }
+          : undefined,
       },
       totalGames: completedGames,
       wdl,
