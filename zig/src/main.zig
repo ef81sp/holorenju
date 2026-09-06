@@ -177,6 +177,13 @@ export fn evaluateBoard(perspective: u8, options_flags: u32) i32 {
 /// [68]: exact_mask（bit i = 候補 i が真値。`exact_top_k == 0` なら 0。設計メモ review-multipv §2.4）
 var result_buffer: [128]u8 = .{0} ** 128;
 
+/// 候補領域（8 + 6 × TOP_CANDIDATES）が [68] の exact_mask と衝突しないことをコンパイル時に守る
+const RESULT_EXACT_MASK_OFFSET: usize = 68;
+comptime {
+    std.debug.assert(8 + @as(usize, search.TOP_CANDIDATES) * 6 <= RESULT_EXACT_MASK_OFFSET);
+    std.debug.assert(RESULT_EXACT_MASK_OFFSET < result_buffer.len);
+}
+
 /// 結果バッファのポインタを返す（JS側からメモリ読み取り用）
 export fn getResultBuffer() [*]u8 {
     return &result_buffer;
@@ -782,7 +789,7 @@ fn writeResult(row: u8, col: u8, score: i32, completed_depth: u8, top_candidates
     result_buffer[5] = score_bytes[3];
     result_buffer[6] = completed_depth;
     result_buffer[7] = top_candidate_count;
-    result_buffer[68] = exact_mask;
+    result_buffer[RESULT_EXACT_MASK_OFFSET] = exact_mask;
 
     // 候補手リスト: offset 8 から、各6バイト（row + col + score_i32_le）
     if (top_candidates) |candidates| {

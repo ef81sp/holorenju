@@ -732,6 +732,11 @@ pub fn findBestMoveIterative(
     // 絶対デッドライン（安全弁）は再装填しない。
     // `exact_top_k == 0` を先頭に置き、従来経路では時計を読まない（ゴールデン B は時計読み回数に敏感）。
     const refined = params.exact_top_k > 0 and !fallback_fired and !ctx.absolute_deadline_exceeded;
+    // 強制候補は空点のみ（`searchRootMove` は無条件に石を置くため）。着手可否（禁手）は問わない
+    const forced_move: ?Position = if (params.forced_move) |fm|
+        (if (cells[@as(u16, fm.row) * BOARD_SIZE + fm.col] == .empty) fm else null)
+    else
+        null;
     if (refined) {
         // 予算の再装填: 主探索と同額の時間 / ノードをもう一度与える（Phase 1 は構造上 最大 2 倍）
         if (!no_time_limit) {
@@ -742,7 +747,7 @@ pub fn findBestMoveIterative(
             ctx.max_nodes = ctx.stats.nodes + params.max_nodes;
             ctx.node_count_exceeded = false;
         }
-        refineTopCandidates(&best_result, cells, color, completed_depth, params.exact_top_k, params.forced_move, &ctx);
+        refineTopCandidates(&best_result, cells, color, completed_depth, params.exact_top_k, forced_move, &ctx);
     }
 
     // 上位候補手を収集（基本 5 手 + 真値化された強制候補 1 手）
@@ -752,7 +757,7 @@ pub fn findBestMoveIterative(
         top_candidates[i] = best_result.candidates[i];
     }
     if (refined) {
-        if (params.forced_move) |fm| {
+        if (forced_move) |fm| {
             if (findCandidateIndex(top_candidates[0..count], fm) == null) {
                 if (findCandidateIndex(best_result.candidates[0..best_result.candidate_count], fm)) |fi| {
                     const entry = best_result.candidates[fi];
@@ -856,6 +861,9 @@ pub fn refineTopCandidates(
     forced_move: ?Position,
     ctx: *minimax.SearchContext,
 ) void {
+    // 呼び出し側ガードに依存しない（`exact_list[k - 1]` のアンダーフロー防止）
+    if (k == 0) return;
+
     const hash = zobrist.computeBoardHash(cells);
     const max_researches: u32 = @as(u32, k) * 2;
     var researches: u32 = 0;
@@ -901,8 +909,15 @@ pub fn refineTopCandidates(
 
         var full_beta: i32 = cand.score + 1;
         if (exact_len >= k) {
-            // K 件確定済み: K 位の真値を超えるかだけ null window で確認
+            // K 件確定済み: K 位の真値を超えるかだけ null window で確認。
+            // 境界値 b_i <= e_K の手は子局面の TT（upper_bound = b_i）で即カットされるだけで
+            // 上限破れも検出できないので、探索せず rest へ直行する（回数も消費しない）。
             const e_k = exact_list[k - 1].score;
+            if (cand.score <= e_k) {
+                rest_list[rest_len] = cand;
+                rest_len += 1;
+                continue;
+            }
             const s = minimax.searchRootMove(cells, hash, cand.move, color, depth, e_k, e_k + 1, ctx);
             researches += 1;
             if (ctx.isAborted()) aborted = true;
@@ -1213,7 +1228,7 @@ test "exact_top_k = 0: exact_mask は 0 で候補は従来どおり最大 5 件�
     tt_mod.global_tt.clear();
     const result = findBestMoveIterative(&cells, .black, .{ .max_depth = 2, .aspiration_mode = 1 });
     try testing.expectEqual(@as(u8, 0), result.exact_mask);
-    try testing.expect(result.top_candidate_count <= 5);
+    try testing.expect(result.top_candidate_count <= TOP_CANDIDATES_BASE);
 }
 
 test "exact_top_k > 0: 上位候補に exact ビットが立ち、強制手は候補に含まれる（§3-3/§3-5 軽量版）" {
@@ -1290,6 +1305,31 @@ test "refineTopCandidates: root で exact が立った候補は再探索され�
     refineTopCandidates(&result, &cells, .black, 2, 4, null, &ctx);
     try testing.expect(ctx.stats.nodes > 0);
     for (0..result.candidate_count) |i| try testing.expect(result.candidates[i].exact);
+}
+
+test "forced_move が既石（空点でない）なら無視され、候補に入らず落ちない" {
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[7 * BOARD_SIZE + 7] = .black;
+    cells[7 * BOARD_SIZE + 8] = .white;
+    cells[6 * BOARD_SIZE + 7] = .black;
+    cells[8 * BOARD_SIZE + 8] = .white;
+
+    tt_mod.global_tt.clear();
+    const occupied = Position{ .row = 7, .col = 8 };
+    const result = findBestMoveIterative(&cells, .black, .{
+        .max_depth = 2,
+        .aspiration_mode = 1,
+        .exact_top_k = 2,
+        .forced_move = occupied,
+    });
+    try testing.expectEqual(@as(u8, 0b11), result.exact_mask & 0b11);
+    try testing.expect(result.top_candidate_count <= TOP_CANDIDATES_BASE);
+    for (0..result.top_candidate_count) |i| {
+        const m = result.top_candidates[i].move;
+        try testing.expect(!(m.row == occupied.row and m.col == occupied.col));
+    }
+    // 盤面は元のまま
+    try testing.expectEqual(Cell.white, cells[7 * BOARD_SIZE + 8]);
 }
 
 test "exact_top_k = 0: forced_move は無視される" {

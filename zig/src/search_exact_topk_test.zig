@@ -168,10 +168,10 @@ test "§3-3 自己整合: exact_top_k = 5 の上位 5 件は真値・降順で�
     }
 }
 
-test "§3-3 K = 1 で最善手が root 真値なら着手・スコアは K = 0 と同じ（再探索は null window の確認だけ）" {
+test "§3-3 K = 1 で最善手が root 真値なら着手・スコア・nodes は K = 0 と同じ（再探索なし）" {
     // 「root で exact が立った手は再探索されない」の直接の検証は search.zig の
-    // refineTopCandidates 単体テスト。ここでは K=1 の結果が主探索の最善と一致し、
-    // 増分ノードが最善手の全窓再探索（≈ 主探索の PV サブツリー）より十分小さいことを見る。
+    // refineTopCandidates 単体テスト。ここでは K=1 の結果が主探索と完全に一致することを見る。
+    // 境界値 b_i は root の alpha（≤ 最善スコア = e_1）以下なので null window 確認もスキップされ、nodes は増えない。
     budget_mod.deterministic_mode = true;
     defer budget_mod.deterministic_mode = false;
 
@@ -184,8 +184,7 @@ test "§3-3 K = 1 で最善手が root 真値なら着手・スコアは K = 0 �
         try testing.expectEqual(r0.score, r1.score);
         try testing.expect(samePos(r0.position, r1.position));
         try testing.expectEqual(@as(u8, 1), r1.exact_mask & 1);
-        try testing.expect(r1.stats.nodes >= r0.stats.nodes);
-        std.debug.print("  K=1 extra nodes: {s} +{d} (base {d})\n", .{ kifu, r1.stats.nodes - r0.stats.nodes, r0.stats.nodes });
+        try testing.expectEqual(r0.stats.nodes, r1.stats.nodes);
         checked += 1;
     }
     try testing.expect(checked > 0);
