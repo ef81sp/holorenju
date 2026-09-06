@@ -76,7 +76,7 @@ const ABSOLUTE_TIME_LIMIT_MS = 15000;
 const ASPIRATION_MODE = 1;
 
 /**
- * 統計バッファ読み出し。レイアウトと 48/56 バイト分岐は scripts/lib/wasmSearchStats.ts
+ * 統計バッファ読み出し。レイアウトと 48/56/60 バイト分岐は scripts/lib/wasmSearchStats.ts
  * （SSoT）。拡張フィールド（pre_search_nodes / probe_nodes）は getSearchFeatures()
  * bit1 の wasm のみ読む（旧 wasm で 48 バイトを越えて読まない）。
  */

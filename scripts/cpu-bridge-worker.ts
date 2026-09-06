@@ -191,7 +191,7 @@ interface WasmModuleExports {
    * 対応可否は getSearchFeatures() bit0 で確認する。古い wasm には無い＝optional。
    */
   setDeterministicMode?: (enabled: number) => void;
-  /** bit0=deterministic 対応、bit1=stats_buffer 拡張（56 バイト）。古い wasm には無い。 */
+  /** bit0=deterministic 対応、bit1=stats_buffer 拡張（56 バイト以上。現行 60）。古い wasm には無い。 */
   getSearchFeatures?: () => number;
   /** stats_buffer の実長（バイト）。bit1 以降に append されたフィールドの判定に使う。 */
   getStatsBufferLength?: () => number;
@@ -312,7 +312,7 @@ function createWasmSearchHandler(
       const completedDepth = view.getUint8(ptr + 6);
 
       // 統計バッファから読み取り（getStatsBuffer がないWASMとの互換性）。
-      // 48/56 バイトの分岐は getSearchFeatures() bit1（旧 wasm では 48 を越えて読まない）。
+      // 48/56/60 バイトの分岐は getSearchFeatures() bit1 と getStatsBufferLength()（旧 wasm では 48 を越えて読まない）。
       let stats: WasmSearchStats | undefined = undefined;
       if (wasm.getStatsBuffer) {
         stats = readWasmSearchStats(

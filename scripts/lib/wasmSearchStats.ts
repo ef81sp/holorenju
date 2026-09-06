@@ -16,10 +16,11 @@
 
 /** getSearchFeatures() bit0: setDeterministicMode 対応 */
 export const SEARCH_FEATURE_DETERMINISTIC = 1 << 0;
-/** getSearchFeatures() bit1: stats_buffer に pre_search_nodes / probe_nodes あり（56 バイト） */
+/** getSearchFeatures() bit1: stats_buffer に pre_search_nodes / probe_nodes あり（56 バイト以上。現行 wasm は 60） */
 export const SEARCH_FEATURE_EXTENDED_STATS = 1 << 1;
 
 export const STATS_BUFFER_BASE_BYTES = 48;
+/** bit1 が保証する最小長（+48 / +52 まで） */
 export const STATS_BUFFER_EXTENDED_BYTES = 56;
 /** absolute_deadline_hit（+56）を含む長さ */
 export const STATS_BUFFER_DEADLINE_HIT_BYTES = 60;

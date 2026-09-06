@@ -23,6 +23,7 @@ import type { CpuDifficulty } from "../src/types/cpu.ts";
 import type { SPRTConfig, WeightBenchResult } from "./types/ab.ts";
 
 import {
+  effectiveRandomFactor,
   resolveFixedNodesParams,
   resolveFixedNodesPerSide,
   resolveMoveTimeoutMs,
@@ -214,8 +215,12 @@ function resolveFixedNodesOrExit(options: CliOptions): FixedNodesResolved {
     maxNodesB: undefined,
     bookA: false,
     bookB: false,
-    randomFactor: options.randomFactor,
-    // weight-bench には --seed が無い＝randomFactor>0 は決定的モードで使えない
+    // 実効値（未指定なら difficulty 既定）。
+    // weight-bench には --seed が無い＝実効 randomFactor>0 は決定的モードで使えない
+    randomFactor: effectiveRandomFactor(
+      options.randomFactor,
+      options.difficulty,
+    ),
     seedExplicit: false,
     sets: options.sets,
   });

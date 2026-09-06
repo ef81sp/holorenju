@@ -3,6 +3,20 @@
  * （bench-precision-2026-09-04.md §2.2 の `--openings` まわり）。
  * process.exit や console は呼ばない。文字列を返し、CLI 側で表示・終了する。
  */
+import { type CpuDifficulty, DIFFICULTY_PARAMS } from "../../src/types/cpu.ts";
+
+/**
+ * 実効 randomFactor。`--randomFactor` 未指定なら difficulty 既定（beginner=0.3 等）が
+ * bridge worker で効くので、決定的モードのガードと seed 導出は CLI の明示値ではなく
+ * この実効値で判断する（hard は 0）。commit-bench の worktree が別コミットでも、
+ * 現リポジトリの DIFFICULTY_PARAMS を代理値として使う。
+ */
+export function effectiveRandomFactor(
+  explicit: number | undefined,
+  difficulty: CpuDifficulty,
+): number {
+  return explicit ?? DIFFICULTY_PARAMS[difficulty].randomFactor;
+}
 
 export interface OpeningsFlagsInput {
   /** `--openings=<file>`（未指定なら undefined） */
@@ -146,6 +160,7 @@ export interface FixedNodesValidationInput {
   maxNodesB: number | undefined;
   bookA: boolean;
   bookB: boolean;
+  /** **実効** randomFactor（effectiveRandomFactor。CLI 未指定なら difficulty 既定） */
   randomFactor: number | undefined;
   /** `--seed` が CLI で明示されたか（既定 Date.now() は「明示」ではない） */
   seedExplicit: boolean;

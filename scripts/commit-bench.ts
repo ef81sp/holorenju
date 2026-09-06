@@ -42,6 +42,7 @@ import type {
 } from "./types/commit-bench.ts";
 
 import {
+  effectiveRandomFactor,
   normalizeMaxGames,
   resolveFixedNodesParams,
   resolveFixedNodesPerSide,
@@ -437,7 +438,11 @@ function resolveFixedNodesOrExit(options: CliOptions): FixedNodesResolved {
     maxNodesB: options.maxNodesB,
     bookA: options.bookA,
     bookB: options.bookB,
-    randomFactor: options.randomFactor,
+    // 実効値（未指定なら difficulty 既定）。beginner 等は既定 > 0 なので seed が要る
+    randomFactor: effectiveRandomFactor(
+      options.randomFactor,
+      options.difficulty,
+    ),
     seedExplicit: options.seedExplicit,
     sets: options.sets,
   });
@@ -1085,9 +1090,12 @@ async function main(): Promise<void> {
       return fresh;
     };
 
-    // randomFactor 使用時は seed を明示ログ（同一シード同一棋譜の検証で使う）
+    // 実効 randomFactor > 0 なら seed を渡す（difficulty 既定の randomFactor も含む。
+    // 未指定 = Math.random に落ちて決定性・再現性が壊れる）。同一シード同一棋譜の検証用にログ
     const seedInEffect =
-      options.randomFactor === undefined ? undefined : options.seed;
+      effectiveRandomFactor(options.randomFactor, options.difficulty) > 0
+        ? options.seed
+        : undefined;
     if (seedInEffect !== undefined) {
       console.log(
         `PRNG seed（baseSeed）: ${seedInEffect}${process.argv.some((a) => a.startsWith("--seed=")) ? "" : " (default = Date.now())"}`,
@@ -1165,7 +1173,7 @@ async function main(): Promise<void> {
             },
           }
         : undefined,
-      // randomFactor 未指定なら getGameSeed を渡さない（従来と同じ Math.random）
+      // 実効 randomFactor が 0 なら getGameSeed を渡さない（seed は意味を持たない）
       getGameSeed:
         seedInEffect === undefined
           ? undefined

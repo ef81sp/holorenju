@@ -1,7 +1,7 @@
 /**
  * 2 つのベンチ結果 JSON の決定性比較（bench-fixed-nodes-2026-09-06.md §2.5
  * 「決定性スモーク」）。pairId + 色で局を突き合わせ、棋譜（着手列）・1 手ごとの
- * `stats.nodes`・`score` の**完全一致**を判定する。不一致は局ごとに最初の手だけ報告する
+ * `stats.nodes`・`score`・`depth`（completedDepth）の**完全一致**を判定する。不一致は局ごとに最初の手だけ報告する
  * （以降の手は最初のずれに連鎖するので情報量が無い）。
  *
  * 固定ノード（決定的）モードで jobs や負荷を変えて 2 回走らせた結果がここで一致
@@ -13,7 +13,7 @@ export interface BenchRunLike {
   games: CommitGameResult[];
 }
 
-export type MismatchField = "move" | "nodes" | "score" | "length";
+export type MismatchField = "move" | "nodes" | "score" | "depth" | "length";
 
 export interface GameMismatch {
   pairId: string;
@@ -94,6 +94,15 @@ function compareGame(
         b: fmt(mb.score),
       };
     }
+    if (ma.depth !== mb.depth) {
+      return {
+        ...base,
+        moveIndex: i,
+        field: "depth",
+        a: fmt(ma.depth),
+        b: fmt(mb.depth),
+      };
+    }
   }
   if (a.moveHistory.length !== b.moveHistory.length) {
     return {
@@ -150,7 +159,7 @@ export function formatBenchComparison(r: BenchComparison): string {
   const lines: string[] = [];
   if (r.identical) {
     lines.push(
-      `✓ 完全一致: ${r.comparedGames} 局の棋譜・1 手ごとの nodes・score が全て同じ`,
+      `✓ 完全一致: ${r.comparedGames} 局の棋譜・1 手ごとの nodes・score・depth が全て同じ`,
     );
     return lines.join("\n");
   }

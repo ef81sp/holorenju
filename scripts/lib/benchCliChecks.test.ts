@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  effectiveRandomFactor,
   normalizeMaxGames,
   openingsRepeatWarning,
   resolveFixedNodesParams,
@@ -207,6 +208,21 @@ describe("validateFixedNodesFlags", () => {
     ).toBeNull();
   });
 
+  it("difficulty 既定の randomFactor > 0（beginner=0.3）でも --seed 無しはエラー（実効値で判定）", () => {
+    const effective = effectiveRandomFactor(undefined, "beginner");
+    expect(effective).toBeGreaterThan(0);
+    expect(
+      validateFixedNodesFlags({ ...base, randomFactor: effective }),
+    ).toMatch(/--seed/);
+    expect(
+      validateFixedNodesFlags({
+        ...base,
+        randomFactor: effective,
+        seedExplicit: true,
+      }),
+    ).toBeNull();
+  });
+
   it("randomFactor=0 は seed 不要", () => {
     expect(validateFixedNodesFlags({ ...base, randomFactor: 0 })).toBeNull();
   });
@@ -230,6 +246,15 @@ describe("validateFixedNodesFlags", () => {
     expect(
       validateFixedNodesFlags({ ...base, fixedNodesA: undefined, bookA: true }),
     ).toMatch(/--book-a/);
+  });
+});
+
+describe("effectiveRandomFactor", () => {
+  it("明示値があればそれ、無ければ difficulty 既定", () => {
+    expect(effectiveRandomFactor(0.02, "beginner")).toBe(0.02);
+    expect(effectiveRandomFactor(0, "beginner")).toBe(0);
+    expect(effectiveRandomFactor(undefined, "hard")).toBe(0);
+    expect(effectiveRandomFactor(undefined, "beginner")).toBe(0.3);
   });
 });
 

@@ -7,7 +7,13 @@ import { compareBenchRuns, formatBenchComparison } from "./benchCompare.ts";
 function game(
   pairId: string,
   isABlack: boolean,
-  moves: { row: number; col: number; nodes?: number; score?: number }[],
+  moves: {
+    row: number;
+    col: number;
+    nodes?: number;
+    score?: number;
+    depth?: number;
+  }[],
 ): CommitGameResult {
   return {
     playerA: "A",
@@ -25,6 +31,7 @@ function game(
       time: 0,
       isOpening: i < 1,
       score: m.score,
+      depth: m.depth,
       stats: m.nodes === undefined ? undefined : { nodes: m.nodes },
     })),
   };
@@ -33,8 +40,8 @@ function game(
 const base = [
   game("0:o1", true, [
     { row: 7, col: 7 },
-    { row: 7, col: 8, nodes: 100, score: 5 },
-    { row: 8, col: 8, nodes: 200, score: -3 },
+    { row: 7, col: 8, nodes: 100, score: 5, depth: 4 },
+    { row: 8, col: 8, nodes: 200, score: -3, depth: 5 },
   ]),
   game("0:o1", false, [
     { row: 7, col: 7 },
@@ -88,6 +95,15 @@ describe("compareBenchRuns", () => {
       moveIndex: 1,
       field: "score",
     });
+  });
+
+  it("completedDepth が違えば field=depth", () => {
+    const b = structuredClone(base);
+    b[0]!.moveHistory[2]!.depth = 6;
+    const r = compareBenchRuns({ games: base }, { games: b });
+    expect(r.mismatches[0]).toMatchObject({ moveIndex: 2, field: "depth" });
+    expect(r.mismatches[0]?.a).toBe("5");
+    expect(r.mismatches[0]?.b).toBe("6");
   });
 
   it("手数が違えば短い方の末尾の次で length 不一致", () => {
