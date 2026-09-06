@@ -252,7 +252,8 @@ function profileMove(
     const status = c.opponentForcedWin
       ? `forced_loss:${c.opponentForcedWin}`
       : "safe";
-    candDetails.push(`${pos}[${status}]`);
+    const exactMark = c.scoreExact ? "" : "≤";
+    candDetails.push(`${pos}[${status}:${exactMark}${c.searchScore}]`);
   }
   subPhases.push({
     name: "候補手検証",
