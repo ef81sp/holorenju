@@ -28,7 +28,11 @@ import { countStones } from "../core/boardUtils";
 import { PATTERN_SCORES } from "../evaluation/patternScores";
 import { colorToWasm } from "../wasm/boardAdapter";
 import { linearTreeFromSequence } from "../wasm/forcedWinTreeWire";
-import { encodeEvalOptions, type WasmSearchEngine } from "../wasm/searchEngine";
+import {
+  encodeEvalOptions,
+  REVIEW_EXACT_TOP_K,
+  type WasmSearchEngine,
+} from "../wasm/searchEngine";
 // #37 P3 PR4/PR5b: 脅威検出・ミセターゲットを Zig 単一ソース経由に。
 // 合法局面で TS と一致（threatAdapter.test / findMiseTargetsParity.test 検証済）。
 // 未ロード時は TS フォールバック。
@@ -42,7 +46,7 @@ import { buildDoubleMiseTree } from "./doubleMiseBranches";
 import {
   evaluatePlayedForcedWin,
   probePlayedMoveScore,
-  resolvePlayedCandidateScore,
+  resolvePlayedScore,
 } from "./evaluatePlayedMove";
 import {
   checkForcedLoss,
@@ -78,8 +82,10 @@ const REVIEW_EVAL_FLAGS = encodeEvalOptions(
 
 /**
  * WASM 探索エンジンで minimax 探索を実行し、TS 版と同じ結果型に変換する
+ *
+ * export は配線テスト（reviewExactTopKWiring.test.ts）用。
  */
-function executeWasmSearch(
+export function executeWasmSearch(
   engine: WasmSearchEngine,
   board: BoardState,
   color: "black" | "white",
@@ -100,6 +106,9 @@ function executeWasmSearch(
     profile.absoluteTimeLimit ?? 0,
     aspirationMode,
     evalOptionsFlags,
+    // root 上位 K 手を真値に（review-multipv-2026-09-06.md §2.5）。
+    // engine 側の既定は 0 なので振り返り本体だけがここで明示する。
+    REVIEW_EXACT_TOP_K,
   );
 
   // WASM 候補手を MoveScoreEntry[] に変換
@@ -717,7 +726,7 @@ function buildForcedWinResult(
         color,
         colorToWasm(color),
       );
-      // playedScore は probe（全窓）由来で境界値ではない
+      // playedScore は実手局面の root 最善値（真値）で境界値ではない
       candidates.push({
         position: { row: playedRow, col: playedCol },
         searchScore: playedScore,
@@ -937,28 +946,24 @@ function buildNormalResult(
   const playedIsBest =
     playedRow === result.position.row && playedCol === result.position.col;
   if (playedRow >= 0 && result.candidates && !playedIsBest) {
-    // 実手候補のスコアは真値（scoreExact）のときだけ採用する（§2.5 経路 2）。
-    const exactScore = resolvePlayedCandidateScore(
+    // 真値のみ採用、境界値は probe との min、候補外は probe（§2.5 経路 2）。
+    // 従来の -2000 固定は候補外の手を一律 blunder と誤判定していた（B1）。
+    playedScore = resolvePlayedScore(
       result.candidates,
       playedRow,
       playedCol,
+      () =>
+        wasmSearchEngine
+          ? probePlayedMoveScore(
+              board,
+              playedRow,
+              playedCol,
+              color,
+              wasmSearchEngine,
+            )
+          : null,
+      result.score - 2000,
     );
-    if (exactScore === undefined) {
-      // 実手が候補(top5)外 or 境界値: 実手局面を追加探索して実スコアを推定する。
-      // 従来の -2000 固定は候補外の手を一律 blunder と誤判定していた（B1）。
-      const probed = wasmSearchEngine
-        ? probePlayedMoveScore(
-            board,
-            playedRow,
-            playedCol,
-            color,
-            wasmSearchEngine,
-          )
-        : null;
-      playedScore = probed ?? result.score - 2000;
-    } else {
-      playedScore = exactScore;
-    }
   }
 
   const candidates = (result.candidates ?? []).slice(0, 5).map(buildCandidate);
@@ -983,7 +988,7 @@ function buildNormalResult(
         color,
         colorToWasm(color),
       );
-      // playedScore は probe（全窓）由来で境界値ではない
+      // playedScore は実手局面の root 最善値（真値）で境界値ではない
       candidates.push({
         position: { row: playedRow, col: playedCol },
         searchScore: playedScore,

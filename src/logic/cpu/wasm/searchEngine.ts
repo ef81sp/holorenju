@@ -105,7 +105,12 @@ export interface WasmCandidateEntry {
   scoreExact?: boolean;
 }
 
-/** 振り返り探索で真値にする root 上位候補数（§2.5、SSoT） */
+/**
+ * 振り返り探索（fullEval）で真値にする root 上位候補数（§2.5、SSoT）。
+ * findBestMoveForReview の既定値は 0（従来どおり）。scripts のトラップ採掘経路
+ * （trapPipeline / survivorMoves）が黙って 2 倍の時間と候補順の変化を受けないため、
+ * 振り返り本体（fullEval.executeWasmSearch）だけが明示的に渡す。
+ */
 export const REVIEW_EXACT_TOP_K = 5;
 /** wasm findBestMove の forced_row/forced_col「強制手なし」（§2.4） */
 export const WASM_NO_FORCED_MOVE = 255;
@@ -200,6 +205,7 @@ export class WasmSearchEngine {
    * のは、新規呼び出し経路で配線を忘れて素 eval に落ちる silent regression を防ぐため。
    *
    * exactTopK: root 上位 K 手を全窓で再探索して真値にする（§2.1）。候補の scoreExact に反映。
+   * 既定 0 = 従来どおり（再探索なし）。振り返り本体は REVIEW_EXACT_TOP_K を明示する。
    * forcedMove: 候補外でも必ず真値で返す手（フェーズ 2 §2.6。未配線）。
    * findBestMoveWithParams 系（対戦 CPU / プローブ）はこれらを渡さない（0 = 従来どおり）。
    */
@@ -212,7 +218,7 @@ export class WasmSearchEngine {
     absoluteTimeLimitMs: number,
     aspirationMode: number,
     evalOptionsFlags: number,
-    exactTopK: number = REVIEW_EXACT_TOP_K,
+    exactTopK = 0,
     forcedMove?: Position,
   ): WasmSearchResultWithCandidates {
     const wasmColor = colorToWasm(color);

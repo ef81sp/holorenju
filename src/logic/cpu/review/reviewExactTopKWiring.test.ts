@@ -21,6 +21,8 @@ import {
   WasmSearchEngine,
   WASM_NO_FORCED_MOVE,
 } from "../wasm/searchEngine";
+import { executeWasmSearch } from "./fullEval";
+import { REVIEW_PROFILE_FAST } from "./reviewConstants";
 
 const RESULT_PTR = 1024;
 const PV_PTR = 4096;
@@ -72,7 +74,7 @@ const THREE_CANDIDATES: MockCandidate[] = [
 ];
 
 describe("findBestMoveForReview の exact_top_k 配線（§3-6）", () => {
-  it("既定で exact_top_k=5、強制手なし(255,255) を wasm に渡す", () => {
+  it("既定値は exact_top_k=0（scripts のトラップ採掘経路は従来どおり）、強制手なし(255,255)", () => {
     const wasm = createMockWasm(THREE_CANDIDATES, 0);
     const engine = new WasmSearchEngine(wasm);
     engine.findBestMoveForReview(
@@ -88,12 +90,30 @@ describe("findBestMoveForReview の exact_top_k 配線（§3-6）", () => {
     const [call] = vi.mocked(wasm.findBestMove).mock.calls;
     expect(call).toBeDefined();
     expect(call?.slice(7)).toEqual([
-      REVIEW_EXACT_TOP_K,
+      0,
       WASM_NO_FORCED_MOVE,
       WASM_NO_FORCED_MOVE,
     ]);
-    expect(REVIEW_EXACT_TOP_K).toBe(5);
     expect(WASM_NO_FORCED_MOVE).toBe(255);
+  });
+
+  it("振り返り本体（fullEval.executeWasmSearch）は REVIEW_EXACT_TOP_K=5 を明示して渡す", () => {
+    const wasm = createMockWasm(THREE_CANDIDATES, 0b111);
+    const engine = new WasmSearchEngine(wasm);
+    const spy = vi.spyOn(engine, "findBestMoveForReview");
+    executeWasmSearch(
+      engine,
+      createEmptyBoard(),
+      "black",
+      REVIEW_PROFILE_FAST.maxNodes,
+      REVIEW_PROFILE_FAST,
+    );
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy.mock.calls[0]?.[8]).toBe(REVIEW_EXACT_TOP_K);
+    expect(REVIEW_EXACT_TOP_K).toBe(5);
+    // wasm まで 5 が届く
+    const [call] = vi.mocked(wasm.findBestMove).mock.calls;
+    expect(call?.[7]).toBe(REVIEW_EXACT_TOP_K);
   });
 
   it("forcedMove を渡すと forced_row/forced_col に座標が入る", () => {

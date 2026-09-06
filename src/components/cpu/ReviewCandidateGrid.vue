@@ -29,6 +29,8 @@ interface CandidateView {
   delta: number;
   /** 整形済み delta（境界値なら「≤」付き） */
   deltaLabel: string;
+  /** searchScore が境界値（上限）か。基準候補は常に false */
+  isBound: boolean;
   kind: "best" | "actual" | "alt";
   isFukumi: boolean;
   fukumiDepth?: number;
@@ -74,12 +76,14 @@ const candidateViews = computed<CandidateView[]>(() => {
     const delta = c.searchScore - bestSearchScore;
     // 基準（最善）自身の delta は定義上 0 なので「≤」は付けない
     const isReference = c === best;
+    const isBound = !isReference && !c.scoreExact;
     return {
       rank: idx + 1,
       position: c.position,
       coord: formatMove(c.position),
       delta,
-      deltaLabel: formatCandidateDelta(delta, isReference || c.scoreExact),
+      deltaLabel: formatCandidateDelta(delta, !isBound),
+      isBound,
       kind,
       isFukumi: c.isFukumi ?? false,
       fukumiDepth: c.fukumiDepth,
@@ -141,7 +145,8 @@ function handleLeave(): void {
             <span class="cand-coord">{{ c.coord }}</span>
             <span
               class="cand-delta"
-              :class="c.delta === 0 ? 'zero' : 'neg'"
+              :class="c.delta === 0 && !c.isBound ? 'zero' : 'neg'"
+              :title="c.isBound ? '上限値（未確定）' : undefined"
             >
               {{ c.deltaLabel }}
             </span>

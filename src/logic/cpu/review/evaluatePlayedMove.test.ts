@@ -20,7 +20,7 @@ import { PATTERN_SCORES } from "../evaluation";
 import {
   evaluatePlayedForcedWin,
   probePlayedMoveScore,
-  resolvePlayedCandidateScore,
+  resolvePlayedScore,
 } from "./evaluatePlayedMove";
 
 function mockEngine(score: number): WasmSearchEngine {
@@ -85,36 +85,50 @@ vi.mock("./wasmAdapters", () => ({
   wasmIsVCTFirstMove: vi.fn(() => false),
 }));
 
-describe("resolvePlayedCandidateScore（§2.5 経路 1・2 の共通規則）", () => {
-  it("実手候補が scoreExact=true ならそのスコアを返す", () => {
+describe("resolvePlayedScore（§2.5 経路 1・2 の共通規則）", () => {
+  const played = { row: 7, col: 8 };
+  const FALLBACK = -9999;
+
+  it("実手候補が scoreExact=true ならそのスコア（probe しない）", () => {
+    const probe = vi.fn(() => 700);
     const candidates: MoveScoreEntry[] = [
-      { move: { row: 7, col: 7 }, score: 300, scoreExact: true },
-      { move: { row: 7, col: 8 }, score: 120, scoreExact: true },
+      { move: { row: 7, col: 7 }, score: 900, scoreExact: true },
+      { move: played, score: 500, scoreExact: true },
     ];
-    expect(resolvePlayedCandidateScore(candidates, 7, 8)).toBe(120);
+    expect(resolvePlayedScore(candidates, 7, 8, probe, FALLBACK)).toBe(500);
+    expect(probe).not.toHaveBeenCalled();
   });
 
-  it("実手候補が境界値（scoreExact 省略）なら undefined", () => {
-    const candidates: MoveScoreEntry[] = [
-      { move: { row: 7, col: 7 }, score: 300 },
-      { move: { row: 7, col: 8 }, score: 120 },
-    ];
-    expect(resolvePlayedCandidateScore(candidates, 7, 8)).toBeUndefined();
+  it("境界値 500・probe 700 → 500（上限を超えない）", () => {
+    const candidates: MoveScoreEntry[] = [{ move: played, score: 500 }];
+    expect(resolvePlayedScore(candidates, 7, 8, () => 700, FALLBACK)).toBe(500);
   });
 
-  it("実手候補が scoreExact=false なら undefined", () => {
+  it("境界値 500・probe 300 → 300（min）", () => {
     const candidates: MoveScoreEntry[] = [
-      { move: { row: 7, col: 8 }, score: 120, scoreExact: false },
+      { move: played, score: 500, scoreExact: false },
     ];
-    expect(resolvePlayedCandidateScore(candidates, 7, 8)).toBeUndefined();
+    expect(resolvePlayedScore(candidates, 7, 8, () => 300, FALLBACK)).toBe(300);
   });
 
-  it("実手が候補外なら undefined", () => {
+  it("境界値・probe 不能(null) → 境界値のまま", () => {
+    const candidates: MoveScoreEntry[] = [{ move: played, score: 500 }];
+    expect(resolvePlayedScore(candidates, 7, 8, () => null, FALLBACK)).toBe(
+      500,
+    );
+  });
+
+  it("実手が候補外なら probe 値、probe 不能なら fallback", () => {
     const candidates: MoveScoreEntry[] = [
-      { move: { row: 7, col: 7 }, score: 300, scoreExact: true },
+      { move: { row: 7, col: 7 }, score: 900, scoreExact: true },
     ];
-    expect(resolvePlayedCandidateScore(candidates, 0, 0)).toBeUndefined();
-    expect(resolvePlayedCandidateScore(undefined, 0, 0)).toBeUndefined();
+    expect(resolvePlayedScore(candidates, 7, 8, () => 250, FALLBACK)).toBe(250);
+    expect(resolvePlayedScore(candidates, 7, 8, () => null, FALLBACK)).toBe(
+      FALLBACK,
+    );
+    expect(resolvePlayedScore(undefined, 7, 8, () => null, FALLBACK)).toBe(
+      FALLBACK,
+    );
   });
 });
 
@@ -145,9 +159,9 @@ describe("evaluatePlayedForcedWin は境界値を採用しない（§2.5 経路 
     expect(engine.findBestMoveWithParamsNoTTClear).not.toHaveBeenCalled();
   });
 
-  it("実手候補が境界値なら probePlayedMoveScore に落ちる", () => {
+  it("実手候補が境界値なら probe との min（probe が上回れば境界値）", () => {
     const board = createEmptyBoard();
-    // probe は相手視点 -450 → 実手側 +450
+    // probe は相手視点 -450 → 実手側 +450 > 境界値 120 → 120
     const engine = mockEngine(-450);
     const result = {
       score: 300,
@@ -167,7 +181,31 @@ describe("evaluatePlayedForcedWin は境界値を採用しない（§2.5 経路 
       engine,
     );
     expect(engine.findBestMoveWithParamsNoTTClear).toHaveBeenCalledTimes(1);
-    expect(out.playedScore).toBe(450);
+    expect(out.playedScore).toBe(120);
+  });
+
+  it("実手候補が境界値で probe が下回れば probe 値", () => {
+    const board = createEmptyBoard();
+    // probe は相手視点 +50 → 実手側 -50 < 境界値 120 → -50
+    const engine = mockEngine(50);
+    const result = {
+      score: 300,
+      candidates: [
+        { move: bestMove, score: 300, scoreExact: true },
+        { move: { row: 7, col: 8 }, score: 120 },
+      ] satisfies MoveScoreEntry[],
+    };
+    const out = evaluatePlayedForcedWin(
+      board,
+      "black",
+      7,
+      8,
+      bestMove,
+      PATTERN_SCORES.FIVE,
+      result,
+      engine,
+    );
+    expect(out.playedScore).toBe(-50);
   });
 
   it("実手 = 最善手なら bestScore をそのまま返す（scoreExact 不問）", () => {
