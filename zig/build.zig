@@ -231,7 +231,26 @@ pub fn build(b: *std.Build) void {
         }),
     });
 
+    const test_budget = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/budget.zig"),
+            .target = native_target,
+        }),
+    });
+
+    // 時間モードのゴールデン値 + 決定的モードの時計非依存テスト（bench-fixed-nodes §3）。
+    // 実探索（hard 相当・最大 20 万ノード）を回すので ReleaseFast でビルドする。
+    const test_search_golden = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/search_golden_test.zig"),
+            .target = native_target,
+            .optimize = .ReleaseFast,
+        }),
+    });
+
     const test_step = b.step("test", "Run unit tests");
+    test_step.dependOn(&b.addRunArtifact(test_budget).step);
+    test_step.dependOn(&b.addRunArtifact(test_search_golden).step);
     test_step.dependOn(&b.addRunArtifact(test_deadline).step);
     test_step.dependOn(&b.addRunArtifact(test_board).step);
     test_step.dependOn(&b.addRunArtifact(test_patterns).step);
