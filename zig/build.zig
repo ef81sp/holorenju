@@ -231,7 +231,27 @@ pub fn build(b: *std.Build) void {
         }),
     });
 
+    const test_budget = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/budget.zig"),
+            .target = native_target,
+        }),
+    });
+
+    // 時間モードのゴールデン値 + 決定的モードの時計非依存テスト（bench-fixed-nodes §3）。
+    // 実探索（hard 相当・最大 20 万ノード）を回すので ReleaseFast でビルドし、
+    // pre-commit の高速性を保つため通常の `test` には含めず `zig build test-golden` で実行する
+    // （lefthook の pre-push で走る）。
+    const test_search_golden = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/search_golden_test.zig"),
+            .target = native_target,
+            .optimize = .ReleaseFast,
+        }),
+    });
+
     const test_step = b.step("test", "Run unit tests");
+    test_step.dependOn(&b.addRunArtifact(test_budget).step);
     test_step.dependOn(&b.addRunArtifact(test_deadline).step);
     test_step.dependOn(&b.addRunArtifact(test_board).step);
     test_step.dependOn(&b.addRunArtifact(test_patterns).step);
@@ -269,4 +289,7 @@ pub fn build(b: *std.Build) void {
     });
     const test_slow_step = b.step("test-slow", "Run heavy integration tests (#22 forced-win tree)");
     test_slow_step.dependOn(&b.addRunArtifact(test_vct_tree).step);
+
+    const test_golden_step = b.step("test-golden", "Run search golden / deterministic-mode tests (ReleaseFast, bench-fixed-nodes)");
+    test_golden_step.dependOn(&b.addRunArtifact(test_search_golden).step);
 }

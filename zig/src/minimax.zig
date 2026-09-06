@@ -5,6 +5,7 @@
 const bitboard = @import("bitboard.zig");
 const board_mod = @import("board.zig");
 const deadline = @import("deadline.zig");
+const budget_mod = @import("budget.zig");
 const evaluate = @import("evaluate.zig");
 const forbidden = @import("forbidden.zig");
 const incremental_eval = @import("incremental_eval.zig");
@@ -110,6 +111,15 @@ pub const SearchStats = struct {
     lmr_researches: u32 = 0,
     q_search_nodes: u32 = 0,
     threat_probe_cutoffs: u32 = 0,
+    // --- 以下は stats バッファ拡張（getSearchFeatures bit1。append-only） ---
+    /// 事前探索（VCF / 相手 VCF / ミセ VCF / VCT）の消費ノード。両モードで記録。
+    /// `nodes` への加算は決定的モードのみ。
+    pre_search_nodes: u32 = 0,
+    /// 脅威プローブ（VCF + VCT）の消費ノード。両モードで記録。
+    /// `nodes` への加算は決定的モードのみ。
+    probe_nodes: u32 = 0,
+    /// 絶対デッドライン（安全弁）が発火したか（0/1）。
+    absolute_deadline_hit: u32 = 0,
 };
 
 /// 探索コンテキスト
@@ -134,6 +144,9 @@ pub const SearchContext = struct {
 
     /// 時間制限なしモード
     no_time_limit: bool = false,
+
+    /// 予算ポリシー（決定的モード / 時間モード）。`findBestMoveIterative` が一度だけ導出して渡す。
+    budget: budget_mod.BudgetPolicy = budget_mod.BudgetPolicy.TIME_MODE,
 
     /// 探索打ち切り（時間切れ/ノード上限/絶対時間制限）が発生しているか
     pub inline fn isAborted(self: *const SearchContext) bool {
@@ -295,12 +308,25 @@ fn isThreatExtensionCandidate(cells: []const Cell, row: u8, col: u8, color: Cell
 /// 既定 true なので既存の探索挙動・commit-bench 互換は不変。
 pub var threat_probe_enabled: bool = true;
 
+/// 脅威プローブの壁時計予算（ms）。時間モードのみ有効。
+const PROBE_VCF_TIME_LIMIT: u32 = 20;
+const PROBE_VCT_TIME_LIMIT: u32 = 50;
+
+/// 脅威プローブ VCT のノード予算（決定的モード。時間モードは `PROBE_VCT_TIME_LIMIT` のみ）
+///
+/// 設計メモ docs/plans/bench-fixed-nodes-2026-09-06.md §2.1/§2.3。時間定数の隣に置く。
+/// **未較正**の初期値（較正は §4 手順 1）。VCF は両モードとも既存の 100/200 ノード。
+pub const PROBE_VCT_NODES_DETERMINISTIC: u32 = 2000;
+
 /// 深度適応型バジェット（TS版 threatProbe.ts の getThreatBudget に対応）
 const ThreatBudget = struct {
     vcf_depth: u8,
     vcf_nodes: u32,
     vct_depth: u8,
     vct_nodes: u32,
+    /// 壁時計予算（ms）。0 = 時間で縛らない
+    vcf_time: u32,
+    vct_time: u32,
 };
 
 /// **issue #119 注意: `vct_nodes = 0` は「旧挙動の維持」ではなく意図的な緩和**
@@ -322,16 +348,34 @@ const ThreatBudget = struct {
 /// **予算値は未較正**なので、較正は別 issue（#137）で bench に基づいて行う。
 ///
 /// `vcf_nodes` は `vcf.zig` が元から計上していた実効値。こちらは据え置き。
-fn getThreatBudget(minimax_depth: u8) ThreatBudget {
+///
+/// **決定的モード**（`policy.deterministic`）では時間を 0 にし、VCT に `policy.probe_vct_nodes`
+/// のノード予算を与える（設計メモ bench-fixed-nodes §2.3）。`no_time_limit`（解析）は
+/// 従来どおり時間 0・VCT ノード無制限。
+fn getThreatBudget(minimax_depth: u8, no_time_limit: bool, policy: budget_mod.BudgetPolicy) ThreatBudget {
+    const timed = !no_time_limit and !policy.deterministic;
+    const vcf_time: u32 = if (timed) PROBE_VCF_TIME_LIMIT else 0;
+    const vct_time: u32 = if (timed) PROBE_VCT_TIME_LIMIT else 0;
+    const vct_nodes: u32 = if (policy.deterministic) policy.probe_vct_nodes else 0;
     if (minimax_depth >= 4) {
-        return .{ .vcf_depth = 8, .vcf_nodes = 200, .vct_depth = 4, .vct_nodes = 0 };
+        return .{ .vcf_depth = 8, .vcf_nodes = 200, .vct_depth = 4, .vct_nodes = vct_nodes, .vcf_time = vcf_time, .vct_time = vct_time };
     }
     // depth 3
-    return .{ .vcf_depth = 6, .vcf_nodes = 100, .vct_depth = 0, .vct_nodes = 0 };
+    return .{ .vcf_depth = 6, .vcf_nodes = 100, .vct_depth = 0, .vct_nodes = vct_nodes, .vcf_time = vcf_time, .vct_time = vct_time };
 }
+
+/// 脅威プローブの結果
+const ThreatProbeResult = struct {
+    move: ?Position,
+    /// プローブ（VCF + VCT）が消費したノード数
+    nodes: u32,
+};
 
 /// 脅威プローブ: 手番側のVCF/VCTをチェック
 /// VCF/VCTが見つかれば初手を返す
+///
+/// 消費ノードは `result.nodes` で返す（呼び出し側が `stats.probe_nodes` と、
+/// 決定的モードでは `stats.nodes` にも計上する。設計メモ bench-fixed-nodes §2.3）。
 fn threatProbe(
     cells: []Cell,
     color: Cell,
@@ -343,51 +387,39 @@ fn threatProbe(
     /// メイン探索の締切（絶対時刻 ms、0 = 無制限）。プローブはこの残り時間を超えない
     /// （issue #147 B）。
     search_deadline: u32,
-) ?Position {
-    const budget = getThreatBudget(minimax_depth);
+    policy: budget_mod.BudgetPolicy,
+) ThreatProbeResult {
+    const budget = getThreatBudget(minimax_depth, no_time_limit, policy);
 
     // プローブの親＝メイン探索の残り時間。プローブ独自の 20ms / 50ms は
     // 親の残りとの min を取る（`TimeLimiter.child` が SSoT）。
-    const parent = vcf_mod.TimeLimiter.untilDeadline(if (no_time_limit) 0 else search_deadline);
+    // 子 limiter は段ごとに 1 回だけ作り（時計読みを増やさない）、そのまま探索の限界として
+    // 渡して消費を親へ charge する。`parent.nodes` が VCF + VCT の合計になる。
+    var parent = vcf_mod.TimeLimiter.untilDeadline(if (no_time_limit) 0 else search_deadline);
 
     // VCF探索（軽量・常にチェック）。VCFは受け一意で偽陽性が出にくいため常に lenient。
-    const vcf_time: u32 = if (no_time_limit) 0 else 20;
-    var vcf_budget = parent.child(vcf_time, budget.vcf_nodes);
-    if (vcf_budget.exceeded()) return null;
-    const vcf_move = vcf_mod.findVCFMoveWithBudget(
-        cells,
-        color,
-        budget.vcf_depth,
-        vcf_budget.time_limit,
-        vcf_budget.max_nodes,
-    );
-    if (vcf_move) |m| return m;
+    var vcf_budget = parent.child(budget.vcf_time, budget.vcf_nodes);
+    if (vcf_budget.exceeded()) return .{ .move = null, .nodes = parent.nodes };
+    const vcf_move = vcf_mod.findVCFMoveWithLimiter(cells, color, budget.vcf_depth, &vcf_budget);
+    parent.charge(vcf_budget.nodes);
+    if (vcf_move) |m| return .{ .move = m, .nodes = parent.nodes };
 
     // VCT探索（予算が許す場合のみ）
     if (budget.vct_depth > 0) {
-        const vct_time: u32 = if (no_time_limit) 0 else 50;
-        var vct_budget = parent.child(vct_time, budget.vct_nodes);
-        if (vct_budget.exceeded()) return null;
-        const vct_move = if (defensive)
-            vct_mod.findVCTMoveWithBudgetStrict(
-                cells,
-                color,
-                budget.vct_depth,
-                vct_budget.time_limit,
-                vct_budget.max_nodes,
-            )
-        else
-            vct_mod.findVCTMoveWithBudget(
-                cells,
-                color,
-                budget.vct_depth,
-                vct_budget.time_limit,
-                vct_budget.max_nodes,
-            );
-        if (vct_move) |m| return m;
+        var vct_budget = parent.child(budget.vct_time, budget.vct_nodes);
+        if (vct_budget.exceeded()) return .{ .move = null, .nodes = parent.nodes };
+        const vct_move = vct_mod.findVCTMoveWithLimiter(
+            cells,
+            color,
+            budget.vct_depth,
+            &vct_budget,
+            if (defensive) .strict else .lenient,
+        );
+        parent.charge(vct_budget.nodes);
+        if (vct_move) |m| return .{ .move = m, .nodes = parent.nodes };
     }
 
-    return null;
+    return .{ .move = null, .nodes = parent.nodes };
 }
 
 // =============================================================================
@@ -464,6 +496,13 @@ pub fn minimaxWithTT(
                 ctx.absolute_deadline_exceeded = true;
             }
         }
+    } else if (ctx.no_time_limit and ctx.absolute_deadline > 0 and ctx.stats.nodes % 4 == 0) {
+        // 決定的モードの安全弁（設計メモ bench-fixed-nodes §2.6）: 時間を見ないモードでも
+        // `absolute_time_limit > 0` が渡されていれば絶対デッドラインだけは守る。
+        // 時間モード / 従来の `no_time_limit`（absolute_deadline = 0）ではこの枝に入らない。
+        if (!ctx.absolute_deadline_exceeded and getTimestampMs() >= ctx.absolute_deadline) {
+            ctx.absolute_deadline_exceeded = true;
+        }
     }
 
     // タイムアウト/ノード上限時は静的評価を返す（インクリメンタル評価を使用）
@@ -526,15 +565,25 @@ pub fn minimaxWithTT(
     // =========================================================================
     if (threat_probe_enabled and depth >= 3) {
         // !is_maximizing = 相手手番ノード = 自分の被詰み判定 → strict で幻を棄却。
-        const threat_result = threatProbe(
+        const probe = threatProbe(
             cells,
             current_color,
             depth,
             ctx.no_time_limit,
             !is_maximizing,
             ctx.deadline,
+            ctx.budget,
         );
-        if (threat_result) |threat_move| {
+        // プローブの消費ノードを計上（設計メモ bench-fixed-nodes §2.3/§2.4）。
+        // `nodes` への加算は決定的モードのみ（時間モードでは max_nodes 到達が早まり製品挙動が変わる）。
+        ctx.stats.probe_nodes +|= probe.nodes;
+        if (ctx.budget.deterministic) {
+            ctx.stats.nodes +|= probe.nodes;
+            if (!ctx.node_count_exceeded and ctx.max_nodes > 0 and ctx.stats.nodes >= ctx.max_nodes) {
+                ctx.node_count_exceeded = true;
+            }
+        }
+        if (probe.move) |threat_move| {
             ctx.stats.threat_probe_cutoffs += 1;
             // FIVE - 1: threatProbe による追詰検出マーカー
             const threat_score = scores.FIVE - 1;
@@ -1047,13 +1096,51 @@ test "threatProbe: メイン探索の残り時間を超えない（issue #147 B�
     defer deadline.test_now_ms = 0;
 
     // 親に余裕がある（締切 1200ms、現在 1000ms）→ 従来どおり検出する
-    try testing.expect(threatProbe(&cells, .black, 4, false, false, 1200) != null);
+    try testing.expect(threatProbe(&cells, .black, 4, false, false, 1200, budget_mod.BudgetPolicy.TIME_MODE).move != null);
 
     // 親の締切を過ぎている（締切 900ms、現在 1000ms）→ プローブは走らない
-    try testing.expect(threatProbe(&cells, .black, 4, false, false, 900) == null);
+    try testing.expect(threatProbe(&cells, .black, 4, false, false, 900, budget_mod.BudgetPolicy.TIME_MODE).move == null);
 
     // 締切 0（無制限）は従来どおり
-    try testing.expect(threatProbe(&cells, .black, 4, false, false, 0) != null);
+    try testing.expect(threatProbe(&cells, .black, 4, false, false, 0, budget_mod.BudgetPolicy.TIME_MODE).move != null);
+}
+
+test "threatProbe: 消費ノードを返す（bench-fixed-nodes §2.3）" {
+    var cells = [_]Cell{.empty} ** board_mod.CELL_COUNT;
+    cells[7 * BOARD_SIZE + 4] = .black;
+    cells[7 * BOARD_SIZE + 5] = .black;
+    cells[7 * BOARD_SIZE + 6] = .black;
+    cells[7 * BOARD_SIZE + 7] = .black;
+
+    deadline.clear();
+    // 時間モード（解析 = no_time_limit）でも決定的モードでも、VCF 即検出は 1 ノード以上消費する
+    const timed = threatProbe(&cells, .black, 4, true, false, 0, budget_mod.BudgetPolicy.TIME_MODE);
+    try testing.expect(timed.move != null);
+    try testing.expect(timed.nodes > 0);
+    const det = threatProbe(&cells, .black, 4, true, false, 0, budget_mod.BudgetPolicy.DETERMINISTIC);
+    try testing.expect(det.move != null);
+    try testing.expectEqual(timed.nodes, det.nodes);
+}
+
+test "getThreatBudget: 決定的モードは時間 0・VCT ノード予算あり、時間モードは 20/50ms・VCT ノード無制限" {
+    const t = getThreatBudget(4, false, budget_mod.BudgetPolicy.TIME_MODE);
+    try testing.expectEqual(PROBE_VCF_TIME_LIMIT, t.vcf_time);
+    try testing.expectEqual(PROBE_VCT_TIME_LIMIT, t.vct_time);
+    try testing.expectEqual(@as(u32, 0), t.vct_nodes);
+    try testing.expectEqual(@as(u32, 200), t.vcf_nodes);
+
+    const a = getThreatBudget(4, true, budget_mod.BudgetPolicy.TIME_MODE);
+    try testing.expectEqual(@as(u32, 0), a.vcf_time);
+    try testing.expectEqual(@as(u32, 0), a.vct_time);
+    try testing.expectEqual(@as(u32, 0), a.vct_nodes);
+
+    const d = getThreatBudget(4, true, budget_mod.BudgetPolicy.DETERMINISTIC);
+    try testing.expectEqual(@as(u32, 0), d.vcf_time);
+    try testing.expectEqual(@as(u32, 0), d.vct_time);
+    try testing.expectEqual(PROBE_VCT_NODES_DETERMINISTIC, d.vct_nodes);
+    try testing.expectEqual(@as(u32, 200), d.vcf_nodes);
+    // depth 3 は VCT なし
+    try testing.expectEqual(@as(u8, 0), getThreatBudget(3, true, budget_mod.BudgetPolicy.DETERMINISTIC).vct_depth);
 }
 
 test "threat_probe_enabled=false: threatProbeによるcutoffが発生しない（深さ3以上、VCFがある局面）" {

@@ -297,9 +297,11 @@ pub fn quiescenceSearch(
 
     // 壁時計の安全天井（出荷時の応答性用）。`no_time_limit` 時は無効＝計測は決定的。
     // 共有カウンタ基準なので部分木境界に依らず一定間隔で発火する（旧来の取りこぼしを修正）。
-    if (!limits.no_time_limit and (limits.node_counter.* & 1023) == 0) {
+    // 例外: 決定的モードの安全弁（設計メモ bench-fixed-nodes §2.6）。`no_time_limit` でも
+    // `absolute_deadline > 0` なら絶対デッドラインだけは見る（従来の no_time_limit は 0 なので不変）。
+    if ((!limits.no_time_limit or limits.absolute_deadline > 0) and (limits.node_counter.* & 1023) == 0) {
         const now = getTimestampMs();
-        const time_up = (limits.deadline > 0 and now >= limits.deadline) or
+        const time_up = (!limits.no_time_limit and limits.deadline > 0 and now >= limits.deadline) or
             (limits.absolute_deadline > 0 and now >= limits.absolute_deadline);
         if (time_up) {
             limits.timeout_flag.* = true;

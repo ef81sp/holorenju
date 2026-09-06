@@ -44,6 +44,16 @@ export interface EngineParamsSnapshot {
   /** 脅威プローブの状態（ON(default) / OFF(runtime) など） */
   threatProbe: string;
   /**
+   * 決定的探索モード（bench-fixed-nodes-2026-09-06.md）で走っているか。
+   * 旧 bridge worker では欠落（= 時間モード）。
+   */
+  deterministic?: boolean;
+  /**
+   * wasm の `getSearchFeatures()` ビット（bit0=deterministic 対応、bit1=stats 拡張）。
+   * export の無い旧 wasm / TS では undefined。結果 JSON の provenance に使う。
+   */
+  searchFeatures?: number;
+  /**
    * 注入された eval 重み（weight-bench / Texel）の指紋。
    * 重みそのものはダンプを肥大化させるので、キー数とハッシュだけを持つ。
    * replay 側で「同じ重みで再現しているか」を突き合わせるのに使う。

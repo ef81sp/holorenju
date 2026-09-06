@@ -3,7 +3,6 @@
 /// 四を連続して打つことで勝利する手順を探索する。
 /// 白番の場合、黒の防御点が禁手なら即勝利。
 /// TS版 vcf.ts に対応
-
 const bitboard = @import("bitboard.zig");
 const board_mod = @import("board.zig");
 const deadline = @import("deadline.zig");
@@ -26,6 +25,15 @@ pub const VCF_MAX_DEPTH: u8 = 8;
 
 /// VCF探索の時間制限（ミリ秒）
 pub const VCF_TIME_LIMIT: u32 = 150;
+
+/// 事前探索 自分の VCF のノード予算（決定的モード。時間モードでは `VCF_TIME_LIMIT` のみ）
+///
+/// 設計メモ docs/plans/bench-fixed-nodes-2026-09-06.md §2.1。時間定数の隣に置く
+/// （較正で片方だけ直す事故を防ぐ）。**未較正**の初期値。較正は §4 手順 1。
+pub const VCF_PRE_NODES_DETERMINISTIC: u32 = 10_000;
+
+/// 事前探索 相手 VCF（ミセ VCF スキップ判定用）のノード予算。両モード共通（従来値）。
+pub const VCF_PRE_OPPONENT_NODES: u32 = 3000;
 
 // =============================================================================
 // TimeLimiter
@@ -293,6 +301,24 @@ pub fn hasVCF(
     return false;
 }
 
+/// `hasVCF` を親 limiter の子予算で回し、消費ノードを親へ計上する
+/// （`findVCFSequenceWithParent` と同型。設計メモ bench-fixed-nodes §2.2）
+///
+/// 呼び出し側で `charge()` を重ねて呼んではいけない。
+pub fn hasVCFWithParent(
+    cells: []Cell,
+    color: Cell,
+    max_depth: u8,
+    own_time_limit: u32,
+    own_max_nodes: u32,
+    parent: *TimeLimiter,
+) bool {
+    var limiter = parent.child(own_time_limit, own_max_nodes);
+    const result = hasVCF(cells, color, 0, &limiter, max_depth);
+    parent.charge(limiter.nodes);
+    return result;
+}
+
 // =============================================================================
 // findVCFMove（反復深化）
 // =============================================================================
@@ -305,22 +331,48 @@ pub fn findVCFMove(cells: []Cell, color: Cell, max_depth: u8, time_limit: u32) ?
 /// VCFの最初の手を返す（ノード数制限付き）
 /// max_nodes=0 は無制限
 pub fn findVCFMoveWithBudget(cells: []Cell, color: Cell, max_depth: u8, time_limit: u32, max_nodes: u32) ?Position {
-    // トップレベルエントリ: bitboard を cells と同期
-    bitboard.initFromCells(cells);
-    ll.init();
-
     var limiter = TimeLimiter{
         .start_time = getTimestampMs(),
         .time_limit = time_limit,
         .nodes = 0,
         .max_nodes = max_nodes,
     };
+    return findVCFMoveWithLimiter(cells, color, max_depth, &limiter);
+}
+
+/// 親 limiter の残り予算を継承した子 limiter で VCF の最初の手を探す
+/// （`findVCFSequenceWithParent` と同型。設計メモ bench-fixed-nodes §2.2）
+///
+/// 子の消費ノードは呼び出し後に親へ計上するので、呼び出し側で `charge()` を
+/// 重ねて呼んではいけない。消費量は `parent.nodes` の差分で観測できる。
+pub fn findVCFMoveWithParent(
+    cells: []Cell,
+    color: Cell,
+    max_depth: u8,
+    own_time_limit: u32,
+    own_max_nodes: u32,
+    parent: *TimeLimiter,
+) ?Position {
+    var limiter = parent.child(own_time_limit, own_max_nodes);
+    const result = findVCFMoveWithLimiter(cells, color, max_depth, &limiter);
+    parent.charge(limiter.nodes);
+    return result;
+}
+
+/// `findVCFMoveWithBudget` の本体（limiter を受け取る版）
+///
+/// 呼び出し側が limiter を用意して消費ノード（`limiter.nodes`）を観測したいとき
+/// （脅威プローブ）に使う。トップレベルエントリなので bitboard を同期する。
+pub fn findVCFMoveWithLimiter(cells: []Cell, color: Cell, max_depth: u8, limiter: *TimeLimiter) ?Position {
+    // トップレベルエントリ: bitboard を cells と同期
+    bitboard.initFromCells(cells);
+    ll.init();
 
     // 反復深化: 浅い深度から探索し最短VCFを優先
     var depth: u8 = 1;
     while (depth <= max_depth) : (depth += 1) {
         if (limiter.exceeded()) return null;
-        const result = findVCFMoveRecursive(cells, color, 0, &limiter, depth);
+        const result = findVCFMoveRecursive(cells, color, 0, limiter, depth);
         if (result) |_| return result;
     }
     return null;

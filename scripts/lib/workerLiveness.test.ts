@@ -1,12 +1,34 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  type HangLiveness,
   createLivenessChannel,
   createTimestampProbe,
+  describeLivenessVerdict,
   diagnoseLiveness,
   markLivenessRequest,
   readLiveness,
 } from "./workerLiveness.ts";
+
+describe("describeLivenessVerdict", () => {
+  const stalled: HangLiveness = {
+    timeCheckCount: 12,
+    requestId: 1,
+    timeCheckDeltaDuringSample: 0,
+    sampleWindowMs: 250,
+    verdict: "stalled",
+  };
+  it("時間モードでは verdict と回数だけ", () => {
+    const text = describeLivenessVerdict(stalled, undefined);
+    expect(text).toMatch(/stalled/);
+    expect(text).not.toMatch(/deterministic/);
+  });
+  it("決定的モードでは『時間チェック回数は生存指標にならない』注記を付ける", () => {
+    const text = describeLivenessVerdict(stalled, true);
+    expect(text).toMatch(/deterministic/);
+    expect(text).toMatch(/生存指標にならない/);
+  });
+});
 
 describe("createTimestampProbe", () => {
   it("チャネル無しでも動き、performance.now() の ms を返す", () => {

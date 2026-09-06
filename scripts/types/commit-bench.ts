@@ -25,6 +25,46 @@ export interface CommitGameResult extends GameResult {
   pairId?: string;
 }
 
+/** 破棄（abort）された局の識別情報。決定的モードでは 1 件でも run が無効になる。 */
+export interface AbortedGame {
+  gameIdx: number;
+  openingId: string;
+  pairId: string;
+  isABlack: boolean;
+  /** ハングした側。worker 死等で特定できないときは undefined */
+  side?: "A" | "B";
+  reason: string;
+}
+
+/**
+ * 固定ノード（決定的探索）モードの設定記録。bench-fixed-nodes-2026-09-06.md §2.5。
+ * commit-bench / weight-bench の config で共用する。
+ */
+export interface FixedNodesConfig {
+  /** `--fixed-nodes=N`（両側）。片側指定なら undefined */
+  fixedNodes?: number;
+  /** `--fixed-nodes-a=N` / `--fixed-nodes-b=N`（片側。時間 vs 固定の混合＝較正用） */
+  fixedNodesA?: number;
+  fixedNodesB?: number;
+  /**
+   * 両側の wasm `getSearchFeatures()` ビット（bit0=deterministic 対応、bit1=stats 拡張）。
+   * `--compare` の provenance。export の無い旧 wasm / TS では undefined。
+   */
+  searchFeaturesA?: number;
+  searchFeaturesB?: number;
+}
+
+/** 決定的モードの run 妥当性（abort=0 が受け入れ条件）。 */
+export interface RunValidity {
+  /**
+   * 決定的モードで abort が 1 件でも出たら false（結果は Elo 判定に使えない）。
+   * 時間モードでは記録しない（従来どおり abort 局を除いて集計）。
+   */
+  valid?: boolean;
+  /** 破棄された局の一覧（後方互換のため optional。旧 JSON には無い） */
+  abortedGames?: AbortedGame[];
+}
+
 /** コミット情報 */
 export interface CommitInfo {
   /** フルSHA */
@@ -50,7 +90,7 @@ export interface PlayerPerformanceStats {
 }
 
 /** コミット間ベンチマーク結果 */
-export interface CommitBenchResult {
+export interface CommitBenchResult extends RunValidity {
   type: "commit-bench";
   /** タイムスタンプ */
   timestamp: string;
@@ -59,7 +99,7 @@ export interface CommitBenchResult {
   /** commitB情報 */
   commitB: CommitInfo;
   /** 設定 */
-  config: {
+  config: FixedNodesConfig & {
     difficulty: CpuDifficulty;
     /** 珠型モードではセット数、開局スイートではスイートの周回数 */
     sets: number;

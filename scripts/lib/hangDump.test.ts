@@ -247,6 +247,23 @@ describe("writeHangDump", () => {
     expect(dump.notes.join("\n")).toContain("liveness");
   });
 
+  it("時間モードの worker では deterministic 注記を付けない", () => {
+    const { dump } = writeAndRead();
+    expect(dump.notes.join("\n")).not.toContain("deterministic");
+  });
+
+  it("決定的モードの worker では『時間チェック回数は生存指標にならない』注記を付ける", () => {
+    const ctx = context();
+    ctx.telemetry.engineParams = {
+      ...ctx.telemetry.engineParams!,
+      deterministic: true,
+      timeLimit: 0,
+    };
+    const { dump } = writeAndRead(ctx);
+    expect(dump.notes.join("\n")).toContain("deterministic");
+    expect(dump.notes.join("\n")).toContain("生存指標にならない");
+  });
+
   it("盤面・着手履歴・ハング情報を保持する", () => {
     const { dump } = writeAndRead();
     expect(dump.type).toBe("hang-dump");

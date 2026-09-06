@@ -74,6 +74,26 @@ describe("parseEngineParams", () => {
     expect(parseEngineParams(null)).toBeUndefined();
     expect(parseEngineParams("ready")).toBeUndefined();
   });
+
+  it("deterministic / searchFeatures を同梱した新 worker の params を通す", () => {
+    const p = { ...params, deterministic: true, searchFeatures: 3 };
+    expect(parseEngineParams({ ready: true, params: p })).toEqual(p);
+  });
+
+  it("deterministic / searchFeatures の型が違えば undefined", () => {
+    expect(
+      parseEngineParams({
+        ready: true,
+        params: { ...params, deterministic: "yes" },
+      }),
+    ).toBeUndefined();
+    expect(
+      parseEngineParams({
+        ready: true,
+        params: { ...params, searchFeatures: "3" },
+      }),
+    ).toBeUndefined();
+  });
 });
 
 describe("diffEngineParams", () => {
@@ -85,6 +105,14 @@ describe("diffEngineParams", () => {
     const diffs = diffEngineParams(params, { ...params, maxNodes: 3000000 });
     expect(diffs).toHaveLength(1);
     expect(diffs[0]?.key).toBe("maxNodes");
+  });
+
+  it("deterministic の差を検出する（固定ノード局を時間モードで再生する事故防止）", () => {
+    const diffs = diffEngineParams(
+      { ...params, deterministic: true },
+      { ...params, deterministic: undefined },
+    );
+    expect(diffs.map((d) => d.key)).toContain("deterministic");
   });
 
   it("evaluationOptions の差も検出する", () => {

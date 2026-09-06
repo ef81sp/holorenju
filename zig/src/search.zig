@@ -4,6 +4,7 @@
 /// TS版 iterativeDeepening.ts + preSearch.ts に対応
 const bitboard = @import("bitboard.zig");
 const board_mod = @import("board.zig");
+const budget_mod = @import("budget.zig");
 const deadline_mod = @import("deadline.zig");
 const evaluate = @import("evaluate.zig");
 const forbidden = @import("forbidden.zig");
@@ -64,6 +65,8 @@ pub const PreSearchResult = struct {
     restricted_moves: ?move_gen.MoveList = null,
     /// 相手の脅威情報
     threats: ?threats_mod.ThreatInfo = null,
+    /// 事前探索（VCF / 相手 VCF / ミセ VCF / VCT）が消費したノード数
+    nodes: u32 = 0,
 };
 
 /// 即勝ち手を探す（五連を完成できる位置）
@@ -98,17 +101,29 @@ fn findWinningMove(cells: []Cell, color: Cell) ?Position {
 /// 各段を `child()` で作ることで「前段が食った分だけ後段が短くなる」ようにする。
 pub const PRE_SEARCH_TIME_LIMIT: u32 = vcf_mod.VCF_TIME_LIMIT * 2 + vct.VCT_TIME_LIMIT;
 
+/// pre-search 全体のノード予算（決定的モード。設計メモ bench-fixed-nodes §2.2）
+///
+/// 時間モードの 600ms（`PRE_SEARCH_TIME_LIMIT`）に対応する親予算。各段は
+/// 自前のノード予算（`VCF_PRE_NODES_DETERMINISTIC` など）で回り、段の境目と
+/// ミセ VCF の候補ループ先頭でこの親予算を見る。**未較正**の初期値（較正は §4 手順 1）。
+pub const PRE_SEARCH_NODE_BUDGET_DETERMINISTIC: u32 = 40_000;
+
 /// 必須手の事前チェック
+///
+/// `policy.deterministic` なら壁時計を見ず、親 limiter と各段をノード予算で縛る。
+/// 時間モードでは従来どおり 600ms の親 limiter（各段の子は時間のみ、相手 VCF は 3000 ノード）。
+/// 消費ノードの合計は `PreSearchResult.nodes`（= 親 limiter への charge 合計）で返す。
 pub fn findPreSearchMove(
     cells: []Cell,
     color: Cell,
+    policy: budget_mod.BudgetPolicy,
 ) PreSearchResult {
     // pre-search 全体の予算（issue #147 B）。各段はこの残りを継承した子で回る。
     var pre_limiter = vcf_mod.TimeLimiter{
         .start_time = getTimestampMs(),
-        .time_limit = PRE_SEARCH_TIME_LIMIT,
+        .time_limit = if (policy.deterministic) 0 else PRE_SEARCH_TIME_LIMIT,
         .nodes = 0,
-        .max_nodes = 0,
+        .max_nodes = policy.pre_search_nodes,
     };
 
     // 即勝ち手
@@ -156,21 +171,22 @@ pub fn findPreSearchMove(
         };
     }
 
-    // VCF勝ち手を探す
-    const vcf_budget = pre_limiter.child(vcf_mod.VCF_TIME_LIMIT, 0);
-    const vcf_move = vcf_mod.findVCFMove(cells, color, vcf_mod.VCF_MAX_DEPTH, vcf_budget.time_limit);
+    // 各段の壁時計予算（決定的モードでは 0 ＝ ノード予算のみ）
+    const stage_vcf_time: u32 = if (policy.deterministic) 0 else vcf_mod.VCF_TIME_LIMIT;
+    const stage_vct_time: u32 = if (policy.deterministic) 0 else vct.VCT_TIME_LIMIT;
+
+    // VCF勝ち手を探す（親の残り予算を継承し、消費を親へ計上する。設計メモ bench-fixed-nodes §2.2）
+    const vcf_move = vcf_mod.findVCFMoveWithParent(cells, color, vcf_mod.VCF_MAX_DEPTH, stage_vcf_time, policy.pre_vcf_nodes, &pre_limiter);
     if (vcf_move) |vm| {
         return .{
             .immediate_move = vm,
             .immediate_score = scores.FIVE - 10,
+            .nodes = pre_limiter.nodes,
         };
     }
 
     // 相手VCFチェック（Mise-VCFスキップ判定用）
-    const opponent_has_vcf = blk: {
-        var opp_limiter = pre_limiter.child(vcf_mod.VCF_TIME_LIMIT, 3000);
-        break :blk vcf_mod.hasVCF(cells, opponent_color, 0, &opp_limiter, vcf_mod.VCF_MAX_DEPTH);
-    };
+    const opponent_has_vcf = vcf_mod.hasVCFWithParent(cells, opponent_color, vcf_mod.VCF_MAX_DEPTH, stage_vcf_time, policy.pre_opp_vcf_nodes, &pre_limiter);
 
     // Mise-VCF（ミセ→強制応手→VCF勝ち）
     // 相手VCFがある場合は間に合わないのでスキップ
@@ -184,28 +200,30 @@ pub fn findPreSearchMove(
                     return .{
                         .immediate_move = mm,
                         .immediate_score = scores.FIVE - 15,
+                        .nodes = pre_limiter.nodes,
                     };
                 }
             } else {
                 return .{
                     .immediate_move = mm,
                     .immediate_score = scores.FIVE - 15,
+                    .nodes = pre_limiter.nodes,
                 };
             }
         }
     }
 
     // VCT勝ち手を探す
-    const vct_budget = pre_limiter.child(vct.VCT_TIME_LIMIT, 0);
-    const vct_move = vct.findVCTMove(cells, color, vct.VCT_MAX_DEPTH, vct_budget.time_limit);
+    const vct_move = vct.findVCTMoveWithParent(cells, color, vct.VCT_MAX_DEPTH, stage_vct_time, policy.pre_vct_nodes, &pre_limiter, .lenient);
     if (vct_move) |vm| {
         return .{
             .immediate_move = vm,
             .immediate_score = scores.FIVE - 20,
+            .nodes = pre_limiter.nodes,
         };
     }
 
-    return .{ .threats = threat_info };
+    return .{ .threats = threat_info, .nodes = pre_limiter.nodes };
 }
 
 // =============================================================================
@@ -244,6 +262,9 @@ pub const DepthHistoryEntry = struct {
 
 const PLAIN_FOUR_PREFERENCE_MARGIN: i32 = 200;
 const PLAIN_FOUR_VCF_CHECK_TIME_LIMIT: u32 = 50;
+/// 降格判定 VCF のノード予算（決定的モード。時間モードは `PLAIN_FOUR_VCF_CHECK_TIME_LIMIT` のみ）
+/// **未較正**の初期値（VCF は安いので 2〜3k 程度。較正は設計メモ §4 手順 1）。
+pub const PLAIN_FOUR_VCF_CHECK_NODES_DETERMINISTIC: u32 = 3000;
 
 /// 非生産的四の優先度引き下げ
 ///
@@ -256,6 +277,7 @@ fn demotePlainFourIfNeeded(
     result: *IterativeDeepingResult,
     cells: []Cell,
     color: Cell,
+    policy: budget_mod.BudgetPolicy,
 ) void {
     // 候補が2つ未満なら何もしない
     if (result.top_candidate_count < 2) return;
@@ -272,8 +294,12 @@ fn demotePlainFourIfNeeded(
     const is_plain_four = !ft.has_five and ft.has_four and !ft.has_open_three;
     if (!is_plain_four) return;
 
-    // VCF安全チェック
-    const vcf_move = vcf_mod.findVCFMove(cells, color, vcf_mod.VCF_MAX_DEPTH, PLAIN_FOUR_VCF_CHECK_TIME_LIMIT);
+    // VCF安全チェック（決定的モードではノード予算。設計メモ bench-fixed-nodes §2.2。
+    // この消費は stats に計上しない）
+    const vcf_move = if (policy.deterministic)
+        vcf_mod.findVCFMoveWithBudget(cells, color, vcf_mod.VCF_MAX_DEPTH, 0, policy.demote_vcf_nodes)
+    else
+        vcf_mod.findVCFMove(cells, color, vcf_mod.VCF_MAX_DEPTH, PLAIN_FOUR_VCF_CHECK_TIME_LIMIT);
     if (vcf_move != null) return;
 
     // 候補手から最初の非・非生産的四手を探す
@@ -349,9 +375,20 @@ pub fn findBestMoveIterative(
     // limiter も残っているので、ここより後ろで立てると事前探索が天井の外に出てしまう。
     //
     // `no_time_limit`（計測モード・解析）の場合は 0＝無効のまま。
-    const no_time_limit = params.time_limit == 0;
-    const absolute_deadline = if (no_time_limit) @as(u32, 0) else start_time + params.absolute_time_limit;
+    //
+    // 決定的モード（設計メモ bench-fixed-nodes §2.1）: 予算ポリシーをここで一度だけ導出し、
+    // `time_limit` は 0 として扱う（`no_time_limit`）。安全弁（§2.6）として
+    // `absolute_time_limit > 0` なら絶対デッドラインだけは立てる（ベンチは 0 を渡す＝無効）。
+    const policy = budget_mod.BudgetPolicy.derive();
+    const no_time_limit = params.time_limit == 0 or policy.deterministic;
+    const absolute_deadline = if (policy.deterministic)
+        (if (params.absolute_time_limit == 0) @as(u32, 0) else start_time + params.absolute_time_limit)
+    else if (no_time_limit)
+        @as(u32, 0)
+    else
+        start_time + params.absolute_time_limit;
     deadline_mod.set(absolute_deadline);
+    deadline_mod.resetHit();
     // 早期 return（即決手・唯一手）を含め、抜けるときは必ず解除する。
     // 解除し忘れると、以降の振り返り経路（`findVCTSequence` 直接呼び出し）まで
     // 過去のデッドラインで打ち切られてしまう。
@@ -377,6 +414,8 @@ pub fn findBestMoveIterative(
         params.board_eval_options,
     );
 
+    ctx.budget = policy;
+
     // 新しい探索開始
     tt_mod.global_tt.newGeneration();
 
@@ -393,7 +432,12 @@ pub fn findBestMoveIterative(
     // 事前チェック
     // =========================================================================
 
-    const pre_search = findPreSearchMove(cells, color);
+    const pre_search = findPreSearchMove(cells, color, policy);
+    // 事前探索の消費ノードを記録（両モード）。`nodes` への加算は決定的モードのみ
+    // （設計メモ bench-fixed-nodes §2.4）。
+    ctx.stats.pre_search_nodes = pre_search.nodes;
+    if (policy.deterministic) ctx.stats.nodes +|= pre_search.nodes;
+
     // レビューモード(aspiration_mode != 0)ではPV蓄積のためpreSearch即決をスキップ
     if (pre_search.immediate_move) |im| {
         if (params.aspiration_mode == 0) {
@@ -404,7 +448,7 @@ pub fn findBestMoveIterative(
                 .score = pre_search.immediate_score,
                 .completed_depth = 0,
                 .interrupted = false,
-                .stats = ctx.stats,
+                .stats = finalizeStats(&ctx),
                 .top_candidates = candidates,
                 .top_candidate_count = 1,
             };
@@ -461,7 +505,7 @@ pub fn findBestMoveIterative(
             .score = 0,
             .completed_depth = 0,
             .interrupted = false,
-            .stats = ctx.stats,
+            .stats = finalizeStats(&ctx),
             .forced_move = true,
             .top_candidates = candidates,
             .top_candidate_count = 1,
@@ -681,15 +725,28 @@ pub fn findBestMoveIterative(
         .score = best_result.score,
         .completed_depth = completed_depth,
         .interrupted = interrupted,
-        .stats = ctx.stats,
+        .stats = finalizeStats(&ctx),
         .top_candidates = top_candidates,
         .top_candidate_count = @intCast(count),
     };
 
     // 非生産的四の引き下げ
-    demotePlainFourIfNeeded(&final_result, cells, color);
+    demotePlainFourIfNeeded(&final_result, cells, color, policy);
 
     return final_result;
+}
+
+/// 探索終了時の統計を確定する（安全弁の発火フラグを畳み込む。設計メモ bench-fixed-nodes §2.6）
+///
+/// メイン探索（`ctx.absolute_deadline_exceeded`）と VCF/VCT の `TimeLimiter`
+/// （`deadline.hitSinceReset()`）のどちらで発火しても 1 になる。
+fn finalizeStats(ctx: *minimax.SearchContext) minimax.SearchStats {
+    var stats = ctx.stats;
+    // 決定的モードでは時間で timeout_flag を立てる経路は quiescence の安全弁だけなので、
+    // timeout_flag も発火の証拠になる。
+    const q_valve_hit = ctx.budget.deterministic and ctx.timeout_flag;
+    stats.absolute_deadline_hit = if (ctx.absolute_deadline_exceeded or q_valve_hit or deadline_mod.hitSinceReset()) 1 else 0;
+    return stats;
 }
 
 // =============================================================================
@@ -713,7 +770,7 @@ test "findPreSearchMove: immediate win" {
     cells[7 * BOARD_SIZE + 7] = .black;
     cells[7 * BOARD_SIZE + 8] = .black;
 
-    const result = findPreSearchMove(&cells, .black);
+    const result = findPreSearchMove(&cells, .black, budget_mod.BudgetPolicy.TIME_MODE);
     try testing.expect(result.immediate_move != null);
     try testing.expectEqual(result.immediate_score, scores.FIVE);
 }
@@ -728,7 +785,7 @@ test "findPreSearchMove: must defend four" {
     // 片端を黒で塞ぐ → 止め四
     cells[7 * BOARD_SIZE + 4] = .black;
 
-    const result = findPreSearchMove(&cells, .black);
+    const result = findPreSearchMove(&cells, .black, budget_mod.BudgetPolicy.TIME_MODE);
     // 相手の四に対する防御が検出される
     try testing.expect(result.immediate_move != null or result.threats != null);
 }

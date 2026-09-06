@@ -18,6 +18,10 @@
  *     file 省略時は bench-results/ の commit-bench-*.json のうち最新 1 本。
  *   --openings   開局ラベル別の表も出す
  *   --elo0/--elo1  ペア LLR を表示するときの SPRT 仮説（既定 0 / 30）
+ *   --compare a.json b.json
+ *     決定性スモーク（bench-fixed-nodes-2026-09-06.md §2.5）: pairId ごとに棋譜・
+ *     1 手ごとの stats.nodes・score の完全一致を判定し、不一致の最初の手を表示する。
+ *     不一致なら終了コード 1。
  */
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -26,6 +30,7 @@ import { fileURLToPath } from "node:url";
 import type { SPRTConfig, WeightBenchResult } from "./types/ab.ts";
 import type { CommitBenchResult } from "./types/commit-bench.ts";
 
+import { compareBenchRuns, formatBenchComparison } from "./lib/benchCompare.ts";
 import {
   computeBenchGameStats,
   formatBenchGameStats,
@@ -46,6 +51,8 @@ interface Options {
   files: string[];
   showOpenings: boolean;
   sprt: SPRTConfig;
+  /** `--compare a.json b.json`: 2 本の決定性比較モード */
+  compare: boolean;
 }
 
 function parseArgs(): Options {
@@ -53,10 +60,13 @@ function parseArgs(): Options {
     files: [],
     showOpenings: false,
     sprt: { ...DEFAULT_SPRT_CONFIG },
+    compare: false,
   };
   for (const arg of process.argv.slice(2)) {
     if (arg === "--openings") {
       options.showOpenings = true;
+    } else if (arg === "--compare") {
+      options.compare = true;
     } else if (arg.startsWith("--elo0=")) {
       options.sprt.elo0 = parseEloArg(arg, "--elo0=");
     } else if (arg.startsWith("--elo1=")) {
@@ -65,7 +75,9 @@ function parseArgs(): Options {
       console.log(
         [
           "Usage: pnpm bench:reanalyze [file...] [--openings] [--elo0=N] [--elo1=N]",
+          "       pnpm bench:reanalyze --compare a.json b.json",
           "  file 省略時は bench-results/commit-bench-*.json の最新 1 本",
+          "  --compare: 2 本の結果の棋譜・1 手ごとの nodes・score の完全一致を判定（決定性スモーク）",
         ].join("\n"),
       );
       process.exit(0);
@@ -168,8 +180,53 @@ function analyzeFile(file: string, options: Options): void {
   }
 }
 
+/** `--compare a.json b.json`: 決定性スモーク。不一致なら exit 1。 */
+function compareFiles(files: string[]): void {
+  if (files.length !== 2) {
+    throw new Error("--compare には結果 JSON をちょうど 2 本指定してください");
+  }
+  const [fa, fb] = files as [string, string];
+  const a = JSON.parse(fs.readFileSync(fa, "utf8")) as BenchJson;
+  const b = JSON.parse(fs.readFileSync(fb, "utf8")) as BenchJson;
+  if (!Array.isArray(a.games) || !Array.isArray(b.games)) {
+    throw new Error("games の無い JSON は --compare できません");
+  }
+  console.log(`=== --compare ===`);
+  console.log(`  A: ${path.basename(fa)} | ${describeHeader(a)}`);
+  console.log(`  B: ${path.basename(fb)} | ${describeHeader(b)}`);
+  for (const [label, j] of [
+    ["A", a],
+    ["B", b],
+  ] as const) {
+    const c = j.config as
+      | { fixedNodesA?: number; fixedNodesB?: number }
+      | undefined;
+    if (c?.fixedNodesA !== undefined || c?.fixedNodesB !== undefined) {
+      console.log(
+        `  ${label}: fixedNodes A=${c.fixedNodesA ?? "-"} B=${c.fixedNodesB ?? "-"} valid=${String((j as { valid?: boolean }).valid ?? "n/a")}`,
+      );
+    } else {
+      console.log(
+        `  ${label}: 時間モード（--fixed-nodes 無し。決定性は保証されない）`,
+      );
+    }
+  }
+  const result = compareBenchRuns(
+    { games: a.games as never },
+    { games: b.games as never },
+  );
+  console.log(formatBenchComparison(result));
+  if (!result.identical) {
+    process.exitCode = 1;
+  }
+}
+
 function main(): void {
   const options = parseArgs();
+  if (options.compare) {
+    compareFiles(options.files);
+    return;
+  }
   const files =
     options.files.length > 0 ? options.files : [findLatestCommitBench()];
   for (const f of files) {

@@ -3,7 +3,11 @@
  */
 
 import type { CpuDifficulty, DifficultyParams } from "../../src/types/cpu.ts";
-import type { CommitGameResult } from "./commit-bench.ts";
+import type {
+  CommitGameResult,
+  FixedNodesConfig,
+  RunValidity,
+} from "./commit-bench.ts";
 import type { OpeningSuiteConfig } from "./openingSuite.ts";
 
 // ============================================================================
@@ -132,12 +136,12 @@ export interface ABBenchResult {
 // ============================================================================
 
 /** eval 形系重み A/B ベンチマーク（weight-bench）の結果 JSON。 */
-export interface WeightBenchResult {
+export interface WeightBenchResult extends RunValidity {
   type: "weight-bench";
   timestamp: string;
   /** variant(B) の重みオーバーライド（空なら null test） */
   weights: Record<string, number>;
-  config: {
+  config: FixedNodesConfig & {
     difficulty: CpuDifficulty;
     /** 珠型モードではセット数、開局スイートではスイートの周回数 */
     sets: number;
@@ -149,6 +153,9 @@ export interface WeightBenchResult {
     openings?: OpeningSuiteConfig;
   };
   totalGames: number;
+  /** ハング等で破棄された局数（後方互換のため optional） */
+  aborts?: number;
+  abortsBySide?: { A: number; B: number };
   /** WDL（baseline=A 視点） */
   wdl: WDLCount;
   /** 三項（1 局単位）。参考値 */

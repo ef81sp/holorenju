@@ -77,8 +77,16 @@ export interface WasmModuleContext {
   getResultBuffer: () => number;
   ttClear: () => void;
 
-  // 探索統計バッファ（12フィールド×u32=48バイト。レイアウトは main.zig writeStats 参照）
+  // 探索統計バッファ（12フィールド×u32=48バイト。append-only で getSearchFeatures() bit1
+  // の wasm では 60 バイト（+48 pre_search_nodes / +52 probe_nodes / +56 absolute_deadline_hit）。レイアウトは main.zig writeStats 参照）
   getStatsBuffer: () => number;
+
+  // 決定的探索モード（bench-fixed-nodes-2026-09-06.md）。旧 wasm には無い＝optional。
+  setDeterministicMode?: (enabled: number) => void;
+  /** bit0=deterministic 対応、bit1=stats_buffer 拡張。旧 wasm には無い＝optional。 */
+  getSearchFeatures?: () => number;
+  /** stats_buffer の実長（バイト）。旧 wasm には無い＝optional。 */
+  getStatsBufferLength?: () => number;
 
   // Gate 0 計測用（docs/plans/eval-basis-prospect-2026-07-13.md §5）
   setThreatProbeEnabled: (enabled: number) => void;

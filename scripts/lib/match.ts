@@ -16,7 +16,7 @@ import type { EvaluationOptions } from "../../src/logic/cpu/evaluation/patternSc
 import type { DifficultyParams } from "../../src/types/cpu.ts";
 import type { Position } from "../../src/types/game.ts";
 import type { SPRTConfig, WDLCount } from "../types/ab.ts";
-import type { CommitGameResult } from "../types/commit-bench.ts";
+import type { AbortedGame, CommitGameResult } from "../types/commit-bench.ts";
 
 import {
   getAllJushuNames,
@@ -79,6 +79,12 @@ export interface RunMatchResult {
    * A + B = aborts の関係。
    */
   abortsBySide: { A: number; B: number };
+  /**
+   * 破棄された局の一覧（決定的モードの受け入れ条件 abort=0 の判定と、
+   * 結果 JSON への該当局面記録に使う）。side はハングした側（worker 死等で
+   * 特定できないときは undefined）。
+   */
+  abortedGames: AbortedGame[];
 }
 
 export interface RunMatchParams {
@@ -221,28 +227,59 @@ export interface CreateBridgeWorkerParams {
    * probe OFF/深さ探索レバーが depth cap で頭打ちになるのを避けるためのレバー。
    */
   maxDepth?: number;
+  /**
+   * 探索の timeLimit オーバーライド（ms）。固定ノードモードでは 0（時間を見ない）。
+   * 未指定なら difficulty 既定。
+   */
+  timeLimit?: number;
+  /**
+   * 決定的探索モード（bench-fixed-nodes-2026-09-06.md）。true なら worker は wasm の
+   * `setDeterministicMode(1)` を呼ぶ。非対応 wasm / TS フォールバックでは worker が
+   * 初期化を中止し createBridgeWorker は reject する。
+   */
+  deterministic?: boolean;
+}
+
+/**
+ * bridge worker に渡す customParams。DifficultyParams の部分オーバーライドに加え、
+ * 決定的探索モード（bench-fixed-nodes-2026-09-06.md §2.5）のフラグを載せる。
+ * `deterministic` は DifficultyParams の一員ではない（製品経路には無い概念）ため
+ * ここで拡張する。mergeDifficultyParams はトップレベルを丸ごと展開するので
+ * worker 側では merged params からも読める。
+ */
+export interface BridgeCustomParams extends Partial<DifficultyParams> {
+  /** true なら worker は wasm の `setDeterministicMode(1)` を呼ぶ（非対応なら中止） */
+  deterministic?: boolean;
+}
+
+/** buildBridgeCustomParams の入力（全て任意。何も無ければ undefined を返す）。 */
+export interface BridgeCustomParamsInput {
+  randomFactor?: number;
+  evaluationOptions?: Partial<EvaluationOptions>;
+  maxNodes?: number;
+  /** DifficultyParams.depth に写す（ベンチ CLI の flag 名に合わせた別名） */
+  maxDepth?: number;
+  /** 0 なら時間を見ない（固定ノードモード） */
+  timeLimit?: number;
+  deterministic?: boolean;
 }
 
 /**
  * createBridgeWorker に渡す customParams を組み立てる（純粋関数・単体テスト用に export）。
- * randomFactor / evaluationOptions / maxNodes のいずれも未指定なら undefined を返し、
- * 既存呼び出し（weight-bench 等）の挙動を完全に保つ。
+ * 全て未指定なら undefined を返し、既存呼び出し（weight-bench 等）の挙動を完全に保つ。
  */
 export function buildBridgeCustomParams(
-  randomFactor: number | undefined,
-  evaluationOptions: Partial<EvaluationOptions> | undefined,
-  maxNodes?: number,
-  maxDepth?: number,
-): Partial<DifficultyParams> | undefined {
-  if (
-    randomFactor === undefined &&
-    evaluationOptions === undefined &&
-    maxNodes === undefined &&
-    maxDepth === undefined
-  ) {
-    return undefined;
-  }
-  const customParams: Partial<DifficultyParams> = {};
+  input: BridgeCustomParamsInput,
+): BridgeCustomParams | undefined {
+  const {
+    randomFactor,
+    evaluationOptions,
+    maxNodes,
+    maxDepth,
+    timeLimit,
+    deterministic,
+  } = input;
+  const customParams: BridgeCustomParams = {};
   if (randomFactor !== undefined) {
     customParams.randomFactor = randomFactor;
   }
@@ -257,7 +294,13 @@ export function buildBridgeCustomParams(
     // ベンチ CLI の flag に合わせ、ここで DifficultyParams.depth に写す。
     customParams.depth = maxDepth;
   }
-  return customParams;
+  if (timeLimit !== undefined) {
+    customParams.timeLimit = timeLimit;
+  }
+  if (deterministic !== undefined) {
+    customParams.deterministic = deterministic;
+  }
+  return Object.keys(customParams).length === 0 ? undefined : customParams;
 }
 
 /** bridge worker を起動し、ready 通知を待って resolve する。 */
@@ -276,14 +319,18 @@ export function createBridgeWorker(
     threatProbeEnabled,
     maxNodes,
     maxDepth,
+    timeLimit,
+    deterministic,
   } = params;
   return new Promise<Worker>((resolve, reject) => {
-    const customParams = buildBridgeCustomParams(
+    const customParams = buildBridgeCustomParams({
       randomFactor,
       evaluationOptions,
       maxNodes,
       maxDepth,
-    );
+      timeLimit,
+      deterministic,
+    });
     // #128: ハング中でも読める生存信号を共有メモリで用意する
     const livenessChannel = createLivenessChannel();
 
@@ -334,6 +381,16 @@ export function createBridgeWorker(
     worker.on("error", (err) => {
       clearTimeout(initTimeout);
       reject(err);
+    });
+    // 初期化中止（決定的モード非対応など）は worker が process.exit(1) するため
+    // "error" ではなく "exit" で観測される。ready 前の終了は reject にする。
+    worker.on("exit", (code) => {
+      clearTimeout(initTimeout);
+      reject(
+        new Error(
+          `Bridge worker exited before ready (code=${code}) for ${worktreePath}`,
+        ),
+      );
     });
   });
 }
@@ -394,6 +451,7 @@ export async function runMatch(
   let stoppedBySprt = false;
   let aborts = 0;
   const abortsBySide = { A: 0, B: 0 };
+  const abortedGames: AbortedGame[] = [];
 
   const cumAcc = { A: newAcc(), B: newAcc() };
 
@@ -457,6 +515,14 @@ export async function runMatch(
           }
         }
         aborts++;
+        abortedGames.push({
+          gameIdx: taskIdx,
+          openingId,
+          pairId,
+          isABlack,
+          side: isHang ? err.context.side : undefined,
+          reason: msg,
+        });
         // side 別集計: ハングした側（A/B）に加算。ハングじゃない例外（worker死等）
         // は側が特定できないので aborts のみ加算する。
         if (isHang) {
@@ -601,6 +667,7 @@ export async function runMatch(
     stoppedBySprt,
     aborts,
     abortsBySide,
+    abortedGames,
     stats: finalSnap,
   };
 }

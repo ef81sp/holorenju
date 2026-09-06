@@ -55,6 +55,10 @@ import { DIFFICULTY_PARAMS } from "@/types/cpu";
 // コピーを作らない。gate0-bench.ts 自体は commit-bench の worktree 切替対象外だが、
 // エンコーダのビットレイアウトSSoTを1箇所に保つため統一する）。
 import { encodeEvalOptionsForWasm } from "./lib/wasmEvalOptionsEncoder.ts";
+import {
+  type WasmSearchStats,
+  readWasmSearchStats,
+} from "./lib/wasmSearchStats.ts";
 
 const DRAW_MOVE_LIMIT = 70;
 /**
@@ -71,31 +75,24 @@ const ABSOLUTE_TIME_LIMIT_MS = 15000;
  * 再探索率が観測しにくいため。 */
 const ASPIRATION_MODE = 1;
 
-interface WasmStats {
-  nodes: number;
-  lmrTrials: number;
-  lmrResearches: number;
-  qSearchNodes: number;
-  threatProbeCutoffs: number;
-}
-
 /**
- * 統計バッファ読み出し。オフセットは zig/src/main.zig writeStats の fields 配列順
- * （u32×12: nodes, tt_hits, tt_cutoffs, beta_cutoffs, null_move_trials,
- * null_move_cutoffs, futility_prunes, threat_extensions, lmr_trials(+32),
- * lmr_researches(+36), q_search_nodes(+40), threat_probe_cutoffs(+44)）に対応。
- * Zig 側のフィールド追加/並べ替え時はここも追随が必要。
+ * 統計バッファ読み出し。レイアウトと 48/56/60 バイト分岐は scripts/lib/wasmSearchStats.ts
+ * （SSoT）。拡張フィールド（pre_search_nodes / probe_nodes）は getSearchFeatures()
+ * bit1 の wasm のみ読む（旧 wasm で 48 バイトを越えて読まない）。
  */
-function readStats(wasm: WasmModuleContext): WasmStats {
-  const ptr = wasm.getStatsBuffer();
-  const view = new DataView(wasm.memory.buffer);
-  return {
-    nodes: view.getUint32(ptr, true),
-    lmrTrials: view.getUint32(ptr + 32, true),
-    lmrResearches: view.getUint32(ptr + 36, true),
-    qSearchNodes: view.getUint32(ptr + 40, true),
-    threatProbeCutoffs: view.getUint32(ptr + 44, true),
-  };
+function readStats(wasm: WasmModuleContext): WasmSearchStats {
+  const features =
+    typeof wasm.getSearchFeatures === "function"
+      ? wasm.getSearchFeatures() >>> 0
+      : undefined;
+  return readWasmSearchStats(
+    new DataView(wasm.memory.buffer),
+    wasm.getStatsBuffer(),
+    features,
+    typeof wasm.getStatsBufferLength === "function"
+      ? wasm.getStatsBufferLength()
+      : undefined,
+  );
 }
 
 interface MoveMetrics {
