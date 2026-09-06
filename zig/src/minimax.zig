@@ -934,6 +934,9 @@ fn lmrPvsMinimizing(
 pub const MoveScoreEntry = struct {
     move: Position,
     score: i32,
+    /// root の窓 (alpha, beta) の内側に収まった真値か。false は fail-low/high の境界値
+    /// （設計メモ review-multipv-2026-09-06 §2.1）。
+    exact: bool = false,
 };
 
 /// ルート探索結果
@@ -1018,29 +1021,12 @@ pub fn findBestMoveWithTT(
         }
 
         const move = moves.items[mi];
+        const alpha_before = alpha;
+        const score = searchRootMove(cells, hash, move, color, depth, alpha, beta, ctx);
 
-        // 石を配置（cells, bitboard, incremental eval_state を同期更新）
-        incremental_eval.placeStone(cells, move.row, move.col, color);
-        const new_hash = zobrist.updateHash(hash, move.row, move.col, color);
-
-        const score = minimaxWithTT(
-            cells,
-            new_hash,
-            depth - 1,
-            false,
-            color,
-            alpha,
-            beta,
-            move,
-            ctx,
-            true,
-            0,
-        );
-
-        // 石を除去
-        incremental_eval.removeStone(cells, move.row, move.col);
-
-        move_scores[move_score_count] = .{ .move = move, .score = score };
+        // 窓の内側に収まった値だけが真値（打ち切り時は静的評価が混ざるので立てない）
+        const exact = !ctx.isAborted() and alpha_before < score and score < beta;
+        move_scores[move_score_count] = .{ .move = move, .score = score, .exact = exact };
         move_score_count += 1;
         alpha = @max(alpha, score);
     }
@@ -1062,6 +1048,44 @@ pub fn findBestMoveWithTT(
     };
     @memcpy(result.candidates[0..move_score_count], move_scores[0..move_score_count]);
     return result;
+}
+
+/// root の 1 手を探索する（配置 → `minimaxWithTT(depth − 1)` → 除去）
+///
+/// `findBestMoveWithTT` の root ループと `search.refineTopCandidates` の再探索が共用する
+/// （設計メモ review-multipv-2026-09-06 §2.3）。副作用は `ctx`（stats / TT / 打ち切りフラグ）
+/// 経由のみ。`ctx.isAborted()` の前置チェックは呼び出し側の責務。
+pub fn searchRootMove(
+    cells: []Cell,
+    hash: u64,
+    move: Position,
+    color: Cell,
+    depth: u8,
+    alpha: i32,
+    beta: i32,
+    ctx: *SearchContext,
+) i32 {
+    // 石を配置（cells, bitboard, incremental eval_state を同期更新）
+    incremental_eval.placeStone(cells, move.row, move.col, color);
+    const new_hash = zobrist.updateHash(hash, move.row, move.col, color);
+
+    const score = minimaxWithTT(
+        cells,
+        new_hash,
+        depth - 1,
+        false,
+        color,
+        alpha,
+        beta,
+        move,
+        ctx,
+        true,
+        0,
+    );
+
+    // 石を除去
+    incremental_eval.removeStone(cells, move.row, move.col);
+    return score;
 }
 
 /// MoveScoreEntryをスコア降順でソート

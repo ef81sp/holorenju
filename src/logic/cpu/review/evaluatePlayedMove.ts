@@ -68,6 +68,35 @@ export function probePlayedMoveScore(
 }
 
 /**
+ * 実手スコアの決定（review-multipv-2026-09-06.md §2.5 経路 1・2 の共通規則）
+ *
+ * - 実手が候補内で真値（scoreExact）: その値。
+ * - 実手が候補内で境界値（root fail-low の上限）: 上限をそのまま採用すると実手が
+ *   実際より良く見え悪手判定が甘くなる。ただし上限は深さ d の情報なので捨てず、
+ *   probe（深さ 3・全窓）との min を採る。probe 不能なら上限のみ。
+ * - 実手が候補外: probe。不能なら fallback。
+ */
+export function resolvePlayedScore(
+  candidates: MoveScoreEntry[] | undefined,
+  playedRow: number,
+  playedCol: number,
+  probe: () => number | null,
+  fallback: number,
+): number {
+  const entry = candidates?.find(
+    (c) => c.move.row === playedRow && c.move.col === playedCol,
+  );
+  if (entry?.scoreExact) {
+    return entry.score;
+  }
+  const probed = probe();
+  if (entry) {
+    return probed === null ? entry.score : Math.min(entry.score, probed);
+  }
+  return probed ?? fallback;
+}
+
+/**
  * 実際に打った手が追い詰め開始手かチェックし、スコアとシーケンスを返す
  */
 export function evaluatePlayedForcedWin(
@@ -146,21 +175,22 @@ export function evaluatePlayedForcedWin(
     }
   }
 
-  // minimax候補から探す
-  const minimaxEntry = result.candidates?.find(
-    (c) => c.move.row === playedRow && c.move.col === playedCol,
-  );
+  // minimax候補から探す（真値のみ採用。境界値は probe との min）
   // 候補外なら実手局面を追加探索して実スコアを推定（-2000固定の誤blunderを回避）
-  const playedScore =
-    minimaxEntry?.score ??
-    probePlayedMoveScore(
-      board,
-      playedRow,
-      playedCol,
-      color,
-      wasmSearchEngine,
-    ) ??
-    result.score - 2000;
+  const playedScore = resolvePlayedScore(
+    result.candidates,
+    playedRow,
+    playedCol,
+    () =>
+      probePlayedMoveScore(
+        board,
+        playedRow,
+        playedCol,
+        color,
+        wasmSearchEngine,
+      ),
+    result.score - 2000,
+  );
   return {
     playedScore,
     playedForcedWinSequence: undefined,

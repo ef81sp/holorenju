@@ -290,6 +290,16 @@ pub fn build(b: *std.Build) void {
     const test_slow_step = b.step("test-slow", "Run heavy integration tests (#22 forced-win tree)");
     test_slow_step.dependOn(&b.addRunArtifact(test_vct_tree).step);
 
+    // root 上位 K 手の真値化（review-multipv §3-2〜5）。実探索を回すので同じく ReleaseFast / test-golden。
+    const test_search_exact_topk = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/search_exact_topk_test.zig"),
+            .target = native_target,
+            .optimize = .ReleaseFast,
+        }),
+    });
+
     const test_golden_step = b.step("test-golden", "Run search golden / deterministic-mode tests (ReleaseFast, bench-fixed-nodes)");
     test_golden_step.dependOn(&b.addRunArtifact(test_search_golden).step);
+    test_golden_step.dependOn(&b.addRunArtifact(test_search_exact_topk).step);
 }

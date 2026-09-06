@@ -173,8 +173,16 @@ export fn evaluateBoard(perspective: u8, options_flags: u32) i32 {
 // Search exports
 /// 探索結果バッファ（WASM メモリ上）
 /// [0]: row, [1]: col, [2..5]: score (i32 LE), [6]: completedDepth, [7]: candidateCount
-/// [8..67]: 候補手リスト（最大10手、各6バイト: row(1) + col(1) + score(4)）
+/// [8..67]: 候補手リスト（最大10手、各6バイト: row(1) + col(1) + score(4)。書くのは最大 `search.TOP_CANDIDATES` 件）
+/// [68]: exact_mask（bit i = 候補 i が真値。`exact_top_k == 0` なら 0。設計メモ review-multipv §2.4）
 var result_buffer: [128]u8 = .{0} ** 128;
+
+/// 候補領域（8 + 6 × TOP_CANDIDATES）が [68] の exact_mask と衝突しないことをコンパイル時に守る
+const RESULT_EXACT_MASK_OFFSET: usize = 68;
+comptime {
+    std.debug.assert(8 + @as(usize, search.TOP_CANDIDATES) * 6 <= RESULT_EXACT_MASK_OFFSET);
+    std.debug.assert(RESULT_EXACT_MASK_OFFSET < result_buffer.len);
+}
 
 /// 結果バッファのポインタを返す（JS側からメモリ読み取り用）
 export fn getResultBuffer() [*]u8 {
@@ -190,15 +198,25 @@ export fn getResultBuffer() [*]u8 {
 ///   max_nodes: ノード数上限、0=無制限
 ///   absolute_time_limit_ms: 絶対時間制限（0=デフォルト10秒）
 ///   aspiration_mode: 0=固定[75], 1=[75,200,500]
-export fn findBestMove(color: u8, max_depth: u8, time_limit_ms: u32, max_nodes: u32, absolute_time_limit_ms: u32, aspiration_mode: u8, eval_options_flags: u32) void {
+///   exact_top_k: root の上位 K 手を真値にする（0=従来どおり。振り返り用。設計メモ review-multipv §2.4）
+///   forced_row / forced_col: 必ず真値で返す手（255=なし）。exact_top_k == 0 のときは無視
+///
+/// 末尾 3 引数は後付け。wasm の JS 呼び出しでは不足引数が 0 になるので既存呼び出しは
+/// `exact_top_k = 0` として従来どおり動く（forced_row = 0 も無視される）。
+export fn findBestMove(color: u8, max_depth: u8, time_limit_ms: u32, max_nodes: u32, absolute_time_limit_ms: u32, aspiration_mode: u8, eval_options_flags: u32, exact_top_k: u8, forced_row: u8, forced_col: u8) void {
     const cell_color: board.Cell = switch (color) {
         1 => .black,
         2 => .white,
         else => {
-            writeResult(15, 15, 0, 0, null, 0);
+            writeResult(15, 15, 0, 0, null, 0, 0);
             return;
         },
     };
+
+    const forced_move: ?threats_mod.Position = if (exact_top_k > 0 and forced_row < board.BOARD_SIZE and forced_col < board.BOARD_SIZE)
+        .{ .row = forced_row, .col = forced_col }
+    else
+        null;
 
     const cells = &board.board_cells;
     // bits 0-8: position_eval.EvalOptions（手の評価・ムーブオーダリング用）
@@ -243,11 +261,13 @@ export fn findBestMove(color: u8, max_depth: u8, time_limit_ms: u32, max_nodes: 
         .max_nodes = max_nodes,
         .absolute_time_limit = absolute_time_limit,
         .aspiration_mode = aspiration_mode,
+        .exact_top_k = exact_top_k,
+        .forced_move = forced_move,
         .eval_options = eval_options,
         .board_eval_options = board_eval_options,
     });
 
-    writeResult(result.position.row, result.position.col, result.score, result.completed_depth, &result.top_candidates, result.top_candidate_count);
+    writeResult(result.position.row, result.position.col, result.score, result.completed_depth, &result.top_candidates, result.top_candidate_count, result.exact_mask);
     writeStats(result.stats);
 }
 
@@ -763,7 +783,7 @@ export fn isVCTFirstMoveWasm(row: u8, col: u8, color: u8, max_depth: u8, time_li
     return if (vct.isVCTFirstMove(cells, move, cell_color, max_depth, time_limit_ms, max_nodes)) 1 else 0;
 }
 
-fn writeResult(row: u8, col: u8, score: i32, completed_depth: u8, top_candidates: ?*const [5]minimax.MoveScoreEntry, top_candidate_count: u8) void {
+fn writeResult(row: u8, col: u8, score: i32, completed_depth: u8, top_candidates: ?*const [search.TOP_CANDIDATES]minimax.MoveScoreEntry, top_candidate_count: u8, exact_mask: u8) void {
     result_buffer[0] = row;
     result_buffer[1] = col;
     const score_bytes: [4]u8 = @bitCast(score);
@@ -773,10 +793,11 @@ fn writeResult(row: u8, col: u8, score: i32, completed_depth: u8, top_candidates
     result_buffer[5] = score_bytes[3];
     result_buffer[6] = completed_depth;
     result_buffer[7] = top_candidate_count;
+    result_buffer[RESULT_EXACT_MASK_OFFSET] = exact_mask;
 
     // 候補手リスト: offset 8 から、各6バイト（row + col + score_i32_le）
     if (top_candidates) |candidates| {
-        for (0..top_candidate_count) |i| {
+        for (0..@min(top_candidate_count, search.TOP_CANDIDATES)) |i| {
             const base = 8 + i * 6;
             result_buffer[base] = candidates[i].move.row;
             result_buffer[base + 1] = candidates[i].move.col;
