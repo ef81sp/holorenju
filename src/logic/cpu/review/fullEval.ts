@@ -42,6 +42,7 @@ import { buildDoubleMiseTree } from "./doubleMiseBranches";
 import {
   evaluatePlayedForcedWin,
   probePlayedMoveScore,
+  resolvePlayedCandidateScore,
 } from "./evaluatePlayedMove";
 import {
   checkForcedLoss,
@@ -105,6 +106,7 @@ function executeWasmSearch(
   const candidates: MoveScoreEntry[] = wasmResult.candidates.map((c) => ({
     move: c.position,
     score: c.score,
+    scoreExact: c.scoreExact,
     pv: c.pv,
   }));
 
@@ -206,6 +208,7 @@ function promoteVcfCandidate(
     const [entry] = candidates.splice(vcfIdx, 1);
     if (entry) {
       entry.searchScore = PATTERN_SCORES.FIVE;
+      entry.scoreExact = true;
       entry.principalVariation = reVcf.sequence;
       candidates.unshift(entry);
       return;
@@ -214,6 +217,7 @@ function promoteVcfCandidate(
   candidates.unshift({
     position: reVcf.firstMove,
     searchScore: PATTERN_SCORES.FIVE,
+    scoreExact: true,
     principalVariation: reVcf.sequence,
   });
 }
@@ -481,6 +485,7 @@ export function executeFullEval(
   const buildCandidate = (entry: MoveScoreEntry): ReviewCandidate => ({
     position: entry.move,
     searchScore: entry.score,
+    scoreExact: entry.scoreExact,
     principalVariation: entry.pv,
   });
 
@@ -656,9 +661,11 @@ function buildForcedWinResult(
     bestPV = [bestMove, doubleMiseTargets[0], doubleMiseTargets[1]];
   }
 
+  // 詰みスコアは探索の境界値ではなく確定値
   candidates.push({
     position: bestMove,
     searchScore: PATTERN_SCORES.FIVE,
+    scoreExact: true,
     principalVariation: bestPV,
   });
 
@@ -681,11 +688,13 @@ function buildForcedWinResult(
         ...candidates[existingIdx],
         principalVariation: playedForcedWinSequence,
         searchScore: PATTERN_SCORES.FIVE,
+        scoreExact: true,
       };
     } else {
       candidates.push({
         position: { row: playedRow, col: playedCol },
         searchScore: PATTERN_SCORES.FIVE,
+        scoreExact: true,
         principalVariation: playedForcedWinSequence,
       });
     }
@@ -708,9 +717,11 @@ function buildForcedWinResult(
         color,
         colorToWasm(color),
       );
+      // playedScore は probe（全窓）由来で境界値ではない
       candidates.push({
         position: { row: playedRow, col: playedCol },
         searchScore: playedScore,
+        scoreExact: true,
         principalVariation: pv.length > 1 ? pv : undefined,
       });
     }
@@ -923,14 +934,17 @@ function buildNormalResult(
   // 通常の評価フロー（VCT/VCFなし）
   let playedScore = result.score;
 
-  if (playedRow >= 0 && result.candidates) {
-    const played = result.candidates.find(
-      (c) => c.move.row === playedRow && c.move.col === playedCol,
+  const playedIsBest =
+    playedRow === result.position.row && playedCol === result.position.col;
+  if (playedRow >= 0 && result.candidates && !playedIsBest) {
+    // 実手候補のスコアは真値（scoreExact）のときだけ採用する（§2.5 経路 2）。
+    const exactScore = resolvePlayedCandidateScore(
+      result.candidates,
+      playedRow,
+      playedCol,
     );
-    if (played) {
-      playedScore = played.score;
-    } else {
-      // 実手が候補(top5)外: 実手局面を追加探索して実スコアを推定する。
+    if (exactScore === undefined) {
+      // 実手が候補(top5)外 or 境界値: 実手局面を追加探索して実スコアを推定する。
       // 従来の -2000 固定は候補外の手を一律 blunder と誤判定していた（B1）。
       const probed = wasmSearchEngine
         ? probePlayedMoveScore(
@@ -942,6 +956,8 @@ function buildNormalResult(
           )
         : null;
       playedScore = probed ?? result.score - 2000;
+    } else {
+      playedScore = exactScore;
     }
   }
 
@@ -967,9 +983,11 @@ function buildNormalResult(
         color,
         colorToWasm(color),
       );
+      // playedScore は probe（全窓）由来で境界値ではない
       candidates.push({
         position: { row: playedRow, col: playedCol },
         searchScore: playedScore,
+        scoreExact: true,
         principalVariation: pv.length > 1 ? pv : undefined,
       });
     }

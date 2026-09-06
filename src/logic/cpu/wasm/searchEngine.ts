@@ -73,6 +73,11 @@ export function encodeEvalOptions(opts: EvaluationOptions): number {
   return flags;
 }
 
+/** result_buffer の exact_mask（u8）の bit i が立っているか */
+function isExactBit(mask: number, i: number): boolean {
+  return ((mask >> i) & 1) === 1;
+}
+
 /* eslint-enable no-bitwise */
 
 const PV_MAX_LENGTH = 10;
@@ -93,7 +98,19 @@ export interface WasmCandidateEntry {
   position: Position;
   score: number;
   pv?: Position[];
+  /**
+   * score が真値か（review-multipv-2026-09-06.md §2.1）。
+   * false = root の fail-low 境界値（上限）。旧 wasm では常に false。
+   */
+  scoreExact?: boolean;
 }
+
+/** 振り返り探索で真値にする root 上位候補数（§2.5、SSoT） */
+export const REVIEW_EXACT_TOP_K = 5;
+/** wasm findBestMove の forced_row/forced_col「強制手なし」（§2.4） */
+export const WASM_NO_FORCED_MOVE = 255;
+/** result_buffer 内 exact_mask のオフセット（§2.4。旧 wasm では 0） */
+const RESULT_EXACT_MASK_OFFSET = 68;
 
 export interface WasmSearchResultWithCandidates extends WasmSearchResult {
   candidates: WasmCandidateEntry[];
@@ -181,6 +198,10 @@ export class WasmSearchEngine {
    * 0 を渡すと WASM 側は必須防御/ミセ脅威/禁手脆弱性などを切った素 eval で読むため、
    * 呼び出し側で必ず hard 相当（または検証用 0）を明示する。デフォルト引数を持たせない
    * のは、新規呼び出し経路で配線を忘れて素 eval に落ちる silent regression を防ぐため。
+   *
+   * exactTopK: root 上位 K 手を全窓で再探索して真値にする（§2.1）。候補の scoreExact に反映。
+   * forcedMove: 候補外でも必ず真値で返す手（フェーズ 2 §2.6。未配線）。
+   * findBestMoveWithParams 系（対戦 CPU / プローブ）はこれらを渡さない（0 = 従来どおり）。
    */
   findBestMoveForReview(
     board: BoardState,
@@ -191,6 +212,8 @@ export class WasmSearchEngine {
     absoluteTimeLimitMs: number,
     aspirationMode: number,
     evalOptionsFlags: number,
+    exactTopK: number = REVIEW_EXACT_TOP_K,
+    forcedMove?: Position,
   ): WasmSearchResultWithCandidates {
     const wasmColor = colorToWasm(color);
     boardStateToWasm(this.wasm, board);
@@ -203,6 +226,9 @@ export class WasmSearchEngine {
       absoluteTimeLimitMs,
       aspirationMode,
       evalOptionsFlags,
+      exactTopK,
+      forcedMove?.row ?? WASM_NO_FORCED_MOVE,
+      forcedMove?.col ?? WASM_NO_FORCED_MOVE,
     );
     const result = this.readResultWithCandidates();
 
@@ -563,6 +589,8 @@ export class WasmSearchEngine {
     const score = view.getInt32(ptr + 2, true);
     const completedDepth = view.getUint8(ptr + 6);
     const candidateCount = view.getUint8(ptr + 7);
+    // bit i = 候補 i が真値（最終順序）。旧 wasm は書かないので 0（全候補が境界値扱い）。
+    const exactMask = view.getUint8(ptr + RESULT_EXACT_MASK_OFFSET);
 
     const candidates: WasmCandidateEntry[] = [];
     for (let i = 0; i < candidateCount; i++) {
@@ -573,6 +601,7 @@ export class WasmSearchEngine {
           col: view.getUint8(base + 1),
         },
         score: view.getInt32(base + 2, true),
+        scoreExact: isExactBit(exactMask, i),
       });
     }
 
