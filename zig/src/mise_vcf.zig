@@ -277,6 +277,12 @@ pub fn findMiseVCFMoveWithParent(cells: []Cell, color: Cell, parent: *vcf.TimeLi
             if (cells[idx] != .empty) continue;
             if (!threats.isNearFromMask(near_mask, r, c)) continue;
 
+            // 親のノード予算が尽きたら打ち切る（決定的モード。設計メモ bench-fixed-nodes §2.2）。
+            // 親にノード予算があるとき（`max_nodes != 0`）だけ見るので、時間モード
+            // （pre-search の親は `max_nodes = 0`）では評価されず時計も読まない＝挙動不変。
+            // 時間モードで親の時間が尽きた場合は各 child が exhausted になり全経路 null で同じ結果。
+            if (parent.max_nodes != 0 and parent.exceeded()) return null;
+
             // 黒番の禁手チェック
             if (color == .black) {
                 const fr = forbidden.checkForbiddenMove(cells, r, c);
@@ -685,6 +691,41 @@ test "findMiseVCFMove: グローバル絶対デッドライン超過で打ち切
     defer deadline.clear();
 
     try testing.expect(findMiseVCFMove(&cells, .black) == null);
+}
+
+test "findMiseVCFMoveWithParent: 親のノード予算が尽きていれば候補ループ先頭で打ち切る（bench-fixed-nodes §2.2）" {
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    // 上のテストと同じ 12 手目局面（G7 がミセ VCF 手）
+    cells[7 * BOARD_SIZE + 7] = .black;
+    cells[6 * BOARD_SIZE + 8] = .white;
+    cells[8 * BOARD_SIZE + 8] = .black;
+    cells[6 * BOARD_SIZE + 6] = .white;
+    cells[7 * BOARD_SIZE + 9] = .black;
+    cells[5 * BOARD_SIZE + 7] = .white;
+    cells[9 * BOARD_SIZE + 7] = .black;
+    cells[6 * BOARD_SIZE + 10] = .white;
+    cells[8 * BOARD_SIZE + 7] = .black;
+    cells[6 * BOARD_SIZE + 7] = .white;
+    cells[6 * BOARD_SIZE + 9] = .black;
+    cells[5 * BOARD_SIZE + 8] = .white;
+
+    // 親がノード予算を使い切っている → 何も探索せず null
+    var spent = vcf.TimeLimiter{ .start_time = 0, .time_limit = 0, .nodes = 10, .max_nodes = 10 };
+    try testing.expect(findMiseVCFMoveWithParent(&cells, .black, &spent) == null);
+    try testing.expectEqual(@as(u32, 10), spent.nodes);
+
+    // 親にノード予算がない（時間モードの pre-search 親）→ 従来どおり見つかる
+    var unlimited = vcf.TimeLimiter{ .start_time = 0, .time_limit = 0, .nodes = 0, .max_nodes = 0 };
+    const move = findMiseVCFMoveWithParent(&cells, .black, &unlimited);
+    try testing.expect(move != null);
+    try testing.expectEqual(@as(u8, 8), move.?.row);
+    try testing.expectEqual(@as(u8, 6), move.?.col);
+    try testing.expect(unlimited.nodes > 0);
+
+    // 親に十分なノード予算がある → 見つかり、消費が親へ計上される
+    var ample = vcf.TimeLimiter{ .start_time = 0, .time_limit = 0, .nodes = 0, .max_nodes = 1_000_000 };
+    try testing.expect(findMiseVCFMoveWithParent(&cells, .black, &ample) != null);
+    try testing.expectEqual(unlimited.nodes, ample.nodes);
 }
 
 test "findMiseVCFMove: 初期局面ではnull" {
