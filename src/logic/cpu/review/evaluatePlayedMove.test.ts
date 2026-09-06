@@ -13,9 +13,15 @@ import type { BoardState } from "@/types/game";
 
 import { createEmptyBoard } from "@/logic/renjuRules";
 
+import type { MoveScoreEntry } from "../search/types";
 import type { WasmSearchEngine } from "../wasm/searchEngine";
 
-import { probePlayedMoveScore } from "./evaluatePlayedMove";
+import { PATTERN_SCORES } from "../evaluation";
+import {
+  evaluatePlayedForcedWin,
+  probePlayedMoveScore,
+  resolvePlayedCandidateScore,
+} from "./evaluatePlayedMove";
 
 function mockEngine(score: number): WasmSearchEngine {
   return {
@@ -68,5 +74,120 @@ describe("probePlayedMoveScore（B1: 実手実評価）", () => {
     const board = createEmptyBoard();
     const engine = mockEngine(100);
     expect(probePlayedMoveScore(board, -1, 7, "black", engine)).toBeNull();
+  });
+});
+
+// ─── 境界値の不採用（review-multipv-2026-09-06.md §2.5 / §3-7） ───
+
+vi.mock("./wasmAdapters", () => ({
+  wasmFindVCFSequenceFromFirstMove: vi.fn(() => null),
+  wasmFindVCTSequenceFromFirstMove: vi.fn(() => null),
+  wasmIsVCTFirstMove: vi.fn(() => false),
+}));
+
+describe("resolvePlayedCandidateScore（§2.5 経路 1・2 の共通規則）", () => {
+  it("実手候補が scoreExact=true ならそのスコアを返す", () => {
+    const candidates: MoveScoreEntry[] = [
+      { move: { row: 7, col: 7 }, score: 300, scoreExact: true },
+      { move: { row: 7, col: 8 }, score: 120, scoreExact: true },
+    ];
+    expect(resolvePlayedCandidateScore(candidates, 7, 8)).toBe(120);
+  });
+
+  it("実手候補が境界値（scoreExact 省略）なら undefined", () => {
+    const candidates: MoveScoreEntry[] = [
+      { move: { row: 7, col: 7 }, score: 300 },
+      { move: { row: 7, col: 8 }, score: 120 },
+    ];
+    expect(resolvePlayedCandidateScore(candidates, 7, 8)).toBeUndefined();
+  });
+
+  it("実手候補が scoreExact=false なら undefined", () => {
+    const candidates: MoveScoreEntry[] = [
+      { move: { row: 7, col: 8 }, score: 120, scoreExact: false },
+    ];
+    expect(resolvePlayedCandidateScore(candidates, 7, 8)).toBeUndefined();
+  });
+
+  it("実手が候補外なら undefined", () => {
+    const candidates: MoveScoreEntry[] = [
+      { move: { row: 7, col: 7 }, score: 300, scoreExact: true },
+    ];
+    expect(resolvePlayedCandidateScore(candidates, 0, 0)).toBeUndefined();
+    expect(resolvePlayedCandidateScore(undefined, 0, 0)).toBeUndefined();
+  });
+});
+
+describe("evaluatePlayedForcedWin は境界値を採用しない（§2.5 経路 1）", () => {
+  const bestMove = { row: 7, col: 7 };
+
+  it("実手候補が scoreExact=true なら候補スコアを採用し probe しない", () => {
+    const board = createEmptyBoard();
+    const engine = mockEngine(999);
+    const result = {
+      score: 300,
+      candidates: [
+        { move: bestMove, score: 300, scoreExact: true },
+        { move: { row: 7, col: 8 }, score: 120, scoreExact: true },
+      ] satisfies MoveScoreEntry[],
+    };
+    const out = evaluatePlayedForcedWin(
+      board,
+      "black",
+      7,
+      8,
+      bestMove,
+      PATTERN_SCORES.FIVE,
+      result,
+      engine,
+    );
+    expect(out.playedScore).toBe(120);
+    expect(engine.findBestMoveWithParamsNoTTClear).not.toHaveBeenCalled();
+  });
+
+  it("実手候補が境界値なら probePlayedMoveScore に落ちる", () => {
+    const board = createEmptyBoard();
+    // probe は相手視点 -450 → 実手側 +450
+    const engine = mockEngine(-450);
+    const result = {
+      score: 300,
+      candidates: [
+        { move: bestMove, score: 300, scoreExact: true },
+        { move: { row: 7, col: 8 }, score: 120 },
+      ] satisfies MoveScoreEntry[],
+    };
+    const out = evaluatePlayedForcedWin(
+      board,
+      "black",
+      7,
+      8,
+      bestMove,
+      PATTERN_SCORES.FIVE,
+      result,
+      engine,
+    );
+    expect(engine.findBestMoveWithParamsNoTTClear).toHaveBeenCalledTimes(1);
+    expect(out.playedScore).toBe(450);
+  });
+
+  it("実手 = 最善手なら bestScore をそのまま返す（scoreExact 不問）", () => {
+    const board = createEmptyBoard();
+    const engine = mockEngine(0);
+    const result = {
+      score: 300,
+      candidates: [{ move: bestMove, score: 300 }] satisfies MoveScoreEntry[],
+    };
+    const out = evaluatePlayedForcedWin(
+      board,
+      "black",
+      7,
+      7,
+      bestMove,
+      PATTERN_SCORES.FIVE,
+      result,
+      engine,
+    );
+    expect(out.playedScore).toBe(PATTERN_SCORES.FIVE);
+    expect(engine.findBestMoveWithParamsNoTTClear).not.toHaveBeenCalled();
   });
 });

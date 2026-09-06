@@ -65,6 +65,10 @@ export interface WasmModuleContext {
   getProspectFeatureBuffer: () => number;
 
   // Search
+  // 末尾 3 引数は振り返り用（review-multipv-2026-09-06.md §2.4）。
+  // exactTopK: root 上位 K 手を真値に再探索（0 = 従来どおり）。
+  // forcedRow/forcedCol: 強制候補（255 = なし）。省略時は wasm 側で 0 になる。
+  // 旧 wasm は無視する。
   findBestMove: (
     color: number,
     maxDepth: number,
@@ -73,6 +77,9 @@ export interface WasmModuleContext {
     absoluteTimeLimitMs: number,
     aspirationMode: number,
     evalOptionsFlags: number,
+    exactTopK?: number,
+    forcedRow?: number,
+    forcedCol?: number,
   ) => void;
   getResultBuffer: () => number;
   ttClear: () => void;
