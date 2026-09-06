@@ -323,6 +323,11 @@ fn demotePlainFourIfNeeded(
     }
 }
 
+/// 返す上位候補手の最大数: 従来の 5 件 + 強制候補 1 件（設計メモ review-multipv-2026-09-06 §2.4）
+pub const TOP_CANDIDATES: u8 = 6;
+/// 候補リストの基本件数（従来どおり 5 件。`demotePlainFourIfNeeded` が見る範囲もここまで）
+const TOP_CANDIDATES_BASE: u8 = 5;
+
 /// Iterative Deepening結果
 pub const IterativeDeepingResult = struct {
     position: Position,
@@ -331,9 +336,12 @@ pub const IterativeDeepingResult = struct {
     interrupted: bool,
     stats: minimax.SearchStats,
     forced_move: bool = false,
-    /// 上位候補手（最大5手）
-    top_candidates: [5]minimax.MoveScoreEntry = undefined,
+    /// 上位候補手（最大 `TOP_CANDIDATES` 手。6 件目は `forced_move` の強制候補のみ）
+    top_candidates: [TOP_CANDIDATES]minimax.MoveScoreEntry = undefined,
     top_candidate_count: u8 = 0,
+    /// bit i = `top_candidates[i]` が真値（root の窓内 or `refineTopCandidates` の再探索）。
+    /// `exact_top_k == 0` なら常に 0。
+    exact_mask: u8 = 0,
 };
 
 /// 反復深化探索パラメータ
@@ -343,6 +351,10 @@ pub const IterativeDeepeningParams = struct {
     max_nodes: u32 = 0, // 0 = 無制限
     absolute_time_limit: u32 = 10000, // ms
     aspiration_mode: u8 = 0, // 0 = 固定[75], 1 = [75,200,500]
+    /// root の上位 K 手を真値にする（0 = 従来どおり境界値のまま。設計メモ review-multipv §2.1）
+    exact_top_k: u8 = 0,
+    /// 必ず真値で返す手（振り返りの実手）。`exact_top_k == 0` のときは無視される（§2.6）
+    forced_move: ?Position = null,
     eval_options: position_eval.EvalOptions = position_eval.DEFAULT_EVAL_OPTIONS,
     board_eval_options: evaluate.EvalOptions = .{
         .enable_leaf_mise = false,
@@ -441,7 +453,7 @@ pub fn findBestMoveIterative(
     // レビューモード(aspiration_mode != 0)ではPV蓄積のためpreSearch即決をスキップ
     if (pre_search.immediate_move) |im| {
         if (params.aspiration_mode == 0) {
-            var candidates: [5]minimax.MoveScoreEntry = undefined;
+            var candidates: [TOP_CANDIDATES]minimax.MoveScoreEntry = undefined;
             candidates[0] = .{ .move = im, .score = pre_search.immediate_score };
             return .{
                 .position = im,
@@ -498,7 +510,7 @@ pub fn findBestMoveIterative(
     // 唯一の候補手なら即座に返す（レビューモードではPV蓄積のため続行）
     if (moves.len <= 1 and params.aspiration_mode == 0) {
         const pos = if (moves.len == 1) moves.items[0] else Position{ .row = 7, .col = 7 };
-        var candidates: [5]minimax.MoveScoreEntry = undefined;
+        var candidates: [TOP_CANDIDATES]minimax.MoveScoreEntry = undefined;
         candidates[0] = .{ .move = pos, .score = 0 };
         return .{
             .position = pos,
@@ -712,12 +724,41 @@ pub fn findBestMoveIterative(
         }
     }
 
-    // 上位候補手を収集（最大5手）
-    var top_candidates: [5]minimax.MoveScoreEntry = undefined;
-    const max_top: u16 = 5;
-    const count = if (best_result.candidate_count < max_top) best_result.candidate_count else max_top;
+    // root 上位 K 手の真値化（設計メモ review-multipv-2026-09-06 §2.2）。
+    // 打ち切り済みなら走らない（Time Pressure Fallback で差し替えた position を上書きしない）。
+    // `exact_top_k == 0` を先頭に置き、従来経路では時計を読まない（ゴールデン B は時計読み回数に敏感）。
+    const refined = params.exact_top_k > 0 and
+        !interrupted and
+        !ctx.isAborted() and
+        (no_time_limit or getTimestampMs() < loop_deadline);
+    if (refined) {
+        refineTopCandidates(&best_result, cells, color, completed_depth, params.exact_top_k, params.forced_move, &ctx);
+    }
+
+    // 上位候補手を収集（基本 5 手 + 真値化された強制候補 1 手）
+    var top_candidates: [TOP_CANDIDATES]minimax.MoveScoreEntry = undefined;
+    var count: u16 = @min(best_result.candidate_count, TOP_CANDIDATES_BASE);
     for (0..count) |i| {
         top_candidates[i] = best_result.candidates[i];
+    }
+    if (refined) {
+        if (params.forced_move) |fm| {
+            if (findCandidateIndex(top_candidates[0..count], fm) == null) {
+                if (findCandidateIndex(best_result.candidates[0..best_result.candidate_count], fm)) |fi| {
+                    const entry = best_result.candidates[fi];
+                    if (entry.exact) {
+                        top_candidates[count] = entry;
+                        count += 1;
+                    }
+                }
+            }
+        }
+    }
+    var exact_mask: u8 = 0;
+    if (params.exact_top_k > 0) {
+        for (0..count) |i| {
+            if (top_candidates[i].exact) exact_mask |= @as(u8, 1) << @intCast(i);
+        }
     }
 
     var final_result = IterativeDeepingResult{
@@ -728,12 +769,167 @@ pub fn findBestMoveIterative(
         .stats = finalizeStats(&ctx),
         .top_candidates = top_candidates,
         .top_candidate_count = @intCast(count),
+        .exact_mask = exact_mask,
     };
 
     // 非生産的四の引き下げ
     demotePlainFourIfNeeded(&final_result, cells, color, policy);
 
     return final_result;
+}
+
+fn samePosition(a: Position, b: Position) bool {
+    return a.row == b.row and a.col == b.col;
+}
+
+fn findCandidateIndex(entries: []const minimax.MoveScoreEntry, move: Position) ?usize {
+    for (entries, 0..) |e, i| {
+        if (samePosition(e.move, move)) return i;
+    }
+    return null;
+}
+
+/// スコア降順を保って挿入する（同点は後ろ＝安定）
+fn insertDescending(list: []minimax.MoveScoreEntry, len: *u16, entry: minimax.MoveScoreEntry) void {
+    var i: u16 = len.*;
+    while (i > 0 and list[i - 1].score < entry.score) : (i -= 1) {
+        list[i] = list[i - 1];
+    }
+    list[i] = entry;
+    len.* += 1;
+}
+
+// =============================================================================
+// root 上位 K 手の真値化（設計メモ docs/plans/review-multipv-2026-09-06.md §2.1）
+// =============================================================================
+
+/// `alpha = −INF` で 1 手を探索し真値を返す。`beta` は境界値 + 1（境界値が無ければ +INF）。
+/// fail-high（`s >= beta`）なら上限が破れているので `beta = +INF` でもう一度探索する。
+/// 打ち切り時の値は呼び出し側が `ctx.isAborted()` を見て捨てる。
+fn searchFullWindow(
+    cells: []Cell,
+    hash: u64,
+    move: Position,
+    color: Cell,
+    depth: u8,
+    beta: i32,
+    ctx: *minimax.SearchContext,
+) i32 {
+    const s = minimax.searchRootMove(cells, hash, move, color, depth, -scores.INFINITY, beta, ctx);
+    if (ctx.isAborted() or beta >= scores.INFINITY or s < beta) return s;
+    return minimax.searchRootMove(cells, hash, move, color, depth, -scores.INFINITY, scores.INFINITY, ctx);
+}
+
+/// root の候補のうち上位 K 手を真値（全窓の探索値）にする
+///
+/// root の alpha-beta は最善手以外を fail-low の境界値（上限）で返す。振り返りの候補手グリッドが
+/// その境界値を並べると「2 位以下が同じ値」になるので、上位 K 手だけ再探索して真値にする。
+///
+/// - root で窓内に収まった手（`exact = true`）は再探索しない。
+/// - K 件揃うまでは全窓（`alpha = −INF`, `beta = b_i + 1`）。`b_i` は境界値（上限）なので
+///   `s == b_i` は真値扱い（子局面の TT に `upper_bound = b_i` が残っており、ちょうど `b_i` が返る）。
+///   `s >= b_i + 1`（fail-high）は上限が破れている（Futility/LMR/プローブ由来）ので `beta = +INF` で
+///   もう一度だけ探索する。fail-high の値を真値として採用しない。
+/// - K 件揃ったら null window `(e_K, e_K + 1)` で「K 位の真値 `e_K` を超えるか」だけ確認し、
+///   fail-high のときだけ全窓で真値を取る。null window の値が `b_i` を超えていたら上限が
+///   破れているので全窓の `beta` は `+INF` にする。
+/// - 再探索回数は 2K で打ち止め。再探索後に `ctx.isAborted()` なら値を捨てて以降は再探索しない。
+/// - `forced_move`（振り返りの実手）は候補に無ければ追加し、回数上限に関係なく必ず全窓で真値にする。
+/// - 結果の候補順は「真値（降順）＋ 境界値のまま（降順）」。先頭を `position/score` にする
+///   （再探索で最善を超える手が出れば差し替わる）。
+pub fn refineTopCandidates(
+    result: *minimax.MinimaxResult,
+    cells: []Cell,
+    color: Cell,
+    depth: u8,
+    k: u8,
+    forced_move: ?Position,
+    ctx: *minimax.SearchContext,
+) void {
+    const hash = zobrist.computeBoardHash(cells);
+    const max_researches: u32 = @as(u32, k) * 2;
+    var researches: u32 = 0;
+    var aborted = ctx.isAborted();
+
+    // 強制候補（§2.6）: 候補に無ければ追加し、境界値のままなら全窓で真値にする
+    if (forced_move) |fm| {
+        const existing = findCandidateIndex(result.candidates[0..result.candidate_count], fm);
+        const needs_search = if (existing) |i| !result.candidates[i].exact else true;
+        if (needs_search and !aborted) {
+            const beta: i32 = if (existing) |i| result.candidates[i].score + 1 else scores.INFINITY;
+            const s = searchFullWindow(cells, hash, fm, color, depth, beta, ctx);
+            if (ctx.isAborted()) {
+                aborted = true;
+            } else {
+                const entry = minimax.MoveScoreEntry{ .move = fm, .score = s, .exact = true };
+                if (existing) |i| {
+                    result.candidates[i] = entry;
+                } else if (result.candidate_count < move_gen.MAX_MOVES) {
+                    result.candidates[result.candidate_count] = entry;
+                    result.candidate_count += 1;
+                }
+            }
+        }
+    }
+
+    var exact_list: [move_gen.MAX_MOVES]minimax.MoveScoreEntry = undefined;
+    var exact_len: u16 = 0;
+    var rest_list: [move_gen.MAX_MOVES]minimax.MoveScoreEntry = undefined;
+    var rest_len: u16 = 0;
+
+    for (0..result.candidate_count) |i| {
+        const cand = result.candidates[i];
+        if (cand.exact) {
+            insertDescending(&exact_list, &exact_len, cand);
+            continue;
+        }
+        if (aborted or researches >= max_researches) {
+            rest_list[rest_len] = cand;
+            rest_len += 1;
+            continue;
+        }
+
+        var full_beta: i32 = cand.score + 1;
+        if (exact_len >= k) {
+            // K 件確定済み: K 位の真値を超えるかだけ null window で確認
+            const e_k = exact_list[k - 1].score;
+            const s = minimax.searchRootMove(cells, hash, cand.move, color, depth, e_k, e_k + 1, ctx);
+            researches += 1;
+            if (ctx.isAborted()) aborted = true;
+            if (aborted or s <= e_k) {
+                rest_list[rest_len] = cand;
+                rest_len += 1;
+                continue;
+            }
+            if (s > cand.score) full_beta = scores.INFINITY;
+        }
+
+        const s = searchFullWindow(cells, hash, cand.move, color, depth, full_beta, ctx);
+        researches += 1;
+        if (ctx.isAborted()) {
+            aborted = true;
+            rest_list[rest_len] = cand;
+            rest_len += 1;
+            continue;
+        }
+        insertDescending(&exact_list, &exact_len, .{ .move = cand.move, .score = s, .exact = true });
+    }
+
+    // 候補 = 真値（降順）＋ 境界値（降順）
+    var out: u16 = 0;
+    for (0..exact_len) |i| {
+        result.candidates[out] = exact_list[i];
+        out += 1;
+    }
+    for (0..rest_len) |i| {
+        result.candidates[out] = rest_list[i];
+        out += 1;
+    }
+    result.candidate_count = out;
+    if (out > 0) {
+        result.position = result.candidates[0].move;
+        result.score = result.candidates[0].score;
+    }
 }
 
 /// 探索終了時の統計を確定する（安全弁の発火フラグを畳み込む。設計メモ bench-fixed-nodes §2.6）
@@ -993,4 +1189,114 @@ test "findBestMoveIterative: white selects J9 at move 16" {
 
     try testing.expectEqual(result.position.row, 6);
     try testing.expectEqual(result.position.col, 9);
+}
+
+// --- 設計メモ review-multipv-2026-09-06: root 上位 K 手の真値化（軽量テスト。重いものは search_exact_topk_test.zig） ---
+
+test "exact_top_k = 0: exact_mask は 0 で候補は従来どおり最大 5 件（§3-1）" {
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[7 * BOARD_SIZE + 7] = .black;
+    cells[7 * BOARD_SIZE + 8] = .white;
+    cells[6 * BOARD_SIZE + 7] = .black;
+    cells[8 * BOARD_SIZE + 8] = .white;
+
+    tt_mod.global_tt.clear();
+    const result = findBestMoveIterative(&cells, .black, .{ .max_depth = 2, .aspiration_mode = 1 });
+    try testing.expectEqual(@as(u8, 0), result.exact_mask);
+    try testing.expect(result.top_candidate_count <= 5);
+}
+
+test "exact_top_k > 0: 上位候補に exact ビットが立ち、強制手は候補に含まれる（§3-3/§3-5 軽量版）" {
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[7 * BOARD_SIZE + 7] = .black;
+    cells[7 * BOARD_SIZE + 8] = .white;
+    cells[6 * BOARD_SIZE + 7] = .black;
+    cells[8 * BOARD_SIZE + 8] = .white;
+
+    // 盤端の空点（通常は候補の上位に入らない）を強制候補にする
+    const forced = Position{ .row = 0, .col = 0 };
+
+    tt_mod.global_tt.clear();
+    const result = findBestMoveIterative(&cells, .black, .{
+        .max_depth = 2,
+        .aspiration_mode = 1,
+        .exact_top_k = 2,
+        .forced_move = forced,
+    });
+    // 上位 2 件は真値
+    try testing.expect(result.top_candidate_count >= 3);
+    try testing.expectEqual(@as(u8, 0b11), result.exact_mask & 0b11);
+    try testing.expect(result.top_candidates[0].score >= result.top_candidates[1].score);
+    // 強制手は末尾に真値で入る
+    var found: ?usize = null;
+    for (0..result.top_candidate_count) |i| {
+        const m = result.top_candidates[i].move;
+        if (m.row == forced.row and m.col == forced.col) found = i;
+    }
+    try testing.expect(found != null);
+    try testing.expect((result.exact_mask >> @intCast(found.?)) & 1 == 1);
+    try testing.expect(result.top_candidate_count <= TOP_CANDIDATES);
+}
+
+test "refineTopCandidates: root で exact が立った候補は再探索されない（nodes 不変）" {
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[7 * BOARD_SIZE + 7] = .black;
+    cells[7 * BOARD_SIZE + 8] = .white;
+
+    var history = move_order.HistoryTable.init();
+    var killers = move_order.KillerMoves.init();
+    var counter_moves = minimax.initCounterMoveTable();
+    var ctx = minimax.SearchContext.init(
+        &tt_mod.global_tt,
+        &history,
+        &killers,
+        &counter_moves,
+        position_eval.DEFAULT_EVAL_OPTIONS,
+        (IterativeDeepeningParams{}).board_eval_options,
+    );
+    ctx.no_time_limit = true;
+    ll.init();
+    incremental_eval.initFromBoard(&cells, .{
+        .connectivity_bonus = scores.CONNECTIVITY_BONUS,
+        .single_four_penalty_multiplier = 100,
+        .eval_basis = .legacy,
+    });
+
+    var result = minimax.MinimaxResult{ .position = .{ .row = 6, .col = 6 }, .score = 30 };
+    result.candidates[0] = .{ .move = .{ .row = 6, .col = 6 }, .score = 30, .exact = true };
+    result.candidates[1] = .{ .move = .{ .row = 8, .col = 8 }, .score = 20, .exact = true };
+    result.candidates[2] = .{ .move = .{ .row = 6, .col = 8 }, .score = 10, .exact = true };
+    result.candidate_count = 3;
+
+    refineTopCandidates(&result, &cells, .black, 2, 3, null, &ctx);
+    try testing.expectEqual(@as(u32, 0), ctx.stats.nodes);
+    try testing.expectEqual(@as(u16, 3), result.candidate_count);
+    try testing.expectEqual(@as(i32, 30), result.score);
+    try testing.expectEqual(@as(i32, 10), result.candidates[2].score);
+
+    // 境界値の候補を足すと、その手だけ再探索される
+    result.candidates[3] = .{ .move = .{ .row = 8, .col = 6 }, .score = 25, .exact = false };
+    result.candidate_count = 4;
+    refineTopCandidates(&result, &cells, .black, 2, 4, null, &ctx);
+    try testing.expect(ctx.stats.nodes > 0);
+    for (0..result.candidate_count) |i| try testing.expect(result.candidates[i].exact);
+}
+
+test "exact_top_k = 0: forced_move は無視される" {
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[7 * BOARD_SIZE + 7] = .black;
+    cells[7 * BOARD_SIZE + 8] = .white;
+
+    tt_mod.global_tt.clear();
+    const result = findBestMoveIterative(&cells, .black, .{
+        .max_depth = 2,
+        .aspiration_mode = 1,
+        .exact_top_k = 0,
+        .forced_move = Position{ .row = 0, .col = 0 },
+    });
+    try testing.expectEqual(@as(u8, 0), result.exact_mask);
+    for (0..result.top_candidate_count) |i| {
+        const m = result.top_candidates[i].move;
+        try testing.expect(!(m.row == 0 and m.col == 0));
+    }
 }

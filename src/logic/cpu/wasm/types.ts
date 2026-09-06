@@ -73,6 +73,12 @@ export interface WasmModuleContext {
     absoluteTimeLimitMs: number,
     aspirationMode: number,
     evalOptionsFlags: number,
+    /** root の上位 K 手を真値にする（0/省略 = 従来どおり。振り返り用。設計メモ review-multipv §2.4） */
+    exactTopK?: number,
+    /** 必ず真値で返す手の row（255 = なし。exactTopK が 0 のときは無視） */
+    forcedRow?: number,
+    /** 同 col（255 = なし） */
+    forcedCol?: number,
   ) => void;
   getResultBuffer: () => number;
   ttClear: () => void;
