@@ -126,3 +126,11 @@ TS（vitest）:
 - 較正（§4）は実装マージ後にバックグラウンドで回し、結果を §7 に追記。
 
 ## 7. 結果（追記予定）
+
+## 8. 後続課題（レビュー提案・本 PR では未対応）
+
+SOLID レビュー（実装後）の提案で、動作に影響しないため別 PR に回すもの。
+
+1. **commit-bench.ts / weight-bench.ts の重複**: `parsePositiveIntOrExit` / `resolveFixedNodesOrExit` / `searchFeaturesA/B` の telemetry 読み / `valid` 算出 / abort 一覧レポートが両ファイルにほぼ同文（各 ~80 行）。`fixedNodesCli.ts` 等に `resolveFixedNodesOrExit` / `readPairSearchFeatures` / `reportInvalidRun` として集約する。
+2. **`policy.deterministic` 分岐の散在**: `search.zig` / `minimax.zig` で「決定的なら時間 0」を各所で書いている。`BudgetPolicy` に `*_time` を持たせれば `deterministic` bool は「stats.nodes に計上するか」と `no_time_limit` 導出だけに減る。
+3. **小さな DRY / 責務**: `gate0-bench.ts` と worker に手書きされた `typeof === "function"` 判定を `deterministicSupport.readSearchFeatures` / `wasmSearchStats` に寄せる。`BridgeCustomParams.deterministic` が `DifficultyParams` に混入する（無害）ので worker で分離する。`deadline.exceededAt` が `g_hit` を立てる副作用付き述語である旨をコメントに明示する。

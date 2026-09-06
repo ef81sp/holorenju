@@ -51,8 +51,8 @@ pub var deterministic_mode: bool = false;
 /// `getSearchFeatures()` のビット。TS 側リーダーはこのビットで wasm の対応状況を判定する。
 /// bit0: 決定的モード対応（`setDeterministicMode` あり）
 pub const FEATURE_DETERMINISTIC_MODE: u32 = 1 << 0;
-/// bit1: stats バッファ拡張あり（`pre_search_nodes` / `probe_nodes` / `absolute_deadline_hit`、
-/// 60 バイト。旧 wasm は 48 バイト）
+/// bit1: stats バッファ拡張あり（+48 `pre_search_nodes` / +52 `probe_nodes`、56 バイト以上を保証。
+/// 旧 wasm は 48 バイト）。+56 `absolute_deadline_hit` は `getStatsBufferLength() >= 60` で判定する
 pub const FEATURE_EXTENDED_STATS: u32 = 1 << 1;
 
 /// この wasm が持つ探索機能のビット集合
