@@ -321,7 +321,9 @@ const PROBE_VCT_TIME_LIMIT: u32 = 50;
 /// 脅威プローブ VCT のノード予算（決定的モード。時間モードは `PROBE_VCT_TIME_LIMIT` のみ）
 ///
 /// 設計メモ docs/plans/bench-fixed-nodes-2026-09-06.md §2.1/§2.3。時間定数の隣に置く。
-/// **未較正**の初期値（較正は §4 手順 1）。VCF は両モードとも既存の 100/200 ノード。
+/// §7.13 で較正済み（2026-09-07）: 時間モードのプローブ上限到達率 18.8%（平均 2,009 ノード）
+/// に一致する値（§7.8〜7.9。2k は到達率過大、20k は「高価なプローブを切って安いものを
+/// 多数回す」配分が崩れ −60 Elo）。VCF は両モードとも既存の 100/200 ノード。
 pub const PROBE_VCT_NODES_DETERMINISTIC: u32 = 6000;
 
 /// 深度適応型バジェット（TS版 threatProbe.ts の getThreatBudget に対応）
@@ -586,8 +588,8 @@ pub fn minimaxWithTT(
         // プローブの消費ノードを計上（設計メモ bench-fixed-nodes §2.3/§2.4）。
         // `nodes` への加算は決定的モードのみ（時間モードでは max_nodes 到達が早まり製品挙動が変わる）。
         ctx.stats.probe_nodes +|= probe.nodes;
-        ctx.stats.probe_calls += 1;
-        if (probe.vct_cap_hit) ctx.stats.probe_cap_hits += 1;
+        ctx.stats.probe_calls +|= 1;
+        if (probe.vct_cap_hit) ctx.stats.probe_cap_hits +|= 1;
         if (ctx.budget.deterministic) {
             ctx.stats.nodes +|= probe.nodes;
             if (!ctx.node_count_exceeded and ctx.max_nodes > 0 and ctx.stats.nodes >= ctx.max_nodes) {

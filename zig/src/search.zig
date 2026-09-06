@@ -105,7 +105,8 @@ pub const PRE_SEARCH_TIME_LIMIT: u32 = vcf_mod.VCF_TIME_LIMIT * 2 + vct.VCT_TIME
 ///
 /// 時間モードの 600ms（`PRE_SEARCH_TIME_LIMIT`）に対応する親予算。各段は
 /// 自前のノード予算（`VCF_PRE_NODES_DETERMINISTIC` など）で回り、段の境目と
-/// ミセ VCF の候補ループ先頭でこの親予算を見る。**未較正**の初期値（較正は §4 手順 1）。
+/// ミセ VCF の候補ループ先頭でこの親予算を見る。§7.13 で較正済み（2026-09-07）:
+/// 時間モードの事前探索 p90 40k（時間側 53k）を収める値として 40k → 80k に引き上げ。
 pub const PRE_SEARCH_NODE_BUDGET_DETERMINISTIC: u32 = 80_000;
 
 /// 必須手の事前チェック
@@ -263,7 +264,7 @@ pub const DepthHistoryEntry = struct {
 const PLAIN_FOUR_PREFERENCE_MARGIN: i32 = 200;
 const PLAIN_FOUR_VCF_CHECK_TIME_LIMIT: u32 = 50;
 /// 降格判定 VCF のノード予算（決定的モード。時間モードは `PLAIN_FOUR_VCF_CHECK_TIME_LIMIT` のみ）
-/// **未較正**の初期値（VCF は安いので 2〜3k 程度。較正は設計メモ §4 手順 1）。
+/// 初期値 3k を据え置き（設計メモ §7.13。VCF は安く、較正の Elo 同等点に影響しなかった）。
 pub const PLAIN_FOUR_VCF_CHECK_NODES_DETERMINISTIC: u32 = 3000;
 
 /// 非生産的四の優先度引き下げ

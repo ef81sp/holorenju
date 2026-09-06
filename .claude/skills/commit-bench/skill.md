@@ -50,6 +50,8 @@ allowed-tools:
 `--fixed-nodes` で両側を固定ノード探索（timeLimit=0 / maxNodes=N / 決定的モード）にする。設計と較正は `docs/plans/bench-fixed-nodes-2026-09-06.md`（結論は §7.13）。
 
 - **使い方**: `--fixed-nodes`（既定 N=1,200,000。時間モード hard・jobs=5 と Elo 同等に較正済み）/ `--fixed-nodes=N` / 片側だけなら `--fixed-nodes-a[=N]` または `--fixed-nodes-b[=N]`（時間 vs 固定の混合。較正用）。`--max-nodes-a/b`・`--book-a/b` とは併用不可。randomFactor>0 は `--seed` 必須、`--sets>1` は randomFactor 必須。
+- **較正の前提**: 既定 N=1.2M は **jobs=5 の負荷下の hard** と Elo 同等（無負荷の製品 hard は p99 ≈ 2.5M を使うので固定 1.2M より強い）。固定ノードは相対比較専用で、製品強度の絶対値の代理にはしない。
+- **検出力**: A≠B のときに狭い CI で符号を当てられるかは陽性対照（`--max-depth-b=5`、設計メモ §4 手順 6）で検証中（§7.14 に追記予定）。
 - **決定性**: 同一入力なら棋譜・1 手ごとの nodes・score が完全一致し、マシン負荷に依存しない。そのため `--jobs` を増やしてよい（416 局 jobs=7 で約 1 時間、1,200 局なら約 3 時間）。
 - **測れるもの**: eval 品質、枝刈り・ordering の「ノードあたりの質」。eval 品質の PR は固定ノードで判定し、リリース前に時間モードで 1 回確認する。
 - **測れないもの（時間モード必須）**: ノード単価を変える変更（eval 機能追加・incremental eval・ordering コスト。固定ノードでは過大評価される）、時間管理（dynamic time / deadline / Time Pressure Fallback）、VCF/VCT の速度改善、`stats.nodes` 計上点や `TimeLimiter.bump` 位置の変更。ノード計上規則が変わる PR（#89 / #136 / 固定ノード導入 PR）を跨ぐ比較も時間モードで行う。NPS は同一モード同士でのみ比較する。

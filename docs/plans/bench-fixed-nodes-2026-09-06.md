@@ -104,7 +104,7 @@ TS（vitest）:
 
 1. **時間モードの観測**: 開局スイート `--max-games=100`（hard、jobs=5）で `pre_search_nodes` / `probe_nodes` / `stats.nodes` の分布（中央値・p90・p99）を取る → `pre_vcf_nodes` / `pre_vct_nodes` / `demote_vcf_nodes` / `probe_vct_nodes` の初期値（中央値〜p75）を決めて焼く。
 2. **予算の見直し**: 手順 1 の `pre_search_nodes` 分布を見て、`VCT_PRE_NODES_DETERMINISTIC=20k`（時間モードの 300 ms より大きい可能性）を先に調整する。N が事前探索の消費より小さいと主探索は depth 1 のみで返る（着手は必ず出る）ので、N の下限は事前探索の p90 以上。
-3. **N のスイープ**: プローブ計上後は N の意味が変わる（現行計上 p50 68k / mean 126k / p90 317k は参考値）。手順 1 の `nodes + probe_nodes` 分布からスイープ範囲を決め、3 点 × 100 局。指標は `performanceStats.avgDepth`（depth 0 込み。時間モードは 4.0〜4.25、探索手のみは 6.1）と**事前探索手を除いた深度分布**・ノード分布（p50/p90）の一致。
+3. **N のスイープ**: プローブ計上後は N の意味が変わる（現行計上 p50 68k / mean 126k / p90 317k は参考値）。手順 1 の `nodes + probe_nodes` 分布からスイープ範囲を決め、3 点 × 100 局。指標は `performanceStats.avgDepth`（depth 0 込み。時間モードは 4.0〜4.25、探索手のみは 6.1）と**事前探索手を除いた深度分布**・ノード分布（p50/p90）の一致（廃止。固定 N は上限であって消費量ではないため深さ一致は指標にならない。§7.13）。
 4. **時間 vs 固定の混合対局**（強さの同等性を直接示す）: `development` 同一コミットで A=時間モード、B=`--fixed-nodes-b=N`、416 局。Elo ≈ 0 になる N を推奨既定にする。
 5. **決定性スモーク（負荷を変える）**: A=B 同一コミット、`--fixed-nodes=N --openings=… --max-games=40` を **jobs=2 と jobs=8** で 1 回ずつ走らせ、`--compare` で棋譜・1 手ごとの nodes・score が完全一致、全ペア 1-1、abort 0。
 6. **陽性対照**: `development` vs `--max-depth-b=5` を時間モードと固定ノードで各 416 局。両モードで同方向・有意に検出できること。
@@ -117,6 +117,8 @@ TS（vitest）:
   - 測れる: eval 品質、枝刈り・ordering の「ノードあたりの質」。
   - 乖離する（時間モード必須）: (1) ノード単価を変える変更（eval 機能追加・incremental eval・ordering コスト）は固定ノードで**過大評価**される。(2) `stats.nodes` の計上点や `TimeLimiter.bump` の位置を変える変更（実効 N が変わる）。(3) 時間管理（dynamic time / loop_deadline 80% / Time Pressure Fallback）。(4) VCF/VCT の速度改善（時間予算がノード予算に置き換わるので出ない）。
   - 規則: eval 品質の PR は固定ノードで判定し、リリース前に時間モードで 1 回確認。上記 (1)〜(4) に触る PR は時間モード必須。
+- **推奨 N=1.2M は jobs=5 の負荷下の hard と Elo 同等**（§7.11）。無負荷の製品 hard はより多くのノード（p99 ≈ 2.5M）を使うので固定 1.2M より強い。固定ノードは相対比較専用で、製品強度の絶対値の代理にはしない。
+- 検出力（A≠B のときに狭い CI で符号を当てる）は §4 手順 6 の陽性対照で検証中（§7.14 に追記予定）。
 - `--fixed-nodes` は本 PR 以降のコミット同士のみ。ノード計上規則が変わる PR（#89 / #136 / 本 PR）を跨ぐ比較は時間モード。
 - NPS の定義が変わる（決定的モードはプローブ込み）。`performanceStats` の NPS 比較は同一モード同士に限定。
 - gate0-bench / profile-review の `time_limit=0` は従来の `no_time_limit`（事前探索 600 ms 壁時計・プローブ無制限）のまま。決定的に測りたければ `setDeterministicMode(true)` を使う（gate0-bench に `--deterministic` を追加してよい。過去の gate0 結果と数値は比較不可になる旨を注記）。
@@ -136,6 +138,13 @@ SOLID レビュー（実装後）の提案で、動作に影響しないため�
 1. **commit-bench.ts / weight-bench.ts の重複**: `parsePositiveIntOrExit` / `resolveFixedNodesOrExit` / `searchFeaturesA/B` の telemetry 読み / `valid` 算出 / abort 一覧レポートが両ファイルにほぼ同文（各 ~80 行）。`fixedNodesCli.ts` 等に `resolveFixedNodesOrExit` / `readPairSearchFeatures` / `reportInvalidRun` として集約する。
 2. **`policy.deterministic` 分岐の散在**: `search.zig` / `minimax.zig` で「決定的なら時間 0」を各所で書いている。`BudgetPolicy` に `*_time` を持たせれば `deterministic` bool は「stats.nodes に計上するか」と `no_time_limit` 導出だけに減る。
 3. **小さな DRY / 責務**: `gate0-bench.ts` と worker に手書きされた `typeof === "function"` 判定を `deterministicSupport.readSearchFeatures` / `wasmSearchStats` に寄せる。`BridgeCustomParams.deterministic` が `DifficultyParams` に混入する（無害）ので worker で分離する。`deadline.exceededAt` が `g_hit` を立てる副作用付き述語である旨をコメントに明示する。
+4. **較正後レビュー（2026-09-07）の提案**:
+   - `readStats(wasm)` が compare-modes / gate0-bench / cpu-bridge-worker の 3 箇所に重複。`wasmSearchStats.ts` に集約する。
+   - result buffer（着手・score・深さ）のデコードが 5 箇所に重複。同じく共通化する。
+   - `chargeChild` の `inherited` 判定を呼び出し側ではなく `child()` 側に持たせる。
+   - `--fixed-nodes` の値なし対応で commit-bench / weight-bench の分岐が増えた。`matchFixedNodesFlag` に寄せる。
+   - threatProbe の VCT 前早期 return（親の残り予算が尽きている）を `probe_cap_hits` に数えるか決める（現状は数えない）。
+   - compare-modes の `--jobs` 並列化（`--verify` 付きだと 1 手あたり 4M × 2 で遅い）。
 
 ### 7.1 手順 1: 時間モードの観測（2026-09-06、7d44b9c 自己対局 100 局、hard、jobs=5、27 分）
 
@@ -243,9 +252,12 @@ JSON: `bench-results/commit-bench-2026-09-06T14-57-08-162Z.json`。abort 0。
 | 探索手の平均深さ            | 6.19                 | 6.05                  | 6.37                 |
 
 - 到達率は一致（19〜22%）。深さ分布の二峰は消え、時間モードと同じ形になった。
+- 6k は到達率だけが一致（平均ノード/プローブは 1.4〜1.5k で時間モードの 2.0k より 25% 低い）。4k / 8k は未検証。
 - 深さとプローブ回数の補間で **N ≈ 1.2M**。手順 4（3 回目）: A=時間モード vs B=固定 1.2M（6k）、416 局、jobs=5 を実行中。
 
 ### 7.10 局面レベルの比較（`pnpm compare:modes`、182d22d）
+
+→ この節の結論（N は時間モードの最大消費に置く）は §7.12 で撤回。採用は 1.2M（§7.13）。
 
 混合対局 JSON の時間モード側の着手と、同じ局面を固定モード（1.2M / 6k）で探索した着手を突き合わせる（`--verify` で両着手後の局面を N=4M で参照評価）。先頭 20 手のスモーク: 一致 17/20。不一致 3 件はすべて **固定側が N を使い切り、プローブが N の 90〜97% を消費して主探索が深さ 4 で止まった局面**（例: `F8 I9 H8 I7 F6 J7 H6 I8 I6 G6 G7 I5` 黒番、時間 E7 = 勝ち筋 vs 固定 H5 = 負け筋）。N を使い切らない手（30〜70 万）はすべて一致・深さ 7。
 
@@ -265,7 +277,7 @@ JSON: `bench-results/commit-bench-2026-09-06T18-28-18-420Z.json`。abort 0。
 JSON: `bench-results/commit-bench-2026-09-06T20-43-48-572Z.json`。abort 0。
 
 - **ペア Elo（時間モード視点）−53.0 [−79.8, −26.9]** = 固定 2.5M の方が有意に強い。pentanomial ll 46 / ld 9 / dd 133 / wd 2 / ww 18。avgDepth 4.04 vs 4.30、思考時間 3.6 s vs 4.8 s。
-- 固定側の強さは N に対して単調: 1.2M で +5.8（同等）、2.5M で −53（固定が強い）。**Elo ≈ 0 は N ≈ 1.2〜1.3M**。「時間モードの最大消費に置く」（§7.10）は行き過ぎで、時間モードの hard は jobs=5 の負荷下では戦術的局面でも 2.5M までは使えていない（NPS が落ちる）ということ。
+- 固定側の強さは N に対して単調: 1.2M で +5.8（同等）、2.5M で −53（固定が強い）。**Elo ≈ 0 は N ≈ 1.2〜1.3M**。「時間モードの最大消費に置く」（§7.10）は行き過ぎ。固定 N は全手に一律に効くので、2.5M は時間モードでは上位 1% の手しか得られない予算（§7.1: p99 2.46M）を戦術的局面のすべてに与えることになる。時間モードの戦術手の実効予算の中央値は 0.9M 前後なので、Elo 同等点はその実効平均に近い 1.2M になる。
 
 ### 7.13 較正の結論（2026-09-07）
 
@@ -276,6 +288,6 @@ JSON: `bench-results/commit-bench-2026-09-06T20-43-48-572Z.json`。abort 0。
 | 推奨 N（時間モード hard・jobs=5 と同等）                               | **1,200,000**                                             | 混合対局 +5.8 [−15.3, +27.0]（§7.11）                               |
 | 参考                                                                   | 2.5M は時間モードより +53 強い（§7.12）、0.6M（2k）は −26 |
 
-- 使い方: `--fixed-nodes=1200000`（既定値もこれにする）。416 局 jobs=7 で約 1 時間、決定性により負荷に依らず同一結果。
-- 教訓: (1) 固定 N は上限であって消費量ではない。深さ平均の一致で N を決めるのは誤り。強さの一致（混合対局）でしか決まらない。(2) プローブの時間上限は「高価なプローブを切り、安いプローブを多数回す」配分で、ノード上限を大きくすると逆効果（20k で −60）。到達率を合わせるのが正解。(3) 100 局程度の途中経過（+37）は収束前で当てにならない。
+- 使い方: `--fixed-nodes=1200000`（既定値もこれにする）。416 局 jobs=7 で約 1〜1.5 時間（100 局実測 1.0M 15 分 / 1.5M 21 分からの外挿）、決定性により負荷に依らず同一結果。
+- 教訓: (1) 固定 N は上限であって消費量ではない。深さ平均の一致で N を決めるのは誤り。最大消費（p99）に置く説（§7.10）も誤り（§7.12: 上位 1% の予算を全手に与えて +53 強くなる）。強さの一致（混合対局）でしか決まらない。(2) プローブの時間上限は「高価なプローブを切り、安いプローブを多数回す」配分で、ノード上限を大きくすると逆効果（20k で −60）。到達率を合わせるのが正解。(3) 100 局程度の途中経過（+37）は収束前で当てにならない。
 - 未実施: 手順 5（jobs=2 vs 8 の決定性スモーク）は §3 の実装時スモーク（jobs=1/2/4 で完全一致）と各スイープの全ペア同一結果で代替。手順 6（陽性対照 depth5）は残す。

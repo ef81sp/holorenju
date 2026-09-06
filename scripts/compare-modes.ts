@@ -41,6 +41,10 @@ import { formatMove } from "@/logic/gameRecordParser";
 import { checkWin, createEmptyBoard } from "@/logic/renjuRules";
 import { DIFFICULTY_PARAMS } from "@/types/cpu";
 
+import {
+  FIXED_NODES_DEFAULT,
+  parseFixedNodesFlag,
+} from "./lib/benchCliChecks.ts";
 import { checkDeterministicSupport } from "./lib/deterministicSupport.ts";
 import { encodeEvalOptionsForWasm } from "./lib/wasmEvalOptionsEncoder.ts";
 import {
@@ -97,24 +101,43 @@ interface CliOptions {
   out: string | undefined;
 }
 
-function intArg(name: string, fallback: number): number {
+function intArg(name: string, fallback: number, min = 0): number {
   const raw = process.argv.find((a) => a.startsWith(`--${name}=`));
   if (raw === undefined) {
     return fallback;
   }
   const v = parseInt(raw.slice(name.length + 3), 10);
-  if (!Number.isFinite(v) || v < 0) {
-    console.error(`--${name} は 0 以上の整数で指定してください: ${raw}`);
+  if (!Number.isFinite(v) || v < min) {
+    console.error(`--${name} は ${min} 以上の整数で指定してください: ${raw}`);
     process.exit(1);
   }
   return v;
+}
+
+/**
+ * `--fixed-nodes[=N]`: 値なしは `FIXED_NODES_DEFAULT`、値ありは正の整数のみ
+ * （0 は「無制限」ではなく即 abort になるので通さない）。commit-bench と同じ規則。
+ */
+function fixedNodesArg(): number {
+  const arg = process.argv.find(
+    (a) => a === "--fixed-nodes" || a.startsWith("--fixed-nodes="),
+  );
+  if (arg === undefined) {
+    return FIXED_NODES_DEFAULT;
+  }
+  const parsed = parseFixedNodesFlag(arg, "--fixed-nodes");
+  if (!parsed.ok) {
+    console.error(parsed.error);
+    process.exit(1);
+  }
+  return parsed.value;
 }
 
 function parseArgs(): CliOptions {
   const input = process.argv.slice(2).find((a) => !a.startsWith("--"));
   if (!input || !existsSync(input)) {
     console.error(
-      "使い方: pnpm compare:modes <commit-bench JSON> [--fixed-nodes=1200000] [--limit=N] [--offset=N]\n" +
+      `使い方: pnpm compare:modes <commit-bench JSON> [--fixed-nodes[=N]（既定 ${FIXED_NODES_DEFAULT}）] [--limit=N] [--offset=N]\n` +
         "        [--verify] [--verify-nodes=4000000] [--verify-depth=9] [--threshold=300] [--out=<jsonl>]",
     );
     process.exit(1);
@@ -122,10 +145,10 @@ function parseArgs(): CliOptions {
   const limitRaw = process.argv.find((a) => a.startsWith("--limit="));
   return {
     input,
-    fixedNodes: intArg("fixed-nodes", 1200000),
+    fixedNodes: fixedNodesArg(),
     verify: process.argv.includes("--verify"),
-    verifyNodes: intArg("verify-nodes", 4000000),
-    verifyDepth: intArg("verify-depth", 9),
+    verifyNodes: intArg("verify-nodes", 4000000, 1),
+    verifyDepth: intArg("verify-depth", 9, 1),
     threshold: intArg("threshold", 300),
     limit: limitRaw === undefined ? undefined : intArg("limit", 0),
     offset: intArg("offset", 0),
@@ -314,6 +337,8 @@ interface ResultRow {
     diff: number;
     verdict: Verdict;
     depths: [number, number];
+    /** 参照探索（終端でないもの）の完了深さが hard の depth 未満 → verdict は信用しない */
+    unreliable: boolean;
   };
 }
 
@@ -342,6 +367,9 @@ function printMismatch(row: ResultRow): void {
   if (row.verify) {
     const v = row.verify;
     line += ` | 参照: 時間手=${v.timeMoveScore} 固定手=${v.fixedMoveScore} 差=${v.diff} → ${v.verdict}`;
+    if (v.unreliable) {
+      line += ` (unreliable: 参照深さ ${v.depths[0]}/${v.depths[1]})`;
+    }
   }
   console.log(line);
   console.log(`    棋譜: ${row.record}`);
@@ -393,6 +421,7 @@ async function main(): Promise<void> {
 
   const rows: ResultRow[] = [];
   let matched = 0;
+  let unreliableCount = 0;
   const verdictCount: Record<Verdict, number> = {
     "fixed-worse": 0,
     "fixed-better": 0,
@@ -448,12 +477,20 @@ async function main(): Promise<void> {
       const diff = t.score - f.score;
       const verdict = classify(diff, opts.threshold);
       verdictCount[verdict]++;
+      // 参照探索が N 内で hard の depth（7）まで完了していなければ verdict は信用しない
+      const unreliable =
+        (!t.terminal && t.depth < hard.depth) ||
+        (!f.terminal && f.depth < hard.depth);
+      if (unreliable) {
+        unreliableCount++;
+      }
       row.verify = {
         timeMoveScore: t.score,
         fixedMoveScore: f.score,
         diff,
         verdict,
         depths: [t.depth, f.depth],
+        unreliable,
       };
     }
 
@@ -485,7 +522,8 @@ async function main(): Promise<void> {
   if (opts.verify) {
     console.log(
       `verify（不一致のみ、threshold=${opts.threshold}）: 固定が悪い ${verdictCount["fixed-worse"]} / ` +
-        `固定が良い ${verdictCount["fixed-better"]} / 同程度 ${verdictCount.similar}`,
+        `固定が良い ${verdictCount["fixed-better"]} / 同程度 ${verdictCount.similar}` +
+        ` / unreliable（参照深さ < ${hard.depth}）${unreliableCount}`,
     );
   }
   if (opts.out) {

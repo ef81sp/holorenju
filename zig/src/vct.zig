@@ -35,7 +35,8 @@ pub const VCT_TIME_LIMIT: u32 = 300;
 /// 事前探索 VCT のノード予算（決定的モード。時間モードでは `VCT_TIME_LIMIT` のみ）
 ///
 /// 設計メモ docs/plans/bench-fixed-nodes-2026-09-06.md §2.1。時間定数の隣に置く
-/// （較正で片方だけ直す事故を防ぐ）。**未較正**の初期値。較正は §4 手順 1。
+/// （較正で片方だけ直す事故を防ぐ）。§7.13 で較正済み（2026-09-07）: 時間モードの
+/// 事前探索 p90 40k に合わせ 20k → 40k に引き上げ（親予算 80k の半分）。
 pub const VCT_PRE_NODES_DETERMINISTIC: u32 = 40_000;
 
 /// ct=three 時のVCF深度上限
