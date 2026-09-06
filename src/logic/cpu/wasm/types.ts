@@ -88,7 +88,8 @@ export interface WasmModuleContext {
   ttClear: () => void;
 
   // 探索統計バッファ（12フィールド×u32=48バイト。append-only で getSearchFeatures() bit1
-  // の wasm では 60 バイト（+48 pre_search_nodes / +52 probe_nodes / +56 absolute_deadline_hit）。レイアウトは main.zig writeStats 参照）
+  // の wasm では 60 バイト以上（+48 pre_search_nodes / +52 probe_nodes / +56 absolute_deadline_hit）、
+  // 現行は 68 バイト（+60 probe_calls / +64 probe_cap_hits）。レイアウトは main.zig writeStats 参照）
   getStatsBuffer: () => number;
 
   // 決定的探索モード（bench-fixed-nodes-2026-09-06.md）。旧 wasm には無い＝optional。
