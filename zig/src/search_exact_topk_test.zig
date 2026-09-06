@@ -155,9 +155,8 @@ test "§3-3 自己整合: exact_top_k = 5 の上位 5 件は真値・降順で�
         try testing.expectEqual(r.stats.nodes, r_again.stats.nodes);
         const n: u8 = @min(K, r.top_candidate_count);
         try testing.expect(n >= 2);
-        // 候補先頭 = 着手・スコア
-        try testing.expect(samePos(r.position, r.top_candidates[0].move));
-        try testing.expectEqual(r.top_candidates[0].score, r.score);
+        // 着手は候補内（demotePlainFourIfNeeded が非四手に差し替えることがあるので先頭とは限らない）
+        try testing.expect(indexOf(r, r.position) != null);
         for (0..n) |i| {
             try testing.expect((r.exact_mask >> @intCast(i)) & 1 == 1);
             try testing.expect(r.top_candidates[i].exact);
@@ -192,30 +191,62 @@ test "§3-3 K = 1 で最善手が root 真値なら着手・スコアは K = 0 �
     try testing.expect(checked > 0);
 }
 
-test "§3-4 打ち切り: 主探索直後にノード上限が尽きると着手・スコアは exact_top_k = 0 と同一で exact_mask は root 分のみ" {
+test "§3-4 予算再装填: 主探索で max_nodes を使い切っても refine は独自予算で走り K 件の exact が立つ（総 nodes ≤ 2×max_nodes + 余裕）" {
     budget_mod.deterministic_mode = true;
     defer budget_mod.deterministic_mode = false;
 
+    const budget: u32 = 60_000;
     for (KIFUS) |kifu| {
-        const r0 = run(kifu, params(0, null, MAX_NODES));
-        try testing.expect(!r0.interrupted);
-        // 主探索は同一（上限に届かない）、refine の最初の 1 ノードで上限に当たる
-        const r = run(kifu, params(K, null, r0.stats.nodes + 1));
+        const r0 = run(kifu, params(0, null, budget));
+        try testing.expect(r0.interrupted); // 主探索がノード上限で打ち切られる局面
+        try testing.expectEqual(@as(u8, 0), r0.exact_mask);
+
+        const r = run(kifu, params(K, null, budget));
         errdefer printCandidates(kifu, r);
-        try testing.expect(samePos(r0.position, r.position));
-        try testing.expectEqual(r0.score, r.score);
+        try testing.expect(r.interrupted);
         try testing.expectEqual(r0.completed_depth, r.completed_depth);
-        try testing.expectEqual(r0.stats.nodes + 1, r.stats.nodes);
-        // 立っているビットは root 由来（再探索は完了していない）。K=0 の上位 5 件にある手なら値も一致
-        for (0..r.top_candidate_count) |i| {
-            const c = r.top_candidates[i];
-            const bit = (r.exact_mask >> @intCast(i)) & 1 == 1;
-            try testing.expectEqual(c.exact, bit);
-            if (indexOf(r0, c.move)) |j| {
-                try testing.expectEqual(r0.top_candidates[j].score, c.score);
-                try testing.expectEqual(r0.top_candidates[j].exact, c.exact);
-            }
+        const n: u8 = @min(K, r.top_candidate_count);
+        for (0..n) |i| {
+            try testing.expect((r.exact_mask >> @intCast(i)) & 1 == 1);
+            if (i > 0) try testing.expect(r.top_candidates[i - 1].score >= r.top_candidates[i].score);
         }
+        try testing.expect(indexOf(r, r.position) != null);
+        // 主探索の上限超過分（プローブの一括加算）と refine の同額予算
+        try testing.expect(r.stats.nodes <= 2 * budget + 20_000);
+        try testing.expect(r.stats.nodes > r0.stats.nodes);
+        std.debug.print("  refill(nodes): {s} nodes {d} -> {d} depth={d}\n", .{ kifu, r0.stats.nodes, r.stats.nodes, r.completed_depth });
+    }
+}
+
+test "§3-4 予算再装填: 時間モードで主探索が時間切れ（interrupted）でも refine が走り exact が立つ" {
+    try testing.expect(!budget_mod.deterministic_mode);
+    defer {
+        deadline.test_now_ms = 0;
+        deadline.test_clock_step = 0;
+    }
+    // 擬似時計 step=1（時計読みごとに 1ms）。主探索は time_limit 300ms で時間切れになる。
+    for (KIFUS) |kifu| {
+        var p = golden.hardParams(300, 0);
+        p.absolute_time_limit = 1_000_000;
+        p.aspiration_mode = 1;
+        p.exact_top_k = K;
+
+        var cells = [_]Cell{.empty} ** CELL_COUNT;
+        const n_stones = golden.parseKifu(kifu, &cells);
+        tt_mod.global_tt.clear();
+        deadline.test_now_ms = 1;
+        deadline.test_clock_step = 1;
+        const r = search.findBestMoveIterative(&cells, colorOf(n_stones), p);
+        errdefer printCandidates(kifu, r);
+        try testing.expect(r.interrupted);
+        try testing.expectEqual(@as(u32, 0), r.stats.absolute_deadline_hit);
+        const n: u8 = @min(K, r.top_candidate_count);
+        try testing.expect(n >= 2);
+        for (0..n) |i| {
+            try testing.expect((r.exact_mask >> @intCast(i)) & 1 == 1);
+        }
+        try testing.expect(indexOf(r, r.position) != null);
+        std.debug.print("  refill(time): {s} nodes={d} depth={d}\n", .{ kifu, r.stats.nodes, r.completed_depth });
     }
 }
 

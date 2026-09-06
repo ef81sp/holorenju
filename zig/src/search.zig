@@ -709,6 +709,7 @@ pub fn findBestMoveIterative(
     }
 
     // Time Pressure Fallback
+    var fallback_fired = false;
     if (interrupted and depth_history_len > 0) {
         var i: u8 = depth_history_len;
         while (i > 0) {
@@ -719,19 +720,28 @@ pub fn findBestMoveIterative(
             {
                 best_result.position = entry.position;
                 best_result.score = entry.score;
+                fallback_fired = true;
                 break;
             }
         }
     }
 
-    // root 上位 K 手の真値化（設計メモ review-multipv-2026-09-06 §2.2）。
-    // 打ち切り済みなら走らない（Time Pressure Fallback で差し替えた position を上書きしない）。
+    // root 上位 K 手の真値化（設計メモ review-multipv-2026-09-06 §2.2 v3）。
+    // 主探索が時間/ノードで打ち切られていても走る（振り返りでは主探索は時間上限に張り付くのが通常）。
+    // Time Pressure Fallback で position を過去深さの値に差し替えた手は候補と最善がずれるのでスキップ。
+    // 絶対デッドライン（安全弁）は再装填しない。
     // `exact_top_k == 0` を先頭に置き、従来経路では時計を読まない（ゴールデン B は時計読み回数に敏感）。
-    const refined = params.exact_top_k > 0 and
-        !interrupted and
-        !ctx.isAborted() and
-        (no_time_limit or getTimestampMs() < loop_deadline);
+    const refined = params.exact_top_k > 0 and !fallback_fired and !ctx.absolute_deadline_exceeded;
     if (refined) {
+        // 予算の再装填: 主探索と同額の時間 / ノードをもう一度与える（Phase 1 は構造上 最大 2 倍）
+        if (!no_time_limit) {
+            ctx.deadline = @min(getTimestampMs() + dynamic_time_limit, absolute_deadline);
+            ctx.timeout_flag = false;
+        }
+        if (ctx.max_nodes > 0) {
+            ctx.max_nodes = ctx.stats.nodes + params.max_nodes;
+            ctx.node_count_exceeded = false;
+        }
         refineTopCandidates(&best_result, cells, color, completed_depth, params.exact_top_k, params.forced_move, &ctx);
     }
 
