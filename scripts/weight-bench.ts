@@ -24,6 +24,7 @@ import type { SPRTConfig, WeightBenchResult } from "./types/ab.ts";
 
 import {
   effectiveRandomFactor,
+  parseFixedNodesFlag,
   resolveFixedNodesParams,
   resolveFixedNodesPerSide,
   resolveMoveTimeoutMs,
@@ -130,12 +131,18 @@ function parseArgs(): CliOptions {
         options.moveTimeoutMs = v;
         options.moveTimeoutMsExplicit = true;
       }
-    } else if (arg.startsWith("--fixed-nodes=")) {
-      options.fixedNodes = parsePositiveIntOrExit(arg, "--fixed-nodes");
-    } else if (arg.startsWith("--fixed-nodes-a=")) {
-      options.fixedNodesA = parsePositiveIntOrExit(arg, "--fixed-nodes-a");
-    } else if (arg.startsWith("--fixed-nodes-b=")) {
-      options.fixedNodesB = parsePositiveIntOrExit(arg, "--fixed-nodes-b");
+    } else if (arg === "--fixed-nodes" || arg.startsWith("--fixed-nodes=")) {
+      options.fixedNodes = parseFixedNodesOrExit(arg, "--fixed-nodes");
+    } else if (
+      arg === "--fixed-nodes-a" ||
+      arg.startsWith("--fixed-nodes-a=")
+    ) {
+      options.fixedNodesA = parseFixedNodesOrExit(arg, "--fixed-nodes-a");
+    } else if (
+      arg === "--fixed-nodes-b" ||
+      arg.startsWith("--fixed-nodes-b=")
+    ) {
+      options.fixedNodesB = parseFixedNodesOrExit(arg, "--fixed-nodes-b");
     } else if (arg === "--sprt") {
       options.useSPRT = true;
     } else if (arg.startsWith("--elo0=")) {
@@ -175,15 +182,14 @@ function parseArgs(): CliOptions {
   return options;
 }
 
-/** `--flag=<n>` の正の整数をパースする。不正なら exit(1)。 */
-function parsePositiveIntOrExit(arg: string, flagName: string): number {
-  const raw = arg.slice(flagName.length + 1);
-  const value = parseInt(raw, 10);
-  if (!Number.isFinite(value) || value <= 0) {
-    console.error(`Error: ${flagName} は正の整数で指定 (got: ${raw})`);
+/** `--fixed-nodes[=N]` 系フラグを解釈する。値なしは既定 FIXED_NODES_DEFAULT。不正なら exit(1)。 */
+function parseFixedNodesOrExit(arg: string, flagName: string): number {
+  const parsed = parseFixedNodesFlag(arg, flagName);
+  if (!parsed.ok) {
+    console.error(`Error: ${parsed.error}`);
     process.exit(1);
   }
-  return value;
+  return parsed.value;
 }
 
 interface FixedNodesResolved {
@@ -252,12 +258,13 @@ Options:
   --randomFactor=<n>    探索ゆらぎ 0〜1 (default: なし)
   --jobs=<n>            同時対局ペア数 (default: 1)
   --moveTimeoutMs=<n>   1手のタイムアウト (default: 120000、--fixed-nodes 時は 600000)
-  --fixed-nodes=<n>     両側を固定ノード（決定的探索）モードで走らせる
+  --fixed-nodes[=<n>]   両側を固定ノード（決定的探索）モードで走らせる
                         （timeLimit=0 / maxNodes=N / setDeterministicMode(1)）。
+                        値なしなら N=1,200,000（時間モード hard と Elo 同等）。
                         --randomFactor（seed 無し）と --sets>1 は併用不可。
                         abort が 1 件でも出ると valid:false・非0終了
-  --fixed-nodes-a=<n>   baseline(A) 側のみ固定ノード（較正用）
-  --fixed-nodes-b=<n>   variant(B) 側のみ固定ノード
+  --fixed-nodes-a[=<n>] baseline(A) 側のみ固定ノード（較正用）
+  --fixed-nodes-b[=<n>] variant(B) 側のみ固定ノード（値なしの既定は同上）
   --sprt / --elo0 / --elo1
   --verbose, -v
   --help, -h

@@ -102,6 +102,46 @@ export function normalizeMaxGames(value: number): MaxGamesNormalization {
 // 固定ノード（決定的探索）モード — bench-fixed-nodes-2026-09-06.md §2.5
 // ============================================================================
 
+/**
+ * `--fixed-nodes` を値なしで指定したときの既定 N（SSoT）。
+ * bench-fixed-nodes-2026-09-06.md §7.13: プローブ上限 6k のもとで、時間モード hard
+ * （jobs=5）との混合対局 416 局が Elo +5.8 [−15.3, +27.0]（有意差なし）になる N。
+ * 2.5M は時間モードより +53 強く、0.6M は −26 弱い（§7.11〜7.12）。
+ */
+export const FIXED_NODES_DEFAULT = 1_200_000;
+
+export type FixedNodesFlagParse =
+  | { ok: true; value: number }
+  | { ok: false; error: string };
+
+/**
+ * `--fixed-nodes[=N]` 系フラグ 1 個の値を解釈する（`--fixed-nodes-a/-b` も同じ規則）。
+ * - `flagName` そのもの（値なし） → `FIXED_NODES_DEFAULT`
+ * - `flagName=N`（正の整数） → N
+ * - それ以外 → error
+ */
+export function parseFixedNodesFlag(
+  arg: string,
+  flagName: string,
+): FixedNodesFlagParse {
+  if (arg === flagName) {
+    return { ok: true, value: FIXED_NODES_DEFAULT };
+  }
+  const prefix = `${flagName}=`;
+  if (!arg.startsWith(prefix)) {
+    return { ok: false, error: `${flagName} の形式が不正です (got: ${arg})` };
+  }
+  const raw = arg.slice(prefix.length);
+  const value = parseInt(raw, 10);
+  if (!Number.isFinite(value) || value <= 0) {
+    return {
+      ok: false,
+      error: `${flagName} は正の整数で指定（値なしなら既定 ${FIXED_NODES_DEFAULT}） (got: ${raw})`,
+    };
+  }
+  return { ok: true, value };
+}
+
 /** 固定ノードモードで bridge worker に渡す探索パラメータ。 */
 export interface FixedNodesParams {
   /** 0 = 時間を見ない（決定的モードでは wasm 側で time_limit=0 扱い） */

@@ -42,7 +42,30 @@ allowed-tools:
 | `--opening-offset=<n>` | スイートの n 番目から使う（再現性確認用）                                          | `0`          |
 | `--max-games=<n>`      | 先頭 N 局に切り詰め（ペア境界）                                                    | `0`（無効）  |
 | `--jobs=<n>`           | 同時対局数（8 コアなら 5）                                                         | `1`          |
+| `--fixed-nodes[=<n>]`  | 固定ノード（決定的探索）モード。値なしは N=1,200,000。`-a`/`-b` で片側のみ         | なし（時間） |
 | `--verbose`, `-v`      | 詳細ログ出力                                                                       | false        |
+
+## 固定ノード（決定的）モード
+
+`--fixed-nodes` で両側を固定ノード探索（timeLimit=0 / maxNodes=N / 決定的モード）にする。設計と較正は `docs/plans/bench-fixed-nodes-2026-09-06.md`（結論は §7.13）。
+
+- **使い方**: `--fixed-nodes`（既定 N=1,200,000。時間モード hard・jobs=5 と Elo 同等に較正済み）/ `--fixed-nodes=N` / 片側だけなら `--fixed-nodes-a[=N]` または `--fixed-nodes-b[=N]`（時間 vs 固定の混合。較正用）。`--max-nodes-a/b`・`--book-a/b` とは併用不可。randomFactor>0 は `--seed` 必須、`--sets>1` は randomFactor 必須。
+- **決定性**: 同一入力なら棋譜・1 手ごとの nodes・score が完全一致し、マシン負荷に依存しない。そのため `--jobs` を増やしてよい（416 局 jobs=7 で約 1 時間、1,200 局なら約 3 時間）。
+- **測れるもの**: eval 品質、枝刈り・ordering の「ノードあたりの質」。eval 品質の PR は固定ノードで判定し、リリース前に時間モードで 1 回確認する。
+- **測れないもの（時間モード必須）**: ノード単価を変える変更（eval 機能追加・incremental eval・ordering コスト。固定ノードでは過大評価される）、時間管理（dynamic time / deadline / Time Pressure Fallback）、VCF/VCT の速度改善、`stats.nodes` 計上点や `TimeLimiter.bump` 位置の変更。ノード計上規則が変わる PR（#89 / #136 / 固定ノード導入 PR）を跨ぐ比較も時間モードで行う。NPS は同一モード同士でのみ比較する。
+- **`valid:false`**: 結果 JSON の `valid` は固定ノードモードのみ付く。abort（1 手タイムアウト等）が 1 件でもあれば `false` になり非 0 終了する。決定性が崩れているので結果を採用しない（1 手の既定タイムアウトは 600,000 ms）。
+- **決定性の確認**: 同じコマンドを 2 回走らせ `pnpm bench:reanalyze --compare a.json b.json` で完全一致を見る。
+- **時間モードとの着手比較**: `pnpm compare:modes <混合対局のjson> --limit=20`（`--fixed-nodes-b` で走らせた結果から、時間側と固定側の着手が分かれた局面を列挙。`--verify` で参照評価も出す）。
+
+```
+# eval 品質の PR 判定（既定 1.2M、416 局、約 1 時間）
+pnpm commit:bench --commitA=development --commitB=HEAD --fixed-nodes --jobs=7 \
+  --openings=scripts/data/opening-suite-v1.json --max-games=416
+
+# 時間 vs 固定の較正（A=時間モード、B=固定 N）
+pnpm commit:bench --commitA=HEAD --commitB=HEAD --fixed-nodes-b=1200000 --jobs=5 \
+  --openings=scripts/data/opening-suite-v1.json --max-games=416
+```
 
 ## 出力
 
