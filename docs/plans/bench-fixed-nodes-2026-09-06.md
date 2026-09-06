@@ -134,3 +134,25 @@ SOLID レビュー（実装後）の提案で、動作に影響しないため�
 1. **commit-bench.ts / weight-bench.ts の重複**: `parsePositiveIntOrExit` / `resolveFixedNodesOrExit` / `searchFeaturesA/B` の telemetry 読み / `valid` 算出 / abort 一覧レポートが両ファイルにほぼ同文（各 ~80 行）。`fixedNodesCli.ts` 等に `resolveFixedNodesOrExit` / `readPairSearchFeatures` / `reportInvalidRun` として集約する。
 2. **`policy.deterministic` 分岐の散在**: `search.zig` / `minimax.zig` で「決定的なら時間 0」を各所で書いている。`BudgetPolicy` に `*_time` を持たせれば `deterministic` bool は「stats.nodes に計上するか」と `no_time_limit` 導出だけに減る。
 3. **小さな DRY / 責務**: `gate0-bench.ts` と worker に手書きされた `typeof === "function"` 判定を `deterministicSupport.readSearchFeatures` / `wasmSearchStats` に寄せる。`BridgeCustomParams.deterministic` が `DifficultyParams` に混入する（無害）ので worker で分離する。`deadline.exceededAt` が `g_hit` を立てる副作用付き述語である旨をコメントに明示する。
+
+### 7.1 手順 1: 時間モードの観測（2026-09-06、7d44b9c 自己対局 100 局、hard、jobs=5、27 分）
+
+JSON: `bench-results/commit-bench-2026-09-06T09-35-21-178Z.json`。2,130 手（事前探索即決 807 手 = 38%、探索手 1,323 手）。集計は scratchpad/calib-dist.mjs（手ごとの `stats.preSearchNodes` / `probeNodes` から）。
+
+| 探索手のみ（depth>0）           | p50   | p75    | p90    | p99    | mean  |
+| ------------------------------- | ----- | ------ | ------ | ------ | ----- |
+| `nodes`（主探索、プローブ除く） | 62k   | 132k   | 312k   | 916k   | 122k  |
+| `preSearchNodes`                | 262   | 28k    | 59k    | 86k    | 16k   |
+| `probeNodes`                    | 556k  | 1.43M  | 1.68M  | 2.35M  | 788k  |
+| `nodes + probeNodes`            | 864k  | 1.56M  | 1.80M  | 2.46M  | 910k  |
+| 思考時間 ms                     | 6,228 | 10,001 | 10,003 | 10,005 | 5,524 |
+
+即決手（depth 0）: `preSearchNodes` p50 1 / p90 8.8k / p99 64k / max 82k。深さ分布 {0: 807, 4: 55, 5: 323, 6: 253, 7: 692}。avgDepth 3.85（depth 0 込み）。
+
+読み取り:
+
+- **脅威プローブが仕事の 9 割**: 探索手では `probeNodes` の中央値が主探索 `nodes` の 9 倍。決定的モードで N を「主探索のノード数」の感覚（p50 62k）で決めるとプローブ込みでは桁が足りない。N は `nodes + probeNodes` の分布で決める（p50 0.86M、p90 1.8M）。
+- **事前探索の予算**: 親 40k（`PRE_SEARCH_NODE_BUDGET_DETERMINISTIC`）は探索手の p80〜p85 相当。p90 は 59k、p99 86k、最大 194k。即決手の p99 は 64k で 40k を超える（即決できるはずの手が決定的モードでは即決できずに主探索に落ちる割合が数%出る）。→ 手順 2 で **親 80k**（p99 相当）に引き上げる案。VCT 20k の内訳は本手順では分からない（pre_search_nodes は合計のみ）。
+- **時間張り付き**: 探索手の 25% 以上が 10 s の絶対デッドラインに当たっている（p75 = 10,001 ms）。以前の観測 18% より多い（jobs=5 の負荷）。時間モードのばらつき源として大きい。
+
+手順 3 の N スイープ候補: **0.5M / 0.9M / 1.8M**（p25 付近 / p50 / p90）。

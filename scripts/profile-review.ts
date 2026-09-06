@@ -252,7 +252,7 @@ function profileMove(
     const status = c.opponentForcedWin
       ? `forced_loss:${c.opponentForcedWin}`
       : "safe";
-    candDetails.push(`${pos}[${status}]`);
+    candDetails.push(`${pos}[${status}:${c.searchScore}]`);
   }
   subPhases.push({
     name: "候補手検証",
