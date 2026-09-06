@@ -36,7 +36,7 @@ pub const VCT_TIME_LIMIT: u32 = 300;
 ///
 /// 設計メモ docs/plans/bench-fixed-nodes-2026-09-06.md §2.1。時間定数の隣に置く
 /// （較正で片方だけ直す事故を防ぐ）。**未較正**の初期値。較正は §4 手順 1。
-pub const VCT_PRE_NODES_DETERMINISTIC: u32 = 20_000;
+pub const VCT_PRE_NODES_DETERMINISTIC: u32 = 40_000;
 
 /// ct=three 時のVCF深度上限
 const CT_THREE_VCF_MAX_DEPTH: u8 = 6;

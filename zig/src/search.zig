@@ -106,7 +106,7 @@ pub const PRE_SEARCH_TIME_LIMIT: u32 = vcf_mod.VCF_TIME_LIMIT * 2 + vct.VCT_TIME
 /// 時間モードの 600ms（`PRE_SEARCH_TIME_LIMIT`）に対応する親予算。各段は
 /// 自前のノード予算（`VCF_PRE_NODES_DETERMINISTIC` など）で回り、段の境目と
 /// ミセ VCF の候補ループ先頭でこの親予算を見る。**未較正**の初期値（較正は §4 手順 1）。
-pub const PRE_SEARCH_NODE_BUDGET_DETERMINISTIC: u32 = 40_000;
+pub const PRE_SEARCH_NODE_BUDGET_DETERMINISTIC: u32 = 80_000;
 
 /// 必須手の事前チェック
 ///
