@@ -322,7 +322,7 @@ const PROBE_VCT_TIME_LIMIT: u32 = 50;
 ///
 /// 設計メモ docs/plans/bench-fixed-nodes-2026-09-06.md §2.1/§2.3。時間定数の隣に置く。
 /// **未較正**の初期値（較正は §4 手順 1）。VCF は両モードとも既存の 100/200 ノード。
-pub const PROBE_VCT_NODES_DETERMINISTIC: u32 = 20_000;
+pub const PROBE_VCT_NODES_DETERMINISTIC: u32 = 6000;
 
 /// 深度適応型バジェット（TS版 threatProbe.ts の getThreatBudget に対応）
 const ThreatBudget = struct {
