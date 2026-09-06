@@ -57,6 +57,10 @@ pub const TimeLimiter = struct {
     /// これを立て、`exceeded()` が最優先で見る。
     exhausted: bool = false,
 
+    /// `exceeded()` が一度でも true を返したか（予算到達の観測用。統計 `probe_cap_hits` など）。
+    /// 時計を追加で読まずに「上限で打ち切られたか」を判定できる。
+    tripped: bool = false,
+
     /// 探索ノードを 1 つ計上する
     pub fn bump(self: *TimeLimiter) void {
         self.nodes +|= 1;
@@ -67,13 +71,26 @@ pub const TimeLimiter = struct {
         self.nodes +|= consumed;
     }
 
+    /// 子 limiter の消費を取り込む。子が own 予算を持たず親の残りをそのまま継承していた
+    /// （`child(0, 0)`）なら、子の上限到達（`tripped`）は親の上限到達でもあるので伝える。
+    pub fn chargeChild(self: *TimeLimiter, child_limiter: *const TimeLimiter, inherited: bool) void {
+        self.charge(child_limiter.nodes);
+        if (inherited and child_limiter.tripped) self.tripped = true;
+    }
+
     /// 予算（ノード数 or 時間）を超えたか
     ///
     /// issue #147: 自前の予算に加えて **グローバル絶対デッドライン**
     /// （`deadline.g_absolute_deadline_ms`）も見る。`time_limit == 0`（壁時計無制限）の
     /// limiter でも打ち切られるよう、短絡より **前** にデッドラインを評価する。
     /// 時刻取得は 1 回だけで、従来より頻度が増えないようにしてある。
-    pub fn exceeded(self: *const TimeLimiter) bool {
+    pub fn exceeded(self: *TimeLimiter) bool {
+        const result = self.exceededInner();
+        if (result) self.tripped = true;
+        return result;
+    }
+
+    fn exceededInner(self: *const TimeLimiter) bool {
         if (self.exhausted) return true;
         if (self.max_nodes > 0 and self.nodes >= self.max_nodes) {
             return true;
@@ -522,7 +539,7 @@ pub fn findVCFSequenceWithParent(
 ) VCFSequenceResult {
     var limiter = parent.child(own_time_limit, own_max_nodes);
     const result = findVCFSequenceWithLimiter(cells, color, max_depth, &limiter);
-    parent.charge(limiter.nodes);
+    parent.chargeChild(&limiter, own_time_limit == 0 and own_max_nodes == 0);
     return result;
 }
 
@@ -1121,6 +1138,32 @@ test "TimeLimiter.child: ノード予算は独自値、無指定なら親の残�
 
     const unlimited = TimeLimiter{ .start_time = 0, .time_limit = 0, .nodes = 0, .max_nodes = 0 };
     try testing.expectEqual(@as(u32, 0), unlimited.child(0, 0).max_nodes);
+}
+
+test "TimeLimiter.tripped: exceeded() が true を返すと立ち、継承した子からは chargeChild で伝わる" {
+    var l = TimeLimiter{ .start_time = 0, .time_limit = 0, .nodes = 0, .max_nodes = 3 };
+    try testing.expect(!l.exceeded());
+    try testing.expect(!l.tripped);
+    l.charge(3);
+    try testing.expect(l.exceeded());
+    try testing.expect(l.tripped);
+
+    // 親の残りを継承した子（child(0,0)）の到達は親へ伝わる
+    var parent = TimeLimiter{ .start_time = 0, .time_limit = 0, .nodes = 0, .max_nodes = 10 };
+    var c = parent.child(0, 0);
+    c.charge(10);
+    try testing.expect(c.exceeded());
+    parent.chargeChild(&c, true);
+    try testing.expect(parent.tripped);
+
+    // own 予算を持つ子の到達は親の到達ではない
+    var parent2 = TimeLimiter{ .start_time = 0, .time_limit = 0, .nodes = 0, .max_nodes = 1000 };
+    var own = parent2.child(0, 2);
+    own.charge(2);
+    try testing.expect(own.exceeded());
+    parent2.chargeChild(&own, false);
+    try testing.expect(!parent2.tripped);
+    try testing.expectEqual(@as(u32, 2), parent2.nodes);
 }
 
 test "TimeLimiter.untilDeadline: デッドラインまでの残りを親として表現する（#147 B）" {

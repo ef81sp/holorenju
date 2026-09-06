@@ -1381,7 +1381,7 @@ pub fn findVCTSequenceWithParent(
     if (collect_branches) g_tree_arena.reset();
 
     const result = findVCTSequenceWithLimiter(cells, color, max_depth, &limiter, collect_branches, mode);
-    parent.charge(limiter.nodes);
+    parent.chargeChild(&limiter, own_time_limit == 0 and own_max_nodes == 0);
     return result;
 }
 

@@ -275,7 +275,9 @@ export fn findBestMove(color: u8, max_depth: u8, time_limit_ms: u32, max_nodes: 
 /// | 48     | pre_search_nodes      | (bit1)
 /// | 52     | probe_nodes           | (bit1)
 /// | 56     | absolute_deadline_hit | (bit1)
-pub const STATS_FIELD_COUNT: usize = 15;
+/// | 60     | probe_calls           | (getStatsBufferLength() >= 68)
+/// | 64     | probe_cap_hits        | (getStatsBufferLength() >= 68)
+pub const STATS_FIELD_COUNT: usize = 17;
 var stats_buffer: [STATS_FIELD_COUNT * 4]u8 = .{0} ** (STATS_FIELD_COUNT * 4);
 
 export fn getStatsBuffer() [*]u8 {
@@ -304,6 +306,8 @@ fn writeStats(stats: minimax.SearchStats) void {
         stats.pre_search_nodes,
         stats.probe_nodes,
         stats.absolute_deadline_hit,
+        stats.probe_calls,
+        stats.probe_cap_hits,
     };
     for (fields, 0..) |val, i| {
         const bytes: [4]u8 = @bitCast(val);

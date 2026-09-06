@@ -4,7 +4,9 @@ import {
   SEARCH_FEATURE_DETERMINISTIC,
   SEARCH_FEATURE_EXTENDED_STATS,
   STATS_BUFFER_BASE_BYTES,
+  STATS_BUFFER_DEADLINE_HIT_BYTES,
   STATS_BUFFER_EXTENDED_BYTES,
+  STATS_BUFFER_PROBE_STATS_BYTES,
   hasExtendedStats,
   readWasmSearchStats,
 } from "./wasmSearchStats.ts";
@@ -67,6 +69,31 @@ describe("readWasmSearchStats", () => {
     );
   });
 
+  it("bufferLength >= 68 なら probe_calls / probe_cap_hits も読む（60 では読まない）", () => {
+    const view = makeStatsBuffer([...base12, 1, 2, 0, 321, 45]);
+    const at60 = readWasmSearchStats(
+      view,
+      0,
+      SEARCH_FEATURE_EXTENDED_STATS,
+      60,
+    );
+    expect(at60).not.toHaveProperty("probeCalls");
+    expect(at60).not.toHaveProperty("probeCapHits");
+    const at68 = readWasmSearchStats(
+      view,
+      0,
+      SEARCH_FEATURE_EXTENDED_STATS,
+      68,
+    );
+    expect(at68.probeCalls).toBe(321);
+    expect(at68.probeCapHits).toBe(45);
+    expect(at68.absoluteDeadlineHit).toBe(false);
+    // bit1 無しなら bufferLength があっても拡張部は読まない
+    expect(readWasmSearchStats(view, 0, 0, 68)).not.toHaveProperty(
+      "probeCalls",
+    );
+  });
+
   it("ptr オフセットを尊重する", () => {
     const view = makeStatsBuffer([0, 0, ...base12, 5, 6]);
     const stats = readWasmSearchStats(
@@ -80,9 +107,11 @@ describe("readWasmSearchStats", () => {
     expect(stats.probeNodes).toBe(6);
   });
 
-  it("バイト長定数はレイアウトと一致（12×4=48、+2×4=56）", () => {
+  it("バイト長定数はレイアウトと一致（12×4=48、+2×4=56、+1×4=60、+2×4=68）", () => {
     expect(STATS_BUFFER_BASE_BYTES).toBe(48);
     expect(STATS_BUFFER_EXTENDED_BYTES).toBe(56);
+    expect(STATS_BUFFER_DEADLINE_HIT_BYTES).toBe(60);
+    expect(STATS_BUFFER_PROBE_STATS_BYTES).toBe(68);
   });
 });
 
