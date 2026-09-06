@@ -393,35 +393,29 @@ fn threatProbe(
 
     // プローブの親＝メイン探索の残り時間。プローブ独自の 20ms / 50ms は
     // 親の残りとの min を取る（`TimeLimiter.child` が SSoT）。
-    // 消費ノードは `…WithParent` が親へ charge するので `parent.nodes` が合計になる。
+    // 子 limiter は段ごとに 1 回だけ作り（時計読みを増やさない）、そのまま探索の限界として
+    // 渡して消費を親へ charge する。`parent.nodes` が VCF + VCT の合計になる。
     var parent = vcf_mod.TimeLimiter.untilDeadline(if (no_time_limit) 0 else search_deadline);
 
     // VCF探索（軽量・常にチェック）。VCFは受け一意で偽陽性が出にくいため常に lenient。
-    const vcf_budget = parent.child(budget.vcf_time, budget.vcf_nodes);
+    var vcf_budget = parent.child(budget.vcf_time, budget.vcf_nodes);
     if (vcf_budget.exceeded()) return .{ .move = null, .nodes = parent.nodes };
-    const vcf_move = vcf_mod.findVCFMoveWithParent(
-        cells,
-        color,
-        budget.vcf_depth,
-        budget.vcf_time,
-        budget.vcf_nodes,
-        &parent,
-    );
+    const vcf_move = vcf_mod.findVCFMoveWithLimiter(cells, color, budget.vcf_depth, &vcf_budget);
+    parent.charge(vcf_budget.nodes);
     if (vcf_move) |m| return .{ .move = m, .nodes = parent.nodes };
 
     // VCT探索（予算が許す場合のみ）
     if (budget.vct_depth > 0) {
-        const vct_budget = parent.child(budget.vct_time, budget.vct_nodes);
+        var vct_budget = parent.child(budget.vct_time, budget.vct_nodes);
         if (vct_budget.exceeded()) return .{ .move = null, .nodes = parent.nodes };
-        const vct_move = vct_mod.findVCTMoveWithParent(
+        const vct_move = vct_mod.findVCTMoveWithLimiter(
             cells,
             color,
             budget.vct_depth,
-            budget.vct_time,
-            budget.vct_nodes,
-            &parent,
+            &vct_budget,
             if (defensive) .strict else .lenient,
         );
+        parent.charge(vct_budget.nodes);
         if (vct_move) |m| return .{ .move = m, .nodes = parent.nodes };
     }
 

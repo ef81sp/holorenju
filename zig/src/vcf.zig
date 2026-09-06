@@ -360,7 +360,10 @@ pub fn findVCFMoveWithParent(
 }
 
 /// `findVCFMoveWithBudget` の本体（limiter を受け取る版）
-fn findVCFMoveWithLimiter(cells: []Cell, color: Cell, max_depth: u8, limiter: *TimeLimiter) ?Position {
+///
+/// 呼び出し側が limiter を用意して消費ノード（`limiter.nodes`）を観測したいとき
+/// （脅威プローブ）に使う。トップレベルエントリなので bitboard を同期する。
+pub fn findVCFMoveWithLimiter(cells: []Cell, color: Cell, max_depth: u8, limiter: *TimeLimiter) ?Position {
     // トップレベルエントリ: bitboard を cells と同期
     bitboard.initFromCells(cells);
     ll.init();

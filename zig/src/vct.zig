@@ -1337,6 +1337,26 @@ pub fn findVCTSequence(
     return findVCTSequenceWithLimiter(cells, color, max_depth, &limiter, collect_branches, mode);
 }
 
+/// VCT 勝ち手を探す（limiter を受け取る版・トップレベルエントリ）
+///
+/// 呼び出し側が limiter を用意して消費ノード（`limiter.nodes`）を観測したいとき
+/// （脅威プローブ）に使う。bitboard を同期し、詰み木は構築しない。
+pub fn findVCTMoveWithLimiter(
+    cells: []Cell,
+    color: Cell,
+    max_depth: u8,
+    limiter: *TimeLimiter,
+    mode: ResilienceMode,
+) ?Position {
+    bitboard.initFromCells(cells);
+    ll.init();
+    const seq_result = findVCTSequenceWithLimiter(cells, color, max_depth, limiter, false, mode);
+    if (seq_result.found and seq_result.len > 0) {
+        return seq_result.sequence[0];
+    }
+    return null;
+}
+
 /// `findVCTSequence` の親 limiter 版（トップレベルエントリ）
 ///
 /// `parent.child(own_time_limit, own_max_nodes)` で子 limiter を作り、探索後に消費ノードを
