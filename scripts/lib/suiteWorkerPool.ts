@@ -22,6 +22,8 @@ export function runWorkerPool<Req, Res>(
   opts: WorkerPoolOptions<Req, Res>,
 ): Promise<void> {
   let inFlight = 0;
+  /** resolve/reject 済み（terminate による exit を異常扱いしないため） */
+  let settled = false;
   return new Promise<void>((resolve, reject) => {
     const workers: Worker[] = [];
     const terminateAll = (): void => {
@@ -29,10 +31,19 @@ export function runWorkerPool<Req, Res>(
         w.terminate();
       }
     };
+    const fail = (err: Error): void => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      terminateAll();
+      reject(err);
+    };
     const dispatch = (w: Worker): void => {
       const req = opts.next();
       if (req === null) {
-        if (inFlight === 0) {
+        if (inFlight === 0 && !settled) {
+          settled = true;
           terminateAll();
           resolve();
         }
@@ -50,8 +61,12 @@ export function runWorkerPool<Req, Res>(
         dispatch(w);
       });
       w.on("error", (err) => {
-        terminateAll();
-        reject(err);
+        fail(err);
+      });
+      w.on("exit", (code) => {
+        if (code !== 0) {
+          fail(new Error(`worker が異常終了した（exit code ${code}）`));
+        }
       });
     };
     for (let i = 0; i < opts.workers; i++) {

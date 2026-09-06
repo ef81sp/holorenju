@@ -21,6 +21,7 @@ import {
   parsePlyCheckLines,
   parseRawLines,
   partitionByRaw,
+  pickOpenings,
   type PlyCheckResult,
   type PlyRecord,
   type RawEvaluation,
@@ -505,5 +506,57 @@ describe("stratifyBySign", () => {
       .filter((x) => x.rootScore < 0)
       .map((x) => x.candidate.key);
     expect(negs).toEqual(["n0", "n1"]);
+  });
+});
+
+describe("pickOpenings（v1 等価性）", () => {
+  /** 固定 raw フィクスチャ: 3 親 × 4 件、score は正負混在 */
+  const raw = new Map<string, RawEvaluation>();
+  const eligible: SuiteCandidate[] = [];
+  for (const parent of ["A", "B", "C"]) {
+    for (let i = 0; i < 4; i++) {
+      const key = `${parent}${i}`;
+      eligible.push({ key, parent, root: i % 2 === 0 ? "花月" : null });
+      raw.set(key, {
+        score: (i % 2 === 0 ? 1 : -1) * (50 + i * 100),
+        bestMove: "H9",
+        reject: null,
+        elapsedMs: 1,
+      });
+    }
+  }
+  const base = { seed: 7, parentCap: 3, target: 6 };
+
+  it("negativeRatioMin=0 は stratifyBySign を通さず、旧 selectOpenings と同じ openings", () => {
+    const { picked, sign } = pickOpenings(eligible, raw, {
+      ...base,
+      negativeRatioMin: 0,
+    });
+    expect(sign).toBeNull();
+    const legacy = selectOpenings(
+      buildCandidateOrder(eligible, { seed: 7, parentCap: 3 }),
+      raw,
+      { scoreAbsMax: Number.POSITIVE_INFINITY, target: 6 },
+    ).accepted.map((e) => ({ candidate: e.candidate, rootScore: e.score }));
+    expect(picked).toEqual(legacy);
+    expect(picked.map((p) => p.candidate.key)).toMatchInlineSnapshot(`
+      [
+        "B3",
+        "C2",
+        "A3",
+        "A2",
+        "C1",
+        "B0",
+      ]
+    `);
+  });
+
+  it("negativeRatioMin>0 は符号層化を通り、負側の件数を返す", () => {
+    const { picked, sign } = pickOpenings(eligible, raw, {
+      ...base,
+      negativeRatioMin: 0.5,
+    });
+    expect(picked).toHaveLength(6);
+    expect(sign).toEqual({ negative: 3, nonNegative: 3 });
   });
 });

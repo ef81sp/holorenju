@@ -32,6 +32,8 @@ import { formatMove } from "@/logic/gameRecordParser";
 import { checkWin } from "@/logic/renjuRules";
 import { DIFFICULTY_PARAMS } from "@/types/cpu";
 
+import type { OpeningSuitePlyCheckFilter } from "./types/openingSuite.ts";
+
 import {
   checkForcedWinAfterMove,
   VCF_MAX_DEPTH,
@@ -48,12 +50,11 @@ import {
   type SuiteRejectReason,
 } from "./lib/openingSuite.ts";
 
-export interface PlyCheckWorkerConfig {
-  plies: number;
-  nodes: number;
-  depth: number;
-  timeLimitMs: number;
-}
+/** kind "ply" の設定。types の OpeningSuitePlyCheckFilter から導出（しきい値は親側） */
+export type PlyCheckWorkerConfig = Omit<
+  OpeningSuitePlyCheckFilter,
+  "plyScoreAbsMax"
+>;
 
 export interface SuiteWorkerData {
   scoreAbsMax: number;
@@ -61,8 +62,8 @@ export interface SuiteWorkerData {
   nodes: number;
   /** 安全弁（実態は Zig の絶対上限 10 s が先に効く） */
   timeLimitMs: number;
-  /** kind "ply" の設定。使わなければ null */
-  plyCheck: PlyCheckWorkerConfig | null;
+  /** kind "ply" の設定 */
+  plyCheck: PlyCheckWorkerConfig;
 }
 
 export interface SuiteEvalRequest {
@@ -170,7 +171,8 @@ function evaluateCandidate(
   return done(null);
 }
 
-function isOnBoard(board: BoardState, pos: Position): boolean {
+/** 盤内かつ空きマスか（エンジンが着手を返せなかった場合の番兵を弾く） */
+function isEmptyCell(board: BoardState, pos: Position): boolean {
   return board[pos.row]?.[pos.col] === null;
 }
 
@@ -198,7 +200,7 @@ function plyCheck(
       cfg.nodes,
       HARD_EVAL_FLAGS,
     );
-    if (!isOnBoard(board, r.position)) {
+    if (!isEmptyCell(board, r.position)) {
       terminal = "noMove";
       break;
     }
@@ -236,12 +238,8 @@ function handle(
   switch (req.kind) {
     case "eval":
       return evaluateCandidate(engine, data, req);
-    case "ply": {
-      if (!data.plyCheck) {
-        throw new Error("plyCheck 設定なしで kind=ply を受信");
-      }
+    case "ply":
       return plyCheck(engine, data.plyCheck, req);
-    }
     default: {
       const never: never = req;
       throw new Error(`未知のリクエスト: ${JSON.stringify(never)}`);

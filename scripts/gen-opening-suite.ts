@@ -23,9 +23,9 @@
  *   # 全件根評価（生評価の保存。しきい値は広めに取っておく）
  *   pnpm gen:opening-suite --parent-cap=100000 --target=100000 --score-max=1000 \
  *     --raw-out=bench-results/opening-suite-raw-v1.jsonl --out=/dev/null
- *   # v1 の再生成（符号層化なし）
+ *   # v1 の再生成（--suite-version=1 で符号層化なし・ply-check なしが決まる）
  *   pnpm gen:opening-suite --from-raw=bench-results/opening-suite-raw-v1.jsonl \
- *     --suite-version=1 --negative-ratio=0
+ *     --suite-version=1
  *   # v2: ply-check を掛けて件数だけ確認（--dry-run）→ 書き出し
  *   pnpm gen:opening-suite --from-raw=bench-results/opening-suite-raw-v1.jsonl \
  *     --ply-check=bench-results/opening-suite-plycheck-v2.jsonl \
@@ -39,7 +39,8 @@
  *   --nodes=<n>           根スコア探索の maxNodes（既定 100000）
  *   --depth=<n>           根スコア探索の depth（既定 7）
  *   --parent-cap=<n>      親ごとの上限件数（既定 8）
- *   --suite-version=<n>   出力の version / id 接頭辞 / 既定の出力先（既定 2）
+ *   --suite-version=<n>   出力の version / id 接頭辞 / 既定の出力先（既定 2）。既定と制約の SSoT:
+ *                         1 = 符号層化なし・ply-check 禁止、2 = ply-check 必須・negative-ratio 既定 0.4
  *   --out=<path>          出力先（既定 scripts/data/opening-suite-v<version>.json）
  *   --raw-out=<path>      根評価を JSONL に追記保存（既存分は再利用）
  *   --from-raw=<path>     根評価を読み、根評価 worker を起動せずに選抜する
@@ -48,9 +49,10 @@
  *   --ply-score-max=<n>   各 ply の |score| しきい値（既定 700）
  *   --flip-score=<n>      horizon flip の |score| 下限（既定 2000）
  *   --flips-out=<path>    flip 局面の一覧 JSONL（毎回上書き）
- *   --negative-ratio=<r>  負側（黒有利）の最小比率（既定 0.4、0 で符号層化なし）
+ *   --negative-ratio=<r>  負側（黒有利）の最小比率（v2 既定 0.4、v1 は 0 固定）
  *   --dry-run             集計だけ表示して JSON を書かない
- *   --ply-limit=<n>       ply-check 対象を先頭 n 件に絞る（スモークテスト用）
+ *   --ply-limit=<n>       ply-check 対象を先頭 n 件に絞る（スモークテスト用。--flips-out は
+ *                         -smoke 付きの別ファイルに書く）
  */
 import { execSync } from "node:child_process";
 import {
@@ -92,9 +94,9 @@ import {
   parsePlyCheckLines,
   parseRawLines,
   partitionByRaw,
+  pickOpenings,
   selectOpenings,
   selectSevenStoneWhiteKeys,
-  stratifyBySign,
   type EvaluatedCandidate,
   type PlyCheckMeta,
   type PlyCheckRecord,
@@ -106,6 +108,11 @@ import {
   type SuiteCandidate,
   type SuiteRejectReason,
 } from "./lib/openingSuite.ts";
+import {
+  parseSuiteArgs,
+  smokeSuffixedPath,
+  type SuiteCliOptions,
+} from "./lib/openingSuiteCli.ts";
 import {
   distributionLines,
   histogramLines,
@@ -125,50 +132,7 @@ const WORKER_EXEC_ARGV = [
   path.join(__dirname, "register-loader.mjs"),
 ];
 
-interface Options {
-  target: number;
-  workers: number;
-  seed: number;
-  scoreAbsMax: number;
-  nodes: number;
-  depth: number;
-  parentCap: number;
-  suiteVersion: number;
-  out: string | null;
-  rawOut: string | null;
-  fromRaw: string | null;
-  plyCheck: string | null;
-  plies: number;
-  plyScoreAbsMax: number;
-  flipScoreAbsMin: number;
-  flipsOut: string | null;
-  negativeRatioMin: number;
-  dryRun: boolean;
-  /** ply-check 対象を先頭 n 件に絞る（スモークテスト用。0 で無制限） */
-  plyLimit: number;
-}
-
-const DEFAULTS: Options = {
-  target: 600,
-  workers: 8,
-  seed: 20260904,
-  scoreAbsMax: 500,
-  nodes: 100_000,
-  depth: 7,
-  parentCap: 8,
-  suiteVersion: 2,
-  out: null,
-  rawOut: null,
-  fromRaw: null,
-  plyCheck: null,
-  plies: 4,
-  plyScoreAbsMax: 700,
-  flipScoreAbsMin: 2000,
-  flipsOut: null,
-  negativeRatioMin: 0.4,
-  dryRun: false,
-  plyLimit: 0,
-};
+type Options = SuiteCliOptions;
 
 /**
  * root スコア探索の timeLimit。forcedWinCheck と同じく「maxNodes を実質上限にする」
@@ -180,114 +144,6 @@ const DEFAULTS: Options = {
 const ROOT_TIME_LIMIT_MS = 60_000;
 /** ply-check の 1 手の timeLimit（絶対上限 10 s と同じ値にして意図を明示） */
 const PLY_TIME_LIMIT_MS = 10_000;
-
-const INT_FLAGS: Record<string, (o: Options, v: number) => void> = {
-  "--target=": (o, v) => {
-    o.target = v;
-  },
-  "--workers=": (o, v) => {
-    o.workers = Math.max(1, v);
-  },
-  "--seed=": (o, v) => {
-    o.seed = v;
-  },
-  "--score-max=": (o, v) => {
-    o.scoreAbsMax = v;
-  },
-  "--nodes=": (o, v) => {
-    o.nodes = v;
-  },
-  "--depth=": (o, v) => {
-    o.depth = v;
-  },
-  "--parent-cap=": (o, v) => {
-    o.parentCap = v;
-  },
-  "--suite-version=": (o, v) => {
-    o.suiteVersion = v;
-  },
-  "--plies=": (o, v) => {
-    o.plies = v;
-  },
-  "--ply-score-max=": (o, v) => {
-    o.plyScoreAbsMax = v;
-  },
-  "--flip-score=": (o, v) => {
-    o.flipScoreAbsMin = v;
-  },
-  "--ply-limit=": (o, v) => {
-    o.plyLimit = v;
-  },
-};
-
-const FLOAT_FLAGS: Record<string, (o: Options, v: number) => void> = {
-  "--negative-ratio=": (o, v) => {
-    o.negativeRatioMin = v;
-  },
-};
-
-const PATH_FLAGS: Record<string, (o: Options, p: string) => void> = {
-  "--out=": (o, p) => {
-    o.out = p;
-  },
-  "--raw-out=": (o, p) => {
-    o.rawOut = p;
-  },
-  "--from-raw=": (o, p) => {
-    o.fromRaw = p;
-  },
-  "--ply-check=": (o, p) => {
-    o.plyCheck = p;
-  },
-  "--flips-out=": (o, p) => {
-    o.flipsOut = p;
-  },
-};
-
-const BOOL_FLAGS: Record<string, (o: Options) => void> = {
-  "--dry-run": (o) => {
-    o.dryRun = true;
-  },
-};
-
-function parseArgs(argv: string[]): Options {
-  const opts = { ...DEFAULTS };
-  const findFlag = (
-    table: Record<string, unknown>,
-    arg: string,
-  ): string | undefined => Object.keys(table).find((f) => arg.startsWith(f));
-  for (const arg of argv) {
-    const intFlag = findFlag(INT_FLAGS, arg);
-    const floatFlag = findFlag(FLOAT_FLAGS, arg);
-    const pathFlag = findFlag(PATH_FLAGS, arg);
-    const boolFlag = BOOL_FLAGS[arg];
-    if (intFlag) {
-      const v = parseInt(arg.slice(intFlag.length), 10);
-      if (!Number.isFinite(v)) {
-        throw new Error(`数値でない: ${arg}`);
-      }
-      INT_FLAGS[intFlag]!(opts, v);
-    } else if (floatFlag) {
-      const v = Number(arg.slice(floatFlag.length));
-      if (!Number.isFinite(v) || v < 0 || v > 1) {
-        throw new Error(`0..1 の数値でない: ${arg}`);
-      }
-      FLOAT_FLAGS[floatFlag]!(opts, v);
-    } else if (pathFlag) {
-      PATH_FLAGS[pathFlag]!(opts, path.resolve(arg.slice(pathFlag.length)));
-    } else if (boolFlag) {
-      boolFlag(opts);
-    } else {
-      throw new Error(`未知の引数: ${arg}`);
-    }
-  }
-  if (opts.plyCheck && !opts.fromRaw) {
-    throw new Error(
-      "--ply-check は --from-raw と併用すること（根評価が先に必要）",
-    );
-  }
-  return opts;
-}
 
 interface BookAssetLike {
   weightGeneration?: string;
@@ -608,38 +464,6 @@ function applyPlyCheck(
   return { passed, stats, flips };
 }
 
-/** 層化順序 → 符号層化 → target 件 */
-function pickFromEligible(
-  eligible: SuiteCandidate[],
-  rawResults: ReadonlyMap<string, RawEvaluation>,
-  opts: Options,
-): { picked: SignedCandidate[]; sign: Selection["sign"]; ordered: number } {
-  const order = buildCandidateOrder(eligible, {
-    seed: opts.seed,
-    parentCap: opts.parentCap,
-  });
-  const signed: SignedCandidate[] = order.map((c) => ({
-    candidate: c,
-    rootScore: rawResults.get(c.key)!.score,
-  }));
-  if (opts.negativeRatioMin <= 0) {
-    return {
-      picked: signed.slice(0, opts.target),
-      sign: null,
-      ordered: order.length,
-    };
-  }
-  const r = stratifyBySign(signed, {
-    target: opts.target,
-    negativeRatioMin: opts.negativeRatioMin,
-  });
-  return {
-    picked: r.picked,
-    sign: { negative: r.negativeCount, nonNegative: r.nonNegativeCount },
-    ordered: order.length,
-  };
-}
-
 /**
  * --from-raw: 全候補を根評価で分類し、（--ply-check があれば ply-check で絞り）
  * 採用可能な候補だけに層化順序を掛けて target 件取る。
@@ -688,17 +512,29 @@ async function selectFromRaw(
       `ply-check: 通過 ${stats.passed} / ${stats.checked}（ply 別 |score|>${opts.plyScoreAbsMax} 棄却 [${stats.rejectedByPlyScore.join(", ")}]、終局 ${stats.rejectedByTerminal}、手数不足 ${stats.rejectedIncomplete}、flip(>${opts.flipScoreAbsMin}) ${stats.horizonFlips}）`,
     );
     if (opts.flipsOut) {
-      mkdirSync(path.dirname(opts.flipsOut), { recursive: true });
+      const flipsOut =
+        opts.plyLimit > 0 ? smokeSuffixedPath(opts.flipsOut) : opts.flipsOut;
+      if (flipsOut !== opts.flipsOut) {
+        log(
+          `警告: --ply-limit のスモーク実行なので flips は ${flipsOut} に書く（本番ファイルは上書きしない）`,
+        );
+      }
+      mkdirSync(path.dirname(flipsOut), { recursive: true });
       writeFileSync(
-        opts.flipsOut,
+        flipsOut,
         flips.map((f) => JSON.stringify(f)).join("\n") +
           (flips.length ? "\n" : ""),
       );
-      log(`horizon flips ${flips.length} 件を ${opts.flipsOut} に書き出し`);
+      log(`horizon flips ${flips.length} 件を ${flipsOut} に書き出し`);
     }
   }
 
-  const { picked, sign, ordered } = pickFromEligible(pool, results, opts);
+  const { picked, sign, ordered } = pickOpenings(pool, results, {
+    seed: opts.seed,
+    parentCap: opts.parentCap,
+    target: opts.target,
+    negativeRatioMin: opts.negativeRatioMin,
+  });
   const signNote = sign
     ? `（負側 ${sign.negative} / 非負側 ${sign.nonNegative}）`
     : "";
@@ -767,7 +603,7 @@ function computeStats(
 }
 
 async function main(): Promise<void> {
-  const opts = parseArgs(process.argv.slice(2));
+  const opts = parseSuiteArgs(process.argv.slice(2));
   const outPath =
     opts.out ??
     path.join(

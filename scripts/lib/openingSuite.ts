@@ -17,6 +17,8 @@ import { D4_TRANSFORMS } from "@/logic/boardSymmetry";
 import { getAllJushuNames, getJushuPositions } from "@/logic/cpu/opening";
 import { formatMove } from "@/logic/gameRecordParser";
 
+import type { OpeningSuitePlyCheckFilter } from "../types/openingSuite.ts";
+
 import { mulberry32 } from "./mulberry32.ts";
 
 const CELL_COUNT = BOARD_SIZE * BOARD_SIZE;
@@ -451,12 +453,15 @@ export interface PlyCheckRecord extends PlyCheckResult {
   timeLimitMs: number;
 }
 
-export interface PlyCheckMeta {
-  pliesRequested: number;
-  nodes: number;
-  depth: number;
-  timeLimitMs: number;
-}
+/**
+ * ply-check JSONL 全体で共通の評価設定。types の OpeningSuitePlyCheckFilter から導出
+ * （しきい値は選抜時に決めるので持たない。手数は JSONL の `plies`（配列）と衝突するため
+ * `pliesRequested`）。
+ */
+export type PlyCheckMeta = Omit<
+  OpeningSuitePlyCheckFilter,
+  "plyScoreAbsMax" | "plies"
+> & { pliesRequested: number };
 
 export type PlyRejectReason = "plyScore" | "terminal" | "incomplete";
 
@@ -577,4 +582,54 @@ export function stratifyBySign(
     }
   }
   return { picked, negativeCount: negQuota, nonNegativeCount: posQuota };
+}
+
+export interface PickOptions {
+  seed: number;
+  parentCap: number;
+  target: number;
+  /** 0 なら符号層化なし（v1 と同じ経路: 層化順序の先頭 target 件） */
+  negativeRatioMin: number;
+}
+
+/**
+ * 採用可能候補から最終採用を決める（純粋）: 親上限付き root→親→子ラウンドロビン →
+ * （negativeRatioMin > 0 なら）符号層化 → target 件。
+ */
+export function pickOpenings(
+  eligible: readonly SuiteCandidate[],
+  rawResults: ReadonlyMap<string, RawEvaluation>,
+  opts: PickOptions,
+): {
+  picked: SignedCandidate[];
+  sign: { negative: number; nonNegative: number } | null;
+  ordered: number;
+} {
+  const order = buildCandidateOrder(eligible, {
+    seed: opts.seed,
+    parentCap: opts.parentCap,
+  });
+  const signed: SignedCandidate[] = order.map((c) => {
+    const raw = rawResults.get(c.key);
+    if (!raw) {
+      throw new Error(`未評価の候補: ${c.key}`);
+    }
+    return { candidate: c, rootScore: raw.score };
+  });
+  if (opts.negativeRatioMin <= 0) {
+    return {
+      picked: signed.slice(0, opts.target),
+      sign: null,
+      ordered: order.length,
+    };
+  }
+  const r = stratifyBySign(signed, {
+    target: opts.target,
+    negativeRatioMin: opts.negativeRatioMin,
+  });
+  return {
+    picked: r.picked,
+    sign: { negative: r.negativeCount, nonNegative: r.nonNegativeCount },
+    ordered: order.length,
+  };
 }
