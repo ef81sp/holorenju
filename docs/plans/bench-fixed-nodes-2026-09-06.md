@@ -63,7 +63,7 @@ pub const BudgetPolicy = struct {
 ### 2.4 統計（`SearchStats` / `main.zig`）
 
 - `pre_search_nodes: u32`、`probe_nodes: u32` を追加。両モードで記録（時間モードの較正データ取得に必要）。`stats.nodes` への加算は決定的モードのみ。
-- `stats_buffer` は **append-only で 48 → 56 バイト**。main.zig の「レイアウト変更禁止」コメントを「append-only。リーダーは `getSearchFeatures()` bit1（または buffer 長）で存在判定」に改める。**TS 側リーダー（bridge worker / gate0-bench `readStats` / searchEngine）は features bit または `getStatsBuffer` 長で分岐**し、旧 wasm で 48 バイトを越えて読まない（越えると隣接メモリを黙って読む）。
+- `stats_buffer` は **append-only で 48 → 60 バイト**（`pre_search_nodes` / `probe_nodes` / `absolute_deadline_hit`。実装時に安全弁フラグを追加）。main.zig の「レイアウト変更禁止」コメントを「append-only。リーダーは `getSearchFeatures()` bit1（または buffer 長）で存在判定」に改める。**TS 側リーダー（bridge worker / gate0-bench `readStats` / searchEngine）は features bit または `getStatsBuffer` 長で分岐**し、旧 wasm で 48 バイトを越えて読まない（越えると隣接メモリを黙って読む）。
 
 ### 2.5 ベンチ側（`scripts/`）
 
@@ -101,12 +101,15 @@ TS（vitest）:
 ## 4. 較正（実装マージ後、コード変更なし）
 
 1. **時間モードの観測**: 開局スイート `--max-games=100`（hard、jobs=5）で `pre_search_nodes` / `probe_nodes` / `stats.nodes` の分布（中央値・p90・p99）を取る → `pre_vcf_nodes` / `pre_vct_nodes` / `demote_vcf_nodes` / `probe_vct_nodes` の初期値（中央値〜p75）を決めて焼く。
-2. **N のスイープ**: プローブ計上後は N の意味が変わる（現行計上 p50 68k / mean 126k / p90 317k は参考値）。手順 1 の `nodes + probe_nodes` 分布からスイープ範囲を決め、3 点 × 100 局。指標は `performanceStats.avgDepth`（depth 0 込み。時間モードは 4.0〜4.25、探索手のみは 6.1）と**事前探索手を除いた深度分布**・ノード分布（p50/p90）の一致。
-3. **時間 vs 固定の混合対局**（強さの同等性を直接示す）: `development` 同一コミットで A=時間モード、B=`--fixed-nodes-b=N`、416 局。Elo ≈ 0 になる N を推奨既定にする。
-4. **決定性スモーク（負荷を変える）**: A=B 同一コミット、`--fixed-nodes=N --openings=… --max-games=40` を **jobs=2 と jobs=8** で 1 回ずつ走らせ、`--compare` で棋譜・1 手ごとの nodes・score が完全一致、全ペア 1-1、abort 0。
-5. **陽性対照**: `development` vs `--max-depth-b=5` を時間モードと固定ノードで各 416 局。両モードで同方向・有意に検出できること。
+2. **予算の見直し**: 手順 1 の `pre_search_nodes` 分布を見て、`VCT_PRE_NODES_DETERMINISTIC=20k`（時間モードの 300 ms より大きい可能性）を先に調整する。N が事前探索の消費より小さいと主探索は depth 1 のみで返る（着手は必ず出る）ので、N の下限は事前探索の p90 以上。
+3. **N のスイープ**: プローブ計上後は N の意味が変わる（現行計上 p50 68k / mean 126k / p90 317k は参考値）。手順 1 の `nodes + probe_nodes` 分布からスイープ範囲を決め、3 点 × 100 局。指標は `performanceStats.avgDepth`（depth 0 込み。時間モードは 4.0〜4.25、探索手のみは 6.1）と**事前探索手を除いた深度分布**・ノード分布（p50/p90）の一致。
+4. **時間 vs 固定の混合対局**（強さの同等性を直接示す）: `development` 同一コミットで A=時間モード、B=`--fixed-nodes-b=N`、416 局。Elo ≈ 0 になる N を推奨既定にする。
+5. **決定性スモーク（負荷を変える）**: A=B 同一コミット、`--fixed-nodes=N --openings=… --max-games=40` を **jobs=2 と jobs=8** で 1 回ずつ走らせ、`--compare` で棋譜・1 手ごとの nodes・score が完全一致、全ペア 1-1、abort 0。
+6. **陽性対照**: `development` vs `--max-depth-b=5` を時間モードと固定ノードで各 416 局。両モードで同方向・有意に検出できること。
 
 ## 5. 運用規則・注意
+
+- **時間モードの唯一の挙動変更（実質バグ修正）**: 旧コードは事前探索の親 600 ms が尽きた後の段（VCF/VCT）に `child().time_limit == 0` を渡していたため、その段が壁時計無制限（10 s の絶対デッドラインのみ）で走っていた。`…WithParent` 化で `exhausted` が伝播し即 null になる。壁時計依存の稀な経路なのでゴールデンでは検出不能。ビット不変の例外として記録する。
 
 - **固定ノードで測れるもの／測れないもの**:
   - 測れる: eval 品質、枝刈り・ordering の「ノードあたりの質」。
