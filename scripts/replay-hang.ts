@@ -58,8 +58,8 @@ import {
   countPlannedRequests,
   runReplayStages,
 } from "./lib/hangReplayRunner.ts";
-import { buildBridgeCustomParams } from "./lib/match.ts";
-import { createLivenessChannel } from "./lib/workerLiveness.ts";
+import { buildReplayWorkerData } from "./lib/replayWorkerData.ts";
+import { describeLivenessVerdict } from "./lib/workerLiveness.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -251,35 +251,6 @@ interface SpawnedWorker {
   engineParams?: EngineParamsSnapshot;
 }
 
-/**
- * ダンプの engineParams（v2）から、replay worker に渡す customParams を組み立てる。
- * v1 ダンプや engineParams 欠落時は、ダンプのトップレベル情報でフォールバックする。
- */
-function buildReplayWorkerData(
-  dump: HangDumpJson,
-  engineParams: EngineParamsSnapshot | undefined,
-): Record<string, unknown> {
-  const customParams = buildBridgeCustomParams(
-    engineParams?.randomFactor ?? dump.worker.randomFactor,
-    (engineParams?.evaluationOptions as Record<string, unknown> | undefined) ??
-      dump.worker.evaluationOptions,
-    engineParams?.maxNodes,
-    engineParams?.depth,
-  );
-  return {
-    worktreePath: dump.worker.worktreePath,
-    difficulty: engineParams?.difficulty ?? dump.worker.difficulty,
-    customParams,
-    bookEnabled: engineParams?.bookEnabled ?? dump.worker.bookEnabled,
-    // engineParams.threatProbe は "ON(default)" / "OFF(runtime)" などの表示文字列。
-    // OFF で走っていたときだけ明示的に無効化する。
-    threatProbeEnabled: engineParams?.threatProbe.startsWith("OFF")
-      ? false
-      : undefined,
-    livenessChannel: createLivenessChannel(),
-  };
-}
-
 function spawnBridgeWorker(
   dump: HangDumpJson,
   dumpEngineParams: EngineParamsSnapshot | undefined,
@@ -300,7 +271,20 @@ function spawnBridgeWorker(
 
   return new Promise<SpawnedWorker>((resolve, reject) => {
     const worker = new Worker(workerPath, {
-      workerData: buildReplayWorkerData(dump, dumpEngineParams),
+      // engineParams（timeLimit / maxNodes / depth / deterministic）を復元する。
+      // 固定ノード局のハングを時間モードで再生しないため（lib/replayWorkerData.ts）
+      workerData: buildReplayWorkerData(
+        {
+          worktreePath: dump.worker.worktreePath,
+          difficulty: dump.worker.difficulty,
+          randomFactor: dump.worker.randomFactor,
+          evaluationOptions: dump.worker.evaluationOptions as
+            | Record<string, unknown>
+            | undefined,
+          bookEnabled: dump.worker.bookEnabled,
+        },
+        dumpEngineParams,
+      ),
       execArgv: [
         "--experimental-strip-types",
         "--disable-warning=ExperimentalWarning",
@@ -420,7 +404,7 @@ function printDiagnostics(dump: HangDumpJson): void {
   console.log(`telemetry: worker 起動からの要求数=${requestCount}`);
   if (engineParams) {
     console.log(
-      `  engine=${engineParams.engine} depth=${engineParams.depth} timeLimit=${engineParams.timeLimit} maxNodes=${engineParams.maxNodes} threatProbe=${engineParams.threatProbe} statsBuffer=${engineParams.hasStatsBuffer}`,
+      `  engine=${engineParams.engine} depth=${engineParams.depth} timeLimit=${engineParams.timeLimit} maxNodes=${engineParams.maxNodes} deterministic=${engineParams.deterministic ?? false} threatProbe=${engineParams.threatProbe} statsBuffer=${engineParams.hasStatsBuffer}`,
     );
   }
   if (pendingRequest) {
@@ -438,7 +422,7 @@ function printDiagnostics(dump: HangDumpJson): void {
   }
   const { liveness, mainThread } = dump.hang;
   console.log(
-    `  liveness: ${liveness.verdict} timeChecks=${liveness.timeCheckCount} (+${liveness.timeCheckDeltaDuringSample} in ${liveness.sampleWindowMs}ms) lastAt=${liveness.lastTimeCheckAt ?? "n/a"}`,
+    `  liveness: ${describeLivenessVerdict(liveness, engineParams?.deterministic)} lastAt=${liveness.lastTimeCheckAt ?? "n/a"}`,
   );
   console.log(
     `  mainThread: maxTimerLag=${mainThread.maxTimerLagMs}ms maxClockSkewJump=${mainThread.maxClockSkewJumpMs}ms samples=${mainThread.samples.length}`,

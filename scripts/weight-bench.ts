@@ -23,6 +23,12 @@ import type { CpuDifficulty } from "../src/types/cpu.ts";
 import type { SPRTConfig, WeightBenchResult } from "./types/ab.ts";
 
 import {
+  resolveFixedNodesParams,
+  resolveFixedNodesPerSide,
+  resolveMoveTimeoutMs,
+  validateFixedNodesFlags,
+} from "./lib/benchCliChecks.ts";
+import {
   computeBenchGameStats,
   formatBenchGameStats,
 } from "./lib/benchGameStats.ts";
@@ -32,6 +38,7 @@ import { createBridgeWorker, runMatch } from "./lib/match.ts";
 import { resolveOpenings } from "./lib/openingSuiteLoader.ts";
 import { formatPairedStats } from "./lib/pairedStats.ts";
 import { DEFAULT_SPRT_CONFIG, formatSPRT } from "./lib/sprt.ts";
+import { getWorkerTelemetry } from "./lib/workerTelemetry.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, "..");
@@ -52,7 +59,9 @@ interface CliOptions {
   difficulty: CpuDifficulty;
   randomFactor?: number;
   jobs: number;
+  /** 1 手タイムアウト。決定的モード（--fixed-nodes）では未指定時の既定が 600000 */
   moveTimeoutMs: number;
+  moveTimeoutMsExplicit: boolean;
   useSPRT: boolean;
   sprtElo0: number;
   sprtElo1: number;
@@ -61,6 +70,13 @@ interface CliOptions {
   openings?: string;
   /** スイートの n 番目から使う（末尾で折り返さない）。既定 0 */
   openingOffset: number;
+  /**
+   * 固定ノード（決定的探索）モード。bench-fixed-nodes-2026-09-06.md §2.5。
+   * weight-bench には --seed が無いため randomFactor>0 とは併用できない。
+   */
+  fixedNodes?: number;
+  fixedNodesA?: number;
+  fixedNodesB?: number;
 }
 
 function parseArgs(): CliOptions {
@@ -72,6 +88,7 @@ function parseArgs(): CliOptions {
     difficulty: "hard",
     jobs: 1,
     moveTimeoutMs: 120000,
+    moveTimeoutMsExplicit: false,
     useSPRT: false,
     sprtElo0: DEFAULT_SPRT_CONFIG.elo0,
     sprtElo1: DEFAULT_SPRT_CONFIG.elo1,
@@ -110,7 +127,14 @@ function parseArgs(): CliOptions {
       const v = parseInt(arg.slice("--moveTimeoutMs=".length), 10);
       if (!isNaN(v) && v > 0) {
         options.moveTimeoutMs = v;
+        options.moveTimeoutMsExplicit = true;
       }
+    } else if (arg.startsWith("--fixed-nodes=")) {
+      options.fixedNodes = parsePositiveIntOrExit(arg, "--fixed-nodes");
+    } else if (arg.startsWith("--fixed-nodes-a=")) {
+      options.fixedNodesA = parsePositiveIntOrExit(arg, "--fixed-nodes-a");
+    } else if (arg.startsWith("--fixed-nodes-b=")) {
+      options.fixedNodesB = parsePositiveIntOrExit(arg, "--fixed-nodes-b");
     } else if (arg === "--sprt") {
       options.useSPRT = true;
     } else if (arg.startsWith("--elo0=")) {
@@ -150,6 +174,61 @@ function parseArgs(): CliOptions {
   return options;
 }
 
+/** `--flag=<n>` の正の整数をパースする。不正なら exit(1)。 */
+function parsePositiveIntOrExit(arg: string, flagName: string): number {
+  const raw = arg.slice(flagName.length + 1);
+  const value = parseInt(raw, 10);
+  if (!Number.isFinite(value) || value <= 0) {
+    console.error(`Error: ${flagName} は正の整数で指定 (got: ${raw})`);
+    process.exit(1);
+  }
+  return value;
+}
+
+interface FixedNodesResolved {
+  a: number | undefined;
+  b: number | undefined;
+  anyDeterministic: boolean;
+}
+
+function resolvePerSideOrExit(options: CliOptions): {
+  a: number | undefined;
+  b: number | undefined;
+} {
+  try {
+    return resolveFixedNodesPerSide(options);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`Error: ${msg}`);
+    process.exit(1);
+  }
+}
+
+/** 固定ノードモードの side 別 N（両側/片側の正規化 + 排他チェック）。 */
+function resolveFixedNodesOrExit(options: CliOptions): FixedNodesResolved {
+  const perSide = resolvePerSideOrExit(options);
+  const error = validateFixedNodesFlags({
+    fixedNodesA: perSide.a,
+    fixedNodesB: perSide.b,
+    maxNodesA: undefined,
+    maxNodesB: undefined,
+    bookA: false,
+    bookB: false,
+    randomFactor: options.randomFactor,
+    // weight-bench には --seed が無い＝randomFactor>0 は決定的モードで使えない
+    seedExplicit: false,
+    sets: options.sets,
+  });
+  if (error) {
+    console.error(`Error: ${error}`);
+    process.exit(1);
+  }
+  return {
+    ...perSide,
+    anyDeterministic: perSide.a !== undefined || perSide.b !== undefined,
+  };
+}
+
 function printHelp(): void {
   console.log(`
 eval 形系重み A/B ベンチマーク（リビルド不要）
@@ -167,7 +246,13 @@ Options:
   --difficulty=<d>      beginner|easy|medium|hard (default: hard)
   --randomFactor=<n>    探索ゆらぎ 0〜1 (default: なし)
   --jobs=<n>            同時対局ペア数 (default: 1)
-  --moveTimeoutMs=<n>   1手のタイムアウト (default: 120000)
+  --moveTimeoutMs=<n>   1手のタイムアウト (default: 120000、--fixed-nodes 時は 600000)
+  --fixed-nodes=<n>     両側を固定ノード（決定的探索）モードで走らせる
+                        （timeLimit=0 / maxNodes=N / setDeterministicMode(1)）。
+                        --randomFactor（seed 無し）と --sets>1 は併用不可。
+                        abort が 1 件でも出ると valid:false・非0終了
+  --fixed-nodes-a=<n>   baseline(A) 側のみ固定ノード（較正用）
+  --fixed-nodes-b=<n>   variant(B) 側のみ固定ノード
   --sprt / --elo0 / --elo1
   --verbose, -v
   --help, -h
@@ -226,6 +311,12 @@ function resolveOpeningsOrExit(
 
 async function main(): Promise<void> {
   const options = parseArgs();
+  const fixedNodes = resolveFixedNodesOrExit(options);
+  const moveTimeoutMs = resolveMoveTimeoutMs(
+    options.moveTimeoutMsExplicit ? options.moveTimeoutMs : undefined,
+    fixedNodes.anyDeterministic,
+    options.moveTimeoutMs,
+  );
   const startTime = performance.now();
 
   ensureFreshWasm();
@@ -256,6 +347,11 @@ async function main(): Promise<void> {
     console.log(line);
   }
   console.log(`jobs=${options.jobs}`);
+  if (fixedNodes.anyDeterministic) {
+    console.log(
+      `fixedNodes（決定的モード） A: ${fixedNodes.a ?? "(時間モード)"} / B: ${fixedNodes.b ?? "(時間モード)"} | move-timeout=${moveTimeoutMs}ms`,
+    );
+  }
   for (const w of resolved.warnings) {
     console.warn(`⚠ ${w}`);
   }
@@ -263,7 +359,10 @@ async function main(): Promise<void> {
 
   const workerPath = path.join(__dirname, "cpu-bridge-worker.ts");
   const loaderPath = path.join(__dirname, "register-loader.mjs");
-  const makeWorker = (evalWeights: Record<string, number>): Promise<Worker> =>
+  const makeWorker = (
+    evalWeights: Record<string, number>,
+    fixed: ReturnType<typeof resolveFixedNodesParams>,
+  ): Promise<Worker> =>
     createBridgeWorker({
       workerPath,
       loaderPath,
@@ -271,12 +370,17 @@ async function main(): Promise<void> {
       difficulty: options.difficulty,
       randomFactor: options.randomFactor,
       evalWeights,
+      maxNodes: fixed?.maxNodes,
+      timeLimit: fixed?.timeLimit,
+      deterministic: fixed?.deterministic,
     });
   // A=baseline(空), B=variant(weights)
+  const fixedA = resolveFixedNodesParams(fixedNodes.a);
+  const fixedB = resolveFixedNodesParams(fixedNodes.b);
   const makePair = async (): Promise<{ a: Worker; b: Worker }> => {
     const [a, b] = await Promise.all([
-      makeWorker({}),
-      makeWorker(options.weights),
+      makeWorker({}, fixedA),
+      makeWorker(options.weights, fixedB),
     ]);
     return { a, b };
   };
@@ -302,13 +406,26 @@ async function main(): Promise<void> {
     );
     pairs.push(...created);
     console.log("初期化完了\n");
+    const firstPair = pairs[0]!;
+    const searchFeaturesA = getWorkerTelemetry(firstPair.a).snapshot()
+      .engineParams?.searchFeatures;
+    const searchFeaturesB = getWorkerTelemetry(firstPair.b).snapshot()
+      .engineParams?.searchFeatures;
 
-    const { wdl, games, completedGames, stats } = await runMatch({
+    const {
+      wdl,
+      games,
+      completedGames,
+      aborts,
+      abortsBySide,
+      abortedGames,
+      stats,
+    } = await runMatch({
       pairs,
       tasks,
       totalGames,
       sprtConfig,
-      moveTimeoutMs: options.moveTimeoutMs,
+      moveTimeoutMs,
       verbose: options.verbose,
       startTime,
       // 1局隔離: ハングした局は破棄しペアを再生成して続行
@@ -330,7 +447,9 @@ async function main(): Promise<void> {
         `開局スイート: ${suite.file} (version ${suite.version}, offset=${options.openingOffset})`,
       );
     }
-    console.log(`対局数: ${completedGames}`);
+    console.log(
+      `対局数: ${completedGames}${aborts > 0 ? ` (abort: ${aborts} = A側${abortsBySide.A} / B側${abortsBySide.B})` : ""}`,
+    );
     console.log(
       `WDL (baseline=A 視点): +${wdl.wins} =${wdl.draws} -${wdl.losses}`,
     );
@@ -358,8 +477,17 @@ async function main(): Promise<void> {
         randomFactor: options.randomFactor,
         sprt: sprtConfig,
         openings: resolved.config,
+        fixedNodes: options.fixedNodes,
+        fixedNodesA: fixedNodes.a,
+        fixedNodesB: fixedNodes.b,
+        searchFeaturesA,
+        searchFeaturesB,
       },
       totalGames: completedGames,
+      aborts,
+      abortsBySide,
+      abortedGames,
+      valid: fixedNodes.anyDeterministic ? aborts === 0 : undefined,
       wdl,
       /** 三項（1 局単位）。参考値 */
       eloDiff: stats.trinomialElo,
@@ -375,6 +503,18 @@ async function main(): Promise<void> {
     const outPath = path.join(OUTPUT_DIR, `weight-bench-${ts}.json`);
     fs.writeFileSync(outPath, JSON.stringify(result, null, 2));
     console.log(`\n結果を保存: ${outPath}`);
+
+    if (result.valid === false) {
+      console.error(
+        `\n✗ 決定的モードで abort が ${aborts} 件発生したため、この run は無効（valid:false）です:`,
+      );
+      for (const g of abortedGames) {
+        console.error(
+          `    g${g.gameIdx} ${g.openingId} (${g.isABlack ? "A黒" : "A白"}) side=${g.side ?? "?"}: ${g.reason}`,
+        );
+      }
+      process.exitCode = 1;
+    }
   } finally {
     cleanup();
   }
