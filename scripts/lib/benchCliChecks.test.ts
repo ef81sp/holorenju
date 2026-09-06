@@ -3,6 +3,10 @@ import { describe, expect, it } from "vitest";
 import {
   normalizeMaxGames,
   openingsRepeatWarning,
+  resolveFixedNodesParams,
+  resolveFixedNodesPerSide,
+  resolveMoveTimeoutMs,
+  validateFixedNodesFlags,
   validateOpeningsFlags,
 } from "./benchCliChecks.ts";
 
@@ -102,5 +106,141 @@ describe("normalizeMaxGames", () => {
     const one = normalizeMaxGames(1);
     expect(one.ok).toBe(false);
     expect(!one.ok && one.error).toMatch(/--max-games/);
+  });
+});
+
+describe("resolveFixedNodesParams", () => {
+  it("fixedNodes → timeLimit 0 / maxNodes N / deterministic true", () => {
+    expect(resolveFixedNodesParams(50000)).toEqual({
+      timeLimit: 0,
+      maxNodes: 50000,
+      deterministic: true,
+    });
+  });
+
+  it("未指定なら undefined（時間モードのまま）", () => {
+    expect(resolveFixedNodesParams(undefined)).toBeUndefined();
+  });
+});
+
+describe("resolveFixedNodesPerSide", () => {
+  it("--fixed-nodes は両側に同じ N", () => {
+    expect(resolveFixedNodesPerSide({ fixedNodes: 100 })).toEqual({
+      a: 100,
+      b: 100,
+    });
+  });
+
+  it("--fixed-nodes-a/b は片側のみ（較正用の時間 vs 固定の混合）", () => {
+    expect(resolveFixedNodesPerSide({ fixedNodesB: 100 })).toEqual({
+      a: undefined,
+      b: 100,
+    });
+  });
+
+  it("両側指定と片側指定の併用はエラー", () => {
+    expect(() =>
+      resolveFixedNodesPerSide({ fixedNodes: 100, fixedNodesA: 50 }),
+    ).toThrow(/--fixed-nodes/);
+  });
+});
+
+describe("validateFixedNodesFlags", () => {
+  const base = {
+    fixedNodesA: 100 as number | undefined,
+    fixedNodesB: 100 as number | undefined,
+    maxNodesA: undefined as number | undefined,
+    maxNodesB: undefined as number | undefined,
+    bookA: false,
+    bookB: false,
+    randomFactor: undefined as number | undefined,
+    seedExplicit: false,
+    sets: 1,
+  };
+
+  it("固定ノード未指定なら常に OK（時間モードは従来どおり）", () => {
+    expect(
+      validateFixedNodesFlags({
+        ...base,
+        fixedNodesA: undefined,
+        fixedNodesB: undefined,
+        maxNodesA: 3_000_000,
+        bookA: true,
+        randomFactor: 0.02,
+        sets: 8,
+      }),
+    ).toBeNull();
+  });
+
+  it("両側固定・他フラグ無しは OK", () => {
+    expect(validateFixedNodesFlags(base)).toBeNull();
+  });
+
+  it("--max-nodes-a/b との併用はエラー", () => {
+    expect(validateFixedNodesFlags({ ...base, maxNodesA: 1 })).toMatch(
+      /--max-nodes-a/,
+    );
+    expect(validateFixedNodesFlags({ ...base, maxNodesB: 1 })).toMatch(
+      /--max-nodes-b/,
+    );
+  });
+
+  it("--book-a/b との併用はエラー（ブックの randomPool は Math.random）", () => {
+    expect(validateFixedNodesFlags({ ...base, bookA: true })).toMatch(
+      /--book-a/,
+    );
+    expect(validateFixedNodesFlags({ ...base, bookB: true })).toMatch(
+      /--book-b/,
+    );
+  });
+
+  it("randomFactor > 0 は --seed 必須", () => {
+    expect(validateFixedNodesFlags({ ...base, randomFactor: 0.02 })).toMatch(
+      /--seed/,
+    );
+    expect(
+      validateFixedNodesFlags({
+        ...base,
+        randomFactor: 0.02,
+        seedExplicit: true,
+      }),
+    ).toBeNull();
+  });
+
+  it("randomFactor=0 は seed 不要", () => {
+    expect(validateFixedNodesFlags({ ...base, randomFactor: 0 })).toBeNull();
+  });
+
+  it("--sets > 1 は randomFactor 無しではエラー（同一棋譜の反復）", () => {
+    expect(validateFixedNodesFlags({ ...base, sets: 2 })).toMatch(/--sets/);
+    expect(
+      validateFixedNodesFlags({
+        ...base,
+        sets: 2,
+        randomFactor: 0.02,
+        seedExplicit: true,
+      }),
+    ).toBeNull();
+    expect(
+      validateFixedNodesFlags({ ...base, sets: 2, randomFactor: 0 }),
+    ).toMatch(/--sets/);
+  });
+
+  it("片側固定（較正）でも同じ排他が効く", () => {
+    expect(
+      validateFixedNodesFlags({ ...base, fixedNodesA: undefined, bookA: true }),
+    ).toMatch(/--book-a/);
+  });
+});
+
+describe("resolveMoveTimeoutMs", () => {
+  it("明示指定があればそれを使う", () => {
+    expect(resolveMoveTimeoutMs(5000, true, 30000)).toBe(5000);
+  });
+  it("決定的モードで未指定なら 600000", () => {
+    expect(resolveMoveTimeoutMs(undefined, true, 30000)).toBe(600000);
+  });
+  it("時間モードで未指定なら CLI 既定", () => {
+    expect(resolveMoveTimeoutMs(undefined, false, 30000)).toBe(30000);
   });
 });

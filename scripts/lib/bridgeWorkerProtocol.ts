@@ -49,7 +49,10 @@ export function parseEngineParams(
     (p.engine === "wasm" || p.engine === "ts") &&
     typeof p.bookEnabled === "boolean" &&
     typeof p.hasStatsBuffer === "boolean" &&
-    typeof p.threatProbe === "string";
+    typeof p.threatProbe === "string" &&
+    // 決定的モード関連は新しい bridge worker のみ（旧 worker では欠落を許す）
+    (p.deterministic === undefined || typeof p.deterministic === "boolean") &&
+    (p.searchFeatures === undefined || isFiniteNumber(p.searchFeatures));
   return ok ? (params as EngineParamsSnapshot) : undefined;
 }
 
@@ -63,6 +66,7 @@ const COMPARED_KEYS = [
   "engine",
   "bookEnabled",
   "threatProbe",
+  "deterministic",
 ] as const;
 
 export interface EngineParamsDiff {

@@ -83,3 +83,135 @@ export function normalizeMaxGames(value: number): MaxGamesNormalization {
   }
   return { ok: true, maxGames: value, warning: null };
 }
+
+// ============================================================================
+// 固定ノード（決定的探索）モード — bench-fixed-nodes-2026-09-06.md §2.5
+// ============================================================================
+
+/** 固定ノードモードで bridge worker に渡す探索パラメータ。 */
+export interface FixedNodesParams {
+  /** 0 = 時間を見ない（決定的モードでは wasm 側で time_limit=0 扱い） */
+  timeLimit: 0;
+  maxNodes: number;
+  deterministic: true;
+}
+
+/**
+ * `--fixed-nodes=N` → `{ timeLimit: 0, maxNodes: N, deterministic: true }`。
+ * 未指定なら undefined（時間モードのまま）。
+ */
+export function resolveFixedNodesParams(
+  fixedNodes: number | undefined,
+): FixedNodesParams | undefined {
+  if (fixedNodes === undefined) {
+    return undefined;
+  }
+  return { timeLimit: 0, maxNodes: fixedNodes, deterministic: true };
+}
+
+export interface FixedNodesFlagsInput {
+  /** `--fixed-nodes=N`（両側） */
+  fixedNodes?: number;
+  /** `--fixed-nodes-a=N` / `--fixed-nodes-b=N`（片側。時間 vs 固定の混合＝較正用） */
+  fixedNodesA?: number;
+  fixedNodesB?: number;
+}
+
+/**
+ * 両側指定と片側指定を side 別の N に正規化する。両方を同時に指定したら Error。
+ */
+export function resolveFixedNodesPerSide(input: FixedNodesFlagsInput): {
+  a: number | undefined;
+  b: number | undefined;
+} {
+  const { fixedNodes, fixedNodesA, fixedNodesB } = input;
+  if (
+    fixedNodes !== undefined &&
+    (fixedNodesA !== undefined || fixedNodesB !== undefined)
+  ) {
+    throw new Error(
+      "--fixed-nodes と --fixed-nodes-a/--fixed-nodes-b は併用できません（両側なら --fixed-nodes、片側なら -a/-b のどちらか）",
+    );
+  }
+  if (fixedNodes !== undefined) {
+    return { a: fixedNodes, b: fixedNodes };
+  }
+  return { a: fixedNodesA, b: fixedNodesB };
+}
+
+export interface FixedNodesValidationInput {
+  fixedNodesA: number | undefined;
+  fixedNodesB: number | undefined;
+  maxNodesA: number | undefined;
+  maxNodesB: number | undefined;
+  bookA: boolean;
+  bookB: boolean;
+  randomFactor: number | undefined;
+  /** `--seed` が CLI で明示されたか（既定 Date.now() は「明示」ではない） */
+  seedExplicit: boolean;
+  sets: number;
+}
+
+/**
+ * 固定ノードモードの排他・必須チェック（どちらかの側でも固定なら適用）。
+ * - `--max-nodes-a/b` との併用: maxNodes は fixedNodes が決めるので二重指定は誤用
+ * - `--book-a/b` との併用: ブックの randomPool は Math.random で決定性が壊れる
+ * - `randomFactor > 0` は `--seed` 必須: seed 無しの bridge worker は Math.random
+ * - `--sets > 1` は randomFactor 無しではエラー: 同一棋譜の反復で独立サンプルにならない
+ * 問題なければ null。
+ */
+export function validateFixedNodesFlags(
+  input: FixedNodesValidationInput,
+): string | null {
+  const {
+    fixedNodesA,
+    fixedNodesB,
+    maxNodesA,
+    maxNodesB,
+    bookA,
+    bookB,
+    randomFactor,
+    seedExplicit,
+    sets,
+  } = input;
+  if (fixedNodesA === undefined && fixedNodesB === undefined) {
+    return null;
+  }
+  if (maxNodesA !== undefined) {
+    return "--fixed-nodes(-a) と --max-nodes-a は併用できません（maxNodes は fixedNodes が決める）";
+  }
+  if (maxNodesB !== undefined) {
+    return "--fixed-nodes(-b) と --max-nodes-b は併用できません（maxNodes は fixedNodes が決める）";
+  }
+  if (bookA) {
+    return "--fixed-nodes と --book-a は併用できません（ブックの randomPool は Math.random で決定性が壊れる）";
+  }
+  if (bookB) {
+    return "--fixed-nodes と --book-b は併用できません（ブックの randomPool は Math.random で決定性が壊れる）";
+  }
+  const randomized = randomFactor !== undefined && randomFactor > 0;
+  if (randomized && !seedExplicit) {
+    return "--fixed-nodes で randomFactor > 0 を使うには --seed が必須です（seed 無しの bridge worker は Math.random で決定性が壊れる）";
+  }
+  if (sets > 1 && !randomized) {
+    return `--fixed-nodes で --sets=${sets} は randomFactor（> 0、--seed 付き）無しでは指定できません（同一開局の反復が同一棋譜になり独立サンプルとして数えられない）`;
+  }
+  return null;
+}
+
+/** 決定的モードの `--move-timeout-ms` 既定（1 手時間が N と負荷に比例して伸びるため）。 */
+export const DETERMINISTIC_MOVE_TIMEOUT_MS = 600_000;
+
+/**
+ * 1 手タイムアウトの決定。明示指定 > 決定的モード既定 600,000 > CLI 既定。
+ */
+export function resolveMoveTimeoutMs(
+  explicit: number | undefined,
+  deterministic: boolean,
+  cliDefault: number,
+): number {
+  if (explicit !== undefined) {
+    return explicit;
+  }
+  return deterministic ? DETERMINISTIC_MOVE_TIMEOUT_MS : cliDefault;
+}
