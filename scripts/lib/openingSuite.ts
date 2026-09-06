@@ -17,6 +17,8 @@ import { D4_TRANSFORMS } from "@/logic/boardSymmetry";
 import { getAllJushuNames, getJushuPositions } from "@/logic/cpu/opening";
 import { formatMove } from "@/logic/gameRecordParser";
 
+import type { OpeningSuitePlyCheckFilter } from "../types/openingSuite.ts";
+
 import { mulberry32 } from "./mulberry32.ts";
 
 const CELL_COUNT = BOARD_SIZE * BOARD_SIZE;
@@ -416,4 +418,218 @@ export function assertRawMeta(
       `--depth=${opts.depth} が raw の depth=${meta.depth} と不一致。raw を再生成するか --depth を合わせること`,
     );
   }
+}
+
+// ---------------------------------------------------------------------------
+// v2: ply-check（採用可能候補を hard 実機で N 手進め、深さ 7 の根評価では見えない
+// 決着済み局面を除く）と、根 score の符号による層化（bench-precision §5.2）
+// ---------------------------------------------------------------------------
+
+/** ply-check の 1 手分の記録 */
+export interface PlyRecord {
+  move: string;
+  /** 着手側視点の score */
+  score: number;
+  completedDepth: number;
+}
+
+/** 途中終局の種類: 五連 / 黒の禁手着手 / エンジンが着手を返さなかった */
+export type PlyTerminal = "five" | "forbidden" | "noMove";
+
+export interface PlyCheckResult {
+  plies: PlyRecord[];
+  /** 途中終局していれば種類（最後の ply で終局） */
+  terminal: PlyTerminal | null;
+  elapsedMs: number;
+}
+
+/** ply-check JSONL の 1 行。評価設定も残す（再利用可否の判断用）。 */
+export interface PlyCheckRecord extends PlyCheckResult {
+  key: string;
+  rootScore: number;
+  pliesRequested: number;
+  nodes: number;
+  depth: number;
+  timeLimitMs: number;
+}
+
+/**
+ * ply-check JSONL 全体で共通の評価設定。types の OpeningSuitePlyCheckFilter から導出
+ * （しきい値は選抜時に決めるので持たない。手数は JSONL の `plies`（配列）と衝突するため
+ * `pliesRequested`）。
+ */
+export type PlyCheckMeta = Omit<
+  OpeningSuitePlyCheckFilter,
+  "plyScoreAbsMax" | "plies"
+> & { pliesRequested: number };
+
+export type PlyRejectReason = "plyScore" | "terminal" | "incomplete";
+
+/**
+ * ply-check の採否（純粋）。終局 → "terminal"、手数不足 → "incomplete"、
+ * いずれかの ply で |score| > plyScoreAbsMax → "plyScore"（最初に超えた手数を atPly に、1 始まり）。
+ */
+export function classifyPlyCheck(
+  result: PlyCheckResult,
+  opts: { plyScoreAbsMax: number; pliesRequired: number },
+): { reject: PlyRejectReason | null; atPly: number | null } {
+  if (result.terminal !== null) {
+    return { reject: "terminal", atPly: result.plies.length };
+  }
+  if (result.plies.length < opts.pliesRequired) {
+    return { reject: "incomplete", atPly: result.plies.length };
+  }
+  const idx = result.plies.findIndex(
+    (p) => Math.abs(p.score) > opts.plyScoreAbsMax,
+  );
+  if (idx >= 0) {
+    return { reject: "plyScore", atPly: idx + 1 };
+  }
+  return { reject: null, atPly: null };
+}
+
+/** 根が均衡（|root| <= rootScoreAbsMax）なのに N 手以内に |score| > flipScoreAbsMin になったか。 */
+export function isHorizonFlip(
+  rootScore: number,
+  plies: readonly PlyRecord[],
+  opts: { rootScoreAbsMax: number; flipScoreAbsMin: number },
+): boolean {
+  if (Math.abs(rootScore) > opts.rootScoreAbsMax) {
+    return false;
+  }
+  return plies.some((p) => Math.abs(p.score) > opts.flipScoreAbsMin);
+}
+
+/** ply-check JSONL を results と meta に分ける（純粋）。設定が行ごとに食い違えば例外。 */
+export function parsePlyCheckLines(text: string): {
+  results: Map<string, PlyCheckResult>;
+  meta: PlyCheckMeta | null;
+} {
+  const results = new Map<string, PlyCheckResult>();
+  let meta: PlyCheckMeta | null = null;
+  for (const line of text.split("\n")) {
+    if (line.trim() === "") {
+      continue;
+    }
+    const r = JSON.parse(line) as PlyCheckRecord;
+    const m: PlyCheckMeta = {
+      pliesRequested: r.pliesRequested,
+      nodes: r.nodes,
+      depth: r.depth,
+      timeLimitMs: r.timeLimitMs,
+    };
+    if (meta && JSON.stringify(meta) !== JSON.stringify(m)) {
+      throw new Error(
+        `ply-check の設定が行ごとに食い違う: ${JSON.stringify(meta)} vs ${JSON.stringify(m)}`,
+      );
+    }
+    meta = m;
+    results.set(r.key, {
+      plies: r.plies,
+      terminal: r.terminal,
+      elapsedMs: r.elapsedMs,
+    });
+  }
+  return { results, meta };
+}
+
+/** 根 score 付きの候補（符号層化の入力） */
+export interface SignedCandidate {
+  candidate: SuiteCandidate;
+  /** 白番 root score（白視点。負 = 黒有利） */
+  rootScore: number;
+}
+
+/**
+ * 根 score の符号で層化して target 件取る（純粋）。
+ * 負側（黒有利）を negativeRatioMin 以上含める。負側が不足なら達成できる比率で
+ * 非負側から埋め、非負側が不足なら負側を比率以上に使う。各側の中では入力順
+ * （層化順）を保ち、出力は比率に応じて交互に混ぜる（--opening-offset で前後半に
+ * 分けても符号比率が偏らないように）。
+ */
+export function stratifyBySign(
+  ordered: readonly SignedCandidate[],
+  opts: { target: number; negativeRatioMin: number },
+): {
+  picked: SignedCandidate[];
+  negativeCount: number;
+  nonNegativeCount: number;
+} {
+  const negatives = ordered.filter((c) => c.rootScore < 0);
+  const nonNegatives = ordered.filter((c) => c.rootScore >= 0);
+  const wantNeg = Math.ceil(opts.target * opts.negativeRatioMin);
+  const negQuota = Math.min(
+    negatives.length,
+    Math.max(wantNeg, opts.target - nonNegatives.length),
+  );
+  const posQuota = Math.min(nonNegatives.length, opts.target - negQuota);
+  const total = negQuota + posQuota;
+
+  // 比率に応じて交互に混ぜる（Bresenham 風: 累積比率が負側の目標比率を下回ったら負側）
+  const picked: SignedCandidate[] = [];
+  let ni = 0;
+  let pi = 0;
+  while (picked.length < total) {
+    const negShare = total === 0 ? 0 : negQuota / total;
+    const takeNeg =
+      ni < negQuota && (pi >= posQuota || ni < negShare * (picked.length + 1));
+    if (takeNeg) {
+      picked.push(negatives[ni]!);
+      ni++;
+    } else {
+      picked.push(nonNegatives[pi]!);
+      pi++;
+    }
+  }
+  return { picked, negativeCount: negQuota, nonNegativeCount: posQuota };
+}
+
+export interface PickOptions {
+  seed: number;
+  parentCap: number;
+  target: number;
+  /** 0 なら符号層化なし（v1 と同じ経路: 層化順序の先頭 target 件） */
+  negativeRatioMin: number;
+}
+
+/**
+ * 採用可能候補から最終採用を決める（純粋）: 親上限付き root→親→子ラウンドロビン →
+ * （negativeRatioMin > 0 なら）符号層化 → target 件。
+ */
+export function pickOpenings(
+  eligible: readonly SuiteCandidate[],
+  rawResults: ReadonlyMap<string, RawEvaluation>,
+  opts: PickOptions,
+): {
+  picked: SignedCandidate[];
+  sign: { negative: number; nonNegative: number } | null;
+  ordered: number;
+} {
+  const order = buildCandidateOrder(eligible, {
+    seed: opts.seed,
+    parentCap: opts.parentCap,
+  });
+  const signed: SignedCandidate[] = order.map((c) => {
+    const raw = rawResults.get(c.key);
+    if (!raw) {
+      throw new Error(`未評価の候補: ${c.key}`);
+    }
+    return { candidate: c, rootScore: raw.score };
+  });
+  if (opts.negativeRatioMin <= 0) {
+    return {
+      picked: signed.slice(0, opts.target),
+      sign: null,
+      ordered: order.length,
+    };
+  }
+  const r = stratifyBySign(signed, {
+    target: opts.target,
+    negativeRatioMin: opts.negativeRatioMin,
+  });
+  return {
+    picked: r.picked,
+    sign: { negative: r.negativeCount, nonNegative: r.nonNegativeCount },
+    ordered: order.length,
+  };
 }

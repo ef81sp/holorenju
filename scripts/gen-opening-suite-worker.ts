@@ -1,18 +1,27 @@
 /**
  * gen-opening-suite.ts の評価 worker（node:worker_threads）。
  *
- * 1 worker が 1 つの WasmSearchEngine を持ち、親から受け取った候補（ブックの
- * entries キー）を bench-precision-2026-09-04.md §2.2 手順 4 の順で評価する:
+ * 1 worker が 1 つの WasmSearchEngine を持ち、親から受け取ったリクエストを処理する。
+ *
+ * - kind "eval"（v1、bench-precision-2026-09-04.md §2.2 手順 4）:
  *   (i)   白番 root スコア（hard 実機 findBestMoveWithParams、depth 7 / 100k nodes）
  *         で |score| <= scoreAbsMax
  *   (ii)  白番に VCF/VCT が無い（forcedWinCheck.ts の予算）
  *   (iii) (i) の着手後に黒の VCF/VCT が無い（checkForcedWinAfterMove）
+ * - kind "ply"（v2、§5.2 の 4 手整合フィルタ）:
+ *   hard 実機で白から交互に N 手進め、各手の着手・score・completedDepth と
+ *   途中終局（五連 / 黒の禁手着手 / 着手なし）を記録する。採否判定は親側
+ *   （lib/openingSuite.ts の classifyPlyCheck）。
  */
 import { parentPort, workerData } from "node:worker_threads";
 
 import type { BoardState, Position } from "@/types/game";
 
-import { preloadForbiddenWasm } from "@/logic/cpu/wasm/forbiddenAdapter";
+import { applyMove, getOppositeColor } from "@/logic/cpu/core/boardUtils";
+import {
+  getForbiddenType,
+  preloadForbiddenWasm,
+} from "@/logic/cpu/wasm/forbiddenAdapter";
 import { loadWasmModule } from "@/logic/cpu/wasm/loader";
 import {
   encodeEvalOptions,
@@ -20,7 +29,10 @@ import {
 } from "@/logic/cpu/wasm/searchEngine";
 import { preloadThreatWasm } from "@/logic/cpu/wasm/threatAdapter";
 import { formatMove } from "@/logic/gameRecordParser";
+import { checkWin } from "@/logic/renjuRules";
 import { DIFFICULTY_PARAMS } from "@/types/cpu";
+
+import type { OpeningSuitePlyCheckFilter } from "./types/openingSuite.ts";
 
 import {
   checkForcedWinAfterMove,
@@ -31,28 +43,63 @@ import {
   VCT_MAX_NODES,
   VCT_TIME_LIMIT_MS,
 } from "./lib/forcedWinCheck.ts";
-import { parseBoardKey, type SuiteRejectReason } from "./lib/openingSuite.ts";
+import {
+  parseBoardKey,
+  type PlyCheckResult,
+  type PlyRecord,
+  type SuiteRejectReason,
+} from "./lib/openingSuite.ts";
+
+/** kind "ply" の設定。types の OpeningSuitePlyCheckFilter から導出（しきい値は親側） */
+export type PlyCheckWorkerConfig = Omit<
+  OpeningSuitePlyCheckFilter,
+  "plyScoreAbsMax"
+>;
 
 export interface SuiteWorkerData {
   scoreAbsMax: number;
   depth: number;
   nodes: number;
-  /** 安全弁（maxNodes が実質上限） */
+  /** 安全弁（実態は Zig の絶対上限 10 s が先に効く） */
   timeLimitMs: number;
+  /** kind "ply" の設定 */
+  plyCheck: PlyCheckWorkerConfig;
 }
 
 export interface SuiteEvalRequest {
+  kind: "eval";
   index: number;
   key: string;
 }
 
+export interface SuitePlyRequest {
+  kind: "ply";
+  index: number;
+  key: string;
+}
+
+export type SuiteRequest = SuiteEvalRequest | SuitePlyRequest;
+
 export interface SuiteEvalResponse {
+  kind: "eval";
   index: number;
   score: number;
   bestMove: string;
   reject: SuiteRejectReason | null;
   elapsedMs: number;
 }
+
+export interface SuitePlyResponse {
+  kind: "ply";
+  index: number;
+  result: PlyCheckResult;
+}
+
+export type SuiteResponse = SuiteEvalResponse | SuitePlyResponse;
+
+const HARD_EVAL_FLAGS = encodeEvalOptions(
+  DIFFICULTY_PARAMS.hard.evaluationOptions,
+);
 
 function hasForcedWin(
   engine: WasmSearchEngine,
@@ -90,17 +137,17 @@ function evaluateCandidate(
   if (sideToMove !== "white") {
     throw new Error(`白番でない候補: ${req.key}`);
   }
-  const evalFlags = encodeEvalOptions(DIFFICULTY_PARAMS.hard.evaluationOptions);
   const result = engine.findBestMoveWithParams(
     board,
     "white",
     data.depth,
     data.timeLimitMs,
     data.nodes,
-    evalFlags,
+    HARD_EVAL_FLAGS,
   );
   const bestMove: Position = result.position;
   const base = {
+    kind: "eval" as const,
     index: req.index,
     score: result.score,
     bestMove: formatMove(bestMove),
@@ -124,6 +171,82 @@ function evaluateCandidate(
   return done(null);
 }
 
+/** 盤内かつ空きマスか（エンジンが着手を返せなかった場合の番兵を弾く） */
+function isEmptyCell(board: BoardState, pos: Position): boolean {
+  return board[pos.row]?.[pos.col] === null;
+}
+
+/** hard 実機で白から交互に N 手進める。終局したらそこで止める。 */
+function plyCheck(
+  engine: WasmSearchEngine,
+  cfg: PlyCheckWorkerConfig,
+  req: SuitePlyRequest,
+): SuitePlyResponse {
+  const start = Date.now();
+  const parsed = parseBoardKey(req.key);
+  if (parsed.sideToMove !== "white") {
+    throw new Error(`白番でない候補: ${req.key}`);
+  }
+  let { board } = parsed;
+  let side: "black" | "white" = "white";
+  const plies: PlyRecord[] = [];
+  let terminal: PlyCheckResult["terminal"] = null;
+  for (let i = 0; i < cfg.plies; i++) {
+    const r = engine.findBestMoveWithParams(
+      board,
+      side,
+      cfg.depth,
+      cfg.timeLimitMs,
+      cfg.nodes,
+      HARD_EVAL_FLAGS,
+    );
+    if (!isEmptyCell(board, r.position)) {
+      terminal = "noMove";
+      break;
+    }
+    plies.push({
+      move: formatMove(r.position),
+      score: r.score,
+      completedDepth: r.completedDepth,
+    });
+    if (
+      side === "black" &&
+      getForbiddenType(board, r.position.row, r.position.col) !== null
+    ) {
+      terminal = "forbidden";
+      break;
+    }
+    board = applyMove(board, r.position, side);
+    if (checkWin(board, r.position, side)) {
+      terminal = "five";
+      break;
+    }
+    side = getOppositeColor(side);
+  }
+  return {
+    kind: "ply",
+    index: req.index,
+    result: { plies, terminal, elapsedMs: Date.now() - start },
+  };
+}
+
+function handle(
+  engine: WasmSearchEngine,
+  data: SuiteWorkerData,
+  req: SuiteRequest,
+): SuiteResponse {
+  switch (req.kind) {
+    case "eval":
+      return evaluateCandidate(engine, data, req);
+    case "ply":
+      return plyCheck(engine, data.plyCheck, req);
+    default: {
+      const never: never = req;
+      throw new Error(`未知のリクエスト: ${JSON.stringify(never)}`);
+    }
+  }
+}
+
 async function main(): Promise<void> {
   if (!parentPort) {
     throw new Error("worker として起動してください");
@@ -133,8 +256,8 @@ async function main(): Promise<void> {
   await Promise.all([preloadThreatWasm(), preloadForbiddenWasm()]);
   const engine = new WasmSearchEngine(await loadWasmModule());
 
-  port.on("message", (req: SuiteEvalRequest) => {
-    port.postMessage(evaluateCandidate(engine, data, req));
+  port.on("message", (req: SuiteRequest) => {
+    port.postMessage(handle(engine, data, req));
   });
   port.postMessage({ ready: true });
 }

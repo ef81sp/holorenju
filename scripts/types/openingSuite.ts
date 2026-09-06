@@ -47,6 +47,10 @@ export interface OpeningSuiteFilter {
   parentCap: number;
   /** 層化順序のシャッフル seed */
   seed: number;
+  /** v2: ply-check の設定（v1 は無し） */
+  plyCheck?: OpeningSuitePlyCheckFilter;
+  /** v2: 負側（黒有利）を含める最小比率（v1 は無し） */
+  negativeRatioMin?: number;
 }
 
 /** 生成時の候補数・棄却数の集計 */
@@ -62,6 +66,12 @@ export interface OpeningSuiteStats {
   eligible: number | null;
   /** 最終採用数（openings.length） */
   accepted: number;
+  /** v2: ply-check の集計 */
+  plyCheck?: OpeningSuitePlyCheckStats;
+  /** v2: 採用分の根 score 符号比率 */
+  sign?: OpeningSuiteSignStats;
+  /** v2: 採用分の親分布 */
+  parents?: OpeningSuiteParentStats;
 }
 
 /** 生成側が書き出す完全形（消費側は OpeningSuiteFile だけに依存する）。 */
@@ -72,4 +82,44 @@ export interface GeneratedOpeningSuiteFile extends OpeningSuiteFile {
   weightGeneration: string | null;
   filter: OpeningSuiteFilter;
   stats: OpeningSuiteStats;
+}
+
+/** v2 の ply-check（採用可能候補を hard 実機で N 手進める整合フィルタ）の設定 */
+export interface OpeningSuitePlyCheckFilter {
+  /** 進める手数（白から交互） */
+  plies: number;
+  /** 各 ply の |score| しきい値 */
+  plyScoreAbsMax: number;
+  nodes: number;
+  depth: number;
+  timeLimitMs: number;
+}
+
+/** ply-check の集計 */
+export interface OpeningSuitePlyCheckStats {
+  /** ply-check を掛けた候補数（= 根フィルタの採用可能数） */
+  checked: number;
+  passed: number;
+  /** i 番目（0 始まり）= ply i+1 で初めて |score| を超えて棄却された数 */
+  rejectedByPlyScore: number[];
+  /** 途中終局（五連 / 禁手 / 着手なし）で棄却された数 */
+  rejectedByTerminal: number;
+  rejectedIncomplete: number;
+  /** 根 |score| <= scoreAbsMax なのに N 手以内に |score| > flipScoreAbsMin になった数 */
+  horizonFlips: number;
+  flipScoreAbsMin: number;
+}
+
+/** 根 score の符号（白視点。負 = 黒有利）の比率 */
+export interface OpeningSuiteSignStats {
+  negative: number;
+  nonNegative: number;
+  negativeRatio: number;
+}
+
+/** 親（白 3 石構成）の分布 */
+export interface OpeningSuiteParentStats {
+  count: number;
+  /** "親あたり件数" → その件数の親の数 */
+  histogram: Record<string, number>;
 }

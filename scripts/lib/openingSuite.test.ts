@@ -12,15 +12,23 @@ import {
   assertRawMeta,
   boardToPseudoMoves,
   buildCandidateOrder,
+  classifyPlyCheck,
   classifyRaw,
+  isHorizonFlip,
   detectRootJushu,
   parentKey,
   parseBoardKey,
+  parsePlyCheckLines,
   parseRawLines,
   partitionByRaw,
+  pickOpenings,
+  type PlyCheckResult,
+  type PlyRecord,
   type RawEvaluation,
   selectOpenings,
   selectSevenStoneWhiteKeys,
+  type SignedCandidate,
+  stratifyBySign,
   type SuiteCandidate,
 } from "./openingSuite.ts";
 
@@ -347,5 +355,208 @@ describe("parseRawLines / assertRawMeta", () => {
     expect(() => assertRawMeta(meta, { nodes: 100000, depth: 5 })).toThrow(
       /--depth/,
     );
+  });
+});
+
+describe("classifyPlyCheck", () => {
+  const ply = (score: number): PlyRecord => ({
+    move: "H9",
+    score,
+    completedDepth: 7,
+  });
+  const opts = { plyScoreAbsMax: 700, pliesRequired: 4 };
+
+  it("全 ply が |score| <= しきい値で終局なしなら通過", () => {
+    const r: PlyCheckResult = {
+      plies: [ply(100), ply(-300), ply(699), ply(-700)],
+      terminal: null,
+      elapsedMs: 1,
+    };
+    expect(classifyPlyCheck(r, opts)).toEqual({ reject: null, atPly: null });
+  });
+
+  it("途中終局（五連/禁手/着手なし）は terminal、atPly は終局した手数", () => {
+    const r: PlyCheckResult = {
+      plies: [ply(100), ply(3000)],
+      terminal: "five",
+      elapsedMs: 1,
+    };
+    expect(classifyPlyCheck(r, opts)).toEqual({ reject: "terminal", atPly: 2 });
+  });
+
+  it("最初にしきい値を超えた ply を報告する（1 始まり）", () => {
+    const r: PlyCheckResult = {
+      plies: [ply(100), ply(-200), ply(701), ply(5000)],
+      terminal: null,
+      elapsedMs: 1,
+    };
+    expect(classifyPlyCheck(r, opts)).toEqual({ reject: "plyScore", atPly: 3 });
+  });
+
+  it("ply が足りなければ incomplete", () => {
+    const r: PlyCheckResult = { plies: [ply(0)], terminal: null, elapsedMs: 1 };
+    expect(classifyPlyCheck(r, opts)).toEqual({
+      reject: "incomplete",
+      atPly: 1,
+    });
+  });
+});
+
+describe("isHorizonFlip", () => {
+  const ply = (score: number): PlyRecord => ({
+    move: "H9",
+    score,
+    completedDepth: 7,
+  });
+  const opts = { rootScoreAbsMax: 500, flipScoreAbsMin: 2000 };
+  it("根が均衡なのに 4 手以内に |score| > 2000 になれば flip", () => {
+    expect(isHorizonFlip(120, [ply(300), ply(-2500)], opts)).toBe(true);
+    expect(isHorizonFlip(120, [ply(300), ply(2000)], opts)).toBe(false);
+  });
+  it("根が均衡でなければ flip とみなさない", () => {
+    expect(isHorizonFlip(800, [ply(3000)], opts)).toBe(false);
+  });
+});
+
+describe("parsePlyCheckLines", () => {
+  const rec = (key: string, plies = 4, nodes = 100000): string =>
+    JSON.stringify({
+      key,
+      rootScore: 10,
+      plies: [{ move: "H9", score: 1, completedDepth: 7 }],
+      terminal: null,
+      elapsedMs: 5,
+      pliesRequested: plies,
+      nodes,
+      depth: 7,
+      timeLimitMs: 10000,
+    });
+  it("results と meta に分ける。空行無視", () => {
+    const { results, meta } = parsePlyCheckLines(`${rec("a")}\n\n${rec("b")}`);
+    expect([...results.keys()]).toEqual(["a", "b"]);
+    expect(results.get("a")?.plies).toHaveLength(1);
+    expect(meta).toEqual({
+      pliesRequested: 4,
+      nodes: 100000,
+      depth: 7,
+      timeLimitMs: 10000,
+    });
+  });
+  it("設定が行ごとに食い違えば例外", () => {
+    expect(() => parsePlyCheckLines(`${rec("a")}\n${rec("b", 6)}`)).toThrow(
+      /設定/,
+    );
+  });
+});
+
+describe("stratifyBySign", () => {
+  const item = (key: string, score: number): SignedCandidate => ({
+    candidate: { key, parent: key, root: null },
+    rootScore: score,
+  });
+
+  it("負側（黒有利）を比率以上含め、順序は交互に混ぜる", () => {
+    const ordered = [
+      ...Array.from({ length: 10 }, (_, i) => item(`p${i}`, 100 + i)),
+      ...Array.from({ length: 10 }, (_, i) => item(`n${i}`, -100 - i)),
+    ];
+    const r = stratifyBySign(ordered, { target: 10, negativeRatioMin: 0.4 });
+    expect(r.picked).toHaveLength(10);
+    expect(r.negativeCount).toBe(4);
+    expect(r.nonNegativeCount).toBe(6);
+    // 先頭 5 件に負側が 2 件含まれる（偏らずに混ざる）
+    expect(r.picked.slice(0, 5).filter((x) => x.rootScore < 0)).toHaveLength(2);
+  });
+
+  it("負側が不足なら達成できる比率で、非負側で target まで埋める", () => {
+    const ordered = [
+      ...Array.from({ length: 20 }, (_, i) => item(`p${i}`, i)), // 0 は非負
+      item("n0", -5),
+    ];
+    const r = stratifyBySign(ordered, { target: 10, negativeRatioMin: 0.4 });
+    expect(r.picked).toHaveLength(10);
+    expect(r.negativeCount).toBe(1);
+    expect(r.nonNegativeCount).toBe(9);
+  });
+
+  it("非負側が不足なら負側を比率以上に使う。全体が足りなければ届く件数", () => {
+    const ordered = [
+      item("p0", 1),
+      ...Array.from({ length: 10 }, (_, i) => item(`n${i}`, -1 - i)),
+    ];
+    const r = stratifyBySign(ordered, { target: 8, negativeRatioMin: 0.4 });
+    expect(r.picked).toHaveLength(8);
+    expect(r.negativeCount).toBe(7);
+    const small = stratifyBySign(ordered.slice(0, 3), {
+      target: 8,
+      negativeRatioMin: 0.4,
+    });
+    expect(small.picked).toHaveLength(3);
+  });
+
+  it("各側の中では入力順（層化順）を保つ", () => {
+    const ordered = [
+      item("n0", -1),
+      item("p0", 1),
+      item("n1", -2),
+      item("p1", 2),
+    ];
+    const r = stratifyBySign(ordered, { target: 4, negativeRatioMin: 0.5 });
+    const negs = r.picked
+      .filter((x) => x.rootScore < 0)
+      .map((x) => x.candidate.key);
+    expect(negs).toEqual(["n0", "n1"]);
+  });
+});
+
+describe("pickOpenings（v1 等価性）", () => {
+  /** 固定 raw フィクスチャ: 3 親 × 4 件、score は正負混在 */
+  const raw = new Map<string, RawEvaluation>();
+  const eligible: SuiteCandidate[] = [];
+  for (const parent of ["A", "B", "C"]) {
+    for (let i = 0; i < 4; i++) {
+      const key = `${parent}${i}`;
+      eligible.push({ key, parent, root: i % 2 === 0 ? "花月" : null });
+      raw.set(key, {
+        score: (i % 2 === 0 ? 1 : -1) * (50 + i * 100),
+        bestMove: "H9",
+        reject: null,
+        elapsedMs: 1,
+      });
+    }
+  }
+  const base = { seed: 7, parentCap: 3, target: 6 };
+
+  it("negativeRatioMin=0 は stratifyBySign を通さず、旧 selectOpenings と同じ openings", () => {
+    const { picked, sign } = pickOpenings(eligible, raw, {
+      ...base,
+      negativeRatioMin: 0,
+    });
+    expect(sign).toBeNull();
+    const legacy = selectOpenings(
+      buildCandidateOrder(eligible, { seed: 7, parentCap: 3 }),
+      raw,
+      { scoreAbsMax: Number.POSITIVE_INFINITY, target: 6 },
+    ).accepted.map((e) => ({ candidate: e.candidate, rootScore: e.score }));
+    expect(picked).toEqual(legacy);
+    expect(picked.map((p) => p.candidate.key)).toMatchInlineSnapshot(`
+      [
+        "B3",
+        "C2",
+        "A3",
+        "A2",
+        "C1",
+        "B0",
+      ]
+    `);
+  });
+
+  it("negativeRatioMin>0 は符号層化を通り、負側の件数を返す", () => {
+    const { picked, sign } = pickOpenings(eligible, raw, {
+      ...base,
+      negativeRatioMin: 0.5,
+    });
+    expect(picked).toHaveLength(6);
+    expect(sign).toEqual({ negative: 3, nonNegative: 3 });
   });
 });
