@@ -55,7 +55,9 @@ for cand in cands（exact=false のもの、score 降順）:
 候補 = exact（降順）＋ 残り（境界値のまま、降順）。exact_mask は最終順序で計算
 ```
 
-- `beta = b_i + 1`: 子局面の TT に `upper_bound = b_i` が残っているので、probe で beta は `b_i` に切り詰められる。真値 == b_i の普通のケースでは **ちょうど `b_i`** が返る。上限の仮定下ではこれは真値なので **`s == b_i` は真値扱い**（1 回で確定。全窓フォールバックは意味がないので置かない）。
+- `beta = b_i + 1`: 子局面の TT に `upper_bound = b_i` が残っているので、probe で beta は `b_i` に切り詰められる。真値 == b_i の普通のケースでは **ちょうど `b_i`** が返る。上限の仮定下ではこれは真値なので **`s == b_i` は真値扱い**。**`s >= b_i + 1`（fail-high）は上限が破れている**（§3-2 の実測で 14 件中 2 件、382 → 3190 級）ので `beta = +INF` でもう一度だけ探索する（実装 `searchFullWindow`。1 手あたり最大 2 回、研究回数は 1 として数える）。
+- K 件確定後、`b_i <= e_K` の候補は子局面の TT 上限で即カットされるだけ（上限破れは検出できない）なので探索せず境界値のまま残す（研究回数も消費しない）。`b_i > e_K` のときだけ null window で確認する。
+- 候補順は「真値（降順）＋ 境界値（降順）」。境界値が真値より大きい値でも順序は真値優先（上限であって値ではない）。予算切れ以外では上位 K 件はすべて真値になる。
 - **上限の性質はこのエンジンでは保証されない**（Futility は max ノードの手を捨てて値を下げる、LMR は減深値を返す、打ち切り時は静的評価が混ざる）。真値 > b_i の手が孫の `beta = b_i` カットでちょうど `b_i` を返すと、そのまま真値として採用され検出できない。ヒューリスティック探索の限界として受け入れる（表示用途で今より悪くはならない）。§3-2 で不安定率を測る。
 - コストの支配項は `alpha = −INF`（子で NMP もカットも効かない）で、再探索 1 手 ≈ 深さ d−1 の PV サブツリー。K=5 で反復深化全体の **1.5〜3 倍** の見積り（perf）。null window 確認により「境界値が alpha に張り付いて打ち切りが成立せず root 全手を全窓再探索」は避ける。
 - 再探索で最善手を超える手が出た場合は候補先頭にし `result.position/score` も差し替える（全窓の方が信頼できる）。「候補先頭 = `result.position`」は **refine が走ったときだけ** の定義（Time Pressure Fallback 経路では従来どおりずれ得るが、TS は `bestMove` 一致で引くので破綻しない）。
@@ -67,7 +69,7 @@ v2 の「`!interrupted` かつ `now < loop_deadline` のときだけ走る」は
 - 実行位置は変えない: 反復深化ループ、Score Verification、Time Pressure Fallback の後、`finalizeStats` と `demotePlainFourIfNeeded` の前。
 - ガード: `exact_top_k > 0 and !fallback_fired and !ctx.absolute_deadline_exceeded`。`interrupted` でも走る（候補は `completed_depth` の完了済みの値）。Time Pressure Fallback が発火した手（`position/score` を過去深さの値に差し替えた）は候補と最善がずれるのでスキップ。
 - **予算の再装填**（refine 開始時）:
-  - 時間モード: `ctx.deadline = min(now + dynamic_time_limit, absolute_deadline)`、`ctx.timeout_flag = false`。主探索と同額の時間をもう一度与える（Phase 1 は構造上 **最大 2 倍**）。絶対デッドライン（FAST 10 s / PRECISE 20 s）は据え置きで安全弁。
+  - 時間モード: `ctx.deadline = min(now + dynamic_time_limit, absolute_deadline)`、`ctx.timeout_flag = false`。主探索と同額の時間をもう一度与える（Phase 1 は構造上 **最大 2 倍**。1 手あたりの最悪待ちは FAST 5 s → 10 s）。絶対デッドライン（FAST 10 s / PRECISE 20 s）は据え置きで安全弁。**実効予算は min(同額, 絶対デッドラインまでの残り)** で、PRECISE（15 s + 15 s > 20 s）は refine に最大 5 s しか残らない（§6.3 の PRECISE 残り 13/55 の主因）。
   - ノード上限あり（PRECISE の 1M など）: `ctx.max_nodes = ctx.stats.nodes + params.max_nodes`、`ctx.node_count_exceeded = false`。同じく最大 2 倍。
   - 決定的モードも同じくノードで再装填。
   - `absolute_deadline_exceeded` は再装填しない（安全弁）。
@@ -92,15 +94,16 @@ v2 の「`!interrupted` かつ `now < loop_deadline` のときだけ走る」は
 
 境界値を実手/最善のスコアとして使っている箇所は 3 つ。すべて `scoreExact` で分岐する。
 
-1. `evaluatePlayedForcedWin`（`evaluatePlayedMove.ts:150`）: 実手が候補内 → `scoreExact` のときだけ採用、境界値なら `probePlayedMoveScore` にフォールバック。
-2. `buildNormalResult`（`fullEval.ts:927-947`）: 通常パス（件数最多）の `playedScore` も同じ規則。
-3. 降格時の `bestScore = safeBest.searchScore`（`fullEval.ts:1046-1050`, `reviewLogic.ts:362-366`）: 2 位以下＝境界値（上限）。真値になると **下がる** ので `scoreDiff` が縮み、判定はこの経路では **甘くなる方向**。表示は境界値なら「≤」。
+1. `evaluatePlayedForcedWin`（`evaluatePlayedMove.ts`）: 実手が候補内で `scoreExact` ならその値。**境界値なら `min(境界値, probePlayedMoveScore)`**（上限は深さ d の情報なので捨てない。probe 不能なら境界値）。候補外は probe（共通ヘルパー `resolvePlayedScore`）。
+2. `buildNormalResult`（`fullEval.ts`）: 通常パス（件数最多）の `playedScore` も同じ規則。実手が最善手なら `scoreExact` を見ずに最善値を採用。
+
+注: フェーズ 1 では、候補内かつ境界値の実手は「判定値 = min(境界値, probe)」「グリッドの表示 = ≤境界値」で同じ手の値がずれ得る。フェーズ 2 の強制候補で解消する。`findBestMoveForReview` の `exactTopK` 既定値は **0**（scripts のトラップ採掘経路 `trapPipeline.ts` / `survivorMoves.ts` に波及させない）で、振り返りの `executeWasmSearch` だけが `REVIEW_EXACT_TOP_K = 5` を明示する。3. 降格時の `bestScore = safeBest.searchScore`（`fullEval.ts:1046-1050`, `reviewLogic.ts:362-366`）: 2 位以下＝境界値（上限）。真値になると **下がる** ので `scoreDiff` が縮み、判定はこの経路では **甘くなる方向**。表示は境界値なら「≤」。
 
 判定が変わる方向は両側: 実手側（1・2）は厳しく、降格時の最善側（3）は緩く、再探索で最善を超える手が出れば厳しく。しきい値 150/400/2500（`reviewLogic.ts:38-45`）は境界値ベースの分布で較正したものなので、§3-7(c) の集計を再較正要否の判断材料にする。
 
 - `executeWasmSearch` は `exactTopK = 5`、`forcedMove = 実手`（フェーズ 2 配線時）を渡す。候補の並びは wasm の返却順。
 - `demotePlainFourIfNeeded` は refine 後の真値で判定する（振り返りのみ）。
-- `ReviewCandidateGrid.vue`: `scoreExact` でない候補は `delta` に「≤」。
+- `ReviewCandidateGrid.vue`: `scoreExact` でない候補は `delta` に「≤」、delta 0 でも最善同格の色にせず `title="上限値（未確定）"`。
 
 ### 2.6 フェーズ 2: 実手の強制候補（Zig の ABI は本 PR に同梱、TS 配線は後続）
 
@@ -168,3 +171,17 @@ v2 の「`!interrupted` かつ `now < loop_deadline` のときだけ走る」は
 - 所要時間: FAST は 2 倍以内（負荷込み）。PRECISE は 2.1× で境界（opt-in 機能なので許容。K=3 は保留）。
 - 実 wasm テスト（`reviewExactTopK.wasm.test.ts`、決定的モード・深さ 6）: K=0 の同値ペア（白 11 手目 I7/I10 = −3603）が K=5 で −3603 / −4020 に分かれる。K=5 のコストは K=0 の 1.0〜1.6 倍（Zig 単体の 4 局面では 1.9〜4.0 倍）。
 - 受け入れ基準（§4）: 不変（ゴールデン緑）○ / 同点の消滅（FAST 白 0/28）○ / 時間 2 倍以内（FAST）○ / 判定の方向 ○。
+
+### 6.4 実装レビュー（3 観点、2026-09-06）の結果
+
+- SOLID: LGTM。提案 5 件（fail-high 再探索のメモ追記 / `result_buffer` の comptime assert / `k == 0` ガード / フェーズ 1 の表示と判定値のずれの注記 / テストの定数参照）→ すべて反映。
+- perf: LGTM。PRECISE の refine 予算が絶対デッドラインに食われる点（§2.2 に追記）、`b_i <= e_K` の null window 省略（反映）、残りは §8。
+- イシュー: blocker 1 件 = `exactTopK` 既定値 5 が scripts のトラップ採掘経路に波及 → 既定値 0 に修正。提案: min(境界値, probe)（反映）、forced_move の空点チェック（反映）、「≤±0」の色（反映）、FAST の 1 手あたり最悪 10 s（§2.2 に追記）。
+
+## 8. 後続課題
+
+1. **PRECISE の refine 予算**: `absoluteTimeLimit` 20 s を `timeLimit × 2 + α` にするか、refine 予算を明示パラメータにする。現状 refine は最大 5 s。
+2. **境界値残り（FAST 黒 6/32）のレバー**（perf 提案）: 全窓の alpha を段階的に下げる `(b_i − W, b_i + 1)`（W = 300 → 1000 → INF）、K 確定後の fail-high 再探索を `alpha = e_K` で読む。root で exact になった低い手（最初の手）が K を埋める問題も同根。K=3 より先に試す。
+3. **フェーズ 2**: `forcedMove = 実手` の TS 配線と `probePlayedMoveScore` の廃止。実手が候補外で詰み定数（−99999）になる手は (a) 分類の同点に合流する点に注意。
+4. (a) 詰みスコア `FIVE − 1` の真の同点（詰み距離なし）と (b) FAST の事前探索即決で候補 1 件、は別メモ。
+5. しきい値 150/400/2500 の再較正要否: 黒 9 手目 J6（FAST 679 / PRECISE 871、diff 579 / 388）のように 400 をまたぐ境界ケースを蓄積して判断。
