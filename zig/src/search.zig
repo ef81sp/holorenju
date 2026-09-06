@@ -4,6 +4,7 @@
 /// TS版 iterativeDeepening.ts + preSearch.ts に対応
 const bitboard = @import("bitboard.zig");
 const board_mod = @import("board.zig");
+const budget_mod = @import("budget.zig");
 const deadline_mod = @import("deadline.zig");
 const evaluate = @import("evaluate.zig");
 const forbidden = @import("forbidden.zig");
@@ -64,6 +65,8 @@ pub const PreSearchResult = struct {
     restricted_moves: ?move_gen.MoveList = null,
     /// 相手の脅威情報
     threats: ?threats_mod.ThreatInfo = null,
+    /// 事前探索（VCF / 相手 VCF / ミセ VCF / VCT）が消費したノード数
+    nodes: u32 = 0,
 };
 
 /// 即勝ち手を探す（五連を完成できる位置）
@@ -98,17 +101,29 @@ fn findWinningMove(cells: []Cell, color: Cell) ?Position {
 /// 各段を `child()` で作ることで「前段が食った分だけ後段が短くなる」ようにする。
 pub const PRE_SEARCH_TIME_LIMIT: u32 = vcf_mod.VCF_TIME_LIMIT * 2 + vct.VCT_TIME_LIMIT;
 
+/// pre-search 全体のノード予算（決定的モード。設計メモ bench-fixed-nodes §2.2）
+///
+/// 時間モードの 600ms（`PRE_SEARCH_TIME_LIMIT`）に対応する親予算。各段は
+/// 自前のノード予算（`VCF_PRE_NODES_DETERMINISTIC` など）で回り、段の境目と
+/// ミセ VCF の候補ループ先頭でこの親予算を見る。**未較正**の初期値（較正は §4 手順 1）。
+pub const PRE_SEARCH_NODE_BUDGET_DETERMINISTIC: u32 = 40_000;
+
 /// 必須手の事前チェック
+///
+/// `policy.deterministic` なら壁時計を見ず、親 limiter と各段をノード予算で縛る。
+/// 時間モードでは従来どおり 600ms の親 limiter（各段の子は時間のみ、相手 VCF は 3000 ノード）。
+/// 消費ノードの合計は `PreSearchResult.nodes`（= 親 limiter への charge 合計）で返す。
 pub fn findPreSearchMove(
     cells: []Cell,
     color: Cell,
+    policy: budget_mod.BudgetPolicy,
 ) PreSearchResult {
     // pre-search 全体の予算（issue #147 B）。各段はこの残りを継承した子で回る。
     var pre_limiter = vcf_mod.TimeLimiter{
         .start_time = getTimestampMs(),
-        .time_limit = PRE_SEARCH_TIME_LIMIT,
+        .time_limit = if (policy.deterministic) 0 else PRE_SEARCH_TIME_LIMIT,
         .nodes = 0,
-        .max_nodes = 0,
+        .max_nodes = policy.pre_search_nodes,
     };
 
     // 即勝ち手
@@ -156,21 +171,22 @@ pub fn findPreSearchMove(
         };
     }
 
-    // VCF勝ち手を探す
-    const vcf_budget = pre_limiter.child(vcf_mod.VCF_TIME_LIMIT, 0);
-    const vcf_move = vcf_mod.findVCFMove(cells, color, vcf_mod.VCF_MAX_DEPTH, vcf_budget.time_limit);
+    // 各段の壁時計予算（決定的モードでは 0 ＝ ノード予算のみ）
+    const stage_vcf_time: u32 = if (policy.deterministic) 0 else vcf_mod.VCF_TIME_LIMIT;
+    const stage_vct_time: u32 = if (policy.deterministic) 0 else vct.VCT_TIME_LIMIT;
+
+    // VCF勝ち手を探す（親の残り予算を継承し、消費を親へ計上する。設計メモ bench-fixed-nodes §2.2）
+    const vcf_move = vcf_mod.findVCFMoveWithParent(cells, color, vcf_mod.VCF_MAX_DEPTH, stage_vcf_time, policy.pre_vcf_nodes, &pre_limiter);
     if (vcf_move) |vm| {
         return .{
             .immediate_move = vm,
             .immediate_score = scores.FIVE - 10,
+            .nodes = pre_limiter.nodes,
         };
     }
 
     // 相手VCFチェック（Mise-VCFスキップ判定用）
-    const opponent_has_vcf = blk: {
-        var opp_limiter = pre_limiter.child(vcf_mod.VCF_TIME_LIMIT, 3000);
-        break :blk vcf_mod.hasVCF(cells, opponent_color, 0, &opp_limiter, vcf_mod.VCF_MAX_DEPTH);
-    };
+    const opponent_has_vcf = vcf_mod.hasVCFWithParent(cells, opponent_color, vcf_mod.VCF_MAX_DEPTH, stage_vcf_time, policy.pre_opp_vcf_nodes, &pre_limiter);
 
     // Mise-VCF（ミセ→強制応手→VCF勝ち）
     // 相手VCFがある場合は間に合わないのでスキップ
@@ -184,28 +200,30 @@ pub fn findPreSearchMove(
                     return .{
                         .immediate_move = mm,
                         .immediate_score = scores.FIVE - 15,
+                        .nodes = pre_limiter.nodes,
                     };
                 }
             } else {
                 return .{
                     .immediate_move = mm,
                     .immediate_score = scores.FIVE - 15,
+                    .nodes = pre_limiter.nodes,
                 };
             }
         }
     }
 
     // VCT勝ち手を探す
-    const vct_budget = pre_limiter.child(vct.VCT_TIME_LIMIT, 0);
-    const vct_move = vct.findVCTMove(cells, color, vct.VCT_MAX_DEPTH, vct_budget.time_limit);
+    const vct_move = vct.findVCTMoveWithParent(cells, color, vct.VCT_MAX_DEPTH, stage_vct_time, policy.pre_vct_nodes, &pre_limiter, .lenient);
     if (vct_move) |vm| {
         return .{
             .immediate_move = vm,
             .immediate_score = scores.FIVE - 20,
+            .nodes = pre_limiter.nodes,
         };
     }
 
-    return .{ .threats = threat_info };
+    return .{ .threats = threat_info, .nodes = pre_limiter.nodes };
 }
 
 // =============================================================================
@@ -244,6 +262,9 @@ pub const DepthHistoryEntry = struct {
 
 const PLAIN_FOUR_PREFERENCE_MARGIN: i32 = 200;
 const PLAIN_FOUR_VCF_CHECK_TIME_LIMIT: u32 = 50;
+/// 降格判定 VCF のノード予算（決定的モード。時間モードは `PLAIN_FOUR_VCF_CHECK_TIME_LIMIT` のみ）
+/// **未較正**の初期値（VCF は安いので 2〜3k 程度。較正は設計メモ §4 手順 1）。
+pub const PLAIN_FOUR_VCF_CHECK_NODES_DETERMINISTIC: u32 = 3000;
 
 /// 非生産的四の優先度引き下げ
 ///
@@ -256,6 +277,7 @@ fn demotePlainFourIfNeeded(
     result: *IterativeDeepingResult,
     cells: []Cell,
     color: Cell,
+    policy: budget_mod.BudgetPolicy,
 ) void {
     // 候補が2つ未満なら何もしない
     if (result.top_candidate_count < 2) return;
@@ -272,8 +294,12 @@ fn demotePlainFourIfNeeded(
     const is_plain_four = !ft.has_five and ft.has_four and !ft.has_open_three;
     if (!is_plain_four) return;
 
-    // VCF安全チェック
-    const vcf_move = vcf_mod.findVCFMove(cells, color, vcf_mod.VCF_MAX_DEPTH, PLAIN_FOUR_VCF_CHECK_TIME_LIMIT);
+    // VCF安全チェック（決定的モードではノード予算。設計メモ bench-fixed-nodes §2.2。
+    // この消費は stats に計上しない）
+    const vcf_move = if (policy.deterministic)
+        vcf_mod.findVCFMoveWithBudget(cells, color, vcf_mod.VCF_MAX_DEPTH, 0, policy.demote_vcf_nodes)
+    else
+        vcf_mod.findVCFMove(cells, color, vcf_mod.VCF_MAX_DEPTH, PLAIN_FOUR_VCF_CHECK_TIME_LIMIT);
     if (vcf_move != null) return;
 
     // 候補手から最初の非・非生産的四手を探す
@@ -297,6 +323,11 @@ fn demotePlainFourIfNeeded(
     }
 }
 
+/// 返す上位候補手の最大数: 従来の 5 件 + 強制候補 1 件（設計メモ review-multipv-2026-09-06 §2.4）
+pub const TOP_CANDIDATES: u8 = 6;
+/// 候補リストの基本件数（従来どおり 5 件。`demotePlainFourIfNeeded` が見る範囲もここまで）
+const TOP_CANDIDATES_BASE: u8 = 5;
+
 /// Iterative Deepening結果
 pub const IterativeDeepingResult = struct {
     position: Position,
@@ -305,9 +336,12 @@ pub const IterativeDeepingResult = struct {
     interrupted: bool,
     stats: minimax.SearchStats,
     forced_move: bool = false,
-    /// 上位候補手（最大5手）
-    top_candidates: [5]minimax.MoveScoreEntry = undefined,
+    /// 上位候補手（最大 `TOP_CANDIDATES` 手。6 件目は `forced_move` の強制候補のみ）
+    top_candidates: [TOP_CANDIDATES]minimax.MoveScoreEntry = undefined,
     top_candidate_count: u8 = 0,
+    /// bit i = `top_candidates[i]` が真値（root の窓内 or `refineTopCandidates` の再探索）。
+    /// `exact_top_k == 0` なら常に 0。
+    exact_mask: u8 = 0,
 };
 
 /// 反復深化探索パラメータ
@@ -317,6 +351,10 @@ pub const IterativeDeepeningParams = struct {
     max_nodes: u32 = 0, // 0 = 無制限
     absolute_time_limit: u32 = 10000, // ms
     aspiration_mode: u8 = 0, // 0 = 固定[75], 1 = [75,200,500]
+    /// root の上位 K 手を真値にする（0 = 従来どおり境界値のまま。設計メモ review-multipv §2.1）
+    exact_top_k: u8 = 0,
+    /// 必ず真値で返す手（振り返りの実手）。`exact_top_k == 0` のときは無視される（§2.6）
+    forced_move: ?Position = null,
     eval_options: position_eval.EvalOptions = position_eval.DEFAULT_EVAL_OPTIONS,
     board_eval_options: evaluate.EvalOptions = .{
         .enable_leaf_mise = false,
@@ -349,9 +387,20 @@ pub fn findBestMoveIterative(
     // limiter も残っているので、ここより後ろで立てると事前探索が天井の外に出てしまう。
     //
     // `no_time_limit`（計測モード・解析）の場合は 0＝無効のまま。
-    const no_time_limit = params.time_limit == 0;
-    const absolute_deadline = if (no_time_limit) @as(u32, 0) else start_time + params.absolute_time_limit;
+    //
+    // 決定的モード（設計メモ bench-fixed-nodes §2.1）: 予算ポリシーをここで一度だけ導出し、
+    // `time_limit` は 0 として扱う（`no_time_limit`）。安全弁（§2.6）として
+    // `absolute_time_limit > 0` なら絶対デッドラインだけは立てる（ベンチは 0 を渡す＝無効）。
+    const policy = budget_mod.BudgetPolicy.derive();
+    const no_time_limit = params.time_limit == 0 or policy.deterministic;
+    const absolute_deadline = if (policy.deterministic)
+        (if (params.absolute_time_limit == 0) @as(u32, 0) else start_time + params.absolute_time_limit)
+    else if (no_time_limit)
+        @as(u32, 0)
+    else
+        start_time + params.absolute_time_limit;
     deadline_mod.set(absolute_deadline);
+    deadline_mod.resetHit();
     // 早期 return（即決手・唯一手）を含め、抜けるときは必ず解除する。
     // 解除し忘れると、以降の振り返り経路（`findVCTSequence` 直接呼び出し）まで
     // 過去のデッドラインで打ち切られてしまう。
@@ -377,6 +426,8 @@ pub fn findBestMoveIterative(
         params.board_eval_options,
     );
 
+    ctx.budget = policy;
+
     // 新しい探索開始
     tt_mod.global_tt.newGeneration();
 
@@ -393,18 +444,23 @@ pub fn findBestMoveIterative(
     // 事前チェック
     // =========================================================================
 
-    const pre_search = findPreSearchMove(cells, color);
+    const pre_search = findPreSearchMove(cells, color, policy);
+    // 事前探索の消費ノードを記録（両モード）。`nodes` への加算は決定的モードのみ
+    // （設計メモ bench-fixed-nodes §2.4）。
+    ctx.stats.pre_search_nodes = pre_search.nodes;
+    if (policy.deterministic) ctx.stats.nodes +|= pre_search.nodes;
+
     // レビューモード(aspiration_mode != 0)ではPV蓄積のためpreSearch即決をスキップ
     if (pre_search.immediate_move) |im| {
         if (params.aspiration_mode == 0) {
-            var candidates: [5]minimax.MoveScoreEntry = undefined;
+            var candidates: [TOP_CANDIDATES]minimax.MoveScoreEntry = undefined;
             candidates[0] = .{ .move = im, .score = pre_search.immediate_score };
             return .{
                 .position = im,
                 .score = pre_search.immediate_score,
                 .completed_depth = 0,
                 .interrupted = false,
-                .stats = ctx.stats,
+                .stats = finalizeStats(&ctx),
                 .top_candidates = candidates,
                 .top_candidate_count = 1,
             };
@@ -454,14 +510,14 @@ pub fn findBestMoveIterative(
     // 唯一の候補手なら即座に返す（レビューモードではPV蓄積のため続行）
     if (moves.len <= 1 and params.aspiration_mode == 0) {
         const pos = if (moves.len == 1) moves.items[0] else Position{ .row = 7, .col = 7 };
-        var candidates: [5]minimax.MoveScoreEntry = undefined;
+        var candidates: [TOP_CANDIDATES]minimax.MoveScoreEntry = undefined;
         candidates[0] = .{ .move = pos, .score = 0 };
         return .{
             .position = pos,
             .score = 0,
             .completed_depth = 0,
             .interrupted = false,
-            .stats = ctx.stats,
+            .stats = finalizeStats(&ctx),
             .forced_move = true,
             .top_candidates = candidates,
             .top_candidate_count = 1,
@@ -653,6 +709,7 @@ pub fn findBestMoveIterative(
     }
 
     // Time Pressure Fallback
+    var fallback_fired = false;
     if (interrupted and depth_history_len > 0) {
         var i: u8 = depth_history_len;
         while (i > 0) {
@@ -663,17 +720,60 @@ pub fn findBestMoveIterative(
             {
                 best_result.position = entry.position;
                 best_result.score = entry.score;
+                fallback_fired = true;
                 break;
             }
         }
     }
 
-    // 上位候補手を収集（最大5手）
-    var top_candidates: [5]minimax.MoveScoreEntry = undefined;
-    const max_top: u16 = 5;
-    const count = if (best_result.candidate_count < max_top) best_result.candidate_count else max_top;
+    // root 上位 K 手の真値化（設計メモ review-multipv-2026-09-06 §2.2 v3）。
+    // 主探索が時間/ノードで打ち切られていても走る（振り返りでは主探索は時間上限に張り付くのが通常）。
+    // Time Pressure Fallback で position を過去深さの値に差し替えた手は候補と最善がずれるのでスキップ。
+    // 絶対デッドライン（安全弁）は再装填しない。
+    // `exact_top_k == 0` を先頭に置き、従来経路では時計を読まない（ゴールデン B は時計読み回数に敏感）。
+    const refined = params.exact_top_k > 0 and !fallback_fired and !ctx.absolute_deadline_exceeded;
+    // 強制候補は空点のみ（`searchRootMove` は無条件に石を置くため）。着手可否（禁手）は問わない
+    const forced_move: ?Position = if (params.forced_move) |fm|
+        (if (cells[@as(u16, fm.row) * BOARD_SIZE + fm.col] == .empty) fm else null)
+    else
+        null;
+    if (refined) {
+        // 予算の再装填: 主探索と同額の時間 / ノードをもう一度与える（Phase 1 は構造上 最大 2 倍）
+        if (!no_time_limit) {
+            ctx.deadline = @min(getTimestampMs() + dynamic_time_limit, absolute_deadline);
+            ctx.timeout_flag = false;
+        }
+        if (ctx.max_nodes > 0) {
+            ctx.max_nodes = ctx.stats.nodes + params.max_nodes;
+            ctx.node_count_exceeded = false;
+        }
+        refineTopCandidates(&best_result, cells, color, completed_depth, params.exact_top_k, forced_move, &ctx);
+    }
+
+    // 上位候補手を収集（基本 5 手 + 真値化された強制候補 1 手）
+    var top_candidates: [TOP_CANDIDATES]minimax.MoveScoreEntry = undefined;
+    var count: u16 = @min(best_result.candidate_count, TOP_CANDIDATES_BASE);
     for (0..count) |i| {
         top_candidates[i] = best_result.candidates[i];
+    }
+    if (refined) {
+        if (forced_move) |fm| {
+            if (findCandidateIndex(top_candidates[0..count], fm) == null) {
+                if (findCandidateIndex(best_result.candidates[0..best_result.candidate_count], fm)) |fi| {
+                    const entry = best_result.candidates[fi];
+                    if (entry.exact) {
+                        top_candidates[count] = entry;
+                        count += 1;
+                    }
+                }
+            }
+        }
+    }
+    var exact_mask: u8 = 0;
+    if (params.exact_top_k > 0) {
+        for (0..count) |i| {
+            if (top_candidates[i].exact) exact_mask |= @as(u8, 1) << @intCast(i);
+        }
     }
 
     var final_result = IterativeDeepingResult{
@@ -681,15 +781,193 @@ pub fn findBestMoveIterative(
         .score = best_result.score,
         .completed_depth = completed_depth,
         .interrupted = interrupted,
-        .stats = ctx.stats,
+        .stats = finalizeStats(&ctx),
         .top_candidates = top_candidates,
         .top_candidate_count = @intCast(count),
+        .exact_mask = exact_mask,
     };
 
     // 非生産的四の引き下げ
-    demotePlainFourIfNeeded(&final_result, cells, color);
+    demotePlainFourIfNeeded(&final_result, cells, color, policy);
 
     return final_result;
+}
+
+fn samePosition(a: Position, b: Position) bool {
+    return a.row == b.row and a.col == b.col;
+}
+
+fn findCandidateIndex(entries: []const minimax.MoveScoreEntry, move: Position) ?usize {
+    for (entries, 0..) |e, i| {
+        if (samePosition(e.move, move)) return i;
+    }
+    return null;
+}
+
+/// スコア降順を保って挿入する（同点は後ろ＝安定）
+fn insertDescending(list: []minimax.MoveScoreEntry, len: *u16, entry: minimax.MoveScoreEntry) void {
+    var i: u16 = len.*;
+    while (i > 0 and list[i - 1].score < entry.score) : (i -= 1) {
+        list[i] = list[i - 1];
+    }
+    list[i] = entry;
+    len.* += 1;
+}
+
+// =============================================================================
+// root 上位 K 手の真値化（設計メモ docs/plans/review-multipv-2026-09-06.md §2.1）
+// =============================================================================
+
+/// `alpha = −INF` で 1 手を探索し真値を返す。`beta` は境界値 + 1（境界値が無ければ +INF）。
+/// fail-high（`s >= beta`）なら上限が破れているので `beta = +INF` でもう一度探索する。
+/// 打ち切り時の値は呼び出し側が `ctx.isAborted()` を見て捨てる。
+fn searchFullWindow(
+    cells: []Cell,
+    hash: u64,
+    move: Position,
+    color: Cell,
+    depth: u8,
+    beta: i32,
+    ctx: *minimax.SearchContext,
+) i32 {
+    const s = minimax.searchRootMove(cells, hash, move, color, depth, -scores.INFINITY, beta, ctx);
+    if (ctx.isAborted() or beta >= scores.INFINITY or s < beta) return s;
+    return minimax.searchRootMove(cells, hash, move, color, depth, -scores.INFINITY, scores.INFINITY, ctx);
+}
+
+/// root の候補のうち上位 K 手を真値（全窓の探索値）にする
+///
+/// root の alpha-beta は最善手以外を fail-low の境界値（上限）で返す。振り返りの候補手グリッドが
+/// その境界値を並べると「2 位以下が同じ値」になるので、上位 K 手だけ再探索して真値にする。
+///
+/// - root で窓内に収まった手（`exact = true`）は再探索しない。
+/// - K 件揃うまでは全窓（`alpha = −INF`, `beta = b_i + 1`）。`b_i` は境界値（上限）なので
+///   `s == b_i` は真値扱い（子局面の TT に `upper_bound = b_i` が残っており、ちょうど `b_i` が返る）。
+///   `s >= b_i + 1`（fail-high）は上限が破れている（Futility/LMR/プローブ由来）ので `beta = +INF` で
+///   もう一度だけ探索する。fail-high の値を真値として採用しない。
+/// - K 件揃ったら null window `(e_K, e_K + 1)` で「K 位の真値 `e_K` を超えるか」だけ確認し、
+///   fail-high のときだけ全窓で真値を取る。null window の値が `b_i` を超えていたら上限が
+///   破れているので全窓の `beta` は `+INF` にする。
+/// - 再探索回数は 2K で打ち止め。再探索後に `ctx.isAborted()` なら値を捨てて以降は再探索しない。
+/// - `forced_move`（振り返りの実手）は候補に無ければ追加し、回数上限に関係なく必ず全窓で真値にする。
+/// - 結果の候補順は「真値（降順）＋ 境界値のまま（降順）」。先頭を `position/score` にする
+///   （再探索で最善を超える手が出れば差し替わる）。
+pub fn refineTopCandidates(
+    result: *minimax.MinimaxResult,
+    cells: []Cell,
+    color: Cell,
+    depth: u8,
+    k: u8,
+    forced_move: ?Position,
+    ctx: *minimax.SearchContext,
+) void {
+    // 呼び出し側ガードに依存しない（`exact_list[k - 1]` のアンダーフロー防止）
+    if (k == 0) return;
+
+    const hash = zobrist.computeBoardHash(cells);
+    const max_researches: u32 = @as(u32, k) * 2;
+    var researches: u32 = 0;
+    var aborted = ctx.isAborted();
+
+    // 強制候補（§2.6）: 候補に無ければ追加し、境界値のままなら全窓で真値にする
+    if (forced_move) |fm| {
+        const existing = findCandidateIndex(result.candidates[0..result.candidate_count], fm);
+        const needs_search = if (existing) |i| !result.candidates[i].exact else true;
+        if (needs_search and !aborted) {
+            const beta: i32 = if (existing) |i| result.candidates[i].score + 1 else scores.INFINITY;
+            const s = searchFullWindow(cells, hash, fm, color, depth, beta, ctx);
+            if (ctx.isAborted()) {
+                aborted = true;
+            } else {
+                const entry = minimax.MoveScoreEntry{ .move = fm, .score = s, .exact = true };
+                if (existing) |i| {
+                    result.candidates[i] = entry;
+                } else if (result.candidate_count < move_gen.MAX_MOVES) {
+                    result.candidates[result.candidate_count] = entry;
+                    result.candidate_count += 1;
+                }
+            }
+        }
+    }
+
+    var exact_list: [move_gen.MAX_MOVES]minimax.MoveScoreEntry = undefined;
+    var exact_len: u16 = 0;
+    var rest_list: [move_gen.MAX_MOVES]minimax.MoveScoreEntry = undefined;
+    var rest_len: u16 = 0;
+
+    for (0..result.candidate_count) |i| {
+        const cand = result.candidates[i];
+        if (cand.exact) {
+            insertDescending(&exact_list, &exact_len, cand);
+            continue;
+        }
+        if (aborted or researches >= max_researches) {
+            rest_list[rest_len] = cand;
+            rest_len += 1;
+            continue;
+        }
+
+        var full_beta: i32 = cand.score + 1;
+        if (exact_len >= k) {
+            // K 件確定済み: K 位の真値を超えるかだけ null window で確認。
+            // 境界値 b_i <= e_K の手は子局面の TT（upper_bound = b_i）で即カットされるだけで
+            // 上限破れも検出できないので、探索せず rest へ直行する（回数も消費しない）。
+            const e_k = exact_list[k - 1].score;
+            if (cand.score <= e_k) {
+                rest_list[rest_len] = cand;
+                rest_len += 1;
+                continue;
+            }
+            const s = minimax.searchRootMove(cells, hash, cand.move, color, depth, e_k, e_k + 1, ctx);
+            researches += 1;
+            if (ctx.isAborted()) aborted = true;
+            if (aborted or s <= e_k) {
+                rest_list[rest_len] = cand;
+                rest_len += 1;
+                continue;
+            }
+            if (s > cand.score) full_beta = scores.INFINITY;
+        }
+
+        const s = searchFullWindow(cells, hash, cand.move, color, depth, full_beta, ctx);
+        researches += 1;
+        if (ctx.isAborted()) {
+            aborted = true;
+            rest_list[rest_len] = cand;
+            rest_len += 1;
+            continue;
+        }
+        insertDescending(&exact_list, &exact_len, .{ .move = cand.move, .score = s, .exact = true });
+    }
+
+    // 候補 = 真値（降順）＋ 境界値（降順）
+    var out: u16 = 0;
+    for (0..exact_len) |i| {
+        result.candidates[out] = exact_list[i];
+        out += 1;
+    }
+    for (0..rest_len) |i| {
+        result.candidates[out] = rest_list[i];
+        out += 1;
+    }
+    result.candidate_count = out;
+    if (out > 0) {
+        result.position = result.candidates[0].move;
+        result.score = result.candidates[0].score;
+    }
+}
+
+/// 探索終了時の統計を確定する（安全弁の発火フラグを畳み込む。設計メモ bench-fixed-nodes §2.6）
+///
+/// メイン探索（`ctx.absolute_deadline_exceeded`）と VCF/VCT の `TimeLimiter`
+/// （`deadline.hitSinceReset()`）のどちらで発火しても 1 になる。
+fn finalizeStats(ctx: *minimax.SearchContext) minimax.SearchStats {
+    var stats = ctx.stats;
+    // 決定的モードでは時間で timeout_flag を立てる経路は quiescence の安全弁だけなので、
+    // timeout_flag も発火の証拠になる。
+    const q_valve_hit = ctx.budget.deterministic and ctx.timeout_flag;
+    stats.absolute_deadline_hit = if (ctx.absolute_deadline_exceeded or q_valve_hit or deadline_mod.hitSinceReset()) 1 else 0;
+    return stats;
 }
 
 // =============================================================================
@@ -713,7 +991,7 @@ test "findPreSearchMove: immediate win" {
     cells[7 * BOARD_SIZE + 7] = .black;
     cells[7 * BOARD_SIZE + 8] = .black;
 
-    const result = findPreSearchMove(&cells, .black);
+    const result = findPreSearchMove(&cells, .black, budget_mod.BudgetPolicy.TIME_MODE);
     try testing.expect(result.immediate_move != null);
     try testing.expectEqual(result.immediate_score, scores.FIVE);
 }
@@ -728,7 +1006,7 @@ test "findPreSearchMove: must defend four" {
     // 片端を黒で塞ぐ → 止め四
     cells[7 * BOARD_SIZE + 4] = .black;
 
-    const result = findPreSearchMove(&cells, .black);
+    const result = findPreSearchMove(&cells, .black, budget_mod.BudgetPolicy.TIME_MODE);
     // 相手の四に対する防御が検出される
     try testing.expect(result.immediate_move != null or result.threats != null);
 }
@@ -936,4 +1214,139 @@ test "findBestMoveIterative: white selects J9 at move 16" {
 
     try testing.expectEqual(result.position.row, 6);
     try testing.expectEqual(result.position.col, 9);
+}
+
+// --- 設計メモ review-multipv-2026-09-06: root 上位 K 手の真値化（軽量テスト。重いものは search_exact_topk_test.zig） ---
+
+test "exact_top_k = 0: exact_mask は 0 で候補は従来どおり最大 5 件（§3-1）" {
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[7 * BOARD_SIZE + 7] = .black;
+    cells[7 * BOARD_SIZE + 8] = .white;
+    cells[6 * BOARD_SIZE + 7] = .black;
+    cells[8 * BOARD_SIZE + 8] = .white;
+
+    tt_mod.global_tt.clear();
+    const result = findBestMoveIterative(&cells, .black, .{ .max_depth = 2, .aspiration_mode = 1 });
+    try testing.expectEqual(@as(u8, 0), result.exact_mask);
+    try testing.expect(result.top_candidate_count <= TOP_CANDIDATES_BASE);
+}
+
+test "exact_top_k > 0: 上位候補に exact ビットが立ち、強制手は候補に含まれる（§3-3/§3-5 軽量版）" {
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[7 * BOARD_SIZE + 7] = .black;
+    cells[7 * BOARD_SIZE + 8] = .white;
+    cells[6 * BOARD_SIZE + 7] = .black;
+    cells[8 * BOARD_SIZE + 8] = .white;
+
+    // 盤端の空点（通常は候補の上位に入らない）を強制候補にする
+    const forced = Position{ .row = 0, .col = 0 };
+
+    tt_mod.global_tt.clear();
+    const result = findBestMoveIterative(&cells, .black, .{
+        .max_depth = 2,
+        .aspiration_mode = 1,
+        .exact_top_k = 2,
+        .forced_move = forced,
+    });
+    // 上位 2 件は真値
+    try testing.expect(result.top_candidate_count >= 3);
+    try testing.expectEqual(@as(u8, 0b11), result.exact_mask & 0b11);
+    try testing.expect(result.top_candidates[0].score >= result.top_candidates[1].score);
+    // 強制手は末尾に真値で入る
+    var found: ?usize = null;
+    for (0..result.top_candidate_count) |i| {
+        const m = result.top_candidates[i].move;
+        if (m.row == forced.row and m.col == forced.col) found = i;
+    }
+    try testing.expect(found != null);
+    try testing.expect((result.exact_mask >> @intCast(found.?)) & 1 == 1);
+    try testing.expect(result.top_candidate_count <= TOP_CANDIDATES);
+}
+
+test "refineTopCandidates: root で exact が立った候補は再探索されない（nodes 不変）" {
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[7 * BOARD_SIZE + 7] = .black;
+    cells[7 * BOARD_SIZE + 8] = .white;
+
+    var history = move_order.HistoryTable.init();
+    var killers = move_order.KillerMoves.init();
+    var counter_moves = minimax.initCounterMoveTable();
+    var ctx = minimax.SearchContext.init(
+        &tt_mod.global_tt,
+        &history,
+        &killers,
+        &counter_moves,
+        position_eval.DEFAULT_EVAL_OPTIONS,
+        (IterativeDeepeningParams{}).board_eval_options,
+    );
+    ctx.no_time_limit = true;
+    ll.init();
+    incremental_eval.initFromBoard(&cells, .{
+        .connectivity_bonus = scores.CONNECTIVITY_BONUS,
+        .single_four_penalty_multiplier = 100,
+        .eval_basis = .legacy,
+    });
+
+    var result = minimax.MinimaxResult{ .position = .{ .row = 6, .col = 6 }, .score = 30 };
+    result.candidates[0] = .{ .move = .{ .row = 6, .col = 6 }, .score = 30, .exact = true };
+    result.candidates[1] = .{ .move = .{ .row = 8, .col = 8 }, .score = 20, .exact = true };
+    result.candidates[2] = .{ .move = .{ .row = 6, .col = 8 }, .score = 10, .exact = true };
+    result.candidate_count = 3;
+
+    refineTopCandidates(&result, &cells, .black, 2, 3, null, &ctx);
+    try testing.expectEqual(@as(u32, 0), ctx.stats.nodes);
+    try testing.expectEqual(@as(u16, 3), result.candidate_count);
+    try testing.expectEqual(@as(i32, 30), result.score);
+    try testing.expectEqual(@as(i32, 10), result.candidates[2].score);
+
+    // 境界値の候補を足すと、その手だけ再探索される
+    result.candidates[3] = .{ .move = .{ .row = 8, .col = 6 }, .score = 25, .exact = false };
+    result.candidate_count = 4;
+    refineTopCandidates(&result, &cells, .black, 2, 4, null, &ctx);
+    try testing.expect(ctx.stats.nodes > 0);
+    for (0..result.candidate_count) |i| try testing.expect(result.candidates[i].exact);
+}
+
+test "forced_move が既石（空点でない）なら無視され、候補に入らず落ちない" {
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[7 * BOARD_SIZE + 7] = .black;
+    cells[7 * BOARD_SIZE + 8] = .white;
+    cells[6 * BOARD_SIZE + 7] = .black;
+    cells[8 * BOARD_SIZE + 8] = .white;
+
+    tt_mod.global_tt.clear();
+    const occupied = Position{ .row = 7, .col = 8 };
+    const result = findBestMoveIterative(&cells, .black, .{
+        .max_depth = 2,
+        .aspiration_mode = 1,
+        .exact_top_k = 2,
+        .forced_move = occupied,
+    });
+    try testing.expectEqual(@as(u8, 0b11), result.exact_mask & 0b11);
+    try testing.expect(result.top_candidate_count <= TOP_CANDIDATES_BASE);
+    for (0..result.top_candidate_count) |i| {
+        const m = result.top_candidates[i].move;
+        try testing.expect(!(m.row == occupied.row and m.col == occupied.col));
+    }
+    // 盤面は元のまま
+    try testing.expectEqual(Cell.white, cells[7 * BOARD_SIZE + 8]);
+}
+
+test "exact_top_k = 0: forced_move は無視される" {
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[7 * BOARD_SIZE + 7] = .black;
+    cells[7 * BOARD_SIZE + 8] = .white;
+
+    tt_mod.global_tt.clear();
+    const result = findBestMoveIterative(&cells, .black, .{
+        .max_depth = 2,
+        .aspiration_mode = 1,
+        .exact_top_k = 0,
+        .forced_move = Position{ .row = 0, .col = 0 },
+    });
+    try testing.expectEqual(@as(u8, 0), result.exact_mask);
+    for (0..result.top_candidate_count) |i| {
+        const m = result.top_candidates[i].move;
+        try testing.expect(!(m.row == 0 and m.col == 0));
+    }
 }

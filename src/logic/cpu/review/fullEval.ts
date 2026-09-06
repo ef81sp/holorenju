@@ -28,7 +28,11 @@ import { countStones } from "../core/boardUtils";
 import { PATTERN_SCORES } from "../evaluation/patternScores";
 import { colorToWasm } from "../wasm/boardAdapter";
 import { linearTreeFromSequence } from "../wasm/forcedWinTreeWire";
-import { encodeEvalOptions, type WasmSearchEngine } from "../wasm/searchEngine";
+import {
+  encodeEvalOptions,
+  REVIEW_EXACT_TOP_K,
+  type WasmSearchEngine,
+} from "../wasm/searchEngine";
 // #37 P3 PR4/PR5b: 脅威検出・ミセターゲットを Zig 単一ソース経由に。
 // 合法局面で TS と一致（threatAdapter.test / findMiseTargetsParity.test 検証済）。
 // 未ロード時は TS フォールバック。
@@ -42,6 +46,7 @@ import { buildDoubleMiseTree } from "./doubleMiseBranches";
 import {
   evaluatePlayedForcedWin,
   probePlayedMoveScore,
+  resolvePlayedScore,
 } from "./evaluatePlayedMove";
 import {
   checkForcedLoss,
@@ -77,8 +82,10 @@ const REVIEW_EVAL_FLAGS = encodeEvalOptions(
 
 /**
  * WASM 探索エンジンで minimax 探索を実行し、TS 版と同じ結果型に変換する
+ *
+ * export は配線テスト（reviewExactTopKWiring.test.ts）用。
  */
-function executeWasmSearch(
+export function executeWasmSearch(
   engine: WasmSearchEngine,
   board: BoardState,
   color: "black" | "white",
@@ -99,12 +106,16 @@ function executeWasmSearch(
     profile.absoluteTimeLimit ?? 0,
     aspirationMode,
     evalOptionsFlags,
+    // root 上位 K 手を真値に（review-multipv-2026-09-06.md §2.5）。
+    // engine 側の既定は 0 なので振り返り本体だけがここで明示する。
+    REVIEW_EXACT_TOP_K,
   );
 
   // WASM 候補手を MoveScoreEntry[] に変換
   const candidates: MoveScoreEntry[] = wasmResult.candidates.map((c) => ({
     move: c.position,
     score: c.score,
+    scoreExact: c.scoreExact,
     pv: c.pv,
   }));
 
@@ -206,6 +217,7 @@ function promoteVcfCandidate(
     const [entry] = candidates.splice(vcfIdx, 1);
     if (entry) {
       entry.searchScore = PATTERN_SCORES.FIVE;
+      entry.scoreExact = true;
       entry.principalVariation = reVcf.sequence;
       candidates.unshift(entry);
       return;
@@ -214,6 +226,7 @@ function promoteVcfCandidate(
   candidates.unshift({
     position: reVcf.firstMove,
     searchScore: PATTERN_SCORES.FIVE,
+    scoreExact: true,
     principalVariation: reVcf.sequence,
   });
 }
@@ -481,6 +494,7 @@ export function executeFullEval(
   const buildCandidate = (entry: MoveScoreEntry): ReviewCandidate => ({
     position: entry.move,
     searchScore: entry.score,
+    scoreExact: entry.scoreExact,
     principalVariation: entry.pv,
   });
 
@@ -656,9 +670,11 @@ function buildForcedWinResult(
     bestPV = [bestMove, doubleMiseTargets[0], doubleMiseTargets[1]];
   }
 
+  // 詰みスコアは探索の境界値ではなく確定値
   candidates.push({
     position: bestMove,
     searchScore: PATTERN_SCORES.FIVE,
+    scoreExact: true,
     principalVariation: bestPV,
   });
 
@@ -681,11 +697,13 @@ function buildForcedWinResult(
         ...candidates[existingIdx],
         principalVariation: playedForcedWinSequence,
         searchScore: PATTERN_SCORES.FIVE,
+        scoreExact: true,
       };
     } else {
       candidates.push({
         position: { row: playedRow, col: playedCol },
         searchScore: PATTERN_SCORES.FIVE,
+        scoreExact: true,
         principalVariation: playedForcedWinSequence,
       });
     }
@@ -708,9 +726,11 @@ function buildForcedWinResult(
         color,
         colorToWasm(color),
       );
+      // playedScore は実手局面の root 最善値（真値）で境界値ではない
       candidates.push({
         position: { row: playedRow, col: playedCol },
         searchScore: playedScore,
+        scoreExact: true,
         principalVariation: pv.length > 1 ? pv : undefined,
       });
     }
@@ -923,26 +943,27 @@ function buildNormalResult(
   // 通常の評価フロー（VCT/VCFなし）
   let playedScore = result.score;
 
-  if (playedRow >= 0 && result.candidates) {
-    const played = result.candidates.find(
-      (c) => c.move.row === playedRow && c.move.col === playedCol,
+  const playedIsBest =
+    playedRow === result.position.row && playedCol === result.position.col;
+  if (playedRow >= 0 && result.candidates && !playedIsBest) {
+    // 真値のみ採用、境界値は probe との min、候補外は probe（§2.5 経路 2）。
+    // 従来の -2000 固定は候補外の手を一律 blunder と誤判定していた（B1）。
+    playedScore = resolvePlayedScore(
+      result.candidates,
+      playedRow,
+      playedCol,
+      () =>
+        wasmSearchEngine
+          ? probePlayedMoveScore(
+              board,
+              playedRow,
+              playedCol,
+              color,
+              wasmSearchEngine,
+            )
+          : null,
+      result.score - 2000,
     );
-    if (played) {
-      playedScore = played.score;
-    } else {
-      // 実手が候補(top5)外: 実手局面を追加探索して実スコアを推定する。
-      // 従来の -2000 固定は候補外の手を一律 blunder と誤判定していた（B1）。
-      const probed = wasmSearchEngine
-        ? probePlayedMoveScore(
-            board,
-            playedRow,
-            playedCol,
-            color,
-            wasmSearchEngine,
-          )
-        : null;
-      playedScore = probed ?? result.score - 2000;
-    }
   }
 
   const candidates = (result.candidates ?? []).slice(0, 5).map(buildCandidate);
@@ -967,9 +988,11 @@ function buildNormalResult(
         color,
         colorToWasm(color),
       );
+      // playedScore は実手局面の root 最善値（真値）で境界値ではない
       candidates.push({
         position: { row: playedRow, col: playedCol },
         searchScore: playedScore,
+        scoreExact: true,
         principalVariation: pv.length > 1 ? pv : undefined,
       });
     }

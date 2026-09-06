@@ -24,9 +24,14 @@ import { parentPort, workerData } from "node:worker_threads";
 
 import type { DifficultyParams } from "../src/types/cpu.ts";
 import type { BoardState, Position } from "../src/types/game.ts";
+import type { BridgeCustomParams } from "./lib/match.ts";
 import type { EngineParamsSnapshot } from "./lib/workerTelemetry.ts";
 
 import { fingerprintEvalWeights } from "./lib/bridgeWorkerProtocol.ts";
+import {
+  checkDeterministicSupport,
+  readSearchFeatures,
+} from "./lib/deterministicSupport.ts";
 import { mergeDifficultyParams } from "./lib/difficultyParamsMerge.ts";
 import { EVAL_PARAM_IDS } from "./lib/evalParams.ts";
 import { mulberry32 } from "./lib/mulberry32.ts";
@@ -35,6 +40,10 @@ import {
   loadOpeningBookFromWorktree,
 } from "./lib/openingBookBridge.ts";
 import { encodeEvalOptionsForWasm } from "./lib/wasmEvalOptionsEncoder.ts";
+import {
+  type WasmSearchStats,
+  readWasmSearchStats,
+} from "./lib/wasmSearchStats.ts";
 import {
   type LivenessChannel,
   createTimestampProbe,
@@ -48,7 +57,12 @@ import {
 interface BridgeWorkerData {
   worktreePath: string;
   difficulty: string;
-  customParams?: Partial<DifficultyParams>;
+  /**
+   * DifficultyParams の部分オーバーライド + `deterministic`（固定ノードモード）。
+   * `deterministic: true` なら wasm の `setDeterministicMode(1)` を呼ぶ。非対応 wasm
+   * / TS フォールバックでは初期化を**中止**する（黙って時間モードで走らない）。
+   */
+  customParams?: BridgeCustomParams;
   /**
    * eval 形系重みの実行時注入（weight-bench 用）。キー名は EVAL_PARAM_IDS。
    * wasm が setEvalParam を export していれば適用、無ければ warn してスキップ
@@ -95,21 +109,6 @@ interface MoveRequest {
    * 未指定なら Math.random にフォールバック（従来挙動）。
    */
   moveSeed?: number;
-}
-
-interface WasmSearchStats {
-  nodes: number;
-  ttHits: number;
-  ttCutoffs: number;
-  betaCutoffs: number;
-  nullMoveTrials: number;
-  nullMoveCutoffs: number;
-  futilityPrunes: number;
-  threatExtensions: number;
-  lmrTrials: number;
-  lmrResearches: number;
-  qSearchNodes: number;
-  threatProbeCutoffs: number;
 }
 
 interface MoveResponse {
@@ -187,6 +186,15 @@ interface WasmModuleExports {
    * が Elo に転換するかは要検証。古い wasm には無い＝optional。
    */
   setThreatProbeEnabled?: (enabled: number) => void;
+  /**
+   * 決定的探索モード（bench-fixed-nodes-2026-09-06.md §2.1）。1=有効、0=無効（既定）。
+   * 対応可否は getSearchFeatures() bit0 で確認する。古い wasm には無い＝optional。
+   */
+  setDeterministicMode?: (enabled: number) => void;
+  /** bit0=deterministic 対応、bit1=stats_buffer 拡張（56 バイト以上。現行 60）。古い wasm には無い。 */
+  getSearchFeatures?: () => number;
+  /** stats_buffer の実長（バイト）。bit1 以降に append されたフィールドの判定に使う。 */
+  getStatsBufferLength?: () => number;
 }
 
 /** WASM探索のハンドラ */
@@ -266,7 +274,14 @@ async function loadWasmFromWorktree(
 /**
  * WASM探索ハンドラを作成
  */
-function createWasmSearchHandler(wasm: WasmModuleExports): WasmSearchHandler {
+function createWasmSearchHandler(
+  wasm: WasmModuleExports,
+  searchFeatures: number | undefined,
+): WasmSearchHandler {
+  const statsBufferLength =
+    typeof wasm.getStatsBufferLength === "function"
+      ? wasm.getStatsBufferLength()
+      : undefined;
   return {
     search(
       board: BoardState,
@@ -296,24 +311,16 @@ function createWasmSearchHandler(wasm: WasmModuleExports): WasmSearchHandler {
       const score = view.getInt32(ptr + 2, true);
       const completedDepth = view.getUint8(ptr + 6);
 
-      // 統計バッファから読み取り（getStatsBuffer がないWASMとの互換性）
+      // 統計バッファから読み取り（getStatsBuffer がないWASMとの互換性）。
+      // 48/56/60 バイトの分岐は getSearchFeatures() bit1 と getStatsBufferLength()（旧 wasm では 48 を越えて読まない）。
       let stats: WasmSearchStats | undefined = undefined;
       if (wasm.getStatsBuffer) {
-        const statsPtr = wasm.getStatsBuffer();
-        stats = {
-          nodes: view.getUint32(statsPtr, true),
-          ttHits: view.getUint32(statsPtr + 4, true),
-          ttCutoffs: view.getUint32(statsPtr + 8, true),
-          betaCutoffs: view.getUint32(statsPtr + 12, true),
-          nullMoveTrials: view.getUint32(statsPtr + 16, true),
-          nullMoveCutoffs: view.getUint32(statsPtr + 20, true),
-          futilityPrunes: view.getUint32(statsPtr + 24, true),
-          threatExtensions: view.getUint32(statsPtr + 28, true),
-          lmrTrials: view.getUint32(statsPtr + 32, true),
-          lmrResearches: view.getUint32(statsPtr + 36, true),
-          qSearchNodes: view.getUint32(statsPtr + 40, true),
-          threatProbeCutoffs: view.getUint32(statsPtr + 44, true),
-        };
+        stats = readWasmSearchStats(
+          view,
+          wasm.getStatsBuffer(),
+          searchFeatures,
+          statsBufferLength,
+        );
       }
 
       return {
@@ -635,9 +642,24 @@ async function main(): Promise<void> {
   let tsFindBestMove: FindBestMoveFn | null = null;
   // #128: ready 通知（EngineParamsSnapshot）にも載せるためブロック外で保持する
   let threatProbeState = "ON(default)";
+  const searchFeatures = readSearchFeatures(wasm);
+
+  // 決定的探索モード（固定ノードベンチ）。非対応なら ready を返さず中止する。
+  // 黙って時間モードにフォールバックすると「決定的なつもりの結果」が混入するため。
+  const deterministic = data.customParams?.deterministic === true;
+  const support = checkDeterministicSupport(wasm, deterministic);
+  if (!support.ok) {
+    throw new Error(
+      `deterministic モードが要求されましたが使えません: ${support.reason} (${worktreePath})`,
+    );
+  }
 
   if (wasm) {
-    wasmHandler = createWasmSearchHandler(wasm);
+    wasmHandler = createWasmSearchHandler(wasm, searchFeatures);
+    if (deterministic) {
+      // checkDeterministicSupport 通過済み＝export は存在する
+      wasm.setDeterministicMode!(1);
+    }
     // eval 形系重みを注入（baseline は weights 空＝reset のみでクリーン既定）
     applyEvalWeights(wasm, data.evalWeights);
     // 脅威プローブトグル（Gate 0 計測用）。既定 true=従来挙動、false のときのみ
@@ -663,7 +685,7 @@ async function main(): Promise<void> {
     const basis = params.evaluationOptions?.evalBasis ?? "legacy";
     const bit18 = (evalFlags & (1 << 18)) === 0 ? "legacy" : "prospect";
     console.log(
-      `[cpu-bridge-worker] WASM engine loaded for ${worktreePath} | evalBasis=${basis} evalFlags=${evalFlags} bit18=${bit18} threatProbe=${threatProbeState}`,
+      `[cpu-bridge-worker] WASM engine loaded for ${worktreePath} | evalBasis=${basis} evalFlags=${evalFlags} bit18=${bit18} threatProbe=${threatProbeState} deterministic=${deterministic} searchFeatures=${searchFeatures ?? "n/a"} timeLimit=${params.timeLimit} maxNodes=${params.maxNodes}`,
     );
   } else {
     tsFindBestMove = await loadTsCpuFromWorktree(worktreePath);
@@ -688,6 +710,8 @@ async function main(): Promise<void> {
     bookEnabled: bookBridge !== null,
     hasStatsBuffer: typeof wasm?.getStatsBuffer === "function",
     threatProbe: threatProbeState,
+    deterministic,
+    searchFeatures,
     evalWeightsFingerprint: fingerprintEvalWeights(data.evalWeights),
   };
   parentPort?.postMessage({ ready: true, params: engineParams });

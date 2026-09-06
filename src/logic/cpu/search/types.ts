@@ -123,6 +123,11 @@ export interface MoveScoreEntry {
   move: Position;
   /** 評価スコア */
   score: number;
+  /**
+   * score が真値か（review-multipv-2026-09-06.md §2.4）。
+   * 省略/false = root alpha-beta の境界値（上限）＝安全側。振り返りの実手スコア採用は true のときだけ。
+   */
+  scoreExact?: boolean;
   /** Principal Variation（予想手順） */
   pv?: Position[];
   /** PV末端の盤面（評価内訳計算用） */

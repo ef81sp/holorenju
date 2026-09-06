@@ -32,6 +32,12 @@ pub const VCT_MAX_DEPTH: u8 = 5;
 /// VCT探索の時間制限（ミリ秒）
 pub const VCT_TIME_LIMIT: u32 = 300;
 
+/// 事前探索 VCT のノード予算（決定的モード。時間モードでは `VCT_TIME_LIMIT` のみ）
+///
+/// 設計メモ docs/plans/bench-fixed-nodes-2026-09-06.md §2.1。時間定数の隣に置く
+/// （較正で片方だけ直す事故を防ぐ）。**未較正**の初期値。較正は §4 手順 1。
+pub const VCT_PRE_NODES_DETERMINISTIC: u32 = 20_000;
+
 /// ct=three 時のVCF深度上限
 const CT_THREE_VCF_MAX_DEPTH: u8 = 6;
 
@@ -1203,6 +1209,27 @@ pub fn findVCTMoveWithBudgetStrict(cells: []Cell, color: Cell, max_depth: u8, ti
     return null;
 }
 
+/// 親 limiter の残り予算を継承した子 limiter で VCT 勝ち手を探す
+/// （`findVCFSequenceWithParent` と同型。設計メモ bench-fixed-nodes §2.2）
+///
+/// 子の消費ノードは呼び出し後に親へ計上するので、呼び出し側で `charge()` を
+/// 重ねて呼んではいけない。消費量は `parent.nodes` の差分で観測できる。
+pub fn findVCTMoveWithParent(
+    cells: []Cell,
+    color: Cell,
+    max_depth: u8,
+    own_time_limit: u32,
+    own_max_nodes: u32,
+    parent: *TimeLimiter,
+    mode: ResilienceMode,
+) ?Position {
+    const seq_result = findVCTSequenceWithParent(cells, color, max_depth, own_time_limit, own_max_nodes, parent, false, mode);
+    if (seq_result.found and seq_result.len > 0) {
+        return seq_result.sequence[0];
+    }
+    return null;
+}
+
 // =============================================================================
 // findVCTSequence（手順蓄積版）
 // =============================================================================
@@ -1257,7 +1284,6 @@ const DefenseSeqEntry = struct {
 /// 1ノードあたりの受け手の最大数（詰み木の SSoT は forced_win_tree.zig）
 const MAX_DEFENSE_ENTRIES = ft.MAX_DEFENSES_PER_NODE;
 
-
 /// 手順長 α カットの「上限なし」
 ///
 /// カットは「`max_len` 未満なら採用」なので、sequence バッファ長 64 ちょうどの
@@ -1309,7 +1335,54 @@ pub fn findVCTSequence(
     if (collect_branches) g_tree_arena.reset();
 
     return findVCTSequenceWithLimiter(cells, color, max_depth, &limiter, collect_branches, mode);
+}
 
+/// VCT 勝ち手を探す（limiter を受け取る版・トップレベルエントリ）
+///
+/// 呼び出し側が limiter を用意して消費ノード（`limiter.nodes`）を観測したいとき
+/// （脅威プローブ）に使う。bitboard を同期し、詰み木は構築しない。
+pub fn findVCTMoveWithLimiter(
+    cells: []Cell,
+    color: Cell,
+    max_depth: u8,
+    limiter: *TimeLimiter,
+    mode: ResilienceMode,
+) ?Position {
+    bitboard.initFromCells(cells);
+    ll.init();
+    const seq_result = findVCTSequenceWithLimiter(cells, color, max_depth, limiter, false, mode);
+    if (seq_result.found and seq_result.len > 0) {
+        return seq_result.sequence[0];
+    }
+    return null;
+}
+
+/// `findVCTSequence` の親 limiter 版（トップレベルエントリ）
+///
+/// `parent.child(own_time_limit, own_max_nodes)` で子 limiter を作り、探索後に消費ノードを
+/// 親へ計上する（`findVCFSequenceWithParent` と同型）。
+pub fn findVCTSequenceWithParent(
+    cells: []Cell,
+    color: Cell,
+    max_depth: u8,
+    own_time_limit: u32,
+    own_max_nodes: u32,
+    parent: *TimeLimiter,
+    collect_branches: bool,
+    mode: ResilienceMode,
+) VCTSequenceResult {
+    // トップレベルエントリ: bitboard を cells と同期
+    bitboard.initFromCells(cells);
+    ll.init();
+
+    var limiter = parent.child(own_time_limit, own_max_nodes);
+
+    // 詰み木アリーナを初期化（collect_branches 時のみ構築する）
+    if (collect_branches) g_tree_arena.reset();
+
+    const result = findVCTSequenceWithLimiter(cells, color, max_depth, &limiter, collect_branches, mode);
+    parent.charge(limiter.nodes);
+    return result;
 }
 
 /// findVCTSequence の本体（limiter 共有版）
@@ -3741,7 +3814,6 @@ test "findVCTSequenceRecursive: max_len 未満の手順しか返さない（issu
     }
 }
 
-
 test "VCT探索は委譲した VCF のノードも予算に計上する（issue #119）" {
     // VCT 経路は VCF を独自 limiter で回すので、その消費を親へ加算しないと
     // 予算が実態より小さく見える（＝ max_nodes が緩む）。
@@ -3866,7 +3938,6 @@ test "issue #130: 脅威でない初手から VCT は成立しない（isVCTFirs
     const seq = findVCTSequenceFromFirstMove(&cells, .{ .row = 0, .col = 0 }, .black, 4, 0, 0, false);
     try testing.expect(!seq.found);
 }
-
 
 // =============================================================================
 // issue #140 の回帰テスト
@@ -4040,7 +4111,6 @@ test "findVCTSequenceFromFirstMove: ブロック石が五連になる VCT を取
     try testing.expectEqual(@as(u8, 7), result.sequence[0].row);
     try testing.expectEqual(@as(u8, 7), result.sequence[0].col);
 }
-
 
 // =============================================================================
 // issue #146 の回帰テスト

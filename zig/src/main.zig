@@ -173,8 +173,16 @@ export fn evaluateBoard(perspective: u8, options_flags: u32) i32 {
 // Search exports
 /// 探索結果バッファ（WASM メモリ上）
 /// [0]: row, [1]: col, [2..5]: score (i32 LE), [6]: completedDepth, [7]: candidateCount
-/// [8..67]: 候補手リスト（最大10手、各6バイト: row(1) + col(1) + score(4)）
+/// [8..67]: 候補手リスト（最大10手、各6バイト: row(1) + col(1) + score(4)。書くのは最大 `search.TOP_CANDIDATES` 件）
+/// [68]: exact_mask（bit i = 候補 i が真値。`exact_top_k == 0` なら 0。設計メモ review-multipv §2.4）
 var result_buffer: [128]u8 = .{0} ** 128;
+
+/// 候補領域（8 + 6 × TOP_CANDIDATES）が [68] の exact_mask と衝突しないことをコンパイル時に守る
+const RESULT_EXACT_MASK_OFFSET: usize = 68;
+comptime {
+    std.debug.assert(8 + @as(usize, search.TOP_CANDIDATES) * 6 <= RESULT_EXACT_MASK_OFFSET);
+    std.debug.assert(RESULT_EXACT_MASK_OFFSET < result_buffer.len);
+}
 
 /// 結果バッファのポインタを返す（JS側からメモリ読み取り用）
 export fn getResultBuffer() [*]u8 {
@@ -190,15 +198,25 @@ export fn getResultBuffer() [*]u8 {
 ///   max_nodes: ノード数上限、0=無制限
 ///   absolute_time_limit_ms: 絶対時間制限（0=デフォルト10秒）
 ///   aspiration_mode: 0=固定[75], 1=[75,200,500]
-export fn findBestMove(color: u8, max_depth: u8, time_limit_ms: u32, max_nodes: u32, absolute_time_limit_ms: u32, aspiration_mode: u8, eval_options_flags: u32) void {
+///   exact_top_k: root の上位 K 手を真値にする（0=従来どおり。振り返り用。設計メモ review-multipv §2.4）
+///   forced_row / forced_col: 必ず真値で返す手（255=なし）。exact_top_k == 0 のときは無視
+///
+/// 末尾 3 引数は後付け。wasm の JS 呼び出しでは不足引数が 0 になるので既存呼び出しは
+/// `exact_top_k = 0` として従来どおり動く（forced_row = 0 も無視される）。
+export fn findBestMove(color: u8, max_depth: u8, time_limit_ms: u32, max_nodes: u32, absolute_time_limit_ms: u32, aspiration_mode: u8, eval_options_flags: u32, exact_top_k: u8, forced_row: u8, forced_col: u8) void {
     const cell_color: board.Cell = switch (color) {
         1 => .black,
         2 => .white,
         else => {
-            writeResult(15, 15, 0, 0, null, 0);
+            writeResult(15, 15, 0, 0, null, 0, 0);
             return;
         },
     };
+
+    const forced_move: ?threats_mod.Position = if (exact_top_k > 0 and forced_row < board.BOARD_SIZE and forced_col < board.BOARD_SIZE)
+        .{ .row = forced_row, .col = forced_col }
+    else
+        null;
 
     const cells = &board.board_cells;
     // bits 0-8: position_eval.EvalOptions（手の評価・ムーブオーダリング用）
@@ -230,29 +248,67 @@ export fn findBestMove(color: u8, max_depth: u8, time_limit_ms: u32, max_nodes: 
         .eval_basis = eval_basis,
     };
 
+    // 絶対時間制限の既定 10 秒は時間モードのみ。決定的モード（setDeterministicMode）では
+    // 0 = 安全弁なし（ベンチは 0 を渡す）。>0 を渡せば安全弁として有効（設計メモ §2.6）。
+    const absolute_time_limit: u32 = if (absolute_time_limit_ms == 0 and !budget_mod.deterministic_mode)
+        10000
+    else
+        absolute_time_limit_ms;
+
     const result = search.findBestMoveIterative(cells, cell_color, .{
         .max_depth = max_depth,
         .time_limit = time_limit_ms,
         .max_nodes = max_nodes,
-        .absolute_time_limit = if (absolute_time_limit_ms == 0) 10000 else absolute_time_limit_ms,
+        .absolute_time_limit = absolute_time_limit,
         .aspiration_mode = aspiration_mode,
+        .exact_top_k = exact_top_k,
+        .forced_move = forced_move,
         .eval_options = eval_options,
         .board_eval_options = board_eval_options,
     });
 
-    writeResult(result.position.row, result.position.col, result.score, result.completed_depth, &result.top_candidates, result.top_candidate_count);
+    writeResult(result.position.row, result.position.col, result.score, result.completed_depth, &result.top_candidates, result.top_candidate_count, result.exact_mask);
     writeStats(result.stats);
 }
 
-/// 探索統計バッファ（12フィールド × u32 = 48バイト）
-var stats_buffer: [48]u8 = .{0} ** 48;
+/// 探索統計バッファ（15フィールド × u32 LE = 60バイト）
+///
+/// レイアウトは **append-only**（先頭 48 バイト＝12 フィールドは旧 wasm と同一）。
+/// リーダー（TS: bridge worker / gate0-bench readStats / searchEngine）は
+/// `getSearchFeatures()` bit1（FEATURE_EXTENDED_STATS）で拡張フィールドの存在を判定し、
+/// 旧 wasm では 48 バイトを越えて読まないこと（越えると隣接メモリを黙って読む）。
+///
+/// | offset | field                 |
+/// | ------ | --------------------- |
+/// | 0      | nodes                 |
+/// | 4      | tt_hits               |
+/// | 8      | tt_cutoffs            |
+/// | 12     | beta_cutoffs          |
+/// | 16     | null_move_trials      |
+/// | 20     | null_move_cutoffs     |
+/// | 24     | futility_prunes       |
+/// | 28     | threat_extensions     |
+/// | 32     | lmr_trials            |
+/// | 36     | lmr_researches        |
+/// | 40     | q_search_nodes        |
+/// | 44     | threat_probe_cutoffs  |
+/// | 48     | pre_search_nodes      | (bit1)
+/// | 52     | probe_nodes           | (bit1)
+/// | 56     | absolute_deadline_hit | (bit1)
+pub const STATS_FIELD_COUNT: usize = 15;
+var stats_buffer: [STATS_FIELD_COUNT * 4]u8 = .{0} ** (STATS_FIELD_COUNT * 4);
 
 export fn getStatsBuffer() [*]u8 {
     return &stats_buffer;
 }
 
+/// stats バッファの長さ（バイト）。リーダーが features bit の代わりに使ってもよい。
+export fn getStatsBufferLength() u32 {
+    return STATS_FIELD_COUNT * 4;
+}
+
 fn writeStats(stats: minimax.SearchStats) void {
-    const fields = [_]u32{
+    const fields = [STATS_FIELD_COUNT]u32{
         stats.nodes,
         stats.tt_hits,
         stats.tt_cutoffs,
@@ -265,6 +321,9 @@ fn writeStats(stats: minimax.SearchStats) void {
         stats.lmr_researches,
         stats.q_search_nodes,
         stats.threat_probe_cutoffs,
+        stats.pre_search_nodes,
+        stats.probe_nodes,
+        stats.absolute_deadline_hit,
     };
     for (fields, 0..) |val, i| {
         const bytes: [4]u8 = @bitCast(val);
@@ -282,16 +341,38 @@ export fn ttClear() void {
 }
 
 const minimax = @import("minimax.zig");
+const budget_mod = @import("budget.zig");
 
 /// threatProbe の実行時トグル（Gate 0 計測用。既定 true=有効、既存挙動不変）。
 export fn setThreatProbeEnabled(enabled: u8) void {
     minimax.threat_probe_enabled = enabled != 0;
 }
 
+/// 決定的探索モードのトグル（ベンチ `--fixed-nodes` 用。既定 false=時間モード、既存挙動不変）。
+///
+/// true にすると findBestMove は壁時計を一切見ず、時間で縛っていた子探索（事前探索の
+/// VCF/VCT、降格判定の VCF、脅威プローブの VCT）をノード予算に置き換え、それらの消費を
+/// stats.nodes に計上する。詳細: docs/plans/bench-fixed-nodes-2026-09-06.md、budget.zig。
+export fn setDeterministicMode(enabled: u8) void {
+    budget_mod.deterministic_mode = enabled != 0;
+}
+
+/// 現在の決定的モード設定（往復確認用）
+export fn getDeterministicMode() u8 {
+    return if (budget_mod.deterministic_mode) 1 else 0;
+}
+
+/// この wasm が持つ探索機能のビット集合（TS 側の対応判定用）
+///   bit0: setDeterministicMode 対応
+///   bit1: stats バッファ拡張（pre_search_nodes / probe_nodes / absolute_deadline_hit、60 バイト）
+export fn getSearchFeatures() u32 {
+    return budget_mod.searchFeatures();
+}
+
 /// aspiration window fail による再探索回数を返す（Gate 0 計測用）。
 /// search.findBestMoveIterative の開始時にリセットされるため、直前の
 /// findBestMove 呼び出し1回分の値になる。stats_buffer とは独立の export
-/// （レイアウト変更禁止のため既存バッファには含めない）。
+/// （旧 wasm リーダーとの互換のため既存バッファの先頭 48 バイトには含めない）。
 export fn getAspirationResearchCount() u32 {
     return search.aspiration_research_count;
 }
@@ -698,7 +779,7 @@ export fn isVCTFirstMoveWasm(row: u8, col: u8, color: u8, max_depth: u8, time_li
     return if (vct.isVCTFirstMove(cells, move, cell_color, max_depth, time_limit_ms, max_nodes)) 1 else 0;
 }
 
-fn writeResult(row: u8, col: u8, score: i32, completed_depth: u8, top_candidates: ?*const [5]minimax.MoveScoreEntry, top_candidate_count: u8) void {
+fn writeResult(row: u8, col: u8, score: i32, completed_depth: u8, top_candidates: ?*const [search.TOP_CANDIDATES]minimax.MoveScoreEntry, top_candidate_count: u8, exact_mask: u8) void {
     result_buffer[0] = row;
     result_buffer[1] = col;
     const score_bytes: [4]u8 = @bitCast(score);
@@ -708,10 +789,11 @@ fn writeResult(row: u8, col: u8, score: i32, completed_depth: u8, top_candidates
     result_buffer[5] = score_bytes[3];
     result_buffer[6] = completed_depth;
     result_buffer[7] = top_candidate_count;
+    result_buffer[RESULT_EXACT_MASK_OFFSET] = exact_mask;
 
     // 候補手リスト: offset 8 から、各6バイト（row + col + score_i32_le）
     if (top_candidates) |candidates| {
-        for (0..top_candidate_count) |i| {
+        for (0..@min(top_candidate_count, search.TOP_CANDIDATES)) |i| {
             const base = 8 + i * 6;
             result_buffer[base] = candidates[i].move.row;
             result_buffer[base + 1] = candidates[i].move.col;

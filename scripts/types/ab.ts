@@ -2,7 +2,13 @@
  * A/B ベンチマーク比較の型定義
  */
 
-import type { DifficultyParams } from "../../src/types/cpu.ts";
+import type { CpuDifficulty, DifficultyParams } from "../../src/types/cpu.ts";
+import type {
+  CommitGameResult,
+  FixedNodesConfig,
+  RunValidity,
+} from "./commit-bench.ts";
+import type { OpeningSuiteConfig } from "./openingSuite.ts";
 
 // ============================================================================
 // SPRT (Sequential Probability Ratio Test)
@@ -52,6 +58,36 @@ export interface EloDiffResult {
 }
 
 // ============================================================================
+// ペア統計（pentanomial）
+// ============================================================================
+
+/**
+ * pentanomial カウント。同一開局を色を入れ替えて 2 局打つ「ペア」の得点
+ * （A 視点、勝 1 / 分 0.5 / 負 0 の平均）を 5 区分に集計したもの。
+ * ll=0 / ld=0.25 / dd=0.5 / wd=0.75 / ww=1。
+ */
+export interface PentanomialCount {
+  ll: number;
+  ld: number;
+  dd: number;
+  wd: number;
+  ww: number;
+}
+
+/** ペア統計（commit-bench / weight-bench 共用）。 */
+export interface PairedStats {
+  /** 完成ペア数 */
+  pairs: number;
+  /** 相方が無い局数 */
+  unpaired: number;
+  pentanomial: PentanomialCount;
+  /** ペア得点の平均・分散から求めた Elo 差 */
+  elo: EloDiffResult;
+  /** ペア LLR による判定（停止に使ったもの）。SPRT 無効時は null */
+  sprt: SPRTState | null;
+}
+
+// ============================================================================
 // A/Bベンチマーク設定・結果
 // ============================================================================
 
@@ -92,5 +128,44 @@ export interface ABBenchResult {
   /** SPRT状態（SPRT有効時のみ） */
   sprt: SPRTState | null;
   /** 所要時間（秒） */
+  elapsedSeconds: number;
+}
+
+// ============================================================================
+// weight-bench 結果
+// ============================================================================
+
+/** eval 形系重み A/B ベンチマーク（weight-bench）の結果 JSON。 */
+export interface WeightBenchResult extends RunValidity {
+  type: "weight-bench";
+  timestamp: string;
+  /** variant(B) の重みオーバーライド（空なら null test） */
+  weights: Record<string, number>;
+  config: FixedNodesConfig & {
+    difficulty: CpuDifficulty;
+    /** 珠型モードではセット数、開局スイートではスイートの周回数 */
+    sets: number;
+    /** 1 周回あたりの局数（珠型 26×2、スイートは (count−offset)×2） */
+    gamesPerSet: number;
+    randomFactor?: number;
+    sprt: SPRTConfig | null;
+    /** `--openings` 指定時の開局スイート情報。未指定（珠型モード）なら無い */
+    openings?: OpeningSuiteConfig;
+  };
+  totalGames: number;
+  /** ハング等で破棄された局数（後方互換のため optional） */
+  aborts?: number;
+  abortsBySide?: { A: number; B: number };
+  /** WDL（baseline=A 視点） */
+  wdl: WDLCount;
+  /** 三項（1 局単位）。参考値 */
+  eloDiff: EloDiffResult;
+  /** 停止に使った判定＝ペア LLR */
+  sprt: SPRTState | null;
+  /** 三項 SPRT。参考値 */
+  sprtTrinomial: SPRTState | null;
+  paired: PairedStats;
+  /** 再集計（bench-reanalyze）用の棋譜 */
+  games: CommitGameResult[];
   elapsedSeconds: number;
 }

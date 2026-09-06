@@ -13,6 +13,7 @@ import type { EvaluatedMove, ReviewCandidate } from "@/types/review";
 import type { Position } from "@/types/game";
 import { SHORT_LABELS } from "@/logic/forcedTypeLabels";
 import { formatMove } from "@/logic/gameRecordParser";
+import { formatCandidateDelta } from "@/logic/reviewCandidateDelta";
 import { useReviewBoardPreviewStore } from "@/stores/reviewBoardPreviewStore";
 
 const props = defineProps<{
@@ -26,6 +27,10 @@ interface CandidateView {
   position: Position;
   coord: string;
   delta: number;
+  /** 整形済み delta（境界値なら「≤」付き） */
+  deltaLabel: string;
+  /** searchScore が境界値（上限）か。基準候補は常に false */
+  isBound: boolean;
   kind: "best" | "actual" | "alt";
   isFukumi: boolean;
   fukumiDepth?: number;
@@ -53,8 +58,8 @@ const candidateViews = computed<CandidateView[]>(() => {
   if (eval_.candidates.length === 0) {
     return [];
   }
-  const bestSearchScore =
-    bestCandidate.value?.searchScore ?? eval_.candidates[0]?.searchScore ?? 0;
+  const best = bestCandidate.value ?? eval_.candidates[0];
+  const bestSearchScore = best?.searchScore ?? 0;
   return eval_.candidates.map((c, idx) => {
     const isBest =
       c.position.row === eval_.bestMove.row &&
@@ -68,11 +73,17 @@ const candidateViews = computed<CandidateView[]>(() => {
     } else if (isPlayed) {
       kind = "actual";
     }
+    const delta = c.searchScore - bestSearchScore;
+    // 基準（最善）自身の delta は定義上 0 なので「≤」は付けない
+    const isReference = c === best;
+    const isBound = !isReference && !c.scoreExact;
     return {
       rank: idx + 1,
       position: c.position,
       coord: formatMove(c.position),
-      delta: c.searchScore - bestSearchScore,
+      delta,
+      deltaLabel: formatCandidateDelta(delta, !isBound),
+      isBound,
       kind,
       isFukumi: c.isFukumi ?? false,
       fukumiDepth: c.fukumiDepth,
@@ -82,13 +93,6 @@ const candidateViews = computed<CandidateView[]>(() => {
     };
   });
 });
-
-function formatDelta(delta: number): string {
-  if (delta === 0) {
-    return "±0";
-  }
-  return delta.toLocaleString("en");
-}
 
 function handleEnter(position: Position): void {
   previewStore.setHoveredCandidate(position);
@@ -141,9 +145,10 @@ function handleLeave(): void {
             <span class="cand-coord">{{ c.coord }}</span>
             <span
               class="cand-delta"
-              :class="c.delta === 0 ? 'zero' : 'neg'"
+              :class="c.delta === 0 && !c.isBound ? 'zero' : 'neg'"
+              :title="c.isBound ? '上限値（未確定）' : undefined"
             >
-              {{ formatDelta(c.delta) }}
+              {{ c.deltaLabel }}
             </span>
             <span
               v-if="c.opponentForcedWinShort"

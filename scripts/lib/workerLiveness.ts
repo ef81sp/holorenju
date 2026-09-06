@@ -68,6 +68,32 @@ export interface HangLiveness {
   verdict: "searching" | "stalled" | "never-started" | "unavailable";
 }
 
+/**
+ * 決定的探索モード（bench-fixed-nodes-2026-09-06.md）では探索中に時計を呼ばない
+ * （事前探索・プローブ・降格判定まで全てノード予算）ため、時間チェック回数は
+ * 生存指標にならず、長考が `stalled` と誤報される。ハングダンプに載せる注記。
+ */
+export const DETERMINISTIC_LIVENESS_NOTE =
+  "この worker は deterministic（固定ノード）モードで走っていた。決定的モードでは探索中に " +
+  "getTimestampMsExternal（時間チェック）を呼ばないため、hang.liveness の時間チェック回数は生存指標にならない。" +
+  "verdict=stalled は『探索ループの外で停止』ではなく単なる長考（N が大きい・局面が重い）でありうる。" +
+  "recentMoves の nodes/thinkingTimeMs と --move-timeout-ms を見直すこと。";
+
+/**
+ * 生存信号の verdict を、決定的モードの制約を踏まえて説明する 1 行。
+ * ダンプの console 出力と replay-hang の表示で共用する。
+ */
+export function describeLivenessVerdict(
+  liveness: HangLiveness,
+  deterministic: boolean | undefined,
+): string {
+  const base = `${liveness.verdict} (timeChecks=${liveness.timeCheckCount}, +${liveness.timeCheckDeltaDuringSample} in ${liveness.sampleWindowMs}ms)`;
+  if (deterministic) {
+    return `${base} ※deterministic モード: 時間チェック回数は生存指標にならない`;
+  }
+  return base;
+}
+
 // ============================================================================
 // worker 側
 // ============================================================================

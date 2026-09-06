@@ -91,6 +91,11 @@ export interface ReviewCandidate {
   position: Position;
   /** 探索スコア（順位の根拠） */
   searchScore: number;
+  /**
+   * searchScore が真値か（review-multipv-2026-09-06.md §2.4）。
+   * 省略/false = 探索の境界値（上限）。表示は「≤」を付ける。
+   */
+  scoreExact?: boolean;
   /** 予想手順 */
   principalVariation?: Position[];
   /** この手を打つと相手に強制勝ちを許す場合のタイプ */

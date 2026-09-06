@@ -41,19 +41,33 @@ import type {
   PlayerPerformanceStats,
 } from "./types/commit-bench.ts";
 
-import { estimateEloDiff, formatEloDiff } from "./lib/eloDiff.ts";
+import {
+  effectiveRandomFactor,
+  normalizeMaxGames,
+  resolveFixedNodesParams,
+  resolveFixedNodesPerSide,
+  resolveMoveTimeoutMs,
+  validateFixedNodesFlags,
+} from "./lib/benchCliChecks.ts";
+import {
+  computeBenchGameStats,
+  formatBenchGameStats,
+} from "./lib/benchGameStats.ts";
+import { formatEloDiff } from "./lib/eloDiff.ts";
 import { startEventLoopSampler } from "./lib/eventLoopSampler.ts";
 import { type HangDumpSideConfig, writeHangDump } from "./lib/hangDump.ts";
 import { deriveGameSeed } from "./lib/hangReplay.ts";
 import {
-  buildJushuTasks,
   createBridgeWorker,
-  gamesPerSet as computeGamesPerSet,
   type HangMatchInfo,
   runMatch,
 } from "./lib/match.ts";
+import { resolveOpenings } from "./lib/openingSuiteLoader.ts";
+import { formatPairedStats } from "./lib/pairedStats.ts";
 import { parseHangInjectEnv } from "./lib/parseHangInjectEnv.ts";
-import { DEFAULT_SPRT_CONFIG, formatSPRT, updateSPRT } from "./lib/sprt.ts";
+import { DEFAULT_SPRT_CONFIG, formatSPRT } from "./lib/sprt.ts";
+import { describeLivenessVerdict } from "./lib/workerLiveness.ts";
+import { getWorkerTelemetry } from "./lib/workerTelemetry.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, "..");
@@ -142,21 +156,43 @@ interface CliOptions {
   maxDepthB?: number;
   /**
    * デバッグ/スモークテスト用: タスクを先頭 N 局に切り詰める（0 なら無効）。
-   * ハング計装の e2e 検証で少局数（例: 4局）を回すために追加。
-   * 通常のベンチ運用では 0（無効＝全 sets を消化）。
+   * ペア境界で切る（奇数は偶数に切り下げ）。ハング計装の e2e 検証で少局数
+   * （例: 4局）を回すために追加。通常のベンチ運用では 0（無効＝全 sets を消化）。
    */
   maxGames: number;
   /**
+   * 開局スイート JSON（bench-precision-2026-09-04.md §2.2）。相対パスはリポジトリ
+   * ルート基準。未指定なら従来どおり 26 珠型（後方互換）。指定時 --sets は
+   * スイートの周回数になる。--book-a/--book-b とは併用不可。
+   */
+  openings?: string;
+  /** スイートの n 番目から使う（末尾で折り返さない）。既定 0 */
+  openingOffset: number;
+  /**
    * ハングした側 worker の 1 手あたりタイムアウト（ms）。
    * 通常は 30000 で運用。ハング計装のテスト時は短くして待ち時間を減らす。
+   * 決定的モード（--fixed-nodes）では未指定時の既定が 600000 になる
+   * （1 手時間が N と負荷に比例して伸び、abort が緊迫局面に偏ると Elo が歪むため）。
    */
   moveTimeoutMs: number;
+  /** `--move-timeout-ms` が CLI で明示されたか（決定的モードの既定切替に使う） */
+  moveTimeoutMsExplicit: boolean;
   /**
    * randomFactor > 0 での対局の PRNG シード（baseSeed）。指定時、局ごとの
    * 実効 seed は `mixSeed(baseSeed, gameIdx)` で導出され、同一 --seed なら
    * 同一棋譜になる。未指定なら `Date.now() | 0` を使う（従来と同じく非決定的）。
    */
   seed: number;
+  /** `--seed` が CLI で明示されたか（決定的モードでは randomFactor>0 に必須） */
+  seedExplicit: boolean;
+  /**
+   * 固定ノード（決定的探索）モード。bench-fixed-nodes-2026-09-06.md §2.5。
+   * `--fixed-nodes=N` は両側、`--fixed-nodes-a/b=N` は片側（時間 vs 固定の混合＝較正用）。
+   * 該当側は timeLimit=0 / maxNodes=N / setDeterministicMode(1) で走る。
+   */
+  fixedNodes?: number;
+  fixedNodesA?: number;
+  fixedNodesB?: number;
 }
 
 function parseArgs(): CliOptions {
@@ -178,8 +214,11 @@ function parseArgs(): CliOptions {
     probeEnabledA: true,
     probeEnabledB: true,
     maxGames: 0,
+    openingOffset: 0,
     moveTimeoutMs: 30000,
+    moveTimeoutMsExplicit: false,
     seed: Date.now() | 0,
+    seedExplicit: false,
   };
 
   for (const arg of args) {
@@ -287,10 +326,36 @@ function parseArgs(): CliOptions {
     } else if (arg.startsWith("--max-games=")) {
       const value = parseInt(arg.slice("--max-games=".length), 10);
       if (!isNaN(value) && value >= 0) {
-        options.maxGames = value;
+        const norm = normalizeMaxGames(value);
+        if (!norm.ok) {
+          console.error(`Error: ${norm.error}`);
+          process.exit(1);
+        }
+        if (norm.warning) {
+          console.warn(`⚠ ${norm.warning}`);
+        }
+        options.maxGames = norm.maxGames;
       } else {
         console.error(
           `Error: --max-games は 0 以上の整数で指定 (got: ${arg.slice("--max-games=".length)})`,
+        );
+        process.exit(1);
+      }
+    } else if (arg.startsWith("--openings=")) {
+      const value = arg.slice("--openings=".length);
+      if (value.length === 0) {
+        console.error("Error: --openings にはファイルパスを指定してください");
+        process.exit(1);
+      }
+      options.openings = value;
+    } else if (arg.startsWith("--opening-offset=")) {
+      const raw = arg.slice("--opening-offset=".length);
+      const value = parseInt(raw, 10);
+      if (Number.isFinite(value) && value >= 0) {
+        options.openingOffset = value;
+      } else {
+        console.error(
+          `Error: --opening-offset は 0 以上の整数で指定 (got: ${raw})`,
         );
         process.exit(1);
       }
@@ -298,6 +363,7 @@ function parseArgs(): CliOptions {
       const value = parseInt(arg.slice("--move-timeout-ms=".length), 10);
       if (!isNaN(value) && value > 0) {
         options.moveTimeoutMs = value;
+        options.moveTimeoutMsExplicit = true;
       } else {
         console.error(
           `Error: --move-timeout-ms は正の整数で指定 (got: ${arg.slice("--move-timeout-ms=".length)})`,
@@ -309,10 +375,17 @@ function parseArgs(): CliOptions {
       const value = parseInt(raw, 10);
       if (Number.isFinite(value)) {
         options.seed = value | 0;
+        options.seedExplicit = true;
       } else {
         console.error(`Error: --seed は整数で指定 (got: ${raw})`);
         process.exit(1);
       }
+    } else if (arg.startsWith("--fixed-nodes=")) {
+      options.fixedNodes = parsePositiveIntOrExit(arg, "--fixed-nodes");
+    } else if (arg.startsWith("--fixed-nodes-a=")) {
+      options.fixedNodesA = parsePositiveIntOrExit(arg, "--fixed-nodes-a");
+    } else if (arg.startsWith("--fixed-nodes-b=")) {
+      options.fixedNodesB = parsePositiveIntOrExit(arg, "--fixed-nodes-b");
     } else if (arg === "--verbose" || arg === "-v") {
       options.verbose = true;
     } else if (arg === "--help" || arg === "-h") {
@@ -322,6 +395,65 @@ function parseArgs(): CliOptions {
   }
 
   return options;
+}
+
+/** `--flag=<n>` の正の整数をパースする。不正なら exit(1)。 */
+function parsePositiveIntOrExit(arg: string, flagName: string): number {
+  const raw = arg.slice(flagName.length + 1);
+  const value = parseInt(raw, 10);
+  if (!Number.isFinite(value) || value <= 0) {
+    console.error(`Error: ${flagName} は正の整数で指定 (got: ${raw})`);
+    process.exit(1);
+  }
+  return value;
+}
+
+function resolvePerSideOrExit(options: CliOptions): {
+  a: number | undefined;
+  b: number | undefined;
+} {
+  try {
+    return resolveFixedNodesPerSide(options);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`Error: ${msg}`);
+    process.exit(1);
+  }
+}
+
+/** 固定ノードモードの side 別 N（両側/片側の正規化 + 排他チェック）。 */
+interface FixedNodesResolved {
+  a: number | undefined;
+  b: number | undefined;
+  /** どちらかの側が決定的モードか */
+  anyDeterministic: boolean;
+}
+
+function resolveFixedNodesOrExit(options: CliOptions): FixedNodesResolved {
+  const perSide = resolvePerSideOrExit(options);
+  const error = validateFixedNodesFlags({
+    fixedNodesA: perSide.a,
+    fixedNodesB: perSide.b,
+    maxNodesA: options.maxNodesA,
+    maxNodesB: options.maxNodesB,
+    bookA: options.bookA,
+    bookB: options.bookB,
+    // 実効値（未指定なら difficulty 既定）。beginner 等は既定 > 0 なので seed が要る
+    randomFactor: effectiveRandomFactor(
+      options.randomFactor,
+      options.difficulty,
+    ),
+    seedExplicit: options.seedExplicit,
+    sets: options.sets,
+  });
+  if (error) {
+    console.error(`Error: ${error}`);
+    process.exit(1);
+  }
+  return {
+    ...perSide,
+    anyDeterministic: perSide.a !== undefined || perSide.b !== undefined,
+  };
 }
 
 /**
@@ -365,7 +497,8 @@ Usage:
 Options:
   --commitA=<sha|ref>    比較元コミット (default: HEAD~1)
   --commitB=<sha|ref>    比較先コミット (default: HEAD)
-  --sets=<n>             セット数 (1セット = 26珠型 × 2色 = 52局, default: 1)
+  --sets=<n>             セット数 (1セット = 26珠型 × 2色 = 52局, default: 1)。
+                         --openings 指定時はスイートの周回数
   --difficulty=<d>       難易度 beginner|easy|medium|hard (default: hard)
   --sprt                 SPRT早期停止を有効化
   --elo0=<n>             SPRT帰無仮説Elo差 (default: 0)
@@ -389,8 +522,23 @@ Options:
                          binding だと差が出ないので併用する
   --max-depth-b=<n>      B側の depth cap を上書き（既定=difficulty 既定）
   --max-games=<n>        タスクを先頭 N 局に切り詰め（0=無効, default: 0）。
-                         ハング計装のスモークテスト用
-  --move-timeout-ms=<n>  1手あたりのタイムアウト (default: 30000)
+                         ペア境界で切る（奇数は偶数に切り下げ）。スモークテスト用
+  --openings=<file>      開局スイート JSON（gen:opening-suite の成果物。相対パスは
+                         リポジトリルート基準）。指定時は珠型の代わりにスイートの各
+                         開局 × 2 色で対局し、--sets はスイートの周回数になる。
+                         --book-a/--book-b とは併用不可
+  --opening-offset=<n>   スイートの n 番目の開局から使う（末尾で折り返さない。
+                         互いに素な部分集合での再現性検証用, default: 0）
+  --fixed-nodes=<n>      両側を固定ノード（決定的探索）モードで走らせる:
+                         timeLimit=0 / maxNodes=N / setDeterministicMode(1)。
+                         結果が壁時計・負荷に依存せず、同一入力で棋譜・1 手ごとの
+                         nodes・score が完全一致する。--max-nodes-a/b・--book-a/b と
+                         併用不可。randomFactor>0 は --seed 必須、--sets>1 は
+                         randomFactor 必須。abort が 1 件でも出ると valid:false・非0終了。
+                         非対応 wasm（本 PR より前のコミット）は起動時に中止
+  --fixed-nodes-a=<n>    A 側のみ固定ノード（時間 vs 固定の混合。較正用）
+  --fixed-nodes-b=<n>    B 側のみ固定ノード
+  --move-timeout-ms=<n>  1手あたりのタイムアウト (default: 30000、--fixed-nodes 時は 600000)
   --seed=<n>             randomFactor 使用時の PRNG baseSeed（integer）。
                          同一 seed なら同一棋譜を再現。default: Date.now()（非決定的）
   --verbose, -v          詳細ログ
@@ -414,6 +562,18 @@ Examples:
   # （B3仕様③: コミット差の交絡を排除、worktree1本で済む）
   pnpm commit:bench --commitA=HEAD --commitB=HEAD --sets=8 --randomFactor=0.02 \\
     --book-a
+
+  # 開局スイート（600 開局 × 2 色 = 1,200 局、randomFactor 無し）
+  pnpm commit:bench --commitA=80f1c4f --commitB=f1bdc9a --jobs=5 \\
+    --openings=scripts/data/opening-suite-v1.json
+  # 後半 300 開局だけ（再現性検証）
+  pnpm commit:bench --commitA=80f1c4f --commitB=f1bdc9a --jobs=5 \\
+    --openings=scripts/data/opening-suite-v1.json --opening-offset=300
+
+  # 固定ノード（決定的）: 同一コミットの決定性スモーク。2 回走らせて
+  # pnpm bench:reanalyze --compare a.json b.json で完全一致を確認する
+  pnpm commit:bench --commitA=HEAD --commitB=HEAD --fixed-nodes=50000 \\
+    --openings=scripts/data/opening-suite-v1.json --max-games=40 --jobs=2
 
   # ハング計装スモークテスト（4局・jobs=2・5秒タイムアウト・g1 の 2 手目で注入）
   HANG_INJECT=1:2 pnpm commit:bench --commitA=HEAD --commitB=HEAD \\
@@ -686,8 +846,35 @@ function removeWorktree(worktreePath: string): void {
 // メイン処理
 // ============================================================================
 
+function resolveOpeningsOrExit(
+  options: CliOptions,
+): ReturnType<typeof resolveOpenings> {
+  try {
+    return resolveOpenings({
+      openings: options.openings,
+      openingOffset: options.openingOffset,
+      sets: options.sets,
+      maxGames: options.maxGames,
+      bookA: options.bookA,
+      bookB: options.bookB,
+      randomFactor: options.randomFactor,
+      rootDir: PROJECT_ROOT,
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`Error: ${msg}`);
+    process.exit(1);
+  }
+}
+
 async function main(): Promise<void> {
   const options = parseArgs();
+  const fixedNodes = resolveFixedNodesOrExit(options);
+  const moveTimeoutMs = resolveMoveTimeoutMs(
+    options.moveTimeoutMsExplicit ? options.moveTimeoutMs : undefined,
+    fixedNodes.anyDeterministic,
+    options.moveTimeoutMs,
+  );
   const startTime = performance.now();
   // #128: メインスレッドのイベントループ遅延・時計ずれを常時サンプリングする。
   // 「worker がハングした」のか「メインスレッド/マシンが止まっていた」のかを
@@ -707,8 +894,10 @@ async function main(): Promise<void> {
       }
     : null;
 
-  const gamesPerSet = computeGamesPerSet(); // 全珠型 × 2色
-  const totalGames = options.sets * gamesPerSet;
+  // 開局の供給元（--openings ならスイート、未指定なら 26 珠型）とタスク列を解決する。
+  // totalGames は tasks.length（--max-games 切り詰め後）が唯一の源。
+  const resolved = resolveOpeningsOrExit(options);
+  const { suite, tasks, totalGames, gamesPerSet } = resolved;
 
   console.log(`\n=== コミット間CPU強度比較ベンチマーク ===`);
   console.log(
@@ -720,9 +909,12 @@ async function main(): Promise<void> {
   console.log(
     `難易度: ${options.difficulty}${options.randomFactor === undefined ? "" : ` (randomFactor=${options.randomFactor})`}`,
   );
-  console.log(
-    `セット数: ${options.sets} (${gamesPerSet}局/セット, 計${totalGames}局)`,
-  );
+  for (const line of resolved.summaryLines) {
+    console.log(line);
+  }
+  for (const w of resolved.warnings) {
+    console.warn(`⚠ ${w}`);
+  }
   if (options.evalOptionsA || options.evalOptionsB) {
     console.log(
       `evalOptions A: ${options.evalOptionsA ? JSON.stringify(options.evalOptionsA) : "(既定=legacy)"}`,
@@ -747,6 +939,11 @@ async function main(): Promise<void> {
   if (options.maxDepthA !== undefined || options.maxDepthB !== undefined) {
     console.log(
       `maxDepth A: ${options.maxDepthA ?? "(既定=difficulty)"} / B: ${options.maxDepthB ?? "(既定=difficulty)"}`,
+    );
+  }
+  if (fixedNodes.anyDeterministic) {
+    console.log(
+      `fixedNodes（決定的モード） A: ${fixedNodes.a ?? "(時間モード)"} / B: ${fixedNodes.b ?? "(時間モード)"} | move-timeout=${moveTimeoutMs}ms`,
     );
   }
   if (sprtConfig) {
@@ -796,69 +993,78 @@ async function main(): Promise<void> {
 
     // bridge workerを起動（--jobs 組のペアを並列初期化）
     const workerPath = path.join(__dirname, "cpu-bridge-worker.ts");
-    const makeWorker = (
-      worktreePath: string,
-      evaluationOptions: Partial<EvaluationOptions> | undefined,
-      bookEnabled: boolean,
-      threatProbeEnabled: boolean,
-      maxNodes: number | undefined,
-      maxDepth: number | undefined,
-    ): Promise<Worker> =>
-      createBridgeWorker({
+    // side 別の worker 生成設定（初期化と再生成で同じものを使う）
+    const sideParams = {
+      A: {
+        worktreePath: worktreePathA!,
+        evaluationOptions: options.evalOptionsA,
+        bookEnabled: options.bookA,
+        threatProbeEnabled: options.probeEnabledA,
+        maxNodes: options.maxNodesA,
+        maxDepth: options.maxDepthA,
+        fixed: resolveFixedNodesParams(fixedNodes.a),
+      },
+      B: {
+        worktreePath: worktreePathB!,
+        evaluationOptions: options.evalOptionsB,
+        bookEnabled: options.bookB,
+        threatProbeEnabled: options.probeEnabledB,
+        maxNodes: options.maxNodesB,
+        maxDepth: options.maxDepthB,
+        fixed: resolveFixedNodesParams(fixedNodes.b),
+      },
+    } as const;
+    const makeWorker = (side: "A" | "B"): Promise<Worker> => {
+      const sp = sideParams[side];
+      return createBridgeWorker({
         workerPath,
-        loaderPath: path.join(worktreePath, "scripts", "register-loader.mjs"),
-        worktreePath,
+        loaderPath: path.join(
+          sp.worktreePath,
+          "scripts",
+          "register-loader.mjs",
+        ),
+        worktreePath: sp.worktreePath,
         difficulty: options.difficulty,
         randomFactor: options.randomFactor,
-        evaluationOptions,
-        bookEnabled,
-        threatProbeEnabled,
-        maxNodes,
-        maxDepth,
+        evaluationOptions: sp.evaluationOptions,
+        bookEnabled: sp.bookEnabled,
+        threatProbeEnabled: sp.threatProbeEnabled,
+        // 固定ノードモードでは fixedNodes が maxNodes を決める（--max-nodes との併用は排他済み）
+        maxNodes: sp.fixed?.maxNodes ?? sp.maxNodes,
+        maxDepth: sp.maxDepth,
+        timeLimit: sp.fixed?.timeLimit,
+        deterministic: sp.fixed?.deterministic,
       });
+    };
+    const makePair = async (): Promise<{ a: Worker; b: Worker }> => {
+      const [a, b] = await Promise.all([makeWorker("A"), makeWorker("B")]);
+      return { a, b };
+    };
 
     console.log(`Bridge workerを初期化中... (${options.jobs}並列)`);
     const createdPairs = await Promise.all(
-      Array.from({ length: options.jobs }, async () => {
-        const [a, b] = await Promise.all([
-          makeWorker(
-            worktreePathA!,
-            options.evalOptionsA,
-            options.bookA,
-            options.probeEnabledA,
-            options.maxNodesA,
-            options.maxDepthA,
-          ),
-          makeWorker(
-            worktreePathB!,
-            options.evalOptionsB,
-            options.bookB,
-            options.probeEnabledB,
-            options.maxNodesB,
-            options.maxDepthB,
-          ),
-        ]);
-        return { a, b };
-      }),
+      Array.from({ length: options.jobs }, () => makePair()),
     );
     pairs.push(...createdPairs);
     console.log("Bridge worker初期化完了\n");
 
-    // 珠型タスクを生成し、共有の対局ループ（runMatch）で消化する。
+    // 両側の wasm getSearchFeatures() ビット（ready 通知に同梱）。結果 JSON の provenance
+    const firstPair = pairs[0]!;
+    const searchFeaturesA = getWorkerTelemetry(firstPair.a).snapshot()
+      .engineParams?.searchFeatures;
+    const searchFeaturesB = getWorkerTelemetry(firstPair.b).snapshot()
+      .engineParams?.searchFeatures;
+    if (fixedNodes.anyDeterministic) {
+      console.log(
+        `searchFeatures A=${searchFeaturesA ?? "n/a"} B=${searchFeaturesB ?? "n/a"}`,
+      );
+    }
+
+    // タスク列（珠型 or 開局スイート）を共有の対局ループ（runMatch）で消化する。
     //
     // ハング耐性: move-request timeout（GameHangError）が起きたら、当該局を破棄しつつ
     // 再現ダンプ（bench-results/hang-dumps/hang-*.json）を書き、当該 pair の worker を
     // 再生成して残り局を続行する。プロセス全体を落とさない。
-    const allTasks = buildJushuTasks(options.sets);
-    const tasks =
-      options.maxGames > 0 && options.maxGames < allTasks.length
-        ? allTasks.slice(0, options.maxGames)
-        : allTasks;
-    if (options.maxGames > 0 && options.maxGames < allTasks.length) {
-      console.log(
-        `--max-games=${options.maxGames} 指定により ${allTasks.length}→${tasks.length} 局に切り詰め`,
-      );
-    }
 
     // ダンプ用の side メタ（worker 再生成にも再利用）
     const workerConfigs: { A: HangDumpSideConfig; B: HangDumpSideConfig } = {
@@ -879,32 +1085,17 @@ async function main(): Promise<void> {
     const recreatePair = async (
       idx: number,
     ): Promise<{ a: Worker; b: Worker }> => {
-      const [a, b] = await Promise.all([
-        makeWorker(
-          worktreePathA!,
-          options.evalOptionsA,
-          options.bookA,
-          options.probeEnabledA,
-          options.maxNodesA,
-          options.maxDepthA,
-        ),
-        makeWorker(
-          worktreePathB!,
-          options.evalOptionsB,
-          options.bookB,
-          options.probeEnabledB,
-          options.maxNodesB,
-          options.maxDepthB,
-        ),
-      ]);
-      const fresh = { a, b };
+      const fresh = await makePair();
       pairs[idx] = fresh;
       return fresh;
     };
 
-    // randomFactor 使用時は seed を明示ログ（同一シード同一棋譜の検証で使う）
+    // 実効 randomFactor > 0 なら seed を渡す（difficulty 既定の randomFactor も含む。
+    // 未指定 = Math.random に落ちて決定性・再現性が壊れる）。同一シード同一棋譜の検証用にログ
     const seedInEffect =
-      options.randomFactor === undefined ? undefined : options.seed;
+      effectiveRandomFactor(options.randomFactor, options.difficulty) > 0
+        ? options.seed
+        : undefined;
     if (seedInEffect !== undefined) {
       console.log(
         `PRNG seed（baseSeed）: ${seedInEffect}${process.argv.some((a) => a.startsWith("--seed=")) ? "" : " (default = Date.now())"}`,
@@ -929,6 +1120,8 @@ async function main(): Promise<void> {
           moveTimeoutMs: context.timeoutMs,
           jobs: options.jobs,
           baseSeed: seedInEffect,
+          fixedNodesA: fixedNodes.a,
+          fixedNodesB: fixedNodes.b,
         },
         workerConfigs,
       });
@@ -936,7 +1129,7 @@ async function main(): Promise<void> {
       console.warn(
         `⚠ hang detected g${info.gameIdx}, dumped to ${dumpPath}\n` +
           `  worker: requests=${telemetry.requestCount} recentMoves=${telemetry.recentMoves.length} recentGames=${telemetry.recentGames.length}\n` +
-          `  liveness: ${liveness.verdict} (timeChecks=${liveness.timeCheckCount}, +${liveness.timeCheckDeltaDuringSample} in ${liveness.sampleWindowMs}ms)\n` +
+          `  liveness: ${describeLivenessVerdict(liveness, telemetry.engineParams?.deterministic)}\n` +
           `  mainThread: maxTimerLag=${mainThread.maxTimerLagMs}ms maxClockSkewJump=${mainThread.maxClockSkewJumpMs}ms`,
       );
     };
@@ -953,34 +1146,39 @@ async function main(): Promise<void> {
       );
     }
 
-    const { wdl, games, completedGames, aborts, abortsBySide } = await runMatch(
-      {
-        pairs,
-        tasks,
-        totalGames: tasks.length,
-        sprtConfig,
-        moveTimeoutMs: options.moveTimeoutMs,
-        verbose: options.verbose,
-        startTime,
-        recreatePair,
-        onHang,
-        hangInject: hangInjectEnv
-          ? {
-              gameIdx: hangInjectEnv.gameIdx,
-              spec: {
-                requestOrdinal: hangInjectEnv.requestOrdinal,
-                side: hangInjectEnv.side,
-              },
-            }
-          : undefined,
-        // randomFactor 未指定なら getGameSeed を渡さない（従来と同じ Math.random）
-        getGameSeed:
-          seedInEffect === undefined
-            ? undefined
-            : (gameIdx: number): number =>
-                deriveGameSeed(seedInEffect, gameIdx)!,
-      },
-    );
+    const {
+      wdl,
+      games,
+      completedGames,
+      aborts,
+      abortsBySide,
+      abortedGames,
+      stats,
+    } = await runMatch({
+      pairs,
+      tasks,
+      totalGames,
+      sprtConfig,
+      moveTimeoutMs,
+      verbose: options.verbose,
+      startTime,
+      recreatePair,
+      onHang,
+      hangInject: hangInjectEnv
+        ? {
+            gameIdx: hangInjectEnv.gameIdx,
+            spec: {
+              requestOrdinal: hangInjectEnv.requestOrdinal,
+              side: hangInjectEnv.side,
+            },
+          }
+        : undefined,
+      // 実効 randomFactor が 0 なら getGameSeed を渡さない（seed は意味を持たない）
+      getGameSeed:
+        seedInEffect === undefined
+          ? undefined
+          : (gameIdx: number): number => deriveGameSeed(seedInEffect, gameIdx)!,
+    });
 
     const elapsedSeconds = (performance.now() - startTime) / 1000;
 
@@ -988,6 +1186,11 @@ async function main(): Promise<void> {
     console.log(`\n=== 結果 ===`);
     console.log(`commitA: ${commitA.shortSha} "${commitA.message}"`);
     console.log(`commitB: ${commitB.shortSha} "${commitB.message}"`);
+    if (suite) {
+      console.log(
+        `開局スイート: ${suite.file} (version ${suite.version}, offset=${options.openingOffset})`,
+      );
+    }
     console.log(
       `対局数: ${completedGames}${aborts > 0 ? ` (abort: ${aborts} = A側${abortsBySide.A} / B側${abortsBySide.B})` : ""}`,
     );
@@ -1004,14 +1207,13 @@ async function main(): Promise<void> {
     }
     console.log(`WDL (commitA視点): +${wdl.wins} =${wdl.draws} -${wdl.losses}`);
 
-    const eloDiffResult = estimateEloDiff(wdl);
-    console.log(formatEloDiff(eloDiffResult));
-
-    let sprtState = null;
-    if (sprtConfig) {
-      sprtState = updateSPRT(wdl, sprtConfig);
-      console.log(formatSPRT(sprtState, wdl));
+    // 三項（旧・1 局単位）とペア（新・pentanomial）を並記。停止判定はペア。
+    console.log(`[三項] ${formatEloDiff(stats.trinomialElo)}`);
+    if (stats.sprtTrinomial) {
+      console.log(`(三項・参考) ${formatSPRT(stats.sprtTrinomial, wdl)}`);
     }
+    console.log(`[ペア] ${formatPairedStats(stats.paired)}`);
+    console.log(formatBenchGameStats(computeBenchGameStats(games)));
 
     console.log(`所要時間: ${elapsedSeconds.toFixed(1)}秒`);
 
@@ -1059,6 +1261,7 @@ async function main(): Promise<void> {
         gamesPerSet,
         randomFactor: options.randomFactor,
         sprt: sprtConfig,
+        openings: resolved.config,
         evalOptionsA: options.evalOptionsA,
         evalOptionsB: options.evalOptionsB,
         bookA: options.bookA,
@@ -1070,13 +1273,24 @@ async function main(): Promise<void> {
         maxDepthA: options.maxDepthA,
         maxDepthB: options.maxDepthB,
         seed: seedInEffect,
+        fixedNodes: options.fixedNodes,
+        fixedNodesA: fixedNodes.a,
+        fixedNodesB: fixedNodes.b,
+        searchFeaturesA,
+        searchFeaturesB,
       },
       totalGames: completedGames,
       aborts,
       abortsBySide,
+      abortedGames,
+      // 決定的モードの受け入れ条件は abort=0（abort が緊迫局面に偏ると Elo が歪む）。
+      // 時間モードでは従来どおり記録しない（abort 局を除いて集計）。
+      valid: fixedNodes.anyDeterministic ? aborts === 0 : undefined,
       wdl,
-      eloDiff: eloDiffResult,
-      sprt: sprtState,
+      eloDiff: stats.trinomialElo,
+      sprt: stats.paired.sprt,
+      sprtTrinomial: stats.sprtTrinomial,
+      paired: stats.paired,
       games,
       elapsedSeconds,
       performanceStats,
@@ -1089,6 +1303,21 @@ async function main(): Promise<void> {
     const outputPath = path.join(OUTPUT_DIR, `commit-bench-${timestamp}.json`);
     fs.writeFileSync(outputPath, JSON.stringify(benchResult, null, 2));
     console.log(`\n結果を保存: ${outputPath}`);
+
+    if (benchResult.valid === false) {
+      console.error(
+        `\n✗ 決定的モードで abort が ${aborts} 件発生したため、この run は無効（valid:false）です:`,
+      );
+      for (const g of abortedGames) {
+        console.error(
+          `    g${g.gameIdx} ${g.openingId} (${g.isABlack ? "A黒" : "A白"}) side=${g.side ?? "?"}: ${g.reason}`,
+        );
+      }
+      console.error(
+        `  --move-timeout-ms を伸ばすか N を下げて再実行してください（受け入れ条件は abort=0）。`,
+      );
+      process.exitCode = 1;
+    }
   } finally {
     cleanup();
   }

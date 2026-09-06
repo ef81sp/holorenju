@@ -2,7 +2,7 @@
  * 対局オーケストレーション共有モジュール。
  *
  * commit-bench（worktree 比較）と weight-bench（ローカル wasm + 重み注入）の
- * 両方で使う「珠型タスク生成 / bridge worker 生成 / ワークスティール並列ループ＋
+ * 両方で使う「タスク生成（珠型/開局スイート） / bridge worker 生成 / ワークスティール並列ループ＋
  * WDL・Elo・SPRT・状態表示」を集約する。両ベンチの差は
  *   (1) worker ペアの作り方（worktree vs ローカル wasm + evalWeights）
  *   (2) 結果の保存形式・ラベル
@@ -16,7 +16,7 @@ import type { EvaluationOptions } from "../../src/logic/cpu/evaluation/patternSc
 import type { DifficultyParams } from "../../src/types/cpu.ts";
 import type { Position } from "../../src/types/game.ts";
 import type { SPRTConfig, WDLCount } from "../types/ab.ts";
-import type { CommitGameResult } from "../types/commit-bench.ts";
+import type { AbortedGame, CommitGameResult } from "../types/commit-bench.ts";
 
 import {
   getAllJushuNames,
@@ -29,16 +29,26 @@ import {
   runCommitGame,
 } from "../commit-game-runner.ts";
 import { isReadyMessage, parseEngineParams } from "./bridgeWorkerProtocol.ts";
-import { estimateEloDiff } from "./eloDiff.ts";
-import { updateSPRT } from "./sprt.ts";
+import { type MatchStatsSnapshot, MatchStatsTracker } from "./matchStats.ts";
 import { createLivenessChannel } from "./workerLiveness.ts";
 import { getWorkerTelemetry } from "./workerTelemetry.ts";
 
-/** 1局分の珠型タスク（開始局面＋先後割当）。 */
+/** 1局分の対局タスク（開始局面＋先後割当）。 */
 export interface MatchTask {
-  jushuName: string;
-  positions: [Position, Position, Position];
+  /** 開局ラベル（珠型名または開局 id）。結果の jushuName に入る */
+  openingId: string;
+  /** ペア id。同一開局の A黒/A白 2 局が同じ値を持つ（`${set}:${openingId}`） */
+  pairId: string;
+  /** 開局の擬似手順（黒から交互）。珠型は 3 手、開局スイートは 7 手。 */
+  positions: Position[];
   isABlack: boolean;
+}
+
+/** 開局の供給元（珠型アダプタ jushuOpenings() または開局スイートのローダ）。 */
+export interface OpeningSource {
+  id: string;
+  /** 黒から交互の擬似手順。手番は長さの偶奇で決まる */
+  positions: Position[];
 }
 
 /** ハング局のメタ情報（caller のダンプ作成用） */
@@ -51,7 +61,10 @@ export interface HangMatchInfo {
 
 /** runMatch の結果（caller が後処理＝性能統計や保存を行う）。 */
 export interface RunMatchResult {
+  /** stats.wdl の別名（既存 caller との互換）。 */
   wdl: WDLCount;
+  /** 最終統計（三項 Elo / 三項 SPRT / ペア統計）。 */
+  stats: MatchStatsSnapshot;
   games: CommitGameResult[];
   completedGames: number;
   stoppedBySprt: boolean;
@@ -66,14 +79,20 @@ export interface RunMatchResult {
    * A + B = aborts の関係。
    */
   abortsBySide: { A: number; B: number };
+  /**
+   * 破棄された局の一覧（決定的モードの受け入れ条件 abort=0 の判定と、
+   * 結果 JSON への該当局面記録に使う）。side はハングした側（worker 死等で
+   * 特定できないときは undefined）。
+   */
+  abortedGames: AbortedGame[];
 }
 
 export interface RunMatchParams {
   /** A/B bridge worker のペア群（--jobs 組）。生成方法は caller が決める。 */
   pairs: { a: Worker; b: Worker }[];
-  /** 消化する珠型タスク列（buildJushuTasks 等で生成）。 */
+  /** 消化するタスク列（buildTasks で生成）。 */
   tasks: MatchTask[];
-  /** 進捗表示の分母。 */
+  /** 進捗表示の分母（tasks.length を渡す）。 */
   totalGames: number;
   sprtConfig: SPRTConfig | null;
   moveTimeoutMs: number;
@@ -108,30 +127,57 @@ export interface RunMatchParams {
 }
 
 // ============================================================================
-// 珠型タスク生成
+// タスク生成
 // ============================================================================
 
-/** sets セット分の珠型タスク（各セット = 全珠型 × 2色）をフラット化して返す。 */
-export function buildJushuTasks(sets: number): MatchTask[] {
-  const jushuNames = getAllJushuNames();
+export interface BuildTasksOptions {
+  /** 開局列の n 番目から使う（末尾で折り返さない）。既定 0 */
+  offset?: number;
+  /** タスクを先頭 N 局に切り詰める（ペア境界＝偶数に切り下げ）。0 なら無効 */
+  maxGames?: number;
+}
+
+/**
+ * 開局列 × sets 周回 × 2 色のタスクをフラット化して返す（唯一のタスク生成経路）。
+ * 各開局について A黒 → A白 の 2 局を隣接して出し、`pairId = ${set}:${id}`。
+ * 返り値の長さがベンチの totalGames の唯一の源。
+ */
+export function buildTasks(
+  source: OpeningSource[],
+  sets: number,
+  options: BuildTasksOptions = {},
+): MatchTask[] {
+  const { offset = 0, maxGames = 0 } = options;
+  const usable = source.slice(offset);
   const tasks: MatchTask[] = [];
   for (let set = 0; set < sets; set++) {
-    for (const jn of jushuNames) {
-      const pos = getJushuPositions(jn, true);
-      if (!pos) {
-        continue;
-      }
-      for (const ab of [true, false]) {
-        tasks.push({ jushuName: jn, positions: pos, isABlack: ab });
+    for (const { id, positions } of usable) {
+      for (const isABlack of [true, false]) {
+        tasks.push({
+          openingId: id,
+          pairId: `${set}:${id}`,
+          positions,
+          isABlack,
+        });
       }
     }
+  }
+  if (maxGames > 0 && maxGames < tasks.length) {
+    return tasks.slice(0, maxGames - (maxGames % 2));
   }
   return tasks;
 }
 
-/** 1セットあたりの局数（全珠型 × 2色）。 */
-export function gamesPerSet(): number {
-  return getAllJushuNames().length * 2;
+/** 26 珠型（天元黒・白 2 手目・黒 3 手目）を OpeningSource として供給するアダプタ。 */
+export function jushuOpenings(): OpeningSource[] {
+  const out: OpeningSource[] = [];
+  for (const id of getAllJushuNames()) {
+    const positions = getJushuPositions(id, true);
+    if (positions) {
+      out.push({ id, positions });
+    }
+  }
+  return out;
 }
 
 // ============================================================================
@@ -181,28 +227,59 @@ export interface CreateBridgeWorkerParams {
    * probe OFF/深さ探索レバーが depth cap で頭打ちになるのを避けるためのレバー。
    */
   maxDepth?: number;
+  /**
+   * 探索の timeLimit オーバーライド（ms）。固定ノードモードでは 0（時間を見ない）。
+   * 未指定なら difficulty 既定。
+   */
+  timeLimit?: number;
+  /**
+   * 決定的探索モード（bench-fixed-nodes-2026-09-06.md）。true なら worker は wasm の
+   * `setDeterministicMode(1)` を呼ぶ。非対応 wasm / TS フォールバックでは worker が
+   * 初期化を中止し createBridgeWorker は reject する。
+   */
+  deterministic?: boolean;
+}
+
+/**
+ * bridge worker に渡す customParams。DifficultyParams の部分オーバーライドに加え、
+ * 決定的探索モード（bench-fixed-nodes-2026-09-06.md §2.5）のフラグを載せる。
+ * `deterministic` は DifficultyParams の一員ではない（製品経路には無い概念）ため
+ * ここで拡張する。mergeDifficultyParams はトップレベルを丸ごと展開するので
+ * worker 側では merged params からも読める。
+ */
+export interface BridgeCustomParams extends Partial<DifficultyParams> {
+  /** true なら worker は wasm の `setDeterministicMode(1)` を呼ぶ（非対応なら中止） */
+  deterministic?: boolean;
+}
+
+/** buildBridgeCustomParams の入力（全て任意。何も無ければ undefined を返す）。 */
+export interface BridgeCustomParamsInput {
+  randomFactor?: number;
+  evaluationOptions?: Partial<EvaluationOptions>;
+  maxNodes?: number;
+  /** DifficultyParams.depth に写す（ベンチ CLI の flag 名に合わせた別名） */
+  maxDepth?: number;
+  /** 0 なら時間を見ない（固定ノードモード） */
+  timeLimit?: number;
+  deterministic?: boolean;
 }
 
 /**
  * createBridgeWorker に渡す customParams を組み立てる（純粋関数・単体テスト用に export）。
- * randomFactor / evaluationOptions / maxNodes のいずれも未指定なら undefined を返し、
- * 既存呼び出し（weight-bench 等）の挙動を完全に保つ。
+ * 全て未指定なら undefined を返し、既存呼び出し（weight-bench 等）の挙動を完全に保つ。
  */
 export function buildBridgeCustomParams(
-  randomFactor: number | undefined,
-  evaluationOptions: Partial<EvaluationOptions> | undefined,
-  maxNodes?: number,
-  maxDepth?: number,
-): Partial<DifficultyParams> | undefined {
-  if (
-    randomFactor === undefined &&
-    evaluationOptions === undefined &&
-    maxNodes === undefined &&
-    maxDepth === undefined
-  ) {
-    return undefined;
-  }
-  const customParams: Partial<DifficultyParams> = {};
+  input: BridgeCustomParamsInput,
+): BridgeCustomParams | undefined {
+  const {
+    randomFactor,
+    evaluationOptions,
+    maxNodes,
+    maxDepth,
+    timeLimit,
+    deterministic,
+  } = input;
+  const customParams: BridgeCustomParams = {};
   if (randomFactor !== undefined) {
     customParams.randomFactor = randomFactor;
   }
@@ -217,7 +294,13 @@ export function buildBridgeCustomParams(
     // ベンチ CLI の flag に合わせ、ここで DifficultyParams.depth に写す。
     customParams.depth = maxDepth;
   }
-  return customParams;
+  if (timeLimit !== undefined) {
+    customParams.timeLimit = timeLimit;
+  }
+  if (deterministic !== undefined) {
+    customParams.deterministic = deterministic;
+  }
+  return Object.keys(customParams).length === 0 ? undefined : customParams;
 }
 
 /** bridge worker を起動し、ready 通知を待って resolve する。 */
@@ -236,14 +319,18 @@ export function createBridgeWorker(
     threatProbeEnabled,
     maxNodes,
     maxDepth,
+    timeLimit,
+    deterministic,
   } = params;
   return new Promise<Worker>((resolve, reject) => {
-    const customParams = buildBridgeCustomParams(
+    const customParams = buildBridgeCustomParams({
       randomFactor,
       evaluationOptions,
       maxNodes,
       maxDepth,
-    );
+      timeLimit,
+      deterministic,
+    });
     // #128: ハング中でも読める生存信号を共有メモリで用意する
     const livenessChannel = createLivenessChannel();
 
@@ -295,6 +382,16 @@ export function createBridgeWorker(
       clearTimeout(initTimeout);
       reject(err);
     });
+    // 初期化中止（決定的モード非対応など）は worker が process.exit(1) するため
+    // "error" ではなく "exit" で観測される。ready 前の終了は reject にする。
+    worker.on("exit", (code) => {
+      clearTimeout(initTimeout);
+      reject(
+        new Error(
+          `Bridge worker exited before ready (code=${code}) for ${worktreePath}`,
+        ),
+      );
+    });
   });
 }
 
@@ -323,8 +420,9 @@ interface Acc {
 const newAcc = (): Acc => ({ depthSum: 0, timeSum: 0, count: 0, maxDepth: 0 });
 
 /**
- * 珠型タスクを pairs（--jobs 組）でワークスティール並列消化する。
+ * タスク列を pairs（--jobs 組）でワークスティール並列消化する。
  * 結果処理（WDL/統計/ステータス/SPRT）は await を挟まず同期実行＝競合しない。
+ * 統計は MatchStatsTracker に委譲し、**SPRT の停止判定はペア LLR**で行う。
  *
  * **1局隔離**: runCommitGame が throw（move timeout/worker死）しても、その局だけ
  * 「敗北扱い」で記録して残りを続行する。ハングした worker は terminate→再生成し、
@@ -347,12 +445,13 @@ export async function runMatch(
     getGameSeed,
   } = params;
 
-  const wdl: WDLCount = { wins: 0, draws: 0, losses: 0 };
+  const stats = new MatchStatsTracker(sprtConfig);
   const games: CommitGameResult[] = [];
   let completedGames = 0;
   let stoppedBySprt = false;
   let aborts = 0;
   const abortsBySide = { A: 0, B: 0 };
+  const abortedGames: AbortedGame[] = [];
 
   const cumAcc = { A: newAcc(), B: newAcc() };
 
@@ -370,7 +469,8 @@ export async function runMatch(
       if (taskIdx >= tasks.length) {
         break;
       }
-      const { jushuName, positions, isABlack } = tasks[taskIdx]!;
+      const { openingId, pairId, positions, isABlack } = tasks[taskIdx]!;
+      const jushuName = openingId;
 
       let result: CommitGameResult | null = null;
       const injectHere =
@@ -387,7 +487,7 @@ export async function runMatch(
           gameSeed,
           gameIdx: taskIdx,
         });
-        result = { ...r, jushuName };
+        result = { ...r, jushuName, pairId };
       } catch (err: unknown) {
         // recreatePair 未指定なら旧挙動でエラー伝播（commit-bench 出力同一）。
         if (!recreatePair) {
@@ -415,6 +515,14 @@ export async function runMatch(
           }
         }
         aborts++;
+        abortedGames.push({
+          gameIdx: taskIdx,
+          openingId,
+          pairId,
+          isABlack,
+          side: isHang ? err.context.side : undefined,
+          reason: msg,
+        });
         // side 別集計: ハングした側（A/B）に加算。ハングじゃない例外（worker死等）
         // は側が特定できないので aborts のみ加算する。
         if (isHang) {
@@ -439,14 +547,9 @@ export async function runMatch(
         break;
       }
 
-      // WDL更新（A=playerA 視点）
-      if (result.winner === "draw") {
-        wdl.draws++;
-      } else if (result.winner === "A") {
-        wdl.wins++;
-      } else {
-        wdl.losses++;
-      }
+      // WDL / Elo / ペア統計 / SPRT 更新（A=playerA 視点）
+      const snap = stats.push(result);
+      const { wdl } = snap;
 
       games.push(result);
       completedGames++;
@@ -518,17 +621,18 @@ export async function runMatch(
 
       // ステータス表示
       const elapsed = ((performance.now() - startTime) / 1000).toFixed(0);
-      const elo = estimateEloDiff(wdl);
-      let statusMsg = `[${elapsed}s] ${completedGames}/${totalGames} ${jushuName} ${isABlack ? "A黒" : "A白"} +${wdl.wins}=${wdl.draws}-${wdl.losses} Elo:${elo.eloDiff > 0 ? "+" : ""}${elo.eloDiff}`;
+      const elo = snap.trinomialElo;
+      const pElo = snap.paired.elo;
+      let statusMsg = `[${elapsed}s] ${completedGames}/${totalGames} ${jushuName} ${isABlack ? "A黒" : "A白"} +${wdl.wins}=${wdl.draws}-${wdl.losses} Elo:${elo.eloDiff > 0 ? "+" : ""}${elo.eloDiff} ペア(${snap.paired.pairs}):${pElo.eloDiff > 0 ? "+" : ""}${pElo.eloDiff}`;
 
-      if (sprtConfig) {
-        const sprt = updateSPRT(wdl, sprtConfig);
+      if (snap.paired.sprt) {
+        const { sprt } = snap.paired;
         statusMsg += ` LLR:${sprt.llr.toFixed(2)}`;
         if (sprt.decision !== "continue") {
           writeStatus(statusMsg);
           clearStatus();
           console.log(
-            `SPRT判定: ${sprt.decision} (${completedGames}局目で停止)`,
+            `SPRT判定(ペア): ${sprt.decision} (${completedGames}局目 / ${snap.paired.pairs}ペアで停止)`,
           );
           stop = true;
           stoppedBySprt = true;
@@ -555,5 +659,15 @@ export async function runMatch(
 
   clearStatus();
 
-  return { wdl, games, completedGames, stoppedBySprt, aborts, abortsBySide };
+  const finalSnap = stats.snapshot();
+  return {
+    wdl: finalSnap.wdl,
+    games,
+    completedGames,
+    stoppedBySprt,
+    aborts,
+    abortsBySide,
+    abortedGames,
+    stats: finalSnap,
+  };
 }

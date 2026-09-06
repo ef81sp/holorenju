@@ -18,11 +18,15 @@ import type { BoardState } from "../../src/types/game.ts";
 import type { HangContext, MoveRecord } from "../commit-game-runner.ts";
 import type { CommitInfo } from "../types/commit-bench.ts";
 import type { EventLoopSnapshot } from "./eventLoopSampler.ts";
-import type { HangLiveness } from "./workerLiveness.ts";
 import type {
   RecentGameRecord,
   WorkerTelemetrySnapshot,
 } from "./workerTelemetry.ts";
+
+import {
+  DETERMINISTIC_LIVENESS_NOTE,
+  type HangLiveness,
+} from "./workerLiveness.ts";
 
 /**
  * ダンプの現行スキーマ版。
@@ -69,6 +73,13 @@ export interface HangDumpBench {
    * 実効的な perGameSeed は match.gameSeed に別途保存する。
    */
   baseSeed?: number;
+  /**
+   * 固定ノード（決定的探索）モードの side 別 N（bench-fixed-nodes-2026-09-06.md）。
+   * 時間モードの側は undefined。replay の探索条件は worker.telemetry.engineParams
+   * （timeLimit / maxNodes / deterministic）から復元するので、これは人間向けの記録。
+   */
+  fixedNodesA?: number;
+  fixedNodesB?: number;
 }
 
 /** ダンプに含める対局メタ */
@@ -93,7 +104,7 @@ export interface HangDumpHangBase {
   requestId: number;
   timeoutMs: number;
   elapsedMs: number;
-  /** 何手目でハングしたか（1-based, opening 3手を含む） */
+  /** 何手目でハングしたか（1-based, 開局手を含む） */
   moveNumber: number;
 }
 
@@ -148,7 +159,7 @@ interface HangDumpCommon {
   opponent: HangDumpOpponent;
   /** ハング直前の盤面（そのままリクエストとして送れる形） */
   board: BoardState;
-  /** ハング直前までの着手履歴（opening 3手を含む。row/col/isOpening/time…） */
+  /** ハング直前までの着手履歴（開局手を含む。row/col/isOpening/time…） */
   moveHistory: MoveRecord[];
 }
 
@@ -235,7 +246,10 @@ export function writeHangDump(params: WriteHangDumpParams): string {
     board: context.board,
     moveHistory: context.moveHistory,
     recentGames: context.telemetry.recentGames,
-    notes: HANG_DUMP_NOTES,
+    // 決定的モードでは liveness の時間チェック回数が生存指標にならない旨を必ず残す
+    notes: context.telemetry.engineParams?.deterministic
+      ? [...HANG_DUMP_NOTES, DETERMINISTIC_LIVENESS_NOTE]
+      : HANG_DUMP_NOTES,
   };
 
   if (!fs.existsSync(outputDir)) {
