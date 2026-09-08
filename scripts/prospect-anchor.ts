@@ -28,10 +28,10 @@ import { WasmBoardEvaluator } from "@/logic/cpu/wasm/bridge";
 import { loadWasmModule } from "@/logic/cpu/wasm/loader";
 import { DIFFICULTY_PARAMS } from "@/types/cpu";
 
+import { PROSPECT_PARAM_ID_BASE } from "./lib/evalParams.ts";
 import { meanSquaredLoss, rapfiTeacherLabel } from "./lib/texelFit.ts";
+import { readCString } from "./lib/wasmCString.ts";
 
-/** prospect id 空間のオフセット（main.zig の PROSPECT_PARAM_ID_BASE と一致）。 */
-const PROSPECT_PARAM_ID_BASE = 100;
 const FEATURE_COUNT = 34;
 const CAT_COUNT = 17; // CellCat の有効値数（prospect.zig と一致）
 const PROSPECT_EVAL_CLAMP = 10000;
@@ -154,16 +154,6 @@ function legacyLeafEval(
     // singleFourPenaltyMultiplier のみ（他の hard フラグは探索側で、葉評価には不関与）。
     singleFourPenaltyMultiplier: hardOpts.singleFourPenaltyMultiplier,
   });
-}
-
-/** null 終端文字列を wasm メモリから読む（prospect-texel.ts と同じ）。 */
-function readCString(wasm: WasmModuleContext, ptr: number): string {
-  const bytes = new Uint8Array(wasm.memory.buffer);
-  let end = ptr;
-  while (bytes[end] !== 0) {
-    end++;
-  }
-  return new TextDecoder().decode(bytes.subarray(ptr, end));
 }
 
 function getWeightNames(wasm: WasmModuleContext): string[] {
