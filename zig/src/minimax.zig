@@ -319,7 +319,8 @@ pub var threat_probe_enabled: bool = true;
 /// VCT は 50 → 25 ms（2026-09-09、docs/plans/strength-screen-2026-09-08.md §6.3〜6.4）:
 /// プローブは主探索ノードの 8 割を食うため上限を半分にすると主探索が深くなり
 /// （平均深さ 6.13 → 6.51）、時間モード v1 1,200 局で +27.6 [+12.4, +42.8]。
-/// 上限到達率は 18.4% → 24.2%。VCF の 20 ms は据え置き。
+/// 上限到達率は 18.4% → 24.2%（ベンチ機 jobs=5 での値。壁時計なので遅い端末では到達率が上がる）。
+/// VCF の 20 ms は据え置き。振り返り解析（timeLimit 5,000/15,000）も時間モード扱いなので同じ 25 ms が効く。
 const PROBE_VCF_TIME_LIMIT: u32 = 20;
 const PROBE_VCT_TIME_LIMIT: u32 = 25;
 
@@ -361,7 +362,7 @@ const ThreatBudget = struct {
 /// だけで縛られる形になり、**旧実装より深く探せる（＝挙動は変わる）**。
 /// あわせて攻め手ごとに `exceeded()` を見るようになったので 50ms の粒度も細かくなり、
 /// 手順長の α カットも非収集モード＝対局経路に効く。
-/// **予算値は未較正**なので、較正は別 issue（#137）で bench に基づいて行う。
+/// 予算値は当初未較正（#137）。2026-09-09 に VCT を 25 ms へ較正（上の定数コメント参照）。
 ///
 /// `vcf_nodes` は `vcf.zig` が元から計上していた実効値。こちらは据え置き。
 ///
@@ -409,7 +410,7 @@ fn threatProbe(
 ) ThreatProbeResult {
     const budget = getThreatBudget(minimax_depth, no_time_limit, policy);
 
-    // プローブの親＝メイン探索の残り時間。プローブ独自の 20ms / 50ms は
+    // プローブの親＝メイン探索の残り時間。プローブ独自の PROBE_VCF_TIME_LIMIT / PROBE_VCT_TIME_LIMIT は
     // 親の残りとの min を取る（`TimeLimiter.child` が SSoT）。
     // 子 limiter は段ごとに 1 回だけ作り（時計読みを増やさない）、そのまま探索の限界として
     // 渡して消費を親へ charge する。`parent.nodes` が VCF + VCT の合計になる。
@@ -1257,7 +1258,7 @@ test "probe_cap_hits: 決定的モードで probe_vct_nodes を極小にする�
     try testing.expect(ctx.stats.probe_cap_hits <= ctx.stats.probe_calls);
 }
 
-test "getThreatBudget: 決定的モードは時間 0・VCT ノード予算あり、時間モードは 20/50ms・VCT ノード無制限" {
+test "getThreatBudget: 決定的モードは時間 0・VCT ノード予算あり、時間モードは PROBE_VCF/VCT_TIME_LIMIT・VCT ノード無制限" {
     const t = getThreatBudget(4, false, budget_mod.BudgetPolicy.TIME_MODE);
     try testing.expectEqual(PROBE_VCF_TIME_LIMIT, t.vcf_time);
     try testing.expectEqual(PROBE_VCT_TIME_LIMIT, t.vct_time);

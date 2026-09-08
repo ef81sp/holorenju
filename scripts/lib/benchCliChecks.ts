@@ -121,6 +121,8 @@ export function parseMaxGamesArg(raw: string): MaxGamesNormalization {
  * bench-fixed-nodes-2026-09-06.md §7.13: プローブ上限 6k のもとで、時間モード hard
  * （jobs=5）との混合対局 416 局が Elo +5.8 [−15.3, +27.0]（有意差なし）になる N。
  * 2.5M は時間モードより +53 強く、0.6M は −26 弱い（§7.11〜7.12）。
+ * 2026-09-09 にプローブ上限を 3k 化（strength-screen-2026-09-08.md §6.4）。3k での同等性は
+ * 未再測（bench-fixed-nodes §7.15）。
  */
 export const FIXED_NODES_DEFAULT = 1_200_000;
 
