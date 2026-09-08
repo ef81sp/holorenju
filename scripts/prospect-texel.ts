@@ -29,16 +29,19 @@ import type { WasmModuleContext } from "@/logic/cpu/wasm/types";
 import { loadWasmModule } from "@/logic/cpu/wasm/loader";
 
 import {
+  PROSPECT_FEATURE_COUNT,
+  PROSPECT_PARAM_ID_BASE,
+} from "./lib/evalParams.ts";
+import {
   fitLogistic,
   type FitLogisticResult,
   groupKFold,
   meanSquaredLoss,
   rapfiTeacherLabel,
 } from "./lib/texelFit.ts";
+import { readCString } from "./lib/wasmCString.ts";
 
-/** prospect id 空間のオフセット（main.zig の PROSPECT_PARAM_ID_BASE と一致）。 */
-const PROSPECT_PARAM_ID_BASE = 100;
-const FEATURE_COUNT = 34;
+const FEATURE_COUNT = PROSPECT_FEATURE_COUNT;
 
 type Teacher = "rapfi" | "outcome";
 type TeacherArg = Teacher | "both";
@@ -92,16 +95,6 @@ function readCorpus(path: string): CorpusRow[] {
     rows.push(row);
   }
   return rows;
-}
-
-/** wasm メモリ上の null 終端文字列（[*:0]const u8）を読む。 */
-function readCString(wasm: WasmModuleContext, ptr: number): string {
-  const bytes = new Uint8Array(wasm.memory.buffer);
-  let end = ptr;
-  while (bytes[end] !== 0) {
-    end++;
-  }
-  return new TextDecoder().decode(bytes.subarray(ptr, end));
 }
 
 /** prospect id (100..133) の正準名34個を取得する（getEvalParamName 経由、SSoT は prospect.zig）。 */
