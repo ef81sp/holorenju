@@ -33,7 +33,7 @@ import {
   readSearchFeatures,
 } from "./lib/deterministicSupport.ts";
 import { mergeDifficultyParams } from "./lib/difficultyParamsMerge.ts";
-import { EVAL_PARAM_IDS } from "./lib/evalParams.ts";
+import { applyEvalWeights } from "./lib/evalWeightInjection.ts";
 import { mulberry32 } from "./lib/mulberry32.ts";
 import {
   countStones,
@@ -64,9 +64,10 @@ interface BridgeWorkerData {
    */
   customParams?: BridgeCustomParams;
   /**
-   * eval 形系重みの実行時注入（weight-bench 用）。キー名は EVAL_PARAM_IDS。
-   * wasm が setEvalParam を export していれば適用、無ければ warn してスキップ
-   * （setEvalParam 非対応の古い commit を読む commit-bench と後方互換）。
+   * eval 重みの実行時注入（weight-bench 用）。キー名は EVAL_PARAM_IDS（legacy + prospect）。
+   * wasm が setEvalParam を export していれば適用し、getEvalParam で読み戻して不一致なら
+   * 初期化を失敗させる（lib/evalWeightInjection.ts）。setEvalParam の無い古い commit を
+   * 読む commit-bench とは後方互換（warn してスキップ）。
    */
   evalWeights?: Record<string, number>;
   /**
@@ -427,38 +428,6 @@ function callTsFindBestMove(
     params.evaluationOptions,
     params.maxNodes,
   );
-}
-
-/**
- * eval 形系重みを wasm に注入する（純粋関数）。
- * setEvalParam export があれば resetEvalParams→各 setEvalParam を適用、無ければ
- * warn してスキップ（setEvalParam 非対応の古い commit を読む commit-bench と後方互換）。
- * baseline 側（weights 空）でも resetEvalParams を呼びクリーンな既定を保証する。
- */
-function applyEvalWeights(
-  wasm: WasmModuleExports,
-  weights: Record<string, number> | undefined,
-): void {
-  if (
-    typeof wasm.setEvalParam !== "function" ||
-    typeof wasm.resetEvalParams !== "function"
-  ) {
-    if (weights && Object.keys(weights).length > 0) {
-      console.warn(
-        "[cpu-bridge-worker] この wasm は setEvalParam 非対応。evalWeights を無視します。",
-      );
-    }
-    return;
-  }
-  wasm.resetEvalParams();
-  for (const [name, value] of Object.entries(weights ?? {})) {
-    const id = (EVAL_PARAM_IDS as Record<string, number>)[name];
-    if (id === undefined) {
-      console.warn(`[cpu-bridge-worker] 不明な eval 重みキー: ${name}（無視）`);
-      continue;
-    }
-    wasm.setEvalParam(id, value);
-  }
 }
 
 // ============================================================================
