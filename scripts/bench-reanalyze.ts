@@ -22,19 +22,27 @@
  *     決定性スモーク（bench-fixed-nodes-2026-09-06.md §2.5）: pairId ごとに棋譜・
  *     1 手ごとの stats.nodes・score の完全一致を判定し、不一致の最初の手を表示する。
  *     不一致なら終了コード 1。
+ *   --merge a.json b.json [...]
+ *     複数 JSON の games を結合して 1 つのペア統計を出す（二段階スクリーンの前後半連結、
+ *     strength-screen-2026-09-08.md §1）。commitA/commitB・weights・fixedNodes 等の設定が
+ *     一致しない、または同じ局が重複していればエラー。
  */
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import type { SPRTConfig, WeightBenchResult } from "./types/ab.ts";
-import type { CommitBenchResult } from "./types/commit-bench.ts";
+import type {
+  CommitBenchResult,
+  CommitGameResult,
+} from "./types/commit-bench.ts";
 
 import { compareBenchRuns, formatBenchComparison } from "./lib/benchCompare.ts";
 import {
   computeBenchGameStats,
   formatBenchGameStats,
 } from "./lib/benchGameStats.ts";
+import { mergeBenchRuns } from "./lib/benchMerge.ts";
 import { estimateEloDiff, formatEloDiff } from "./lib/eloDiff.ts";
 import {
   computePairedStats,
@@ -53,6 +61,8 @@ interface Options {
   sprt: SPRTConfig;
   /** `--compare a.json b.json`: 2 本の決定性比較モード */
   compare: boolean;
+  /** `--merge a.json b.json ...`: games を結合して 1 つのペア統計を出す */
+  merge: boolean;
 }
 
 function parseArgs(): Options {
@@ -61,12 +71,15 @@ function parseArgs(): Options {
     showOpenings: false,
     sprt: { ...DEFAULT_SPRT_CONFIG },
     compare: false,
+    merge: false,
   };
   for (const arg of process.argv.slice(2)) {
     if (arg === "--openings") {
       options.showOpenings = true;
     } else if (arg === "--compare") {
       options.compare = true;
+    } else if (arg === "--merge") {
+      options.merge = true;
     } else if (arg.startsWith("--elo0=")) {
       options.sprt.elo0 = parseEloArg(arg, "--elo0=");
     } else if (arg.startsWith("--elo1=")) {
@@ -76,8 +89,10 @@ function parseArgs(): Options {
         [
           "Usage: pnpm bench:reanalyze [file...] [--openings] [--elo0=N] [--elo1=N]",
           "       pnpm bench:reanalyze --compare a.json b.json",
+          "       pnpm bench:reanalyze --merge a.json b.json [...] [--openings]",
           "  file 省略時は bench-results/commit-bench-*.json の最新 1 本",
           "  --compare: 2 本の結果の棋譜・1 手ごとの nodes・score の完全一致を判定（決定性スモーク）",
+          "  --merge: 複数の結果の games を結合して 1 つのペア統計を出す（前後半の連結。設定が違えばエラー）",
         ].join("\n"),
       );
       process.exit(0);
@@ -145,9 +160,18 @@ function analyzeFile(file: string, options: Options): void {
     );
     return;
   }
+  analyzeGames(path.basename(file), describeHeader(json), games, options);
+}
 
-  console.log(`\n=== ${path.basename(file)} ===`);
-  console.log(`  ${describeHeader(json)}`);
+/** games 配列の再集計本体（単一ファイルと --merge で共用）。 */
+function analyzeGames(
+  title: string,
+  header: string,
+  games: CommitGameResult[],
+  options: Options,
+): void {
+  console.log(`\n=== ${title} ===`);
+  console.log(`  ${header}`);
   const hasPairId = games.some((g) => g.pairId !== undefined);
   console.log(
     `  局数: ${games.length}  ペアリング: ${hasPairId ? "pairId" : "jushuName（旧 JSON 規則）"}`,
@@ -178,6 +202,29 @@ function analyzeFile(file: string, options: Options): void {
       );
     }
   }
+}
+
+/** `--merge a.json b.json ...`: games を結合して 1 つのペア統計を出す。 */
+function mergeFiles(files: string[], options: Options): void {
+  if (files.length < 2) {
+    throw new Error("--merge には結果 JSON を 2 本以上指定してください");
+  }
+  const runs = files.map(
+    (f) => JSON.parse(fs.readFileSync(f, "utf8")) as BenchJson,
+  );
+  const merged = mergeBenchRuns(runs);
+  console.log(`=== --merge ===`);
+  files.forEach((f, i) => {
+    console.log(
+      `  ${i + 1}: ${path.basename(f)} | ${describeHeader(runs[i]!)}`,
+    );
+  });
+  analyzeGames(
+    files.map((f) => path.basename(f)).join(" + "),
+    merged.header,
+    merged.games,
+    options,
+  );
 }
 
 /** `--compare a.json b.json`: 決定性スモーク。不一致なら exit 1。 */
@@ -225,6 +272,10 @@ function main(): void {
   const options = parseArgs();
   if (options.compare) {
     compareFiles(options.files);
+    return;
+  }
+  if (options.merge) {
+    mergeFiles(options.files, options);
     return;
   }
   const files =
