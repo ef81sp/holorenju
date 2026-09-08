@@ -66,8 +66,8 @@ interface BridgeWorkerData {
   /**
    * eval 重みの実行時注入（weight-bench 用）。キー名は EVAL_PARAM_IDS（legacy + prospect）。
    * wasm が setEvalParam を export していれば適用し、getEvalParam で読み戻して不一致なら
-   * 初期化を失敗させる（lib/evalWeightInjection.ts）。setEvalParam の無い古い commit を
-   * 読む commit-bench とは後方互換（warn してスキップ）。
+   * 初期化を失敗させる（lib/evalWeightInjection.ts）。不明キーも throw。setEvalParam の
+   * 無い古い commit を読む commit-bench とは後方互換（warn してスキップ）。
    */
   evalWeights?: Record<string, number>;
   /**

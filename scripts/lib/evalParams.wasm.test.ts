@@ -9,7 +9,7 @@
  *
  * docs/plans/strength-screen-2026-09-08.md §2 T1-3。
  */
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
 import type { BoardState } from "@/types/game";
 
@@ -21,10 +21,26 @@ import { WasmSearchEngine } from "@/logic/cpu/wasm/searchEngine";
 import { EVAL_PARAM_IDS, PROSPECT_PARAM_ID_BASE } from "./evalParams.ts";
 import { readCString } from "./wasmCString.ts";
 
-/** 走査上限（prospect 末尾 133 より十分大きい）。 */
+/**
+ * 走査上限（prospect 末尾 133 より十分大きい）。
+ * main.zig に新しい id 空間（例: 200〜）を足すときはこの上限も上げること。
+ */
 const ID_SCAN_LIMIT = 256;
 /** searchEngine.ts レイアウトB の eval_basis ビット（prospectBasisWiring.wasm.test.ts と同じ）。 */
 const PROSPECT_BASIS_FLAG_SEARCH = 1 << 18;
+
+type WasmModule = Awaited<ReturnType<typeof loadWasmModule>>;
+/** beforeAll で 1 回だけロードした wasm（各テストは wasm() で参照する）。 */
+let loadedWasm: WasmModule | null = null;
+beforeAll(async () => {
+  loadedWasm = await loadWasmModule();
+});
+function wasm(): WasmModule {
+  if (loadedWasm === null) {
+    throw new Error("wasm が未ロード（beforeAll 前に参照された）");
+  }
+  return loadedWasm;
+}
 
 function emptyBoard(): BoardState {
   const board: BoardState = [];
@@ -84,14 +100,11 @@ function buildFourHeavyBoard(): BoardState {
 }
 
 /** 局面の prospect 特徴ベクトル（index = id - PROSPECT_PARAM_ID_BASE）。 */
-function prospectFeatures(
-  wasm: Awaited<ReturnType<typeof loadWasmModule>>,
-  board: BoardState,
-): number[] {
-  boardStateToWasm(wasm, board);
-  const count = wasm.extractProspectFeatures(1, 1);
-  const ptr = wasm.getProspectFeatureBuffer();
-  const view = new DataView(wasm.memory.buffer);
+function prospectFeatures(board: BoardState): number[] {
+  boardStateToWasm(wasm(), board);
+  const count = wasm().extractProspectFeatures(1, 1);
+  const ptr = wasm().getProspectFeatureBuffer();
+  const view = new DataView(wasm().memory.buffer);
   const out: number[] = [];
   for (let i = 0; i < count; i++) {
     out.push(view.getInt32(ptr + i * 4, true));
@@ -100,11 +113,10 @@ function prospectFeatures(
 }
 
 describe("EVAL_PARAM_IDS と wasm getEvalParamName の双方向照合", () => {
-  it("wasm の非空名の集合 == TS のキー集合、かつ各 id が一致する", async () => {
-    const wasm = await loadWasmModule();
+  it("wasm の非空名の集合 == TS のキー集合、かつ各 id が一致する", () => {
     const wasmNames = new Map<string, number>();
     for (let id = 0; id < ID_SCAN_LIMIT; id++) {
-      const name = readCString(wasm, wasm.getEvalParamName(id));
+      const name = readCString(wasm(), wasm().getEvalParamName(id));
       if (name === "") {
         continue;
       }
@@ -120,14 +132,13 @@ describe("EVAL_PARAM_IDS と wasm getEvalParamName の双方向照合", () => {
     }
   });
 
-  it("prospect 基底の重みは全 id が既定値を持つ（getEvalParam が sentinel でない）", async () => {
-    const wasm = await loadWasmModule();
-    wasm.resetEvalParams();
+  it("prospect 基底の重みは全 id が既定値を持つ（getEvalParam が sentinel でない）", () => {
+    wasm().resetEvalParams();
     for (const [name, id] of Object.entries(EVAL_PARAM_IDS)) {
       if (id < PROSPECT_PARAM_ID_BASE) {
         continue;
       }
-      const v = wasm.getEvalParam(id);
+      const v = wasm().getEvalParam(id);
       expect(v, `${name} が未定義 sentinel`).not.toBe(-2147483648);
     }
   });
@@ -137,38 +148,36 @@ describe("prospect id の setEvalParam がフル評価と探索側評価に効�
   const TARGET = "PROSPECT_SOLO_F3_TURN" as const;
   const targetId = EVAL_PARAM_IDS[TARGET];
 
-  it("フィクスチャは対象特徴を持つ（前提固定）", async () => {
-    const wasm = await loadWasmModule();
-    const features = prospectFeatures(wasm, buildFourThreeBoard());
+  it("フィクスチャは対象特徴を持つ（前提固定）", () => {
+    const features = prospectFeatures(buildFourThreeBoard());
     expect(features[targetId - PROSPECT_PARAM_ID_BASE]).not.toBe(0);
   });
 
-  it("注入後に evaluateBoard(prospect) が変わり、resetEvalParams で戻る", async () => {
-    const wasm = await loadWasmModule();
-    const evaluator = new WasmBoardEvaluator(wasm);
+  it("注入後に evaluateBoard(prospect) が変わり、resetEvalParams で戻る", () => {
+    const evaluator = new WasmBoardEvaluator(wasm());
     const board = buildFourThreeBoard();
 
-    wasm.resetEvalParams();
+    wasm().resetEvalParams();
     const baseline = evaluator.evaluateBoard(board, "black", {
       evalBasis: "prospect",
     });
-    const defaultWeight = wasm.getEvalParam(targetId);
+    const defaultWeight = wasm().getEvalParam(targetId);
 
-    wasm.setEvalParam(targetId, defaultWeight + 100);
-    expect(wasm.getEvalParam(targetId)).toBe(defaultWeight + 100);
+    wasm().setEvalParam(targetId, defaultWeight + 100);
+    expect(wasm().getEvalParam(targetId)).toBe(defaultWeight + 100);
     const injected = evaluator.evaluateBoard(board, "black", {
       evalBasis: "prospect",
     });
     expect(injected).not.toBe(baseline);
 
     // legacy 基底には影響しない
-    wasm.resetEvalParams();
+    wasm().resetEvalParams();
     const legacyBaseline = evaluator.evaluateBoard(board, "black");
-    wasm.setEvalParam(targetId, defaultWeight + 100);
+    wasm().setEvalParam(targetId, defaultWeight + 100);
     expect(evaluator.evaluateBoard(board, "black")).toBe(legacyBaseline);
 
-    wasm.resetEvalParams();
-    expect(wasm.getEvalParam(targetId)).toBe(defaultWeight);
+    wasm().resetEvalParams();
+    expect(wasm().getEvalParam(targetId)).toBe(defaultWeight);
     expect(
       evaluator.evaluateBoard(board, "black", { evalBasis: "prospect" }),
     ).toBe(baseline);
@@ -180,13 +189,12 @@ describe("prospect id の setEvalParam がフル評価と探索側評価に効�
    * 死四のみの局面（prospectBasisWiring.wasm.test.ts の buildFourHeavyBoard）を使う。
    * 注入対象 id は、候補手後の局面で計数が非ゼロの特徴から選ぶ（前提を明示）。
    */
-  it("注入後の findBestMove(maxNodes=1) のスコアは候補手後局面の evaluateBoard(prospect) と一致する", async () => {
-    const wasm = await loadWasmModule();
-    const engine = new WasmSearchEngine(wasm);
-    const evaluator = new WasmBoardEvaluator(wasm);
+  it("注入後の findBestMove(maxNodes=1) のスコアは候補手後局面の evaluateBoard(prospect) と一致する", () => {
+    const engine = new WasmSearchEngine(wasm());
+    const evaluator = new WasmBoardEvaluator(wasm());
     const board = buildFourHeavyBoard();
 
-    wasm.resetEvalParams();
+    wasm().resetEvalParams();
     engine.clearTT();
     const defaultResult = engine.findBestMoveWithParams(
       board,
@@ -199,17 +207,17 @@ describe("prospect id の setEvalParam がフル評価と探索側評価に効�
     const after = board.map((row) => [...row]);
     after[defaultResult.position.row]![defaultResult.position.col] = "black";
 
-    const features = prospectFeatures(wasm, after);
+    const features = prospectFeatures(after);
     const offset = features.findIndex((x) => x !== 0);
     expect(offset, "候補手後局面に非ゼロの prospect 特徴が無い").not.toBe(-1);
     const id = PROSPECT_PARAM_ID_BASE + offset;
-    const defaultWeight = wasm.getEvalParam(id);
+    const defaultWeight = wasm().getEvalParam(id);
     const directDefault = evaluator.evaluateBoard(after, "black", {
       evalBasis: "prospect",
       lastMoverIsPerspective: true,
     });
 
-    wasm.setEvalParam(id, defaultWeight + 100);
+    wasm().setEvalParam(id, defaultWeight + 100);
     engine.clearTT();
     const result = engine.findBestMoveWithParams(
       board,
@@ -225,7 +233,7 @@ describe("prospect id の setEvalParam がフル評価と探索側評価に効�
       evalBasis: "prospect",
       lastMoverIsPerspective: true,
     });
-    wasm.resetEvalParams();
+    wasm().resetEvalParams();
 
     expect(result.score).toBe(direct);
     expect(direct).not.toBe(directDefault);

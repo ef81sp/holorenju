@@ -31,18 +31,19 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import type { SPRTConfig, WeightBenchResult } from "./types/ab.ts";
-import type {
-  CommitBenchResult,
-  CommitGameResult,
-} from "./types/commit-bench.ts";
+import type { SPRTConfig } from "./types/ab.ts";
+import type { CommitGameResult } from "./types/commit-bench.ts";
 
 import { compareBenchRuns, formatBenchComparison } from "./lib/benchCompare.ts";
 import {
   computeBenchGameStats,
   formatBenchGameStats,
 } from "./lib/benchGameStats.ts";
-import { mergeBenchRuns } from "./lib/benchMerge.ts";
+import {
+  type MergeableBenchJson,
+  mergeBenchRuns,
+  readBenchJson,
+} from "./lib/benchMerge.ts";
 import { estimateEloDiff, formatEloDiff } from "./lib/eloDiff.ts";
 import {
   computePairedStats,
@@ -128,13 +129,7 @@ function findLatestCommitBench(): string {
   return path.join(RESULTS_DIR, last);
 }
 
-/**
- * 再集計対象の JSON 形。commit-bench / weight-bench の結果型から導出する
- * （旧 JSON は新フィールドを欠くので Partial）。
- */
-type BenchJson = Partial<CommitBenchResult> | Partial<WeightBenchResult>;
-
-function describeHeader(json: BenchJson): string {
+function describeHeader(json: MergeableBenchJson): string {
   const head: string[] = [];
   if (json.type) {
     head.push(json.type);
@@ -152,7 +147,7 @@ function describeHeader(json: BenchJson): string {
 }
 
 function analyzeFile(file: string, options: Options): void {
-  const json = JSON.parse(fs.readFileSync(file, "utf8")) as BenchJson;
+  const json = readBenchJson(file);
   const { games } = json;
   if (!Array.isArray(games) || games.length === 0) {
     console.log(
@@ -209,9 +204,7 @@ function mergeFiles(files: string[], options: Options): void {
   if (files.length < 2) {
     throw new Error("--merge には結果 JSON を 2 本以上指定してください");
   }
-  const runs = files.map(
-    (f) => JSON.parse(fs.readFileSync(f, "utf8")) as BenchJson,
-  );
+  const runs = files.map(readBenchJson);
   const merged = mergeBenchRuns(runs);
   console.log(`=== --merge ===`);
   files.forEach((f, i) => {
@@ -233,8 +226,8 @@ function compareFiles(files: string[]): void {
     throw new Error("--compare には結果 JSON をちょうど 2 本指定してください");
   }
   const [fa, fb] = files as [string, string];
-  const a = JSON.parse(fs.readFileSync(fa, "utf8")) as BenchJson;
-  const b = JSON.parse(fs.readFileSync(fb, "utf8")) as BenchJson;
+  const a = readBenchJson(fa);
+  const b = readBenchJson(fb);
   if (!Array.isArray(a.games) || !Array.isArray(b.games)) {
     throw new Error("games の無い JSON は --compare できません");
   }

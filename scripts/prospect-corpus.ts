@@ -34,7 +34,9 @@ import { loadWasmModule } from "@/logic/cpu/wasm/loader";
 import { preloadThreatWasm } from "@/logic/cpu/wasm/threatLoader";
 import { checkWin, createEmptyBoard } from "@/logic/renjuRules";
 
-const FEATURE_COUNT = 34;
+import { PROSPECT_FEATURE_COUNT } from "./lib/evalParams.ts";
+
+const FEATURE_COUNT = PROSPECT_FEATURE_COUNT;
 
 interface BenchMove {
   row: number;

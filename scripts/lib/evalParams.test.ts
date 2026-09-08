@@ -7,7 +7,9 @@ import { describe, expect, it } from "vitest";
 import {
   EVAL_PARAM_DEFAULTS,
   EVAL_PARAM_IDS,
+  LEGACY_PARAM_IDS,
   PROSPECT_CATEGORIES,
+  PROSPECT_FEATURE_COUNT,
   PROSPECT_PARAM_ID_BASE,
   parseWeightOverrides,
 } from "./evalParams.ts";
@@ -58,5 +60,24 @@ describe("parseWeightOverrides", () => {
 
   it("非数値はエラー", () => {
     expect(() => parseWeightOverrides("OPEN_THREE:x")).toThrow(/数値/);
+  });
+});
+
+describe("parseWeightOverrides（値の検証）", () => {
+  it("整数でない値は明示エラー（wasm は i32 なので丸めない）", () => {
+    expect(() => parseWeightOverrides("OPEN_THREE:12.5")).toThrow(/整数/);
+  });
+
+  it("i32 範囲外は明示エラー", () => {
+    expect(() => parseWeightOverrides("OPEN_THREE:2147483648")).toThrow(/i32/);
+    expect(() => parseWeightOverrides("OPEN_THREE:-2147483649")).toThrow(/i32/);
+    expect(
+      parseWeightOverrides("OPEN_THREE:2147483647,TWO:-2147483648"),
+    ).toEqual({ OPEN_THREE: 2147483647, TWO: -2147483648 });
+  });
+
+  it("PROSPECT_FEATURE_COUNT はカテゴリ数×2、LEGACY_PARAM_IDS は 9 個", () => {
+    expect(PROSPECT_FEATURE_COUNT).toBe(PROSPECT_CATEGORIES.length * 2);
+    expect(Object.keys(LEGACY_PARAM_IDS)).toHaveLength(9);
   });
 });

@@ -157,3 +157,43 @@ describe("mergeBenchRuns", () => {
     expect(() => mergeBenchRuns([run([]), run(["s1"])])).toThrow(/games/);
   });
 });
+
+describe("mergeBenchRuns（レビュー反映）", () => {
+  it("searchFeaturesA/B が違えばエラー（前後半の間の再ビルド混入検出）", () => {
+    const base = run(["s1"]);
+    expect(() =>
+      mergeBenchRuns([
+        base,
+        run(["s2"], { config: { ...base.config!, searchFeaturesB: 3 } }),
+      ]),
+    ).toThrow(/searchFeaturesB/);
+  });
+
+  it("valid === false のランが含まれていればエラー", () => {
+    expect(() =>
+      mergeBenchRuns([run(["s1"]), run(["s2"], { valid: false })]),
+    ).toThrow(/valid/);
+    expect(
+      mergeBenchRuns([run(["s1"], { valid: true }), run(["s2"])]).games,
+    ).toHaveLength(4);
+  });
+
+  it("weights はキー順が違っても同一とみなす", () => {
+    const wb = (
+      pairIds: string[],
+      weights: Record<string, number>,
+    ): MergeableBenchJson =>
+      run(pairIds, {
+        type: "weight-bench",
+        commitA: undefined,
+        commitB: undefined,
+        weights,
+      });
+    expect(
+      mergeBenchRuns([
+        wb(["s1"], { OPEN_THREE: 600, TWO: 5 }),
+        wb(["s2"], { TWO: 5, OPEN_THREE: 600 }),
+      ]).games,
+    ).toHaveLength(4);
+  });
+});

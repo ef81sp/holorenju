@@ -17,7 +17,7 @@ export interface EvalParamInjectable {
   resetEvalParams?: () => void;
 }
 
-const LOG_PREFIX = "[cpu-bridge-worker]";
+const LOG_PREFIX = "[evalWeightInjection]";
 
 export function applyEvalWeights(
   wasm: EvalParamInjectable,

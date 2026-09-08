@@ -13,7 +13,14 @@
  *     evalOptions / book / threatProbe / maxNodes / maxDepth / openings.file・version）。
  *     openings.offset と sets・sprt は前後半で当然違うので比較しない
  *   - 同じ pairId+色 の局が複数の JSON に現れない（前後半が重なっていない）
+ *   - いずれの run も valid !== false（決定的モードで abort が出たランはビット一致の
+ *     前提が崩れているので連結しない）
+ *
+ * seed は比較しない: 非決定的モード（randomFactor>0）では前後半の連結は
+ * 「1 ラン」と等価にならないので、そもそも --merge の対象は決定的モードの結果。
  */
+import { readFileSync } from "node:fs";
+
 import type { WeightBenchResult } from "../types/ab.ts";
 import type {
   CommitBenchResult,
@@ -31,7 +38,12 @@ export interface MergedBenchRun {
   header: string;
 }
 
-/** 強さに効く config キー（前後半で一致していなければならない）。 */
+/**
+ * 強さに効く config キー（前後半で一致していなければならない）。
+ * **強さに効くキーを config に追加したらここにも足す。**
+ * searchFeaturesA/B は wasm の機能ビット。weight-bench は同一 worktree の wasm を
+ * 使うので、前後半の間に再ビルドが混入したことの検出になる。
+ */
 const COMPARED_CONFIG_KEYS = [
   "difficulty",
   "fixedNodes",
@@ -48,9 +60,20 @@ const COMPARED_CONFIG_KEYS = [
   "maxNodesB",
   "maxDepthA",
   "maxDepthB",
-] as const;
+  "searchFeaturesA",
+  "searchFeaturesB",
+] as const satisfies readonly (keyof CommitBenchResult["config"])[];
 
+/** キー順に依存しない stringify（weights 等の Record 比較用）。 */
 function stable(v: unknown): string {
+  if (v !== null && typeof v === "object" && !Array.isArray(v)) {
+    const rec = v as Record<string, unknown>;
+    const sorted: Record<string, unknown> = {};
+    for (const k of Object.keys(rec).sort()) {
+      sorted[k] = rec[k];
+    }
+    return JSON.stringify(sorted);
+  }
   return JSON.stringify(v ?? null);
 }
 
@@ -114,6 +137,11 @@ function gameKey(g: CommitGameResult): string {
   return `${g.pairId ?? g.jushuName}/${g.isABlack ? "A黒" : "A白"}`;
 }
 
+/** 結果 JSON を読む（bench-reanalyze の全モードで共用）。 */
+export function readBenchJson(file: string): MergeableBenchJson {
+  return JSON.parse(readFileSync(file, "utf8")) as MergeableBenchJson;
+}
+
 export function mergeBenchRuns(runs: MergeableBenchJson[]): MergedBenchRun {
   const [first] = runs;
   if (!first) {
@@ -122,6 +150,11 @@ export function mergeBenchRuns(runs: MergeableBenchJson[]): MergedBenchRun {
   const games: CommitGameResult[] = [];
   const seen = new Set<string>();
   runs.forEach((json, index) => {
+    if (json.valid === false) {
+      throw new Error(
+        `--merge: ${index + 1} 本目は valid=false（abort 等で決定性が崩れたラン）なので連結できません`,
+      );
+    }
     if (index > 0) {
       assertCompatible(first, json, index);
     }

@@ -41,8 +41,11 @@ export const PROSPECT_CATEGORIES = [
   "WIN",
 ] as const;
 
+/** prospect 特徴数（カテゴリ × WAIT/TURN）。extractProspectFeatures の要素数と一致。 */
+export const PROSPECT_FEATURE_COUNT = PROSPECT_CATEGORIES.length * 2;
+
 /** legacy 形系重み（scores.zig `EvalParamId`）。 */
-const LEGACY_PARAM_IDS = {
+export const LEGACY_PARAM_IDS = {
   OPEN_THREE: 0,
   THREE: 1,
   OPEN_TWO: 2,
@@ -74,8 +77,6 @@ export const EVAL_PARAM_IDS: Readonly<
   ...(buildProspectParamIds() as Record<ProspectParamName, number>),
 };
 
-export type EvalParamName = keyof typeof EVAL_PARAM_IDS;
-
 /** legacy 各 id の既定値（scores.zig の *_DEFAULT と一致）。prospect は含めない。 */
 export const EVAL_PARAM_DEFAULTS: Record<
   keyof typeof LEGACY_PARAM_IDS,
@@ -91,6 +92,29 @@ export const EVAL_PARAM_DEFAULTS: Record<
   LINE_POTENTIAL_3: 40,
   LINE_POTENTIAL_4: 60,
 };
+
+const I32_MIN = -(2 ** 31);
+const I32_MAX = 2 ** 31 - 1;
+
+/**
+ * 重み値を i32 として検証する。wasm 側の setEvalParam は i32 なので、非整数は
+ * 無音で丸まり、範囲外はラップして読み戻し検証が「古いビルド」と誤診断する。
+ */
+function parseI32(name: string, raw: string): number {
+  const num = Number(raw.trim());
+  if (raw.trim() === "" || Number.isNaN(num)) {
+    throw new Error(`"${name}" の値が数値でない: "${raw}"`);
+  }
+  if (!Number.isInteger(num)) {
+    throw new Error(`"${name}" の値は整数で指定（wasm は i32）: "${raw}"`);
+  }
+  if (num < I32_MIN || num > I32_MAX) {
+    throw new Error(
+      `"${name}" の値が i32 範囲外（${I32_MIN}..${I32_MAX}）: "${raw}"`,
+    );
+  }
+  return num;
+}
 
 /**
  * "OPEN_TWO:25,OPEN_THREE:600" 形式を **名前キーの Record** にパースする。
@@ -114,11 +138,7 @@ export function parseWeightOverrides(str: string): Record<string, number> {
         `不明な eval 重みキー "${name}"。有効なキーは ${Object.keys(EVAL_PARAM_IDS).length} 個（legacy 9 + PROSPECT_<CAT>_WAIT/TURN 34）。一覧は --help を参照`,
       );
     }
-    const num = Number(v.trim());
-    if (Number.isNaN(num)) {
-      throw new Error(`"${name}" の値が数値でない: "${v}"`);
-    }
-    out[name] = num;
+    out[name] = parseI32(name, v);
   }
   return out;
 }

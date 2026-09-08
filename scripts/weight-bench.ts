@@ -37,7 +37,7 @@ import {
 } from "./lib/benchGameStats.ts";
 import { formatEloDiff } from "./lib/eloDiff.ts";
 import {
-  EVAL_PARAM_DEFAULTS,
+  LEGACY_PARAM_IDS,
   PROSPECT_CATEGORIES,
   parseWeightOverrides,
 } from "./lib/evalParams.ts";
@@ -272,7 +272,7 @@ Usage:
 
 Options:
   --weights=<K:V,...>   side B に注入する重み (例: "OPEN_THREE:600,OPEN_TWO:25")
-                        キー: legacy = ${Object.keys(EVAL_PARAM_DEFAULTS).join(", ")}
+                        キー: legacy = ${Object.keys(LEGACY_PARAM_IDS).join(", ")}
                         prospect = PROSPECT_<CAT>_WAIT / PROSPECT_<CAT>_TURN
                         (CAT = ${PROSPECT_CATEGORIES.join(", ")})
                         既定値は wasm 側が SSoT（getEvalParam で読める）

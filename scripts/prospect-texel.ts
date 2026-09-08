@@ -28,7 +28,10 @@ import type { WasmModuleContext } from "@/logic/cpu/wasm/types";
 
 import { loadWasmModule } from "@/logic/cpu/wasm/loader";
 
-import { PROSPECT_PARAM_ID_BASE } from "./lib/evalParams.ts";
+import {
+  PROSPECT_FEATURE_COUNT,
+  PROSPECT_PARAM_ID_BASE,
+} from "./lib/evalParams.ts";
 import {
   fitLogistic,
   type FitLogisticResult,
@@ -38,7 +41,7 @@ import {
 } from "./lib/texelFit.ts";
 import { readCString } from "./lib/wasmCString.ts";
 
-const FEATURE_COUNT = 34;
+const FEATURE_COUNT = PROSPECT_FEATURE_COUNT;
 
 type Teacher = "rapfi" | "outcome";
 type TeacherArg = Teacher | "both";
