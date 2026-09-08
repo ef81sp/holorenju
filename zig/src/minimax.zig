@@ -315,8 +315,13 @@ fn isThreatExtensionCandidate(cells: []const Cell, row: u8, col: u8, color: Cell
 pub var threat_probe_enabled: bool = true;
 
 /// 脅威プローブの壁時計予算（ms）。時間モードのみ有効。
+///
+/// VCT は 50 → 25 ms（2026-09-09、docs/plans/strength-screen-2026-09-08.md §6.3〜6.4）:
+/// プローブは主探索ノードの 8 割を食うため上限を半分にすると主探索が深くなり
+/// （平均深さ 6.13 → 6.51）、時間モード v1 1,200 局で +27.6 [+12.4, +42.8]。
+/// 上限到達率は 18.4% → 24.2%。VCF の 20 ms は据え置き。
 const PROBE_VCF_TIME_LIMIT: u32 = 20;
-const PROBE_VCT_TIME_LIMIT: u32 = 50;
+const PROBE_VCT_TIME_LIMIT: u32 = 25;
 
 /// 脅威プローブ VCT のノード予算（決定的モード。時間モードは `PROBE_VCT_TIME_LIMIT` のみ）
 ///
@@ -324,7 +329,10 @@ const PROBE_VCT_TIME_LIMIT: u32 = 50;
 /// §7.13 で較正済み（2026-09-07）: 時間モードのプローブ上限到達率 18.8%（平均 2,009 ノード）
 /// に一致する値（§7.8〜7.9。2k は到達率過大、20k は「高価なプローブを切って安いものを
 /// 多数回す」配分が崩れ −60 Elo）。VCF は両モードとも既存の 100/200 ノード。
-pub const PROBE_VCT_NODES_DETERMINISTIC: u32 = 6000;
+///
+/// 2026-09-09: 時間上限 25 ms（到達率 24.2%）に合わせて 6k → 3k（固定 3k の到達率 25.4%、
+/// strength-screen-2026-09-08.md §6.3）。固定 764 局で 6k に対し +35.6 [+15.3, +56.2]。
+pub const PROBE_VCT_NODES_DETERMINISTIC: u32 = 3000;
 
 /// 深度適応型バジェット（TS版 threatProbe.ts の getThreatBudget に対応）
 const ThreatBudget = struct {
