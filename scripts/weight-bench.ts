@@ -25,6 +25,7 @@ import type { SPRTConfig, WeightBenchResult } from "./types/ab.ts";
 import {
   effectiveRandomFactor,
   parseFixedNodesFlag,
+  parseMaxGamesArg,
   resolveFixedNodesParams,
   resolveFixedNodesPerSide,
   resolveMoveTimeoutMs,
@@ -76,6 +77,8 @@ interface CliOptions {
   openings?: string;
   /** スイートの n 番目から使う（末尾で折り返さない）。既定 0 */
   openingOffset: number;
+  /** タスクを先頭 N 局に切り詰める（0=無効、ペア境界で切る）。既定 0 */
+  maxGames: number;
   /**
    * 固定ノード（決定的探索）モード。bench-fixed-nodes-2026-09-06.md §2.5。
    * weight-bench には --seed が無いため randomFactor>0 とは併用できない。
@@ -100,6 +103,7 @@ function parseArgs(): CliOptions {
     sprtElo1: DEFAULT_SPRT_CONFIG.elo1,
     verbose: false,
     openingOffset: 0,
+    maxGames: 0,
   };
 
   for (const arg of args) {
@@ -162,6 +166,8 @@ function parseArgs(): CliOptions {
         process.exit(1);
       }
       options.openings = value;
+    } else if (arg.startsWith("--max-games=")) {
+      options.maxGames = parseMaxGamesOrExit(arg.slice("--max-games=".length));
     } else if (arg.startsWith("--opening-offset=")) {
       const raw = arg.slice("--opening-offset=".length);
       const v = parseInt(raw, 10);
@@ -194,6 +200,19 @@ function parseFixedNodesOrExit(arg: string, flagName: string): number {
     process.exit(1);
   }
   return parsed.value;
+}
+
+/** `--max-games=<raw>` をペア境界で正規化する。不正なら exit(1)、奇数なら warn。 */
+function parseMaxGamesOrExit(raw: string): number {
+  const norm = parseMaxGamesArg(raw);
+  if (!norm.ok) {
+    console.error(`Error: ${norm.error}`);
+    process.exit(1);
+  }
+  if (norm.warning) {
+    console.warn(`⚠ ${norm.warning}`);
+  }
+  return norm.maxGames;
 }
 
 interface FixedNodesResolved {
@@ -262,6 +281,8 @@ Options:
   --openings=<file>     開局スイート JSON（相対パスはリポジトリルート基準）。
                         指定時は珠型の代わりにスイートの各開局 × 2 色で対局
   --opening-offset=<n>  スイートの n 番目の開局から使う（末尾で折り返さない, default: 0）
+  --max-games=<n>       タスクを先頭 N 局に切り詰め（0=無効, default: 0）。
+                        ペア境界で切るため偶数（奇数は切り下げ）。二段階スクリーンの前半用
   --difficulty=<d>      beginner|easy|medium|hard (default: hard)
   --randomFactor=<n>    探索ゆらぎ 0〜1 (default: なし)
   --jobs=<n>            同時対局ペア数 (default: 1)
@@ -280,6 +301,8 @@ Options:
 Examples:
   pnpm weight:bench --weights=OPEN_THREE:600 --sets=4 --jobs=4 --randomFactor=0.02
   pnpm weight:bench --sets=1            # null test (A=B baseline, Elo≈0)
+  pnpm weight:bench --weights=PROSPECT_FOUR_THREE_TURN:2000 --fixed-nodes --jobs=7 \\
+    --openings=scripts/data/opening-suite-v2.json --max-games=382   # 二段階スクリーン前半
 `);
 }
 
@@ -318,6 +341,7 @@ function resolveOpeningsOrExit(
     return resolveOpenings({
       openings: options.openings,
       openingOffset: options.openingOffset,
+      maxGames: options.maxGames,
       sets: options.sets,
       randomFactor: options.randomFactor,
       rootDir: PROJECT_ROOT,

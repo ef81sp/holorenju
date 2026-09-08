@@ -98,6 +98,20 @@ export function normalizeMaxGames(value: number): MaxGamesNormalization {
   return { ok: true, maxGames: value, warning: null };
 }
 
+/**
+ * `--max-games=<raw>` の文字列をパースして normalizeMaxGames に通す
+ * （commit-bench / weight-bench 共通）。整数でない・負値はエラー。
+ */
+export function parseMaxGamesArg(raw: string): MaxGamesNormalization {
+  if (!/^\d+$/.test(raw)) {
+    return {
+      ok: false,
+      error: `--max-games は 0 以上の整数で指定 (got: ${raw})`,
+    };
+  }
+  return normalizeMaxGames(Number(raw));
+}
+
 // ============================================================================
 // 固定ノード（決定的探索）モード — bench-fixed-nodes-2026-09-06.md §2.5
 // ============================================================================

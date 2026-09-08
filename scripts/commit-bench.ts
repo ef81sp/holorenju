@@ -43,8 +43,8 @@ import type {
 
 import {
   effectiveRandomFactor,
-  normalizeMaxGames,
   parseFixedNodesFlag,
+  parseMaxGamesArg,
   resolveFixedNodesParams,
   resolveFixedNodesPerSide,
   resolveMoveTimeoutMs,
@@ -325,23 +325,7 @@ function parseArgs(): CliOptions {
         process.exit(1);
       }
     } else if (arg.startsWith("--max-games=")) {
-      const value = parseInt(arg.slice("--max-games=".length), 10);
-      if (!isNaN(value) && value >= 0) {
-        const norm = normalizeMaxGames(value);
-        if (!norm.ok) {
-          console.error(`Error: ${norm.error}`);
-          process.exit(1);
-        }
-        if (norm.warning) {
-          console.warn(`⚠ ${norm.warning}`);
-        }
-        options.maxGames = norm.maxGames;
-      } else {
-        console.error(
-          `Error: --max-games は 0 以上の整数で指定 (got: ${arg.slice("--max-games=".length)})`,
-        );
-        process.exit(1);
-      }
+      options.maxGames = parseMaxGamesOrExit(arg.slice("--max-games=".length));
     } else if (arg.startsWith("--openings=")) {
       const value = arg.slice("--openings=".length);
       if (value.length === 0) {
@@ -491,6 +475,19 @@ function parseEvalOptionsJson(
     process.exit(1);
   }
   return parsed as Partial<EvaluationOptions>;
+}
+
+/** `--max-games=<raw>` をペア境界で正規化する。不正なら exit(1)、奇数なら warn。 */
+function parseMaxGamesOrExit(raw: string): number {
+  const norm = parseMaxGamesArg(raw);
+  if (!norm.ok) {
+    console.error(`Error: ${norm.error}`);
+    process.exit(1);
+  }
+  if (norm.warning) {
+    console.warn(`⚠ ${norm.warning}`);
+  }
+  return norm.maxGames;
 }
 
 function printHelp(): void {

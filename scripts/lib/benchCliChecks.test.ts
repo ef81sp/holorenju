@@ -6,6 +6,7 @@ import {
   normalizeMaxGames,
   openingsRepeatWarning,
   parseFixedNodesFlag,
+  parseMaxGamesArg,
   resolveFixedNodesParams,
   resolveFixedNodesPerSide,
   resolveMoveTimeoutMs,
@@ -315,5 +316,30 @@ describe("resolveMoveTimeoutMs", () => {
   });
   it("時間モードで未指定なら CLI 既定", () => {
     expect(resolveMoveTimeoutMs(undefined, false, 30000)).toBe(30000);
+  });
+});
+
+describe("parseMaxGamesArg", () => {
+  it("非負整数の文字列を normalizeMaxGames に通す", () => {
+    expect(parseMaxGamesArg("40")).toEqual({
+      ok: true,
+      maxGames: 40,
+      warning: null,
+    });
+    expect(parseMaxGamesArg("0")).toEqual({
+      ok: true,
+      maxGames: 0,
+      warning: null,
+    });
+    expect(parseMaxGamesArg("5")).toMatchObject({ ok: true, maxGames: 4 });
+    expect(parseMaxGamesArg("1").ok).toBe(false);
+  });
+
+  it("整数でない・負・空はエラー", () => {
+    for (const raw of ["", "abc", "-2", "1.5"]) {
+      const r = parseMaxGamesArg(raw);
+      expect(r.ok, raw).toBe(false);
+      expect(!r.ok && r.error).toMatch(/--max-games/);
+    }
   });
 });
