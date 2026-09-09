@@ -97,9 +97,9 @@ const GOLDEN_A = [_]Golden{
 const GOLDEN_B = [_]Golden{
     .{ .kifu = "H8 I9 I8 G8 F6 I7 G6", .what = "深さ7完了（白）", .row = 8, .col = 7, .score = 147, .nodes = 48141, .depth = 7 },
     .{ .kifu = "H8 I9 I8 G8 F6 I7 G6 H7 I6 H6 J8 K7", .what = "深さ7完了（黒）", .row = 8, .col = 9, .score = 551, .nodes = 71422, .depth = 7 },
-    .{ .kifu = "I9 H9 H8 G8 I7 G7 I6 I10 J11 G10 G11 F10 H10 J8 J6 K5 L6 K6", .what = "demotePlainFourIfNeeded 発火（I8→I5）", .row = 10, .col = 8, .score = -1327, .nodes = 200001, .depth = 5 },
+    .{ .kifu = "I9 H9 H8 G8 I7 G7 I6 I10 J11 G10 G11 F10 H10 J8 J6 K5 L6 K6", .what = "demotePlainFourIfNeeded 発火（I8→I5）", .row = 10, .col = 8, .score = -1327, .nodes = 200003, .depth = 5 }, // 2026-09-09 VCT 25 ms 化で 200001→200003（着手・score 不変）
     .{ .kifu = "H9 I8 I9 G7 H8 H7 F7 J9 G6 I10 H10", .what = "深さ7完了（白）", .row = 4, .col = 7, .score = -125, .nodes = 38335, .depth = 7 },
-    .{ .kifu = "H8 H7 H6 I6 J6 H5 I5 G8 J5 J7 K8 G9 G7 J4 K7 H4", .what = "深さ7完了（黒）", .row = 11, .col = 8, .score = 400, .nodes = 48026, .depth = 7 },
+    .{ .kifu = "H8 H7 H6 I6 J6 H5 I5 G8 J5 J7 K8 G9 G7 J4 K7 H4", .what = "深さ7完了（黒・高スコア。2026-09-09 VCT プローブ 25 ms 化で勝ち筋 (7,11) を発見＝セット A と同一着手。50 ms 時は (11,8) score 400）", .row = 7, .col = 11, .score = 8084, .nodes = 32001, .depth = 7 },
 };
 
 fn runGolden(g: Golden, time_limit: u32) search.IterativeDeepingResult {

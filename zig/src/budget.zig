@@ -78,7 +78,7 @@ pub const BudgetPolicy = struct {
     pre_vct_nodes: u32,
     /// 非生産的四の降格判定 VCF（時間モードは 0＝50ms のみ）
     demote_vcf_nodes: u32,
-    /// 脅威プローブ VCT（時間モードは 0＝50ms のみ）
+    /// 脅威プローブ VCT（時間モードは 0＝minimax.PROBE_VCT_TIME_LIMIT のみ）
     probe_vct_nodes: u32,
 
     /// 時間モード（従来挙動）
