@@ -743,10 +743,15 @@ pub const ResilienceMode = enum { lenient, strict };
 /// TS版 hasBreakingCounterFour を移植・拡張。
 /// CF を仮置きしてその場での五連完成 / 防御不可（活四）/ ブロック後の即時勝ち手段（VCF/4-3）/
 /// ブロック後の手順崩壊を順に判定。
+///
+/// `sequence == null` は「手順に依存しない崩壊条件だけを見る」モード
+/// （`rootThreeBrokenByCounterFour`）。CF ごとの判定は手順非依存の条件を先に、
+/// 手順依存の `checkSequenceBreaksByCF` を最後に見る順序なので、null で true なら
+/// どんな手順を渡しても true（健全な部分判定）。
 fn hasBreakingCounterFour(
     cells: []Cell,
     color: Cell,
-    sequence: []const Position,
+    sequence: ?[]const Position,
     attack_index: usize,
     mode: ResilienceMode,
     limiter: ?*TimeLimiter,
@@ -849,7 +854,7 @@ fn hasBreakingCounterFour(
             return true;
         }
 
-        const breaks = checkSequenceBreaksByCF(cells, color, sequence, attack_index + 1);
+        const breaks = if (sequence) |seq| checkSequenceBreaksByCF(cells, color, seq, attack_index + 1) else false;
 
         // Undo
         cells[bp_idx] = .empty;
@@ -862,6 +867,40 @@ fn hasBreakingCounterFour(
 
     return false;
 }
+
+/// 根の攻め手（活三）が、手順に依存しない崩壊条件だけで非耐性と確定するか
+///
+/// `isResilientToCounterFours` は手順の先頭手 `seq[0]` について、根の盤面に
+/// `seq[0]` だけを置いた状態で `hasBreakingCounterFour` を評価する。その判定のうち
+/// 相手の CF で五 / 活四（受け不能）/（strict）ブロックが四にならない /
+/// ブロック後に相手が即時勝ち手段を持つ、の 4 条件は残りの手順に依存しない。
+/// これらのどれかが成立する根の手は、どんな手順を組んでも採用時に棄却されるので、
+/// 反復深化で展開する前に外してよい（根の盤面は反復間で不変＝結果を記憶できる）。
+/// 四・五を作る手は耐性検証の対象外なので false。
+fn rootThreeBrokenByCounterFour(
+    cells: []Cell,
+    color: Cell,
+    move: Position,
+    mode: ResilienceMode,
+    limiter: *TimeLimiter,
+) bool {
+    const idx = @as(u16, move.row) * BOARD_SIZE + move.col;
+    cells[idx] = color;
+    bitboard.placeStone(move.row, move.col, color);
+    defer {
+        cells[idx] = .empty;
+        bitboard.removeStone(move.row, move.col);
+    }
+    if (forbidden.checkFive(cells, move.row, move.col, color)) return false;
+    if (quiescence.createsFour(cells, move.row, move.col, color)) return false;
+    return hasBreakingCounterFour(cells, color, null, 0, mode, limiter);
+}
+
+/// 根の攻め手ごとの `rootThreeBrokenByCounterFour` の記憶（反復深化をまたいで再利用）
+const RootCFCache = struct {
+    const State = enum(u8) { unknown, ok, broken };
+    states: [CELL_COUNT]State = [_]State{.unknown} ** CELL_COUNT,
+};
 
 /// VCT手順がカウンターフォー耐性を持つか検証
 ///
@@ -1201,7 +1240,8 @@ pub fn findVCTMoveWithBudget(cells: []Cell, color: Cell, max_depth: u8, time_lim
 
 /// 防御側（被詰み判定）専用の VCT 探索。strict 耐性検証で相手のノリ手による
 /// 手順崩壊（偽の追い詰め＝幻の被詰み）を棄却する。攻めには使わないこと。
-/// findVCTSequence 内部の耐性検証を strict で一度だけ実行するため二重検証は無い。
+/// findVCTSequence 内部の耐性検証（根の攻め手ごとに採用前に実行）を strict で回すため
+/// 二重検証は無い。
 pub fn findVCTMoveWithBudgetStrict(cells: []Cell, color: Cell, max_depth: u8, time_limit: u32, max_nodes: u32) ?Position {
     const seq_result = findVCTSequence(cells, color, max_depth, time_limit, max_nodes, false, .strict);
     if (seq_result.found and seq_result.len > 0) {
@@ -1270,6 +1310,8 @@ const VCTRecursiveContext = struct {
     out_node: u16 = ft.TREE_TERMINAL,
     /// カウンター四耐性検証のモード（depth 0 の候補採用時にのみ参照する）
     mode: ResilienceMode = .lenient,
+    /// 根の三ごとの「手順非依存の崩壊条件」の記憶（depth 0 のみ参照。null = 記憶しない）
+    root_cf_cache: ?*RootCFCache = null,
 };
 
 /// 防御ごとの手順エントリ
@@ -1449,6 +1491,10 @@ fn findVCTSequenceInner(
         return result;
     }
 
+    // 根の三ごとの「手順非依存の崩壊条件」は反復をまたいで記憶する
+    // （根の盤面は反復間で不変。非耐性が確定した根の手を毎反復展開しないため）
+    var root_cf_cache = RootCFCache{};
+
     // 反復深化
     var depth: u8 = 1;
     while (depth <= max_depth) : (depth += 1) {
@@ -1461,6 +1507,7 @@ fn findVCTSequenceInner(
             .branches = undefined,
             .branch_count = 0,
             .mode = mode,
+            .root_cf_cache = &root_cf_cache,
         };
         // カウンターフォー耐性検証は depth 0 の候補採用時（`findVCTSequenceRecursive`）に
         // 攻め手ごとに行う。旧実装は「見つかった手順」を事後検証し、非耐性なら
@@ -1597,13 +1644,27 @@ fn findVCTSequenceRecursive(
             if (blocked) break;
         }
 
+        const move = threat_buf[ti];
+
+        // 根の三で、手順に依存しない崩壊条件（相手の CF で五 / 活四 / strict の
+        // ブロック非四 / ブロック後の相手即勝ち）が成立するものは、どんな手順でも
+        // 採用時の耐性検証で棄却されるので展開しない。結果は反復をまたいで記憶する。
+        if (depth == 0 and ti >= @as(usize, threat_moves.four_count)) {
+            if (context.root_cf_cache) |cache| {
+                const move_cell = @as(u16, move.row) * BOARD_SIZE + move.col;
+                if (cache.states[move_cell] == .unknown) {
+                    cache.states[move_cell] = if (rootThreeBrokenByCounterFour(cells, color, move, context.mode, limiter)) .broken else .ok;
+                }
+                if (cache.states[move_cell] == .broken) continue;
+            }
+        }
+
         // 攻め手 1 手 = 1 ノード（#119）。予算切れなら「ここまでの best」を返す。
         limiter.bump();
         if (limiter.exceeded()) break;
 
         // この脅威手の探索でアリーナへ積むノードの起点。採用されなければ巻き戻す。
         const threat_snap = g_tree_arena.snapshot();
-        const move = threat_buf[ti];
         const move_idx = @as(u16, move.row) * BOARD_SIZE + move.col;
         cells[move_idx] = color;
         bitboard.placeStone(move.row, move.col, color);
@@ -1787,6 +1848,7 @@ fn findVCTSequenceRecursive(
                     .collect_branches = context.collect_branches,
                     .branches = undefined,
                     .branch_count = 0,
+                    .mode = context.mode,
                 };
                 var sub_seq: [64]Position = undefined;
                 var sub_len: u8 = 0;
@@ -1895,11 +1957,16 @@ fn findVCTSequenceRecursive(
             // 候補にしない（best / α 値を更新しない）。ここで弾くことで、他の攻め手が
             // 非耐性候補の α 値で刈られず、反復深化も継続する。
             // 石は攻め手・受け手とも戻した後なので盤面は根の状態。
-            const resilient = depth != 0 or
-                isResilientToCounterFours(cells, color, candidate_seq[0..candidate_len], context.mode, limiter);
+            //
+            // 手順非依存の崩壊条件は展開前に `root_cf_cache` で除外済みなので、ここに
+            // 来る非耐性は手順依存（`checkSequenceBreaksByCF`）のもの。手順は反復ごとに
+            // 変わりうるため初手でのメモ化はせず、反復ごとに再検証する。
+            // 採用され得ない長さの候補には検証（VCF プローブを含む）を走らせない。
+            const accepted = candidate_len < best_seq_len and
+                (depth != 0 or isResilientToCounterFours(cells, color, candidate_seq[0..candidate_len], context.mode, limiter));
 
             // 最短の候補を保持（α 値の更新も兼ねる）
-            if (resilient and candidate_len < best_seq_len) {
+            if (accepted) {
                 var ci: u8 = 0;
                 while (ci < candidate_len) : (ci += 1) {
                     best_seq[ci] = candidate_seq[ci];
@@ -2935,7 +3002,11 @@ test "findVCTMove: open three rejected when opponent has counter-four (issue #27
     setupIssue27Position(&cells);
     bitboard.initFromCells(&cells);
 
-    // 黒の勝ちVCTは存在しない（活三・四追いとも成立しない）
+    // 黒の勝ちVCTは存在しない（活三・四追いとも成立しない）。
+    // この局面の根の三（J10 など）の崩壊は手順依存（checkSequenceBreaksByCF）なので
+    // 展開前には除外できず、無制限だと深さ 8 の全展開（約 1,000 万ノード）に数十秒かかる。
+    // maxNodes=50000 で打ち切る（旧実装の「非耐性候補で反復深化を打ち切る」高速さは
+    // idx6 の取りこぼしの原因だったので戻さない。fix/vct-miss-idx6）。
     const move = findVCTMoveWithBudget(&cells, .black, VCT_MAX_DEPTH, 0, 50000);
     try testing.expect(move == null);
 }
@@ -2946,7 +3017,7 @@ test "findVCTSequence: rejects sequence broken by counter-four (issue #27)" {
     setupIssue27Position(&cells);
     bitboard.initFromCells(&cells);
 
-    // 手順自体が見つからないこと（VCF-onlyフォールバック含めて勝ち手順なし）
+    // 手順自体が見つからないこと（勝ち手順なし）。上のテストと同じ理由で maxNodes=50000。
     const result = findVCTSequence(&cells, .black, VCT_MAX_DEPTH, 0, 50000, false, .lenient);
     try testing.expect(!result.found);
 }
@@ -3238,6 +3309,42 @@ test "findVCTSequence: idx6 J9 line with black H8 (horizon-flips)" {
     try testing.expectEqual(j9.row, from_j9.sequence[0].row);
     try testing.expectEqual(j9.col, from_j9.sequence[0].col);
     try testing.expect(isVCTFirstMove(&cells, j9, .black, 8, 0, 0));
+}
+
+test "rootThreeBrokenByCounterFour: idx6 の J10 は strict では手順非依存に崩壊・lenient では手順依存" {
+    // 白の逆四 E10（F9-G8-H7）のブロック D11 は四にならない → strict はここで崩壊確定。
+    // lenient では「ブロック後の相手即勝ち」までは成立せず、崩壊は手順依存
+    // （checkSequenceBreaksByCF）なので展開前には除外できない。
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    setupIdx6Position(&cells);
+    bitboard.initFromCells(&cells);
+    var limiter = TimeLimiter{ .start_time = 0, .time_limit = 0, .nodes = 0, .max_nodes = 0 };
+
+    const j10 = Position{ .row = 5, .col = 9 };
+    try testing.expect(rootThreeBrokenByCounterFour(&cells, .black, j10, .strict, &limiter));
+    try testing.expect(!rootThreeBrokenByCounterFour(&cells, .black, j10, .lenient, &limiter));
+    // 判定のあいだだけ置いて外すので盤面は不変
+    try testing.expectEqual(Cell.empty, cells[5 * BOARD_SIZE + 9]);
+
+    // 四を作る手は耐性検証の対象外 → 崩壊扱いしない（J9 を置いた後の K9 は H9-I9-J9-K9 の四）
+    cells[6 * BOARD_SIZE + 9] = .black; // J9
+    bitboard.placeStone(6, 9, .black);
+    const k9 = Position{ .row = 6, .col = 10 };
+    try testing.expect(!rootThreeBrokenByCounterFour(&cells, .black, k9, .strict, &limiter));
+}
+
+test "findVCTSequence: 手順非依存に崩壊する根の三は展開しない（idx6 strict は少ノードで「なし」）" {
+    // 白に逆四 E10 があるので、strict では黒の根の三はすべて展開前に除外される。
+    // 旧実装（採用時の事後検証のみ）では非耐性候補を各反復で再展開し、
+    // 無制限・深さ 8 で数百万ノードを消費していた。
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    setupIdx6Position(&cells);
+
+    const result = findVCTSequence(&cells, .black, 8, 0, 0, false, .strict);
+    try testing.expect(!result.found);
+    try testing.expect(result.nodes < 2000);
 }
 
 test "hasVCT: 四で相手の活三を潰してから三で追う手順は成立する（issue #116 の意味論）" {
