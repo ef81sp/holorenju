@@ -185,6 +185,91 @@ WEAK は差分特徴として相殺されるため触らない。残す eval 系
 - 対処: `caffeinate -dims` 付きで再実行（`bench-results/screen-p1c-probe1500-half1-rerun-2026-09-09.log`）。
 - 教訓: hang が全ペア同時・周期的に出たら `hang.mainThread.samples` の timerLag を先に見る（探索のハングなら 1 ペアだけ・非周期）。
 
+### 6.7 P1c 前半（再実行、caffeinate 付き、2026-09-09、A=c968b2e 3k / B=2bf6a82 1.5k、v2 前半 382 局、jobs=7、94 分）
+
+- JSON `bench-results/commit-bench-2026-09-09T08-24-01-018Z.json`、abort 0、distinct 382/382
+- A 視点 −5.5 [−34, +23] ＝ **変種 1.5k が +5.5**。pentanomial ll=32 ld=4 dd=123 wd=2 ww=30（1-1 ペア 64%）
+- 判定: 点推定 ≥ 0 → 後半（offset 191）へ。P1a 前半（+15.5）より小さく、3k → 1.5k の勾配は緩やかになった可能性。
+
+### 6.8 P1c 後半＋全量（2026-09-09、offset 191、382 局、108 分）
+
+- 後半 JSON `bench-results/commit-bench-2026-09-09T10-12-36-386Z.json`: A 視点 −11.8 [−37.7, +13.9]、abort 0
+- **全量 764 局（`--merge`）: A 視点 −8.6 [−27.9, +10.5] ＝ 変種 1.5k が +8.6**。pentanomial ll=59 ld=12 dd=252 wd=7 ww=52、distinct 764/764
+- 判定: 点推定 +8.6 < +10 → **棄却**（候補でも保留でもない）。6k→3k の +35.6 に対し 3k→1.5k は +8.6 で勾配が急に緩む＝プローブ上限は 3k 付近で頭打ち。P1 は 3k / 25 ms で確定。
+- 次: 混合対局（時間 25 ms vs 固定 1.2M/3k、v1 416 局 jobs=5）で N=1.2M の同等性を再較正 → P2 → S4/S4'。
+
+### 6.9 固定 N=1.2M の同等性再較正（2026-09-09、8d741fb、A=時間 25 ms / B=固定 1.2M・3k、v1 416 局、jobs=5、106 分）
+
+- JSON `bench-results/commit-bench-2026-09-09T12-21-21-024Z.json`、abort 0
+- **ペア Elo 0 [−21.1, +21.1]**、pentanomial ll=14 ld=3 dd=173 wd=5 ww=13（1-1 ペア 83%）
+- プローブ統計: 時間 25 ms 到達率 24.5% / 平均 1,187 ノード / 深さ 6.48、固定 3k 25.0% / 875 / 6.57
+- 判定: 固定 1.2M/3k ≡ 時間 25 ms。`--fixed-nodes` 既定 1.2M は据え置き。bench-fixed-nodes §7.15 の未再測を解消。
+
+### 6.10 P2: `singleFourPenaltyMultiplier` 1.0 → 0.0（2026-09-09、8d741fb 同士、`--eval-options-b`、固定 1.2M/3k、v2 前半 382 局、110 分）
+
+- JSON `bench-results/commit-bench-2026-09-09T14-26-39-075Z.json`。両側 prospect（worker ログ bit18=prospect、flags 313855 vs 393215＝乗数ビットのみ差）
+- **191 ペア全部が 1-1（dd=191）＝全局が同一進行**。Elo 0 [−22.1, +22.1]
+- 判定: **無効レバー（棄却）**。乗数は legacy 葉評価の項で、hard の prospect 基底では参照されない（下記 grep）。`src/types/cpu.ts` のコメント「0.0 の採否は別途ベンチ」は prospect 化で意味を失っている → コメント修正を後続課題に。
+
+### 6.11 S4a: `PROSPECT_DOUBLE_THREE_BLACK_RISK_TURN` −246 → −150（2026-09-09、weight-bench、8d741fb、固定 1.2M/3k、v2 前半 382 局、104 分）
+
+- JSON `bench-results/weight-bench-2026-09-09T16-21-38-262Z.json`
+- A 視点 +1.8 [−23.3, +27.0] ＝ **変種 −1.8**。pentanomial ll=22 ld=9 dd=128 wd=9 ww=23（注入は有効: 63 ペアで進行が分かれた）
+- 判定: 点推定 < 0 → **棄却**。反対方向 S4b（−350）へ。
+
+### 6.12 S4b: `PROSPECT_DOUBLE_THREE_BLACK_RISK_TURN` −246 → −350（2026-09-10、weight-bench、v2 前半 382 局、110 分）
+
+- JSON `bench-results/weight-bench-2026-09-09T18-27-28-583Z.json`
+- A 視点 +9.1 [−16.8, +35.1] ＝ **変種 −9.1**。pentanomial ll=23 ld=6 dd=126 wd=10 ww=26
+- 判定: 棄却。S4 は両方向とも負（−150: −1.8 / −350: −9.1）→ r2 の −246 は局所最適。S4' へ。
+
+### 6.13 S4'a: `PROSPECT_DOUBLE_THREE_WHITE_TURN` 545 → 450（2026-09-10、weight-bench、v2 前半 382 局、103 分）
+
+- JSON `bench-results/weight-bench-2026-09-09T20-25-21-826Z.json`
+- A 視点 −12.7 [−37.3, +11.6] ＝ **変種 +12.7**。pentanomial ll=25 ld=6 dd=138 wd=2 ww=20
+- 判定: 点推定 ≥ 0 → 後半（offset 191）へ。
+
+### 6.14 S4'a 後半＋全量（2026-09-10、offset 191、382 局、115 分）
+
+- 後半 JSON `bench-results/weight-bench-2026-09-09T22-20-34-881Z.json`: A 視点 −7.3 [−31.9, +17.3]
+- **全量 764 局（`--merge`）: A 視点 −10.0 [−27.4, +7.3] ＝ 変種 450 が +10.0**。pentanomial ll=50 ld=11 dd=271 wd=11 ww=39
+- 判定: 点推定 +10.0 で**保留**（基準ちょうど）。追試（固定 v1 1,200 局）の前に反対方向 S4'b（650）で勾配の向きを確認する: 650 も正なら雑音、負なら 450 の追試へ。
+
+### 6.15 S4'b: `PROSPECT_DOUBLE_THREE_WHITE_TURN` 545 → 650（2026-09-10、weight-bench、v2 前半 382 局、104 分）
+
+- JSON `bench-results/weight-bench-2026-09-10T00-11-31-803Z.json`
+- A 視点 +7.3 [−16.9, +31.5] ＝ **変種 −7.3**。pentanomial ll=20 ld=5 dd=136 wd=7 ww=23
+- 判定: 棄却。450 が +10.0 / 650 が −7.3 で「下げる方向」に一貫 → 保留中の 450 を規約どおり **固定 v1 1,200 局で追試**（`retest-s4pa-d3white-450-v1-2026-09-10.log`、約 5.5 h）。合格 = 点推定 ≥ +10 かつ CI 下限 > −5。
+
+### 6.16 S4'a 追試: `PROSPECT_DOUBLE_THREE_WHITE_TURN` 450、固定 v1（2026-09-10、weight-bench、jobs=7）
+
+- セッション再起動でベンチが 1,145/1,200 局で落ち JSON 未保存。ログの累積 W/D/L と開局 id から復元（scratch `recover-log.ts`、`estimatePairedElo` を使用）: 572 ペア（未ペア 1）
+- pentanomial ll=65 ld=14 dd=433 wd=14 ww=46。**A 視点 −11.5 [−24.5, +1.4] ＝ 変種 450 が +11.5**（ハーネスの途中表示 −11.5 と一致）
+- 判定: 点推定 ≥ +10 かつ CI 下限 > −5 → **候補**（v2 764 局 +10.0 と同方向・同規模。28 開局分の欠落は許容）
+- 採用ゲート①: 時間モード `weight:bench --weights=...:450 --openings=v1 --jobs=5`（1,200 局、約 6 h）実行中、ログ `gate1-s4pa-d3white-450-time-2026-09-10.log`。合格 = 変種 ≥ +10 かつ CI 下限 > −5。合格なら prospect.zig に 450 を焼き込むブランチで ②regression / ③テストを通して PR。
+
+### 6.17 S4'a 採用ゲート①（2026-09-10〜11、時間モード、weight-bench、v1 1,200 局、jobs=5、5.9 h）
+
+- JSON `bench-results/weight-bench-2026-09-10T16-07-30-130Z.json`、abort 0
+- A 視点 −5.8 [−18.8, +7.2] ＝ **変種 450 が +5.8**。pentanomial ll=65 ld=21 dd=441 wd=15 ww=58
+- 判定: 点推定 < +10 → **不採用**（固定 +10.0 / +11.5 → 時間 +5.8。効果はあっても小さく、しきい値に届かない）。
+- **§3 の候補は全部消化**: 採用 1 本（P1 +27.6）、棄却 = P1c / P2（無効）/ S4 両方向 / S4' 両方向。§5（後段）へ。
+
+### 6.18 総括（2026-09-11）
+
+| #   | レバー                             | 固定スクリーン                 | 時間ゲート       | 結果             |
+| --- | ---------------------------------- | ------------------------------ | ---------------- | ---------------- |
+| P1  | プローブ VCT 上限 6k→3k / 50→25 ms | +35.6 [+15, +56]               | +27.6 [+12, +43] | **採用（#163）** |
+| P1c | 3k→1.5k                            | +8.6 [−10, +28]                | —                | 棄却             |
+| P2  | singleFourPenalty 0.0              | 全局同一                       | —                | 無効レバー       |
+| S4  | BLACK_RISK_TURN −150 / −350        | −1.8 / −9.1（前半）            | —                | 棄却             |
+| S4' | WHITE_TURN 450 / 650               | +10.0 [−7, +27] / −7.3（前半） | +5.8 [−7, +19]   | 不採用           |
+
+所要: スクリーン 11 ラン（約 20 h）＋ゲート 2 ラン（12 h）＋再較正 1 ラン（2 h）。
+教訓: (1) 費用軸（プローブ予算）に唯一の大きな勾配があった。eval の単セル摂動は Texel 適合済みの重みでは ±10 以内。
+(2) 固定スクリーンの結果は時間モードに転移する（P1: +35.6→+27.6、S4': +10→+5.8）。
+(3) 保留（+10 前後）の追試は時間モードで縮む傾向。保留基準を +15 に上げるか、追試を時間モードで直接行うほうが効率的。
+
 ## 7. 非目標
 
 - 探索深さ・NPS の改善（Elo に効かないと確定済み）。
@@ -193,6 +278,10 @@ WEAK は差分特徴として相殺されるため触らない。残す eval 系
 - `scripts/analyze-position.ts` / `scripts/diagnose-vct.ts` は削除済み TS モジュールを import していて起動しない。別 issue で整理（本件では触らない）。
 
 ## 8. 後続課題
+
+- weight-bench / commit-bench は結果 JSON を最後にしか保存しない。中断時に備え、局ごとの追記保存（または進捗ログからの復元ツール `bench:reanalyze --from-log`）を用意する（§6.16 の scratch を昇格）。
+- `src/types/cpu.ts` hard の `singleFourPenaltyMultiplier` コメント「0.0 の採否は別途ベンチで判断」は prospect 基底では無効（§6.10）。コメントを実態に合わせる。
+- commit-bench の起動ログ「evalOptions A: (既定=legacy)」は P5 以降 hard=prospect なので表示が古い（実体は worker ログの bit18 が正）。表示を「既定=難易度の evaluationOptions」に直す。
 
 - `PROSPECT_PARAM_ID_BASE` の TS/Zig 二重定義（照合テストで検出できるので本件では共有しない）。
 - 事前探索の即決（探索手の 38%）の偽陽性率は未監査。
