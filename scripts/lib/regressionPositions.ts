@@ -10,7 +10,9 @@
  *   （テスト衛生。docs/plans/eval-r4-2026-09-11.md §1）。
  */
 
-import type { StoneColor } from "@/types/game";
+import type { BoardState, StoneColor } from "@/types/game";
+
+import { createBoardFromRecord } from "@/logic/gameRecordParser";
 
 export type RegressionSide = Exclude<StoneColor, null>;
 
@@ -57,3 +59,21 @@ export const REGRESSION_POSITIONS: readonly RegressionPosition[] = [
       "bench-results/opening-traps-black-run1.jsonl",
   },
 ];
+
+/**
+ * kifuPrefix を再生して局面を返す。棋譜から算出した手番が sideToMove と
+ * 矛盾していれば例外（レジストリの記載ミス検出）。
+ */
+export function regressionPositionBoard(pos: RegressionPosition): {
+  board: BoardState;
+  sideToMove: RegressionSide;
+} {
+  const { board, nextColor } = createBoardFromRecord(pos.kifuPrefix);
+  if (nextColor !== pos.sideToMove) {
+    throw new Error(
+      `${pos.id}: kifuPrefix の手数と sideToMove が矛盾しています` +
+        `（棋譜から算出した手番=${nextColor}, 指定=${pos.sideToMove}）`,
+    );
+  }
+  return { board, sideToMove: pos.sideToMove };
+}

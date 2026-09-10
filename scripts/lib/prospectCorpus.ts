@@ -7,8 +7,11 @@
  * - `tryEmitQuietPosition`: quiet フィルタ（即五 stm/opp なし、hasVCF maxNodes=200 なし）
  *   + 特徴抽出 + dedup + emit を 1 関数にまとめたもの。棋譜（`sampleGame`）・
  *   ブック（`sampleBook`）・開局スイート prefix（`samplePrefix`）の 3 源が共用する。
- * - 盤面キーはブック形式 `${boardToString(board)}|${stm}`（`parseBoardKey` で往復可）。
- * - 回帰ゲート局面（`REGRESSION_POSITIONS`）は `excluded` に事前投入して学習から除く。
+ * - 行の `key` はブック形式 `${boardToString(board)}|${stm}`（生の向き、`parseBoardKey` で
+ *   往復可）。dedup と回帰除外の照合は `canonicalKey`（8 対称の最小、ブックの key と同じ
+ *   規則）で行う（対称形の重複をすり抜けさせない）。
+ * - 回帰ゲート局面（`REGRESSION_POSITIONS`）は canonical key を `excluded` に事前投入して
+ *   学習から除く。
  *
  * quiet フィルタ（事前登録、r2 と同じ）:
  *   1. ply ∈ [minPly, 終局−endMargin]（棋譜）/ 石数 ≥ minPly（ブック・prefix）
@@ -24,23 +27,27 @@ import { readFileSync } from "node:fs";
 import type { WasmModuleContext } from "@/logic/cpu/wasm/types";
 import type { BoardState, Position, StoneColor } from "@/types/game";
 
-import { boardToString } from "@/logic/boardSymmetry";
+import { boardToString, canonicalKey } from "@/logic/boardSymmetry";
+import { countStones } from "@/logic/cpu/core/boardUtils";
 import { hasVCF } from "@/logic/cpu/search/vcfCheck";
 import { boardStateToWasm, colorToWasm } from "@/logic/cpu/wasm/boardAdapter";
-import { createBoardFromRecord } from "@/logic/gameRecordParser";
 import { checkWin, createEmptyBoard } from "@/logic/renjuRules";
 
-import type {
-  CorpusRow,
-  CorpusSide,
-  CorpusSource,
-  CorpusSourceKind,
-} from "../types/prospectCorpus.ts";
 import type { OpeningSource } from "./match.ts";
 
+import {
+  CORPUS_SOURCE_KINDS,
+  type CorpusRow,
+  type CorpusSide,
+  type CorpusSource,
+  type CorpusSourceKind,
+} from "../types/prospectCorpus.ts";
 import { PROSPECT_FEATURE_COUNT } from "./evalParams.ts";
 import { parseBoardKey } from "./openingSuite.ts";
-import { REGRESSION_POSITIONS } from "./regressionPositions.ts";
+import {
+  REGRESSION_POSITIONS,
+  regressionPositionBoard,
+} from "./regressionPositions.ts";
 
 // ---------------------------------------------------------------------------
 // ベンチ棋譜 JSON のローダ
@@ -97,20 +104,39 @@ function parseGame(raw: unknown, label: string, idx: number): BenchGame {
   };
 }
 
+/** games を持たない理由（ログ用）。 */
+export type BenchSkipReason = "noGames" | "invalid";
+
+export interface BenchGamesResult {
+  games: BenchGame[];
+  /** games を採らなかった理由。games があれば null */
+  skipped: BenchSkipReason | null;
+}
+
 /**
  * ベンチ結果 JSON（パース済み）から games を取り出す（純粋）。
- * - commit-bench 形: `{ games: [...] }`。`valid === false` なら空。games 欠落も空。
+ * - commit-bench 形: `{ games: [...] }`。`valid === false` は skipped "invalid"、
+ *   games 欠落は skipped "noGames"（どちらも games は空）。
  * - weight-bench 形: トップレベル配列。
  * それ以外の形・要素の不正は例外（黙って 0 局にしない）。
  */
-export function parseBenchGames(raw: unknown, label: string): BenchGame[] {
-  const games = extractGamesArray(raw, label);
-  return games.map((g, i) => parseGame(g, label, i));
+export function parseBenchGames(raw: unknown, label: string): BenchGamesResult {
+  const extracted = extractGamesArray(raw, label);
+  if (extracted.skipped !== null) {
+    return { games: [], skipped: extracted.skipped };
+  }
+  return {
+    games: extracted.games.map((g, i) => parseGame(g, label, i)),
+    skipped: null,
+  };
 }
 
-function extractGamesArray(raw: unknown, label: string): unknown[] {
+function extractGamesArray(
+  raw: unknown,
+  label: string,
+): { games: unknown[]; skipped: BenchSkipReason | null } {
   if (Array.isArray(raw)) {
-    return raw;
+    return { games: raw, skipped: null };
   }
   if (!isRecord(raw)) {
     throw new Error(
@@ -118,19 +144,19 @@ function extractGamesArray(raw: unknown, label: string): unknown[] {
     );
   }
   if (raw["valid"] === false) {
-    return [];
+    return { games: [], skipped: "invalid" };
   }
   const g = raw["games"];
   if (g === undefined) {
-    return [];
+    return { games: [], skipped: "noGames" };
   }
   if (!Array.isArray(g)) {
     throw new Error(`${label}: games が配列でない`);
   }
-  return g;
+  return { games: g, skipped: null };
 }
 
-export function readBenchGames(path: string): BenchGame[] {
+export function readBenchGames(path: string): BenchGamesResult {
   return parseBenchGames(JSON.parse(readFileSync(path, "utf8")), path);
 }
 
@@ -138,9 +164,14 @@ export function readBenchGames(path: string): BenchGame[] {
 // 盤面キー・quiet 判定・特徴
 // ---------------------------------------------------------------------------
 
-/** ブック形式の盤面キー（`parseBoardKey` で往復可）。 */
+/** ブック形式の盤面キー（生の向き。`parseBoardKey` で往復可）。 */
 export function boardKey(board: BoardState, stm: CorpusSide): string {
   return `${boardToString(board)}|${stm}`;
+}
+
+/** dedup・回帰除外の照合キー（8 対称の最小 = ブックの entries キーと同じ規則）。 */
+export function dedupKey(board: BoardState, stm: CorpusSide): string {
+  return canonicalKey(board, stm);
 }
 
 /** color がどこかの空点に置いて即座に五（勝ち）を作れるか。盤面は変更しない。 */
@@ -234,9 +265,9 @@ export function createFilterStats(): FilterStats {
 
 export interface QuietEmitContext {
   wasm: WasmModuleContext;
-  /** 源横断の dedup 集合（emit 済み key）。 */
+  /** 源横断の dedup 集合（emit 済み局面の canonical key）。 */
   seen: Set<string>;
-  /** 学習から除外する key（回帰ゲート局面）。seen より先に判定し rejectedRegression に数える。 */
+  /** 学習から除外する canonical key（回帰ゲート局面）。seen より先に判定し rejectedRegression に数える。 */
   excluded: Set<string>;
   stats: FilterStats;
   emit: (row: CorpusRow) => void;
@@ -258,12 +289,12 @@ export function tryEmitQuietPosition(
 ): boolean {
   const { stats } = ctx;
   stats.candidates++;
-  const key = boardKey(board, stm);
-  if (ctx.excluded.has(key)) {
+  const canonical = dedupKey(board, stm);
+  if (ctx.excluded.has(canonical)) {
     stats.rejectedRegression++;
     return false;
   }
-  if (ctx.seen.has(key)) {
+  if (ctx.seen.has(canonical)) {
     stats.rejectedDup++;
     return false;
   }
@@ -279,9 +310,9 @@ export function tryEmitQuietPosition(
     stats.rejectedVcf++;
     return false;
   }
-  ctx.seen.add(key);
+  ctx.seen.add(canonical);
   ctx.emit({
-    key,
+    key: boardKey(board, stm),
     source,
     stm,
     black: stonesOf(board, "black"),
@@ -355,26 +386,25 @@ export function sampleGame(
   return sampled;
 }
 
-export interface StaticSampleOptions {
+export interface BookSampleOptions {
   /** 石数がこれ未満の局面は候補にしない。 */
   minPly: number;
 }
 
 /**
- * オープニングブックの entries（key = ブック形式の盤面キー）を局面として投入する。
- * 1 局面 1 グループ（gameIdx = entries の index）。outcome は 0.5 固定。
+ * オープニングブックの entries キー（ブック形式の盤面キー）を局面として投入する。
+ * 1 局面 1 グループ（gameIdx = keys の index）。outcome は 0.5 固定。
  */
 export function sampleBook(
   ctx: QuietEmitContext,
-  entries: Record<string, unknown>,
+  keys: readonly string[],
   file: string,
-  opts: StaticSampleOptions,
+  opts: BookSampleOptions,
 ): number {
   let emitted = 0;
-  Object.keys(entries).forEach((key, idx) => {
+  keys.forEach((key, idx) => {
     const { board, sideToMove } = parseBoardKey(key);
-    const ply =
-      stonesOf(board, "black").length + stonesOf(board, "white").length;
+    const ply = countStones(board);
     if (ply < opts.minPly) {
       return;
     }
@@ -396,19 +426,19 @@ export function sampleBook(
 /**
  * 開局スイートの各開局 moves を先頭 n 手（n ∈ plies）で切った局面を投入する。
  * 黒番（n 偶数）・白番（n 奇数）の両方が出る。1 局面 1 グループ（gameIdx は連番）。
+ * plies は明示指定なので minPly は適用しない（開局の手数を超える n だけ飛ばす）。
  */
 export function samplePrefix(
   ctx: QuietEmitContext,
   openings: readonly OpeningSource[],
   file: string,
   plies: readonly number[],
-  opts: StaticSampleOptions,
 ): number {
   let emitted = 0;
   let nextIdx = 0;
   for (const opening of openings) {
     for (const n of plies) {
-      if (n < opts.minPly || n > opening.positions.length) {
+      if (n > opening.positions.length) {
         continue;
       }
       const board = createEmptyBoard();
@@ -437,16 +467,11 @@ export function samplePrefix(
 // 回帰ゲート局面の除外
 // ---------------------------------------------------------------------------
 
-/** REGRESSION_POSITIONS の各 kifuPrefix を再生した統一 key（excluded に投入する）。 */
+/** REGRESSION_POSITIONS の各 kifuPrefix を再生した canonical key（excluded に投入する）。 */
 export function regressionPositionKeys(): string[] {
   return REGRESSION_POSITIONS.map((pos) => {
-    const { board, nextColor } = createBoardFromRecord(pos.kifuPrefix);
-    if (nextColor !== pos.sideToMove) {
-      throw new Error(
-        `${pos.id}: kifuPrefix の手数と sideToMove が矛盾（棋譜=${nextColor}, 指定=${pos.sideToMove}）`,
-      );
-    }
-    return boardKey(board, pos.sideToMove);
+    const { board, sideToMove } = regressionPositionBoard(pos);
+    return dedupKey(board, sideToMove);
   });
 }
 
@@ -476,18 +501,12 @@ export function plyBand(ply: number): PlyBand {
   return "26+";
 }
 
-export const SOURCE_KINDS: readonly CorpusSourceKind[] = [
-  "kifu",
-  "book",
-  "prefix",
-];
-
 export type SideCounts = Record<CorpusSide, number>;
 export type RowTable = Record<CorpusSourceKind, Record<PlyBand, SideCounts>>;
 
 export function createRowTable(): RowTable {
   const table = {} as RowTable;
-  for (const kind of SOURCE_KINDS) {
+  for (const kind of CORPUS_SOURCE_KINDS) {
     const bands = {} as Record<PlyBand, SideCounts>;
     for (const band of PLY_BANDS) {
       bands[band] = { black: 0, white: 0 };
@@ -501,16 +520,21 @@ export function tallyRow(table: RowTable, row: CorpusRow): void {
   table[row.source.kind][plyBand(row.source.ply)][row.stm]++;
 }
 
-/** 源 kind × ply 帯 × 手番の行数表を整形する（0 行の帯は省略、kind 小計と総合計付き）。 */
+/**
+ * 源 kind × ply 帯 × 手番の行数表を整形する（0 行の帯は省略、kind 小計・
+ * ply 帯ごとの kind 横断小計（A2 合格条件「ply 4-6 > 624」の判定用）・総合計付き）。
+ */
 export function formatRowTable(table: RowTable): string {
   const lines: string[] = [];
   const pad = (s: string, n: number): string => s.padStart(n);
+  const line = (a: string, b: string, black: number, white: number): string =>
+    `${a.padEnd(7)}${b.padEnd(7)}${pad(String(black), 7)}${pad(String(white), 7)}${pad(String(black + white), 7)}`;
   lines.push(
     `${"kind".padEnd(7)}${"ply".padEnd(7)}${pad("black", 7)}${pad("white", 7)}${pad("total", 7)}`,
   );
   let grandBlack = 0;
   let grandWhite = 0;
-  for (const kind of SOURCE_KINDS) {
+  for (const kind of CORPUS_SOURCE_KINDS) {
     let subBlack = 0;
     let subWhite = 0;
     for (const band of PLY_BANDS) {
@@ -520,21 +544,27 @@ export function formatRowTable(table: RowTable): string {
       }
       subBlack += c.black;
       subWhite += c.white;
-      lines.push(
-        `${kind.padEnd(7)}${band.padEnd(7)}${pad(String(c.black), 7)}${pad(String(c.white), 7)}${pad(String(c.black + c.white), 7)}`,
-      );
+      lines.push(line(kind, band, c.black, c.white));
     }
     if (subBlack + subWhite === 0) {
       continue;
     }
-    lines.push(
-      `${kind.padEnd(7)}${"小計".padEnd(6)}${pad(String(subBlack), 7)}${pad(String(subWhite), 7)}${pad(String(subBlack + subWhite), 7)}`,
-    );
+    lines.push(line(kind, "小計", subBlack, subWhite));
     grandBlack += subBlack;
     grandWhite += subWhite;
   }
-  lines.push(
-    `${"合計".padEnd(12)}${pad(String(grandBlack), 7)}${pad(String(grandWhite), 7)}${pad(String(grandBlack + grandWhite), 7)}`,
-  );
+  for (const band of PLY_BANDS) {
+    let black = 0;
+    let white = 0;
+    for (const kind of CORPUS_SOURCE_KINDS) {
+      black += table[kind][band].black;
+      white += table[kind][band].white;
+    }
+    if (black + white === 0) {
+      continue;
+    }
+    lines.push(line("全源", band, black, white));
+  }
+  lines.push(line("合計", "", grandBlack, grandWhite));
   return lines.join("\n");
 }

@@ -34,19 +34,23 @@ import type { WasmModuleContext } from "@/logic/cpu/wasm/types";
 
 import { loadWasmModule } from "@/logic/cpu/wasm/loader";
 
-import type { CorpusRow, CorpusSourceKind } from "./types/prospectCorpus.ts";
+import type { CorpusRow } from "./types/prospectCorpus.ts";
 
 import {
   PROSPECT_FEATURE_COUNT,
   PROSPECT_PARAM_ID_BASE,
 } from "./lib/evalParams.ts";
 import {
-  filterRowsBySourceKind,
+  filterRowsBySelector,
+  formatHoldoutLoss,
   formatSegmentLoss,
-  parseKindList,
+  type HoldoutSegmentSummary,
+  matchesSelector,
+  parseSelectorList,
   readCorpusRows,
   segmentKey,
   type SegmentLossSummary,
+  summarizeHoldoutLoss,
   summarizeSegmentLoss,
 } from "./lib/prospectCorpusRows.ts";
 import {
@@ -182,10 +186,13 @@ interface TeacherReport {
   } | null;
   finalFit: FitLogisticResult;
   finalVsBaseline: "改善" | "非改善";
+  /** holdout 行（学習に使わなかった行）の final fit 重みでのセグメント別損失。holdout 無しなら [] */
+  holdout: HoldoutSegmentSummary[];
 }
 
 function runTeacher(
   rows: CorpusRow[],
+  holdoutRows: CorpusRow[],
   teacher: Teacher,
   requestedK: number,
   K: number,
@@ -262,12 +269,32 @@ function runTeacher(
     `  vs ベースライン: ${finalVsBaseline}（${baselineLoss.toFixed(6)} → ${finalFit.trainLoss.toFixed(6)}）`,
   );
 
+  const holdoutSet = buildDataset(holdoutRows, teacher, K);
+  const holdout = summarizeHoldoutLoss({
+    segments: holdoutSet.segments,
+    X: holdoutSet.X,
+    labels: holdoutSet.labels,
+    baselineWeights,
+    finalWeights: finalFit.weights,
+    K,
+  });
+  if (holdout.length > 0) {
+    console.log(`holdout 評価（${holdoutSet.X.length} 局面、final fit 重み）:`);
+    console.log(
+      formatHoldoutLoss(holdout)
+        .split("\n")
+        .map((l) => `  ${l}`)
+        .join("\n"),
+    );
+  }
+
   return {
     rowCount: dataset.X.length,
     baselineLoss,
     kfold,
     finalFit,
     finalVsBaseline,
+    holdout,
   };
 }
 
@@ -284,18 +311,16 @@ async function main(): Promise<void> {
   const K = parseIntArg("K", 200);
   const teachers: Teacher[] =
     teacherArg === "both" ? ["rapfi", "outcome"] : [teacherArg];
-  const includeSource: CorpusSourceKind[] = parseKindList(
-    parseStringArg("include-source"),
-  );
-  const excludeSource: CorpusSourceKind[] = parseKindList(
-    parseStringArg("exclude-source"),
-  );
+  const includeSource = parseSelectorList(parseStringArg("include-source"));
+  const excludeSource = parseSelectorList(parseStringArg("exclude-source"));
+  const holdoutTokens = parseSelectorList(parseStringArg("holdout"));
 
   console.log("=== P3-c: Texel 回帰 ===");
   console.log(
     `条件: in=${inPath}, k=${k}, teacher=${teacherArg}, K=${K}` +
-      `, include-source=${includeSource.join(",") || "(全 kind)"}` +
-      `, exclude-source=${excludeSource.join(",") || "(なし)"}`,
+      `, include-source=${includeSource.join(",") || "(全源)"}` +
+      `, exclude-source=${excludeSource.join(",") || "(なし)"}` +
+      `, holdout=${holdoutTokens.join(",") || "(include/exclude で落とした行)"}`,
   );
 
   const wasm = await loadWasmModule();
@@ -303,14 +328,30 @@ async function main(): Promise<void> {
   const baselineWeights = getBaselineWeights(wasm);
 
   const allRows: CorpusRow[] = readCorpusRows(inPath);
-  const rows = filterRowsBySourceKind(allRows, includeSource, excludeSource);
+  const selected = filterRowsBySelector(allRows, includeSource, excludeSource);
+  // holdout: 明示トークンがあればそれに該当する行（学習からも除く）。無ければ選別で落ちた行。
+  const rows =
+    holdoutTokens.length > 0
+      ? selected.filter((r) => !matchesSelector(r.source, holdoutTokens))
+      : selected;
+  const holdoutRows =
+    holdoutTokens.length > 0
+      ? allRows.filter((r) => matchesSelector(r.source, holdoutTokens))
+      : allRows.filter((r) => !selected.includes(r));
   console.log(
-    `読み込み: ${allRows.length} 局面（破棄行を除く）→ 源 kind 選別後 ${rows.length} 局面`,
+    `読み込み: ${allRows.length} 局面（破棄行を除く）→ 学習 ${rows.length} 局面 / holdout ${holdoutRows.length} 局面`,
   );
 
   const teacherReports: Partial<Record<Teacher, TeacherReport>> = {};
   for (const teacher of teachers) {
-    teacherReports[teacher] = runTeacher(rows, teacher, k, K, baselineWeights);
+    teacherReports[teacher] = runTeacher(
+      rows,
+      holdoutRows,
+      teacher,
+      k,
+      K,
+      baselineWeights,
+    );
   }
 
   mkdirSync("bench-results", { recursive: true });
@@ -328,6 +369,8 @@ async function main(): Promise<void> {
           rowCount: rows.length,
           includeSource,
           excludeSource,
+          holdout: holdoutTokens,
+          holdoutRowCount: holdoutRows.length,
         },
         weightNames,
         baselineWeights,

@@ -41,12 +41,13 @@ import { preloadForbiddenWasm } from "@/logic/cpu/wasm/forbiddenAdapter";
 import { loadWasmModule } from "@/logic/cpu/wasm/loader";
 import { WasmSearchEngine } from "@/logic/cpu/wasm/searchEngine";
 import { preloadThreatWasm } from "@/logic/cpu/wasm/threatAdapter";
-import { createBoardFromRecord, formatMove } from "@/logic/gameRecordParser";
+import { formatMove } from "@/logic/gameRecordParser";
 
 import { checkForcedWin, checkForcedWinAfterMove } from "./lib/forcedWinCheck";
 import {
   REGRESSION_POSITIONS,
   type RegressionPosition,
+  regressionPositionBoard,
 } from "./lib/regressionPositions.ts";
 
 /** regression-positions.ts が想定する実機経路の難易度（hard固定）。 */
@@ -86,13 +87,7 @@ function checkPosition(
   pos: RegressionPosition,
 ): CheckResult {
   const start = Date.now();
-  const { board, nextColor } = createBoardFromRecord(pos.kifuPrefix);
-  if (nextColor !== pos.sideToMove) {
-    throw new Error(
-      `${pos.id}: kifuPrefix の手数と sideToMove が矛盾しています` +
-        `（棋譜から算出した手番=${nextColor}, 指定=${pos.sideToMove}）`,
-    );
-  }
+  const { board } = regressionPositionBoard(pos);
 
   const moveCount = countStones(board);
   const bookMove = isBookEligible(

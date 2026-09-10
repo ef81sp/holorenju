@@ -2,38 +2,42 @@
  * prospect コーパス JSONL の消費側（prospect-texel.ts / prospect-anchor.ts）の共通部。
  *
  * - `readCorpusRows`: JSONL を読み、ラベラーの破棄行（`dropped`）を除く。
- * - 源 kind の選別（`--include-source` / `--exclude-source`）。
+ * - 源の選別（`--include-source` / `--exclude-source` / `--holdout`）。トークンは
+ *   kind（`kifu` / `book` / `prefix`）か月単位セグメント（`kifu/2026-06`、segmentKey と同形式）。
  * - 源 kind × 月（kifu はファイル名の YYYY-MM、book/prefix は月なし）のセグメントと、
- *   fold 平均 val 損失のセグメント集計（eval-r4-2026-09-11.md §3 (i) / §4 の診断用）。
+ *   fold 平均 val 損失・holdout 損失のセグメント集計（eval-r4-2026-09-11.md §3 (i) / §4）。
  */
 
 import { readFileSync } from "node:fs";
 
-import type {
-  CorpusRow,
-  CorpusSource,
-  CorpusSourceKind,
+import {
+  CORPUS_SOURCE_KINDS,
+  type CorpusRow,
+  type CorpusSource,
+  type CorpusSourceKind,
 } from "../types/prospectCorpus.ts";
-
 import { type Fold, meanSquaredLoss } from "./texelFit.ts";
 
-const SOURCE_KINDS: readonly CorpusSourceKind[] = ["kifu", "book", "prefix"];
-
-/** JSONL を読み込み、破棄行（dropped フィールド持ち）を除いて返す。 */
+/** JSONL を読み込み、破棄行（dropped フィールド持ち）を除いて返す。source.kind の無い行（旧形式）は例外。 */
 export function readCorpusRows(path: string): CorpusRow[] {
   const text = readFileSync(path, "utf8");
   const rows: CorpusRow[] = [];
-  for (const line of text.split("\n")) {
+  text.split("\n").forEach((line, i) => {
     const trimmed = line.trim();
     if (!trimmed) {
-      continue;
+      return;
     }
     const row = JSON.parse(trimmed) as CorpusRow;
     if (row.dropped !== undefined) {
-      continue;
+      return;
+    }
+    if (!isSourceKind(row.source?.kind as string | undefined)) {
+      throw new Error(
+        `${path}:${i + 1}: source.kind が無いか不正（旧形式の JSONL。prospect-corpus.ts で再生成すること）`,
+      );
     }
     rows.push(row);
-  }
+  });
   return rows;
 }
 
@@ -51,12 +55,21 @@ export function segmentKey(source: CorpusSource): string {
   return `kifu/${sourceMonth(source.file) ?? "-"}`;
 }
 
-function isSourceKind(s: string): s is CorpusSourceKind {
-  return (SOURCE_KINDS as readonly string[]).includes(s);
+function isSourceKind(s: string | undefined): s is CorpusSourceKind {
+  return (
+    s !== undefined && (CORPUS_SOURCE_KINDS as readonly string[]).includes(s)
+  );
 }
 
-/** `kifu,book` 形式を kind の配列にする。未指定は空配列。不明な kind は例外。 */
-export function parseKindList(raw: string | undefined): CorpusSourceKind[] {
+const MONTH_SEGMENT_RE = /^kifu\/\d{4}-\d{2}$/;
+
+/** 選別トークン: kind（`kifu`）または月単位セグメント（`kifu/2026-06`）。 */
+export function isSelectorToken(s: string): boolean {
+  return isSourceKind(s) || MONTH_SEGMENT_RE.test(s);
+}
+
+/** `kifu,book,kifu/2026-06` 形式をトークン配列にする。未指定は空配列。不明なトークンは例外。 */
+export function parseSelectorList(raw: string | undefined): string[] {
   if (raw === undefined) {
     return [];
   }
@@ -65,25 +78,33 @@ export function parseKindList(raw: string | undefined): CorpusSourceKind[] {
     .map((s) => s.trim())
     .filter((s) => s.length > 0)
     .map((s) => {
-      if (!isSourceKind(s)) {
+      if (!isSelectorToken(s)) {
         throw new Error(
-          `不明な源 kind: "${s}"（${SOURCE_KINDS.join("|")} のいずれか）`,
+          `不明な源トークン: "${s}"（${CORPUS_SOURCE_KINDS.join("|")} または kifu/YYYY-MM）`,
         );
       }
       return s;
     });
 }
 
-/** include（空なら全 kind）に含まれ、exclude に含まれない行を返す。 */
-export function filterRowsBySourceKind(
+/** 行がトークンに該当するか（kind 一致、または月単位セグメント一致）。 */
+export function matchesSelector(
+  source: CorpusSource,
+  tokens: readonly string[],
+): boolean {
+  return tokens.some((t) => t === source.kind || t === segmentKey(source));
+}
+
+/** include（空なら全行）に該当し、exclude に該当しない行を返す。 */
+export function filterRowsBySelector(
   rows: readonly CorpusRow[],
-  include: readonly CorpusSourceKind[],
-  exclude: readonly CorpusSourceKind[],
+  include: readonly string[],
+  exclude: readonly string[],
 ): CorpusRow[] {
   return rows.filter(
     (r) =>
-      (include.length === 0 || include.includes(r.source.kind)) &&
-      !exclude.includes(r.source.kind),
+      (include.length === 0 || matchesSelector(r.source, include)) &&
+      !matchesSelector(r.source, exclude),
   );
 }
 
@@ -127,18 +148,8 @@ function lossOfIndices(
 export function summarizeSegmentLoss(
   input: SegmentLossInput,
 ): SegmentLossSummary[] {
-  const bySegment = new Map<string, number[]>();
-  input.segments.forEach((seg, i) => {
-    const list = bySegment.get(seg);
-    if (list) {
-      list.push(i);
-    } else {
-      bySegment.set(seg, [i]);
-    }
-  });
-
   const out: SegmentLossSummary[] = [];
-  for (const [segment, indices] of bySegment) {
+  for (const [segment, indices] of groupIndicesBySegment(input.segments)) {
     const members = new Set(indices);
     let valSum = 0;
     let foldCount = 0;
@@ -159,6 +170,77 @@ export function summarizeSegmentLoss(
     });
   }
   return out;
+}
+
+export interface HoldoutSegmentSummary {
+  segment: string;
+  rowCount: number;
+  /** baseline 重み（PROSPECT_SCORE_DEFAULT）での損失 */
+  baselineLoss: number;
+  /** 学習行の final fit 重みでの損失 */
+  finalLoss: number;
+}
+
+export interface HoldoutLossInput {
+  segments: readonly string[];
+  X: readonly number[][];
+  labels: readonly number[];
+  baselineWeights: readonly number[];
+  finalWeights: readonly number[];
+  K: number;
+}
+
+function groupIndicesBySegment(
+  segments: readonly string[],
+): Map<string, number[]> {
+  const bySegment = new Map<string, number[]>();
+  segments.forEach((seg, i) => {
+    const list = bySegment.get(seg);
+    if (list) {
+      list.push(i);
+    } else {
+      bySegment.set(seg, [i]);
+    }
+  });
+  return bySegment;
+}
+
+/** holdout 行（学習に使わなかった行）をセグメント（初出順）ごとに final fit 重みで評価する（純粋）。 */
+export function summarizeHoldoutLoss(
+  input: HoldoutLossInput,
+): HoldoutSegmentSummary[] {
+  const lossOf = (indices: number[], weights: readonly number[]): number =>
+    meanSquaredLoss(
+      indices.map((i) => input.X[i]!),
+      indices.map((i) => input.labels[i]!),
+      [...weights],
+      input.K,
+    );
+  const out: HoldoutSegmentSummary[] = [];
+  for (const [segment, indices] of groupIndicesBySegment(input.segments)) {
+    out.push({
+      segment,
+      rowCount: indices.length,
+      baselineLoss: lossOf(indices, input.baselineWeights),
+      finalLoss: lossOf(indices, input.finalWeights),
+    });
+  }
+  return out;
+}
+
+/** holdout セグメント損失の表。 */
+export function formatHoldoutLoss(
+  summaries: readonly HoldoutSegmentSummary[],
+): string {
+  const lines = [
+    `${"segment".padEnd(14)}${"rows".padStart(8)}${"baseline".padStart(11)}${"final".padStart(11)}`,
+  ];
+  for (const s of summaries) {
+    lines.push(
+      `${s.segment.padEnd(14)}${String(s.rowCount).padStart(8)}${s.baselineLoss.toFixed(6).padStart(11)}${s.finalLoss.toFixed(6).padStart(11)}`,
+    );
+  }
+  return lines.join("\n");
 }
 
 /** セグメント損失の表。 */

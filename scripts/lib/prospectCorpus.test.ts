@@ -8,7 +8,7 @@ import { readFileSync } from "node:fs";
 import * as path from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 
-import { boardToString } from "@/logic/boardSymmetry";
+import { boardToString, transformBoard } from "@/logic/boardSymmetry";
 import { preloadForbiddenWasm } from "@/logic/cpu/wasm/forbiddenAdapter";
 import { loadWasmModule } from "@/logic/cpu/wasm/loader";
 import { preloadThreatWasm } from "@/logic/cpu/wasm/threatAdapter";
@@ -22,6 +22,7 @@ import { parseOpeningSuite } from "./openingSuiteLoader.ts";
 import {
   boardKey,
   createFilterStats,
+  dedupKey,
   createRowTable,
   formatRowTable,
   hasImmediateFive,
@@ -68,9 +69,10 @@ function createContext(): QuietEmitContext & { rows: CorpusRow[] } {
 
 describe("readBenchGames / parseBenchGames — 両 JSON 形", () => {
   it("commit-bench 形（{games:[...]}）を読む", () => {
-    const games = readBenchGames(
+    const { games, skipped } = readBenchGames(
       path.join(CORPUS_FIXTURES, "commit-bench-form.json"),
     );
+    expect(skipped).toBeNull();
     expect(games).toHaveLength(2);
     expect(games[0]!.jushuName).toBe("長星");
     expect(games[0]!.moveHistory).toHaveLength(6);
@@ -78,23 +80,24 @@ describe("readBenchGames / parseBenchGames — 両 JSON 形", () => {
   });
 
   it("weight-bench 形（トップレベル配列）を読む", () => {
-    const games = readBenchGames(
+    const { games, skipped } = readBenchGames(
       path.join(CORPUS_FIXTURES, "weight-bench-array-form.json"),
     );
+    expect(skipped).toBeNull();
     expect(games).toHaveLength(1);
     expect(games[0]!.winner).toBe("B");
     expect(games[0]!.isABlack).toBe(true);
   });
 
-  it("valid:false の run は空（決定的モードで abort があった run を除外）", () => {
+  it("valid:false の run は空で skipped=invalid（決定的モードで abort があった run）", () => {
     expect(
       readBenchGames(path.join(CORPUS_FIXTURES, "invalid-run.json")),
-    ).toEqual([]);
+    ).toEqual({ games: [], skipped: "invalid" });
   });
 
-  it("games を持たない JSON は空", () => {
+  it("games を持たない JSON は空で skipped=noGames", () => {
     expect(readBenchGames(path.join(CORPUS_FIXTURES, "no-games.json"))).toEqual(
-      [],
+      { games: [], skipped: "noGames" },
     );
   });
 
@@ -166,7 +169,7 @@ describe("tryEmitQuietPosition — quiet フィルタ + 特徴 + dedup + emit", 
     expect(row.features.every((f) => Number.isInteger(f))).toBe(true);
     expect(ctx.stats.emitted).toBe(1);
     expect(ctx.stats.candidates).toBe(1);
-    expect(ctx.seen.has(row.key)).toBe(true);
+    expect(ctx.seen.has(dedupKey(board, "black"))).toBe(true);
     // 盤面は変更しない（作業用の着手は戻す）
     expect(boardToString(board)).toBe(
       boardToString(parseBoardKey(row.key).board),
@@ -180,6 +183,25 @@ describe("tryEmitQuietPosition — quiet フィルタ + 特徴 + dedup + emit", 
     expect(tryEmitQuietPosition(ctx, board, "black", source, 0.5)).toBe(false);
     expect(ctx.stats.rejectedDup).toBe(1);
     expect(ctx.rows).toHaveLength(1);
+  });
+
+  it("対称形（鏡映・回転）の再投入も rejectedDup（canonical key で照合）", () => {
+    const ctx = createContext();
+    const { board } = createBoardFromRecord("H8 I9 I8 G8");
+    expect(tryEmitQuietPosition(ctx, board, "black", source, 0.5)).toBe(true);
+    const mirrored = transformBoard(board, (row, col) => ({
+      row,
+      col: 14 - col,
+    }));
+    expect(boardKey(mirrored, "black")).not.toBe(boardKey(board, "black"));
+    expect(dedupKey(mirrored, "black")).toBe(dedupKey(board, "black"));
+    expect(tryEmitQuietPosition(ctx, mirrored, "black", source, 0.5)).toBe(
+      false,
+    );
+    expect(ctx.stats.rejectedDup).toBe(1);
+    expect(ctx.rows).toHaveLength(1);
+    // 行の key は生の向き
+    expect(ctx.rows[0]!.key).toBe(boardKey(board, "black"));
   });
 
   it("手番側に即五があれば rejectedFiveStm、相手側なら rejectedFiveOpp", () => {
@@ -202,11 +224,17 @@ describe("tryEmitQuietPosition — quiet フィルタ + 特徴 + dedup + emit", 
     expect(ctx.stats.rejectedVcf).toBe(1);
   });
 
-  it("excluded（回帰ゲート局面）に含まれる key は rejectedRegression", () => {
+  it("excluded（回帰ゲート局面）に含まれる canonical key は対称形でも rejectedRegression", () => {
     const ctx = createContext();
     const { board } = createBoardFromRecord("H8 I9 I8 G8");
-    ctx.excluded.add(boardKey(board, "black"));
-    expect(tryEmitQuietPosition(ctx, board, "black", source, 0.5)).toBe(false);
+    ctx.excluded.add(dedupKey(board, "black"));
+    const rotated = transformBoard(board, (row, col) => ({
+      row: col,
+      col: 14 - row,
+    }));
+    expect(tryEmitQuietPosition(ctx, rotated, "black", source, 0.5)).toBe(
+      false,
+    );
     expect(ctx.stats.rejectedRegression).toBe(1);
     expect(ctx.stats.rejectedDup).toBe(0);
     expect(ctx.rows).toHaveLength(0);
@@ -235,7 +263,7 @@ describe("sampleGame — 棋譜からのサンプリング", () => {
     const ctx = createContext();
     const game = readBenchGames(
       path.join(CORPUS_FIXTURES, "commit-bench-form.json"),
-    )[0]!;
+    ).games[0]!;
     // 6 手の棋譜。minPly=2, endMargin=1 → ply 2..5 が候補
     sampleGame(ctx, game, file, 0, {
       minPly: 2,
@@ -264,7 +292,7 @@ describe("sampleGame — 棋譜からのサンプリング", () => {
     const ctx = createContext();
     const game = readBenchGames(
       path.join(CORPUS_FIXTURES, "commit-bench-form.json"),
-    )[0]!;
+    ).games[0]!;
     sampleGame(ctx, game, file, 0, {
       minPly: 2,
       endMargin: 1,
@@ -276,7 +304,7 @@ describe("sampleGame — 棋譜からのサンプリング", () => {
 
   it("引き分けは outcome 0.5、白勝ちは白番 1", () => {
     const ctx = createContext();
-    const games = readBenchGames(
+    const { games } = readBenchGames(
       path.join(CORPUS_FIXTURES, "commit-bench-form.json"),
     );
     sampleGame(ctx, games[1]!, file, 1, {
@@ -289,7 +317,7 @@ describe("sampleGame — 棋譜からのサンプリング", () => {
     const ctx2 = createContext();
     const whiteWin = readBenchGames(
       path.join(CORPUS_FIXTURES, "weight-bench-array-form.json"),
-    )[0]!; // winner=B, isABlack=true → 白勝ち
+    ).games[0]!; // winner=B, isABlack=true → 白勝ち
     sampleGame(ctx2, whiteWin, file, 2, {
       minPly: 2,
       endMargin: 0,
@@ -310,11 +338,8 @@ describe("sampleBook — オープニングブック entries", () => {
     const ctx = createContext();
     const b3 = createBoardFromRecord("H8 I9 I8").board;
     const b5 = createBoardFromRecord("H8 I9 I8 G8 H7").board;
-    const entries: Record<string, unknown> = {
-      [boardKey(b3, "white")]: { play: { move: "G8" } },
-      [boardKey(b5, "white")]: { play: { move: "G6" } },
-    };
-    const emitted = sampleBook(ctx, entries, "opening-book-hard.json", {
+    const keys = [boardKey(b3, "white"), boardKey(b5, "white")];
+    const emitted = sampleBook(ctx, keys, "opening-book-hard.json", {
       minPly: 4,
     });
     expect(emitted).toBe(1);
@@ -335,8 +360,8 @@ describe("sampleBook — オープニングブック entries", () => {
   it("既出の局面は dedup される", () => {
     const ctx = createContext();
     const b5 = createBoardFromRecord("H8 I9 I8 G8 H7").board;
-    ctx.seen.add(boardKey(b5, "white"));
-    sampleBook(ctx, { [boardKey(b5, "white")]: {} }, "opening-book-hard.json", {
+    ctx.seen.add(dedupKey(b5, "white"));
+    sampleBook(ctx, [boardKey(b5, "white")], "opening-book-hard.json", {
       minPly: 4,
     });
     expect(ctx.rows).toHaveLength(0);
@@ -357,7 +382,6 @@ describe("samplePrefix — 開局スイートの先頭 n 手", () => {
       suite.openings,
       "opening-suite-small.json",
       [4, 5, 6],
-      { minPly: 4 },
     );
     expect(emitted).toBe(ctx.rows.length);
     expect(ctx.rows.length).toBeGreaterThan(0);
@@ -381,7 +405,7 @@ describe("samplePrefix — 開局スイートの先頭 n 手", () => {
     );
   });
 
-  it("開局の手数を超える ply と minPly 未満の ply は飛ばす", () => {
+  it("開局の手数を超える ply だけ飛ばす（minPly は適用しない）", () => {
     const ctx = createContext();
     const opening = {
       id: "t-1",
@@ -393,8 +417,8 @@ describe("samplePrefix — 開局スイートの先頭 n 手", () => {
         { row: 8, col: 7 },
       ],
     };
-    samplePrefix(ctx, [opening], "s.json", [3, 5, 7], { minPly: 4 });
-    expect(ctx.rows.map((r) => r.source.ply)).toEqual([5]);
+    samplePrefix(ctx, [opening], "s.json", [3, 5, 7]);
+    expect(ctx.rows.map((r) => r.source.ply)).toEqual([3, 5]);
   });
 });
 
@@ -430,7 +454,10 @@ describe("行数表 — 源 kind × ply 帯 × 手番", () => {
     expect(text).toContain("kifu");
     expect(text).toContain("4-6");
     expect(text).toMatch(/合計/);
+    // ply 帯ごとの kind 横断小計: 4-6 は kifu 2 + prefix 1 = 3（黒 2・白 1）
+    expect(text).toMatch(/^全源\s+4-6\s+2\s+1\s+3$/m);
+    expect(text).toMatch(/^全源\s+7\s+0\s+1\s+1$/m);
     // 全体合計 5
-    expect(text).toMatch(/5\s*$/m);
+    expect(text).toMatch(/^合計\s+3\s+2\s+5$/m);
   });
 });

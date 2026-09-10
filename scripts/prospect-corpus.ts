@@ -11,6 +11,8 @@
  *   2. ブック（book）: `--book=<json>` の entries（白番 ply 3/5/7。`--min-ply` を石数に適用）。
  *   3. 序盤 prefix（prefix）: `--suite-prefix=<json,...>` の各開局 moves を
  *      `--prefix-plies` の各 n 手で切った局面（黒番 n 偶数 / 白番 n 奇数）。
+ *      plies が明示指定なので `--min-ply` は適用しない。
+ *   dedup と回帰除外は canonical key（8 対称の最小）で照合する。
  *   book / prefix は 1 局面 1 グループ、outcome 0.5 固定（ラベルは Rapfi 評価）。
  *
  * 回帰ゲート局面（scripts/lib/regressionPositions.ts）は再生して得た key を
@@ -43,6 +45,8 @@
 
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
+
+import type { OpeningBookAsset } from "@/logic/cpu/openingBook";
 
 import { preloadForbiddenWasm } from "@/logic/cpu/wasm/forbiddenAdapter";
 import { loadWasmModule } from "@/logic/cpu/wasm/loader";
@@ -107,11 +111,11 @@ function listKifuFiles(inputDir: string, limit: number): string[] {
   return Number.isFinite(limit) ? files.slice(0, limit) : files;
 }
 
-function readBookEntries(bookPath: string): Record<string, unknown> {
-  const raw = JSON.parse(readFileSync(bookPath, "utf8")) as {
-    entries?: unknown;
-  };
-  const { entries } = raw;
+function readBookKeys(bookPath: string): string[] {
+  const asset = JSON.parse(
+    readFileSync(bookPath, "utf8"),
+  ) as Partial<OpeningBookAsset>;
+  const { entries } = asset;
   if (
     typeof entries !== "object" ||
     entries === null ||
@@ -119,7 +123,7 @@ function readBookEntries(bookPath: string): Record<string, unknown> {
   ) {
     throw new Error(`${bookPath}: entries がオブジェクトでない`);
   }
-  return entries as Record<string, unknown>;
+  return Object.keys(entries);
 }
 
 function usage(): never {
@@ -196,7 +200,13 @@ async function main(): Promise<void> {
       if (gameCount >= maxGames) {
         break;
       }
-      const games = readBenchGames(join(inputDir, file));
+      const { games, skipped } = readBenchGames(join(inputDir, file));
+      if (skipped !== null) {
+        console.log(
+          `  ${file}: ${skipped === "invalid" ? "valid:false" : "games なし"} としてスキップ`,
+        );
+        continue;
+      }
       let used = 0;
       for (let gameIdx = 0; gameIdx < games.length; gameIdx++) {
         if (gameCount >= maxGames) {
@@ -214,12 +224,12 @@ async function main(): Promise<void> {
 
   // 2. ブック
   if (bookPath) {
-    const entries = readBookEntries(bookPath);
-    const emitted = sampleBook(ctx, entries, basename(bookPath), {
+    const keys = readBookKeys(bookPath);
+    const emitted = sampleBook(ctx, keys, basename(bookPath), {
       minPly: opts.minPly,
     });
     console.log(
-      `\nブック: ${bookPath}（${Object.keys(entries).length} entries）→ ${emitted} 局面`,
+      `\nブック: ${bookPath}（${keys.length} entries）→ ${emitted} 局面`,
     );
   }
 
@@ -231,11 +241,15 @@ async function main(): Promise<void> {
       suite.openings,
       basename(suitePath),
       prefixPlies,
-      { minPly: opts.minPly },
     );
     console.log(
       `\nprefix: ${suitePath}（${suite.count} 開局 × ply ${prefixPlies.join("/")}）→ ${emitted} 局面`,
     );
+    if (emitted === 0) {
+      console.warn(
+        `  警告: ${suitePath} の prefix 行が 0 件（全て dedup/quiet 落ち、または --prefix-plies が開局の手数を超えている）`,
+      );
+    }
   }
 
   mkdirSync(dirname(outPath), { recursive: true });

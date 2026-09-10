@@ -13,6 +13,13 @@ import type { Position } from "@/types/game";
 /** 局面の出どころ。kifu=ベンチ棋譜、book=オープニングブック entries、prefix=開局スイートの先頭 n 手。 */
 export type CorpusSourceKind = "kifu" | "book" | "prefix";
 
+/** 源 kind の一覧（表・CLI 検証の SSoT）。 */
+export const CORPUS_SOURCE_KINDS = [
+  "kifu",
+  "book",
+  "prefix",
+] as const satisfies readonly CorpusSourceKind[];
+
 export type CorpusSide = "black" | "white";
 
 export interface CorpusSource {
@@ -31,11 +38,15 @@ export interface CorpusSource {
 }
 
 export interface CorpusRow {
-  /** 盤面キー `${boardToString(board)}|${stm}`（ブックと同形式。dedup・resume 用）。 */
+  /**
+   * 盤面キー `${boardToString(board)}|${stm}`（ブックと同形式、生の向き。resume 用）。
+   * dedup・回帰除外は canonicalKey（8 対称の最小）で照合する。
+   */
   key: string;
   source: CorpusSource;
   /** 手番側の色。特徴・ラベルはすべてこの視点。 */
   stm: CorpusSide;
+  /** 石リスト（key から導出可。ラベラーが盤面再構築なしで Rapfi に送るために保持）。 */
   black: Position[];
   white: Position[];
   /** extractProspectFeatures(stm, stmIsPerspective=1) の i32×34。 */

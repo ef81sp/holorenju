@@ -11,12 +11,15 @@ import { describe, expect, it } from "vitest";
 import type { CorpusRow, CorpusSource } from "../types/prospectCorpus.ts";
 
 import {
-  filterRowsBySourceKind,
+  filterRowsBySelector,
+  formatHoldoutLoss,
   formatSegmentLoss,
-  parseKindList,
+  matchesSelector,
+  parseSelectorList,
   readCorpusRows,
   segmentKey,
   sourceMonth,
+  summarizeHoldoutLoss,
   summarizeSegmentLoss,
 } from "./prospectCorpusRows.ts";
 import { meanSquaredLoss } from "./texelFit.ts";
@@ -81,6 +84,14 @@ describe("readCorpusRows", () => {
     expect(rows[0]!.source.kind).toBe("kifu");
     expect(rows[1]!.rapfiEval).toBe(12);
   });
+
+  it("source.kind の無い行（旧形式）は例外", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "corpus-rows-"));
+    const file = path.join(dir, "old.jsonl");
+    const legacy = { ...rowOf(KIFU_06), source: { file: "x", gameIdx: 0 } };
+    writeFileSync(file, `${JSON.stringify(legacy)}\n`);
+    expect(() => readCorpusRows(file)).toThrow(/source\.kind/);
+  });
 });
 
 describe("sourceMonth / segmentKey", () => {
@@ -95,28 +106,92 @@ describe("sourceMonth / segmentKey", () => {
   });
 });
 
-describe("parseKindList / filterRowsBySourceKind", () => {
-  it("カンマ区切りの kind を検証して返す（未指定は空）", () => {
-    expect(parseKindList(undefined)).toEqual([]);
-    expect(parseKindList("kifu")).toEqual(["kifu"]);
-    expect(parseKindList("book, prefix")).toEqual(["book", "prefix"]);
-    expect(() => parseKindList("kifu,bogus")).toThrow(/bogus/);
+describe("parseSelectorList / matchesSelector / filterRowsBySelector", () => {
+  it("kind と月単位トークン（kifu/YYYY-MM）を検証して返す（未指定は空）", () => {
+    expect(parseSelectorList(undefined)).toEqual([]);
+    expect(parseSelectorList("kifu")).toEqual(["kifu"]);
+    expect(parseSelectorList("book, prefix")).toEqual(["book", "prefix"]);
+    expect(parseSelectorList("kifu/2026-06,kifu/2026-08")).toEqual([
+      "kifu/2026-06",
+      "kifu/2026-08",
+    ]);
+    expect(() => parseSelectorList("kifu,bogus")).toThrow(/bogus/);
+    expect(() => parseSelectorList("book/2026-06")).toThrow(/book\/2026-06/);
   });
 
-  it("include は指定 kind のみ、exclude は指定 kind を除く。両方なら include 後に exclude", () => {
+  it("matchesSelector は kind 一致か月セグメント一致", () => {
+    expect(matchesSelector(KIFU_06, ["kifu"])).toBe(true);
+    expect(matchesSelector(KIFU_06, ["kifu/2026-06"])).toBe(true);
+    expect(matchesSelector(KIFU_06, ["kifu/2026-09"])).toBe(false);
+    expect(matchesSelector(BOOK, ["kifu", "prefix"])).toBe(false);
+    expect(matchesSelector(BOOK, [])).toBe(false);
+  });
+
+  it("include は該当行のみ、exclude は該当行を除く。両方なら include 後に exclude。月トークンも可", () => {
     const rows = [rowOf(KIFU_06), rowOf(KIFU_09), rowOf(BOOK), rowOf(PREFIX)];
-    expect(filterRowsBySourceKind(rows, [], [])).toHaveLength(4);
+    expect(filterRowsBySelector(rows, [], [])).toHaveLength(4);
     expect(
-      filterRowsBySourceKind(rows, ["kifu"], []).map((r) => r.source.kind),
+      filterRowsBySelector(rows, ["kifu"], []).map((r) => r.source.kind),
     ).toEqual(["kifu", "kifu"]);
     expect(
-      filterRowsBySourceKind(rows, [], ["book"]).map((r) => r.source.kind),
+      filterRowsBySelector(rows, [], ["book"]).map((r) => r.source.kind),
     ).toEqual(["kifu", "kifu", "prefix"]);
     expect(
-      filterRowsBySourceKind(rows, ["kifu", "book"], ["book"]).map(
+      filterRowsBySelector(rows, ["kifu", "book"], ["book"]).map(
         (r) => r.source.kind,
       ),
     ).toEqual(["kifu", "kifu"]);
+    // §3 (i): 06 で fit → 09/book/prefix を holdout
+    expect(
+      filterRowsBySelector(rows, ["kifu/2026-06"], []).map((r) =>
+        segmentKey(r.source),
+      ),
+    ).toEqual(["kifu/2026-06"]);
+    expect(
+      filterRowsBySelector(rows, [], ["kifu/2026-06"]).map((r) =>
+        segmentKey(r.source),
+      ),
+    ).toEqual(["kifu/2026-09", "book", "prefix"]);
+  });
+});
+
+describe("summarizeHoldoutLoss", () => {
+  it("holdout 行をセグメントごとに baseline / final の損失で評価する", () => {
+    const out = summarizeHoldoutLoss({
+      segments: ["kifu/2026-09", "book", "kifu/2026-09"],
+      X: [[1], [2], [3]],
+      labels: [0.6, 0.7, 0.8],
+      baselineWeights: [0.5],
+      finalWeights: [0.4],
+      K: 1,
+    });
+    expect(out.map((s) => s.segment)).toEqual(["kifu/2026-09", "book"]);
+    expect(out[0]!.rowCount).toBe(2);
+    expect(out[0]!.baselineLoss).toBeCloseTo(
+      meanSquaredLoss([[1], [3]], [0.6, 0.8], [0.5], 1),
+      12,
+    );
+    expect(out[0]!.finalLoss).toBeCloseTo(
+      meanSquaredLoss([[1], [3]], [0.6, 0.8], [0.4], 1),
+      12,
+    );
+    expect(out[1]!.rowCount).toBe(1);
+    const text = formatHoldoutLoss(out);
+    expect(text).toContain("kifu/2026-09");
+    expect(text).toContain("final");
+  });
+
+  it("空なら空", () => {
+    expect(
+      summarizeHoldoutLoss({
+        segments: [],
+        X: [],
+        labels: [],
+        baselineWeights: [0],
+        finalWeights: [0],
+        K: 1,
+      }),
+    ).toEqual([]);
   });
 });
 
