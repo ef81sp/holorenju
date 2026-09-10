@@ -1,0 +1,19 @@
+[
+  {
+    "playerA": "weightsA",
+    "playerB": "weightsB",
+    "winner": "B",
+    "reason": "five",
+    "moves": 5,
+    "duration": 1,
+    "moveHistory": [
+      { "row": 7, "col": 7, "time": 0, "isOpening": true },
+      { "row": 6, "col": 8, "time": 0, "isOpening": true },
+      { "row": 7, "col": 8, "time": 0, "isOpening": true },
+      { "row": 7, "col": 6, "time": 0, "isOpening": false },
+      { "row": 8, "col": 9, "time": 0, "isOpening": false }
+    ],
+    "isABlack": true,
+    "jushuName": "花月"
+  }
+]
