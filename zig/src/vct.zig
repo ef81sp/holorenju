@@ -1268,6 +1268,8 @@ const VCTRecursiveContext = struct {
     branch_count: u8,
     /// この部分木の root node index（collect_branches 時のみ設定）
     out_node: u16 = ft.TREE_TERMINAL,
+    /// カウンター四耐性検証のモード（depth 0 の候補採用時にのみ参照する）
+    mode: ResilienceMode = .lenient,
 };
 
 /// 防御ごとの手順エントリ
@@ -1458,24 +1460,17 @@ fn findVCTSequenceInner(
             .collect_branches = collect_branches,
             .branches = undefined,
             .branch_count = 0,
+            .mode = mode,
         };
+        // カウンターフォー耐性検証は depth 0 の候補採用時（`findVCTSequenceRecursive`）に
+        // 攻め手ごとに行う。旧実装は「見つかった手順」を事後検証し、非耐性なら
+        // 反復深化ごと打ち切って VCF-only に落としていたが、
+        // (a) 同じ深さで別の先頭手（耐性あり）が非耐性候補の α 値で刈られている、
+        // (b) より深い反復でしか見つからない別の先頭手がある、
+        // の両方を取りこぼしていた（idx6: 深さ 3 で非耐性の J10 を拾って中断し、
+        // 深さ 5 以上で成立する J9 に到達しなかった）。
         const found = findVCTSequenceRecursive(cells, color, 0, depth, limiter, &result.sequence, &seq_len, &context, SEQ_LEN_UNBOUNDED);
         if (found) {
-            // カウンターフォー耐性検証: 活三を打つ段階で相手のカウンターフォーが
-            // 残り手順を破壊するならVCT不成立扱い → VCF-onlyにフォールバック
-            //
-            // 深い反復に進んでも先頭の活三は同じで再度棄却されるため早期終了する。
-            if (!isResilientToCounterFours(cells, color, result.sequence[0..seq_len], mode, limiter)) {
-                var fallback = VCTSequenceResult{
-                    .sequence = undefined,
-                    .len = 0,
-                    .is_forbidden_trap = false,
-                    .found = false,
-                    .branches = undefined,
-                    .branch_count = 0,
-                };
-                return tryVCFOnly(cells, color, limiter, &fallback, collect_branches);
-            }
             result.len = seq_len;
             result.is_forbidden_trap = context.is_forbidden_trap;
             result.found = true;
@@ -1895,8 +1890,16 @@ fn findVCTSequenceRecursive(
                 }
             }
 
+            // カウンターフォー耐性検証（根の攻め手のみ）: 活三を打つ段階で相手の
+            // カウンターフォーが残り手順を破壊するなら、この攻め手は VCT 不成立として
+            // 候補にしない（best / α 値を更新しない）。ここで弾くことで、他の攻め手が
+            // 非耐性候補の α 値で刈られず、反復深化も継続する。
+            // 石は攻め手・受け手とも戻した後なので盤面は根の状態。
+            const resilient = depth != 0 or
+                isResilientToCounterFours(cells, color, candidate_seq[0..candidate_len], context.mode, limiter);
+
             // 最短の候補を保持（α 値の更新も兼ねる）
-            if (candidate_len < best_seq_len) {
+            if (resilient and candidate_len < best_seq_len) {
                 var ci: u8 = 0;
                 while (ci < candidate_len) : (ci += 1) {
                     best_seq[ci] = candidate_seq[ci];
@@ -3200,6 +3203,43 @@ test "findVCTSequence: 途中でミセ手を持たれる三の手順をVCTとし
     try testing.expect(!result.found);
 }
 
+/// 棋譜 `H9 G8 I9 H7 H8 I7 J7 F9 I6 I8`（黒番）。horizon-flips 調査 idx6。
+fn setupIdx6Position(cells: []Cell) void {
+    cells[6 * BOARD_SIZE + 7] = .black; // 1. H9
+    cells[7 * BOARD_SIZE + 6] = .white; // 2. G8
+    cells[6 * BOARD_SIZE + 8] = .black; // 3. I9
+    cells[8 * BOARD_SIZE + 7] = .white; // 4. H7
+    cells[7 * BOARD_SIZE + 7] = .black; // 5. H8
+    cells[8 * BOARD_SIZE + 8] = .white; // 6. I7
+    cells[8 * BOARD_SIZE + 9] = .black; // 7. J7
+    cells[6 * BOARD_SIZE + 5] = .white; // 8. F9
+    cells[9 * BOARD_SIZE + 8] = .black; // 9. I6
+    cells[7 * BOARD_SIZE + 8] = .white; // 10. I8
+}
+
+test "findVCTSequence: idx6 J9 line with black H8 (horizon-flips)" {
+    // 黒 J9（H9-I9-J9 の活三）に対し、白の受け K9 / G9 / L9 のいずれにも黒の
+    // 追い詰め（K9/L9: J8 J6 J10 J11 K11、G9: 四追い L9 K9 K8）がある。
+    // 「J9 + 受け」を根にすれば見つかるのに、元局面を根にすると見つからなかった。
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    setupIdx6Position(&cells);
+
+    // 旧実装は深さ 3 で非耐性の J10 手順（J10 G7 L9 M10 J9 K9 J8）を拾い、
+    // 事後の耐性検証で棄却して反復深化ごと打ち切っていたため、深さ 5 以上で
+    // 成立する J9 に到達しなかった。
+    const result = findVCTSequence(&cells, .black, 8, 0, 0, false, .lenient);
+    try testing.expect(result.found);
+
+    // 初手指定版・判定版も J9 を追い詰めの初手として認める
+    const j9 = Position{ .row = 6, .col = 9 };
+    const from_j9 = findVCTSequenceFromFirstMove(&cells, j9, .black, 8, 0, 0, false);
+    try testing.expect(from_j9.found);
+    try testing.expectEqual(j9.row, from_j9.sequence[0].row);
+    try testing.expectEqual(j9.col, from_j9.sequence[0].col);
+    try testing.expect(isVCTFirstMove(&cells, j9, .black, 8, 0, 0));
+}
+
 test "hasVCT: 四で相手の活三を潰してから三で追う手順は成立する（issue #116 の意味論）" {
     // 1. の意味論（ノード単位の棄却ではなく「三の攻め手のみ不可」）の正当化。
     // 修正前（相手に活三があれば即 return false）ではこの局面は VCT なしと判定される。
@@ -4290,7 +4330,12 @@ test "findVCTMove / isVCTFirstMove: ブロック点が黒の禁手なら偽 VCT 
     bitboard.initFromCells(&cells);
 
     // 対局 CPU 経路。修正前はこの偽 VCT の初手 (7,8) をそのまま着手として返していた。
-    try testing.expect(findVCTMove(&cells, .black, VCT_MAX_DEPTH, 0) == null);
+    // この局面には (7,8) 以外の初手（(4,10) の活三 → (7,9) で白のカウンター四点を
+    // 埋めつつ四 → 四 → 活四）による本物の追い詰めがあるので、
+    // 「(7,8) を初手として返さない」ことを確認する（「なし」を要求するのは過剰）。
+    const move = findVCTMove(&cells, .black, VCT_MAX_DEPTH, 0);
+    try testing.expect(move != null);
+    try testing.expect(!(move.?.row == 7 and move.?.col == 8));
     // 筋を固定した VCT 初手判定（修正前は true）
     try testing.expect(!isVCTFirstMove(&cells, .{ .row = 7, .col = 8 }, .black, VCT_MAX_DEPTH, 0, 0));
 
@@ -4305,8 +4350,12 @@ test "findVCTSequence: ブロック点が黒の禁手なら偽 VCT を主張し�
     var cells = [_]Cell{.empty} ** CELL_COUNT;
     setupIssue146Position(&cells);
 
+    // 旧実装は最初に見つかった (7,8) 手順を事後の耐性検証で棄却すると反復深化ごと
+    // 打ち切っていたため「なし」だったが、本物の追い詰め（初手 (4,10)）が存在する。
+    // 主張してはならないのは「初手 (7,8) の偽 VCT」であって「追い詰めなし」ではない。
     const result = findVCTSequence(&cells, .black, VCT_MAX_DEPTH, 0, 0, false, .lenient);
-    try testing.expect(!result.found);
+    try testing.expect(result.found);
+    try testing.expect(!(result.sequence[0].row == 7 and result.sequence[0].col == 8));
 }
 
 test "findVCTSequenceFromFirstMove: ブロック点が黒の禁手なら偽 VCT を主張しない（issue #146）" {
