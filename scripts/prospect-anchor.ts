@@ -22,17 +22,20 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 
 import type { WasmModuleContext } from "@/logic/cpu/wasm/types";
-import type { BoardState, Position } from "@/types/game";
+import type { BoardState } from "@/types/game";
 
 import { WasmBoardEvaluator } from "@/logic/cpu/wasm/bridge";
 import { loadWasmModule } from "@/logic/cpu/wasm/loader";
 import { DIFFICULTY_PARAMS } from "@/types/cpu";
+
+import type { CorpusRow } from "./types/prospectCorpus.ts";
 
 import {
   PROSPECT_CATEGORIES,
   PROSPECT_FEATURE_COUNT,
   PROSPECT_PARAM_ID_BASE,
 } from "./lib/evalParams.ts";
+import { readCorpusRows } from "./lib/prospectCorpusRows.ts";
 import { meanSquaredLoss, rapfiTeacherLabel } from "./lib/texelFit.ts";
 import { readCString } from "./lib/wasmCString.ts";
 
@@ -52,18 +55,6 @@ const CAT_INDEX = Object.fromEntries(
 ) as Record<(typeof PROSPECT_CATEGORIES)[number], number>;
 
 type Teacher = "rapfi" | "outcome";
-
-interface CorpusRow {
-  key: string;
-  source: { file: string; gameIdx: number; ply: number; jushu: string };
-  stm: "black" | "white";
-  black: Position[];
-  white: Position[];
-  features: number[];
-  outcome: number;
-  rapfiEval?: number;
-  dropped?: string;
-}
 
 interface FitFile {
   weightNames: string[];
@@ -95,23 +86,6 @@ function parseTeacherArg(): Teacher {
   }
   console.error(`不明な --teacher 値: "${raw}"（rapfi|outcome）`);
   process.exit(1);
-}
-
-function readCorpus(path: string): CorpusRow[] {
-  const text = readFileSync(path, "utf8");
-  const rows: CorpusRow[] = [];
-  for (const line of text.split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed) {
-      continue;
-    }
-    const row = JSON.parse(trimmed) as CorpusRow;
-    if (row.dropped !== undefined) {
-      continue;
-    }
-    rows.push(row);
-  }
-  return rows;
 }
 
 function reconstructBoard(row: CorpusRow): BoardState {
@@ -284,7 +258,7 @@ async function main(): Promise<void> {
   const weightNames = getWeightNames(wasm);
   const baselineWeights = getBaselineWeights(wasm);
 
-  const rows = readCorpus(corpusPath);
+  const rows = readCorpusRows(corpusPath);
   console.log(`コーパス読み込み: ${rows.length} 局面（破棄行を除く）`);
 
   const fitFile = JSON.parse(readFileSync(fitPath, "utf8")) as FitFile;

@@ -16,22 +16,39 @@
  * これはスキップする。rapfiEval を欠く行は --teacher=rapfi の学習対象から除外する
  * （--teacher=outcome / both の outcome 側では引き続き使う）。
  *
+ * 源 kind（source.kind = kifu|book|prefix）の選別と、fold 平均 val 損失の
+ * 源 kind × 月（kifu はファイル名の YYYY-MM）集計（eval-r4-2026-09-11.md §3 (i) / §4）:
+ *   --include-source=<kind[,kind]>  指定 kind の行だけを使う
+ *   --exclude-source=<kind[,kind]>  指定 kind の行を除く（include の後に適用）
+ *   セグメント集計は kfold.segments として JSON にも保存する（既存キーは不変）。
+ *
  * 使用例:
  *   node --experimental-strip-types --import ./scripts/register-loader.mjs \
- *     scripts/prospect-texel.ts --in=bench-results/prospect-corpus-labeled.jsonl \
- *     --k=5 --teacher=both --K=200
+ *     scripts/prospect-texel.ts --in=bench-results/corpus/prospect-corpus-labeled.jsonl \
+ *     --k=5 --teacher=both --K=200 [--include-source=kifu] [--exclude-source=book]
  */
 
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 
 import type { WasmModuleContext } from "@/logic/cpu/wasm/types";
 
 import { loadWasmModule } from "@/logic/cpu/wasm/loader";
 
+import type { CorpusRow, CorpusSourceKind } from "./types/prospectCorpus.ts";
+
 import {
   PROSPECT_FEATURE_COUNT,
   PROSPECT_PARAM_ID_BASE,
 } from "./lib/evalParams.ts";
+import {
+  filterRowsBySourceKind,
+  formatSegmentLoss,
+  parseKindList,
+  readCorpusRows,
+  segmentKey,
+  type SegmentLossSummary,
+  summarizeSegmentLoss,
+} from "./lib/prospectCorpusRows.ts";
 import {
   fitLogistic,
   type FitLogisticResult,
@@ -45,17 +62,6 @@ const FEATURE_COUNT = PROSPECT_FEATURE_COUNT;
 
 type Teacher = "rapfi" | "outcome";
 type TeacherArg = Teacher | "both";
-
-interface CorpusRow {
-  key: string;
-  source: { file: string; gameIdx: number; ply: number; jushu: string };
-  stm: "black" | "white";
-  features: number[];
-  outcome: number;
-  rapfiEval?: number;
-  /** ラベラー側の破棄行マーカー（存在すれば学習対象から除外）。 */
-  dropped?: string;
-}
 
 function parseStringArg(name: string): string | undefined {
   return process.argv
@@ -77,24 +83,6 @@ function parseTeacherArg(): TeacherArg {
     `不明な --teacher 値: "${raw}"（rapfi|outcome|both のいずれか）`,
   );
   process.exit(1);
-}
-
-/** JSONL を読み込み、破棄行（dropped フィールド持ち）を除いて返す。 */
-function readCorpus(path: string): CorpusRow[] {
-  const text = readFileSync(path, "utf8");
-  const rows: CorpusRow[] = [];
-  for (const line of text.split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed) {
-      continue;
-    }
-    const row = JSON.parse(trimmed) as CorpusRow;
-    if (row.dropped !== undefined) {
-      continue;
-    }
-    rows.push(row);
-  }
-  return rows;
 }
 
 /** prospect id (100..133) の正準名34個を取得する（getEvalParamName 経由、SSoT は prospect.zig）。 */
@@ -121,6 +109,8 @@ interface Dataset {
   X: number[][];
   labels: number[];
   groups: string[];
+  /** 行ごとの源 kind × 月セグメント（診断用集計のキー）。 */
+  segments: string[];
 }
 
 /** 対局単位のグループキー（同一対局の局面が train/val にまたがらないための groupKFold 入力）。 */
@@ -138,6 +128,7 @@ function buildDataset(rows: CorpusRow[], teacher: Teacher, K: number): Dataset {
         ? filtered.map((r) => rapfiTeacherLabel(r.rapfiEval!, K))
         : filtered.map((r) => r.outcome),
     groups: filtered.map(groupKey),
+    segments: filtered.map((r) => segmentKey(r.source)),
   };
 }
 
@@ -149,22 +140,33 @@ interface FoldResult {
   valLoss: number;
 }
 
-function runKFold(dataset: Dataset, k: number, K: number): FoldResult[] {
+interface KFoldRun {
+  results: FoldResult[];
+  /** fold ごとの fit 重み（セグメント集計用。JSON には出さない） */
+  weights: number[][];
+  folds: ReturnType<typeof groupKFold>;
+}
+
+function runKFold(dataset: Dataset, k: number, K: number): KFoldRun {
   const folds = groupKFold(dataset.groups, k);
-  return folds.map((fold, i) => {
+  const results: FoldResult[] = [];
+  const weights: number[][] = [];
+  folds.forEach((fold, i) => {
     const trainX = fold.train.map((idx) => dataset.X[idx]!);
     const trainY = fold.train.map((idx) => dataset.labels[idx]!);
     const valX = fold.val.map((idx) => dataset.X[idx]!);
     const valY = fold.val.map((idx) => dataset.labels[idx]!);
     const fit = fitLogistic(trainX, trainY, K);
-    return {
+    results.push({
       fold: i,
       trainCount: trainX.length,
       valCount: valX.length,
       trainLoss: fit.trainLoss,
       valLoss: meanSquaredLoss(valX, valY, fit.weights, K),
-    };
+    });
+    weights.push(fit.weights);
   });
+  return { results, weights, folds };
 }
 
 interface TeacherReport {
@@ -175,6 +177,8 @@ interface TeacherReport {
     folds: FoldResult[];
     avgTrainLoss: number;
     avgValLoss: number;
+    /** 源 kind × 月ごとの baseline 損失と fold 平均 val 損失（診断用、追加キー） */
+    segments: SegmentLossSummary[];
   } | null;
   finalFit: FitLogisticResult;
   finalVsBaseline: "改善" | "非改善";
@@ -209,7 +213,8 @@ function runTeacher(
         `  グループ数(${uniqueGroupCount})が k(${requestedK})未満のため k=${effectiveK} に縮小`,
       );
     }
-    const folds = runKFold(dataset, effectiveK, K);
+    const run = runKFold(dataset, effectiveK, K);
+    const folds = run.results;
     for (const f of folds) {
       console.log(
         `  fold${f.fold}: train=${f.trainCount}(loss=${f.trainLoss.toFixed(6)}) ` +
@@ -223,7 +228,25 @@ function runTeacher(
       `  平均: train=${avgTrainLoss.toFixed(6)} val=${avgValLoss.toFixed(6)}` +
         `（val>>trainなら過学習の兆候）`,
     );
-    kfold = { k: effectiveK, folds, avgTrainLoss, avgValLoss };
+    const segments = summarizeSegmentLoss({
+      segments: dataset.segments,
+      X: dataset.X,
+      labels: dataset.labels,
+      folds: run.folds,
+      foldWeights: run.weights,
+      baselineWeights,
+      K,
+    });
+    console.log(
+      "  源 kind × 月 セグメント損失（baseline=全行, val=fold 平均）:",
+    );
+    console.log(
+      formatSegmentLoss(segments)
+        .split("\n")
+        .map((l) => `    ${l}`)
+        .join("\n"),
+    );
+    kfold = { k: effectiveK, folds, avgTrainLoss, avgValLoss, segments };
   } else {
     console.log(
       `  グループ数(${uniqueGroupCount})が2未満のため k-fold をスキップ（局面数が少なすぎる）`,
@@ -261,16 +284,29 @@ async function main(): Promise<void> {
   const K = parseIntArg("K", 200);
   const teachers: Teacher[] =
     teacherArg === "both" ? ["rapfi", "outcome"] : [teacherArg];
+  const includeSource: CorpusSourceKind[] = parseKindList(
+    parseStringArg("include-source"),
+  );
+  const excludeSource: CorpusSourceKind[] = parseKindList(
+    parseStringArg("exclude-source"),
+  );
 
   console.log("=== P3-c: Texel 回帰 ===");
-  console.log(`条件: in=${inPath}, k=${k}, teacher=${teacherArg}, K=${K}`);
+  console.log(
+    `条件: in=${inPath}, k=${k}, teacher=${teacherArg}, K=${K}` +
+      `, include-source=${includeSource.join(",") || "(全 kind)"}` +
+      `, exclude-source=${excludeSource.join(",") || "(なし)"}`,
+  );
 
   const wasm = await loadWasmModule();
   const weightNames = getWeightNames(wasm);
   const baselineWeights = getBaselineWeights(wasm);
 
-  const rows = readCorpus(inPath);
-  console.log(`読み込み: ${rows.length} 局面（破棄行を除く）`);
+  const allRows: CorpusRow[] = readCorpusRows(inPath);
+  const rows = filterRowsBySourceKind(allRows, includeSource, excludeSource);
+  console.log(
+    `読み込み: ${allRows.length} 局面（破棄行を除く）→ 源 kind 選別後 ${rows.length} 局面`,
+  );
 
   const teacherReports: Partial<Record<Teacher, TeacherReport>> = {};
   for (const teacher of teachers) {
@@ -284,7 +320,15 @@ async function main(): Promise<void> {
     outPath,
     JSON.stringify(
       {
-        condition: { inPath, k, teacher: teacherArg, K, rowCount: rows.length },
+        condition: {
+          inPath,
+          k,
+          teacher: teacherArg,
+          K,
+          rowCount: rows.length,
+          includeSource,
+          excludeSource,
+        },
         weightNames,
         baselineWeights,
         teachers: teacherReports,
