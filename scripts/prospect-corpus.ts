@@ -1,70 +1,72 @@
 /**
- * P3 コーパス抽出: 既存 commit-bench 棋譜から quiet 局面をサンプルし、
- * 空点プロスペクト特徴ベクトル（i32×34）と勝敗ラベルを JSONL に dump する
- * （docs/plans/prospect-texel-p3-2026-07-15.md の事前登録フィルタ定義に従う）。
+ * prospect コーパス抽出: ベンチ棋譜・オープニングブック・開局スイート prefix から
+ * quiet 局面をサンプルし、空点プロスペクト特徴ベクトル（i32×34）と勝敗ラベルを
+ * JSONL に dump する（docs/plans/eval-r4-2026-09-11.md §1〜§2。quiet フィルタは
+ * prospect-texel-p3-2026-07-15.md の事前登録定義と同じ）。
  *
- * Rapfi 評価値ラベルは別スクリプト（scripts/rapfi/labelCorpus.ts、
- * gitignore 対象のローカル運用）が本出力の JSONL に付与する。
- * そのため各行に black/white の石リストも含める（ラベラー側で盤面再構築不要）。
+ * 3 源（処理順もこの順。dedup は源横断なので、重複局面は先に処理した源に帰属する）:
+ *   1. 棋譜（kifu）: `--input=<dir>` の `commit-bench-*.json` / `weight-bench-*.json`
+ *      （`{games:[...]}` 形・トップレベル配列形の両方。`valid:false` の run は除外）。
+ *      グループキー = file#gameIdx（同一対局の局面は同じ fold）。
+ *   2. ブック（book）: `--book=<json>` の entries（白番 ply 3/5/7。`--min-ply` を石数に適用）。
+ *   3. 序盤 prefix（prefix）: `--suite-prefix=<json,...>` の各開局 moves を
+ *      `--prefix-plies` の各 n 手で切った局面（黒番 n 偶数 / 白番 n 奇数）。
+ *   book / prefix は 1 局面 1 グループ、outcome 0.5 固定（ラベルは Rapfi 評価）。
  *
- * quiet フィルタ（事前登録）:
- *   1. ply ∈ [minPly, 終局−endMargin]
- *   2. 手番側に即五なし / 3. 相手側に即五なし（必須防御局面の除外）
- *   4. hasVCF(手番側) が false（maxNodes=200 予算）
- *   5. |Rapfi eval| 上限カットはラベラー側で適用
- *   6. 盤面キー + 手番でグローバル dedup
- *   7. 1局あたり sampleInterval ply 間隔・最大 maxPerGame 局面
+ * 回帰ゲート局面（scripts/lib/regressionPositions.ts）は再生して得た key を
+ * 除外集合に事前投入し、出力から除く（stats の rejectedRegression）。
+ *
+ * Rapfi 評価値ラベルは別スクリプト（scripts/rapfi/labelCorpus.ts、gitignore 対象の
+ * ローカル運用）が本出力の JSONL に付与する。各行に black/white の石リストを含める
+ * （ラベラー側で盤面再構築不要）。
  *
  * 使用例:
  *   node --experimental-strip-types --import ./scripts/register-loader.mjs \
- *     scripts/prospect-corpus.ts --input=/path/to/bench-results \
- *     --out=bench-results/prospect-corpus.jsonl
+ *     scripts/prospect-corpus.ts --input=bench-results \
+ *     --book=src/assets/opening-book-hard.json \
+ *     --suite-prefix=scripts/data/opening-suite-v1.json,scripts/data/opening-suite-v2.json \
+ *     --prefix-plies=4,5,6 --min-ply=4 --sample-interval=1 --max-per-game=24
+ *
+ * オプション:
+ *   --input=<dir>            棋譜 JSON のディレクトリ
+ *   --limit-files=<n>        棋譜ファイルを名前順の先頭 n 本に絞る（スモーク用）
+ *   --max-games=<n>          棋譜の局数上限
+ *   --book=<json>            オープニングブック JSON
+ *   --suite-prefix=<a,b,..>  開局スイート JSON（カンマ区切り）
+ *   --prefix-plies=<a,b,..>  prefix の手数（既定 4,5,6）
+ *   --out=<jsonl>            既定 bench-results/corpus/prospect-corpus.jsonl
+ *   --min-ply=<n>            候補にする最小手数/石数（既定 8）
+ *   --end-margin=<n>         終局からこの手数以内は候補にしない（既定 4）
+ *   --sample-interval=<n>    1 局内のサンプル間隔（既定 2）
+ *   --max-per-game=<n>       1 局あたりの上限（既定 12）
  */
 
-import { readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { basename, dirname, join } from "node:path";
 
-import type { WasmModuleContext } from "@/logic/cpu/wasm/types";
-import type { BoardState, Position, StoneColor } from "@/types/game";
-
-import { hasVCF } from "@/logic/cpu/search/vcfCheck";
-import { boardStateToWasm, colorToWasm } from "@/logic/cpu/wasm/boardAdapter";
 import { preloadForbiddenWasm } from "@/logic/cpu/wasm/forbiddenAdapter";
 import { loadWasmModule } from "@/logic/cpu/wasm/loader";
 import { preloadThreatWasm } from "@/logic/cpu/wasm/threatLoader";
-import { checkWin, createEmptyBoard } from "@/logic/renjuRules";
 
-import { PROSPECT_FEATURE_COUNT } from "./lib/evalParams.ts";
+import type { CorpusSourceKind } from "./types/prospectCorpus.ts";
 
-const FEATURE_COUNT = PROSPECT_FEATURE_COUNT;
+import { loadOpeningSuite } from "./lib/openingSuiteLoader.ts";
+import {
+  createFilterStats,
+  createRowTable,
+  formatRowTable,
+  type GameSampleOptions,
+  type QuietEmitContext,
+  readBenchGames,
+  regressionPositionKeys,
+  sampleBook,
+  sampleGame,
+  samplePrefix,
+  tallyRow,
+} from "./lib/prospectCorpus.ts";
 
-interface BenchMove {
-  row: number;
-  col: number;
-  isOpening: boolean;
-}
-
-interface BenchGame {
-  winner: "A" | "B" | "draw";
-  reason: string;
-  moveHistory: BenchMove[];
-  isABlack: boolean;
-  jushuName: string;
-}
-
-interface CorpusRow {
-  /** 盤面キー + 手番（dedup 用。ラベラー・回帰側では未使用）。 */
-  key: string;
-  source: { file: string; gameIdx: number; ply: number; jushu: string };
-  /** 手番側の色。特徴・ラベルはすべてこの視点。 */
-  stm: "black" | "white";
-  black: Position[];
-  white: Position[];
-  /** extractProspectFeatures(stm, stmIsPerspective=1) の i32×34。 */
-  features: number[];
-  /** 勝敗ラベル（stm 視点 1 / 0.5 / 0）。 */
-  outcome: number;
-}
+const DEFAULT_OUT = "bench-results/corpus/prospect-corpus.jsonl";
+const INPUT_PREFIXES = ["commit-bench-", "weight-bench-"] as const;
 
 function parseArg(name: string, fallback: number): number {
   const raw = process.argv.find((a) => a.startsWith(`--${name}=`));
@@ -77,231 +79,180 @@ function parseStringArg(name: string): string | undefined {
     ?.slice(name.length + 3);
 }
 
-function cellChar(cell: StoneColor | null): string {
-  if (cell === "black") {
-    return "b";
+function parseListArg(name: string): string[] {
+  const raw = parseStringArg(name);
+  if (raw === undefined) {
+    return [];
   }
-  if (cell === "white") {
-    return "w";
-  }
-  return ".";
+  return raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
 }
 
-function boardKey(board: BoardState, stm: StoneColor): string {
-  let key = stm === "black" ? "b:" : "w:";
-  for (const row of board) {
-    for (const cell of row) {
-      key += cellChar(cell);
-    }
+function parsePlies(raw: string[]): number[] {
+  const plies = raw.map((s) => Number.parseInt(s, 10));
+  if (plies.some((n) => !Number.isInteger(n) || n < 1)) {
+    throw new Error(`--prefix-plies が不正: ${raw.join(",")}`);
   }
-  return key;
+  return plies;
 }
 
-/** color がどこかの空点に置いて即座に五（勝ち）を作れるか。 */
-function hasImmediateFive(
-  board: BoardState,
-  color: "black" | "white",
-): boolean {
-  for (let row = 0; row < board.length; row++) {
-    for (let col = 0; col < board.length; col++) {
-      if (board[row]![col] !== null) {
-        continue;
-      }
-      board[row]![col] = color;
-      const wins = checkWin(board, { row, col }, color);
-      board[row]![col] = null;
-      if (wins) {
-        return true;
-      }
-    }
-  }
-  return false;
+function listKifuFiles(inputDir: string, limit: number): string[] {
+  const files = readdirSync(inputDir)
+    .filter(
+      (f) => INPUT_PREFIXES.some((p) => f.startsWith(p)) && f.endsWith(".json"),
+    )
+    .sort();
+  return Number.isFinite(limit) ? files.slice(0, limit) : files;
 }
 
-function extractFeatures(
-  wasm: WasmModuleContext,
-  board: BoardState,
-  stm: "black" | "white",
-): number[] {
-  boardStateToWasm(wasm, board);
-  const count = wasm.extractProspectFeatures(colorToWasm(stm), 1);
-  if (count !== FEATURE_COUNT) {
-    throw new Error(`特徴数不一致: got ${count}, want ${FEATURE_COUNT}`);
+function readBookEntries(bookPath: string): Record<string, unknown> {
+  const raw = JSON.parse(readFileSync(bookPath, "utf8")) as {
+    entries?: unknown;
+  };
+  const { entries } = raw;
+  if (
+    typeof entries !== "object" ||
+    entries === null ||
+    Array.isArray(entries)
+  ) {
+    throw new Error(`${bookPath}: entries がオブジェクトでない`);
   }
-  const ptr = wasm.getProspectFeatureBuffer();
-  const view = new DataView(wasm.memory.buffer);
-  const features: number[] = [];
-  for (let i = 0; i < count; i++) {
-    features.push(view.getInt32(ptr + i * 4, true));
-  }
-  return features;
+  return entries as Record<string, unknown>;
 }
 
-interface FilterStats {
-  candidates: number;
-  rejectedFiveStm: number;
-  rejectedFiveOpp: number;
-  rejectedVcf: number;
-  rejectedDup: number;
-  emitted: number;
-}
-
-function sampleGame(
-  wasm: WasmModuleContext,
-  game: BenchGame,
-  file: string,
-  gameIdx: number,
-  opts: {
-    minPly: number;
-    endMargin: number;
-    sampleInterval: number;
-    maxPerGame: number;
-  },
-  seen: Set<string>,
-  stats: FilterStats,
-  emit: (row: CorpusRow) => void,
-): void {
-  const len = game.moveHistory.length;
-  const maxPly = len - opts.endMargin;
-  const board: BoardState = createEmptyBoard();
-  const blackStones: Position[] = [];
-  const whiteStones: Position[] = [];
-
-  let winnerColor: StoneColor | null = null;
-  if (game.winner !== "draw") {
-    winnerColor = (game.winner === "A") === game.isABlack ? "black" : "white";
-  }
-
-  let sampled = 0;
-  let lastSampledPly = -Infinity;
-
-  for (let ply = 0; ply < len; ply++) {
-    // ply 手置かれた状態（= moveHistory[ply] を置く直前）を検討する。
-    if (
-      ply >= opts.minPly &&
-      ply <= maxPly &&
-      sampled < opts.maxPerGame &&
-      ply - lastSampledPly >= opts.sampleInterval
-    ) {
-      const stm: "black" | "white" = ply % 2 === 0 ? "black" : "white";
-      const opp: "black" | "white" = stm === "black" ? "white" : "black";
-      stats.candidates++;
-
-      const key = boardKey(board, stm);
-      if (seen.has(key)) {
-        stats.rejectedDup++;
-      } else if (hasImmediateFive(board, stm)) {
-        stats.rejectedFiveStm++;
-      } else if (hasImmediateFive(board, opp)) {
-        stats.rejectedFiveOpp++;
-      } else if (
-        // timeLimit はノード予算より十分大きくし、実質 maxNodes=200 のみで
-        // 打ち切る（wall-clock 打ち切りが混じるとマシン速度でコーパスが
-        // 変わる＝非決定になるため。perf レビュー指摘対応）。
-        hasVCF(board, stm, 0, undefined, { maxNodes: 200, timeLimit: 10000 })
-      ) {
-        stats.rejectedVcf++;
-      } else {
-        seen.add(key);
-        let outcome = 0.5;
-        if (winnerColor !== null) {
-          outcome = winnerColor === stm ? 1 : 0;
-        }
-        emit({
-          key,
-          source: { file, gameIdx, ply, jushu: game.jushuName },
-          stm,
-          black: [...blackStones],
-          white: [...whiteStones],
-          features: extractFeatures(wasm, board, stm),
-          outcome,
-        });
-        stats.emitted++;
-        sampled++;
-        lastSampledPly = ply;
-      }
-    }
-
-    const move = game.moveHistory[ply]!;
-    const color: StoneColor = ply % 2 === 0 ? "black" : "white";
-    board[move.row]![move.col] = color;
-    (color === "black" ? blackStones : whiteStones).push({
-      row: move.row,
-      col: move.col,
-    });
-  }
+function usage(): never {
+  console.error(
+    "使い方: prospect-corpus.ts [--input=<dir>] [--book=<json>] [--suite-prefix=<json,...>] [--out=...]\n" +
+      "  --input / --book / --suite-prefix のいずれか 1 つ以上が必要",
+  );
+  return process.exit(1);
 }
 
 async function main(): Promise<void> {
   const inputDir = parseStringArg("input");
-  const outPath =
-    parseStringArg("out") ?? "bench-results/prospect-corpus.jsonl";
-  if (!inputDir) {
-    console.error(
-      "使い方: prospect-corpus.ts --input=<commit-bench-*.json のあるディレクトリ> [--out=...]",
-    );
-    process.exit(1);
+  const bookPath = parseStringArg("book");
+  const suitePaths = parseListArg("suite-prefix");
+  if (!inputDir && !bookPath && suitePaths.length === 0) {
+    usage();
   }
-  const opts = {
+  const outPath = parseStringArg("out") ?? DEFAULT_OUT;
+  const opts: GameSampleOptions = {
     minPly: parseArg("min-ply", 8),
     endMargin: parseArg("end-margin", 4),
     sampleInterval: parseArg("sample-interval", 2),
     maxPerGame: parseArg("max-per-game", 12),
   };
   const maxGames = parseArg("max-games", Infinity);
+  const limitFiles = parseArg("limit-files", Infinity);
+  const prefixPliesRaw = parseListArg("prefix-plies");
+  const prefixPlies = parsePlies(
+    prefixPliesRaw.length > 0 ? prefixPliesRaw : ["4", "5", "6"],
+  );
+
+  console.log("=== prospect コーパス抽出 ===");
+  const extra = [
+    Number.isFinite(maxGames) ? `maxGames=${maxGames}` : "",
+    Number.isFinite(limitFiles) ? `limitFiles=${limitFiles}` : "",
+  ]
+    .filter((s) => s.length > 0)
+    .join(" ");
+  console.log(
+    `条件: minPly=${opts.minPly} endMargin=${opts.endMargin} sampleInterval=${opts.sampleInterval} maxPerGame=${opts.maxPerGame} ${extra}`.trimEnd(),
+  );
 
   const wasm = await loadWasmModule();
   // hasVCF（quiet フィルタ）が threat/forbidden wasm を要求する
   await preloadThreatWasm();
   await preloadForbiddenWasm();
 
-  const files = readdirSync(inputDir)
-    .filter((f) => f.startsWith("commit-bench-") && f.endsWith(".json"))
-    .sort();
-  console.log(`入力: ${files.length} ファイル（${inputDir}）`);
-
-  const seen = new Set<string>();
-  const stats: FilterStats = {
-    candidates: 0,
-    rejectedFiveStm: 0,
-    rejectedFiveOpp: 0,
-    rejectedVcf: 0,
-    rejectedDup: 0,
-    emitted: 0,
-  };
   const lines: string[] = [];
-  let gameCount = 0;
+  const table = createRowTable();
+  const emittedByKind: Record<CorpusSourceKind, number> = {
+    kifu: 0,
+    book: 0,
+    prefix: 0,
+  };
+  const ctx: QuietEmitContext = {
+    wasm,
+    seen: new Set<string>(),
+    excluded: new Set<string>(regressionPositionKeys()),
+    stats: createFilterStats(),
+    emit: (row) => {
+      lines.push(JSON.stringify(row));
+      tallyRow(table, row);
+      emittedByKind[row.source.kind]++;
+    },
+  };
+  console.log(`回帰ゲート局面 ${ctx.excluded.size} 件を除外集合に投入`);
 
-  for (const file of files) {
-    const data = JSON.parse(readFileSync(join(inputDir, file), "utf8")) as {
-      games: BenchGame[];
-    };
-    for (let gameIdx = 0; gameIdx < data.games.length; gameIdx++) {
+  // 1. 棋譜
+  let gameCount = 0;
+  if (inputDir) {
+    const files = listKifuFiles(inputDir, limitFiles);
+    console.log(`\n棋譜: ${files.length} ファイル（${inputDir}）`);
+    for (const file of files) {
       if (gameCount >= maxGames) {
         break;
       }
-      sampleGame(
-        wasm,
-        data.games[gameIdx]!,
-        file,
-        gameIdx,
-        opts,
-        seen,
-        stats,
-        (row) => lines.push(JSON.stringify(row)),
+      const games = readBenchGames(join(inputDir, file));
+      let used = 0;
+      for (let gameIdx = 0; gameIdx < games.length; gameIdx++) {
+        if (gameCount >= maxGames) {
+          break;
+        }
+        sampleGame(ctx, games[gameIdx]!, file, gameIdx, opts);
+        gameCount++;
+        used++;
+      }
+      console.log(
+        `  ${file}: ${used}/${games.length} 局 → 累計 ${ctx.stats.emitted} 局面`,
       );
-      gameCount++;
     }
-    console.log(`  ${file}: 累計 ${stats.emitted} 局面`);
   }
 
+  // 2. ブック
+  if (bookPath) {
+    const entries = readBookEntries(bookPath);
+    const emitted = sampleBook(ctx, entries, basename(bookPath), {
+      minPly: opts.minPly,
+    });
+    console.log(
+      `\nブック: ${bookPath}（${Object.keys(entries).length} entries）→ ${emitted} 局面`,
+    );
+  }
+
+  // 3. 開局スイート prefix
+  for (const suitePath of suitePaths) {
+    const suite = loadOpeningSuite(suitePath, process.cwd());
+    const emitted = samplePrefix(
+      ctx,
+      suite.openings,
+      basename(suitePath),
+      prefixPlies,
+      { minPly: opts.minPly },
+    );
+    console.log(
+      `\nprefix: ${suitePath}（${suite.count} 開局 × ply ${prefixPlies.join("/")}）→ ${emitted} 局面`,
+    );
+  }
+
+  mkdirSync(dirname(outPath), { recursive: true });
   writeFileSync(outPath, `${lines.join("\n")}\n`);
+
+  const s = ctx.stats;
   console.log(
-    `\n完了: ${gameCount} 局中 candidates=${stats.candidates} → emitted=${stats.emitted}` +
-      `（dup=${stats.rejectedDup}, 即五stm=${stats.rejectedFiveStm}, ` +
-      `即五opp=${stats.rejectedFiveOpp}, vcf=${stats.rejectedVcf}）`,
+    `\n完了: 棋譜 ${gameCount} 局 / candidates=${s.candidates} → emitted=${s.emitted}` +
+      `（regression=${s.rejectedRegression}, dup=${s.rejectedDup}, 即五stm=${s.rejectedFiveStm}, ` +
+      `即五opp=${s.rejectedFiveOpp}, vcf=${s.rejectedVcf}）`,
   );
-  console.log(`出力: ${outPath}`);
+  console.log(
+    `源別: kifu=${emittedByKind.kifu} book=${emittedByKind.book} prefix=${emittedByKind.prefix}`,
+  );
+  console.log("\n源 kind × ply 帯 × 手番 行数表:");
+  console.log(formatRowTable(table));
+  console.log(`\n出力: ${outPath}`);
 }
 
 main().catch((err) => {
