@@ -128,6 +128,13 @@ if (ct === "win") {
 
 `hasVCT` / `findVCTMove` はper-nodeチェックなしのまま（偽陽性の可能性あり）。正確なVCT判定が必要な場合は `isVCTFirstMove`（`evaluateCounterThreat` 使用）を利用する。
 
+**2026-09-11 更新（fix/vct-miss-idx6）**: 上記の「事後検証」は現在、次の構造に置き換わっている（`zig/src/vct.zig`）。
+
+- 耐性検証（`isResilientToCounterFours`）は `findVCTSequenceRecursive` の **depth 0 の候補採用時に根の攻め手ごと**に行う。非耐性の候補は best / α 値を更新せず、反復深化も継続する。旧構造（見つかった手順を `findVCTSequenceInner` で事後検証し、非耐性なら反復深化ごと打ち切って VCF-only に落とす）は、同じ深さで α 値に刈られた別初手と、より深い反復でしか成立しない別初手の両方を取りこぼしていた（idx6 局面: 深さ 3 の非耐性 J10 で中断し J9 / L9 の追い詰めを「なし」と返していた）。
+- 「手順に依存しない崩壊条件」（相手のカウンター四で五 / 活四 / strict のブロック非四 / ブロック後の相手即勝ち。`hasBreakingCounterFour` の `checkSequenceBreaksByCF` より前の判定）を満たす根の三は `rootThreeBrokenByCounterFour` で **展開前に除外**し、結果を `RootCFCache` で反復をまたいで記憶する（根の盤面は反復間で不変）。これがないと非耐性の根の手を各反復で再展開し、「追い詰めなし」局面の探索時間が旧構造の 3 桁増になる。
+- 手順依存の崩壊（`checkSequenceBreaksByCF`）で非耐性になった根の手は、手順が反復ごとに変わりうるためメモ化せず、採用時に反復ごとに再検証する。採用され得ない長さの候補には検証を走らせない（短絡順）。
+- `findVCTMove` / `findVCTMoveWithLimiter`（対局の脅威プローブ）/ `findVCTMoveWithBudgetStrict`（振り返りの被追い詰め判定）はいずれも `findVCTSequenceInner` を通るので、上記の根の攻め手ごとの検証が適用される（「per-node チェックなし」は古い記述）。`hasVCT` は再帰内部の判定専用で耐性検証を持たない点は従来どおり。
+
 #### 未実装: ct=three の事後検証
 
 事後検証は現在 counter-win と counter-four のみチェック。counter-three（防御手が活三を作る場合）は未対応。攻撃側の次手が四であれば活三は無視可能だが、三脅威の場合は無効化される。`isVCTFirstMove` では `hasVCF` フォールバックで対応済み。
