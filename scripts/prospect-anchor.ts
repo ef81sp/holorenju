@@ -22,18 +22,25 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 
 import type { WasmModuleContext } from "@/logic/cpu/wasm/types";
-import type { BoardState, Position } from "@/types/game";
+import type { BoardState } from "@/types/game";
 
 import { WasmBoardEvaluator } from "@/logic/cpu/wasm/bridge";
 import { loadWasmModule } from "@/logic/cpu/wasm/loader";
 import { DIFFICULTY_PARAMS } from "@/types/cpu";
 
-import { meanSquaredLoss, rapfiTeacherLabel } from "./lib/texelFit.ts";
+import type { CorpusRow } from "./types/prospectCorpus.ts";
 
-/** prospect id 空間のオフセット（main.zig の PROSPECT_PARAM_ID_BASE と一致）。 */
-const PROSPECT_PARAM_ID_BASE = 100;
-const FEATURE_COUNT = 34;
-const CAT_COUNT = 17; // CellCat の有効値数（prospect.zig と一致）
+import {
+  PROSPECT_CATEGORIES,
+  PROSPECT_FEATURE_COUNT,
+  PROSPECT_PARAM_ID_BASE,
+} from "./lib/evalParams.ts";
+import { readCorpusRows } from "./lib/prospectCorpusRows.ts";
+import { meanSquaredLoss, rapfiTeacherLabel } from "./lib/texelFit.ts";
+import { readCString } from "./lib/wasmCString.ts";
+
+const FEATURE_COUNT = PROSPECT_FEATURE_COUNT;
+const CAT_COUNT = PROSPECT_CATEGORIES.length; // CellCat の有効値数（prospect.zig と一致）
 const PROSPECT_EVAL_CLAMP = 10000;
 
 /** legacy スケール参照（scores.zig）。P3-d プランのアンカー基準値。 */
@@ -41,40 +48,13 @@ const LEAF_FOUR_THREE_THREAT = 2000;
 const FOUR_THREE_BONUS = 5000;
 const LEGACY_FOUR_THREE_ANCHOR = LEAF_FOUR_THREE_THREAT + FOUR_THREE_BONUS; // 7000
 
-// カテゴリ index（PROSPECT_SCORE_DEFAULT の配列順・prospect.zig の CellCat と一致）
-const CAT_INDEX = {
-  NONE: 0,
-  WEAK: 1,
-  SOLO_B2: 2,
-  SOLO_F2: 3,
-  DOUBLE_F2: 4,
-  SOLO_B3: 5,
-  B4_F2: 6,
-  SOLO_F3: 7,
-  F3_F2: 8,
-  F3_B3: 9,
-  SOLO_B4: 10,
-  DOUBLE_THREE_BLACK_RISK: 11,
-  DOUBLE_THREE_WHITE: 12,
-  FOUR_THREE: 13,
-  SOLO_F4: 14,
-  DOUBLE_FOUR_WHITE: 15,
-  WIN: 16,
-} as const;
+// カテゴリ index（PROSPECT_SCORE_DEFAULT の配列順・prospect.zig の CellCat と一致）。
+// SSoT は evalParams.ts の PROSPECT_CATEGORIES（宣言順 = index）。
+const CAT_INDEX = Object.fromEntries(
+  PROSPECT_CATEGORIES.map((cat, i) => [cat, i]),
+) as Record<(typeof PROSPECT_CATEGORIES)[number], number>;
 
 type Teacher = "rapfi" | "outcome";
-
-interface CorpusRow {
-  key: string;
-  source: { file: string; gameIdx: number; ply: number; jushu: string };
-  stm: "black" | "white";
-  black: Position[];
-  white: Position[];
-  features: number[];
-  outcome: number;
-  rapfiEval?: number;
-  dropped?: string;
-}
 
 interface FitFile {
   weightNames: string[];
@@ -108,23 +88,6 @@ function parseTeacherArg(): Teacher {
   process.exit(1);
 }
 
-function readCorpus(path: string): CorpusRow[] {
-  const text = readFileSync(path, "utf8");
-  const rows: CorpusRow[] = [];
-  for (const line of text.split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed) {
-      continue;
-    }
-    const row = JSON.parse(trimmed) as CorpusRow;
-    if (row.dropped !== undefined) {
-      continue;
-    }
-    rows.push(row);
-  }
-  return rows;
-}
-
 function reconstructBoard(row: CorpusRow): BoardState {
   const board: BoardState = [];
   for (let r = 0; r < 15; r++) {
@@ -154,16 +117,6 @@ function legacyLeafEval(
     // singleFourPenaltyMultiplier のみ（他の hard フラグは探索側で、葉評価には不関与）。
     singleFourPenaltyMultiplier: hardOpts.singleFourPenaltyMultiplier,
   });
-}
-
-/** null 終端文字列を wasm メモリから読む（prospect-texel.ts と同じ）。 */
-function readCString(wasm: WasmModuleContext, ptr: number): string {
-  const bytes = new Uint8Array(wasm.memory.buffer);
-  let end = ptr;
-  while (bytes[end] !== 0) {
-    end++;
-  }
-  return new TextDecoder().decode(bytes.subarray(ptr, end));
 }
 
 function getWeightNames(wasm: WasmModuleContext): string[] {
@@ -305,7 +258,7 @@ async function main(): Promise<void> {
   const weightNames = getWeightNames(wasm);
   const baselineWeights = getBaselineWeights(wasm);
 
-  const rows = readCorpus(corpusPath);
+  const rows = readCorpusRows(corpusPath);
   console.log(`コーパス読み込み: ${rows.length} 局面（破棄行を除く）`);
 
   const fitFile = JSON.parse(readFileSync(fitPath, "utf8")) as FitFile;
@@ -513,25 +466,8 @@ async function main(): Promise<void> {
   console.log(
     `\n=== 焼き込みスニペット（zig/src/prospect.zig PROSPECT_SCORE_DEFAULT）===`,
   );
-  const catOrder = [
-    "none",
-    "weak",
-    "solo_b2",
-    "solo_f2",
-    "double_f2",
-    "solo_b3",
-    "b4_f2",
-    "solo_f3",
-    "f3_f2",
-    "f3_b3",
-    "solo_b4",
-    "double_three_black_risk",
-    "double_three_white",
-    "four_three",
-    "solo_f4",
-    "double_four_white",
-    "win",
-  ];
+  // Zig の CellCat タグ名（小文字）。PROSPECT_CATEGORIES 由来
+  const catOrder = PROSPECT_CATEGORIES.map((c) => c.toLowerCase());
   for (let c = 0; c < CAT_COUNT; c++) {
     const waitIdx = c * 2;
     const turnIdx = c * 2 + 1;

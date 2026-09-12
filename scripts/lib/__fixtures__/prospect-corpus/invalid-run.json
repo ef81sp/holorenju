@@ -1,0 +1,12 @@
+{
+  "type": "commit-bench",
+  "valid": false,
+  "games": [
+    {
+      "winner": "A",
+      "moveHistory": [{ "row": 7, "col": 7 }],
+      "isABlack": true,
+      "jushuName": "x"
+    }
+  ]
+}

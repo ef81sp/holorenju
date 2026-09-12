@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  FIXED_NODES_DEFAULT,
   effectiveRandomFactor,
   normalizeMaxGames,
   openingsRepeatWarning,
+  parseFixedNodesFlag,
+  parseMaxGamesArg,
   resolveFixedNodesParams,
   resolveFixedNodesPerSide,
   resolveMoveTimeoutMs,
@@ -107,6 +110,52 @@ describe("normalizeMaxGames", () => {
     const one = normalizeMaxGames(1);
     expect(one.ok).toBe(false);
     expect(!one.ok && one.error).toMatch(/--max-games/);
+  });
+});
+
+describe("parseFixedNodesFlag", () => {
+  it("既定値は §7.13 の 1,200,000", () => {
+    expect(FIXED_NODES_DEFAULT).toBe(1_200_000);
+  });
+
+  it("値なし（--fixed-nodes 単体）は既定値", () => {
+    expect(parseFixedNodesFlag("--fixed-nodes", "--fixed-nodes")).toEqual({
+      ok: true,
+      value: FIXED_NODES_DEFAULT,
+    });
+  });
+
+  it("片側フラグも値なしなら既定値", () => {
+    expect(parseFixedNodesFlag("--fixed-nodes-a", "--fixed-nodes-a")).toEqual({
+      ok: true,
+      value: FIXED_NODES_DEFAULT,
+    });
+    expect(parseFixedNodesFlag("--fixed-nodes-b", "--fixed-nodes-b")).toEqual({
+      ok: true,
+      value: FIXED_NODES_DEFAULT,
+    });
+  });
+
+  it("--fixed-nodes=N は N", () => {
+    expect(parseFixedNodesFlag("--fixed-nodes=50000", "--fixed-nodes")).toEqual(
+      { ok: true, value: 50000 },
+    );
+  });
+
+  it("空・0・負・非数値は error", () => {
+    for (const raw of ["", "0", "-5", "abc"]) {
+      const result = parseFixedNodesFlag(
+        `--fixed-nodes=${raw}`,
+        "--fixed-nodes",
+      );
+      expect(result.ok).toBe(false);
+    }
+  });
+
+  it("フラグ名が一致しなければ error（-a を両側フラグとして解釈しない）", () => {
+    expect(parseFixedNodesFlag("--fixed-nodes-a=100", "--fixed-nodes").ok).toBe(
+      false,
+    );
   });
 });
 
@@ -267,5 +316,30 @@ describe("resolveMoveTimeoutMs", () => {
   });
   it("時間モードで未指定なら CLI 既定", () => {
     expect(resolveMoveTimeoutMs(undefined, false, 30000)).toBe(30000);
+  });
+});
+
+describe("parseMaxGamesArg", () => {
+  it("非負整数の文字列を normalizeMaxGames に通す", () => {
+    expect(parseMaxGamesArg("40")).toEqual({
+      ok: true,
+      maxGames: 40,
+      warning: null,
+    });
+    expect(parseMaxGamesArg("0")).toEqual({
+      ok: true,
+      maxGames: 0,
+      warning: null,
+    });
+    expect(parseMaxGamesArg("5")).toMatchObject({ ok: true, maxGames: 4 });
+    expect(parseMaxGamesArg("1").ok).toBe(false);
+  });
+
+  it("整数でない・負・空はエラー", () => {
+    for (const raw of ["", "abc", "-2", "1.5"]) {
+      const r = parseMaxGamesArg(raw);
+      expect(r.ok, raw).toBe(false);
+      expect(!r.ok && r.error).toMatch(/--max-games/);
+    }
   });
 });

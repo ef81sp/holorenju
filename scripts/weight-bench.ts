@@ -24,6 +24,8 @@ import type { SPRTConfig, WeightBenchResult } from "./types/ab.ts";
 
 import {
   effectiveRandomFactor,
+  parseFixedNodesFlag,
+  parseMaxGamesArg,
   resolveFixedNodesParams,
   resolveFixedNodesPerSide,
   resolveMoveTimeoutMs,
@@ -34,7 +36,11 @@ import {
   formatBenchGameStats,
 } from "./lib/benchGameStats.ts";
 import { formatEloDiff } from "./lib/eloDiff.ts";
-import { parseWeightOverrides } from "./lib/evalParams.ts";
+import {
+  LEGACY_PARAM_IDS,
+  PROSPECT_CATEGORIES,
+  parseWeightOverrides,
+} from "./lib/evalParams.ts";
 import { createBridgeWorker, runMatch } from "./lib/match.ts";
 import { resolveOpenings } from "./lib/openingSuiteLoader.ts";
 import { formatPairedStats } from "./lib/pairedStats.ts";
@@ -71,6 +77,8 @@ interface CliOptions {
   openings?: string;
   /** スイートの n 番目から使う（末尾で折り返さない）。既定 0 */
   openingOffset: number;
+  /** タスクを先頭 N 局に切り詰める（0=無効、ペア境界で切る）。既定 0 */
+  maxGames: number;
   /**
    * 固定ノード（決定的探索）モード。bench-fixed-nodes-2026-09-06.md §2.5。
    * weight-bench には --seed が無いため randomFactor>0 とは併用できない。
@@ -95,6 +103,7 @@ function parseArgs(): CliOptions {
     sprtElo1: DEFAULT_SPRT_CONFIG.elo1,
     verbose: false,
     openingOffset: 0,
+    maxGames: 0,
   };
 
   for (const arg of args) {
@@ -130,12 +139,18 @@ function parseArgs(): CliOptions {
         options.moveTimeoutMs = v;
         options.moveTimeoutMsExplicit = true;
       }
-    } else if (arg.startsWith("--fixed-nodes=")) {
-      options.fixedNodes = parsePositiveIntOrExit(arg, "--fixed-nodes");
-    } else if (arg.startsWith("--fixed-nodes-a=")) {
-      options.fixedNodesA = parsePositiveIntOrExit(arg, "--fixed-nodes-a");
-    } else if (arg.startsWith("--fixed-nodes-b=")) {
-      options.fixedNodesB = parsePositiveIntOrExit(arg, "--fixed-nodes-b");
+    } else if (arg === "--fixed-nodes" || arg.startsWith("--fixed-nodes=")) {
+      options.fixedNodes = parseFixedNodesOrExit(arg, "--fixed-nodes");
+    } else if (
+      arg === "--fixed-nodes-a" ||
+      arg.startsWith("--fixed-nodes-a=")
+    ) {
+      options.fixedNodesA = parseFixedNodesOrExit(arg, "--fixed-nodes-a");
+    } else if (
+      arg === "--fixed-nodes-b" ||
+      arg.startsWith("--fixed-nodes-b=")
+    ) {
+      options.fixedNodesB = parseFixedNodesOrExit(arg, "--fixed-nodes-b");
     } else if (arg === "--sprt") {
       options.useSPRT = true;
     } else if (arg.startsWith("--elo0=")) {
@@ -151,6 +166,8 @@ function parseArgs(): CliOptions {
         process.exit(1);
       }
       options.openings = value;
+    } else if (arg.startsWith("--max-games=")) {
+      options.maxGames = parseMaxGamesOrExit(arg.slice("--max-games=".length));
     } else if (arg.startsWith("--opening-offset=")) {
       const raw = arg.slice("--opening-offset=".length);
       const v = parseInt(raw, 10);
@@ -175,15 +192,27 @@ function parseArgs(): CliOptions {
   return options;
 }
 
-/** `--flag=<n>` の正の整数をパースする。不正なら exit(1)。 */
-function parsePositiveIntOrExit(arg: string, flagName: string): number {
-  const raw = arg.slice(flagName.length + 1);
-  const value = parseInt(raw, 10);
-  if (!Number.isFinite(value) || value <= 0) {
-    console.error(`Error: ${flagName} は正の整数で指定 (got: ${raw})`);
+/** `--fixed-nodes[=N]` 系フラグを解釈する。値なしは既定 FIXED_NODES_DEFAULT。不正なら exit(1)。 */
+function parseFixedNodesOrExit(arg: string, flagName: string): number {
+  const parsed = parseFixedNodesFlag(arg, flagName);
+  if (!parsed.ok) {
+    console.error(`Error: ${parsed.error}`);
     process.exit(1);
   }
-  return value;
+  return parsed.value;
+}
+
+/** `--max-games=<raw>` をペア境界で正規化する。不正なら exit(1)、奇数なら warn。 */
+function parseMaxGamesOrExit(raw: string): number {
+  const norm = parseMaxGamesArg(raw);
+  if (!norm.ok) {
+    console.error(`Error: ${norm.error}`);
+    process.exit(1);
+  }
+  if (norm.warning) {
+    console.warn(`⚠ ${norm.warning}`);
+  }
+  return norm.maxGames;
 }
 
 interface FixedNodesResolved {
@@ -243,21 +272,28 @@ Usage:
 
 Options:
   --weights=<K:V,...>   side B に注入する重み (例: "OPEN_THREE:600,OPEN_TWO:25")
+                        キー: legacy = ${Object.keys(LEGACY_PARAM_IDS).join(", ")}
+                        prospect = PROSPECT_<CAT>_WAIT / PROSPECT_<CAT>_TURN
+                        (CAT = ${PROSPECT_CATEGORIES.join(", ")})
+                        既定値は wasm 側が SSoT（getEvalParam で読める）
   --sets=<n>            セット数 (1セット = 全珠型 × 2色, default: 1)。
                         --openings 指定時はスイートの周回数
   --openings=<file>     開局スイート JSON（相対パスはリポジトリルート基準）。
                         指定時は珠型の代わりにスイートの各開局 × 2 色で対局
   --opening-offset=<n>  スイートの n 番目の開局から使う（末尾で折り返さない, default: 0）
+  --max-games=<n>       タスクを先頭 N 局に切り詰め（0=無効, default: 0）。
+                        ペア境界で切るため偶数（奇数は切り下げ）。二段階スクリーンの前半用
   --difficulty=<d>      beginner|easy|medium|hard (default: hard)
   --randomFactor=<n>    探索ゆらぎ 0〜1 (default: なし)
   --jobs=<n>            同時対局ペア数 (default: 1)
   --moveTimeoutMs=<n>   1手のタイムアウト (default: 120000、--fixed-nodes 時は 600000)
-  --fixed-nodes=<n>     両側を固定ノード（決定的探索）モードで走らせる
+  --fixed-nodes[=<n>]   両側を固定ノード（決定的探索）モードで走らせる
                         （timeLimit=0 / maxNodes=N / setDeterministicMode(1)）。
+                        値なしなら N=1,200,000（時間モード hard と Elo 同等）。
                         --randomFactor（seed 無し）と --sets>1 は併用不可。
                         abort が 1 件でも出ると valid:false・非0終了
-  --fixed-nodes-a=<n>   baseline(A) 側のみ固定ノード（較正用）
-  --fixed-nodes-b=<n>   variant(B) 側のみ固定ノード
+  --fixed-nodes-a[=<n>] baseline(A) 側のみ固定ノード（較正用）
+  --fixed-nodes-b[=<n>] variant(B) 側のみ固定ノード（値なしの既定は同上）
   --sprt / --elo0 / --elo1
   --verbose, -v
   --help, -h
@@ -265,6 +301,8 @@ Options:
 Examples:
   pnpm weight:bench --weights=OPEN_THREE:600 --sets=4 --jobs=4 --randomFactor=0.02
   pnpm weight:bench --sets=1            # null test (A=B baseline, Elo≈0)
+  pnpm weight:bench --weights=PROSPECT_FOUR_THREE_TURN:2000 --fixed-nodes --jobs=7 \\
+    --openings=scripts/data/opening-suite-v2.json --max-games=382   # 二段階スクリーン前半
 `);
 }
 
@@ -303,6 +341,7 @@ function resolveOpeningsOrExit(
     return resolveOpenings({
       openings: options.openings,
       openingOffset: options.openingOffset,
+      maxGames: options.maxGames,
       sets: options.sets,
       randomFactor: options.randomFactor,
       rootDir: PROJECT_ROOT,

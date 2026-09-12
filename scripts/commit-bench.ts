@@ -43,7 +43,8 @@ import type {
 
 import {
   effectiveRandomFactor,
-  normalizeMaxGames,
+  parseFixedNodesFlag,
+  parseMaxGamesArg,
   resolveFixedNodesParams,
   resolveFixedNodesPerSide,
   resolveMoveTimeoutMs,
@@ -324,23 +325,7 @@ function parseArgs(): CliOptions {
         process.exit(1);
       }
     } else if (arg.startsWith("--max-games=")) {
-      const value = parseInt(arg.slice("--max-games=".length), 10);
-      if (!isNaN(value) && value >= 0) {
-        const norm = normalizeMaxGames(value);
-        if (!norm.ok) {
-          console.error(`Error: ${norm.error}`);
-          process.exit(1);
-        }
-        if (norm.warning) {
-          console.warn(`⚠ ${norm.warning}`);
-        }
-        options.maxGames = norm.maxGames;
-      } else {
-        console.error(
-          `Error: --max-games は 0 以上の整数で指定 (got: ${arg.slice("--max-games=".length)})`,
-        );
-        process.exit(1);
-      }
+      options.maxGames = parseMaxGamesOrExit(arg.slice("--max-games=".length));
     } else if (arg.startsWith("--openings=")) {
       const value = arg.slice("--openings=".length);
       if (value.length === 0) {
@@ -380,12 +365,18 @@ function parseArgs(): CliOptions {
         console.error(`Error: --seed は整数で指定 (got: ${raw})`);
         process.exit(1);
       }
-    } else if (arg.startsWith("--fixed-nodes=")) {
-      options.fixedNodes = parsePositiveIntOrExit(arg, "--fixed-nodes");
-    } else if (arg.startsWith("--fixed-nodes-a=")) {
-      options.fixedNodesA = parsePositiveIntOrExit(arg, "--fixed-nodes-a");
-    } else if (arg.startsWith("--fixed-nodes-b=")) {
-      options.fixedNodesB = parsePositiveIntOrExit(arg, "--fixed-nodes-b");
+    } else if (arg === "--fixed-nodes" || arg.startsWith("--fixed-nodes=")) {
+      options.fixedNodes = parseFixedNodesOrExit(arg, "--fixed-nodes");
+    } else if (
+      arg === "--fixed-nodes-a" ||
+      arg.startsWith("--fixed-nodes-a=")
+    ) {
+      options.fixedNodesA = parseFixedNodesOrExit(arg, "--fixed-nodes-a");
+    } else if (
+      arg === "--fixed-nodes-b" ||
+      arg.startsWith("--fixed-nodes-b=")
+    ) {
+      options.fixedNodesB = parseFixedNodesOrExit(arg, "--fixed-nodes-b");
     } else if (arg === "--verbose" || arg === "-v") {
       options.verbose = true;
     } else if (arg === "--help" || arg === "-h") {
@@ -397,15 +388,14 @@ function parseArgs(): CliOptions {
   return options;
 }
 
-/** `--flag=<n>` の正の整数をパースする。不正なら exit(1)。 */
-function parsePositiveIntOrExit(arg: string, flagName: string): number {
-  const raw = arg.slice(flagName.length + 1);
-  const value = parseInt(raw, 10);
-  if (!Number.isFinite(value) || value <= 0) {
-    console.error(`Error: ${flagName} は正の整数で指定 (got: ${raw})`);
+/** `--fixed-nodes[=N]` 系フラグを解釈する。値なしは既定 FIXED_NODES_DEFAULT。不正なら exit(1)。 */
+function parseFixedNodesOrExit(arg: string, flagName: string): number {
+  const parsed = parseFixedNodesFlag(arg, flagName);
+  if (!parsed.ok) {
+    console.error(`Error: ${parsed.error}`);
     process.exit(1);
   }
-  return value;
+  return parsed.value;
 }
 
 function resolvePerSideOrExit(options: CliOptions): {
@@ -487,6 +477,19 @@ function parseEvalOptionsJson(
   return parsed as Partial<EvaluationOptions>;
 }
 
+/** `--max-games=<raw>` をペア境界で正規化する。不正なら exit(1)、奇数なら warn。 */
+function parseMaxGamesOrExit(raw: string): number {
+  const norm = parseMaxGamesArg(raw);
+  if (!norm.ok) {
+    console.error(`Error: ${norm.error}`);
+    process.exit(1);
+  }
+  if (norm.warning) {
+    console.warn(`⚠ ${norm.warning}`);
+  }
+  return norm.maxGames;
+}
+
 function printHelp(): void {
   console.log(`
 コミット間CPU強度比較ベンチマーク
@@ -529,15 +532,17 @@ Options:
                          --book-a/--book-b とは併用不可
   --opening-offset=<n>   スイートの n 番目の開局から使う（末尾で折り返さない。
                          互いに素な部分集合での再現性検証用, default: 0）
-  --fixed-nodes=<n>      両側を固定ノード（決定的探索）モードで走らせる:
+  --fixed-nodes[=<n>]    両側を固定ノード（決定的探索）モードで走らせる:
                          timeLimit=0 / maxNodes=N / setDeterministicMode(1)。
+                         値なしなら N=1,200,000（時間モード hard と Elo 同等。
+                         bench-fixed-nodes-2026-09-06.md §7.13）。
                          結果が壁時計・負荷に依存せず、同一入力で棋譜・1 手ごとの
                          nodes・score が完全一致する。--max-nodes-a/b・--book-a/b と
                          併用不可。randomFactor>0 は --seed 必須、--sets>1 は
                          randomFactor 必須。abort が 1 件でも出ると valid:false・非0終了。
                          非対応 wasm（本 PR より前のコミット）は起動時に中止
-  --fixed-nodes-a=<n>    A 側のみ固定ノード（時間 vs 固定の混合。較正用）
-  --fixed-nodes-b=<n>    B 側のみ固定ノード
+  --fixed-nodes-a[=<n>]  A 側のみ固定ノード（時間 vs 固定の混合。較正用）
+  --fixed-nodes-b[=<n>]  B 側のみ固定ノード（値なしの既定は同上）
   --move-timeout-ms=<n>  1手あたりのタイムアウト (default: 30000、--fixed-nodes 時は 600000)
   --seed=<n>             randomFactor 使用時の PRNG baseSeed（integer）。
                          同一 seed なら同一棋譜を再現。default: Date.now()（非決定的）
@@ -569,6 +574,10 @@ Examples:
   # 後半 300 開局だけ（再現性検証）
   pnpm commit:bench --commitA=80f1c4f --commitB=f1bdc9a --jobs=5 \\
     --openings=scripts/data/opening-suite-v1.json --opening-offset=300
+
+  # 固定ノード（決定的、既定 N=1.2M）: eval 品質の PR 判定。負荷非依存なので jobs を増やせる
+  pnpm commit:bench --commitA=development --commitB=HEAD --fixed-nodes --jobs=7 \\
+    --openings=scripts/data/opening-suite-v1.json --max-games=416
 
   # 固定ノード（決定的）: 同一コミットの決定性スモーク。2 回走らせて
   # pnpm bench:reanalyze --compare a.json b.json で完全一致を確認する

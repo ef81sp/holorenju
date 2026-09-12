@@ -8,6 +8,8 @@
  *   （ここまで 48 バイト＝旧 wasm の全体）
  *   +48 pre_search_nodes, +52 probe_nodes（bench-fixed-nodes-2026-09-06.md §2.4、append-only）
  *   +56 absolute_deadline_hit（§2.6 の安全弁が発火したか。0/1）
+ *   +60 probe_calls, +64 probe_cap_hits（脅威プローブの呼び出し数 / VCT が上限で打ち切られた数。
+ *       プローブ較正用。getStatsBufferLength() >= 68 の wasm のみ）
  *
  * 拡張フィールドの存在は `getSearchFeatures()` の bit1 で判定する。旧 wasm では
  * 48 バイトを越えて読まない（越えると隣接メモリを黙って読んでしまう）。
@@ -24,6 +26,8 @@ export const STATS_BUFFER_BASE_BYTES = 48;
 export const STATS_BUFFER_EXTENDED_BYTES = 56;
 /** absolute_deadline_hit（+56）を含む長さ */
 export const STATS_BUFFER_DEADLINE_HIT_BYTES = 60;
+/** probe_calls（+60）/ probe_cap_hits（+64）を含む長さ */
+export const STATS_BUFFER_PROBE_STATS_BYTES = 68;
 
 export interface WasmSearchStats {
   nodes: number;
@@ -47,6 +51,13 @@ export interface WasmSearchStats {
    * getStatsBufferLength() >= 60 の wasm のみ（ベンチは 0 を渡すので通常 false）
    */
   absoluteDeadlineHit?: boolean;
+  /** 脅威プローブ（threatProbe）の呼び出し回数。getStatsBufferLength() >= 68 の wasm のみ */
+  probeCalls?: number;
+  /**
+   * 脅威プローブの VCT 探索が上限（時間 or ノード）で打ち切られた回数。
+   * getStatsBufferLength() >= 68 の wasm のみ
+   */
+  probeCapHits?: number;
 }
 
 /** `getSearchFeatures()` の値（undefined = export 無しの旧 wasm）に拡張統計があるか。 */
@@ -88,6 +99,13 @@ export function readWasmSearchStats(
       bufferLength >= STATS_BUFFER_DEADLINE_HIT_BYTES
     ) {
       stats.absoluteDeadlineHit = view.getUint32(ptr + 56, true) !== 0;
+    }
+    if (
+      bufferLength !== undefined &&
+      bufferLength >= STATS_BUFFER_PROBE_STATS_BYTES
+    ) {
+      stats.probeCalls = view.getUint32(ptr + 60, true);
+      stats.probeCapHits = view.getUint32(ptr + 64, true);
     }
   }
   return stats;

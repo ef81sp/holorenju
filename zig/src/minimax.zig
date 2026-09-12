@@ -120,6 +120,12 @@ pub const SearchStats = struct {
     probe_nodes: u32 = 0,
     /// 絶対デッドライン（安全弁）が発火したか（0/1）。
     absolute_deadline_hit: u32 = 0,
+    /// 脅威プローブ（`threatProbe`）の呼び出し回数。両モードで記録。
+    probe_calls: u32 = 0,
+    /// 脅威プローブの VCT 探索が上限（時間 or ノード）に当たって打ち切られた回数。
+    /// 判定は VCT 子 limiter の `tripped`（探索中に `exceeded()` が true を返した）。
+    /// VCF 部分は数えない。較正用（設計メモ bench-fixed-nodes §2.3）。
+    probe_cap_hits: u32 = 0,
 };
 
 /// 探索コンテキスト
@@ -309,14 +315,25 @@ fn isThreatExtensionCandidate(cells: []const Cell, row: u8, col: u8, color: Cell
 pub var threat_probe_enabled: bool = true;
 
 /// 脅威プローブの壁時計予算（ms）。時間モードのみ有効。
+///
+/// VCT は 50 → 25 ms（2026-09-09、docs/plans/strength-screen-2026-09-08.md §6.3〜6.4）:
+/// プローブは主探索ノードの 8 割を食うため上限を半分にすると主探索が深くなり
+/// （平均深さ 6.13 → 6.51）、時間モード v1 1,200 局で +27.6 [+12.4, +42.8]。
+/// 上限到達率は 18.4% → 24.2%（ベンチ機 jobs=5 での値。壁時計なので遅い端末では到達率が上がる）。
+/// VCF の 20 ms は据え置き。振り返り解析（timeLimit 5,000/15,000）も時間モード扱いなので同じ 25 ms が効く。
 const PROBE_VCF_TIME_LIMIT: u32 = 20;
-const PROBE_VCT_TIME_LIMIT: u32 = 50;
+const PROBE_VCT_TIME_LIMIT: u32 = 25;
 
 /// 脅威プローブ VCT のノード予算（決定的モード。時間モードは `PROBE_VCT_TIME_LIMIT` のみ）
 ///
 /// 設計メモ docs/plans/bench-fixed-nodes-2026-09-06.md §2.1/§2.3。時間定数の隣に置く。
-/// **未較正**の初期値（較正は §4 手順 1）。VCF は両モードとも既存の 100/200 ノード。
-pub const PROBE_VCT_NODES_DETERMINISTIC: u32 = 2000;
+/// §7.13 で較正済み（2026-09-07）: 時間モードのプローブ上限到達率 18.8%（平均 2,009 ノード）
+/// に一致する値（§7.8〜7.9。2k は到達率過大、20k は「高価なプローブを切って安いものを
+/// 多数回す」配分が崩れ −60 Elo）。VCF は両モードとも既存の 100/200 ノード。
+///
+/// 2026-09-09: 時間上限 25 ms（到達率 24.2%）に合わせて 6k → 3k（固定 3k の到達率 25.4%、
+/// strength-screen-2026-09-08.md §6.3）。固定 764 局で 6k に対し +35.6 [+15.3, +56.2]。
+pub const PROBE_VCT_NODES_DETERMINISTIC: u32 = 3000;
 
 /// 深度適応型バジェット（TS版 threatProbe.ts の getThreatBudget に対応）
 const ThreatBudget = struct {
@@ -345,7 +362,7 @@ const ThreatBudget = struct {
 /// だけで縛られる形になり、**旧実装より深く探せる（＝挙動は変わる）**。
 /// あわせて攻め手ごとに `exceeded()` を見るようになったので 50ms の粒度も細かくなり、
 /// 手順長の α カットも非収集モード＝対局経路に効く。
-/// **予算値は未較正**なので、較正は別 issue（#137）で bench に基づいて行う。
+/// 予算値は当初未較正（#137）。2026-09-09 に VCT を 25 ms へ較正（上の定数コメント参照）。
 ///
 /// `vcf_nodes` は `vcf.zig` が元から計上していた実効値。こちらは据え置き。
 ///
@@ -369,6 +386,8 @@ const ThreatProbeResult = struct {
     move: ?Position,
     /// プローブ（VCF + VCT）が消費したノード数
     nodes: u32,
+    /// VCT 探索が上限（時間 or ノード）で打ち切られたか（VCT 子 limiter の `tripped`）
+    vct_cap_hit: bool = false,
 };
 
 /// 脅威プローブ: 手番側のVCF/VCTをチェック
@@ -391,7 +410,7 @@ fn threatProbe(
 ) ThreatProbeResult {
     const budget = getThreatBudget(minimax_depth, no_time_limit, policy);
 
-    // プローブの親＝メイン探索の残り時間。プローブ独自の 20ms / 50ms は
+    // プローブの親＝メイン探索の残り時間。プローブ独自の PROBE_VCF_TIME_LIMIT / PROBE_VCT_TIME_LIMIT は
     // 親の残りとの min を取る（`TimeLimiter.child` が SSoT）。
     // 子 limiter は段ごとに 1 回だけ作り（時計読みを増やさない）、そのまま探索の限界として
     // 渡して消費を親へ charge する。`parent.nodes` が VCF + VCT の合計になる。
@@ -416,7 +435,8 @@ fn threatProbe(
             if (defensive) .strict else .lenient,
         );
         parent.charge(vct_budget.nodes);
-        if (vct_move) |m| return .{ .move = m, .nodes = parent.nodes };
+        if (vct_move) |m| return .{ .move = m, .nodes = parent.nodes, .vct_cap_hit = vct_budget.tripped };
+        return .{ .move = null, .nodes = parent.nodes, .vct_cap_hit = vct_budget.tripped };
     }
 
     return .{ .move = null, .nodes = parent.nodes };
@@ -577,6 +597,8 @@ pub fn minimaxWithTT(
         // プローブの消費ノードを計上（設計メモ bench-fixed-nodes §2.3/§2.4）。
         // `nodes` への加算は決定的モードのみ（時間モードでは max_nodes 到達が早まり製品挙動が変わる）。
         ctx.stats.probe_nodes +|= probe.nodes;
+        ctx.stats.probe_calls +|= 1;
+        if (probe.vct_cap_hit) ctx.stats.probe_cap_hits +|= 1;
         if (ctx.budget.deterministic) {
             ctx.stats.nodes +|= probe.nodes;
             if (!ctx.node_count_exceeded and ctx.max_nodes > 0 and ctx.stats.nodes >= ctx.max_nodes) {
@@ -1146,7 +1168,97 @@ test "threatProbe: 消費ノードを返す（bench-fixed-nodes §2.3）" {
     try testing.expectEqual(timed.nodes, det.nodes);
 }
 
-test "getThreatBudget: 決定的モードは時間 0・VCT ノード予算あり、時間モードは 20/50ms・VCT ノード無制限" {
+test "probe_calls: プローブが走る局面で threatProbe の呼び出し回数が記録される" {
+    var cells = [_]Cell{.empty} ** board_mod.CELL_COUNT;
+    // 黒の活四: threatProbe（depth>=3）が VCF を即検出する局面
+    cells[7 * BOARD_SIZE + 4] = .black;
+    cells[7 * BOARD_SIZE + 5] = .black;
+    cells[7 * BOARD_SIZE + 6] = .black;
+    cells[7 * BOARD_SIZE + 7] = .black;
+
+    incremental_eval.initFromBoard(&cells, .{ .connectivity_bonus = scores.CONNECTIVITY_BONUS, .single_four_penalty_multiplier = 100 });
+
+    var tt = tt_mod.TranspositionTable{
+        .entries = &tt_mod.global_tt_storage,
+        .current_generation = 0,
+    };
+    tt.clear();
+    const board_eval_options = evaluate.EvalOptions{
+        .enable_leaf_mise = false,
+        .last_mover_is_perspective = .unset,
+        .single_four_penalty_multiplier = 100,
+        .connectivity_bonus = scores.CONNECTIVITY_BONUS,
+    };
+    var history = move_order.HistoryTable.init();
+    var killers = move_order.KillerMoves.init();
+    var counter_moves = initCounterMoveTable();
+    var ctx = SearchContext.init(&tt, &history, &killers, &counter_moves, position_eval.DEFAULT_EVAL_OPTIONS, board_eval_options);
+    ctx.no_time_limit = true;
+    _ = minimaxWithTT(&cells, 0, 3, true, .black, -scores.INFINITY, scores.INFINITY, null, &ctx, true, 0);
+    try testing.expect(ctx.stats.probe_calls > 0);
+    try testing.expect(ctx.stats.threat_probe_cutoffs > 0);
+    // VCF 即検出なので VCT は走らず、上限到達は 0
+    try testing.expectEqual(@as(u32, 0), ctx.stats.probe_cap_hits);
+}
+
+test "probe_cap_hits: 決定的モードで probe_vct_nodes を極小にすると VCT の上限到達が数えられる" {
+    // vct.zig「四で相手の活三を潰してから三で追う手順は成立する」の局面:
+    // 白に VCF はなく VCT がある → プローブは VCT 探索まで進む。
+    var cells = [_]Cell{.empty} ** board_mod.CELL_COUNT;
+    cells[7 * BOARD_SIZE + 4] = .white;
+    cells[7 * BOARD_SIZE + 5] = .white;
+    cells[7 * BOARD_SIZE + 6] = .white;
+    cells[10 * BOARD_SIZE + 5] = .white;
+    cells[10 * BOARD_SIZE + 6] = .white;
+    cells[11 * BOARD_SIZE + 7] = .white;
+    cells[12 * BOARD_SIZE + 7] = .white;
+    cells[7 * BOARD_SIZE + 3] = .black;
+    cells[4 * BOARD_SIZE + 4] = .black;
+    cells[5 * BOARD_SIZE + 5] = .black;
+    cells[6 * BOARD_SIZE + 6] = .black;
+
+    deadline.clear();
+
+    // 無制限（probe_vct_nodes = 0、時間 0）: 上限には当たらない
+    var unlimited = budget_mod.BudgetPolicy.DETERMINISTIC;
+    unlimited.probe_vct_nodes = 0;
+    const full = threatProbe(&cells, .white, 4, true, false, 0, unlimited);
+    try testing.expect(!full.vct_cap_hit);
+    try testing.expect(full.nodes > 5);
+
+    // 極小予算（5 ノード）: VCT 探索が上限で打ち切られる
+    var tiny = budget_mod.BudgetPolicy.DETERMINISTIC;
+    tiny.probe_vct_nodes = 5;
+    const capped = threatProbe(&cells, .white, 4, true, false, 0, tiny);
+    try testing.expect(capped.move == null);
+    try testing.expect(capped.vct_cap_hit);
+
+    // minimax 経由でも stats に乗る
+    incremental_eval.initFromBoard(&cells, .{ .connectivity_bonus = scores.CONNECTIVITY_BONUS, .single_four_penalty_multiplier = 100 });
+    var tt = tt_mod.TranspositionTable{
+        .entries = &tt_mod.global_tt_storage,
+        .current_generation = 0,
+    };
+    tt.clear();
+    const board_eval_options = evaluate.EvalOptions{
+        .enable_leaf_mise = false,
+        .last_mover_is_perspective = .unset,
+        .single_four_penalty_multiplier = 100,
+        .connectivity_bonus = scores.CONNECTIVITY_BONUS,
+    };
+    var history = move_order.HistoryTable.init();
+    var killers = move_order.KillerMoves.init();
+    var counter_moves = initCounterMoveTable();
+    var ctx = SearchContext.init(&tt, &history, &killers, &counter_moves, position_eval.DEFAULT_EVAL_OPTIONS, board_eval_options);
+    ctx.no_time_limit = true;
+    ctx.budget = tiny;
+    _ = minimaxWithTT(&cells, 0, 4, true, .white, -scores.INFINITY, scores.INFINITY, null, &ctx, true, 0);
+    try testing.expect(ctx.stats.probe_calls > 0);
+    try testing.expect(ctx.stats.probe_cap_hits > 0);
+    try testing.expect(ctx.stats.probe_cap_hits <= ctx.stats.probe_calls);
+}
+
+test "getThreatBudget: 決定的モードは時間 0・VCT ノード予算あり、時間モードは PROBE_VCF/VCT_TIME_LIMIT・VCT ノード無制限" {
     const t = getThreatBudget(4, false, budget_mod.BudgetPolicy.TIME_MODE);
     try testing.expectEqual(PROBE_VCF_TIME_LIMIT, t.vcf_time);
     try testing.expectEqual(PROBE_VCT_TIME_LIMIT, t.vct_time);

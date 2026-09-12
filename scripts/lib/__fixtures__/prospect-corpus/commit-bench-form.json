@@ -1,0 +1,42 @@
+{
+  "type": "commit-bench",
+  "timestamp": "2026-06-10T01:51:00.851Z",
+  "totalGames": 2,
+  "games": [
+    {
+      "playerA": "commitA",
+      "playerB": "commitB",
+      "winner": "A",
+      "reason": "five",
+      "moves": 6,
+      "duration": 1,
+      "moveHistory": [
+        { "row": 7, "col": 7, "time": 0, "isOpening": true },
+        { "row": 6, "col": 8, "time": 0, "isOpening": true },
+        { "row": 7, "col": 8, "time": 0, "isOpening": true },
+        { "row": 7, "col": 6, "time": 0, "isOpening": false },
+        { "row": 8, "col": 9, "time": 0, "isOpening": false },
+        { "row": 5, "col": 9, "time": 0, "isOpening": false }
+      ],
+      "isABlack": true,
+      "jushuName": "長星"
+    },
+    {
+      "playerA": "commitA",
+      "playerB": "commitB",
+      "winner": "draw",
+      "reason": "draw",
+      "moves": 4,
+      "duration": 1,
+      "moveHistory": [
+        { "row": 7, "col": 7, "time": 0, "isOpening": true },
+        { "row": 6, "col": 8, "time": 0, "isOpening": true },
+        { "row": 7, "col": 8, "time": 0, "isOpening": true },
+        { "row": 7, "col": 6, "time": 0, "isOpening": false }
+      ],
+      "isABlack": false,
+      "jushuName": "s1-0001",
+      "pairId": "s1-0001#0"
+    }
+  ]
+}
