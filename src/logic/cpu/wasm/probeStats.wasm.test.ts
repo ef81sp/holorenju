@@ -44,7 +44,10 @@ function buildTacticalBoard(): BoardState {
 describe("probe stats (wasm 配線)", () => {
   it("getStatsBufferLength() は 68 で、時間モードの探索で probeCalls > 0 が読める", async () => {
     const wasm = await loadWasmModule();
-    expect(wasm.getStatsBufferLength?.()).toBe(STATS_BUFFER_PROBE_STATS_BYTES);
+    // append-only なので 68 以上（現行 84 = walkin_* を含む）
+    expect(wasm.getStatsBufferLength?.()).toBeGreaterThanOrEqual(
+      STATS_BUFFER_PROBE_STATS_BYTES,
+    );
 
     boardStateToWasm(wasm, buildTacticalBoard());
     wasm.ttClear();

@@ -271,7 +271,7 @@ export fn findBestMove(color: u8, max_depth: u8, time_limit_ms: u32, max_nodes: 
     writeStats(result.stats);
 }
 
-/// 探索統計バッファ（15フィールド × u32 LE = 60バイト）
+/// 探索統計バッファ（`STATS_FIELD_COUNT` フィールド × u32 LE。現行 21 × 4 = 84 バイト）
 ///
 /// レイアウトは **append-only**（先頭 48 バイト＝12 フィールドは旧 wasm と同一）。
 /// リーダー（TS: bridge worker / gate0-bench readStats / searchEngine）は
@@ -297,7 +297,11 @@ export fn findBestMove(color: u8, max_depth: u8, time_limit_ms: u32, max_nodes: 
 /// | 56     | absolute_deadline_hit | (bit1)
 /// | 60     | probe_calls           | (getStatsBufferLength() >= 68)
 /// | 64     | probe_cap_hits        | (getStatsBufferLength() >= 68)
-pub const STATS_FIELD_COUNT: usize = 17;
+/// | 68     | walkin_checks         | (getStatsBufferLength() >= 84)
+/// | 72     | walkin_switches       | (getStatsBufferLength() >= 84)
+/// | 76     | walkin_skipped        | (getStatsBufferLength() >= 84)
+/// | 80     | walkin_nodes          | (getStatsBufferLength() >= 84)
+pub const STATS_FIELD_COUNT: usize = 21;
 var stats_buffer: [STATS_FIELD_COUNT * 4]u8 = .{0} ** (STATS_FIELD_COUNT * 4);
 
 export fn getStatsBuffer() [*]u8 {
@@ -328,6 +332,10 @@ fn writeStats(stats: minimax.SearchStats) void {
         stats.absolute_deadline_hit,
         stats.probe_calls,
         stats.probe_cap_hits,
+        stats.walkin_checks,
+        stats.walkin_switches,
+        stats.walkin_skipped,
+        stats.walkin_nodes,
     };
     for (fields, 0..) |val, i| {
         const bytes: [4]u8 = @bitCast(val);
