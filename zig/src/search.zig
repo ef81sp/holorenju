@@ -258,14 +258,36 @@ pub const DepthHistoryEntry = struct {
 };
 
 // =============================================================================
-// 非生産的四の引き下げ
+// 根の後処理（非生産的四の引き下げ / 自ら追い詰めに入る手の検証）
 // =============================================================================
+//
+// 反復深化の結果（最善手と上位候補）に対する後処理。どちらも「最善手を仮置きして
+// 判定し、条件を満たせば上位候補のうち安全なものへ切り替える」型で、共通部
+// （`isPlainFourMove` / `switchToCandidate`）をここに置く。
 
 const PLAIN_FOUR_PREFERENCE_MARGIN: i32 = 200;
 const PLAIN_FOUR_VCF_CHECK_TIME_LIMIT: u32 = 50;
 /// 降格判定 VCF のノード予算（決定的モード。時間モードは `PLAIN_FOUR_VCF_CHECK_TIME_LIMIT` のみ）
 /// 初期値 3k を据え置き（設計メモ §7.13。VCF は安く、較正の Elo 同等点に影響しなかった）。
 pub const PLAIN_FOUR_VCF_CHECK_NODES_DETERMINISTIC: u32 = 3000;
+
+/// `pos` に `color` を仮置きして非生産的四（四を作るが五・活三を伴わない）か判定する。
+/// 仮置き中は bitboard も同期し、戻すときに解除する。
+fn isPlainFourMove(cells: []Cell, pos: Position, color: Cell) bool {
+    const idx = @as(u16, pos.row) * BOARD_SIZE + pos.col;
+    cells[idx] = color;
+    bitboard.placeStone(pos.row, pos.col, color);
+    const ft = minimax.analyzeFourAndThree(cells, pos.row, pos.col, color);
+    cells[idx] = .empty;
+    bitboard.removeStone(pos.row, pos.col);
+    return !ft.has_five and ft.has_four and !ft.has_open_three;
+}
+
+/// 最善手を候補 `entry` に差し替える（score は候補の値＝製品経路では bound。設計メモ opp-vct-walkin §2）
+fn switchToCandidate(result: *IterativeDeepingResult, entry: minimax.MoveScoreEntry) void {
+    result.position = entry.move;
+    result.score = entry.score;
+}
 
 /// 非生産的四の優先度引き下げ
 ///
@@ -283,17 +305,7 @@ fn demotePlainFourIfNeeded(
     // 候補が2つ未満なら何もしない
     if (result.top_candidate_count < 2) return;
 
-    // 最善手を仮配置して非生産的四か判定（bitboard も同期）
-    const best = result.position;
-    const idx = @as(u16, best.row) * BOARD_SIZE + best.col;
-    cells[idx] = color;
-    bitboard.placeStone(best.row, best.col, color);
-    const ft = minimax.analyzeFourAndThree(cells, best.row, best.col, color);
-    cells[idx] = .empty;
-    bitboard.removeStone(best.row, best.col);
-
-    const is_plain_four = !ft.has_five and ft.has_four and !ft.has_open_three;
-    if (!is_plain_four) return;
+    if (!isPlainFourMove(cells, result.position, color)) return;
 
     // VCF安全チェック（決定的モードではノード予算。設計メモ bench-fixed-nodes §2.2。
     // この消費は stats に計上しない）
@@ -306,18 +318,9 @@ fn demotePlainFourIfNeeded(
     // 候補手から最初の非・非生産的四手を探す
     for (0..result.top_candidate_count) |i| {
         const entry = result.top_candidates[i];
-        const eidx = @as(u16, entry.move.row) * BOARD_SIZE + entry.move.col;
-        cells[eidx] = color;
-        bitboard.placeStone(entry.move.row, entry.move.col, color);
-        const eft = minimax.analyzeFourAndThree(cells, entry.move.row, entry.move.col, color);
-        cells[eidx] = .empty;
-        bitboard.removeStone(entry.move.row, entry.move.col);
-
-        const entry_is_plain_four = !eft.has_five and eft.has_four and !eft.has_open_three;
-        if (!entry_is_plain_four) {
+        if (!isPlainFourMove(cells, entry.move, color)) {
             if (result.score - entry.score < PLAIN_FOUR_PREFERENCE_MARGIN) {
-                result.position = entry.move;
-                result.score = entry.score;
+                switchToCandidate(result, entry);
             }
             return;
         }
@@ -782,7 +785,7 @@ pub fn findBestMoveIterative(
         .score = best_result.score,
         .completed_depth = completed_depth,
         .interrupted = interrupted,
-        .stats = finalizeStats(&ctx),
+        .stats = undefined,
         .top_candidates = top_candidates,
         .top_candidate_count = @intCast(count),
         .exact_mask = exact_mask,
@@ -790,6 +793,9 @@ pub fn findBestMoveIterative(
 
     // 非生産的四の引き下げ
     demotePlainFourIfNeeded(&final_result, cells, color, policy);
+
+    // 後処理の消費・安全弁の発火をすべて畳んでから統計を確定する
+    final_result.stats = finalizeStats(&ctx);
 
     return final_result;
 }
