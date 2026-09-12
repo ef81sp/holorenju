@@ -288,6 +288,7 @@ test "決定的モード: 事前探索の各段が予算内で打ち切られる
         .pre_vct_nodes = 5,
         .demote_vcf_nodes = 5,
         .probe_vct_nodes = 5,
+        .walkin_nodes = 5,
     };
     const r_tiny = search.findPreSearchMove(&cells, color, tiny);
     errdefer std.debug.print("pre-search budget: tiny.nodes={d}\n", .{r_tiny.nodes});

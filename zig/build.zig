@@ -299,7 +299,17 @@ pub fn build(b: *std.Build) void {
         }),
     });
 
+    // 根の最善手の「自ら追い詰めに入る手」検証（opp-vct-walkin §5.6）。同じく ReleaseFast / test-golden。
+    const test_search_walkin = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/search_walkin_test.zig"),
+            .target = native_target,
+            .optimize = .ReleaseFast,
+        }),
+    });
+
     const test_golden_step = b.step("test-golden", "Run search golden / deterministic-mode tests (ReleaseFast, bench-fixed-nodes)");
     test_golden_step.dependOn(&b.addRunArtifact(test_search_golden).step);
     test_golden_step.dependOn(&b.addRunArtifact(test_search_exact_topk).step);
+    test_golden_step.dependOn(&b.addRunArtifact(test_search_walkin).step);
 }

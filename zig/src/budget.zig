@@ -80,6 +80,9 @@ pub const BudgetPolicy = struct {
     demote_vcf_nodes: u32,
     /// 脅威プローブ VCT（時間モードは 0＝minimax.PROBE_VCT_TIME_LIMIT のみ）
     probe_vct_nodes: u32,
+    /// 根の最善手の「自ら追い詰めに入る手」検証（search.zig `avoidWalkInIfNeeded`）。
+    /// 主探索の `max_nodes` から**予約**する額（時間モードは 0＝`search.WALKIN_TIME_RESERVE` のみ）
+    walkin_nodes: u32,
 
     /// 時間モード（従来挙動）
     pub const TIME_MODE = BudgetPolicy{
@@ -90,6 +93,7 @@ pub const BudgetPolicy = struct {
         .pre_vct_nodes = 0,
         .demote_vcf_nodes = 0,
         .probe_vct_nodes = 0,
+        .walkin_nodes = 0,
     };
 
     /// 決定的モード
@@ -101,6 +105,7 @@ pub const BudgetPolicy = struct {
         .pre_vct_nodes = vct.VCT_PRE_NODES_DETERMINISTIC,
         .demote_vcf_nodes = search.PLAIN_FOUR_VCF_CHECK_NODES_DETERMINISTIC,
         .probe_vct_nodes = minimax.PROBE_VCT_NODES_DETERMINISTIC,
+        .walkin_nodes = search.WALKIN_NODES_RESERVE,
     };
 
     /// グローバルトグルから導出する
@@ -134,6 +139,8 @@ test "BudgetPolicy.derive: 既定は時間モード、トグルで決定的モ�
     try testing.expect(p.pre_vct_nodes > 0);
     try testing.expect(p.demote_vcf_nodes > 0);
     try testing.expect(p.probe_vct_nodes > 0);
+    try testing.expect(p.walkin_nodes > 0);
+    try testing.expectEqual(@as(u32, 0), BudgetPolicy.TIME_MODE.walkin_nodes);
 }
 
 test "時間モードの相手 VCF ノード予算は従来の 3000" {
