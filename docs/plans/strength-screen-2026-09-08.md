@@ -286,6 +286,8 @@ WEAK は差分特徴として相殺されるため触らない。残す eval 系
 
 ## 8. 後続課題
 
+- **（2026-09-14 追記）採用 3 本目 = V1c「自ら追い詰めに入る手の検証」（PR #171、時間ゲート +15.1 [+2.6, +27.5]）**。経緯・計測・follow-up は `opp-vct-walkin-2026-09-12.md`（根プローブ案の撤回、実戦棋譜走査、S-L ±0 保留、V1c 固定 +16.4）。次候補はそのメモ §10.5-(4)（最初の穴で 5 候補すべて walk-in ＝ 1 手前で既に負けている局面の解明）。
+
 - weight-bench / commit-bench は結果 JSON を最後にしか保存しない。中断時に備え、局ごとの追記保存（または進捗ログからの復元ツール `bench:reanalyze --from-log`）を用意する（§6.16 の scratch を昇格）。
 - `src/types/cpu.ts` hard の `singleFourPenaltyMultiplier` コメント「0.0 の採否は別途ベンチで判断」は prospect 基底では無効（§6.10）。コメントを実態に合わせる。
 - commit-bench の起動ログ「evalOptions A: (既定=legacy)」は P5 以降 hard=prospect なので表示が古い（実体は worker ログの bit18 が正）。表示を「既定=難易度の evaluationOptions」に直す。
