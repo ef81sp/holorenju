@@ -80,9 +80,9 @@ fn runHard(cells: []Cell, color: Cell, max_nodes: u32) search.IterativeDeepingRe
 }
 
 fn printResult(label: []const u8, r: search.IterativeDeepingResult) void {
-    std.debug.print("{s}: best=({d},{d}) score={d} depth={d} nodes={d} walkin checks={d} switches={d} skipped={d} walkin_nodes={d}\n", .{
-        label,         r.position.row,        r.position.col,          r.score,                r.completed_depth,
-        r.stats.nodes, r.stats.walkin_checks, r.stats.walkin_switches, r.stats.walkin_skipped, r.stats.walkin_nodes,
+    std.debug.print("{s}: best=({d},{d}) score={d} depth={d} nodes={d} walkin checks={d} fired={d} switches={d} skipped={d} vct_nodes={d} research_nodes={d}\n", .{
+        label,                 r.position.row,       r.position.col,          r.score,                r.completed_depth,        r.stats.nodes,
+        r.stats.walkin_checks, r.stats.walkin_fired, r.stats.walkin_switches, r.stats.walkin_skipped, r.stats.walkin_vct_nodes, r.stats.walkin_nodes,
     });
 }
 
@@ -122,10 +122,26 @@ test "局面 1: V1 後の最善手は F9 でなく I6 / J7 / K8 のいずれか�
     try testing.expect(samePos(r.position, "I6") or samePos(r.position, "J7") or samePos(r.position, "K8"));
     try testing.expect(!walksIntoVCTAt(&cells, r.position, .black, .white));
     try testing.expectEqual(forbidden.ForbiddenType.none, forbidden.checkForbiddenMove(&cells, r.position.row, r.position.col));
+    try testing.expectEqual(@as(u32, 1), r.stats.walkin_fired);
     try testing.expectEqual(@as(u32, 1), r.stats.walkin_switches);
     try testing.expect(r.stats.walkin_checks >= 2);
     try testing.expectEqual(@as(u32, 0), r.stats.walkin_skipped);
+    // 検証（相手 VCT）と除外再探索の消費は別々に記録される
+    try testing.expect(r.stats.walkin_vct_nodes > 0);
     try testing.expect(r.stats.walkin_nodes > 0);
+}
+
+test "局面 1: 決定的 hard の結果は J7（walkin_fired = 1、switches = 1、checks = 3）" {
+    budget_mod.deterministic_mode = true;
+    defer budget_mod.deterministic_mode = false;
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    setup(&cells, FIXTURE1_BLACK, FIXTURE1_WHITE);
+    const r = runHard(&cells, .black, HARD_MAX_NODES);
+    errdefer printResult("fixture1-J7", r);
+    try testing.expect(samePos(r.position, "J7"));
+    try testing.expectEqual(@as(u32, 1), r.stats.walkin_fired);
+    try testing.expectEqual(@as(u32, 1), r.stats.walkin_switches);
+    try testing.expectEqual(@as(u32, 3), r.stats.walkin_checks);
 }
 
 // =============================================================================
@@ -159,11 +175,12 @@ test "局面 2: V1 後の最善手は H9 でなく、置いた後に白の追い
 
 // =============================================================================
 // 全候補が追い詰めに入る局面（§5.6-2）: 局面 1 に白 G6（+ 黒 A1 で黒番を保つ）。
-// 深さ 5 では探索が損を見ておらず（score −1095）、最善 G7 も除外再探索の代替 2 手も
-// 白の追い詰めに入る → 最善手のまま。深さ 6 以上では探索自身が −99999 を返し V1 は触らない。
+// 深さ 5 では探索が損を見ておらず（score −1095）、最善 G7 は白の追い詰めに入る → 発火。
+// 除外再探索（深さ 4）の代替手 G5 は score −3967（負け確定）なので、切り替え先の score 下限
+// ガードで検証せず最善手のまま（checks = 1）。深さ 6 以上では探索自身が −99999 を返し V1 は触らない。
 // =============================================================================
 
-test "全候補が追い詰めに入る局面では最善手を変えない（walkin_switches = 0、walkin_checks = 3）" {
+test "全候補が追い詰めに入る局面では最善手を変えない（fired = 1、代替手が負け確定なので検証せず checks = 1、switches = 0）" {
     budget_mod.deterministic_mode = true;
     defer budget_mod.deterministic_mode = false;
     var cells = [_]Cell{.empty} ** CELL_COUNT;
@@ -172,7 +189,10 @@ test "全候補が追い詰めに入る局面では最善手を変えない（wa
     errdefer printResult("all-walk-in", r);
     try testing.expect(r.score > -2500);
     try testing.expect(walksIntoVCTAt(&cells, r.position, .black, .white));
-    try testing.expectEqual(@as(u32, 3), r.stats.walkin_checks);
+    try testing.expectEqual(@as(u32, 1), r.stats.walkin_checks);
+    try testing.expectEqual(@as(u32, 1), r.stats.walkin_fired);
+    // 除外再探索は走った（消費が記録される）が、代替手の検証には至っていない
+    try testing.expect(r.stats.walkin_nodes > 0);
     try testing.expectEqual(@as(u32, 0), r.stats.walkin_switches);
     try testing.expectEqual(@as(u32, 0), r.stats.walkin_skipped);
     // 主探索と同じ最善手（切り替えていない）
@@ -228,7 +248,7 @@ test "決定的モード: 主探索の max_nodes は予約分だけ減り、検�
     const rs = runHard(&cells, .black, small);
     errdefer printResult("acct-small", rs);
     try testing.expect(rs.interrupted);
-    const main_nodes = rs.stats.nodes - rs.stats.walkin_nodes;
+    const main_nodes = rs.stats.nodes - rs.stats.walkin_vct_nodes - rs.stats.walkin_nodes;
     try testing.expect(main_nodes <= small - policy.walkin_nodes + policy.probe_vct_nodes);
     try testing.expect(main_nodes >= small - policy.walkin_nodes);
 
@@ -237,8 +257,9 @@ test "決定的モード: 主探索の max_nodes は予約分だけ減り、検�
     const rh = runHard(&cells, .black, HARD_MAX_NODES);
     errdefer printResult("acct-hard", rh);
     try testing.expectEqual(@as(u32, 1), rh.stats.walkin_switches);
+    try testing.expect(rh.stats.walkin_vct_nodes > 0);
     try testing.expect(rh.stats.walkin_nodes > 0);
-    try testing.expect(rh.stats.nodes >= rh.stats.walkin_nodes);
+    try testing.expect(rh.stats.nodes >= rh.stats.walkin_vct_nodes + rh.stats.walkin_nodes);
     try testing.expect(rh.stats.nodes <= HARD_MAX_NODES + 3 * search.WALKIN_RESEARCH_NODES + policy.probe_vct_nodes);
     // 同一入力で再現する（決定的）
     const rh2 = runHard(&cells, .black, HARD_MAX_NODES);
@@ -246,13 +267,85 @@ test "決定的モード: 主探索の max_nodes は予約分だけ減り、検�
     try testing.expectEqual(rh.score, rh2.score);
     try testing.expectEqual(rh.stats.nodes, rh2.stats.nodes);
     try testing.expectEqual(rh.stats.walkin_nodes, rh2.stats.walkin_nodes);
+    try testing.expectEqual(rh.stats.walkin_vct_nodes, rh2.stats.walkin_vct_nodes);
+}
+
+// =============================================================================
+// 適用範囲のゲート（レビュー反映）: 浅い難易度・振り返り経路・小予算では走らせない
+// =============================================================================
+
+test "max_depth < 3（beginner / easy）では予約も検証もしない（walkin_* すべて 0、nodes は予約なしの主探索のみ）" {
+    budget_mod.deterministic_mode = true;
+    defer budget_mod.deterministic_mode = false;
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    setup(&cells, FIXTURE1_BLACK, FIXTURE1_WHITE);
+    for ([_]u8{ 1, 2 }) |d| {
+        const r = runDeterministic(&cells, .black, d, HARD_MAX_NODES);
+        errdefer printResult("shallow", r);
+        try testing.expectEqual(d, r.completed_depth);
+        try testing.expectEqual(@as(u32, 0), r.stats.walkin_checks);
+        try testing.expectEqual(@as(u32, 0), r.stats.walkin_fired);
+        try testing.expectEqual(@as(u32, 0), r.stats.walkin_switches);
+        try testing.expectEqual(@as(u32, 0), r.stats.walkin_skipped);
+        try testing.expectEqual(@as(u32, 0), r.stats.walkin_vct_nodes);
+        try testing.expectEqual(@as(u32, 0), r.stats.walkin_nodes);
+    }
+}
+
+test "振り返り経路（exact_top_k > 0 / aspiration_mode != 0）では予約も検証もしない（最善手＝主探索の値）" {
+    budget_mod.deterministic_mode = true;
+    defer budget_mod.deterministic_mode = false;
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    setup(&cells, FIXTURE1_BLACK, FIXTURE1_WHITE);
+
+    tt_mod.global_tt.clear();
+    resetClock();
+    var p_exact = golden.hardParams(0, HARD_MAX_NODES);
+    p_exact.exact_top_k = 2;
+    const re = search.findBestMoveIterative(&cells, .black, p_exact);
+    errdefer printResult("review-exact", re);
+    // 主探索の最善手 F9（walk-in）のまま切り替えない
+    try testing.expect(samePos(re.position, "F9"));
+    try testing.expectEqual(@as(u32, 0), re.stats.walkin_checks);
+    try testing.expectEqual(@as(u32, 0), re.stats.walkin_fired);
+    try testing.expectEqual(@as(u32, 0), re.stats.walkin_skipped);
+    try testing.expectEqual(@as(u32, 0), re.stats.walkin_vct_nodes);
+
+    tt_mod.global_tt.clear();
+    resetClock();
+    var p_asp = golden.hardParams(0, HARD_MAX_NODES);
+    p_asp.aspiration_mode = 1;
+    const ra = search.findBestMoveIterative(&cells, .black, p_asp);
+    errdefer printResult("review-asp", ra);
+    try testing.expectEqual(@as(u32, 0), ra.stats.walkin_checks);
+    try testing.expectEqual(@as(u32, 0), ra.stats.walkin_fired);
+    try testing.expectEqual(@as(u32, 0), ra.stats.walkin_skipped);
+    try testing.expectEqual(@as(u32, 0), ra.stats.walkin_vct_nodes);
+}
+
+test "決定的モードの小予算（max_nodes <= 予約額）では検証を走らせず walkin_skipped = 1（nodes は上限内）" {
+    budget_mod.deterministic_mode = true;
+    defer budget_mod.deterministic_mode = false;
+    const policy = budget_mod.BudgetPolicy.DETERMINISTIC;
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    setup(&cells, FIXTURE1_BLACK, FIXTURE1_WHITE);
+    const small: u32 = 50_000;
+    try testing.expect(small <= policy.walkin_nodes);
+    const r = runHard(&cells, .black, small);
+    errdefer printResult("tiny", r);
+    try testing.expectEqual(@as(u32, 0), r.stats.walkin_checks);
+    try testing.expectEqual(@as(u32, 0), r.stats.walkin_fired);
+    try testing.expectEqual(@as(u32, 1), r.stats.walkin_skipped);
+    try testing.expectEqual(@as(u32, 0), r.stats.walkin_vct_nodes);
+    try testing.expectEqual(@as(u32, 0), r.stats.walkin_nodes);
+    try testing.expect(r.stats.nodes <= small + policy.probe_vct_nodes);
 }
 
 // =============================================================================
 // 時間モード（擬似時計 step=1）: 予算切れで `walkin_skipped` が数える
 // =============================================================================
 
-test "時間モード: 絶対デッドライン超過後は検証を走らせず walkin_skipped = 1（checks = 0）" {
+test "時間モード: 絶対デッドライン超過で深さ 1 しか完了しなければ検証を走らせない（checks = 0、skip にも数えない）" {
     try testing.expect(!budget_mod.deterministic_mode);
     var cells = [_]Cell{.empty} ** CELL_COUNT;
     setup(&cells, FIXTURE1_BLACK, FIXTURE1_WHITE);
@@ -263,8 +356,10 @@ test "時間モード: 絶対デッドライン超過後は検証を走らせず
     const r = search.findBestMoveIterative(&cells, .black, golden.hardParams(50, 200_000));
     errdefer printResult("time-50ms", r);
     try testing.expectEqual(@as(u32, 1), r.stats.absolute_deadline_hit);
+    try testing.expect(r.completed_depth < 3);
     try testing.expectEqual(@as(u32, 0), r.stats.walkin_checks);
-    try testing.expectEqual(@as(u32, 1), r.stats.walkin_skipped);
+    try testing.expectEqual(@as(u32, 0), r.stats.walkin_skipped);
+    try testing.expectEqual(@as(u32, 0), r.stats.walkin_fired);
     try testing.expectEqual(@as(u32, 0), r.stats.walkin_switches);
     // 出口でグローバルデッドラインは解除されている
     try testing.expectEqual(@as(u32, 0), deadline.g_absolute_deadline_ms);
@@ -286,5 +381,8 @@ test "時間モード: 検証の時間予算（WALKIN_TIME_RESERVE）が擬似�
     try testing.expectEqual(@as(u32, 1), r.stats.walkin_skipped);
     try testing.expectEqual(@as(u32, 0), r.stats.walkin_switches);
     // 時間モードでは検証の消費は nodes に加算されない（記録のみ。ゴールデン B の nodes 不変が証拠）
-    try testing.expect(r.stats.walkin_nodes > 0);
+    try testing.expect(r.stats.walkin_vct_nodes > 0);
+    // 判定不能なので除外再探索は走っていない
+    try testing.expectEqual(@as(u32, 0), r.stats.walkin_fired);
+    try testing.expectEqual(@as(u32, 0), r.stats.walkin_nodes);
 }

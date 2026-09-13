@@ -356,11 +356,19 @@ const WalkInVerdict = enum {
     undecided,
 };
 
+/// `verifyWalkIn` の戻り値: 判定と、その検証（相手 VCT）が消費したノード
+const WalkInCheck = struct {
+    verdict: WalkInVerdict,
+    /// この 1 回の VCT 探索の消費ノード（`parent` へも charge 済み）
+    nodes: u32,
+};
+
 /// `move` に `color` を仮置きし、相手の lenient 追い詰め（`vct.VCT_MAX_DEPTH`）を探す。
 ///
 /// 子 limiter の時間は `WALKIN_TIME_RESERVE`（絶対デッドラインとの min。検証ごとに立て直す＝
 /// 間に挟まる除外再探索で予約時間が食われないように）、ノードは `parent` の残り全部
 /// （決定的モードの予約 `policy.walkin_nodes` を K 回で共有）。消費は親へ charge する。
+/// stats には触らない（呼び出し側が `WalkInCheck.nodes` を集計する）。
 ///
 /// `findVCTMoveWithLimiter` は内部で `bitboard.initFromCells` を呼ぶので、石を戻したあと
 /// bitboard を再同期して demote と同じ不変条件（bitboard == cells）に揃える。
@@ -372,15 +380,14 @@ fn verifyWalkIn(
     parent: *vcf_mod.TimeLimiter,
     no_time_limit: bool,
     absolute_deadline: u32,
-    stats: *minimax.SearchStats,
-) WalkInVerdict {
+) WalkInCheck {
     const outer = vcf_mod.TimeLimiter.untilDeadline(if (no_time_limit) 0 else absolute_deadline);
     var child = outer.child(if (no_time_limit) 0 else WALKIN_TIME_RESERVE, 0);
     if (parent.max_nodes != 0) {
         child.max_nodes = parent.remainingNodes();
         if (child.max_nodes == 0) child.exhausted = true;
     }
-    if (child.exceeded()) return .undecided;
+    if (child.exceeded()) return .{ .verdict = .undecided, .nodes = 0 };
 
     const idx = @as(u16, move.row) * BOARD_SIZE + move.col;
     cells[idx] = color;
@@ -389,9 +396,22 @@ fn verifyWalkIn(
     bitboard.initFromCells(cells);
 
     parent.chargeChild(&child, false);
-    stats.walkin_checks += 1;
-    if (found != null) return .walks_in;
-    return if (child.tripped) .undecided else .safe;
+    const verdict: WalkInVerdict = if (found != null) .walks_in else if (child.tripped) .undecided else .safe;
+    return .{ .verdict = verdict, .nodes = child.nodes };
+}
+
+/// 自ら追い詰めに入る手の検証を**行う**経路か（予約・検証の適用範囲。1 箇所に集約）。
+///
+/// - `max_depth < 3`（beginner / easy）: 除外再探索の深さ（completed_depth − 1 ≥ 2）が
+///   取れないので予約も検証もしない。
+/// - 振り返り経路（`aspiration_mode != 0` / `exact_top_k > 0`）: 切り替えると `result.position/score`
+///   と `top_candidates` / `exact_mask` の整合が壊れ、fullEval.ts の `playedIsBest` /
+///   `resolvePlayedScore` が逆向きの判定をし得る。除外再探索の TT 上書きも候補 PV に影響する。
+///   振り返りは「最善手＝主探索の値」を保つ（flag で返す案は follow-up）。
+fn walkInApplies(params: IterativeDeepeningParams) bool {
+    if (params.max_depth < 3) return false;
+    if (params.aspiration_mode != 0 or params.exact_top_k > 0) return false;
+    return true;
 }
 
 /// 除外再探索 1 回のノード予算（決定的モード。発火時のみの**追加**予算で、主探索からは
@@ -399,7 +419,7 @@ fn verifyWalkIn(
 pub const WALKIN_RESEARCH_NODES: u32 = 150_000;
 /// 除外再探索 1 回の時間予算（ms。絶対デッドラインまでの残りとの min）
 pub const WALKIN_RESEARCH_TIME: u32 = 1000;
-/// 絶対デッドラインまでの残りがこれ未満なら再探索せず `walkin_skipped` に数える
+/// 絶対デッドラインまでの残りがこれ未満なら再探索せず最善手のまま（`walkin_skipped` には数えない）
 const WALKIN_RESEARCH_MIN_TIME: u32 = 100;
 
 /// PV 手を候補リストの先頭へ移す（反復深化の各深さの前処理。除外再探索も同じ）
@@ -461,41 +481,69 @@ fn researchExcluded(
 /// 根の最善手を置いた後に相手の追い詰め（lenient・大予算）が残るなら、最善手を除外した
 /// 根の再探索で代替手を得て、安全ならそれに切り替える（§5.3 v3 = V1c。margin なし）。
 ///
+/// - 適用範囲は `walkInApplies`（呼び出し側で予約と揃えて判定する）。予約できない小予算
+///   （`policy.walkin_nodes > 0 and params.max_nodes <= policy.walkin_nodes`）は `reserved == false`
+///   で渡され、検証せず `walkin_skipped` に数える。
 /// - 勝ち筋・負け確定（`|score| >= WINNING_SCORE_THRESHOLD`）は触らない。
+/// - 主探索が深さ 2 までしか完了していなければ再探索の深さが取れないので、検証もしない
+///   （skip には数えない）。
 /// - 相手の追い詰め検証は主探索から予約した予算（時間 `WALKIN_TIME_RESERVE` /
 ///   ノード `policy.walkin_nodes`）を親として最大 `WALKIN_MAX_CHECKS` 回で共有する。
 /// - 除外再探索は発火時のみの追加予算（`WALKIN_RESEARCH_NODES` / `WALKIN_RESEARCH_TIME`）。
 ///   深さは 2 〜 `completed_depth − 1`。
-/// - 最善手の検証が判定に至らない／再探索の時間が残っていなければ `walkin_skipped` を数える。
+/// - **既知の逸脱**: 再探索は時間モードでも `ctx.max_nodes` を `stats.nodes + WALKIN_RESEARCH_NODES`
+///   に延ばすので、呼び出し側の `maxNodes` 契約を発火手で最大 `(WALKIN_MAX_CHECKS − 1) ×
+///   WALKIN_RESEARCH_NODES`（= 300k）超えうる。時間ゲート（+15.1）で採用済みの挙動なので据え置き。
+/// - 切り替え先の score が負け確定（`<= −WINNING_SCORE_THRESHOLD`）なら切り替えない（保険）。
+/// - stats: `walkin_checks`（検証回数）、`walkin_fired`（最善手が walk-in）、`walkin_switches`、
+///   `walkin_skipped`（最善手の検証が判定不能: 予約なし・枯渇・tripped）、`walkin_vct_nodes`
+///   （検証の消費。`nodes` への加算は決定的モードのみ）、`walkin_nodes`（除外再探索の消費。
+///   主探索と同じ経路で両モードとも `nodes` に含まれる）。
+///   この関数は `ctx.deadline` / `ctx.timeout_flag` / `ctx.max_nodes` を書き換える。後続の
+///   `finalizeStats` はそれら可変状態を読むので、必ずこの関数の**後**に呼ぶこと。
 fn avoidWalkInIfNeeded(
     result: *IterativeDeepingResult,
     cells: []Cell,
     color: Cell,
     root_moves: *const move_gen.MoveList,
     policy: budget_mod.BudgetPolicy,
+    reserved: bool,
     no_time_limit: bool,
     absolute_deadline: u32,
     ctx: *minimax.SearchContext,
 ) void {
     if (root_moves.len < 2) return;
     if (result.score >= WINNING_SCORE_THRESHOLD or result.score <= -WINNING_SCORE_THRESHOLD) return;
+    const stats = &ctx.stats;
+    if (!reserved) {
+        stats.walkin_skipped += 1;
+        return;
+    }
+    // 再探索の深さは completed_depth − 1（≥ 2）。主探索が深さ 2 までしか完了していなければ
+    // 代替手を得る手段が無いので、検証予算を使わず最善手のまま（skip には数えない）
+    if (result.completed_depth < 3) return;
+    const research_depth: u8 = result.completed_depth - 1;
 
     const opponent: Cell = if (color == .black) .white else .black;
-    const stats = &ctx.stats;
 
     // 検証（VCT）の親 ＝ 予約したノード予算（時間モードは 0 ＝ 無制限。時間は検証ごとに
     // `verifyWalkIn` が `WALKIN_TIME_RESERVE` で立てる）。`nodes` は VCT の消費合計
     var parent = vcf_mod.TimeLimiter{ .start_time = 0, .time_limit = 0, .nodes = 0, .max_nodes = policy.walkin_nodes };
     const nodes_at_entry = stats.nodes;
+    var checks: u32 = 0;
     defer {
-        // walkin_nodes = 検証（VCT）+ 除外再探索の合計。再探索の消費は主探索と同じ経路で
-        // `stats.nodes` に入っている。検証の `nodes` への加算は決定的モードのみ（プローブと同じ規約）
-        stats.walkin_nodes = parent.nodes + (stats.nodes - nodes_at_entry);
+        stats.walkin_checks = checks;
+        // 検証（VCT）の消費は記録し、`nodes` への加算は決定的モードのみ（プローブと同じ規約）。
+        // 除外再探索の消費は主探索と同じ経路で既に `stats.nodes` に入っている
+        stats.walkin_vct_nodes = parent.nodes;
+        stats.walkin_nodes = stats.nodes - nodes_at_entry;
         if (policy.deterministic) stats.nodes +|= parent.nodes;
         ctx.root_excluded = @TypeOf(ctx.root_excluded).initEmpty();
     }
 
-    switch (verifyWalkIn(cells, result.position, color, opponent, &parent, no_time_limit, absolute_deadline, stats)) {
+    const first = verifyWalkIn(cells, result.position, color, opponent, &parent, no_time_limit, absolute_deadline);
+    checks += 1;
+    switch (first.verdict) {
         .undecided => {
             stats.walkin_skipped += 1;
             return;
@@ -503,28 +551,19 @@ fn avoidWalkInIfNeeded(
         .safe => return,
         .walks_in => {},
     }
+    stats.walkin_fired += 1;
 
     // 最善手を除外して再探索 → 代替手を検証、を最大 WALKIN_MAX_CHECKS 回。
-    // 再探索の深さは completed_depth − 1（≥ 2）。主探索が深さ 2 までしか完了していなければ
-    // 代替手を得る手段が無いので最善手のまま（skip には数えない）
-    if (result.completed_depth < 3) return;
-    const research_depth: u8 = result.completed_depth - 1;
     ctx.root_excluded.set(@as(u16, result.position.row) * BOARD_SIZE + result.position.col);
-    while (stats.walkin_checks < WALKIN_MAX_CHECKS) {
-        // 再探索の予算を張り直す（発火時のみの追加予算）
+    while (checks < WALKIN_MAX_CHECKS) {
+        // 再探索の予算を張り直す（発火時のみの追加予算）。時間が残っていなければ最善手のまま
         if (!no_time_limit) {
             const now = getTimestampMs();
-            if (absolute_deadline != 0 and (now >= absolute_deadline or absolute_deadline - now < WALKIN_RESEARCH_MIN_TIME)) {
-                stats.walkin_skipped += 1;
-                return;
-            }
+            if (absolute_deadline != 0 and (now >= absolute_deadline or absolute_deadline - now < WALKIN_RESEARCH_MIN_TIME)) return;
             ctx.deadline = if (absolute_deadline == 0) now + WALKIN_RESEARCH_TIME else @min(now + WALKIN_RESEARCH_TIME, absolute_deadline);
             ctx.timeout_flag = false;
         }
-        if (ctx.absolute_deadline_exceeded) {
-            stats.walkin_skipped += 1;
-            return;
-        }
+        if (ctx.absolute_deadline_exceeded) return;
         if (ctx.max_nodes > 0) {
             ctx.max_nodes = stats.nodes + WALKIN_RESEARCH_NODES;
             ctx.node_count_exceeded = false;
@@ -532,7 +571,11 @@ fn avoidWalkInIfNeeded(
 
         const alt = researchExcluded(cells, color, research_depth, root_moves, ctx) orelse return;
         ctx.root_excluded.set(@as(u16, alt.move.row) * BOARD_SIZE + alt.move.col);
-        switch (verifyWalkIn(cells, alt.move, color, opponent, &parent, no_time_limit, absolute_deadline, stats)) {
+        // 負け確定への切り替えは無意味（検証予算も使わない）
+        if (alt.score <= -WINNING_SCORE_THRESHOLD) return;
+        const check = verifyWalkIn(cells, alt.move, color, opponent, &parent, no_time_limit, absolute_deadline);
+        checks += 1;
+        switch (check.verdict) {
             .undecided => return,
             .walks_in => {},
             .safe => {
@@ -757,15 +800,20 @@ pub fn findBestMoveIterative(
         calculateDynamicTimeLimit(params.time_limit, stone_count, moves.len);
 
     // 自ら追い詰めに入る手の検証（`avoidWalkInIfNeeded`）の予算を主探索から**予約**する
-    // （設計メモ opp-vct-walkin §5.2）。時間: 締切を `WALKIN_TIME_RESERVE` 分だけ手前に立てる
-    // （比率で頭打ち）。ノード（決定的モード）: `max_nodes` から `policy.walkin_nodes` を引く
-    // （`max_nodes` が予約額以下なら引かない＝小予算のテスト・解析では主探索を守る）。
-    const walkin_time_reserve: u32 = if (no_time_limit)
+    // （設計メモ opp-vct-walkin §5.2）。適用範囲は `walkInApplies`（浅い難易度・振り返り経路では
+    // 予約しない）。時間: 締切を `WALKIN_TIME_RESERVE` 分だけ手前に立てる（比率で頭打ち）。
+    // ノード（決定的モード）: `max_nodes` から `policy.walkin_nodes` を引く。`max_nodes` が
+    // 予約額以下なら引かず、検証も走らせない（`walkin_reserved == false` → skip に計上。
+    // 小予算の N スイープ較正で主探索 50k に検証 100k が乗らないように）。
+    const walkin_applies = walkInApplies(params);
+    const walkin_reserved = walkin_applies and
+        (policy.walkin_nodes == 0 or params.max_nodes == 0 or params.max_nodes > policy.walkin_nodes);
+    const walkin_time_reserve: u32 = if (no_time_limit or !walkin_applies)
         0
     else
         @min(WALKIN_TIME_RESERVE, dynamic_time_limit * WALKIN_TIME_RESERVE_MAX_PERCENT / 100);
     const main_time_limit = dynamic_time_limit - walkin_time_reserve;
-    const main_max_nodes: u32 = if (params.max_nodes > policy.walkin_nodes)
+    const main_max_nodes: u32 = if (walkin_reserved and params.max_nodes > policy.walkin_nodes)
         params.max_nodes - policy.walkin_nodes
     else
         params.max_nodes;
@@ -1000,7 +1048,8 @@ pub fn findBestMoveIterative(
         .score = best_result.score,
         .completed_depth = completed_depth,
         .interrupted = interrupted,
-        .stats = undefined,
+        // この区間の stats は暫定（後処理の消費を含まない）。最後に `finalizeStats` で上書きする
+        .stats = ctx.stats,
         .top_candidates = top_candidates,
         .top_candidate_count = @intCast(count),
         .exact_mask = exact_mask,
@@ -1009,10 +1058,13 @@ pub fn findBestMoveIterative(
     // 非生産的四の引き下げ
     demotePlainFourIfNeeded(&final_result, cells, color, policy);
 
-    // 自ら追い詰めに入る手の検証（予約した予算で走る）
-    avoidWalkInIfNeeded(&final_result, cells, color, &moves, policy, no_time_limit, absolute_deadline, &ctx);
+    // 自ら追い詰めに入る手の検証（予約した予算で走る。適用範囲は予約と同じ `walkin_applies`）
+    if (walkin_applies) {
+        avoidWalkInIfNeeded(&final_result, cells, color, &moves, policy, walkin_reserved, no_time_limit, absolute_deadline, &ctx);
+    }
 
-    // 後処理の消費・安全弁の発火をすべて畳んでから統計を確定する
+    // 後処理の消費・安全弁の発火をすべて畳んでから統計を確定する（`finalizeStats` は
+    // `ctx.timeout_flag` / `ctx.absolute_deadline_exceeded` を読むので後処理より後ろ）
     final_result.stats = finalizeStats(&ctx);
 
     return final_result;
@@ -1186,6 +1238,10 @@ pub fn refineTopCandidates(
 ///
 /// メイン探索（`ctx.absolute_deadline_exceeded`）と VCF/VCT の `TimeLimiter`
 /// （`deadline.hitSinceReset()`）のどちらで発火しても 1 になる。
+///
+/// `ctx.stats` のほか `ctx.timeout_flag` / `ctx.absolute_deadline_exceeded` /
+/// `deadline_mod.hitSinceReset()` という**可変状態**を読むので、後処理（demote / walk-in 検証）が
+/// それらを書き換えた**後**に呼ぶこと。
 fn finalizeStats(ctx: *minimax.SearchContext) minimax.SearchStats {
     var stats = ctx.stats;
     // 決定的モードでは時間で timeout_flag を立てる経路は quiescence の安全弁だけなので、
