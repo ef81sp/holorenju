@@ -288,4 +288,26 @@ plycheck v2 非反転（全 ply |score| ≤ 700、終局なし）の先頭 100 �
 - **V1c 採用**。PR `feat/walkin-verify` → development（3 観点レビュー後にマージ）。
 - follow-up: (1) 時間 400 ms ↔ 固定 100k の到達率較正、(2) 除外再探索と TT 共有の振り返り PV 影響、(3) S-L は保留・S-G（strict ゲート緩和）は棄却 11 件の内訳から条件を定義できれば別メモで、(4) 実戦走査 §9.1 の「最初の穴で 5 候補すべて walk-in」31/44 局面は V1c の範囲外（1 手前で既に負け）＝次の穴はそこ（2 手先の被追い詰め、または敗者の探索が損を見ていない理由）。
 
+### 10.6 実装レビュー（3 観点、Opus、2026-09-13）と対応
+
+3 観点とも要修正。指摘を「hard の対局経路の挙動を変えない修正（PR に入れる）」と「探索挙動が変わる改良（再ベンチが要る follow-up）」に分けた。
+
+PR に入れる（採用済みの時間ゲート結果を無効にしない範囲）:
+
+1. 適用範囲のゲート: `params.max_depth < 3`（beginner / easy）は予約も検証もしない（切り替えは原理的に起きないのに主探索の 20% を失っていた）。`completed_depth < 3` の判定を最初の検証より前へ。
+2. 振り返り経路（aspiration_mode≠0 / exact_top_k>0）では走らせない: 切り替えで `result.position/score` と `top_candidates`/`exact_mask` の整合が壊れ、`fullEval.ts` の `playedIsBest` / `resolvePlayedScore` が「穴に入った手を最善」と判定し得る。除外再探索の TT 上書きが候補 PV にも影響する。振り返りの 14/14 一致は経験的証拠であり不変条件違反は残っていた。
+3. 小予算の決定的モード（`max_nodes ≤ 予約額`）は検証を走らせない（主探索 50k に対して検証 100k が走り N スイープの較正を壊す）。
+4. stats の分離: `walkin_fired` / `walkin_vct_nodes` を追加（+84/+88、92 バイト）、`walkin_skipped` は最善手の検証が判定不能のみ、`walkin_nodes` は除外再探索の消費のみ（時間モードで `stats.nodes − walkin_nodes` が主探索ノードになるように）。
+5. ループ制御をローカル変数に、`verifyWalkIn` を純粋関数に、`.stats = undefined` をやめる、切り替え先の score 下限ガード（負け確定への切り替えを禁止）、既知の逸脱（時間モードでも再探索が `max_nodes` を最大 +300k 超える）のコメント明記。
+
+follow-up（別メモ・要スクリーン）:
+
+- 除外再探索と主探索の TT 共有: 浅い exact が深い exact を無条件に上書き（`tt.zig` の置換規則）。次の手の再利用を失うだけで誤値は使わない（probe は深さを確認）。対処案は再探索中の `newGeneration()` か store 抑止。
+- `research_depth = completed_depth`（現状 −1）の変種。根の子は主探索で埋まっているので追加コストは小さく、切り替え先の質が上がる。
+- 切り替え先の非生産的四フィルタ（§5.3 v1 にあったが v3 で落ちた）。demote が降格した四に V1c が戻す経路がある。
+- `root_excluded` を `SearchContext` から外し、MoveList のコピーをフィルタして渡す（minimax の差分がゼロになる。`moves.len == 1` の早期経路の扱いを決める）。
+- 時間モードの再探索ノード天井（`params.max_nodes` を超えない）と、時間 400 ms ↔ 固定 100k の到達率較正（`walkin_skipped` / `walkin_fired` から）。
+- 振り返りに「相手の追い詰めあり」を flag で返す設計（§5.6-6）。
+- aspiration 1 深さ分の共通ヘルパー化（主ループと `researchExcluded` の SSoT）。
+
 - 残る観点（採否後の follow-up）: 除外再探索が主探索の TT を共有するため、発火した手では根の子局面の TT エントリが浅い深さで上書きされうる（PV 抽出は最善手起点なので着手には無関係、振り返りの候補 PV 表示に影響しうる）。
