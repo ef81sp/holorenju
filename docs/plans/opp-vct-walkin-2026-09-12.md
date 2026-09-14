@@ -417,3 +417,24 @@ follow-up（別メモ・要スクリーン）:
 1. **修正（進行中）**: VCF/VCT 根の「相手の四を無視」（§11.8）。正しさの修正として非劣性ゲート。
 2. **次の設計メモ: quiescence の診断**。深さ 0 の子で Rapfi の手の値が静的評価より大きく落ちる局面（7c の深さ 1 反転 12 件＋7f の差 +1,400 以上 15 件の重なり）について、quiescence が辿った手順（stand-pat か、どの四／三の応酬で値が決まったか）を wasm から取り出す観測 API（PV 相当）を先に作り、機序（防御側の四に直面する層での候補列挙、三の応酬の打ち切り、stand-pat の手番補正）を特定してから直す。walk-in 系（V1c）とは独立。
 3. 純粋な評価誤り（1/3）は eval 側の課題として据え置き（r4/r5 で飽和を確認済み）。
+
+## 12. quiescence の診断（設計、2026-09-14）
+
+### 12.1 目的
+
+§11.9 の「静的評価は Rapfi の手を上に置くのに深さ 1（子の quiescence）で覆る」局面で、quiescence が何をしているかを観測し、機序を特定する。quiescence（`zig/src/quiescence.zig`）は四を作る手と強制受けだけを最大 4 段辿り、stand-pat（`last_mover_is_perspective` で手番を補正した静的評価）と比較する。候補となる機序:
+
+1. **四の応酬後の静的評価の落ち込み**: Rapfi の手（四を作る）→ 強制受け → 局面の四が「止まった四」になり、prospect 基底の脅威カテゴリが消えて評価が下がる（Rapfi は受けを強いたテンポ・形を評価している）。
+2. **相手のカウンター四**: 受けの後に相手が四を作れる手を quiescence が拾い、我々の側の評価が下がる（本来は相手の四も受ければ済む）。
+3. **stand-pat の手番補正の非対称**: 深さ 0 の子は相手手番なので `last_mover_is_perspective = .yes`。根の静的評価との差（horizon-flips メモ「静的評価は手番側に悲観的」中央値 854）が候補間で非一様に効く。
+4. **TT の再利用**: quiescence は TT を負の深さで共有する。主探索の別経路の値が混ざる。
+
+### 12.2 観測 API（実装）
+
+- `zig/src/quiescence.zig`: 診断用のトレース（`pub var q_trace_enabled: bool`、`QTrace{ standpat_root, value, pv: [MAX_QUIESCENCE_DEPTH]Position, pv_len, standpats: [..]i32, cut_reason }`）。`quiescenceSearch` の各ノードで best 子の手と stand-pat を記録（有効時のみ。無効時のホットパスは分岐 1 つ）。TT は診断時に無効化（`q_trace_enabled` なら probe/store を飛ばす）して純粋な木の値を見る。
+- `zig/src/main.zig`: `export fn quiescenceTraceWasm(color, last_row, last_col)`（盤面は既存の board バッファ、eval は hard の EvalOptions）→ 結果バッファ（value, standpat, pv_len, pv 座標列, standpats）。
+- TS: `WasmSearchEngine.quiescenceTrace(board, color, lastMove)`。テストは Zig 側に 2 本（四の応酬 1 往復で PV が記録される／トレース無効時の値がトレース有効時と一致＝挙動不変）。
+
+### 12.3 計測 8（API 完成後）
+
+35 局面（§11.6）のうち深さ 1 で覆る 12 件＋2 手先の静的差 +1,400 以上の 15 件（重複あり）について、「我々の手の後」「Rapfi の手の後」それぞれで quiescence トレースを取り、(a) stand-pat で止まったか、(b) 四の応酬の手順と各段の stand-pat、(c) 最終値と 2 手先静的評価の差、を表にして機序 1〜4 に分類する。分類の多数派に対してレバーを設計（例: 機序 1 なら「止め四になった直後の局面の評価」＝受けを強いた側の TURN 補正、機序 2 なら quiescence の相手側四の扱い、機序 3 なら葉の手番補正の再較正）。
