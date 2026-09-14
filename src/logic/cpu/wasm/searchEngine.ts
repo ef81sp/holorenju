@@ -133,12 +133,14 @@ export const Q_TRACE_CUTS = [
 ] as const;
 export type QTraceCut = (typeof Q_TRACE_CUTS)[number];
 
-/** quiescence.MAX_QUIESCENCE_DEPTH（getQTraceBuffer のレイアウトが依存） */
+/** quiescence.MAX_QUIESCENCE_DEPTH（quiescenceTraceWasm の q_depth 既定） */
 const Q_TRACE_MAX_DEPTH = 4;
-/** getQTraceBuffer のレイアウト（main.zig q_trace_buffer）: pv は offset 16 から (row u32, col u32) × 4 */
+/** quiescence.MAX_Q_PV_LEN = MAX_QUIESCENCE_DEPTH + FORCED_BLOCK_EXTRA（getQTraceBuffer のレイアウトが依存） */
+const Q_TRACE_MAX_PV_LEN = 10;
+/** getQTraceBuffer のレイアウト（main.zig q_trace_buffer）: pv は offset 16 から (row u32, col u32) × 10 */
 const Q_TRACE_PV_OFFSET = 16;
-/** standpats は pv の直後から i32 × 5 */
-const Q_TRACE_STANDPATS_OFFSET = Q_TRACE_PV_OFFSET + Q_TRACE_MAX_DEPTH * 8;
+/** standpats は pv の直後から i32 × 11 */
+const Q_TRACE_STANDPATS_OFFSET = Q_TRACE_PV_OFFSET + Q_TRACE_MAX_PV_LEN * 8;
 const Q_TRACE_NO_LAST_MOVE = 255;
 
 /** 静止探索の診断トレース（根から best 子を辿った手順と各局面の stand-pat） */

@@ -651,6 +651,7 @@ pub fn minimaxWithTT(
             last_move,
             ctx.board_eval_options,
             quiescence.MAX_QUIESCENCE_DEPTH,
+            0,
             &q_stats,
             qLimitsFrom(ctx),
             ctx.tt,

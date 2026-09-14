@@ -841,12 +841,12 @@ fn writeResult(row: u8, col: u8, score: i32, completed_depth: u8, top_candidates
 /// | 4      | standpat_root (i32)                            |
 /// | 8      | pv_len (u32)                                   |
 /// | 12     | cut (u32; quiescence.QCut の @intFromEnum)     |
-/// | 16     | pv: MAX_QUIESCENCE_DEPTH × (row u32, col u32)  |
-/// | 48     | standpats: (MAX_QUIESCENCE_DEPTH+1) × i32      |
-/// 合計 68 バイト。pv_len を越える pv / standpats は 0 埋め。
+/// | 16     | pv: MAX_Q_PV_LEN × (row u32, col u32)          |
+/// | 96     | standpats: (MAX_Q_PV_LEN+1) × i32              |
+/// 合計 140 バイト（MAX_Q_PV_LEN = 10）。pv_len を越える pv / standpats は 0 埋め。
 const Q_TRACE_PV_OFFSET: usize = 16;
-const Q_TRACE_STANDPATS_OFFSET: usize = Q_TRACE_PV_OFFSET + @as(usize, quiescence.MAX_QUIESCENCE_DEPTH) * 8;
-const Q_TRACE_BUFFER_LEN: usize = Q_TRACE_STANDPATS_OFFSET + (@as(usize, quiescence.MAX_QUIESCENCE_DEPTH) + 1) * 4;
+const Q_TRACE_STANDPATS_OFFSET: usize = Q_TRACE_PV_OFFSET + @as(usize, quiescence.MAX_Q_PV_LEN) * 8;
+const Q_TRACE_BUFFER_LEN: usize = Q_TRACE_STANDPATS_OFFSET + (@as(usize, quiescence.MAX_Q_PV_LEN) + 1) * 4;
 var q_trace_buffer: [Q_TRACE_BUFFER_LEN]u8 = .{0} ** Q_TRACE_BUFFER_LEN;
 
 export fn getQTraceBuffer() [*]u8 {
