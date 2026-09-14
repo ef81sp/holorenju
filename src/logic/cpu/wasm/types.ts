@@ -176,6 +176,19 @@ export interface WasmModuleContext {
   getLastForcedWinTreeOverflow: () => number;
   /** 直近の詰み木で1ノードの受けが切り捨てられたか（1/0。issue #122） */
   getLastForcedWinTreeDefenseTruncated: () => number;
+
+  // Quiescence 診断トレース（zig/src/quiescence.zig の q_trace。挙動を変えない観測用）。
+  // 旧 wasm には無い＝optional。searchEngine.quiescenceTrace は未定義なら throw する。
+  /** lastRow=255 で last_move なし。evalOptionsFlags は findBestMove と同じデコード */
+  quiescenceTraceWasm?: (
+    color: number,
+    lastRow: number,
+    lastCol: number,
+    evalOptionsFlags: number,
+    qDepth: number,
+  ) => void;
+  /** 68 バイト固定レイアウト（main.zig の q_trace_buffer 参照） */
+  getQTraceBuffer?: () => number;
 }
 
 /** Cell values matching Zig Cell enum */
