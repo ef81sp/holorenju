@@ -126,6 +126,24 @@ pub const SearchStats = struct {
     /// 判定は VCT 子 limiter の `tripped`（探索中に `exceeded()` が true を返した）。
     /// VCF 部分は数えない。較正用（設計メモ bench-fixed-nodes §2.3）。
     probe_cap_hits: u32 = 0,
+    // --- 根の最善手の「自ら追い詰めに入る手」検証（search.zig `avoidWalkInIfNeeded`。
+    //     設計メモ opp-vct-walkin-2026-09-12 §5.4。append-only、+68〜+80 と +84〜+88） ---
+    /// 検証した候補数（最善手 + 代替候補。最大 `search.WALKIN_MAX_CHECKS`）
+    walkin_checks: u32 = 0,
+    /// 最善手を安全な代替候補に切り替えた回数（0/1）
+    walkin_switches: u32 = 0,
+    /// 最善手の検証が判定不能だった回数（0/1）。予約予算が無い／尽きていて走れなかったか、
+    /// 走ったが上限に当たって「なし」で終わった（= tripped。較正用の到達率）。
+    /// 発火後に再探索の時間が足りなかった件は数えない（`walkin_fired == 1 and walkin_switches == 0`
+    /// で分かる）
+    walkin_skipped: u32 = 0,
+    /// 除外再探索（最善手を除外した根の再探索）の消費ノード。主探索と同じ経路なので
+    /// 両モードで `nodes` に含まれる
+    walkin_nodes: u32 = 0,
+    /// 最善手が「自ら追い詰めに入る手」と判定された回数（0/1。= 除外再探索が始まった）
+    walkin_fired: u32 = 0,
+    /// 検証（相手の VCT 探索）の消費ノード。両モードで記録。`nodes` への加算は決定的モードのみ
+    walkin_vct_nodes: u32 = 0,
 };
 
 /// 探索コンテキスト
@@ -153,6 +171,11 @@ pub const SearchContext = struct {
 
     /// 予算ポリシー（決定的モード / 時間モード）。`findBestMoveIterative` が一度だけ導出して渡す。
     budget: budget_mod.BudgetPolicy = budget_mod.BudgetPolicy.TIME_MODE,
+
+    /// 根の除外集合（セル index のビット集合）。`findBestMoveWithTT` の根の手ループだけが見る
+    /// （深さ > 0 のノードには影響しない）。`search.avoidWalkInIfNeeded` が「最善手を除いた
+    /// 再探索」に使う（設計メモ opp-vct-walkin §5.3 v3）。通常は空。
+    root_excluded: std.bit_set.IntegerBitSet(board_mod.CELL_COUNT) = std.bit_set.IntegerBitSet(board_mod.CELL_COUNT).initEmpty(),
 
     /// 探索打ち切り（時間切れ/ノード上限/絶対時間制限）が発生しているか
     pub inline fn isAborted(self: *const SearchContext) bool {
@@ -1026,12 +1049,15 @@ pub fn findBestMoveWithTT(
     const beta: i32 = if (aspiration_prev_score) |prev| prev + window_size else scores.INFINITY;
 
     for (0..moves.len) |mi| {
+        const move = moves.items[mi];
+        // 根の除外集合（`avoidWalkInIfNeeded` の除外再探索）
+        if (ctx.root_excluded.isSet(@as(u16, move.row) * BOARD_SIZE + move.col)) continue;
+
         // タイムアウトチェック
         if (ctx.isAborted()) {
             break;
         }
 
-        const move = moves.items[mi];
         const alpha_before = alpha;
         const score = searchRootMove(cells, hash, move, color, depth, alpha, beta, ctx);
 

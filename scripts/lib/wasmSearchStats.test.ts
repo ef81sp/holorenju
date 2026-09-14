@@ -7,6 +7,8 @@ import {
   STATS_BUFFER_DEADLINE_HIT_BYTES,
   STATS_BUFFER_EXTENDED_BYTES,
   STATS_BUFFER_PROBE_STATS_BYTES,
+  STATS_BUFFER_WALKIN_DETAIL_BYTES,
+  STATS_BUFFER_WALKIN_STATS_BYTES,
   hasExtendedStats,
   readWasmSearchStats,
 } from "./wasmSearchStats.ts";
@@ -94,6 +96,71 @@ describe("readWasmSearchStats", () => {
     );
   });
 
+  it("bufferLength >= 84 なら walkin_* も読む（68 では読まない）", () => {
+    const view = makeStatsBuffer([...base12, 1, 2, 0, 321, 45, 3, 1, 0, 4321]);
+    const at68 = readWasmSearchStats(
+      view,
+      0,
+      SEARCH_FEATURE_EXTENDED_STATS,
+      68,
+    );
+    expect(at68).not.toHaveProperty("walkinChecks");
+    expect(at68).not.toHaveProperty("walkinNodes");
+    const at84 = readWasmSearchStats(
+      view,
+      0,
+      SEARCH_FEATURE_EXTENDED_STATS,
+      84,
+    );
+    expect(at84.walkinChecks).toBe(3);
+    expect(at84.walkinSwitches).toBe(1);
+    expect(at84.walkinSkipped).toBe(0);
+    expect(at84.walkinNodes).toBe(4321);
+    expect(at84.probeCapHits).toBe(45);
+    // bit1 無しなら bufferLength があっても拡張部は読まない
+    expect(readWasmSearchStats(view, 0, 0, 84)).not.toHaveProperty(
+      "walkinChecks",
+    );
+  });
+
+  it("bufferLength >= 92 なら walkin_fired / walkin_vct_nodes も読む（84 では読まない）", () => {
+    const view = makeStatsBuffer([
+      ...base12,
+      1,
+      2,
+      0,
+      321,
+      45,
+      3,
+      1,
+      0,
+      4321,
+      1,
+      777,
+    ]);
+    const at84 = readWasmSearchStats(
+      view,
+      0,
+      SEARCH_FEATURE_EXTENDED_STATS,
+      84,
+    );
+    expect(at84.walkinNodes).toBe(4321);
+    expect(at84).not.toHaveProperty("walkinFired");
+    expect(at84).not.toHaveProperty("walkinVctNodes");
+    const at92 = readWasmSearchStats(
+      view,
+      0,
+      SEARCH_FEATURE_EXTENDED_STATS,
+      92,
+    );
+    expect(at92.walkinFired).toBe(1);
+    expect(at92.walkinVctNodes).toBe(777);
+    expect(at92.walkinNodes).toBe(4321);
+    expect(readWasmSearchStats(view, 0, 0, 92)).not.toHaveProperty(
+      "walkinFired",
+    );
+  });
+
   it("ptr オフセットを尊重する", () => {
     const view = makeStatsBuffer([0, 0, ...base12, 5, 6]);
     const stats = readWasmSearchStats(
@@ -107,11 +174,13 @@ describe("readWasmSearchStats", () => {
     expect(stats.probeNodes).toBe(6);
   });
 
-  it("バイト長定数はレイアウトと一致（12×4=48、+2×4=56、+1×4=60、+2×4=68）", () => {
+  it("バイト長定数はレイアウトと一致（12×4=48、+2×4=56、+1×4=60、+2×4=68、+4×4=84、+2×4=92）", () => {
     expect(STATS_BUFFER_BASE_BYTES).toBe(48);
     expect(STATS_BUFFER_EXTENDED_BYTES).toBe(56);
     expect(STATS_BUFFER_DEADLINE_HIT_BYTES).toBe(60);
     expect(STATS_BUFFER_PROBE_STATS_BYTES).toBe(68);
+    expect(STATS_BUFFER_WALKIN_STATS_BYTES).toBe(84);
+    expect(STATS_BUFFER_WALKIN_DETAIL_BYTES).toBe(92);
   });
 });
 

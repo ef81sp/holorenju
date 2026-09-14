@@ -80,5 +80,6 @@ describe("checkForcedLoss VCT strict化（幻の被詰み対策）", () => {
       DETERMINISTIC_LOSS_OPTIONS,
     );
     expect(result).toBeUndefined();
-  });
+    // 決定的予算の strict VCT は単独 2.7 s だが、全体実行の並列負荷では 5 s 既定を超える（6.8 s 実測）
+  }, 20_000);
 });
