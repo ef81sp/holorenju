@@ -81,25 +81,25 @@ const Golden = struct {
 
 // セット A: 擬似時計 0 / threatProbe 無効 / time_limit 10000
 const GOLDEN_A = [_]Golden{
-    .{ .kifu = "H8 I9 I8 G8 F6 I7 G6", .what = "深さ7完了（白）", .row = 8, .col = 7, .score = 147, .nodes = 48373, .depth = 7 },
-    .{ .kifu = "H8 I9 I8 G8 F6 I7 G6 H7 I6 H6 J8 K7", .what = "深さ7完了（黒）", .row = 8, .col = 9, .score = 551, .nodes = 64421, .depth = 7 },
+    .{ .kifu = "H8 I9 I8 G8 F6 I7 G6", .what = "深さ7完了（白）", .row = 8, .col = 7, .score = 144, .nodes = 62267, .depth = 7 }, // 2026-09-14 静止探索の強制受け修正で 147/48373 → 144/62267（着手不変）
+    .{ .kifu = "H8 I9 I8 G8 F6 I7 G6 H7 I6 H6 J8 K7", .what = "深さ7完了（黒）", .row = 8, .col = 9, .score = 551, .nodes = 101002, .depth = 7 }, // 2026-09-14 強制受け修正で nodes 64421 → 101002（着手・score 不変）
     .{ .kifu = "H8 I9 F7 J9 G7 I8 H7 I7 I6 H9 K9 J7 K6 I10 I11", .what = "事前探索: ミセVCF即決 (FIVE-15)", .row = 5, .col = 9, .score = 99985, .nodes = 0, .depth = 0 },
     .{ .kifu = "H8 I9 F7 J9 G7 I8 H7 I7 I6 H9 K9 J7 K6 I10 I11 J10 J11", .what = "事前探索: VCF即決 (FIVE-10)", .row = 5, .col = 6, .score = 99990, .nodes = 0, .depth = 0 },
     .{ .kifu = "H8 I9 F7 J9 G7 I8 H7 I7 I6 H9 K9 J7 K6 I10 I11 J10 J11 G10", .what = "事前探索: 相手の四を止める (-FIVE)", .row = 4, .col = 5, .score = -100000, .nodes = 0, .depth = 0 },
     .{ .kifu = "H8 I9 I7 G9 J8 H10 H6 K9 H7 H9 J9 I10", .what = "事前探索: ミセVCF即決 G7（mise_vcf.zig のテスト局面）", .row = 8, .col = 6, .score = 99985, .nodes = 0, .depth = 0 },
     .{ .kifu = "H8 G9 G8 F8 H10 F9 H9 H11 G10 I10 I8 F11 J8 K8 F12", .what = "事前探索: VCF即決 J9（search.zig のテスト局面）", .row = 6, .col = 9, .score = 99990, .nodes = 0, .depth = 0 },
-    .{ .kifu = "I9 H9 H8 G8 I7 G7 I6 I10 J11 G10 G11 F10 H10 J8 J6 K5 L6 K6", .what = "demotePlainFourIfNeeded 発火（I8→I5、ノード上限で中断）", .row = 10, .col = 8, .score = -1327, .nodes = 200002, .depth = 5 },
-    .{ .kifu = "H9 I8 I9 G7 H8 H7 F7 J9 G6 I10 H10", .what = "深さ7完了（白）", .row = 4, .col = 7, .score = -125, .nodes = 38676, .depth = 7 },
-    .{ .kifu = "H8 H7 H6 I6 J6 H5 I5 G8 J5 J7 K8 G9 G7 J4 K7 H4", .what = "深さ7完了（黒・高スコア）", .row = 7, .col = 11, .score = 3082, .nodes = 52777, .depth = 7 },
+    .{ .kifu = "I9 H9 H8 G8 I7 G7 I6 I10 J11 G10 G11 F10 H10 J8 J6 K5 L6 K6", .what = "demotePlainFourIfNeeded 発火（I8→I5、ノード上限で中断）", .row = 10, .col = 8, .score = -1330, .nodes = 200001, .depth = 5 }, // 2026-09-14 強制受け修正で -1327/200002 → -1330/200001（着手不変）
+    .{ .kifu = "H9 I8 I9 G7 H8 H7 F7 J9 G6 I10 H10", .what = "深さ7完了（白）", .row = 4, .col = 7, .score = 27, .nodes = 112997, .depth = 7 }, // 2026-09-14 強制受け修正で -125/38676 → 27/112997（着手不変）
+    .{ .kifu = "H8 H7 H6 I6 J6 H5 I5 G8 J5 J7 K8 G9 G7 J4 K7 H4", .what = "深さ7完了（黒。2026-09-14 強制受け修正で (7,11) L8 score 3082 → (11,6) G4 score 551。L8 は白の VCF G4 F3 I4 に入る負け手で、旧値は王手放置 stand-pat による水平線効果。G4 はその VCF 起点の先取り）", .row = 11, .col = 6, .score = 551, .nodes = 137581, .depth = 7 },
 };
 
 // セット B: 擬似時計 step=1（開始 1ms）/ threatProbe 有効 / time_limit 1,000,000
 const GOLDEN_B = [_]Golden{
-    .{ .kifu = "H8 I9 I8 G8 F6 I7 G6", .what = "深さ7完了（白）", .row = 8, .col = 7, .score = 147, .nodes = 48141, .depth = 7 },
-    .{ .kifu = "H8 I9 I8 G8 F6 I7 G6 H7 I6 H6 J8 K7", .what = "深さ7完了（黒）", .row = 8, .col = 9, .score = 551, .nodes = 71422, .depth = 7 },
-    .{ .kifu = "I9 H9 H8 G8 I7 G7 I6 I10 J11 G10 G11 F10 H10 J8 J6 K5 L6 K6", .what = "demotePlainFourIfNeeded 発火（I8→I5）", .row = 10, .col = 8, .score = -1327, .nodes = 200003, .depth = 5 }, // 2026-09-09 VCT 25 ms 化で 200001→200003（着手・score 不変）
-    .{ .kifu = "H9 I8 I9 G7 H8 H7 F7 J9 G6 I10 H10", .what = "深さ7完了（白）", .row = 4, .col = 7, .score = -125, .nodes = 38335, .depth = 7 },
-    .{ .kifu = "H8 H7 H6 I6 J6 H5 I5 G8 J5 J7 K8 G9 G7 J4 K7 H4", .what = "深さ7完了（黒・高スコア。2026-09-09 VCT プローブ 25 ms 化で勝ち筋 (7,11) を発見＝セット A と同一着手。50 ms 時は (11,8) score 400）", .row = 7, .col = 11, .score = 8084, .nodes = 32001, .depth = 7 },
+    .{ .kifu = "H8 I9 I8 G8 F6 I7 G6", .what = "深さ7完了（白）", .row = 8, .col = 7, .score = 144, .nodes = 50288, .depth = 7 }, // 2026-09-14 強制受け修正で 147/48141 → 144/50288（着手不変）
+    .{ .kifu = "H8 I9 I8 G8 F6 I7 G6 H7 I6 H6 J8 K7", .what = "深さ7完了（黒）", .row = 8, .col = 9, .score = 578, .nodes = 62135, .depth = 7 }, // 2026-09-14 強制受け修正で 551/71422 → 578/62135（着手不変）
+    .{ .kifu = "I9 H9 H8 G8 I7 G7 I6 I10 J11 G10 G11 F10 H10 J8 J6 K5 L6 K6", .what = "demotePlainFourIfNeeded 発火（I8→I5）", .row = 10, .col = 8, .score = -1330, .nodes = 200001, .depth = 5 }, // 2026-09-09 VCT 25 ms 化で 200001→200003 / 2026-09-14 強制受け修正で -1327/200003 → -1330/200001（着手不変）
+    .{ .kifu = "H9 I8 I9 G7 H8 H7 F7 J9 G6 I10 H10", .what = "深さ7完了（白）", .row = 4, .col = 7, .score = 27, .nodes = 107002, .depth = 7 }, // 2026-09-14 強制受け修正で -125/38335 → 27/107002（着手不変）
+    .{ .kifu = "H8 H7 H6 I6 J6 H5 I5 G8 J5 J7 K8 G9 G7 J4 K7 H4", .what = "深さ7完了（黒。2026-09-09 VCT プローブ 25 ms 化で (7,11) L8 score 8084。2026-09-14 強制受け修正で (11,6) G4 score 551 ＝セット A と同一着手。L8 は白の VCF G4 F3 I4 に入る負け手で旧値は水平線効果）", .row = 11, .col = 6, .score = 551, .nodes = 105651, .depth = 7 },
 };
 
 fn runGolden(g: Golden, time_limit: u32) search.IterativeDeepingResult {
