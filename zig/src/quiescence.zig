@@ -236,6 +236,111 @@ pub const QSearchStats = struct {
     q_search_nodes: u32 = 0,
 };
 
+// --- 診断用トレース（挙動を変えない観測機能） ---
+
+/// quiescence ノードがどの理由で値を確定したか
+pub const QCut = enum(u8) {
+    /// stand-pat がウィンドウ外（beta 以上 / alpha 以下）で即返した
+    standpat_cutoff,
+    /// q_depth == 0 で stand-pat を返した
+    depth_limit,
+    /// 脅威手（四・受け）が無く stand-pat を返した
+    no_moves,
+    /// 相手の止め四の受けが黒の禁手 → 終局（issue #142）
+    forced_loss,
+    /// 脅威手を展開して値を確定した（PV が空なら stand-pat が最善）
+    searched,
+    /// ノード予算 / 時間切れで打ち切った（値は不完全）
+    aborted,
+};
+
+/// 根から best 子を辿った手順と、その各局面の stand-pat。
+///
+/// - `pv[0..pv_len]`: 根から best 子を辿った手順（best が stand-pat なら空）
+/// - `standpats[i]`: PV の i 手目を置いた後の局面の stand-pat（perspective 視点）。
+///   `standpats[0]` は根。有効なのは `standpats[0..pv_len + 1]`
+/// - `cut`: 根の確定理由
+pub const QTrace = struct {
+    standpat_root: i32 = 0,
+    value: i32 = 0,
+    pv_len: u8 = 0,
+    pv: [MAX_QUIESCENCE_DEPTH]Position = undefined,
+    standpats: [MAX_QUIESCENCE_DEPTH + 1]i32 = undefined,
+    cut: QCut = .no_moves,
+};
+
+/// トレース有効フラグ。**有効時は TT の probe/store を行わない**（純粋な木の値）。
+/// 無効時のホットパスは `if (q_trace_enabled)` の分岐だけで、計算量・値は不変。
+pub var q_trace_enabled: bool = false;
+/// 直近の `quiescenceSearchTraced` の結果
+pub var q_trace: QTrace = .{};
+
+/// 各 ply（根からの手数）のノード記録。子の確定後に親へ `@memcpy` で畳み上げる。
+const NodeTrace = struct {
+    pv_len: u8 = 0,
+    pv: [MAX_QUIESCENCE_DEPTH]Position = undefined,
+    standpats: [MAX_QUIESCENCE_DEPTH + 1]i32 = undefined,
+    cut: QCut = .no_moves,
+
+    /// 根からの手数 → 記録スロット（`q_trace_root_depth - q_depth`）
+    fn at(q_depth: u8) *NodeTrace {
+        return &trace_nodes[q_trace_root_depth - q_depth];
+    }
+
+    /// 葉として確定（PV 空・stand-pat のみ）
+    fn leaf(self: *NodeTrace, cut: QCut, stand_pat: i32) void {
+        self.pv_len = 0;
+        self.standpats[0] = stand_pat;
+        self.cut = cut;
+    }
+
+    /// 子 `child`（手 `move` を置いた先）を best として畳み上げる
+    fn adoptChild(self: *NodeTrace, move: Position, child: *const NodeTrace) void {
+        self.pv[0] = move;
+        @memcpy(self.pv[1 .. 1 + child.pv_len], child.pv[0..child.pv_len]);
+        @memcpy(self.standpats[1 .. 2 + child.pv_len], child.standpats[0 .. 1 + child.pv_len]);
+        self.pv_len = child.pv_len + 1;
+    }
+};
+var trace_nodes: [MAX_QUIESCENCE_DEPTH + 1]NodeTrace = undefined;
+var q_trace_root_depth: u8 = MAX_QUIESCENCE_DEPTH;
+
+/// `quiescenceSearch` をトレース付きで 1 回走らせ、結果を `q_trace` に書く。
+/// 引数は `quiescenceSearch` と同一。`q_depth` は MAX_QUIESCENCE_DEPTH に丸める。
+/// 呼び出し中だけ `q_trace_enabled = true`（TT は使わない）。
+pub fn quiescenceSearchTraced(
+    cells: []Cell,
+    hash: u64,
+    is_maximizing: bool,
+    perspective: Cell,
+    alpha_init: i32,
+    beta_init: i32,
+    last_move: ?Position,
+    eval_options: evaluate.EvalOptions,
+    q_depth: u8,
+    stats: *QSearchStats,
+    limits: QLimits,
+    tt: *tt_mod.TranspositionTable,
+) i32 {
+    const depth: u8 = @min(q_depth, MAX_QUIESCENCE_DEPTH);
+    q_trace_root_depth = depth;
+    q_trace_enabled = true;
+    defer q_trace_enabled = false;
+
+    const value = quiescenceSearch(cells, hash, is_maximizing, perspective, alpha_init, beta_init, last_move, eval_options, depth, stats, limits, tt);
+
+    const root = &trace_nodes[0];
+    q_trace = .{
+        .standpat_root = root.standpats[0],
+        .value = value,
+        .pv_len = root.pv_len,
+        .pv = root.pv,
+        .standpats = root.standpats,
+        .cut = root.cut,
+    };
+    return value;
+}
+
 /// Quiescence Search（静止探索）
 ///
 /// depth=0 の末端ノードで、脅威手（四・ブロック）を追加探索し、
@@ -257,8 +362,11 @@ pub fn quiescenceSearch(
     stats.nodes += 1;
     stats.q_search_nodes += 1;
 
-    // TTプローブ
-    const tt_entry = tt.probe(hash);
+    // トレース（有効時のみ記録。無効時は null で分岐のみ）
+    const tr: ?*NodeTrace = if (q_trace_enabled) NodeTrace.at(q_depth) else null;
+
+    // TTプローブ（トレース時は TT を使わない＝純粋な木の値）
+    const tt_entry = if (tr == null) tt.probe(hash) else null;
     if (tt_entry) |entry| {
         const current_tt_depth: i8 = -(@as(i8, @intCast(MAX_QUIESCENCE_DEPTH)) - @as(i8, @intCast(q_depth)) + 1);
         if (entry.depth >= current_tt_depth) {
@@ -292,7 +400,9 @@ pub fn quiescenceSearch(
     // 決定的ノード上限（主たる打ち切り条件・ハードウェア非依存）。
     // q探索ノードも総予算に計上されるため、密局面での q爆発が決定的に頭打ちになる。
     if (limits.max_nodes > 0 and limits.node_counter.* >= limits.max_nodes) {
-        return incremental_eval.getEvaluation(cells, perspective, eval_opts);
+        const v = incremental_eval.getEvaluation(cells, perspective, eval_opts);
+        if (tr) |t| t.leaf(.aborted, v);
+        return v;
     }
 
     // 壁時計の安全天井（出荷時の応答性用）。`no_time_limit` 時は無効＝計測は決定的。
@@ -308,7 +418,9 @@ pub fn quiescenceSearch(
         }
     }
     if (limits.timeout_flag.*) {
-        return incremental_eval.getEvaluation(cells, perspective, eval_opts);
+        const v = incremental_eval.getEvaluation(cells, perspective, eval_opts);
+        if (tr) |t| t.leaf(.aborted, v);
+        return v;
     }
 
     // 現在の手番
@@ -322,6 +434,8 @@ pub fn quiescenceSearch(
     // perspective 基準・ply 補正なし。
     const forced = forcedBlockOrLoss(cells, current_color, last_move);
     if (forced == .forced_loss) {
+        // トレース時のみ stand-pat を取る（通常経路では評価しない＝不変）
+        if (tr) |t| t.leaf(.forced_loss, incremental_eval.getEvaluation(cells, perspective, eval_opts));
         return if (current_color == perspective) -scores.FIVE else scores.FIVE;
     }
 
@@ -333,15 +447,22 @@ pub fn quiescenceSearch(
 
     // Alpha-beta cutoff（stand-pat）
     if (is_maximizing) {
-        if (stand_pat >= beta) return beta;
+        if (stand_pat >= beta) {
+            if (tr) |t| t.leaf(.standpat_cutoff, stand_pat);
+            return beta;
+        }
         if (stand_pat > alpha) alpha = stand_pat;
     } else {
-        if (stand_pat <= alpha) return alpha;
+        if (stand_pat <= alpha) {
+            if (tr) |t| t.leaf(.standpat_cutoff, stand_pat);
+            return alpha;
+        }
         if (stand_pat < beta) beta = stand_pat;
     }
 
     // 深度制限
     if (q_depth == 0) {
+        if (tr) |t| t.leaf(.depth_limit, stand_pat);
         return stand_pat;
     }
 
@@ -350,11 +471,14 @@ pub fn quiescenceSearch(
     const move_count = generateTacticalMoves(cells, current_color, forced, &move_buf);
 
     if (move_count == 0) {
+        if (tr) |t| t.leaf(.no_moves, stand_pat);
         return stand_pat;
     }
 
     var best_score = stand_pat;
     var aborted = false;
+    // PV 空・stand-pat 起点で開始し、best 子が見つかるたびに畳み上げる
+    if (tr) |t| t.leaf(.searched, stand_pat);
 
     for (0..move_count) |mi| {
         const move = move_buf[mi];
@@ -392,11 +516,17 @@ pub fn quiescenceSearch(
 
         // Alpha-beta更新
         if (is_maximizing) {
-            if (score > best_score) best_score = score;
+            if (score > best_score) {
+                best_score = score;
+                if (tr) |t| t.adoptChild(move, NodeTrace.at(q_depth - 1));
+            }
             if (score > alpha) alpha = score;
             if (alpha >= beta) break;
         } else {
-            if (score < best_score) best_score = score;
+            if (score < best_score) {
+                best_score = score;
+                if (tr) |t| t.adoptChild(move, NodeTrace.at(q_depth - 1));
+            }
             if (score < beta) beta = score;
             if (alpha >= beta) break;
         }
@@ -404,8 +534,11 @@ pub fn quiescenceSearch(
 
     // 打ち切り時は不完全な best_score を TT に書かない（TT汚染防止）。
     if (aborted) {
+        if (tr) |t| t.cut = .aborted;
         return best_score;
     }
+    // トレース時は TT に書かない
+    if (tr != null) return best_score;
 
     // TT保存: 負の可変depthで本探索と分離
     const tt_depth: i8 = -(@as(i8, @intCast(MAX_QUIESCENCE_DEPTH)) - @as(i8, @intCast(q_depth)) + 1);
@@ -969,4 +1102,152 @@ test "createsFour と getFourDefensePosition は同一基準（不変条件）" 
             cells[idx] = .empty;
         }
     }
+}
+
+// --- 診断用トレース（q_trace） ---
+
+/// トレース時の共通セットアップ（テスト用）。`runQuiescenceAsBlack` と同じ設定で
+/// `quiescenceSearchTraced` を黒視点・黒手番で走らせる。
+fn runTracedAsBlack(cells: []Cell, last_move: ?Position, q_depth: u8) i32 {
+    incremental_eval.initFromBoard(cells, .{
+        .connectivity_bonus = scores.CONNECTIVITY_BONUS,
+        .single_four_penalty_multiplier = 100,
+    });
+    var stats = QSearchStats{};
+    var timeout_flag = false;
+    var node_counter: u32 = 0;
+    var tt = tt_mod.TranspositionTable{
+        .entries = &tt_mod.global_tt_storage,
+        .current_generation = 0,
+    };
+    tt.clear();
+    return quiescenceSearchTraced(
+        cells,
+        0,
+        true,
+        .black,
+        -scores.INFINITY,
+        scores.INFINITY,
+        last_move,
+        test_eval_options,
+        q_depth,
+        &stats,
+        .{ .node_counter = &node_counter, .no_time_limit = true, .timeout_flag = &timeout_flag },
+        &tt,
+    );
+}
+
+/// PV を実際に置いて static eval を取り、`standpats` と一致するか検証する。
+/// `standpats[i]` は i 手置いた後の局面の stand-pat（perspective 視点、手番は交互）。
+fn expectStandpatsMatchPV(cells: []Cell, perspective: Cell, root_is_maximizing: bool, trace: QTrace) !void {
+    var is_max = root_is_maximizing;
+    var color: Cell = if (is_max) perspective else perspective.opposite();
+    var placed: [MAX_QUIESCENCE_DEPTH]Position = undefined;
+    var i: usize = 0;
+    while (true) {
+        var opts = test_eval_options;
+        opts.last_mover_is_perspective = if (!is_max) .yes else .no;
+        try std.testing.expectEqual(trace.standpats[i], incremental_eval.getEvaluation(cells, perspective, opts));
+        if (i == trace.pv_len) break;
+        const m = trace.pv[i];
+        try std.testing.expectEqual(Cell.empty, cells[@as(usize, m.row) * BOARD_SIZE + m.col]);
+        incremental_eval.placeStone(cells, m.row, m.col, color);
+        placed[i] = m;
+        i += 1;
+        is_max = !is_max;
+        color = color.opposite();
+    }
+    while (i > 0) {
+        i -= 1;
+        incremental_eval.removeStone(cells, placed[i].row, placed[i].col);
+    }
+}
+
+test "q_trace: 既定では無効" {
+    try std.testing.expect(!q_trace_enabled);
+}
+
+test "q_trace: 静かな局面は no_moves で PV 空・standpats[0]=stand-pat=value" {
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[7 * BOARD_SIZE + 7] = .black;
+    cells[7 * BOARD_SIZE + 8] = .white;
+    bitboard.initFromCells(&cells);
+
+    const value = runTracedAsBlack(&cells, .{ .row = 7, .col = 8 }, MAX_QUIESCENCE_DEPTH);
+    try std.testing.expect(!q_trace_enabled); // 呼び出し後は元に戻る
+    try std.testing.expectEqual(QCut.no_moves, q_trace.cut);
+    try std.testing.expectEqual(@as(u8, 0), q_trace.pv_len);
+    try std.testing.expectEqual(value, q_trace.value);
+    try std.testing.expectEqual(value, q_trace.standpat_root);
+    try std.testing.expectEqual(q_trace.standpat_root, q_trace.standpats[0]);
+    try expectStandpatsMatchPV(&cells, .black, true, q_trace);
+}
+
+test "q_trace: 戦術局面では PV と standpats が整合し、値はトレース無効時（TT 空）と一致" {
+    ll.init();
+    var cells: [CELL_COUNT]Cell = undefined;
+    setupTacticalPosition(&cells);
+
+    const plain = runQuiescenceAsBlack(&cells, null);
+    const traced = runTracedAsBlack(&cells, null, MAX_QUIESCENCE_DEPTH);
+    // 1 回の呼び出しで TT が空なら、TT の有無で値は変わらない
+    try std.testing.expectEqual(plain, traced);
+    try std.testing.expectEqual(traced, q_trace.value);
+    try std.testing.expectEqual(QCut.searched, q_trace.cut);
+    try std.testing.expect(q_trace.pv_len <= MAX_QUIESCENCE_DEPTH);
+    try expectStandpatsMatchPV(&cells, .black, true, q_trace);
+}
+
+test "q_trace: 四の応酬（四→受け＝カウンター四→受け）で PV が伸びる" {
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    // 黒: 横 (7,3)(7,4)(7,5)（左端 (7,2) は白で止め）→ (7,6) で止め四
+    cells[7 * BOARD_SIZE + 2] = .white;
+    cells[7 * BOARD_SIZE + 3] = .black;
+    cells[7 * BOARD_SIZE + 4] = .black;
+    cells[7 * BOARD_SIZE + 5] = .black;
+    // 斜め (5,4)(6,5) → (7,6) で活三（四三）
+    cells[5 * BOARD_SIZE + 4] = .black;
+    cells[6 * BOARD_SIZE + 5] = .black;
+    // 白: 縦 (8,7)(9,7)(10,7)（上端 (11,7) は黒で止め）→ 受け (7,7) が白の止め四になる
+    // ＝白は stand-pat より受けを選び、黒は (6,7) で受け返す（PV が 3 手伸びる）
+    cells[8 * BOARD_SIZE + 7] = .white;
+    cells[9 * BOARD_SIZE + 7] = .white;
+    cells[10 * BOARD_SIZE + 7] = .white;
+    cells[11 * BOARD_SIZE + 7] = .black;
+    bitboard.initFromCells(&cells);
+
+    const value = runTracedAsBlack(&cells, .{ .row = 10, .col = 7 }, MAX_QUIESCENCE_DEPTH);
+    try std.testing.expectEqual(QCut.searched, q_trace.cut);
+    try std.testing.expectEqual(@as(u8, 3), q_trace.pv_len);
+    try std.testing.expectEqual(Position{ .row = 7, .col = 6 }, q_trace.pv[0]);
+    try std.testing.expectEqual(Position{ .row = 7, .col = 7 }, q_trace.pv[1]);
+    try std.testing.expectEqual(Position{ .row = 6, .col = 7 }, q_trace.pv[2]);
+    try std.testing.expectEqual(q_trace.standpats[3], value); // 末端 ply3（白番・四なし）は stand-pat
+    try std.testing.expect(value > q_trace.standpat_root);
+    try expectStandpatsMatchPV(&cells, .black, true, q_trace);
+}
+
+test "q_trace: q_depth=0 は depth_limit" {
+    ll.init();
+    var cells: [CELL_COUNT]Cell = undefined;
+    setupTacticalPosition(&cells);
+    _ = runTracedAsBlack(&cells, null, 0);
+    try std.testing.expectEqual(QCut.depth_limit, q_trace.cut);
+    try std.testing.expectEqual(@as(u8, 0), q_trace.pv_len);
+    try std.testing.expectEqual(q_trace.standpat_root, q_trace.value);
+}
+
+test "q_trace: 受け点が黒の禁手なら forced_loss" {
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    setupWhiteBlockedFourRow7(&cells);
+    setupBlackDoubleFourAt77(&cells);
+    bitboard.initFromCells(&cells);
+    const value = runTracedAsBlack(&cells, .{ .row = 7, .col = 6 }, MAX_QUIESCENCE_DEPTH);
+    try std.testing.expectEqual(-scores.FIVE, value);
+    try std.testing.expectEqual(QCut.forced_loss, q_trace.cut);
+    try std.testing.expectEqual(@as(u8, 0), q_trace.pv_len);
+    try std.testing.expectEqual(-scores.FIVE, q_trace.value);
 }

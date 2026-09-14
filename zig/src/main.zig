@@ -4,8 +4,10 @@ const evaluate = @import("evaluate.zig");
 const forbidden = @import("forbidden.zig");
 const ft = @import("forced_win_tree.zig");
 const jump_patterns = @import("jump_patterns.zig");
+const incremental_eval = @import("incremental_eval.zig");
 const patterns = @import("patterns.zig");
 const prospect = @import("prospect.zig");
+const quiescence = @import("quiescence.zig");
 const search = @import("search.zig");
 const position_eval = @import("position_eval.zig");
 const scores_mod = @import("scores.zig");
@@ -189,6 +191,34 @@ export fn getResultBuffer() [*]u8 {
     return &result_buffer;
 }
 
+/// findBestMove の `eval_options_flags` から葉評価（盤面評価）オプションを組み立てる。
+/// `quiescenceTraceWasm` も同じデコードを共有する（SSoT）。
+///
+/// bits 9-16: 葉評価 single_four_penalty_multiplier
+///   0   = 未指定 → デフォルト 100（ペナルティなし）
+///   255 = センチネル → 0（完全ペナルティ）
+///   1-254 = そのまま使用
+/// bit 17: enable_leaf_mise
+/// bit 18: eval_basis (0=legacy, 1=prospect)
+fn boardEvalOptionsFromFlags(eval_options_flags: u32) evaluate.EvalOptions {
+    const leaf_multiplier_raw: u8 = @intCast((eval_options_flags >> 9) & 0xFF);
+    const leaf_multiplier: i32 = switch (leaf_multiplier_raw) {
+        0 => 100,
+        255 => 0,
+        else => @as(i32, leaf_multiplier_raw),
+    };
+    const enable_leaf_mise = ((eval_options_flags >> 17) & 1) != 0;
+    const eval_basis: evaluate.EvalBasis = if (((eval_options_flags >> 18) & 1) != 0) .prospect else .legacy;
+
+    return .{
+        .enable_leaf_mise = enable_leaf_mise,
+        .last_mover_is_perspective = .unset,
+        .single_four_penalty_multiplier = leaf_multiplier,
+        .connectivity_bonus = scores_mod.CONNECTIVITY_BONUS,
+        .eval_basis = eval_basis,
+    };
+}
+
 /// 最善手を探索し、結果を result_buffer に書き込む
 ///
 /// パラメータ:
@@ -225,28 +255,7 @@ export fn findBestMove(color: u8, max_depth: u8, time_limit_ms: u32, max_nodes: 
     else
         position_eval.decodeEvalOptions(eval_options_flags);
 
-    // bits 9-16: 葉評価 single_four_penalty_multiplier
-    //   0   = 未指定 → デフォルト 100（ペナルティなし）
-    //   255 = センチネル → 0（完全ペナルティ）
-    //   1-254 = そのまま使用
-    // bit 17: enable_leaf_mise
-    // bit 18: eval_basis (0=legacy, 1=prospect)
-    const leaf_multiplier_raw: u8 = @intCast((eval_options_flags >> 9) & 0xFF);
-    const leaf_multiplier: i32 = switch (leaf_multiplier_raw) {
-        0 => 100,
-        255 => 0,
-        else => @as(i32, leaf_multiplier_raw),
-    };
-    const enable_leaf_mise = ((eval_options_flags >> 17) & 1) != 0;
-    const eval_basis: evaluate.EvalBasis = if (((eval_options_flags >> 18) & 1) != 0) .prospect else .legacy;
-
-    const board_eval_options = evaluate.EvalOptions{
-        .enable_leaf_mise = enable_leaf_mise,
-        .last_mover_is_perspective = .unset,
-        .single_four_penalty_multiplier = leaf_multiplier,
-        .connectivity_bonus = @import("scores.zig").CONNECTIVITY_BONUS,
-        .eval_basis = eval_basis,
-    };
+    const board_eval_options = boardEvalOptionsFromFlags(eval_options_flags);
 
     // 絶対時間制限の既定 10 秒は時間モードのみ。決定的モード（setDeterministicMode）では
     // 0 = 安全弁なし（ベンチは 0 を渡す）。>0 を渡せば安全弁として有効（設計メモ §2.6）。
@@ -819,5 +828,88 @@ fn writeResult(row: u8, col: u8, score: i32, completed_depth: u8, top_candidates
             result_buffer[base + 4] = c_score_bytes[2];
             result_buffer[base + 5] = c_score_bytes[3];
         }
+    }
+}
+
+// --- Quiescence 診断トレース（quiescence.zig の q_trace） ---
+
+/// トレース結果バッファ（固定レイアウト・リトルエンディアン）
+///
+/// | offset | field                                          |
+/// | ------ | ---------------------------------------------- |
+/// | 0      | value (i32)                                    |
+/// | 4      | standpat_root (i32)                            |
+/// | 8      | pv_len (u32)                                   |
+/// | 12     | cut (u32; quiescence.QCut の @intFromEnum)     |
+/// | 16     | pv: MAX_QUIESCENCE_DEPTH × (row u32, col u32)  |
+/// | 48     | standpats: (MAX_QUIESCENCE_DEPTH+1) × i32      |
+/// 合計 68 バイト。pv_len を越える pv / standpats は 0 埋め。
+const Q_TRACE_PV_OFFSET: usize = 16;
+const Q_TRACE_STANDPATS_OFFSET: usize = Q_TRACE_PV_OFFSET + @as(usize, quiescence.MAX_QUIESCENCE_DEPTH) * 8;
+const Q_TRACE_BUFFER_LEN: usize = Q_TRACE_STANDPATS_OFFSET + (@as(usize, quiescence.MAX_QUIESCENCE_DEPTH) + 1) * 4;
+var q_trace_buffer: [Q_TRACE_BUFFER_LEN]u8 = .{0} ** Q_TRACE_BUFFER_LEN;
+
+export fn getQTraceBuffer() [*]u8 {
+    return &q_trace_buffer;
+}
+
+/// 現在の盤面（board_cells）で `color` 手番の静止探索を 1 回トレース付きで走らせ、
+/// 結果を `getQTraceBuffer()` に書く。挙動観測用（TT は使わない・探索 stats には触らない）。
+///
+/// - `last_row = 255` で last_move なし（相手の直前手が四なら受けを強制するため必要）
+/// - `eval_options_flags` は findBestMove と同じデコード（葉評価部分のみ使用）
+/// - `q_depth` は MAX_QUIESCENCE_DEPTH に丸める
+/// - color が不正なら全 0 を書く
+export fn quiescenceTraceWasm(color: u8, last_row: u8, last_col: u8, eval_options_flags: u32, q_depth: u8) void {
+    @memset(&q_trace_buffer, 0);
+    const cell_color: board.Cell = switch (color) {
+        1 => .black,
+        2 => .white,
+        else => return,
+    };
+    const last_move: ?threats_mod.Position = if (last_row < board.BOARD_SIZE and last_col < board.BOARD_SIZE)
+        .{ .row = last_row, .col = last_col }
+    else
+        null;
+
+    const cells = &board.board_cells;
+    const board_eval_options = boardEvalOptionsFromFlags(eval_options_flags);
+    incremental_eval.initFromBoard(cells, .{
+        .connectivity_bonus = board_eval_options.connectivity_bonus,
+        .single_four_penalty_multiplier = board_eval_options.single_four_penalty_multiplier,
+        .eval_basis = board_eval_options.eval_basis,
+    });
+
+    var stats = quiescence.QSearchStats{};
+    var timeout_flag = false;
+    var node_counter: u32 = 0;
+    _ = quiescence.quiescenceSearchTraced(
+        cells,
+        zobrist.computeBoardHash(cells),
+        true,
+        cell_color,
+        -scores_mod.INFINITY,
+        scores_mod.INFINITY,
+        last_move,
+        board_eval_options,
+        q_depth,
+        &stats,
+        .{ .node_counter = &node_counter, .no_time_limit = true, .timeout_flag = &timeout_flag },
+        &tt_mod.global_tt,
+    );
+
+    const t = quiescence.q_trace;
+    std.mem.writeInt(i32, q_trace_buffer[0..4], t.value, .little);
+    std.mem.writeInt(i32, q_trace_buffer[4..8], t.standpat_root, .little);
+    std.mem.writeInt(u32, q_trace_buffer[8..12], t.pv_len, .little);
+    std.mem.writeInt(u32, q_trace_buffer[12..16], @intFromEnum(t.cut), .little);
+    for (0..t.pv_len) |i| {
+        const base = Q_TRACE_PV_OFFSET + i * 8;
+        std.mem.writeInt(u32, q_trace_buffer[base..][0..4], t.pv[i].row, .little);
+        std.mem.writeInt(u32, q_trace_buffer[base + 4 ..][0..4], t.pv[i].col, .little);
+    }
+    for (0..@as(usize, t.pv_len) + 1) |i| {
+        const base = Q_TRACE_STANDPATS_OFFSET + i * 4;
+        std.mem.writeInt(i32, q_trace_buffer[base..][0..4], t.standpats[i], .little);
     }
 }
