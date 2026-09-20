@@ -187,7 +187,7 @@ export interface WasmModuleContext {
     evalOptionsFlags: number,
     qDepth: number,
   ) => void;
-  /** 68 バイト固定レイアウト（main.zig の q_trace_buffer 参照） */
+  /** 140 バイト固定レイアウト（main.zig の q_trace_buffer 参照） */
   getQTraceBuffer?: () => number;
 }
 
