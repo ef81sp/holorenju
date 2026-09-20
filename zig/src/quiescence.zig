@@ -363,6 +363,18 @@ pub fn quiescenceSearchTraced(
 /// 連鎖回数を `FORCED_BLOCK_EXTRA` に制限）。
 ///
 /// - `forced_extra`: 強制受け延長を何回使ったか（根は 0）。
+///
+/// **既知の限界**（いずれも挙動を変えるので、直すときは再スクリーンが必要）:
+/// - (a) TT キー（盤面ハッシュ）は `last_move` を含まない。同一盤面に forced／非 forced の
+///   両経路（手順前後で直前手が違う）で到達すると、stand-pat 適用の有無が違う値が同じ
+///   エントリに混ざる。#142 の `forced_loss` から続く既存の構造。対処案は forced のとき
+///   固定キーを XOR してエントリを分けること。
+/// - (b) `forcedBlockOrLoss` は**直前手が作った四**だけを見る。q の根の一段手前で放置された
+///   四（直前手以外の四）は `.none` になり、stand-pat が許される。
+/// - (c) `.unstoppable`（活四）は `.none` に落ちるので stand-pat を許す。四四（受け点が 2 つ）は
+///   `getFourDefensePosition` が受け 1 点に畳むので、受かる前提で 1 手進む。
+/// - (d) 相手の四に直面しつつ自分に五がある局面でも、五ではなく受けた後の値を返す
+///   （現手番にとって過小評価の方向）。
 pub fn quiescenceSearch(
     cells: []Cell,
     hash: u64,
@@ -389,8 +401,7 @@ pub fn quiescenceSearch(
     // TTプローブ（トレース時は TT を使わない＝純粋な木の値）
     const tt_entry = if (tr == null) tt.probe(hash) else null;
     if (tt_entry) |entry| {
-        const current_tt_depth: i8 = -(@as(i8, @intCast(MAX_QUIESCENCE_DEPTH)) - @as(i8, @intCast(q_depth)) + 1);
-        if (entry.depth >= current_tt_depth) {
+        if (entry.depth >= qTtDepth(q_depth)) {
             switch (entry.score_type) {
                 .exact => return entry.score,
                 .lower_bound => {
@@ -460,56 +471,53 @@ pub fn quiescenceSearch(
         return if (current_color == perspective) -scores.FIVE else scores.FIVE;
     }
 
-    // 強制受け: 相手の止め四に受け点 1 点で対応するしかない。
-    const forced_block = forced == .block;
-
     // Stand-pat: 何もしない場合の評価（インクリメンタル評価を使用）。
-    // 強制受けでは「何もしない」は許されないので値としては使わない（トレースの
-    // standpats[ply] の記録にだけ使う）。
     const stand_pat = incremental_eval.getEvaluation(cells, perspective, eval_opts);
+
+    // 強制受け: 相手の止め四に受け点 1 点で対応するしかない。「何もしない」は許されないので
+    // stand-pat は値としては使わず（延長を使い切ったときの葉とトレースの記録だけ）、
+    // 打ち切りも行わない。専用経路へ。
+    switch (forced) {
+        .block => |dp| return searchForcedBlock(cells, hash, is_maximizing, perspective, alpha_init, beta_init, dp, stand_pat, eval_options, q_depth, forced_extra, stats, limits, tt, tr, ply),
+        .forced_loss => unreachable, // 上で終局として処理済み
+        .none => {},
+    }
 
     var alpha = alpha_init;
     var beta = beta_init;
 
-    // Alpha-beta cutoff（stand-pat）。強制受けでは行わない（受けた後の値が確定する
-    // まで打ち切れない。alpha/beta は呼び出し側の値のまま）。
-    if (!forced_block) {
-        if (is_maximizing) {
-            if (stand_pat >= beta) {
-                if (tr) |t| t.leaf(.standpat_cutoff, stand_pat);
-                return beta;
-            }
-            if (stand_pat > alpha) alpha = stand_pat;
-        } else {
-            if (stand_pat <= alpha) {
-                if (tr) |t| t.leaf(.standpat_cutoff, stand_pat);
-                return alpha;
-            }
-            if (stand_pat < beta) beta = stand_pat;
+    // Alpha-beta cutoff（stand-pat）
+    if (is_maximizing) {
+        if (stand_pat >= beta) {
+            if (tr) |t| t.leaf(.standpat_cutoff, stand_pat);
+            return beta;
         }
+        if (stand_pat > alpha) alpha = stand_pat;
+    } else {
+        if (stand_pat <= alpha) {
+            if (tr) |t| t.leaf(.standpat_cutoff, stand_pat);
+            return alpha;
+        }
+        if (stand_pat < beta) beta = stand_pat;
     }
 
-    // 深度制限。強制受けだけは深さを消費せずに 1 手進める（連鎖は FORCED_BLOCK_EXTRA
-    // 回まで。超えたら受けた後の局面＝上限で止まった子ノードの stand-pat が返る）。
-    const extend = q_depth == 0 and forced_block and forced_extra < FORCED_BLOCK_EXTRA;
-    if (q_depth == 0 and !extend) {
+    // 深度制限
+    if (q_depth == 0) {
         if (tr) |t| t.leaf(.depth_limit, stand_pat);
         return stand_pat;
     }
-    const child_depth: u8 = if (extend) 0 else q_depth - 1;
-    const child_extra: u8 = if (extend) forced_extra + 1 else forced_extra;
+    const child_depth: u8 = q_depth - 1;
 
-    // 脅威手生成（`forced` は stand-pat 前に計算済みのものを再利用する）
+    // 脅威手生成（ここに来るのは `forced == .none` のみ＝自分の四を作る手）
     var move_buf: [225]Position = undefined;
-    const move_count = generateTacticalMoves(cells, current_color, forced, &move_buf);
+    const move_count = generateTacticalMoves(cells, current_color, .none, &move_buf);
 
     if (move_count == 0) {
         if (tr) |t| t.leaf(.no_moves, stand_pat);
         return stand_pat;
     }
 
-    // 強制受けでは best は受け手の探索値のみ（stand-pat を起点にしない）。
-    var best_score: i32 = if (forced_block) (if (is_maximizing) -scores.INFINITY else scores.INFINITY) else stand_pat;
+    var best_score: i32 = stand_pat;
     var aborted = false;
     // PV 空・stand-pat 起点で開始し、best 子が見つかるたびに畳み上げる
     if (tr) |t| t.leaf(.searched, stand_pat);
@@ -531,7 +539,7 @@ pub fn quiescenceSearch(
             move,
             eval_options,
             child_depth,
-            child_extra,
+            forced_extra,
             stats,
             limits,
             tt,
@@ -539,12 +547,6 @@ pub fn quiescenceSearch(
 
         // 石を除去
         incremental_eval.removeStone(cells, move.row, move.col);
-
-        // 強制受けの値は（打ち切りで不完全でも）受け手の値。stand-pat には戻さない。
-        if (forced_block) {
-            best_score = score;
-            if (tr) |t| t.adoptChild(move, NodeTrace.at(ply + 1));
-        }
 
         // 打ち切り（ノード予算/時間切れ）が起きたら弟ノードの走査も止める。
         // これがないと打切り後も幅方向の走査が続き「眠い崩壊」で予算を大きく超過する。
@@ -554,8 +556,6 @@ pub fn quiescenceSearch(
             aborted = true;
             break;
         }
-
-        if (forced_block) break; // 受け手は 1 つだけ（alpha/beta は更新不要）
 
         // Alpha-beta更新
         if (is_maximizing) {
@@ -582,19 +582,102 @@ pub fn quiescenceSearch(
     }
     // トレース時は TT に書かない
     if (tr != null) return best_score;
+    // 強制受け延長ノード（forced_extra > 0）は TT に書かない（理由は `searchForcedBlock`）。
+    if (forced_extra > 0) return best_score;
+
+    // TT保存: 負の可変depthで本探索と分離
+    storeQTt(tt, hash, best_score, q_depth, alpha_init, beta_init);
+
+    return best_score;
+}
+
+/// 静止探索ノードの TT 深さ（probe / store 共通）。負の可変 depth で本探索（depth >= 0）と
+/// 分離する: q_depth = MAX → -1、q_depth = 0 → -(MAX + 1)。
+fn qTtDepth(q_depth: u8) i8 {
+    return -(@as(i8, @intCast(MAX_QUIESCENCE_DEPTH)) - @as(i8, @intCast(q_depth)) + 1);
+}
+
+fn storeQTt(tt: *tt_mod.TranspositionTable, hash: u64, score: i32, q_depth: u8, alpha_init: i32, beta_init: i32) void {
+    const score_type: tt_mod.ScoreType = if (score <= alpha_init) .upper_bound else if (score >= beta_init) .lower_bound else .exact;
+    tt.store(hash, score, qTtDepth(q_depth), score_type, null);
+}
+
+/// 強制受け（`forced == .block`）ノードの探索: 受け点 `block` を 1 手だけ進め、その探索値を返す。
+///
+/// stand-pat による打ち切り・`best_score` の起点は適用しない（`stand_pat` は延長を使い切った
+/// ときの葉の値とトレースの記録にだけ使う）。alpha/beta は呼び出し側の値のまま子に渡す。
+/// `q_depth == 0` でも深さを消費せずに進める延長（`forced_extra` で `FORCED_BLOCK_EXTRA` 回に
+/// 制限）の判定もここに閉じる。受け手は `forcedBlockOrLoss` の payload をそのまま使い、
+/// `generateTacticalMoves` は通さない（受け手が必ず 1 つ＝値が必ず子の探索値で確定する）。
+fn searchForcedBlock(
+    cells: []Cell,
+    hash: u64,
+    is_maximizing: bool,
+    perspective: Cell,
+    alpha_init: i32,
+    beta_init: i32,
+    block: Position,
+    stand_pat: i32,
+    eval_options: evaluate.EvalOptions,
+    q_depth: u8,
+    forced_extra: u8,
+    stats: *QSearchStats,
+    limits: QLimits,
+    tt: *tt_mod.TranspositionTable,
+    tr: ?*NodeTrace,
+    ply: u8,
+) i32 {
+    // 深度制限。連鎖は FORCED_BLOCK_EXTRA 回まで（超えたらこの局面の stand-pat が返る）。
+    const extend = q_depth == 0 and forced_extra < FORCED_BLOCK_EXTRA;
+    if (q_depth == 0 and !extend) {
+        if (tr) |t| t.leaf(.depth_limit, stand_pat);
+        return stand_pat;
+    }
+    const child_depth: u8 = if (extend) 0 else q_depth - 1;
+    const child_extra: u8 = if (extend) forced_extra + 1 else forced_extra;
+
+    if (tr) |t| t.leaf(.searched, stand_pat);
+
+    const current_color = if (is_maximizing) perspective else perspective.opposite();
+    incremental_eval.placeStone(cells, block.row, block.col, current_color);
+    const new_hash = zobrist.updateHash(hash, block.row, block.col, current_color);
+    // 強制受けの値は（打ち切りで不完全でも）受け手の値。stand-pat には戻さない。
+    const score = quiescenceSearch(
+        cells,
+        new_hash,
+        !is_maximizing,
+        perspective,
+        alpha_init,
+        beta_init,
+        block,
+        eval_options,
+        child_depth,
+        child_extra,
+        stats,
+        limits,
+        tt,
+    );
+    incremental_eval.removeStone(cells, block.row, block.col);
+    if (tr) |t| t.adoptChild(block, NodeTrace.at(ply + 1));
+
+    // 打ち切り時は不完全な値を TT に書かない（TT汚染防止）。
+    if (limits.timeout_flag.* or
+        (limits.max_nodes > 0 and limits.node_counter.* >= limits.max_nodes))
+    {
+        if (tr) |t| t.cut = .aborted;
+        return score;
+    }
+    // トレース時は TT に書かない
+    if (tr != null) return score;
     // 強制受け延長ノード（forced_extra > 0）は TT に書かない: 深さ規約は q_depth のみで
     // 表現され（延長ノードはすべて q_depth == 0 ＝ 同じ tt_depth）、値が残り延長回数に
     // 依存するため同じ深さとして再利用できない。probe は行う（書かれている値は延長を
     // 使い切っていない forced_extra == 0 のノードか本探索のもので、延長中のノードに
     // とって十分深い）。
-    if (forced_extra > 0) return best_score;
+    if (forced_extra > 0) return score;
 
-    // TT保存: 負の可変depthで本探索と分離
-    const tt_depth: i8 = -(@as(i8, @intCast(MAX_QUIESCENCE_DEPTH)) - @as(i8, @intCast(q_depth)) + 1);
-    const score_type: tt_mod.ScoreType = if (best_score <= alpha_init) .upper_bound else if (best_score >= beta_init) .lower_bound else .exact;
-    tt.store(hash, best_score, tt_depth, score_type, null);
-
-    return best_score;
+    storeQTt(tt, hash, score, q_depth, alpha_init, beta_init);
+    return score;
 }
 
 // === Tests ===
@@ -1471,6 +1554,7 @@ const chain_pv = [_]Position{
 };
 
 test "forced block: 受けの連鎖は q_depth == 0 から FORCED_BLOCK_EXTRA 回で止まる" {
+    comptime std.debug.assert(chain_pv.len >= 1 + FORCED_BLOCK_EXTRA);
     ll.init();
     var cells = [_]Cell{.empty} ** CELL_COUNT;
     setupForcedBlockChain(&cells);

@@ -361,6 +361,11 @@ export class WasmSearchEngine {
     const value = view.getInt32(ptr, true);
     const standPatRoot = view.getInt32(ptr + 4, true);
     const pvLen = view.getUint32(ptr + 8, true);
+    if (pvLen > Q_TRACE_MAX_PV_LEN) {
+      throw new Error(
+        `quiescenceTrace: pvLen ${pvLen} exceeds Q_TRACE_MAX_PV_LEN ${Q_TRACE_MAX_PV_LEN}`,
+      );
+    }
     const cutIndex = view.getUint32(ptr + 12, true);
     const cut = Q_TRACE_CUTS[cutIndex];
     if (cut === undefined) {

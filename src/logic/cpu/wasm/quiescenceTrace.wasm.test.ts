@@ -41,6 +41,60 @@ function buildFourExchangeBoard(): BoardState {
   return board;
 }
 
+/**
+ * 白番。受けがカウンター四になる連鎖（zig/src/quiescence.zig の `setupForcedBlockChain` と同じ配置）。
+ * 根は黒の止め四 (7,3)-(7,6) に直面。受けの順:
+ * W(7,7) B(6,7) W(6,6) B(2,6) W(2,7) B(2,11) W(1,11) B(1,7) → 次は W(5,3)
+ */
+function buildForcedBlockChainBoard(): BoardState {
+  const board = emptyBoard();
+  const stones: Record<"black" | "white", [number, number][]> = {
+    black: [
+      [7, 3],
+      [7, 4],
+      [7, 5],
+      [7, 6],
+      [11, 7],
+      [6, 8],
+      [6, 9],
+      [6, 10],
+      [2, 3],
+      [2, 4],
+      [2, 5],
+      [3, 11],
+      [4, 11],
+      [5, 11],
+      [1, 12],
+      [3, 5],
+      [4, 4],
+    ],
+    white: [
+      [7, 2],
+      [8, 7],
+      [9, 7],
+      [10, 7],
+      [6, 11],
+      [3, 6],
+      [4, 6],
+      [5, 6],
+      [2, 2],
+      [2, 8],
+      [2, 9],
+      [2, 10],
+      [1, 8],
+      [1, 9],
+      [1, 10],
+      [0, 8],
+    ],
+  };
+  for (const color of ["black", "white"] as const) {
+    for (const [r, c] of stones[color]) {
+      board[r]![c] = color;
+    }
+  }
+  return board;
+}
+
 describe("quiescenceTrace (wasm)", () => {
   const enginePromise = loadWasmModule().then(
     (wasm) => new WasmSearchEngine(wasm),
@@ -61,6 +115,26 @@ describe("quiescenceTrace (wasm)", () => {
     expect(trace.standPats).toHaveLength(trace.pv.length + 1);
     expect(trace.standPats[0]).toBe(trace.standPatRoot);
     expect(trace.value).toBeGreaterThan(trace.standPatRoot);
+  });
+
+  it("受けの連鎖では PV が通常深さ（4）を超えて伸び、standPats は pv.length + 1", async () => {
+    const engine = await enginePromise;
+    const trace = engine.quiescenceTrace(
+      buildForcedBlockChainBoard(),
+      "white",
+      { row: 7, col: 6 },
+      0,
+    );
+    expect(trace.cut).toBe("searched");
+    expect(trace.pv.length).toBeGreaterThan(4);
+    expect(trace.pv.slice(0, 3)).toEqual([
+      { row: 7, col: 7 },
+      { row: 6, col: 7 },
+      { row: 6, col: 6 },
+    ]);
+    expect(trace.standPats).toHaveLength(trace.pv.length + 1);
+    expect(trace.standPats[0]).toBe(trace.standPatRoot);
+    expect(trace.value).toBe(trace.standPats[trace.pv.length]);
   });
 
   it("静かな局面では standpat_cutoff か no_moves で PV は空", async () => {
