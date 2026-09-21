@@ -70,47 +70,52 @@ function evaluateMoveForcedLoss(moveIndex: number): FullEvalResult {
   };
 }
 
-describe("J6被詰みチェーン: #70(検出) + #108(チェーン集計)の統合", () => {
-  it("白の手(moveIndex 1,3,...,19)を実際に検査すると、J6(7)以降が長いforcedLossチェーンになる", () => {
-    const whiteMoveIndices = [1, 3, 5, 7, 9, 11, 13, 15, 17, 19];
-    const results = whiteMoveIndices.map((i) => evaluateMoveForcedLoss(i));
+// 実戦 wasm 探索の壁時計テスト。単独 3.3 s だが pre-push（golden と並列）や全体実行では 5 s 既定を超える
+describe(
+  "J6被詰みチェーン: #70(検出) + #108(チェーン集計)の統合",
+  { timeout: 30_000 },
+  () => {
+    it("白の手(moveIndex 1,3,...,19)を実際に検査すると、J6(7)以降が長いforcedLossチェーンになる", () => {
+      const whiteMoveIndices = [1, 3, 5, 7, 9, 11, 13, 15, 17, 19];
+      const results = whiteMoveIndices.map((i) => evaluateMoveForcedLoss(i));
 
-    const flagged = results
-      .filter((r) => r.forcedLossType)
-      .map((r) => r.moveIndex);
+      const flagged = results
+        .filter((r) => r.forcedLossType)
+        .map((r) => r.moveIndex);
 
-    // J6(7)以降、この棋譜では黒が forcing 手順を継続したため
-    // 9,11,13,15,17,19 全てに forcedLossType が付く
-    expect(flagged).toEqual([7, 9, 11, 13, 15, 17, 19]);
-  });
+      // J6(7)以降、この棋譜では黒が forcing 手順を継続したため
+      // 9,11,13,15,17,19 全てに forcedLossType が付く
+      expect(flagged).toEqual([7, 9, 11, 13, 15, 17, 19]);
+    });
 
-  it("J6は敗着(blunder)、9手目以降は強制応手(forcedReply)として最終表示される", () => {
-    const whiteMoveIndices = [1, 3, 5, 7, 9, 11, 13, 15, 17, 19];
-    const results = whiteMoveIndices.map((i) => evaluateMoveForcedLoss(i));
+    it("J6は敗着(blunder)、9手目以降は強制応手(forcedReply)として最終表示される", () => {
+      const whiteMoveIndices = [1, 3, 5, 7, 9, 11, 13, 15, 17, 19];
+      const results = whiteMoveIndices.map((i) => evaluateMoveForcedLoss(i));
 
-    // playerFirst=false: 白を isPlayerMove=true として評価する
-    const evaluatedMoves = results.map((r) =>
-      buildEvaluatedMove(r, RECORD, false),
-    );
+      // playerFirst=false: 白を isPlayerMove=true として評価する
+      const evaluatedMoves = results.map((r) =>
+        buildEvaluatedMove(r, RECORD, false),
+      );
 
-    const review = buildGameReview(evaluatedMoves);
-    const byIndex = (i: number): string | undefined =>
-      review.evaluatedMoves.find((m) => m.moveIndex === i)?.quality;
+      const review = buildGameReview(evaluatedMoves);
+      const byIndex = (i: number): string | undefined =>
+        review.evaluatedMoves.find((m) => m.moveIndex === i)?.quality;
 
-    // moveIndex 1,3,5 は forcedLossType なし → 通常分類（scoreDiff=0→excellent）
-    expect(byIndex(1)).toBe("excellent");
-    expect(byIndex(3)).toBe("excellent");
-    expect(byIndex(5)).toBe("excellent");
+      // moveIndex 1,3,5 は forcedLossType なし → 通常分類（scoreDiff=0→excellent）
+      expect(byIndex(1)).toBe("excellent");
+      expect(byIndex(3)).toBe("excellent");
+      expect(byIndex(5)).toBe("excellent");
 
-    // moveIndex 7 (J6) = チェーン初手 = 敗着として blunder のまま
-    expect(byIndex(7)).toBe("blunder");
+      // moveIndex 7 (J6) = チェーン初手 = 敗着として blunder のまま
+      expect(byIndex(7)).toBe("blunder");
 
-    // moveIndex 9,11,13,15,17,19 = チェーン継続 = forcedReply に再分類
-    for (const i of [9, 11, 13, 15, 17, 19]) {
-      expect(byIndex(i)).toBe("forcedReply");
-    }
+      // moveIndex 9,11,13,15,17,19 = チェーン継続 = forcedReply に再分類
+      for (const i of [9, 11, 13, 15, 17, 19]) {
+        expect(byIndex(i)).toBe("forcedReply");
+      }
 
-    // criticalErrors はチェーン初手(J6)の1件のみ（forcedReply分は除外）
-    expect(review.criticalErrors).toBe(1);
-  });
-});
+      // criticalErrors はチェーン初手(J6)の1件のみ（forcedReply分は除外）
+      expect(review.criticalErrors).toBe(1);
+    });
+  },
+);

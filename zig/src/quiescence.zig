@@ -27,6 +27,15 @@ pub const Position = @import("threats.zig").Position;
 /// Quiescence Search の最大深度（四+ブロック 2往復分）
 pub const MAX_QUIESCENCE_DEPTH: u8 = 4;
 
+/// 強制受け延長の上限（`q_depth == 0` で相手の止め四に直面した側が、深さを消費せずに
+/// 受けを 1 手進められる回数。受けがカウンター四になる連鎖の無限ループ防止）。
+/// 上限に達したら受けた後の局面（＝上限で止まった子ノード）の stand-pat が返る。
+pub const FORCED_BLOCK_EXTRA: u8 = 6;
+
+/// PV の最大長（通常深さ + 強制受け延長）。トレースの配列サイズと wasm バッファの
+/// レイアウト（main.zig / searchEngine.ts）が依存する。
+pub const MAX_Q_PV_LEN: u8 = MAX_QUIESCENCE_DEPTH + FORCED_BLOCK_EXTRA;
+
 /// quiescence の打ち切り制御。
 ///
 /// **設計方針（ハードウェア非依存の決定的強度）**:
@@ -236,11 +245,79 @@ pub const QSearchStats = struct {
     q_search_nodes: u32 = 0,
 };
 
-/// Quiescence Search（静止探索）
+// --- 診断用トレース（挙動を変えない観測機能） ---
+
+/// quiescence ノードがどの理由で値を確定したか
+pub const QCut = enum(u8) {
+    /// stand-pat がウィンドウ外（beta 以上 / alpha 以下）で即返した
+    standpat_cutoff,
+    /// q_depth == 0 で stand-pat を返した
+    depth_limit,
+    /// 脅威手（四・受け）が無く stand-pat を返した
+    no_moves,
+    /// 相手の止め四の受けが黒の禁手 → 終局（issue #142）
+    forced_loss,
+    /// 脅威手を展開して値を確定した（PV が空なら stand-pat が最善）
+    searched,
+    /// ノード予算 / 時間切れで打ち切った（値は不完全）
+    aborted,
+};
+
+/// 根から best 子を辿った手順と、その各局面の stand-pat。
 ///
-/// depth=0 の末端ノードで、脅威手（四・ブロック）を追加探索し、
-/// 「静止した状態」で evaluateBoard を呼ぶ。
-pub fn quiescenceSearch(
+/// - `pv[0..pv_len]`: 根から best 子を辿った手順（best が stand-pat なら空）
+/// - `standpats[i]`: PV の i 手目を置いた後の局面の stand-pat（perspective 視点）。
+///   `standpats[0]` は根。有効なのは `standpats[0..pv_len + 1]`
+/// - `cut`: 根の確定理由
+pub const QTrace = struct {
+    standpat_root: i32 = 0,
+    value: i32 = 0,
+    pv_len: u8 = 0,
+    pv: [MAX_Q_PV_LEN]Position = undefined,
+    standpats: [MAX_Q_PV_LEN + 1]i32 = undefined,
+    cut: QCut = .no_moves,
+};
+
+/// トレース有効フラグ。**有効時は TT の probe/store を行わない**（純粋な木の値）。
+/// 無効時のホットパスは `if (q_trace_enabled)` の分岐だけで、計算量・値は不変。
+pub var q_trace_enabled: bool = false;
+/// 直近の `quiescenceSearchTraced` の結果
+pub var q_trace: QTrace = .{};
+
+/// 各 ply（根からの手数）のノード記録。子の確定後に親へ `@memcpy` で畳み上げる。
+const NodeTrace = struct {
+    pv_len: u8 = 0,
+    pv: [MAX_Q_PV_LEN]Position = undefined,
+    standpats: [MAX_Q_PV_LEN + 1]i32 = undefined,
+    cut: QCut = .no_moves,
+
+    /// 根からの手数（ply）→ 記録スロット
+    fn at(ply: u8) *NodeTrace {
+        return &trace_nodes[ply];
+    }
+
+    /// 葉として確定（PV 空・stand-pat のみ）
+    fn leaf(self: *NodeTrace, cut: QCut, stand_pat: i32) void {
+        self.pv_len = 0;
+        self.standpats[0] = stand_pat;
+        self.cut = cut;
+    }
+
+    /// 子 `child`（手 `move` を置いた先）を best として畳み上げる
+    fn adoptChild(self: *NodeTrace, move: Position, child: *const NodeTrace) void {
+        self.pv[0] = move;
+        @memcpy(self.pv[1 .. 1 + child.pv_len], child.pv[0..child.pv_len]);
+        @memcpy(self.standpats[1 .. 2 + child.pv_len], child.standpats[0 .. 1 + child.pv_len]);
+        self.pv_len = child.pv_len + 1;
+    }
+};
+var trace_nodes: [MAX_Q_PV_LEN + 1]NodeTrace = undefined;
+var q_trace_root_depth: u8 = MAX_QUIESCENCE_DEPTH;
+
+/// `quiescenceSearch` をトレース付きで 1 回走らせ、結果を `q_trace` に書く。
+/// 引数は `quiescenceSearch` と同一。`q_depth` は MAX_QUIESCENCE_DEPTH に丸める。
+/// 呼び出し中だけ `q_trace_enabled = true`（TT は使わない）。
+pub fn quiescenceSearchTraced(
     cells: []Cell,
     hash: u64,
     is_maximizing: bool,
@@ -254,14 +331,77 @@ pub fn quiescenceSearch(
     limits: QLimits,
     tt: *tt_mod.TranspositionTable,
 ) i32 {
+    const depth: u8 = @min(q_depth, MAX_QUIESCENCE_DEPTH);
+    q_trace_root_depth = depth;
+    q_trace_enabled = true;
+    defer q_trace_enabled = false;
+
+    const value = quiescenceSearch(cells, hash, is_maximizing, perspective, alpha_init, beta_init, last_move, eval_options, depth, 0, stats, limits, tt);
+
+    const root = &trace_nodes[0];
+    q_trace = .{
+        .standpat_root = root.standpats[0],
+        .value = value,
+        .pv_len = root.pv_len,
+        .pv = root.pv,
+        .standpats = root.standpats,
+        .cut = root.cut,
+    };
+    return value;
+}
+
+/// Quiescence Search（静止探索）
+///
+/// depth=0 の末端ノードで、脅威手（四・ブロック）を追加探索し、
+/// 「静止した状態」で evaluateBoard を呼ぶ。
+///
+/// **強制受け（`forced == .block`）の扱い**: 相手の直前手が止め四なら、現手番は
+/// 受ける（または五を作る）以外の手が無い。したがってこのノードの値は「受けた後の
+/// 局面の値」であり、stand-pat（何もしない場合の静的評価）による打ち切り・
+/// `best_score` の初期値は適用しない（チェスの王手放置 stand-pat と同じ誤り）。
+/// `q_depth == 0` でも受けだけは深さを消費せずに 1 手進める（`forced_extra` で
+/// 連鎖回数を `FORCED_BLOCK_EXTRA` に制限）。
+///
+/// - `forced_extra`: 強制受け延長を何回使ったか（根は 0）。
+///
+/// **既知の限界**（いずれも挙動を変えるので、直すときは再スクリーンが必要）:
+/// - (a) TT キー（盤面ハッシュ）は `last_move` を含まない。同一盤面に forced／非 forced の
+///   両経路（手順前後で直前手が違う）で到達すると、stand-pat 適用の有無が違う値が同じ
+///   エントリに混ざる。#142 の `forced_loss` から続く既存の構造。対処案は forced のとき
+///   固定キーを XOR してエントリを分けること。
+/// - (b) `forcedBlockOrLoss` は**直前手が作った四**だけを見る。q の根の一段手前で放置された
+///   四（直前手以外の四）は `.none` になり、stand-pat が許される。
+/// - (c) `.unstoppable`（活四）は `.none` に落ちるので stand-pat を許す。四四（受け点が 2 つ）は
+///   `getFourDefensePosition` が受け 1 点に畳むので、受かる前提で 1 手進む。
+/// - (d) 相手の四に直面しつつ自分に五がある局面でも、五ではなく受けた後の値を返す
+///   （現手番にとって過小評価の方向）。
+pub fn quiescenceSearch(
+    cells: []Cell,
+    hash: u64,
+    is_maximizing: bool,
+    perspective: Cell,
+    alpha_init: i32,
+    beta_init: i32,
+    last_move: ?Position,
+    eval_options: evaluate.EvalOptions,
+    q_depth: u8,
+    forced_extra: u8,
+    stats: *QSearchStats,
+    limits: QLimits,
+    tt: *tt_mod.TranspositionTable,
+) i32 {
     stats.nodes += 1;
     stats.q_search_nodes += 1;
 
-    // TTプローブ
-    const tt_entry = tt.probe(hash);
+    // トレース（有効時のみ記録。無効時は null で分岐のみ）。
+    // ply = 根からの手数（通常の降下 + 強制受け延長）
+    const ply: u8 = if (q_trace_enabled) q_trace_root_depth - q_depth + forced_extra else 0;
+    const tr: ?*NodeTrace = if (q_trace_enabled) NodeTrace.at(ply) else null;
+
+    // TTプローブ（トレース時は TT を使わない＝純粋な木の値）
+    const tt_entry = if (tr == null) tt.probe(hash) else null;
     if (tt_entry) |entry| {
-        const current_tt_depth: i8 = -(@as(i8, @intCast(MAX_QUIESCENCE_DEPTH)) - @as(i8, @intCast(q_depth)) + 1);
-        if (entry.depth >= current_tt_depth) {
+        if (entry.depth >= qTtDepth(q_depth)) {
             switch (entry.score_type) {
                 .exact => return entry.score,
                 .lower_bound => {
@@ -292,7 +432,9 @@ pub fn quiescenceSearch(
     // 決定的ノード上限（主たる打ち切り条件・ハードウェア非依存）。
     // q探索ノードも総予算に計上されるため、密局面での q爆発が決定的に頭打ちになる。
     if (limits.max_nodes > 0 and limits.node_counter.* >= limits.max_nodes) {
-        return incremental_eval.getEvaluation(cells, perspective, eval_opts);
+        const v = incremental_eval.getEvaluation(cells, perspective, eval_opts);
+        if (tr) |t| t.leaf(.aborted, v);
+        return v;
     }
 
     // 壁時計の安全天井（出荷時の応答性用）。`no_time_limit` 時は無効＝計測は決定的。
@@ -308,7 +450,9 @@ pub fn quiescenceSearch(
         }
     }
     if (limits.timeout_flag.*) {
-        return incremental_eval.getEvaluation(cells, perspective, eval_opts);
+        const v = incremental_eval.getEvaluation(cells, perspective, eval_opts);
+        if (tr) |t| t.leaf(.aborted, v);
+        return v;
     }
 
     // 現在の手番
@@ -322,39 +466,61 @@ pub fn quiescenceSearch(
     // perspective 基準・ply 補正なし。
     const forced = forcedBlockOrLoss(cells, current_color, last_move);
     if (forced == .forced_loss) {
+        // トレース時のみ stand-pat を取る（通常経路では評価しない＝不変）
+        if (tr) |t| t.leaf(.forced_loss, incremental_eval.getEvaluation(cells, perspective, eval_opts));
         return if (current_color == perspective) -scores.FIVE else scores.FIVE;
     }
 
-    // Stand-pat: 何もしない場合の評価（インクリメンタル評価を使用）
+    // Stand-pat: 何もしない場合の評価（インクリメンタル評価を使用）。
     const stand_pat = incremental_eval.getEvaluation(cells, perspective, eval_opts);
+
+    // 強制受け: 相手の止め四に受け点 1 点で対応するしかない。「何もしない」は許されないので
+    // stand-pat は値としては使わず（延長を使い切ったときの葉とトレースの記録だけ）、
+    // 打ち切りも行わない。専用経路へ。
+    switch (forced) {
+        .block => |dp| return searchForcedBlock(cells, hash, is_maximizing, perspective, alpha_init, beta_init, dp, stand_pat, eval_options, q_depth, forced_extra, stats, limits, tt, tr, ply),
+        .forced_loss => unreachable, // 上で終局として処理済み
+        .none => {},
+    }
 
     var alpha = alpha_init;
     var beta = beta_init;
 
     // Alpha-beta cutoff（stand-pat）
     if (is_maximizing) {
-        if (stand_pat >= beta) return beta;
+        if (stand_pat >= beta) {
+            if (tr) |t| t.leaf(.standpat_cutoff, stand_pat);
+            return beta;
+        }
         if (stand_pat > alpha) alpha = stand_pat;
     } else {
-        if (stand_pat <= alpha) return alpha;
+        if (stand_pat <= alpha) {
+            if (tr) |t| t.leaf(.standpat_cutoff, stand_pat);
+            return alpha;
+        }
         if (stand_pat < beta) beta = stand_pat;
     }
 
     // 深度制限
     if (q_depth == 0) {
+        if (tr) |t| t.leaf(.depth_limit, stand_pat);
         return stand_pat;
     }
+    const child_depth: u8 = q_depth - 1;
 
-    // 脅威手生成（`forced` は stand-pat 前に計算済みのものを再利用する）
+    // 脅威手生成（ここに来るのは `forced == .none` のみ＝自分の四を作る手）
     var move_buf: [225]Position = undefined;
-    const move_count = generateTacticalMoves(cells, current_color, forced, &move_buf);
+    const move_count = generateTacticalMoves(cells, current_color, .none, &move_buf);
 
     if (move_count == 0) {
+        if (tr) |t| t.leaf(.no_moves, stand_pat);
         return stand_pat;
     }
 
-    var best_score = stand_pat;
+    var best_score: i32 = stand_pat;
     var aborted = false;
+    // PV 空・stand-pat 起点で開始し、best 子が見つかるたびに畳み上げる
+    if (tr) |t| t.leaf(.searched, stand_pat);
 
     for (0..move_count) |mi| {
         const move = move_buf[mi];
@@ -372,7 +538,8 @@ pub fn quiescenceSearch(
             beta,
             move,
             eval_options,
-            q_depth - 1,
+            child_depth,
+            forced_extra,
             stats,
             limits,
             tt,
@@ -392,11 +559,17 @@ pub fn quiescenceSearch(
 
         // Alpha-beta更新
         if (is_maximizing) {
-            if (score > best_score) best_score = score;
+            if (score > best_score) {
+                best_score = score;
+                if (tr) |t| t.adoptChild(move, NodeTrace.at(ply + 1));
+            }
             if (score > alpha) alpha = score;
             if (alpha >= beta) break;
         } else {
-            if (score < best_score) best_score = score;
+            if (score < best_score) {
+                best_score = score;
+                if (tr) |t| t.adoptChild(move, NodeTrace.at(ply + 1));
+            }
             if (score < beta) beta = score;
             if (alpha >= beta) break;
         }
@@ -404,15 +577,107 @@ pub fn quiescenceSearch(
 
     // 打ち切り時は不完全な best_score を TT に書かない（TT汚染防止）。
     if (aborted) {
+        if (tr) |t| t.cut = .aborted;
         return best_score;
     }
+    // トレース時は TT に書かない
+    if (tr != null) return best_score;
+    // 強制受け延長ノード（forced_extra > 0）は TT に書かない（理由は `searchForcedBlock`）。
+    if (forced_extra > 0) return best_score;
 
     // TT保存: 負の可変depthで本探索と分離
-    const tt_depth: i8 = -(@as(i8, @intCast(MAX_QUIESCENCE_DEPTH)) - @as(i8, @intCast(q_depth)) + 1);
-    const score_type: tt_mod.ScoreType = if (best_score <= alpha_init) .upper_bound else if (best_score >= beta_init) .lower_bound else .exact;
-    tt.store(hash, best_score, tt_depth, score_type, null);
+    storeQTt(tt, hash, best_score, q_depth, alpha_init, beta_init);
 
     return best_score;
+}
+
+/// 静止探索ノードの TT 深さ（probe / store 共通）。負の可変 depth で本探索（depth >= 0）と
+/// 分離する: q_depth = MAX → -1、q_depth = 0 → -(MAX + 1)。
+fn qTtDepth(q_depth: u8) i8 {
+    return -(@as(i8, @intCast(MAX_QUIESCENCE_DEPTH)) - @as(i8, @intCast(q_depth)) + 1);
+}
+
+fn storeQTt(tt: *tt_mod.TranspositionTable, hash: u64, score: i32, q_depth: u8, alpha_init: i32, beta_init: i32) void {
+    const score_type: tt_mod.ScoreType = if (score <= alpha_init) .upper_bound else if (score >= beta_init) .lower_bound else .exact;
+    tt.store(hash, score, qTtDepth(q_depth), score_type, null);
+}
+
+/// 強制受け（`forced == .block`）ノードの探索: 受け点 `block` を 1 手だけ進め、その探索値を返す。
+///
+/// stand-pat による打ち切り・`best_score` の起点は適用しない（`stand_pat` は延長を使い切った
+/// ときの葉の値とトレースの記録にだけ使う）。alpha/beta は呼び出し側の値のまま子に渡す。
+/// `q_depth == 0` でも深さを消費せずに進める延長（`forced_extra` で `FORCED_BLOCK_EXTRA` 回に
+/// 制限）の判定もここに閉じる。受け手は `forcedBlockOrLoss` の payload をそのまま使い、
+/// `generateTacticalMoves` は通さない（受け手が必ず 1 つ＝値が必ず子の探索値で確定する）。
+fn searchForcedBlock(
+    cells: []Cell,
+    hash: u64,
+    is_maximizing: bool,
+    perspective: Cell,
+    alpha_init: i32,
+    beta_init: i32,
+    block: Position,
+    stand_pat: i32,
+    eval_options: evaluate.EvalOptions,
+    q_depth: u8,
+    forced_extra: u8,
+    stats: *QSearchStats,
+    limits: QLimits,
+    tt: *tt_mod.TranspositionTable,
+    tr: ?*NodeTrace,
+    ply: u8,
+) i32 {
+    // 深度制限。連鎖は FORCED_BLOCK_EXTRA 回まで（超えたらこの局面の stand-pat が返る）。
+    const extend = q_depth == 0 and forced_extra < FORCED_BLOCK_EXTRA;
+    if (q_depth == 0 and !extend) {
+        if (tr) |t| t.leaf(.depth_limit, stand_pat);
+        return stand_pat;
+    }
+    const child_depth: u8 = if (extend) 0 else q_depth - 1;
+    const child_extra: u8 = if (extend) forced_extra + 1 else forced_extra;
+
+    if (tr) |t| t.leaf(.searched, stand_pat);
+
+    const current_color = if (is_maximizing) perspective else perspective.opposite();
+    incremental_eval.placeStone(cells, block.row, block.col, current_color);
+    const new_hash = zobrist.updateHash(hash, block.row, block.col, current_color);
+    // 強制受けの値は（打ち切りで不完全でも）受け手の値。stand-pat には戻さない。
+    const score = quiescenceSearch(
+        cells,
+        new_hash,
+        !is_maximizing,
+        perspective,
+        alpha_init,
+        beta_init,
+        block,
+        eval_options,
+        child_depth,
+        child_extra,
+        stats,
+        limits,
+        tt,
+    );
+    incremental_eval.removeStone(cells, block.row, block.col);
+    if (tr) |t| t.adoptChild(block, NodeTrace.at(ply + 1));
+
+    // 打ち切り時は不完全な値を TT に書かない（TT汚染防止）。
+    if (limits.timeout_flag.* or
+        (limits.max_nodes > 0 and limits.node_counter.* >= limits.max_nodes))
+    {
+        if (tr) |t| t.cut = .aborted;
+        return score;
+    }
+    // トレース時は TT に書かない
+    if (tr != null) return score;
+    // 強制受け延長ノード（forced_extra > 0）は TT に書かない: 深さ規約は q_depth のみで
+    // 表現され（延長ノードはすべて q_depth == 0 ＝ 同じ tt_depth）、値が残り延長回数に
+    // 依存するため同じ深さとして再利用できない。probe は行う（書かれている値は延長を
+    // 使い切っていない forced_extra == 0 のノードか本探索のもので、延長中のノードに
+    // とって十分深い）。
+    if (forced_extra > 0) return score;
+
+    storeQTt(tt, hash, score, q_depth, alpha_init, beta_init);
+    return score;
 }
 
 // === Tests ===
@@ -517,8 +782,14 @@ const test_eval_options = evaluate.EvalOptions{
     .connectivity_bonus = scores.CONNECTIVITY_BONUS,
 };
 
-/// テスト用に quiescenceSearch を黒視点・黒手番で走らせる
-fn runQuiescenceAsBlack(cells: []Cell, last_move: ?Position) i32 {
+/// テスト用に quiescenceSearch を黒視点で走らせる（`is_maximizing` = 黒手番なら true）。
+/// 全幅ウィンドウ・TT 空・ノード無制限。
+fn runQuiescence(cells: []Cell, is_maximizing: bool, last_move: ?Position, q_depth: u8) i32 {
+    return runQuiescenceWindow(cells, is_maximizing, last_move, q_depth, -scores.INFINITY, scores.INFINITY);
+}
+
+/// `runQuiescence` のウィンドウ指定版
+fn runQuiescenceWindow(cells: []Cell, is_maximizing: bool, last_move: ?Position, q_depth: u8, alpha: i32, beta: i32) i32 {
     incremental_eval.initFromBoard(cells, .{
         .connectivity_bonus = scores.CONNECTIVITY_BONUS,
         .single_four_penalty_multiplier = 100,
@@ -535,17 +806,35 @@ fn runQuiescenceAsBlack(cells: []Cell, last_move: ?Position) i32 {
     return quiescenceSearch(
         cells,
         0,
-        true, // is_maximizing（黒視点の黒手番）
+        is_maximizing,
         .black,
-        -scores.INFINITY,
-        scores.INFINITY,
+        alpha,
+        beta,
         last_move,
         test_eval_options,
-        MAX_QUIESCENCE_DEPTH,
+        q_depth,
+        0,
         &stats,
         .{ .node_counter = &node_counter, .no_time_limit = true, .timeout_flag = &timeout_flag },
         &tt,
     );
+}
+
+/// テスト用に quiescenceSearch を黒視点・黒手番で走らせる
+fn runQuiescenceAsBlack(cells: []Cell, last_move: ?Position) i32 {
+    return runQuiescence(cells, true, last_move, MAX_QUIESCENCE_DEPTH);
+}
+
+/// テスト用の静的評価（黒視点。`is_maximizing` = 黒手番なら true）。
+/// `quiescenceSearch` 内の stand-pat と同じ stm 供給ルール。
+fn staticEvalAsBlack(cells: []Cell, is_maximizing: bool) i32 {
+    incremental_eval.initFromBoard(cells, .{
+        .connectivity_bonus = scores.CONNECTIVITY_BONUS,
+        .single_four_penalty_multiplier = 100,
+    });
+    var opts = test_eval_options;
+    opts.last_mover_is_perspective = if (!is_maximizing) .yes else .no;
+    return incremental_eval.getEvaluation(cells, .black, opts);
 }
 
 test "issue #142: 白の止め四の受け点が黒の四四なら受けられない＝黒の負け" {
@@ -660,6 +949,7 @@ test "quiescenceSearch stand-pat on empty" {
             .connectivity_bonus = scores.CONNECTIVITY_BONUS,
         },
         MAX_QUIESCENCE_DEPTH,
+        0,
         &stats,
         .{ .node_counter = &node_counter, .no_time_limit = true, .timeout_flag = &timeout_flag },
         &tt,
@@ -710,6 +1000,7 @@ test "quiescenceSearch: 総ノード上限=1 は最初の1ノードで打ち切�
             .connectivity_bonus = scores.CONNECTIVITY_BONUS,
         },
         MAX_QUIESCENCE_DEPTH,
+        0,
         &stats,
         .{ .node_counter = &node_counter, .max_nodes = 1, .no_time_limit = true, .timeout_flag = &timeout_flag },
         &tt,
@@ -750,6 +1041,7 @@ test "quiescenceSearch: 既定上限では戦術局面で再帰する（>1ノー
             .connectivity_bonus = scores.CONNECTIVITY_BONUS,
         },
         MAX_QUIESCENCE_DEPTH,
+        0,
         &stats,
         .{ .node_counter = &node_counter, .no_time_limit = true, .timeout_flag = &timeout_flag },
         &tt,
@@ -803,6 +1095,7 @@ test "quiescenceSearch: 木の途中でノード予算が尽きても安全に�
         null,
         eval_options,
         MAX_QUIESCENCE_DEPTH,
+        0,
         &stats_full,
         .{ .node_counter = &counter_full, .no_time_limit = true, .timeout_flag = &timeout_full },
         &tt,
@@ -826,6 +1119,7 @@ test "quiescenceSearch: 木の途中でノード予算が尽きても安全に�
         null,
         eval_options,
         MAX_QUIESCENCE_DEPTH,
+        0,
         &stats_cap,
         .{ .node_counter = &counter_cap, .max_nodes = cap, .no_time_limit = true, .timeout_flag = &timeout_cap },
         &tt,
@@ -969,4 +1263,360 @@ test "createsFour と getFourDefensePosition は同一基準（不変条件）" 
             cells[idx] = .empty;
         }
     }
+}
+
+// --- 診断用トレース（q_trace） ---
+
+/// トレース時の共通セットアップ（テスト用）。`runQuiescenceAsBlack` と同じ設定で
+/// `quiescenceSearchTraced` を黒視点・黒手番で走らせる。
+fn runTracedAsBlack(cells: []Cell, last_move: ?Position, q_depth: u8) i32 {
+    return runTraced(cells, true, last_move, q_depth);
+}
+
+/// 黒視点でトレース付き実行（`is_maximizing` = 黒手番なら true）
+fn runTraced(cells: []Cell, is_maximizing: bool, last_move: ?Position, q_depth: u8) i32 {
+    incremental_eval.initFromBoard(cells, .{
+        .connectivity_bonus = scores.CONNECTIVITY_BONUS,
+        .single_four_penalty_multiplier = 100,
+    });
+    var stats = QSearchStats{};
+    var timeout_flag = false;
+    var node_counter: u32 = 0;
+    var tt = tt_mod.TranspositionTable{
+        .entries = &tt_mod.global_tt_storage,
+        .current_generation = 0,
+    };
+    tt.clear();
+    return quiescenceSearchTraced(
+        cells,
+        0,
+        is_maximizing,
+        .black,
+        -scores.INFINITY,
+        scores.INFINITY,
+        last_move,
+        test_eval_options,
+        q_depth,
+        &stats,
+        .{ .node_counter = &node_counter, .no_time_limit = true, .timeout_flag = &timeout_flag },
+        &tt,
+    );
+}
+
+/// PV を実際に置いて static eval を取り、`standpats` と一致するか検証する。
+/// `standpats[i]` は i 手置いた後の局面の stand-pat（perspective 視点、手番は交互）。
+fn expectStandpatsMatchPV(cells: []Cell, perspective: Cell, root_is_maximizing: bool, trace: QTrace) !void {
+    var is_max = root_is_maximizing;
+    var color: Cell = if (is_max) perspective else perspective.opposite();
+    var placed: [MAX_Q_PV_LEN]Position = undefined;
+    var i: usize = 0;
+    while (true) {
+        var opts = test_eval_options;
+        opts.last_mover_is_perspective = if (!is_max) .yes else .no;
+        try std.testing.expectEqual(trace.standpats[i], incremental_eval.getEvaluation(cells, perspective, opts));
+        if (i == trace.pv_len) break;
+        const m = trace.pv[i];
+        try std.testing.expectEqual(Cell.empty, cells[@as(usize, m.row) * BOARD_SIZE + m.col]);
+        incremental_eval.placeStone(cells, m.row, m.col, color);
+        placed[i] = m;
+        i += 1;
+        is_max = !is_max;
+        color = color.opposite();
+    }
+    while (i > 0) {
+        i -= 1;
+        incremental_eval.removeStone(cells, placed[i].row, placed[i].col);
+    }
+}
+
+test "q_trace: 既定では無効" {
+    try std.testing.expect(!q_trace_enabled);
+}
+
+test "q_trace: 静かな局面は no_moves で PV 空・standpats[0]=stand-pat=value" {
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[7 * BOARD_SIZE + 7] = .black;
+    cells[7 * BOARD_SIZE + 8] = .white;
+    bitboard.initFromCells(&cells);
+
+    const value = runTracedAsBlack(&cells, .{ .row = 7, .col = 8 }, MAX_QUIESCENCE_DEPTH);
+    try std.testing.expect(!q_trace_enabled); // 呼び出し後は元に戻る
+    try std.testing.expectEqual(QCut.no_moves, q_trace.cut);
+    try std.testing.expectEqual(@as(u8, 0), q_trace.pv_len);
+    try std.testing.expectEqual(value, q_trace.value);
+    try std.testing.expectEqual(value, q_trace.standpat_root);
+    try std.testing.expectEqual(q_trace.standpat_root, q_trace.standpats[0]);
+    try expectStandpatsMatchPV(&cells, .black, true, q_trace);
+}
+
+test "q_trace: 戦術局面では PV と standpats が整合し、値はトレース無効時（TT 空）と一致" {
+    ll.init();
+    var cells: [CELL_COUNT]Cell = undefined;
+    setupTacticalPosition(&cells);
+
+    const plain = runQuiescenceAsBlack(&cells, null);
+    const traced = runTracedAsBlack(&cells, null, MAX_QUIESCENCE_DEPTH);
+    // 1 回の呼び出しで TT が空なら、TT の有無で値は変わらない
+    try std.testing.expectEqual(plain, traced);
+    try std.testing.expectEqual(traced, q_trace.value);
+    try std.testing.expectEqual(QCut.searched, q_trace.cut);
+    try std.testing.expect(q_trace.pv_len <= MAX_Q_PV_LEN);
+    try expectStandpatsMatchPV(&cells, .black, true, q_trace);
+}
+
+test "q_trace: 四の応酬（四→受け＝カウンター四→受け）で PV が伸びる" {
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    // 黒: 横 (7,3)(7,4)(7,5)（左端 (7,2) は白で止め）→ (7,6) で止め四
+    cells[7 * BOARD_SIZE + 2] = .white;
+    cells[7 * BOARD_SIZE + 3] = .black;
+    cells[7 * BOARD_SIZE + 4] = .black;
+    cells[7 * BOARD_SIZE + 5] = .black;
+    // 斜め (5,4)(6,5) → (7,6) で活三（四三）
+    cells[5 * BOARD_SIZE + 4] = .black;
+    cells[6 * BOARD_SIZE + 5] = .black;
+    // 白: 縦 (8,7)(9,7)(10,7)（上端 (11,7) は黒で止め）→ 受け (7,7) が白の止め四になる
+    // ＝白は stand-pat より受けを選び、黒は (6,7) で受け返す（PV が 3 手伸びる）
+    cells[8 * BOARD_SIZE + 7] = .white;
+    cells[9 * BOARD_SIZE + 7] = .white;
+    cells[10 * BOARD_SIZE + 7] = .white;
+    cells[11 * BOARD_SIZE + 7] = .black;
+    bitboard.initFromCells(&cells);
+
+    const value = runTracedAsBlack(&cells, .{ .row = 10, .col = 7 }, MAX_QUIESCENCE_DEPTH);
+    try std.testing.expectEqual(QCut.searched, q_trace.cut);
+    try std.testing.expectEqual(@as(u8, 3), q_trace.pv_len);
+    try std.testing.expectEqual(Position{ .row = 7, .col = 6 }, q_trace.pv[0]);
+    try std.testing.expectEqual(Position{ .row = 7, .col = 7 }, q_trace.pv[1]);
+    try std.testing.expectEqual(Position{ .row = 6, .col = 7 }, q_trace.pv[2]);
+    try std.testing.expectEqual(q_trace.standpats[3], value); // 末端 ply3（白番・四なし）は stand-pat
+    try std.testing.expect(value > q_trace.standpat_root);
+    try expectStandpatsMatchPV(&cells, .black, true, q_trace);
+}
+
+test "q_trace: q_depth=0 は depth_limit" {
+    ll.init();
+    var cells: [CELL_COUNT]Cell = undefined;
+    setupTacticalPosition(&cells);
+    _ = runTracedAsBlack(&cells, null, 0);
+    try std.testing.expectEqual(QCut.depth_limit, q_trace.cut);
+    try std.testing.expectEqual(@as(u8, 0), q_trace.pv_len);
+    try std.testing.expectEqual(q_trace.standpat_root, q_trace.value);
+}
+
+test "q_trace: 受け点が黒の禁手なら forced_loss" {
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    setupWhiteBlockedFourRow7(&cells);
+    setupBlackDoubleFourAt77(&cells);
+    bitboard.initFromCells(&cells);
+    const value = runTracedAsBlack(&cells, .{ .row = 7, .col = 6 }, MAX_QUIESCENCE_DEPTH);
+    try std.testing.expectEqual(-scores.FIVE, value);
+    try std.testing.expectEqual(QCut.forced_loss, q_trace.cut);
+    try std.testing.expectEqual(@as(u8, 0), q_trace.pv_len);
+    try std.testing.expectEqual(-scores.FIVE, q_trace.value);
+}
+
+// --- 強制受け（forced == .block）の stand-pat 不適用と q_depth==0 延長 ---
+
+/// 黒の止め四 (7,3)-(7,6)（(7,2) は白）＝白の受けは (7,7) の 1 点。
+fn setupBlackBlockedFourRow7(cells: []Cell) void {
+    cells[7 * BOARD_SIZE + 2] = .white;
+    cells[7 * BOARD_SIZE + 3] = .black;
+    cells[7 * BOARD_SIZE + 4] = .black;
+    cells[7 * BOARD_SIZE + 5] = .black;
+    cells[7 * BOARD_SIZE + 6] = .black;
+}
+
+/// 白番（黒視点 is_maximizing=false）で黒の四に直面した根の値が、受け (7,7) を置いた
+/// 後の局面を同じ設定で探索した値と一致し、根の stand-pat とは異なることを確認する。
+fn expectForcedBlockValueEqualsAfterBlock(cells: []Cell) !void {
+    const last: Position = .{ .row = 7, .col = 6 };
+    const stand_pat_root = staticEvalAsBlack(cells, false);
+    const value = runQuiescence(cells, false, last, MAX_QUIESCENCE_DEPTH);
+
+    // 受けた後の局面（黒番・q_depth は 1 消費）を直接探索した値と一致
+    cells[7 * BOARD_SIZE + 7] = .white;
+    bitboard.initFromCells(cells);
+    const after_block = runQuiescence(cells, true, .{ .row = 7, .col = 7 }, MAX_QUIESCENCE_DEPTH - 1);
+    cells[7 * BOARD_SIZE + 7] = .empty;
+    bitboard.initFromCells(cells);
+
+    try std.testing.expectEqual(after_block, value);
+    try std.testing.expect(value != stand_pat_root);
+}
+
+test "forced block: 受けた後が黒有利でも、白番の値は受けた後の探索値（stand-pat ではない）" {
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    setupBlackBlockedFourRow7(&cells);
+    // 受けた後も黒が良い形（別の活三）
+    cells[3 * BOARD_SIZE + 4] = .black;
+    cells[3 * BOARD_SIZE + 5] = .black;
+    cells[3 * BOARD_SIZE + 6] = .black;
+    bitboard.initFromCells(&cells);
+
+    try expectForcedBlockValueEqualsAfterBlock(&cells);
+    // 白が受けても黒の活三が残る＝黒視点で正
+    try std.testing.expect(runQuiescence(&cells, false, .{ .row = 7, .col = 6 }, MAX_QUIESCENCE_DEPTH) > 0);
+}
+
+test "forced block: 受けた後が白有利なら、白番の値は受けた後の静的評価（stand-pat で確定しない）" {
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    setupBlackBlockedFourRow7(&cells);
+    // 白の活三（受けた後は白が良い。黒の四は受けられて死に四になる）
+    cells[2 * BOARD_SIZE + 3] = .white;
+    cells[2 * BOARD_SIZE + 4] = .white;
+    cells[2 * BOARD_SIZE + 5] = .white;
+    bitboard.initFromCells(&cells);
+
+    try expectForcedBlockValueEqualsAfterBlock(&cells);
+
+    // 受けた後の黒番には脅威手が無いので、値＝受けた後の静的評価
+    const value = runQuiescence(&cells, false, .{ .row = 7, .col = 6 }, MAX_QUIESCENCE_DEPTH);
+    cells[7 * BOARD_SIZE + 7] = .white;
+    bitboard.initFromCells(&cells);
+    try std.testing.expectEqual(staticEvalAsBlack(&cells, true), value);
+    try std.testing.expect(value < 0);
+}
+
+test "forced block: q_depth == 0 でも受け手は 1 手進む（PV 1・値は受けた後の stand-pat）" {
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    setupBlackBlockedFourRow7(&cells);
+    cells[2 * BOARD_SIZE + 3] = .white;
+    cells[2 * BOARD_SIZE + 4] = .white;
+    cells[2 * BOARD_SIZE + 5] = .white;
+    bitboard.initFromCells(&cells);
+
+    const value = runTraced(&cells, false, .{ .row = 7, .col = 6 }, 0);
+    try std.testing.expectEqual(QCut.searched, q_trace.cut);
+    try std.testing.expectEqual(@as(u8, 1), q_trace.pv_len);
+    try std.testing.expectEqual(Position{ .row = 7, .col = 7 }, q_trace.pv[0]);
+    try std.testing.expectEqual(q_trace.standpats[1], value);
+    try std.testing.expect(value != q_trace.standpat_root);
+    try expectStandpatsMatchPV(&cells, .black, false, q_trace);
+}
+
+/// 受けがカウンター四になる連鎖（8 回）。根は白番で黒の四 (7,3)-(7,6) に直面。
+/// 受けの順: W(7,7) B(6,7) W(6,6) B(2,6) W(2,7) B(2,11) W(1,11) B(1,7) → 次は W(5,3)
+fn setupForcedBlockChain(cells: []Cell) void {
+    setupBlackBlockedFourRow7(cells);
+    // 1. W(7,7) → 縦 (7,7)-(10,7)、(11,7) 黒 → 受け (6,7)
+    cells[8 * BOARD_SIZE + 7] = .white;
+    cells[9 * BOARD_SIZE + 7] = .white;
+    cells[10 * BOARD_SIZE + 7] = .white;
+    cells[11 * BOARD_SIZE + 7] = .black;
+    // 2. B(6,7) → 横 (6,7)-(6,10)、(6,11) 白 → 受け (6,6)
+    cells[6 * BOARD_SIZE + 8] = .black;
+    cells[6 * BOARD_SIZE + 9] = .black;
+    cells[6 * BOARD_SIZE + 10] = .black;
+    cells[6 * BOARD_SIZE + 11] = .white;
+    // 3. W(6,6) → 縦 (3,6)-(6,6)、(7,6) 黒 → 受け (2,6)
+    cells[3 * BOARD_SIZE + 6] = .white;
+    cells[4 * BOARD_SIZE + 6] = .white;
+    cells[5 * BOARD_SIZE + 6] = .white;
+    // 4. B(2,6) → 横 (2,3)-(2,6)、(2,2) 白 → 受け (2,7)
+    cells[2 * BOARD_SIZE + 2] = .white;
+    cells[2 * BOARD_SIZE + 3] = .black;
+    cells[2 * BOARD_SIZE + 4] = .black;
+    cells[2 * BOARD_SIZE + 5] = .black;
+    // 5. W(2,7) → 横 (2,7)-(2,10)、(2,6) 黒 → 受け (2,11)
+    cells[2 * BOARD_SIZE + 8] = .white;
+    cells[2 * BOARD_SIZE + 9] = .white;
+    cells[2 * BOARD_SIZE + 10] = .white;
+    // 6. B(2,11) → 縦 (2,11)-(5,11)、(6,11) 白 → 受け (1,11)
+    cells[3 * BOARD_SIZE + 11] = .black;
+    cells[4 * BOARD_SIZE + 11] = .black;
+    cells[5 * BOARD_SIZE + 11] = .black;
+    // 7. W(1,11) → 横 (1,8)-(1,11)、(1,12) 黒 → 受け (1,7)
+    cells[1 * BOARD_SIZE + 8] = .white;
+    cells[1 * BOARD_SIZE + 9] = .white;
+    cells[1 * BOARD_SIZE + 10] = .white;
+    cells[1 * BOARD_SIZE + 12] = .black;
+    // 8. B(1,7) → 斜め (1,7)(2,6)(3,5)(4,4)、(0,8) 白 → 受け (5,3)
+    cells[3 * BOARD_SIZE + 5] = .black;
+    cells[4 * BOARD_SIZE + 4] = .black;
+    cells[0 * BOARD_SIZE + 8] = .white;
+}
+
+const chain_pv = [_]Position{
+    .{ .row = 7, .col = 7 },
+    .{ .row = 6, .col = 7 },
+    .{ .row = 6, .col = 6 },
+    .{ .row = 2, .col = 6 },
+    .{ .row = 2, .col = 7 },
+    .{ .row = 2, .col = 11 },
+    .{ .row = 1, .col = 11 },
+    .{ .row = 1, .col = 7 },
+};
+
+test "forced block: 受けの連鎖は q_depth == 0 から FORCED_BLOCK_EXTRA 回で止まる" {
+    comptime std.debug.assert(chain_pv.len >= 1 + FORCED_BLOCK_EXTRA);
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    setupForcedBlockChain(&cells);
+    bitboard.initFromCells(&cells);
+
+    const value = runTraced(&cells, false, .{ .row = 7, .col = 6 }, 0);
+    try std.testing.expectEqual(QCut.searched, q_trace.cut);
+    try std.testing.expectEqual(FORCED_BLOCK_EXTRA, q_trace.pv_len);
+    for (0..FORCED_BLOCK_EXTRA) |i| {
+        try std.testing.expectEqual(chain_pv[i], q_trace.pv[i]);
+    }
+    // 上限で止まった末端（相手の四に直面したまま）の stand-pat が値
+    try std.testing.expectEqual(q_trace.standpats[FORCED_BLOCK_EXTRA], value);
+    try expectStandpatsMatchPV(&cells, .black, false, q_trace);
+}
+
+test "forced block: 通常深さ分の受けは延長回数に数えない（q_depth 1 なら 1 + FORCED_BLOCK_EXTRA）" {
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    setupForcedBlockChain(&cells);
+    bitboard.initFromCells(&cells);
+
+    const value = runTraced(&cells, false, .{ .row = 7, .col = 6 }, 1);
+    try std.testing.expectEqual(QCut.searched, q_trace.cut);
+    try std.testing.expectEqual(1 + FORCED_BLOCK_EXTRA, q_trace.pv_len);
+    for (0..1 + FORCED_BLOCK_EXTRA) |i| {
+        try std.testing.expectEqual(chain_pv[i], q_trace.pv[i]);
+    }
+    try std.testing.expectEqual(q_trace.standpats[1 + FORCED_BLOCK_EXTRA], value);
+    try expectStandpatsMatchPV(&cells, .black, false, q_trace);
+}
+
+test "forced block: 受け点が黒の禁手なら q_depth == 0 でも forced_loss（延長しない）" {
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    setupWhiteBlockedFourRow7(&cells);
+    setupBlackDoubleFourAt77(&cells);
+    bitboard.initFromCells(&cells);
+    const value = runTraced(&cells, true, .{ .row = 7, .col = 6 }, 0);
+    try std.testing.expectEqual(-scores.FIVE, value);
+    try std.testing.expectEqual(QCut.forced_loss, q_trace.cut);
+    try std.testing.expectEqual(@as(u8, 0), q_trace.pv_len);
+}
+
+test "forced block: stand-pat がウィンドウ外でも打ち切らず受けた後の値を返す（旧: 王手放置 stand-pat 打ち切り）" {
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    setupBlackBlockedFourRow7(&cells);
+    cells[2 * BOARD_SIZE + 3] = .white;
+    cells[2 * BOARD_SIZE + 4] = .white;
+    cells[2 * BOARD_SIZE + 5] = .white;
+    bitboard.initFromCells(&cells);
+
+    const stand_pat_root = staticEvalAsBlack(&cells, false);
+    const after_block = runQuiescence(&cells, false, .{ .row = 7, .col = 6 }, MAX_QUIESCENCE_DEPTH);
+    try std.testing.expect(after_block != stand_pat_root);
+
+    // 白番（minimizing）: 旧実装は stand_pat <= alpha で alpha を即返していた。
+    // alpha = stand_pat_root にすると旧実装は必ず alpha を返すが、新実装は受けた後の値。
+    const windowed = runQuiescenceWindow(&cells, false, .{ .row = 7, .col = 6 }, MAX_QUIESCENCE_DEPTH, stand_pat_root, scores.INFINITY);
+    try std.testing.expectEqual(after_block, windowed);
+    // beta 側も同様（beta = stand_pat_root。旧実装は beta を更新して子に渡すだけで値は同じ経路）
+    const windowed_hi = runQuiescenceWindow(&cells, false, .{ .row = 7, .col = 6 }, MAX_QUIESCENCE_DEPTH, -scores.INFINITY, stand_pat_root);
+    try std.testing.expectEqual(after_block, windowed_hi);
 }

@@ -122,6 +122,41 @@ export interface WasmSearchResultWithCandidates extends WasmSearchResult {
   bestPV?: Position[];
 }
 
+/** quiescence.zig の QCut と同順（@intFromEnum） */
+export const Q_TRACE_CUTS = [
+  "standpat_cutoff",
+  "depth_limit",
+  "no_moves",
+  "forced_loss",
+  "searched",
+  "aborted",
+] as const;
+export type QTraceCut = (typeof Q_TRACE_CUTS)[number];
+
+/** quiescence.MAX_QUIESCENCE_DEPTH（quiescenceTraceWasm の q_depth 既定） */
+const Q_TRACE_MAX_DEPTH = 4;
+/** quiescence.MAX_Q_PV_LEN = MAX_QUIESCENCE_DEPTH + FORCED_BLOCK_EXTRA（getQTraceBuffer のレイアウトが依存） */
+const Q_TRACE_MAX_PV_LEN = 10;
+/** getQTraceBuffer のレイアウト（main.zig q_trace_buffer）: pv は offset 16 から (row u32, col u32) × 10 */
+const Q_TRACE_PV_OFFSET = 16;
+/** standpats は pv の直後から i32 × 11 */
+const Q_TRACE_STANDPATS_OFFSET = Q_TRACE_PV_OFFSET + Q_TRACE_MAX_PV_LEN * 8;
+const Q_TRACE_NO_LAST_MOVE = 255;
+
+/** 静止探索の診断トレース（根から best 子を辿った手順と各局面の stand-pat） */
+export interface QuiescenceTrace {
+  /** 根の静止探索値（perspective = 手番色） */
+  value: number;
+  /** 根の stand-pat */
+  standPatRoot: number;
+  /** 根から best 子を辿った手順（best が stand-pat なら空） */
+  pv: Position[];
+  /** standPats[i] = PV の i 手目を置いた後の stand-pat。長さは pv.length + 1 */
+  standPats: number[];
+  /** 根の確定理由 */
+  cut: QTraceCut;
+}
+
 export class WasmSearchEngine {
   private readonly wasm: WasmModuleContext;
 
@@ -289,6 +324,68 @@ export class WasmSearchEngine {
       });
     }
     return pv;
+  }
+
+  /**
+   * 静止探索の診断トレース（挙動を変えない観測用。TT は使わない）
+   *
+   * `color` の手番で、盤面 `board` から静止探索を 1 回走らせて PV / stand-pat を返す。
+   * `lastMove` は相手の直前手（四なら受けを強制するので必要）。null で無し。
+   * `evalOptionsFlags` は encodeEvalOptions と同じ（葉評価部分のみ使用）。
+   * 旧 wasm（export 無し）では throw する。
+   */
+  quiescenceTrace(
+    board: BoardState,
+    color: "black" | "white",
+    lastMove: Position | null,
+    evalOptionsFlags: number,
+    qDepth = Q_TRACE_MAX_DEPTH,
+  ): QuiescenceTrace {
+    const { quiescenceTraceWasm, getQTraceBuffer } = this.wasm;
+    if (quiescenceTraceWasm === undefined || getQTraceBuffer === undefined) {
+      throw new Error(
+        "quiescenceTraceWasm is not exported by this wasm build (rebuild: cd zig && zig build)",
+      );
+    }
+    boardStateToWasm(this.wasm, board);
+    quiescenceTraceWasm(
+      colorToWasm(color),
+      lastMove?.row ?? Q_TRACE_NO_LAST_MOVE,
+      lastMove?.col ?? Q_TRACE_NO_LAST_MOVE,
+      evalOptionsFlags,
+      qDepth,
+    );
+
+    const ptr = getQTraceBuffer();
+    const view = new DataView(this.wasm.memory.buffer);
+    const value = view.getInt32(ptr, true);
+    const standPatRoot = view.getInt32(ptr + 4, true);
+    const pvLen = view.getUint32(ptr + 8, true);
+    if (pvLen > Q_TRACE_MAX_PV_LEN) {
+      throw new Error(
+        `quiescenceTrace: pvLen ${pvLen} exceeds Q_TRACE_MAX_PV_LEN ${Q_TRACE_MAX_PV_LEN}`,
+      );
+    }
+    const cutIndex = view.getUint32(ptr + 12, true);
+    const cut = Q_TRACE_CUTS[cutIndex];
+    if (cut === undefined) {
+      throw new Error(`quiescenceTrace: unknown cut index ${cutIndex}`);
+    }
+    const pv: Position[] = [];
+    for (let i = 0; i < pvLen; i++) {
+      const base = ptr + Q_TRACE_PV_OFFSET + i * 8;
+      pv.push({
+        row: view.getUint32(base, true),
+        col: view.getUint32(base + 4, true),
+      });
+    }
+    const standPats: number[] = [];
+    for (let i = 0; i <= pvLen; i++) {
+      standPats.push(
+        view.getInt32(ptr + Q_TRACE_STANDPATS_OFFSET + i * 4, true),
+      );
+    }
+    return { value, standPatRoot, pv, standPats, cut };
   }
 
   private readResult(): WasmSearchResult {

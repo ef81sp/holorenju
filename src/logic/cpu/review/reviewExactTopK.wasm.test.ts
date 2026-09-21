@@ -49,7 +49,7 @@ const RECORD =
 /**
  * 白番の途中局面（着手数）。事前探索で即決されず、決定的モードで候補が 2 件以上出るもの。
  * - 7: 候補 2 件（F6 / J10）
- * - 11: 候補 5 件。exactTopK=0 で I7 と I10 が同値（-3603）に並び、5 では分かれる
+ * - 11: 候補 5 件（うち 2 件は負け確定の -99999）
  * - 13: 候補 2 件（J9 / F5）
  */
 const WHITE_POSITIONS = [7, 11, 13] as const;
@@ -156,9 +156,17 @@ describe.each(WHITE_POSITIONS)("参照棋譜 白番 %d 手目の局面", (moveCo
   });
 });
 
-describe("(d) exactTopK=0 で同値に並んだ 2 位以下が exactTopK=5 で分かれる（白番 11 手目）", () => {
-  const k0 = search(11, 0);
-  const k5 = search(11, 5);
+/**
+ * (d) の局面（着手数）。exactTopK=0 で 2 位以下の I9 / H11 / J9 が 1 位と同じ境界値（-721）に
+ * 並び、5 では I9 -1035 / J9 -1263 / H11 -1309 に分かれる。
+ * 以前は 11 手目（I7 と I10 が -3603 で同値）を使っていたが、静止探索の強制受け
+ * （相手の止め四に stand-pat しない）以降は 11 手目の境界値が同値にならなくなった。
+ */
+const TIED_POSITION = 5;
+
+describe("(d) exactTopK=0 で同値に並んだ 2 位以下が exactTopK=5 で分かれる（白番 5 手目）", () => {
+  const k0 = search(TIED_POSITION, 0);
+  const k5 = search(TIED_POSITION, 5);
 
   it("exactTopK=0 では 2 位以下に同値の組がある", () => {
     const tied = findTiedPairs(k0);

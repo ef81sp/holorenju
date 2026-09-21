@@ -10,6 +10,11 @@
  *   +56 absolute_deadline_hit（§2.6 の安全弁が発火したか。0/1）
  *   +60 probe_calls, +64 probe_cap_hits（脅威プローブの呼び出し数 / VCT が上限で打ち切られた数。
  *       プローブ較正用。getStatsBufferLength() >= 68 の wasm のみ）
+ *   +68 walkin_checks, +72 walkin_switches, +76 walkin_skipped, +80 walkin_nodes
+ *       （根の最善手の「自ら追い詰めに入る手」検証。opp-vct-walkin-2026-09-12.md §5.4。
+ *       getStatsBufferLength() >= 84 の wasm のみ）
+ *   +84 walkin_fired, +88 walkin_vct_nodes（同・発火回数と相手 VCT 検証の消費。
+ *       getStatsBufferLength() >= 92 の wasm のみ）
  *
  * 拡張フィールドの存在は `getSearchFeatures()` の bit1 で判定する。旧 wasm では
  * 48 バイトを越えて読まない（越えると隣接メモリを黙って読んでしまう）。
@@ -28,6 +33,10 @@ export const STATS_BUFFER_EXTENDED_BYTES = 56;
 export const STATS_BUFFER_DEADLINE_HIT_BYTES = 60;
 /** probe_calls（+60）/ probe_cap_hits（+64）を含む長さ */
 export const STATS_BUFFER_PROBE_STATS_BYTES = 68;
+/** walkin_checks（+68）/ walkin_switches（+72）/ walkin_skipped（+76）/ walkin_nodes（+80）を含む長さ */
+export const STATS_BUFFER_WALKIN_STATS_BYTES = 84;
+/** walkin_fired（+84）/ walkin_vct_nodes（+88）を含む長さ */
+export const STATS_BUFFER_WALKIN_DETAIL_BYTES = 92;
 
 export interface WasmSearchStats {
   nodes: number;
@@ -58,6 +67,32 @@ export interface WasmSearchStats {
    * getStatsBufferLength() >= 68 の wasm のみ
    */
   probeCapHits?: number;
+  /**
+   * 根の最善手の「自ら追い詰めに入る手」検証（V1）で相手の追い詰めを探した回数
+   * （最善手 + 除外再探索の代替手。最大 3）。getStatsBufferLength() >= 84 の wasm のみ
+   */
+  walkinChecks?: number;
+  /** V1 が最善手を安全な代替手に切り替えた回数（0/1）。getStatsBufferLength() >= 84 の wasm のみ */
+  walkinSwitches?: number;
+  /**
+   * V1 の最善手検証が判定不能だった回数（0/1。予約なし・予算切れ・上限到達＝tripped）。
+   * 発火後に再探索の時間が足りなかった件は数えない（walkinFired=1 かつ walkinSwitches=0 で分かる）。
+   * 時間モードと固定モードの到達率較正に使う。getStatsBufferLength() >= 84 の wasm のみ
+   */
+  walkinSkipped?: number;
+  /**
+   * V1 の除外再探索の消費ノード（両モードで nodes に含まれる）。
+   * getStatsBufferLength() >= 84 の wasm のみ（84 バイト版の wasm では相手 VCT 検証の消費も
+   * 合算されていた）
+   */
+  walkinNodes?: number;
+  /** V1 で最善手が「自ら追い詰めに入る手」と判定された回数（0/1）。getStatsBufferLength() >= 92 の wasm のみ */
+  walkinFired?: number;
+  /**
+   * V1 の相手 VCT 検証の消費ノード（時間モードでは nodes に含まれない）。
+   * getStatsBufferLength() >= 92 の wasm のみ
+   */
+  walkinVctNodes?: number;
 }
 
 /** `getSearchFeatures()` の値（undefined = export 無しの旧 wasm）に拡張統計があるか。 */
@@ -106,6 +141,22 @@ export function readWasmSearchStats(
     ) {
       stats.probeCalls = view.getUint32(ptr + 60, true);
       stats.probeCapHits = view.getUint32(ptr + 64, true);
+    }
+    if (
+      bufferLength !== undefined &&
+      bufferLength >= STATS_BUFFER_WALKIN_STATS_BYTES
+    ) {
+      stats.walkinChecks = view.getUint32(ptr + 68, true);
+      stats.walkinSwitches = view.getUint32(ptr + 72, true);
+      stats.walkinSkipped = view.getUint32(ptr + 76, true);
+      stats.walkinNodes = view.getUint32(ptr + 80, true);
+    }
+    if (
+      bufferLength !== undefined &&
+      bufferLength >= STATS_BUFFER_WALKIN_DETAIL_BYTES
+    ) {
+      stats.walkinFired = view.getUint32(ptr + 84, true);
+      stats.walkinVctNodes = view.getUint32(ptr + 88, true);
     }
   }
   return stats;
