@@ -286,6 +286,43 @@ pub fn extractWindow(line_index: u8, bit_pos: u4, color: Cell) struct { own: u9,
     return .{ .own = own_window, .block = block_window };
 }
 
+/// 9 マス窓の自石ビット（bit 4 = 中心。中心自身は数えない）について、
+/// 「中心を含む 5 マス窓のどれかに自石が 3 個以上ある」かの表。
+const WINDOW_HAS_THREE: [512]bool = blk: {
+    @setEvalBranchQuota(20_000);
+    var table: [512]bool = undefined;
+    for (0..512) |own| {
+        var hit = false;
+        for (0..5) |shift| {
+            const mask: u9 = @as(u9, 0x1F) << shift;
+            if (@popCount(@as(u9, @intCast(own)) & mask & ~@as(u9, 0x10)) >= 3) hit = true;
+        }
+        table[own] = hit;
+    }
+    break :blk table;
+};
+
+/// 空点 (row, col) に `color` を置いて四（または五）と**判定され得る**か（必要条件）。
+/// bitboard 同期済み前提。
+///
+/// 四判定（`threats.isFourInDirectionWithPattern`）は LUT の足切り（連続 4 または跳び四）を
+/// 通った方向だけを見る。足切りを通るには、置いた石を含む 5 マス窓に自石が置く前から
+/// 3 個以上必要。どの方向にもそれが無い点は、石を仮置きして調べるまでもなく四にならない。
+/// 相手石・盤外による遮断は見ない（遮断されていても LUT を通り、同じライン上の既存の四の
+/// 五点を拾って「四」と判定されることがあるため。結果を変えないための保守側の条件）。
+pub fn mayCreateFour(row: u8, col: u8, color: Cell) bool {
+    const cell_idx = @as(usize, row) * BOARD_SIZE + col;
+    const own_lines = if (color == .black) &bitboard.global_bb.black else &bitboard.global_bb.white;
+    inline for (0..4) |dir| {
+        const info = bitboard.CELL_LINES[cell_idx][dir];
+        // 左に 4 マスの余白を付けて 9 マス窓を切り出す（ライン外は自石 0 個）
+        const padded: u32 = @as(u32, own_lines[info.line_index]) << 4;
+        const window: u9 = @intCast((padded >> info.bit_pos) & 0x1FF);
+        if (WINDOW_HAS_THREE[window]) return true;
+    }
+    return false;
+}
+
 /// Query pattern for a specific cell and direction using the lookup table.
 pub fn queryPattern(line_index: u8, bit_pos: u4, color: Cell) PatternResult {
     if (!initialized) init();

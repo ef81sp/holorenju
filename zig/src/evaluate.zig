@@ -134,6 +134,10 @@ fn blackOverlineEnd(cells: []const Cell, row: u8, col: u8, dr: i8, dc: i8, run: 
 /// TS版 analyzeJumpPatterns の hasFour && hasValidOpenThree に対応
 /// 呼び出し側で bitboard が cells と同期している前提。
 pub fn createsFourThree(cells: []Cell, row: u8, col: u8, color: Cell) bool {
+    // 四三には四が要る。四になり得ない点は仮置きせずに返す（結果は不変。葉の評価の
+    // `detectOpponentThreats` が全近傍点でこの関数を呼ぶため、同一探索の時間の 4 割超を占めていた）
+    if (!ll.mayCreateFour(row, col, color)) return false;
+
     const idx = @as(u16, row) * BOARD_SIZE + col;
     // 仮置き（bitboard も同期）
     cells[idx] = color;

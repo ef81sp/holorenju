@@ -1024,16 +1024,26 @@ test "createsFourThree: 空き候補なら global_bb 不変・占有候補なら
     cells[7 * BOARD_SIZE + 7] = .black;
     cells[7 * BOARD_SIZE + 8] = .black;
     cells[8 * BOARD_SIZE + 8] = .white;
+    // 白の 3 連 (10,7)..(10,9) と、その隣の黒石 (10,10)・空点 (10,6)
+    cells[10 * BOARD_SIZE + 7] = .white;
+    cells[10 * BOARD_SIZE + 8] = .white;
+    cells[10 * BOARD_SIZE + 9] = .white;
+    cells[10 * BOARD_SIZE + 10] = .black;
     bitboard.initFromCells(&cells);
     const snapshot = bitboard.global_bb;
 
-    // 空き候補: 仮置き→defer 復元で global_bb は完全復元
+    // 空き候補: 四になり得ない点（事前判定で即 return）も、なり得る点（仮置き→defer 復元）も
+    // global_bb は完全復元
     _ = evaluate.createsFourThree(&cells, 9, 9, .black);
+    try std.testing.expect(bbEqual(snapshot, bitboard.global_bb));
+    _ = evaluate.createsFourThree(&cells, 10, 6, .white);
     try std.testing.expect(bbEqual(snapshot, bitboard.global_bb));
 
     // 占有セルに呼ぶと removeStone が既存石のビットを消し drift する（＝契約違反の証跡）。
     // 呼び出し側は必ず空き点を渡すこと（detectOpponentThreats はガード済み）。
-    _ = evaluate.createsFourThree(&cells, 7, 7, .white);
+    // 事前判定（`ll.mayCreateFour`）で弾かれる点は仮置きまで進まないので、判定を通る
+    // 占有セル（白 3 連の隣の黒石）で確認する。
+    _ = evaluate.createsFourThree(&cells, 10, 10, .white);
     try std.testing.expect(!bbEqual(snapshot, bitboard.global_bb));
 }
 
@@ -1262,4 +1272,52 @@ fn assertFourClassInvariants(cells: *[CELL_COUNT]Cell, line_start: u8) anyerror!
 test "issue #134: 四分類の不変条件（1ライン全列挙）" {
     ll.init();
     try forEachLinePattern(assertFourClassInvariants);
+}
+
+test "ll.mayCreateFour: 四になる手を取りこぼさない（乱数局面で全空点を照合）" {
+    ll.init();
+    var prng = std.Random.DefaultPrng.init(0x4f0a_7a11);
+    const rand = prng.random();
+    var fours: u32 = 0;
+    var rejected: u32 = 0;
+    for (0..2000) |_| {
+        var cells = [_]Cell{.empty} ** CELL_COUNT;
+        const span: u8 = rand.intRangeAtMost(u8, 5, 15);
+        const origin: u8 = (15 - span) / 2;
+        const stones: u16 = rand.intRangeAtMost(u16, 6, @min(@as(u16, 90), @as(u16, span) * span * 2 / 3));
+        var placed: u16 = 0;
+        while (placed < stones) {
+            const r = origin + rand.uintLessThan(u8, span);
+            const c = origin + rand.uintLessThan(u8, span);
+            const idx = @as(u16, r) * BOARD_SIZE + c;
+            if (cells[idx] != .empty) continue;
+            cells[idx] = if (rand.boolean()) .black else .white;
+            placed += 1;
+        }
+        bitboard.initFromCells(&cells);
+        for ([_]Cell{ .black, .white }) |color| {
+            for (0..CELL_COUNT) |i| {
+                if (cells[i] != .empty) continue;
+                const r: u8 = @intCast(i / BOARD_SIZE);
+                const c: u8 = @intCast(i % BOARD_SIZE);
+                const may = ll.mayCreateFour(r, c, color);
+                cells[i] = color;
+                bitboard.placeStone(r, c, color);
+                var any_four = false;
+                for (0..4) |d| {
+                    if (isFourInDirection(&cells, r, c, d, color)) any_four = true;
+                }
+                cells[i] = .empty;
+                bitboard.removeStone(r, c);
+                if (any_four) {
+                    fours += 1;
+                    try std.testing.expect(may);
+                }
+                if (!may) rejected += 1;
+            }
+        }
+    }
+    // 空振りでないこと: 四の手が十分あり、かつフィルタが実際に多くの点を弾いている
+    try std.testing.expect(fours > 3000);
+    try std.testing.expect(rejected > fours);
 }
