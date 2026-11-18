@@ -384,6 +384,22 @@ pub fn queryPatternByCell(row: u8, col: u8, dir_index: usize, color: Cell) Patte
     return queryPattern(info.line_index, info.bit_pos, color);
 }
 
+/// `extractWindowFromCellsDual` の bitboard 版（盤を走査せずライン 1 本のビットから切り出す）。
+/// bitboard 同期済み前提。窓の向き・盤外の扱いは cells 版と同一
+/// （一致は `test "extractWindowDual: cells 版と完全一致"` で固定）。
+pub fn extractWindowDual(row: u8, col: u8, dir_index: usize) struct { black_own: u9, white_own: u9, edge: u9 } {
+    const info = bitboard.CELL_LINES[@as(usize, row) * BOARD_SIZE + col][dir_index];
+    const len_u5: u5 = bitboard.LINE_LENGTHS[info.line_index];
+    // 左に 4 マスの余白（盤外）を付けたレイアウト。ライン長より右も盤外
+    const wall: u32 = 0xF | ~((@as(u32, 1) << (len_u5 + 4)) - 1);
+    const shift: u5 = info.bit_pos;
+    return .{
+        .black_own = @intCast(((@as(u32, bitboard.global_bb.black[info.line_index]) << 4) >> shift) & 0x1FF),
+        .white_own = @intCast(((@as(u32, bitboard.global_bb.white[info.line_index]) << 4) >> shift) & 0x1FF),
+        .edge = @intCast((wall >> shift) & 0x1FF),
+    };
+}
+
 /// cells 配列から (row,col) を中心とする dir_index 方向の9マス窓を、黒視点・白視点の
 /// 生ビット（own 相当）と盤外ビットに**1回のセル走査で同時に**分解する
 /// （bitboard 同期不要版）。窓生成則（盤外→edge、色ごとの own 分類）の一次ソース
@@ -826,4 +842,29 @@ test "queryPatternFromCells matches queryPattern via bitboard" {
         }
     }
     try std.testing.expectEqual(@as(u32, 0), mismatches);
+}
+
+test "extractWindowDual: cells 版と完全一致（乱数局面の全点・全方向）" {
+    var prng = std.Random.DefaultPrng.init(0xb17b_0a2d);
+    const rand = prng.random();
+    for (0..300) |_| {
+        var cells = [_]Cell{.empty} ** (BOARD_SIZE * BOARD_SIZE);
+        const stones = rand.intRangeAtMost(u16, 0, 150);
+        for (0..stones) |_| {
+            const idx = rand.uintLessThan(u16, BOARD_SIZE * BOARD_SIZE);
+            cells[idx] = if (rand.boolean()) .black else .white;
+        }
+        bitboard.initFromCells(&cells);
+        for (0..BOARD_SIZE) |r| {
+            for (0..BOARD_SIZE) |c| {
+                for (0..4) |d| {
+                    const expected = extractWindowFromCellsDual(&cells, @intCast(r), @intCast(c), d);
+                    const actual = extractWindowDual(@intCast(r), @intCast(c), d);
+                    try std.testing.expectEqual(expected.black_own, actual.black_own);
+                    try std.testing.expectEqual(expected.white_own, actual.white_own);
+                    try std.testing.expectEqual(expected.edge, actual.edge);
+                }
+            }
+        }
+    }
 }
