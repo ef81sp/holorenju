@@ -286,85 +286,100 @@ pub fn extractWindow(line_index: u8, bit_pos: u4, color: Cell) struct { own: u9,
     return .{ .own = own_window, .block = block_window };
 }
 
-/// 9 マス窓の自石ビット（bit 4 = 中心。中心自身は数えない）について、
-/// 「中心を含む 5 マス窓のどれかに自石が 3 個以上ある」かの表。
-const WINDOW_HAS_THREE: [512]bool = blk: {
+// =============================================================================
+// 四・三の必要条件（仮置き前の足切り）
+// =============================================================================
+//
+// 四・三の判定（`threats.isFourInDirectionWithPattern` / `createsDoubleThree` など）は、
+// 石を仮置きしてから LUT の足切り（連続 4・跳び四・連続 3・跳び三）を通った方向だけを見る。
+// LUT を通るには、置く点を含む 5 マス窓に自石が置く前から一定数（四は 3 個、三は 2 個）
+// 必要なので、それが無い点・方向は仮置きするまでもなく判定を通らない。
+//
+// 相手石・盤外による遮断は見ない。遮断されていても LUT を通り、同じライン上の既存の四の
+// 五点（置いた石の ±5 マスで探す）を拾って「四」と判定されることがあるため。
+// ここは「結果を変えない」ための保守側の条件で、判定そのものではない。
+//
+// 一致の固定（依存の向きから、判定側のモジュールにテストを置く）:
+// - `threats.zig` `test "ll.mayCreateFour: 四になる手を取りこぼさない"`
+// - `threats.zig` `test "createsDoubleThree: 事前判定は結果を変えない"`
+// - `threats.zig` `test "detectThreatsCore: 足切りは結果を変えない"`
+// - `vcf.zig` `test "findFourMoves: 事前フィルタは結果を変えない"`
+
+/// 9 マス窓の自石ビット（bit 4 = 中心）について、「中心を含む 5 マス窓のどれかに、
+/// 中心以外の自石が `min` 個以上ある」かの表。
+fn windowHasAtLeast(comptime min: u8) [512]bool {
     @setEvalBranchQuota(20_000);
     var table: [512]bool = undefined;
     for (0..512) |own| {
         var hit = false;
         for (0..5) |shift| {
             const mask: u9 = @as(u9, 0x1F) << shift;
-            if (@popCount(@as(u9, @intCast(own)) & mask & ~@as(u9, 0x10)) >= 3) hit = true;
+            if (@popCount(@as(u9, @intCast(own)) & mask & ~@as(u9, 0x10)) >= min) hit = true;
         }
         table[own] = hit;
     }
-    break :blk table;
-};
+    return table;
+}
 
-/// `WINDOW_HAS_THREE` の「2 個以上」版（三の必要条件）。
-const WINDOW_HAS_TWO: [512]bool = blk: {
-    @setEvalBranchQuota(20_000);
-    var table: [512]bool = undefined;
-    for (0..512) |own| {
-        var hit = false;
-        for (0..5) |shift| {
-            const mask: u9 = @as(u9, 0x1F) << shift;
-            if (@popCount(@as(u9, @intCast(own)) & mask & ~@as(u9, 0x10)) >= 2) hit = true;
-        }
-        table[own] = hit;
-    }
-    break :blk table;
-};
+/// 四（五）の必要条件: 中心以外の自石 3 個
+const WINDOW_HAS_THREE: [512]bool = windowHasAtLeast(3);
+/// 三の必要条件: 中心以外の自石 2 個
+const WINDOW_HAS_TWO: [512]bool = windowHasAtLeast(2);
 
-/// (row, col) を中心とする `dir` 方向 9 マス窓の自石ビット（bit 4 = 中心。ライン外は 0）。
-/// bitboard 同期済み前提。
-fn ownWindow(cell_idx: usize, comptime dir: usize, color: Cell) u9 {
-    const info = bitboard.CELL_LINES[cell_idx][dir];
-    const own_lines = if (color == .black) &bitboard.global_bb.black else &bitboard.global_bb.white;
+/// ライン 1 本のビットから、`bit_pos` を中心（bit 4）とする 9 マス窓を切り出す。
+/// ライン外は 0。
+fn windowFromLine(line_bits: u16, bit_pos: u4) u9 {
     // 左に 4 マスの余白を付けて切り出す
-    const padded: u32 = @as(u32, own_lines[info.line_index]) << 4;
-    return @intCast((padded >> info.bit_pos) & 0x1FF);
+    const padded: u32 = @as(u32, line_bits) << 4;
+    return @intCast((padded >> bit_pos) & 0x1FF);
 }
 
-/// 空点 (row, col) に `color` を置いて三三（2 方向以上の三）と**判定され得る**か（必要条件）。
-/// bitboard 同期済み前提。
-///
-/// 三（連続三・跳び三）は置いた石を含む 5 マス窓に自石が置く前から 2 個以上必要。
-/// それが 2 方向以上に無い点は三三にならない。
-pub fn mayCreateDoubleThree(row: u8, col: u8, color: Cell) bool {
-    const cell_idx = @as(usize, row) * BOARD_SIZE + col;
-    var dirs: u8 = 0;
-    inline for (0..4) |dir| {
-        if (WINDOW_HAS_TWO[ownWindow(cell_idx, dir, color)]) dirs += 1;
-    }
-    return dirs >= 2;
-}
-
-/// (row, col) の `dir_index` 方向 9 マス窓にある自石の数（中心が自石ならそれも数える）。
-/// bitboard 同期済み前提。三以上の形（3 石）がその方向に有り得るかの足切り用。
-pub fn ownCountInWindow(row: u8, col: u8, dir_index: usize, color: Cell) u8 {
-    const cell_idx = @as(usize, row) * BOARD_SIZE + col;
-    const info = bitboard.CELL_LINES[cell_idx][dir_index];
+/// (row, col) を中心とする `dir_index` 方向 9 マス窓の自石ビット。bitboard 同期済み前提。
+fn ownWindow(row: u8, col: u8, dir_index: usize, color: Cell) u9 {
+    const info = bitboard.CELL_LINES[@as(usize, row) * BOARD_SIZE + col][dir_index];
     const own_lines = if (color == .black) &bitboard.global_bb.black else &bitboard.global_bb.white;
-    const padded: u32 = @as(u32, own_lines[info.line_index]) << 4;
-    return @popCount((padded >> info.bit_pos) & 0x1FF);
+    return windowFromLine(own_lines[info.line_index], info.bit_pos);
 }
 
 /// 空点 (row, col) に `color` を置いて四（または五）と**判定され得る**か（必要条件）。
 /// bitboard 同期済み前提。
-///
-/// 四判定（`threats.isFourInDirectionWithPattern`）は LUT の足切り（連続 4 または跳び四）を
-/// 通った方向だけを見る。足切りを通るには、置いた石を含む 5 マス窓に自石が置く前から
-/// 3 個以上必要。どの方向にもそれが無い点は、石を仮置きして調べるまでもなく四にならない。
-/// 相手石・盤外による遮断は見ない（遮断されていても LUT を通り、同じライン上の既存の四の
-/// 五点を拾って「四」と判定されることがあるため。結果を変えないための保守側の条件）。
 pub fn mayCreateFour(row: u8, col: u8, color: Cell) bool {
-    const cell_idx = @as(usize, row) * BOARD_SIZE + col;
     inline for (0..4) |dir| {
-        if (WINDOW_HAS_THREE[ownWindow(cell_idx, dir, color)]) return true;
+        if (WINDOW_HAS_THREE[ownWindow(row, col, dir, color)]) return true;
     }
     return false;
+}
+
+/// `mayCreateFour` のライン版: 1 ライン分の自石ビットから、四（または五）と判定され得る点の
+/// マスクを返す（自石の位置・相手石の位置も立つので、空点への絞り込みは呼び出し側で行う）。
+/// 窓はライン外にはみ出してよい（はみ出した分は自石 0 個と数える）。
+/// 点ごとの表（`WINDOW_HAS_THREE`）との一致は
+/// `test "lineFourCandidateMask: 点ごとの判定と全ライン・全位置で一致"` で固定。
+pub fn lineFourCandidateMask(own: u16) u16 {
+    // 左右に 4 マスずつ余白を付け、5 マス窓を 1 つずつずらして数える
+    const padded: u32 = @as(u32, own) << 4;
+    var mask: u32 = 0;
+    inline for (0..19) |shift| {
+        if (@popCount((padded >> shift) & 0x1F) >= 3) mask |= @as(u32, 0x1F) << shift;
+    }
+    return @intCast((mask >> 4) & 0x7FFF);
+}
+
+/// 空点 (row, col) に `color` を置いて三三（2 方向以上の三）と**判定され得る**か（必要条件）。
+/// bitboard 同期済み前提。
+pub fn mayCreateDoubleThree(row: u8, col: u8, color: Cell) bool {
+    var dirs: u8 = 0;
+    inline for (0..4) |dir| {
+        if (WINDOW_HAS_TWO[ownWindow(row, col, dir, color)]) dirs += 1;
+    }
+    return dirs >= 2;
+}
+
+/// `color` の石がある (row, col) が、`dir_index` 方向で三以上の形（四・連続三・跳び三）の
+/// 一部で**あり得る**か（必要条件）。その石を含む 5 マス窓に、ほかの自石が 2 個以上必要。
+/// bitboard 同期済み前提。
+pub fn mayBelongToThree(row: u8, col: u8, dir_index: usize, color: Cell) bool {
+    return WINDOW_HAS_TWO[ownWindow(row, col, dir_index, color)];
 }
 
 /// Query pattern for a specific cell and direction using the lookup table.
@@ -392,11 +407,10 @@ pub fn extractWindowDual(row: u8, col: u8, dir_index: usize) struct { black_own:
     const len_u5: u5 = bitboard.LINE_LENGTHS[info.line_index];
     // 左に 4 マスの余白（盤外）を付けたレイアウト。ライン長より右も盤外
     const wall: u32 = 0xF | ~((@as(u32, 1) << (len_u5 + 4)) - 1);
-    const shift: u5 = info.bit_pos;
     return .{
-        .black_own = @intCast(((@as(u32, bitboard.global_bb.black[info.line_index]) << 4) >> shift) & 0x1FF),
-        .white_own = @intCast(((@as(u32, bitboard.global_bb.white[info.line_index]) << 4) >> shift) & 0x1FF),
-        .edge = @intCast((wall >> shift) & 0x1FF),
+        .black_own = windowFromLine(bitboard.global_bb.black[info.line_index], info.bit_pos),
+        .white_own = windowFromLine(bitboard.global_bb.white[info.line_index], info.bit_pos),
+        .edge = @intCast((wall >> info.bit_pos) & 0x1FF),
     };
 }
 
@@ -867,4 +881,28 @@ test "extractWindowDual: cells 版と完全一致（乱数局面の全点・全�
             }
         }
     }
+}
+
+test "lineFourCandidateMask: 点ごとの判定と全ライン・全位置で一致" {
+    // 15 マスのラインの全パターン × 全位置。自石のない位置（空点または相手石）について、
+    // ライン版のマスクと点ごとの表（mayCreateFour が使う）が同じ答えを返すこと
+    for (0..(1 << 15)) |own_usize| {
+        const own: u16 = @intCast(own_usize);
+        const mask = lineFourCandidateMask(own);
+        for (0..15) |pos| {
+            if (own & (@as(u16, 1) << @intCast(pos)) != 0) continue;
+            const by_line = mask & (@as(u16, 1) << @intCast(pos)) != 0;
+            const by_point = WINDOW_HAS_THREE[windowFromLine(own, @intCast(pos))];
+            try std.testing.expectEqual(by_point, by_line);
+        }
+    }
+}
+
+test "lineFourCandidateMask: ライン端でも窓のはみ出しを数える" {
+    // 端の 3 連 (bit 0..2) → bit 3, 4 が候補（自石の位置も立つが呼び出し側で除く）
+    try std.testing.expectEqual(@as(u16, 0b11111), lineFourCandidateMask(0b00111));
+    // 2 個では候補なし
+    try std.testing.expectEqual(@as(u16, 0), lineFourCandidateMask(0b00011));
+    // 5 マスより離れた 3 個は候補なし
+    try std.testing.expectEqual(@as(u16, 0), lineFourCandidateMask(0b100000100000100));
 }

@@ -643,10 +643,11 @@ fn detectThreatsCore(cells: []Cell, opponent_color: Cell, comptime use_cells_que
             if (cells[@as(u16, row) * BOARD_SIZE + col] != opponent_color) continue;
 
             for (DIRECTIONS, 0..) |dir, dir_idx| {
-                // この方向の 9 マス窓に自石が 3 個なければ、四も三（連続・跳び）も有り得ない。
-                // 以降の判定はどれも空振りするので飛ばす（結果は不変。bitboard 版のみ。
-                // cells 版との一致は `test "detectThreatsCore: 足切りは結果を変えない"` で固定）
-                if (!use_cells_query and ll.ownCountInWindow(row, col, dir_idx, opponent_color) < 3) continue;
+                // この石を含む 5 マス窓に opponent_color の石がほかに 2 個なければ、この方向に
+                // 四も三（連続・跳び）も有り得ない。以降の判定はどれも空振りするので飛ばす
+                // （結果は不変。bitboard 版のみ。cells 版との一致は
+                // `test "detectThreatsCore: 足切りは結果を変えない"` で固定）
+                if (!use_cells_query and !ll.mayBelongToThree(row, col, dir_idx, opponent_color)) continue;
 
                 const lut = if (use_cells_query)
                     ll.queryPatternFromCells(cells, row, col, dir_idx, opponent_color)
@@ -1293,21 +1294,9 @@ test "ll.mayCreateFour: 四になる手を取りこぼさない（乱数局面�
     const rand = prng.random();
     var fours: u32 = 0;
     var rejected: u32 = 0;
+    var cells: [CELL_COUNT]Cell = undefined;
     for (0..2000) |_| {
-        var cells = [_]Cell{.empty} ** CELL_COUNT;
-        const span: u8 = rand.intRangeAtMost(u8, 5, 15);
-        const origin: u8 = (15 - span) / 2;
-        const stones: u16 = rand.intRangeAtMost(u16, 6, @min(@as(u16, 90), @as(u16, span) * span * 2 / 3));
-        var placed: u16 = 0;
-        while (placed < stones) {
-            const r = origin + rand.uintLessThan(u8, span);
-            const c = origin + rand.uintLessThan(u8, span);
-            const idx = @as(u16, r) * BOARD_SIZE + c;
-            if (cells[idx] != .empty) continue;
-            cells[idx] = if (rand.boolean()) .black else .white;
-            placed += 1;
-        }
-        bitboard.initFromCells(&cells);
+        randomDenseBoard(rand, &cells);
         for ([_]Cell{ .black, .white }) |color| {
             for (0..CELL_COUNT) |i| {
                 if (cells[i] != .empty) continue;
@@ -1335,8 +1324,9 @@ test "ll.mayCreateFour: 四になる手を取りこぼさない（乱数局面�
     try std.testing.expect(rejected > fours);
 }
 
-/// テスト用: 中央寄りに石を密集させた乱数局面（bitboard 同期済み）
-fn randomDenseBoard(rand: std.Random, cells: *[CELL_COUNT]Cell) void {
+/// テスト用: 中央寄りに石を密集させた乱数局面（bitboard 同期済み）。
+/// 5〜15 マス四方に詰めるので、三・四・長連・盤端の形が高い頻度で出る。
+pub fn randomDenseBoard(rand: std.Random, cells: *[CELL_COUNT]Cell) void {
     cells.* = [_]Cell{.empty} ** CELL_COUNT;
     const span: u8 = rand.intRangeAtMost(u8, 5, 15);
     const origin: u8 = (15 - span) / 2;

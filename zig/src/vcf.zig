@@ -178,42 +178,9 @@ pub const TimeLimiter = struct {
 // 四を作れる手の列挙
 // =============================================================================
 
-/// ライン index・ビット位置 → セル index（`bitboard.CELL_LINES` の逆引き）
-const LINE_CELLS: [bitboard.LINE_COUNT][15]u8 = blk: {
-    @setEvalBranchQuota(10_000);
-    var table: [bitboard.LINE_COUNT][15]u8 = .{.{0} ** 15} ** bitboard.LINE_COUNT;
-    for (0..CELL_COUNT) |idx| {
-        for (0..4) |dir| {
-            const info = bitboard.CELL_LINES[idx][dir];
-            table[info.line_index][info.bit_pos] = @intCast(idx);
-        }
-    }
-    break :blk table;
-};
-
-/// 1 ライン分の自石ビットから「その点を含む 5 マス窓に自石が 3 個以上ある」点のマスクを返す。
-/// 窓はライン外にはみ出してよい（はみ出した分は自石 0 個と数える）。
-fn lineFourCandidateMask(own: u16) u16 {
-    // 左右に 4 マスずつ余白を付け、5 マス窓を 1 つずつずらして数える
-    const padded: u32 = @as(u32, own) << 4;
-    var mask: u32 = 0;
-    inline for (0..19) |shift| {
-        if (@popCount((padded >> shift) & 0x1F) >= 3) mask |= @as(u32, 0x1F) << shift;
-    }
-    return @intCast((mask >> 4) & 0x7FFF);
-}
-
-/// `color` を置いて五または四と**判定され得る**空点（必要条件）を行ごとのビットマスクで返す。
-/// bitboard 同期済み前提。
-///
-/// 後段の判定はどれも「置いた石を含む 5 マス窓に、置く前から自石が 3 個以上ある」ことを要する:
-/// - `checkFive`: 置いた石を含む 5 連 → 窓に自石 4 個
-/// - `createsFour`: LUT の足切り（連続 4 または跳び四）→ 窓に自石 3 個
-///
-/// 相手石・盤外による遮断はここでは見ない。四判定は LUT を通ったあと置いた石の ±5 マスで
-/// 五点を探すので、両端を塞がれた 4 連でも同じライン上の既存の四の五点を拾って「四」と
-/// 判定することがある。その挙動も含めて結果を変えないため、遮断で弾かない
-/// （一致は `test "findFourMoves: 事前フィルタは結果を変えない"` で固定）。
+/// `color` を置いて五または四と**判定され得る**空点を行ごとのビットマスクで返す。
+/// bitboard 同期済み前提。必要条件の定義と根拠は `line_lookup.zig`「四・三の必要条件」
+/// （`ll.mayCreateFour` のライン版 `ll.lineFourCandidateMask`）を参照。
 ///
 /// 候補点は必ず自石から 2 マス以内にあるので、従来の近傍マスク（石から 2 マス以内）は不要。
 fn fourCandidateRows(color: Cell) [BOARD_SIZE]u16 {
@@ -224,19 +191,44 @@ fn fourCandidateRows(color: Cell) [BOARD_SIZE]u16 {
         const own = own_lines[line];
         if (@popCount(own) < 3) continue;
         const valid: u16 = (@as(u16, 1) << bitboard.LINE_LENGTHS[line]) - 1;
-        var cand = lineFourCandidateMask(own) & valid & ~(own | opp_lines[line]);
+        var cand = ll.lineFourCandidateMask(own) & valid & ~(own | opp_lines[line]);
         while (cand != 0) {
             const bit: u4 = @intCast(@ctz(cand));
             cand &= cand - 1;
-            const idx = LINE_CELLS[line][bit];
+            const idx = bitboard.LINE_CELLS[line][bit];
             rows[idx / BOARD_SIZE] |= @as(u16, 1) << @intCast(idx % BOARD_SIZE);
         }
     }
     return rows;
 }
 
+/// 空点 (r, c) が `color` の「四を作れる手」か（五を作る手を含む。黒の禁手は除外）。
+/// 仮置きして判定し、盤は元に戻す。cells / bitboard 同期済み前提。
+fn isFourMoveAt(cells: []Cell, r: u8, c: u8, color: Cell) bool {
+    const idx = @as(u16, r) * BOARD_SIZE + c;
+    std.debug.assert(cells[idx] == .empty);
+
+    // 仮配置（bitboard も同期）
+    cells[idx] = color;
+    bitboard.placeStone(r, c, color);
+    // 五連チェック（最優先）→ 四チェック
+    const is_five = forbidden.checkFive(cells, r, c, color);
+    const is_four = !is_five and quiescence.createsFour(cells, r, c, color);
+    cells[idx] = .empty;
+    bitboard.removeStone(r, c);
+
+    if (is_five) return true;
+    if (!is_four) return false;
+    // 禁手チェックは四を作る手だけに限定
+    if (color == .black and forbidden.checkForbiddenMove(cells, r, c) != .none) return false;
+    return true;
+}
+
 /// 四を作れる位置を列挙（五連完成手を含む）
 /// TS版 threatPatterns.ts の findFourMoves に対応
+///
+/// cells と bitboard が同期済みであること（空点の判定を bitboard から行う。ずれていると
+/// 既存の石に仮置きしてしまうので、Debug ビルドでは `isFourMoveAt` の assert で検出する）。
 pub fn findFourMoves(cells: []Cell, color: Cell, buf: *[225]Position) u16 {
     var count: u16 = 0;
     // 五・四になり得る空点だけを仮置きして判定する（結果は不変。全近傍点に仮置きしていた
@@ -250,34 +242,7 @@ pub fn findFourMoves(cells: []Cell, color: Cell, buf: *[225]Position) u16 {
         while (row_mask != 0) {
             const c: u8 = @intCast(@ctz(row_mask));
             row_mask &= row_mask - 1;
-            const idx = @as(u16, r) * BOARD_SIZE + c;
-
-            // 仮配置（bitboard も同期）
-            cells[idx] = color;
-            bitboard.placeStone(r, c, color);
-
-            // 五連チェック（最優先）
-            if (forbidden.checkFive(cells, r, c, color)) {
-                cells[idx] = .empty;
-                bitboard.removeStone(r, c);
-                buf[count] = .{ .row = r, .col = c };
-                count += 1;
-                continue;
-            }
-
-            // 四チェック
-            const is_four = quiescence.createsFour(cells, r, c, color);
-            cells[idx] = .empty;
-            bitboard.removeStone(r, c);
-
-            if (!is_four) continue;
-
-            // 禁手チェックは四を作る手だけに限定
-            if (color == .black) {
-                const fr = forbidden.checkForbiddenMove(cells, r, c);
-                if (fr != .none) continue;
-            }
-
+            if (!isFourMoveAt(cells, r, c, color)) continue;
             buf[count] = .{ .row = r, .col = c };
             count += 1;
         }
@@ -900,8 +865,8 @@ test "findFourMoves: basic" {
     try testing.expect(count >= 2);
 }
 
-/// 事前フィルタ導入前の `findFourMoves`（全近傍点に仮置きして判定する素朴版）。
-/// フィルタが結果（集合・順序）を変えないことの参照実装。
+/// 事前フィルタ導入前の `findFourMoves` の走査（石から 2 マス以内の全空点を判定する素朴版）。
+/// 1 点ごとの判定（`isFourMoveAt`）は本体と共有し、違いは「どの点を調べるか」だけにする。
 fn findFourMovesReference(cells: []Cell, color: Cell, buf: *[225]Position) u16 {
     var count: u16 = 0;
     const near_mask = threats.computeNearMask(threats.computeOccupiedRows(cells), 2);
@@ -909,26 +874,9 @@ fn findFourMovesReference(cells: []Cell, color: Cell, buf: *[225]Position) u16 {
         const r: u8 = @intCast(r_usize);
         for (0..BOARD_SIZE) |c_usize| {
             const c: u8 = @intCast(c_usize);
-            const idx = @as(u16, r) * BOARD_SIZE + c;
-            if (cells[idx] != .empty) continue;
+            if (cells[@as(u16, r) * BOARD_SIZE + c] != .empty) continue;
             if (!threats.isNearFromMask(near_mask, r, c)) continue;
-            cells[idx] = color;
-            bitboard.placeStone(r, c, color);
-            if (forbidden.checkFive(cells, r, c, color)) {
-                cells[idx] = .empty;
-                bitboard.removeStone(r, c);
-                buf[count] = .{ .row = r, .col = c };
-                count += 1;
-                continue;
-            }
-            const is_four = quiescence.createsFour(cells, r, c, color);
-            cells[idx] = .empty;
-            bitboard.removeStone(r, c);
-            if (!is_four) continue;
-            if (color == .black) {
-                const fr = forbidden.checkForbiddenMove(cells, r, c);
-                if (fr != .none) continue;
-            }
+            if (!isFourMoveAt(cells, r, c, color)) continue;
             buf[count] = .{ .row = r, .col = c };
             count += 1;
         }
@@ -941,22 +889,9 @@ test "findFourMoves: 事前フィルタは結果を変えない（乱数局面�
     var prng = std.Random.DefaultPrng.init(0x5eed_f00d);
     const rand = prng.random();
     var total_moves: u32 = 0;
+    var cells: [CELL_COUNT]Cell = undefined;
     for (0..3000) |_| {
-        var cells = [_]Cell{.empty} ** CELL_COUNT;
-        // 中央寄りに密集させて三・四・長連の形を多く作る
-        const span: u8 = rand.intRangeAtMost(u8, 5, 15);
-        const origin: u8 = (15 - span) / 2;
-        const stones: u16 = rand.intRangeAtMost(u16, 6, @min(@as(u16, 90), @as(u16, span) * span * 2 / 3));
-        var placed: u16 = 0;
-        while (placed < stones) {
-            const r = origin + rand.uintLessThan(u8, span);
-            const c = origin + rand.uintLessThan(u8, span);
-            const idx = @as(u16, r) * BOARD_SIZE + c;
-            if (cells[idx] != .empty) continue;
-            cells[idx] = if (rand.boolean()) .black else .white;
-            placed += 1;
-        }
-        bitboard.initFromCells(&cells);
+        threats.randomDenseBoard(rand, &cells);
         for ([_]Cell{ .black, .white }) |color| {
             var expected: [225]Position = undefined;
             var actual: [225]Position = undefined;
@@ -993,15 +928,6 @@ test "fourCandidateRows: 置く点を含む 5 マス窓に自石が 3 個ない�
     // 白は 1 石だけなので候補なし
     const white = fourCandidateRows(.white);
     for (0..BOARD_SIZE) |r| try testing.expectEqual(@as(u16, 0), white[r]);
-}
-
-test "lineFourCandidateMask: ライン端でも窓のはみ出しを数える" {
-    // 端の 3 連 (bit 0..2) → bit 3, 4 が候補（自石の位置も立つが呼び出し側で除く）
-    try testing.expectEqual(@as(u16, 0b11111), lineFourCandidateMask(0b00111));
-    // 2 個では候補なし
-    try testing.expectEqual(@as(u16, 0), lineFourCandidateMask(0b00011));
-    // 5 マスより離れた 3 個は候補なし
-    try testing.expectEqual(@as(u16, 0), lineFourCandidateMask(0b100000100000100));
 }
 
 test "hasVCF: immediate five" {
