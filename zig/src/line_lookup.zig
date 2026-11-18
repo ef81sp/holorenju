@@ -302,6 +302,55 @@ const WINDOW_HAS_THREE: [512]bool = blk: {
     break :blk table;
 };
 
+/// `WINDOW_HAS_THREE` の「2 個以上」版（三の必要条件）。
+const WINDOW_HAS_TWO: [512]bool = blk: {
+    @setEvalBranchQuota(20_000);
+    var table: [512]bool = undefined;
+    for (0..512) |own| {
+        var hit = false;
+        for (0..5) |shift| {
+            const mask: u9 = @as(u9, 0x1F) << shift;
+            if (@popCount(@as(u9, @intCast(own)) & mask & ~@as(u9, 0x10)) >= 2) hit = true;
+        }
+        table[own] = hit;
+    }
+    break :blk table;
+};
+
+/// (row, col) を中心とする `dir` 方向 9 マス窓の自石ビット（bit 4 = 中心。ライン外は 0）。
+/// bitboard 同期済み前提。
+fn ownWindow(cell_idx: usize, comptime dir: usize, color: Cell) u9 {
+    const info = bitboard.CELL_LINES[cell_idx][dir];
+    const own_lines = if (color == .black) &bitboard.global_bb.black else &bitboard.global_bb.white;
+    // 左に 4 マスの余白を付けて切り出す
+    const padded: u32 = @as(u32, own_lines[info.line_index]) << 4;
+    return @intCast((padded >> info.bit_pos) & 0x1FF);
+}
+
+/// 空点 (row, col) に `color` を置いて三三（2 方向以上の三）と**判定され得る**か（必要条件）。
+/// bitboard 同期済み前提。
+///
+/// 三（連続三・跳び三）は置いた石を含む 5 マス窓に自石が置く前から 2 個以上必要。
+/// それが 2 方向以上に無い点は三三にならない。
+pub fn mayCreateDoubleThree(row: u8, col: u8, color: Cell) bool {
+    const cell_idx = @as(usize, row) * BOARD_SIZE + col;
+    var dirs: u8 = 0;
+    inline for (0..4) |dir| {
+        if (WINDOW_HAS_TWO[ownWindow(cell_idx, dir, color)]) dirs += 1;
+    }
+    return dirs >= 2;
+}
+
+/// (row, col) の `dir_index` 方向 9 マス窓にある自石の数（中心が自石ならそれも数える）。
+/// bitboard 同期済み前提。三以上の形（3 石）がその方向に有り得るかの足切り用。
+pub fn ownCountInWindow(row: u8, col: u8, dir_index: usize, color: Cell) u8 {
+    const cell_idx = @as(usize, row) * BOARD_SIZE + col;
+    const info = bitboard.CELL_LINES[cell_idx][dir_index];
+    const own_lines = if (color == .black) &bitboard.global_bb.black else &bitboard.global_bb.white;
+    const padded: u32 = @as(u32, own_lines[info.line_index]) << 4;
+    return @popCount((padded >> info.bit_pos) & 0x1FF);
+}
+
 /// 空点 (row, col) に `color` を置いて四（または五）と**判定され得る**か（必要条件）。
 /// bitboard 同期済み前提。
 ///
@@ -312,13 +361,8 @@ const WINDOW_HAS_THREE: [512]bool = blk: {
 /// 五点を拾って「四」と判定されることがあるため。結果を変えないための保守側の条件）。
 pub fn mayCreateFour(row: u8, col: u8, color: Cell) bool {
     const cell_idx = @as(usize, row) * BOARD_SIZE + col;
-    const own_lines = if (color == .black) &bitboard.global_bb.black else &bitboard.global_bb.white;
     inline for (0..4) |dir| {
-        const info = bitboard.CELL_LINES[cell_idx][dir];
-        // 左に 4 マスの余白を付けて 9 マス窓を切り出す（ライン外は自石 0 個）
-        const padded: u32 = @as(u32, own_lines[info.line_index]) << 4;
-        const window: u9 = @intCast((padded >> info.bit_pos) & 0x1FF);
-        if (WINDOW_HAS_THREE[window]) return true;
+        if (WINDOW_HAS_THREE[ownWindow(cell_idx, dir, color)]) return true;
     }
     return false;
 }

@@ -643,6 +643,11 @@ fn detectThreatsCore(cells: []Cell, opponent_color: Cell, comptime use_cells_que
             if (cells[@as(u16, row) * BOARD_SIZE + col] != opponent_color) continue;
 
             for (DIRECTIONS, 0..) |dir, dir_idx| {
+                // この方向の 9 マス窓に自石が 3 個なければ、四も三（連続・跳び）も有り得ない。
+                // 以降の判定はどれも空振りするので飛ばす（結果は不変。bitboard 版のみ。
+                // cells 版との一致は `test "detectThreatsCore: 足切りは結果を変えない"` で固定）
+                if (!use_cells_query and ll.ownCountInWindow(row, col, dir_idx, opponent_color) < 3) continue;
+
                 const lut = if (use_cells_query)
                     ll.queryPatternFromCells(cells, row, col, dir_idx, opponent_color)
                 else
@@ -739,6 +744,14 @@ pub fn detectOpponentThreatsFromCells(cells: []Cell, opponent_color: Cell) Threa
 
 /// 三三チェック（活三2つ以上）
 pub fn createsDoubleThree(cells: []Cell, row: u8, col: u8, color: Cell) bool {
+    // 三が 2 方向に出来得ない点は仮置きせずに返す（結果は不変。
+    // `test "createsDoubleThree: 事前判定は結果を変えない"` で固定）
+    if (!ll.mayCreateDoubleThree(row, col, color)) return false;
+    return createsDoubleThreeUnfiltered(cells, row, col, color);
+}
+
+/// `createsDoubleThree` の本体（事前判定なし）。
+fn createsDoubleThreeUnfiltered(cells: []Cell, row: u8, col: u8, color: Cell) bool {
     const idx = @as(u16, row) * BOARD_SIZE + col;
     cells[idx] = color;
     bitboard.placeStone(row, col, color);
@@ -1320,4 +1333,72 @@ test "ll.mayCreateFour: 四になる手を取りこぼさない（乱数局面�
     // 空振りでないこと: 四の手が十分あり、かつフィルタが実際に多くの点を弾いている
     try std.testing.expect(fours > 3000);
     try std.testing.expect(rejected > fours);
+}
+
+/// テスト用: 中央寄りに石を密集させた乱数局面（bitboard 同期済み）
+fn randomDenseBoard(rand: std.Random, cells: *[CELL_COUNT]Cell) void {
+    cells.* = [_]Cell{.empty} ** CELL_COUNT;
+    const span: u8 = rand.intRangeAtMost(u8, 5, 15);
+    const origin: u8 = (15 - span) / 2;
+    const stones: u16 = rand.intRangeAtMost(u16, 6, @min(@as(u16, 90), @as(u16, span) * span * 2 / 3));
+    var placed: u16 = 0;
+    while (placed < stones) {
+        const r = origin + rand.uintLessThan(u8, span);
+        const c = origin + rand.uintLessThan(u8, span);
+        const idx = @as(u16, r) * BOARD_SIZE + c;
+        if (cells[idx] != .empty) continue;
+        cells[idx] = if (rand.boolean()) .black else .white;
+        placed += 1;
+    }
+    bitboard.initFromCells(cells);
+}
+
+fn expectSameList(a: *const PositionList, b: *const PositionList) !void {
+    try std.testing.expectEqual(a.len, b.len);
+    for (0..a.len) |i| {
+        try std.testing.expectEqual(a.items[i].row, b.items[i].row);
+        try std.testing.expectEqual(a.items[i].col, b.items[i].col);
+    }
+}
+
+test "detectThreatsCore: 足切りは結果を変えない（乱数局面で cells 版＝足切りなしと完全一致）" {
+    ll.init();
+    var prng = std.Random.DefaultPrng.init(0x7417_ea75);
+    const rand = prng.random();
+    var cells: [CELL_COUNT]Cell = undefined;
+    var found: u32 = 0;
+    for (0..3000) |_| {
+        randomDenseBoard(rand, &cells);
+        for ([_]Cell{ .black, .white }) |color| {
+            const gated = detectThreatsCore(&cells, color, false);
+            const reference = detectThreatsCore(&cells, color, true);
+            try expectSameList(&reference.open_fours, &gated.open_fours);
+            try expectSameList(&reference.fours, &gated.fours);
+            try expectSameList(&reference.open_threes, &gated.open_threes);
+            found += @as(u32, reference.open_fours.len) + reference.fours.len + reference.open_threes.len;
+        }
+    }
+    try std.testing.expect(found > 3000);
+}
+
+test "createsDoubleThree: 事前判定は結果を変えない（乱数局面の全空点で本体と一致）" {
+    ll.init();
+    var prng = std.Random.DefaultPrng.init(0x0d0b_1e33);
+    const rand = prng.random();
+    var cells: [CELL_COUNT]Cell = undefined;
+    var hits: u32 = 0;
+    for (0..2000) |_| {
+        randomDenseBoard(rand, &cells);
+        for ([_]Cell{ .black, .white }) |color| {
+            for (0..CELL_COUNT) |i| {
+                if (cells[i] != .empty) continue;
+                const r: u8 = @intCast(i / BOARD_SIZE);
+                const c: u8 = @intCast(i % BOARD_SIZE);
+                const expected = createsDoubleThreeUnfiltered(&cells, r, c, color);
+                try std.testing.expectEqual(expected, createsDoubleThree(&cells, r, c, color));
+                if (expected) hits += 1;
+            }
+        }
+    }
+    try std.testing.expect(hits > 500);
 }
