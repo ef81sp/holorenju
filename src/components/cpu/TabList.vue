@@ -125,11 +125,12 @@ const { onKeydown } = useRovingTabindex({
   flex: 1 0 auto;
   min-width: var(--size-60);
   display: flex;
-  align-items: center;
+  /* ラベルと座標（小さい文字）のベースラインを揃えて下寄せ */
+  align-items: last baseline;
   justify-content: center;
   gap: var(--size-4);
   height: var(--size-24);
-  padding: 0 var(--size-8);
+  padding: 0 var(--size-8) var(--size-4);
   box-sizing: border-box;
   background: var(--color-bg-gray);
   border: 1px solid var(--color-border);
