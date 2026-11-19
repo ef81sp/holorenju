@@ -2,7 +2,8 @@
  * 振り返り評価パネル「候補手」カードの表示用データ
  *
  * - 最大 3 件（最善手・自分の手は必ず含む）。順位番号は探索結果の並び順のまま
- * - 最善との差を S/A/B/C ランクにする。数値差は読み上げ・ツールチップ用に残す
+ * - 最善からの距離をゲージ（長さ＝差、色＝4 段階の区切り）で示す。
+ *   数値差は読み上げ・ツールチップ用に残す
  *
  * @see docs/plans/review-right-panel-redesign-2026-11-19.md
  */
@@ -15,6 +16,7 @@ import { formatMove } from "@/logic/gameRecordParser";
 import { formatCandidateDelta } from "@/logic/reviewCandidateDelta";
 import {
   type CandidateGrade,
+  gaugeRatioFromDelta,
   gradeFromDelta,
   selectDisplayCandidates,
 } from "@/logic/reviewCandidateDisplay";
@@ -27,7 +29,10 @@ export interface CandidateView {
   deltaLabel: string;
   /** searchScore が境界値（上限）か。基準候補は常に false */
   isBound: boolean;
+  /** ゲージの色分け（4 段階） */
   grade: CandidateGrade;
+  /** ゲージの長さ（0〜1）。最善で 1、差400以上で 0 */
+  gaugeRatio: number;
   kind: "best" | "actual" | "alt";
   isFukumi: boolean;
   fukumiDepth?: number;
@@ -64,6 +69,7 @@ export function buildCandidateViews(eval_: EvaluatedMove): CandidateView[] {
       deltaLabel: formatCandidateDelta(delta, !isBound),
       isBound,
       grade: gradeFromDelta(delta),
+      gaugeRatio: gaugeRatioFromDelta(delta),
       kind,
       isFukumi: c.isFukumi ?? false,
       fukumiDepth: c.fukumiDepth,
@@ -101,13 +107,12 @@ function flagLabelOf(c: CandidateView): string {
   return "";
 }
 
-/** カードの読み上げ（順位・座標・役割・ランク・数値差・フラグ） */
+/** カードの読み上げ（順位・座標・役割・数値差・フラグ） */
 export function candidateAriaLabel(c: CandidateView): string {
   return [
     `${c.rank}位`,
     c.coord,
     roleLabelOf(c.kind),
-    `ランク${c.grade}`,
     `（最善比 ${c.deltaLabel}${c.isBound ? "・上限値" : ""}）`,
     flagLabelOf(c),
   ]

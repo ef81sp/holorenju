@@ -3,7 +3,8 @@
  * 振り返り評価パネルの「候補手」セクション
  *
  * 候補手をコンパクトなカードで最大 3 件表示する（最善手・自分の手は必ず含む）。
- * 各カードは最善との差を S/A/B/C ランクで示し、数値差は aria-label / title に残す。
+ * 各カードは最善からの距離を下端のゲージで示す（長さ＝差、色＝4 段階の区切り）。
+ * 数値差は aria-label / title に残す。
  * ホバー・フォーカスで盤面に該当位置を 1 マークだけプレビューする
  * （reviewBoardPreviewStore を直接更新）。
  *
@@ -31,6 +32,13 @@ const previewStore = useReviewBoardPreviewStore();
 const candidateViews = computed<CandidateView[]>(() =>
   buildCandidateViews(props.evaluation),
 );
+
+/** 底打ちした手もバーの存在が見えるよう、最低 4% は残す */
+const GAUGE_MIN_PERCENT = 4;
+
+function gaugeWidth(c: CandidateView): string {
+  return `${Math.max(GAUGE_MIN_PERCENT, c.gaugeRatio * 100)}%`;
+}
 
 function handleEnter(position: Position): void {
   previewStore.setHoveredCandidate(position);
@@ -86,16 +94,20 @@ function handleLeave(): void {
             {{ c.rank }}
           </span>
           <span
-            class="cand-body"
+            class="cand-coord"
             aria-hidden="true"
           >
-            <span class="cand-coord">{{ c.coord }}</span>
+            {{ c.coord }}
+          </span>
+          <span
+            class="cand-gauge"
+            aria-hidden="true"
+          >
             <span
-              class="cand-grade"
+              class="cand-gauge-fill"
               :class="`grade-${c.grade}`"
-            >
-              {{ c.grade }}
-            </span>
+              :style="{ width: gaugeWidth(c) }"
+            />
           </span>
           <span
             v-if="c.opponentForcedWinShort"
@@ -156,7 +168,7 @@ function handleLeave(): void {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--size-4);
   margin: 0;
-  padding: var(--size-4) var(--size-4) var(--size-8) var(--size-4);
+  padding: var(--size-4) var(--size-4) var(--size-12) var(--size-4);
   list-style: none;
 }
 
@@ -180,7 +192,8 @@ function handleLeave(): void {
   align-items: center;
   justify-content: center;
   height: var(--size-36);
-  padding: var(--size-4);
+  /* 下端のゲージの分、座標を上に寄せる */
+  padding: var(--size-4) var(--size-4) var(--size-12);
   box-sizing: border-box;
   border-radius: var(--size-8);
   border: 1px solid var(--color-border);
@@ -274,14 +287,6 @@ function handleLeave(): void {
   background: var(--color-miko-primary);
 }
 
-/* 座標とランクを 1 グループにして下揃え・中央配置 */
-.cand-body {
-  display: flex;
-  align-items: flex-end;
-  gap: var(--size-4);
-  margin: 0 auto;
-}
-
 .cand-coord {
   font-size: var(--font-size-13);
   font-weight: 500;
@@ -289,33 +294,48 @@ function handleLeave(): void {
   line-height: 1.1;
 }
 
-.cand-grade {
-  font-size: var(--font-size-9);
-  font-weight: 500;
-  line-height: 1.2;
+/*
+ * 最善からの距離ゲージ: カード下端の細いバー。最善で満タン、差400で底。
+ * 色は品質判定と同じ 4 段階の区切り（最善／好手／疑問手／悪手）。
+ */
+.cand-gauge {
+  position: absolute;
+  left: var(--size-8);
+  right: var(--size-8);
+  bottom: var(--size-4);
+  height: var(--size-4);
+  border-radius: var(--size-4);
+  background: var(--color-border);
+  overflow: hidden;
 }
 
-.cand-grade.grade-S {
-  color: var(--color-cyan-700);
+.cand-gauge-fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--size-4);
 }
 
-.cand-grade.grade-A {
-  color: var(--color-success-dark);
+.cand-gauge-fill.grade-S {
+  background: var(--color-cyan-600);
 }
 
-.cand-grade.grade-B {
-  color: var(--color-warning-dark);
+.cand-gauge-fill.grade-A {
+  background: var(--color-success);
 }
 
-.cand-grade.grade-C {
-  color: var(--color-error-dark);
+.cand-gauge-fill.grade-B {
+  background: var(--color-warning);
 }
 
-/* 危〜 / フクミ: 右下の角に重ねる */
+.cand-gauge-fill.grade-C {
+  background: var(--color-error);
+}
+
+/* 危〜 / フクミ: 右下の角からぶら下げる（ゲージと重ならないよう下端の外側） */
 .cand-flag {
   position: absolute;
   right: calc(var(--size-4) * -1);
-  bottom: calc(var(--size-8) * -1);
+  bottom: calc(var(--size-12) * -1);
   padding: 0 var(--size-4);
   border-radius: var(--size-4);
   font-size: var(--font-size-8);

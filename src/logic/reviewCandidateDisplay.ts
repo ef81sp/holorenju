@@ -3,12 +3,25 @@
  * （docs/plans/review-right-panel-redesign-2026-11-19.md）
  *
  * - 候補は最大 3 件。最善手と自分の手（必須）は必ず含め、残り枠を上位から補う
- * - スコア差の代わりに S/A/B/C ランクを出す。しきい値は品質判定と共通（SSoT）
+ * - 最善からの距離をゲージで示す。長さは差に比例し、疑問手の境界（差400）で底打ち。
+ *   ゲージの色分けに使う 4 段階（S/A/B/C）のしきい値は品質判定と共通（SSoT）
  */
 
 import type { MoveQuality } from "@/types/review";
 
-import { classifyMoveQuality } from "./reviewLogic";
+import {
+  QUALITY_THRESHOLD_INACCURACY,
+  classifyMoveQuality,
+} from "./reviewLogic";
+
+/**
+ * 最善との差（delta、通常 0 以下）からゲージの長さ（0〜1）を求める。
+ * 最善で 1、差が疑問手の境界に達すると 0。最善より高い delta は 1 に丸める。
+ */
+export function gaugeRatioFromDelta(delta: number): number {
+  const distance = Math.min(Math.max(0, -delta), QUALITY_THRESHOLD_INACCURACY);
+  return 1 - distance / QUALITY_THRESHOLD_INACCURACY;
+}
 
 /** 候補手グリッドに並べる最大件数 */
 export const MAX_DISPLAY_CANDIDATES = 3;

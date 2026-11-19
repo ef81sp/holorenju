@@ -61,13 +61,26 @@ describe("buildCandidateViews", () => {
       evalWith(candidates, pos(1, 1), pos(1, 1)),
     );
     expect(views.map((v) => v.kind)).toEqual(["best", "alt"]);
-    // 差 400 ちょうどは疑問手の範囲（B）
+    // 差 400 ちょうどは疑問手の範囲（B）で、ゲージは底
     expect(views[1]?.grade).toBe("B");
+    expect(views[1]?.gaugeRatio).toBe(0);
+  });
+
+  it("ゲージは最善で満タン、差に比例して短くなる", () => {
+    const candidates: ReviewCandidate[] = [
+      { position: pos(1, 1), searchScore: 500, scoreExact: true },
+      { position: pos(2, 2), searchScore: 400, scoreExact: true },
+    ];
+    const views = buildCandidateViews(
+      evalWith(candidates, pos(2, 2), pos(1, 1)),
+    );
+    expect(views[0]?.gaugeRatio).toBe(1);
+    expect(views[1]?.gaugeRatio).toBeCloseTo(0.75);
   });
 });
 
 describe("candidateAriaLabel", () => {
-  it("順位・座標・役割・ランク・差・フラグを読み上げる", () => {
+  it("順位・座標・役割・差・フラグを読み上げる", () => {
     const candidates: ReviewCandidate[] = [
       { position: pos(1, 1), searchScore: 500, scoreExact: true },
       {
@@ -83,7 +96,7 @@ describe("candidateAriaLabel", () => {
     const label = candidateAriaLabel(views[1]!);
     expect(label).toContain("2位");
     expect(label).toContain("実際の手");
-    expect(label).toContain("ランクB");
+    expect(label).not.toContain("ランク");
     expect(label).toContain("最善比 -200");
     expect(label).toContain("危四追");
   });
