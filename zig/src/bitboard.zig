@@ -66,6 +66,20 @@ pub const CELL_LINES: [225][4]CellLineInfo = blk: {
     break :blk table;
 };
 
+/// ライン index・ビット位置 → セル index（`CELL_LINES` の逆引き）。
+/// ライン長より先のビット位置は 0 のまま（参照しないこと）。
+pub const LINE_CELLS: [LINE_COUNT][15]u8 = blk: {
+    @setEvalBranchQuota(10_000);
+    var table: [LINE_COUNT][15]u8 = .{.{0} ** 15} ** LINE_COUNT;
+    for (0..225) |idx| {
+        for (0..4) |dir| {
+            const info = CELL_LINES[idx][dir];
+            table[info.line_index][info.bit_pos] = @intCast(idx);
+        }
+    }
+    break :blk table;
+};
+
 /// 各ラインの長さ
 pub const LINE_LENGTHS: [LINE_COUNT]u4 = blk: {
     var lens: [LINE_COUNT]u4 = undefined;

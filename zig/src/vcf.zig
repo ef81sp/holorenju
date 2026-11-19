@@ -178,46 +178,71 @@ pub const TimeLimiter = struct {
 // 四を作れる手の列挙
 // =============================================================================
 
+/// `color` を置いて五または四と**判定され得る**空点を行ごとのビットマスクで返す。
+/// bitboard 同期済み前提。必要条件の定義と根拠は `line_lookup.zig`「四・三の必要条件」
+/// （`ll.mayCreateFour` のライン版 `ll.lineFourCandidateMask`）を参照。
+///
+/// 候補点は必ず自石から 2 マス以内にあるので、従来の近傍マスク（石から 2 マス以内）は不要。
+fn fourCandidateRows(color: Cell) [BOARD_SIZE]u16 {
+    var rows: [BOARD_SIZE]u16 = .{0} ** BOARD_SIZE;
+    const own_lines = if (color == .black) &bitboard.global_bb.black else &bitboard.global_bb.white;
+    const opp_lines = if (color == .black) &bitboard.global_bb.white else &bitboard.global_bb.black;
+    for (0..bitboard.LINE_COUNT) |line| {
+        const own = own_lines[line];
+        if (@popCount(own) < 3) continue;
+        const valid: u16 = (@as(u16, 1) << bitboard.LINE_LENGTHS[line]) - 1;
+        var cand = ll.lineFourCandidateMask(own) & valid & ~(own | opp_lines[line]);
+        while (cand != 0) {
+            const bit: u4 = @intCast(@ctz(cand));
+            cand &= cand - 1;
+            const idx = bitboard.LINE_CELLS[line][bit];
+            rows[idx / BOARD_SIZE] |= @as(u16, 1) << @intCast(idx % BOARD_SIZE);
+        }
+    }
+    return rows;
+}
+
+/// 空点 (r, c) が `color` の「四を作れる手」か（五を作る手を含む。黒の禁手は除外）。
+/// 仮置きして判定し、盤は元に戻す。cells / bitboard 同期済み前提。
+fn isFourMoveAt(cells: []Cell, r: u8, c: u8, color: Cell) bool {
+    const idx = @as(u16, r) * BOARD_SIZE + c;
+    std.debug.assert(cells[idx] == .empty);
+
+    // 仮配置（bitboard も同期）
+    cells[idx] = color;
+    bitboard.placeStone(r, c, color);
+    // 五連チェック（最優先）→ 四チェック
+    const is_five = forbidden.checkFive(cells, r, c, color);
+    const is_four = !is_five and quiescence.createsFour(cells, r, c, color);
+    cells[idx] = .empty;
+    bitboard.removeStone(r, c);
+
+    if (is_five) return true;
+    if (!is_four) return false;
+    // 禁手チェックは四を作る手だけに限定
+    if (color == .black and forbidden.checkForbiddenMove(cells, r, c) != .none) return false;
+    return true;
+}
+
 /// 四を作れる位置を列挙（五連完成手を含む）
 /// TS版 threatPatterns.ts の findFourMoves に対応
+///
+/// cells と bitboard が同期済みであること（空点の判定を bitboard から行う。ずれていると
+/// 既存の石に仮置きしてしまうので、Debug ビルドでは `isFourMoveAt` の assert で検出する）。
 pub fn findFourMoves(cells: []Cell, color: Cell, buf: *[225]Position) u16 {
     var count: u16 = 0;
-    const near_mask = threats.computeNearMask(threats.computeOccupiedRows(cells), 2);
+    // 五・四になり得る空点だけを仮置きして判定する（結果は不変。全近傍点に仮置きしていた
+    // 頃は、この関数の配下が探索時間の半分近くを占めていた）
+    const candidate_rows = fourCandidateRows(color);
 
     for (0..BOARD_SIZE) |r_usize| {
         const r: u8 = @intCast(r_usize);
-        for (0..BOARD_SIZE) |c_usize| {
-            const c: u8 = @intCast(c_usize);
-            const idx = @as(u16, r) * BOARD_SIZE + c;
-            if (cells[idx] != .empty) continue;
-            if (!threats.isNearFromMask(near_mask, r, c)) continue;
-
-            // 仮配置（bitboard も同期）
-            cells[idx] = color;
-            bitboard.placeStone(r, c, color);
-
-            // 五連チェック（最優先）
-            if (forbidden.checkFive(cells, r, c, color)) {
-                cells[idx] = .empty;
-                bitboard.removeStone(r, c);
-                buf[count] = .{ .row = r, .col = c };
-                count += 1;
-                continue;
-            }
-
-            // 四チェック
-            const is_four = quiescence.createsFour(cells, r, c, color);
-            cells[idx] = .empty;
-            bitboard.removeStone(r, c);
-
-            if (!is_four) continue;
-
-            // 禁手チェックは四を作る手だけに限定
-            if (color == .black) {
-                const fr = forbidden.checkForbiddenMove(cells, r, c);
-                if (fr != .none) continue;
-            }
-
+        var row_mask = candidate_rows[r_usize];
+        // 列の昇順に取り出す（従来の走査順＝行→列の昇順を保つ）
+        while (row_mask != 0) {
+            const c: u8 = @intCast(@ctz(row_mask));
+            row_mask &= row_mask - 1;
+            if (!isFourMoveAt(cells, r, c, color)) continue;
             buf[count] = .{ .row = r, .col = c };
             count += 1;
         }
@@ -838,6 +863,71 @@ test "findFourMoves: basic" {
     var buf: [225]Position = undefined;
     const count = findFourMoves(&cells, .black, &buf);
     try testing.expect(count >= 2);
+}
+
+/// 事前フィルタ導入前の `findFourMoves` の走査（石から 2 マス以内の全空点を判定する素朴版）。
+/// 1 点ごとの判定（`isFourMoveAt`）は本体と共有し、違いは「どの点を調べるか」だけにする。
+fn findFourMovesReference(cells: []Cell, color: Cell, buf: *[225]Position) u16 {
+    var count: u16 = 0;
+    const near_mask = threats.computeNearMask(threats.computeOccupiedRows(cells), 2);
+    for (0..BOARD_SIZE) |r_usize| {
+        const r: u8 = @intCast(r_usize);
+        for (0..BOARD_SIZE) |c_usize| {
+            const c: u8 = @intCast(c_usize);
+            if (cells[@as(u16, r) * BOARD_SIZE + c] != .empty) continue;
+            if (!threats.isNearFromMask(near_mask, r, c)) continue;
+            if (!isFourMoveAt(cells, r, c, color)) continue;
+            buf[count] = .{ .row = r, .col = c };
+            count += 1;
+        }
+    }
+    return count;
+}
+
+test "findFourMoves: 事前フィルタは結果を変えない（乱数局面で参照実装と完全一致）" {
+    ll.init();
+    var prng = std.Random.DefaultPrng.init(0x5eed_f00d);
+    const rand = prng.random();
+    var total_moves: u32 = 0;
+    var cells: [CELL_COUNT]Cell = undefined;
+    for (0..3000) |_| {
+        threats.randomDenseBoard(rand, &cells);
+        for ([_]Cell{ .black, .white }) |color| {
+            var expected: [225]Position = undefined;
+            var actual: [225]Position = undefined;
+            const n_expected = findFourMovesReference(&cells, color, &expected);
+            const n_actual = findFourMoves(&cells, color, &actual);
+            try testing.expectEqual(n_expected, n_actual);
+            for (0..n_expected) |i| {
+                try testing.expectEqual(expected[i].row, actual[i].row);
+                try testing.expectEqual(expected[i].col, actual[i].col);
+            }
+            total_moves += n_expected;
+        }
+    }
+    // 乱数局面が実際に四の手を十分含んでいること（空振りのテストになっていない）
+    try testing.expect(total_moves > 3000);
+}
+
+test "fourCandidateRows: 置く点を含む 5 マス窓に自石が 3 個ない点は候補にしない" {
+    ll.init();
+    var cells = [_]Cell{.empty} ** CELL_COUNT;
+    cells[7 * BOARD_SIZE + 5] = .black;
+    cells[7 * BOARD_SIZE + 6] = .black;
+    cells[7 * BOARD_SIZE + 7] = .black;
+    cells[7 * BOARD_SIZE + 9] = .white;
+    bitboard.initFromCells(&cells);
+    const black = fourCandidateRows(.black);
+    // 行 7: (7,3) 跳び四・(7,4)・(7,8) が候補。(7,9) は白石、(7,10) は窓に黒が 2 個まで
+    const expected_row7: u16 = (1 << 3) | (1 << 4) | (1 << 8);
+    try testing.expectEqual(expected_row7, black[7]);
+    // 他の行はどの方向にも黒が 3 個ない
+    for (0..BOARD_SIZE) |r| {
+        if (r != 7) try testing.expectEqual(@as(u16, 0), black[r]);
+    }
+    // 白は 1 石だけなので候補なし
+    const white = fourCandidateRows(.white);
+    for (0..BOARD_SIZE) |r| try testing.expectEqual(@as(u16, 0), white[r]);
 }
 
 test "hasVCF: immediate five" {

@@ -11,7 +11,8 @@
 /// - `time_limit` は 0 として扱う（`no_time_limit` と同じくメイン探索・quiescence・
 ///   反復深化ループの時計読みをスキップ）。
 /// - これまで**時間だけ**で縛っていた子探索（事前探索の VCF/VCT、非生産的四の降格判定の
-///   VCF、脅威プローブの VCT）を**ノード予算**に置き換える。
+///   VCF、脅威プローブの VCT）を**ノード予算**に置き換える（脅威プローブの VCT は
+///   2026-11-19 から時間モードでも同じノード予算を併用する。minimax.PROBE_VCT_NODES 参照）。
 /// - 事前探索・脅威プローブの消費ノードを `stats.nodes` に計上し、`max_nodes` が
 ///   探索の総仕事量の上限になるようにする（時間モードでは計上しない＝製品挙動不変）。
 ///
@@ -78,7 +79,8 @@ pub const BudgetPolicy = struct {
     pre_vct_nodes: u32,
     /// 非生産的四の降格判定 VCF（時間モードは 0＝50ms のみ）
     demote_vcf_nodes: u32,
-    /// 脅威プローブ VCT（時間モードは 0＝minimax.PROBE_VCT_TIME_LIMIT のみ）
+    /// 脅威プローブ VCT（両モード共通。時間モードは minimax.PROBE_VCT_TIME_LIMIT との併用で、
+    /// 消費は `stats.nodes` に計上しない）
     probe_vct_nodes: u32,
     /// 根の最善手の「自ら追い詰めに入る手」検証（search.zig `avoidWalkInIfNeeded`）。
     /// 主探索の `max_nodes` から**予約**する額（時間モードは 0＝`search.WALKIN_TIME_RESERVE` のみ）
@@ -92,7 +94,7 @@ pub const BudgetPolicy = struct {
         .pre_opp_vcf_nodes = vcf.VCF_PRE_OPPONENT_NODES,
         .pre_vct_nodes = 0,
         .demote_vcf_nodes = 0,
-        .probe_vct_nodes = 0,
+        .probe_vct_nodes = minimax.PROBE_VCT_NODES,
         .walkin_nodes = 0,
     };
 
@@ -104,7 +106,7 @@ pub const BudgetPolicy = struct {
         .pre_opp_vcf_nodes = vcf.VCF_PRE_OPPONENT_NODES,
         .pre_vct_nodes = vct.VCT_PRE_NODES_DETERMINISTIC,
         .demote_vcf_nodes = search.PLAIN_FOUR_VCF_CHECK_NODES_DETERMINISTIC,
-        .probe_vct_nodes = minimax.PROBE_VCT_NODES_DETERMINISTIC,
+        .probe_vct_nodes = minimax.PROBE_VCT_NODES,
         .walkin_nodes = search.WALKIN_NODES_RESERVE,
     };
 

@@ -830,6 +830,20 @@ fn classifyDirectionDual(cells: []const Cell, row: u8, col: u8, dir_index: usize
     };
 }
 
+/// `classifyDirectionDual` の bitboard 版（窓をライン 1 本のビットから切り出す）。
+/// cells と bitboard の両方が更新済みである差分更新経路（`updateNeighborDirections`）専用。
+/// 石を置く・戻すたびに周辺最大 32 点で呼ばれるため、9 マスのセル走査を避ける。
+fn classifyDirectionDualSynced(cells: []const Cell, row: u8, col: u8, dir_index: usize) struct { black: DirCode, white: DirCode } {
+    std.debug.assert(cells[@as(u16, row) * BOARD_SIZE + col] == .empty);
+    std.debug.assert(prospect_initialized);
+
+    const w = ll.extractWindowDual(row, col, dir_index);
+    return .{
+        .black = @enumFromInt(DIR_PROSPECT_BLACK[w.black_own][w.white_own | w.edge]),
+        .white = @enumFromInt(DIR_PROSPECT_WHITE[w.white_own][w.black_own | w.edge]),
+    };
+}
+
 /// packed u16 の dir_idx 番目のニブルを new_code に置き換える。
 fn replaceNibble(packed_val: u16, dir_idx: u8, new_code: DirCode) u16 {
     const shift: u4 = @intCast(@as(u16, dir_idx) * 4);
@@ -849,7 +863,7 @@ fn updateNeighborDirections(cells: []const Cell, row: u8, col: u8) void {
     for (buf[0..count]) |aff| {
         const ar: u8 = @intCast(aff.idx / BOARD_SIZE);
         const ac: u8 = @intCast(aff.idx % BOARD_SIZE);
-        const dual = classifyDirectionDual(cells, ar, ac, aff.dir_idx);
+        const dual = classifyDirectionDualSynced(cells, ar, ac, aff.dir_idx);
 
         const old_black = prospect_state.dir_code[aff.idx][0];
         const old_white = prospect_state.dir_code[aff.idx][1];
@@ -1612,15 +1626,18 @@ test "updateOnPlace→updateOnRemove: sumが完全に復元する（four_three�
     var cells: [board_mod.CELL_COUNT]Cell = undefined;
     setupFourThreeFixture(&cells);
     initFromBoard(&cells);
+    bitboard.initFromCells(&cells); // 差分更新は bitboard 同期済みが前提
     const sum_before = prospect_state.sum;
 
     const r: u8 = 3;
     const c: u8 = 3;
     cells[@as(u16, r) * BOARD_SIZE + c] = .black;
+    bitboard.placeStone(r, c, .black);
     updateOnPlace(&cells, r, c, .black);
     try std.testing.expect(!std.meta.eql(sum_before, prospect_state.sum)); // 何かは変化するはず
 
     cells[@as(u16, r) * BOARD_SIZE + c] = .empty;
+    bitboard.removeStone(r, c);
     updateOnRemove(&cells, r, c);
 
     try std.testing.expectEqual(sum_before, prospect_state.sum);
@@ -1629,6 +1646,7 @@ test "updateOnPlace→updateOnRemove: sumが完全に復元する（four_three�
 test "updateOnPlace/updateOnRemove: 複数手の対局列で毎手インクリメンタル≡evaluateFull（P1のsequenceテスト流儀）" {
     var cells = [_]Cell{.empty} ** board_mod.CELL_COUNT;
     initFromBoard(&cells);
+    bitboard.initFromCells(&cells); // 差分更新は bitboard 同期済みが前提
 
     const moves = [_]struct { r: u8, c: u8, color: Cell }{
         .{ .r = 7, .c = 7, .color = .black },
@@ -1643,6 +1661,7 @@ test "updateOnPlace/updateOnRemove: 複数手の対局列で毎手インクリ�
 
     for (moves) |m| {
         cells[@as(u16, m.r) * BOARD_SIZE + m.c] = m.color;
+        bitboard.placeStone(m.r, m.c, m.color);
         updateOnPlace(&cells, m.r, m.c, m.color);
 
         for (STM_MODE_VALUES) |stm| {
@@ -1656,6 +1675,7 @@ test "updateOnPlace/updateOnRemove: 複数手の対局列で毎手インクリ�
         i -= 1;
         const m = moves[i];
         cells[@as(u16, m.r) * BOARD_SIZE + m.c] = .empty;
+        bitboard.removeStone(m.r, m.c);
         updateOnRemove(&cells, m.r, m.c);
 
         for (STM_MODE_VALUES) |stm| {
@@ -1667,6 +1687,7 @@ test "updateOnPlace/updateOnRemove: 複数手の対局列で毎手インクリ�
 test "updateOnPlace/updateOnRemove: 跳び四が発生する手順でも毎手インクリメンタル≡evaluateFull（分類境界固定）" {
     var cells = [_]Cell{.empty} ** board_mod.CELL_COUNT;
     initFromBoard(&cells);
+    bitboard.initFromCells(&cells); // 差分更新は bitboard 同期済みが前提
 
     // classifyDirection の "跳び四はcount!=4でもB4" テスト（own bits -2,-1,+2）と同型:
     // 黒(7,5)(7,6)(7,9) → (7,7)の横方向(dir0)は跳び四(B4)相当になる。
@@ -1680,6 +1701,7 @@ test "updateOnPlace/updateOnRemove: 跳び四が発生する手順でも毎手�
 
     for (moves) |m| {
         cells[@as(u16, m.r) * BOARD_SIZE + m.c] = m.color;
+        bitboard.placeStone(m.r, m.c, m.color);
         updateOnPlace(&cells, m.r, m.c, m.color);
         for (STM_MODE_VALUES) |stm| {
             try std.testing.expectEqual(evaluateFull(&cells, .black, stm), getStateEval(.black, stm));
@@ -1696,6 +1718,7 @@ test "updateOnPlace/updateOnRemove: 跳び四が発生する手順でも毎手�
         i -= 1;
         const m = moves[i];
         cells[@as(u16, m.r) * BOARD_SIZE + m.c] = .empty;
+        bitboard.removeStone(m.r, m.c);
         updateOnRemove(&cells, m.r, m.c);
         for (STM_MODE_VALUES) |stm| {
             try std.testing.expectEqual(evaluateFull(&cells, .black, stm), getStateEval(.black, stm));
@@ -1706,6 +1729,7 @@ test "updateOnPlace/updateOnRemove: 跳び四が発生する手順でも毎手�
 test "updateOnPlace/updateOnRemove: 跳び三が発生する手順でも毎手インクリメンタル≡evaluateFull（分類境界固定）" {
     var cells = [_]Cell{.empty} ** board_mod.CELL_COUNT;
     initFromBoard(&cells);
+    bitboard.initFromCells(&cells); // 差分更新は bitboard 同期済みが前提
 
     // classifyDirection の "跳び三はcount!=3でもF3" テスト（own bits -1,+2）と同型:
     // 黒(7,6)(7,9) → (7,7)の横方向(dir0)は跳び三(F3)相当になる。
@@ -1717,6 +1741,7 @@ test "updateOnPlace/updateOnRemove: 跳び三が発生する手順でも毎手�
 
     for (moves) |m| {
         cells[@as(u16, m.r) * BOARD_SIZE + m.c] = m.color;
+        bitboard.placeStone(m.r, m.c, m.color);
         updateOnPlace(&cells, m.r, m.c, m.color);
         for (STM_MODE_VALUES) |stm| {
             try std.testing.expectEqual(evaluateFull(&cells, .black, stm), getStateEval(.black, stm));
@@ -1732,6 +1757,7 @@ test "updateOnPlace/updateOnRemove: 跳び三が発生する手順でも毎手�
         i -= 1;
         const m = moves[i];
         cells[@as(u16, m.r) * BOARD_SIZE + m.c] = .empty;
+        bitboard.removeStone(m.r, m.c);
         updateOnRemove(&cells, m.r, m.c);
         for (STM_MODE_VALUES) |stm| {
             try std.testing.expectEqual(evaluateFull(&cells, .black, stm), getStateEval(.black, stm));
@@ -1742,6 +1768,7 @@ test "updateOnPlace/updateOnRemove: 跳び三が発生する手順でも毎手�
 test "updateOnPlace/updateOnRemove: 盤端(0,0)/(14,14)近傍の手順でも毎手インクリメンタル≡evaluateFull" {
     var cells = [_]Cell{.empty} ** board_mod.CELL_COUNT;
     initFromBoard(&cells);
+    bitboard.initFromCells(&cells); // 差分更新は bitboard 同期済みが前提
 
     const moves = [_]struct { r: u8, c: u8, color: Cell }{
         .{ .r = 0, .c = 1, .color = .black },
@@ -1756,6 +1783,7 @@ test "updateOnPlace/updateOnRemove: 盤端(0,0)/(14,14)近傍の手順でも毎�
 
     for (moves) |m| {
         cells[@as(u16, m.r) * BOARD_SIZE + m.c] = m.color;
+        bitboard.placeStone(m.r, m.c, m.color);
         updateOnPlace(&cells, m.r, m.c, m.color);
         for (STM_MODE_VALUES) |stm| {
             try std.testing.expectEqual(evaluateFull(&cells, .black, stm), getStateEval(.black, stm));
@@ -1768,6 +1796,7 @@ test "updateOnPlace/updateOnRemove: 盤端(0,0)/(14,14)近傍の手順でも毎�
         i -= 1;
         const m = moves[i];
         cells[@as(u16, m.r) * BOARD_SIZE + m.c] = .empty;
+        bitboard.removeStone(m.r, m.c);
         updateOnRemove(&cells, m.r, m.c);
         for (STM_MODE_VALUES) |stm| {
             try std.testing.expectEqual(evaluateFull(&cells, .black, stm), getStateEval(.black, stm));
@@ -1778,6 +1807,7 @@ test "updateOnPlace/updateOnRemove: 盤端(0,0)/(14,14)近傍の手順でも毎�
 test "updateOnPlace/updateOnRemove: 黒の三三禁近傍局面でも毎手インクリメンタル≡evaluateFull（double_three_black_risk境界固定）" {
     var cells = [_]Cell{.empty} ** board_mod.CELL_COUNT;
     initFromBoard(&cells);
+    bitboard.initFromCells(&cells); // 差分更新は bitboard 同期済みが前提
 
     // "近似固定: 黒三三禁の可能性があってもF3+F3(risk)に分類される" テストと同一局面:
     // (7,7) が黒の禁手点（forbidden.zig の三三禁）になる。
@@ -1793,6 +1823,7 @@ test "updateOnPlace/updateOnRemove: 黒の三三禁近傍局面でも毎手イ�
 
     for (moves) |m| {
         cells[@as(u16, m.r) * BOARD_SIZE + m.c] = m.color;
+        bitboard.placeStone(m.r, m.c, m.color);
         updateOnPlace(&cells, m.r, m.c, m.color);
         for (STM_MODE_VALUES) |stm| {
             try std.testing.expectEqual(evaluateFull(&cells, .black, stm), getStateEval(.black, stm));
@@ -1808,6 +1839,7 @@ test "updateOnPlace/updateOnRemove: 黒の三三禁近傍局面でも毎手イ�
         i -= 1;
         const m = moves[i];
         cells[@as(u16, m.r) * BOARD_SIZE + m.c] = .empty;
+        bitboard.removeStone(m.r, m.c);
         updateOnRemove(&cells, m.r, m.c);
         for (STM_MODE_VALUES) |stm| {
             try std.testing.expectEqual(evaluateFull(&cells, .black, stm), getStateEval(.black, stm));
@@ -1819,6 +1851,7 @@ test "getStateEval: 反対称性 eval(persp)==-eval(opp)（stm 3値、インク�
     var cells: [board_mod.CELL_COUNT]Cell = undefined;
     setupFourThreeFixture(&cells);
     initFromBoard(&cells);
+    bitboard.initFromCells(&cells); // 差分更新は bitboard 同期済みが前提
 
     try std.testing.expectEqual(getStateEval(.black, .perspective), -getStateEval(.white, .opponent));
     try std.testing.expectEqual(getStateEval(.black, .opponent), -getStateEval(.white, .perspective));

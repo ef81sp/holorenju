@@ -347,7 +347,15 @@ pub var threat_probe_enabled: bool = true;
 const PROBE_VCF_TIME_LIMIT: u32 = 20;
 const PROBE_VCT_TIME_LIMIT: u32 = 25;
 
-/// 脅威プローブ VCT のノード予算（決定的モード。時間モードは `PROBE_VCT_TIME_LIMIT` のみ）
+/// 脅威プローブ VCT のノード予算（決定的モード・時間モード共通。解析の `no_time_limit` は無制限）
+///
+/// 2026-11-19: 時間モードにも同じノード予算を掛ける（従来は `PROBE_VCT_TIME_LIMIT` のみ）。
+/// プローブは探索時間の大半を占めるので、上限が時間だけだと、コードを速くしても上限に当たる
+/// プローブは同じ 25 ms を使い切って仕事量が増えるだけで、思考時間が縮まない。仕事量で切れば
+/// 端末の速さによらず同じ読みになり、速い端末ほど早く返る。値は時間 25 ms と到達率で対応づけた
+/// 較正済みの 3k をそのまま使う（下記）。時間上限は遅い端末向けの安全弁として残す。
+/// hard 400 局面の実測（持ち時間 10 秒）: 平均思考時間 2,994 → 893 ms、8 秒以上の手 87 → 2、
+/// 深さ 7 完了 179 → 238。
 ///
 /// 設計メモ docs/plans/bench-fixed-nodes-2026-09-06.md §2.1/§2.3。時間定数の隣に置く。
 /// §7.13 で較正済み（2026-09-07）: 時間モードのプローブ上限到達率 18.8%（平均 2,009 ノード）
@@ -356,7 +364,7 @@ const PROBE_VCT_TIME_LIMIT: u32 = 25;
 ///
 /// 2026-09-09: 時間上限 25 ms（到達率 24.2%）に合わせて 6k → 3k（固定 3k の到達率 25.4%、
 /// strength-screen-2026-09-08.md §6.3）。固定 764 局で 6k に対し +35.6 [+15.3, +56.2]。
-pub const PROBE_VCT_NODES_DETERMINISTIC: u32 = 3000;
+pub const PROBE_VCT_NODES: u32 = 3000;
 
 /// 深度適応型バジェット（TS版 threatProbe.ts の getThreatBudget に対応）
 const ThreatBudget = struct {
@@ -390,13 +398,15 @@ const ThreatBudget = struct {
 /// `vcf_nodes` は `vcf.zig` が元から計上していた実効値。こちらは据え置き。
 ///
 /// **決定的モード**（`policy.deterministic`）では時間を 0 にし、VCT に `policy.probe_vct_nodes`
-/// のノード予算を与える（設計メモ bench-fixed-nodes §2.3）。`no_time_limit`（解析）は
+/// のノード予算を与える（設計メモ bench-fixed-nodes §2.3）。**時間モード**は時間上限と
+/// 同じノード予算の両方で縛る（先に当たったほうで打ち切り）。`no_time_limit`（解析）は
 /// 従来どおり時間 0・VCT ノード無制限。
 fn getThreatBudget(minimax_depth: u8, no_time_limit: bool, policy: budget_mod.BudgetPolicy) ThreatBudget {
     const timed = !no_time_limit and !policy.deterministic;
     const vcf_time: u32 = if (timed) PROBE_VCF_TIME_LIMIT else 0;
     const vct_time: u32 = if (timed) PROBE_VCT_TIME_LIMIT else 0;
-    const vct_nodes: u32 = if (policy.deterministic) policy.probe_vct_nodes else 0;
+    // 解析（`no_time_limit` かつ非決定的）だけはノード無制限
+    const vct_nodes: u32 = if (timed or policy.deterministic) policy.probe_vct_nodes else 0;
     if (minimax_depth >= 4) {
         return .{ .vcf_depth = 8, .vcf_nodes = 200, .vct_depth = 4, .vct_nodes = vct_nodes, .vcf_time = vcf_time, .vct_time = vct_time };
     }
@@ -1285,11 +1295,11 @@ test "probe_cap_hits: 決定的モードで probe_vct_nodes を極小にする�
     try testing.expect(ctx.stats.probe_cap_hits <= ctx.stats.probe_calls);
 }
 
-test "getThreatBudget: 決定的モードは時間 0・VCT ノード予算あり、時間モードは PROBE_VCF/VCT_TIME_LIMIT・VCT ノード無制限" {
+test "getThreatBudget: 決定的モードは時間 0・VCT ノード予算あり、時間モードは時間上限＋同じ VCT ノード予算、解析は無制限" {
     const t = getThreatBudget(4, false, budget_mod.BudgetPolicy.TIME_MODE);
     try testing.expectEqual(PROBE_VCF_TIME_LIMIT, t.vcf_time);
     try testing.expectEqual(PROBE_VCT_TIME_LIMIT, t.vct_time);
-    try testing.expectEqual(@as(u32, 0), t.vct_nodes);
+    try testing.expectEqual(PROBE_VCT_NODES, t.vct_nodes);
     try testing.expectEqual(@as(u32, 200), t.vcf_nodes);
 
     const a = getThreatBudget(4, true, budget_mod.BudgetPolicy.TIME_MODE);
@@ -1300,7 +1310,7 @@ test "getThreatBudget: 決定的モードは時間 0・VCT ノード予算あり
     const d = getThreatBudget(4, true, budget_mod.BudgetPolicy.DETERMINISTIC);
     try testing.expectEqual(@as(u32, 0), d.vcf_time);
     try testing.expectEqual(@as(u32, 0), d.vct_time);
-    try testing.expectEqual(PROBE_VCT_NODES_DETERMINISTIC, d.vct_nodes);
+    try testing.expectEqual(PROBE_VCT_NODES, d.vct_nodes);
     try testing.expectEqual(@as(u32, 200), d.vcf_nodes);
     // depth 3 は VCT なし
     try testing.expectEqual(@as(u8, 0), getThreatBudget(3, true, budget_mod.BudgetPolicy.DETERMINISTIC).vct_depth);
