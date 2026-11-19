@@ -182,8 +182,9 @@ function onKeydown(event: KeyboardEvent, currentId: string): void {
     color 0.15s;
 }
 
+/* 選択中（枠色＋背景）と区別するため、ホバーは背景の薄い色だけ */
 .prog-opt:hover {
-  border-color: var(--color-fubuki-primary);
+  background: var(--color-fubuki-bg-light);
 }
 
 .prog-opt:focus-visible {

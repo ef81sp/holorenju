@@ -202,6 +202,12 @@ function handleLeave(): void {
   outline: none;
 }
 
+/* 最善・実際のカードは枠色が上書きされるため、フォーカスはアウトラインで示す */
+.cand-card:focus-visible {
+  outline: var(--size-2) solid var(--color-fubuki-primary);
+  outline-offset: var(--size-1);
+}
+
 .cand-card.is-best {
   border-color: var(--color-blue-400);
   background: var(--color-blue-100);
