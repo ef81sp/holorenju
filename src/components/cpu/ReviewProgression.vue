@@ -214,7 +214,9 @@ function branchAriaLabel(moveNum: number): string {
 .ctl-btn {
   height: var(--size-28);
   font-family: inherit;
-  font-size: var(--font-size-10);
+  /* 文字サイズ「大」でも 3 ボタンが 1 行に収まるよう上限を付ける */
+  font-size: min(var(--font-size-10), var(--size-13));
+  white-space: nowrap;
   font-weight: 500;
   padding: 0 var(--size-4);
   border-radius: var(--size-8);
@@ -262,8 +264,6 @@ function branchAriaLabel(moveNum: number): string {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
-  padding-right: var(--size-2);
-  margin-right: calc(var(--size-2) * -1);
 }
 
 .tree-scroll::-webkit-scrollbar {
@@ -357,7 +357,8 @@ function branchAriaLabel(moveNum: number): string {
     system-ui,
     -apple-system,
     sans-serif;
-  font-size: var(--font-size-9);
+  /* 丸は固定サイズなので、文字倍率をかけない固定値にしてはみ出しを防ぐ */
+  font-size: var(--size-9);
   font-weight: 500;
   font-variant-numeric: tabular-nums;
   line-height: 1;

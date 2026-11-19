@@ -122,8 +122,10 @@ const { onKeydown } = useRovingTabindex({
 }
 
 .tab {
-  flex: 1 0 auto;
-  min-width: var(--size-60);
+  /* 中身の幅を基準に伸び縮み。狭いときは座標（.tab-sub）を省略記号で詰める */
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
   display: flex;
   /* ラベルと座標（小さい文字）のベースラインを揃えて下寄せ */
   align-items: last baseline;
@@ -137,7 +139,8 @@ const { onKeydown } = useRovingTabindex({
   border-bottom: none;
   border-radius: var(--size-8) var(--size-8) 0 0;
   font-family: inherit;
-  font-size: var(--font-size-11);
+  /* 文字サイズ「大」で 2 タブが収まるよう上限を付ける */
+  font-size: min(var(--font-size-11), var(--size-14));
   font-weight: 500;
   color: var(--color-text-secondary);
   cursor: pointer;
@@ -179,7 +182,10 @@ const { onKeydown } = useRovingTabindex({
 
 .tab .tab-sep,
 .tab .tab-sub {
-  font-size: var(--font-size-9);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: min(var(--font-size-9), var(--size-11));
   font-weight: var(--font-weight-normal);
   opacity: 0.85;
 }

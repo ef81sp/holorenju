@@ -272,7 +272,8 @@ function handleLeave(): void {
     system-ui,
     -apple-system,
     sans-serif;
-  font-size: var(--font-size-9);
+  /* 丸は固定サイズなので、文字倍率をかけない固定値にしてはみ出しを防ぐ */
+  font-size: var(--size-9);
   font-weight: 500;
   font-variant-numeric: tabular-nums;
   line-height: 1;
@@ -288,7 +289,8 @@ function handleLeave(): void {
 }
 
 .cand-coord {
-  font-size: var(--font-size-13);
+  /* カード下端のゲージに文字がかからないよう上限を付ける（文字サイズ「大」対策） */
+  font-size: min(var(--font-size-13), var(--size-16));
   font-weight: 500;
   color: var(--color-text-primary);
   line-height: 1.1;
