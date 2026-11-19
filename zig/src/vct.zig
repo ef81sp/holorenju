@@ -1621,368 +1621,396 @@ fn findVCTSequenceRecursive(
     };
     var has_best = false;
 
-    for (0..threat_count) |ti| {
-        // 受けのある攻め手の候補手順長は最短でも 3（攻め手 + 受け手 + 継続 1 手）。
-        // すでに 3 以下の手順を持っているなら、残りの攻め手は改善しえない。
-        // ただし「1 手で終わる攻め手」（五連・受け不能）は best を経由せず即 return
-        // するので、それが混ざる四の区間（buf は四→活三の順）を抜けてから適用する。
-        if (ti >= @as(usize, threat_moves.four_count) and best_seq_len <= 3) break;
+    // 収集モードの二段構え: 先に非収集の探索でこの局面の攻め手を決め、
+    // 全受け展開（木の構築）はその 1 手に絞る。全攻め手を全受け展開すると、
+    // 成立しない攻め手や浅い反復でも非収集の十数倍の仕事になるため。
+    // 非収集で手順が無いなら木も無い。絞った展開が成立しなかったとき
+    // （受け後の判定が非収集と収集で食い違う場合）だけ、全攻め手の展開に戻る。
+    var restrict: ?Position = null;
+    if (context.collect_branches) {
+        var probe_context = VCTRecursiveContext{
+            .is_forbidden_trap = false,
+            .collect_branches = false,
+            .branches = undefined,
+            .branch_count = 0,
+            .mode = context.mode,
+            .root_cf_cache = context.root_cf_cache,
+        };
+        var probe_seq: [64]Position = undefined;
+        var probe_len: u8 = 0;
+        if (!findVCTSequenceRecursive(cells, color, depth, max_depth, limiter, &probe_seq, &probe_len, &probe_context, max_len)) return false;
+        if (probe_len > 0) restrict = probe_seq[0];
+    }
 
-        // 三の攻め手に入る直前で一度だけ判定（buf は四→活三の順）。
-        // 相手が活三/ミセ手/（根に近いノードでは）VCF を持つなら三で追っても
-        // 手順が崩壊するため、残り（すべて三）は打ち切る。四で受けを強制して
-        // 相手の脅威を潰してから三で追う手順は、四を先に試すことで保存される。
-        // 石は未配置・アリーナも未取得の位置なので break して安全。
-        // depth 0 は同一盤面をエントリ（findVCTSequence / findVCTSequenceFromFirstMove）が
-        // フル深度の hasVCF で確認済み。反復深化の各イテレーションで弱いプローブを
-        // 重ねても無駄なので、ここでは安い述語だけにする。
-        if (ti == @as(usize, threat_moves.four_count)) {
-            const blocked = if (depth == 0)
-                opponentBlocksThreePursuit(cells, opponent)
-            else
-                opponentBlocksThreePursuitWithShallowVCF(cells, opponent, depth, limiter);
-            if (blocked) break;
-        }
+    while (true) {
+        for (0..threat_count) |ti| {
+            // 受けのある攻め手の候補手順長は最短でも 3（攻め手 + 受け手 + 継続 1 手）。
+            // すでに 3 以下の手順を持っているなら、残りの攻め手は改善しえない。
+            // ただし「1 手で終わる攻め手」（五連・受け不能）は best を経由せず即 return
+            // するので、それが混ざる四の区間（buf は四→活三の順）を抜けてから適用する。
+            if (ti >= @as(usize, threat_moves.four_count) and best_seq_len <= 3) break;
 
-        const move = threat_buf[ti];
-
-        // 根の三で、手順に依存しない崩壊条件（相手の CF で五 / 活四 / strict の
-        // ブロック非四 / ブロック後の相手即勝ち）が成立するものは、どんな手順でも
-        // 採用時の耐性検証で棄却されるので展開しない。結果は反復をまたいで記憶する。
-        if (depth == 0 and ti >= @as(usize, threat_moves.four_count)) {
-            if (context.root_cf_cache) |cache| {
-                const move_cell = @as(u16, move.row) * BOARD_SIZE + move.col;
-                if (cache.states[move_cell] == .unknown) {
-                    cache.states[move_cell] = if (rootThreeBrokenByCounterFour(cells, color, move, context.mode, limiter)) .broken else .ok;
-                }
-                if (cache.states[move_cell] == .broken) continue;
+            // 三の攻め手に入る直前で一度だけ判定（buf は四→活三の順）。
+            // 相手が活三/ミセ手/（根に近いノードでは）VCF を持つなら三で追っても
+            // 手順が崩壊するため、残り（すべて三）は打ち切る。四で受けを強制して
+            // 相手の脅威を潰してから三で追う手順は、四を先に試すことで保存される。
+            // 石は未配置・アリーナも未取得の位置なので break して安全。
+            // depth 0 は同一盤面をエントリ（findVCTSequence / findVCTSequenceFromFirstMove）が
+            // フル深度の hasVCF で確認済み。反復深化の各イテレーションで弱いプローブを
+            // 重ねても無駄なので、ここでは安い述語だけにする。
+            if (ti == @as(usize, threat_moves.four_count)) {
+                const blocked = if (depth == 0)
+                    opponentBlocksThreePursuit(cells, opponent)
+                else
+                    opponentBlocksThreePursuitWithShallowVCF(cells, opponent, depth, limiter);
+                if (blocked) break;
             }
-        }
 
-        // 攻め手 1 手 = 1 ノード（#119）。予算切れなら「ここまでの best」を返す。
-        limiter.bump();
-        if (limiter.exceeded()) break;
+            const move = threat_buf[ti];
+            if (restrict) |only| {
+                if (move.row != only.row or move.col != only.col) continue;
+            }
 
-        // この脅威手の探索でアリーナへ積むノードの起点。採用されなければ巻き戻す。
-        const threat_snap = g_tree_arena.snapshot();
-        const move_idx = @as(u16, move.row) * BOARD_SIZE + move.col;
-        cells[move_idx] = color;
-        bitboard.placeStone(move.row, move.col, color);
+            // 根の三で、手順に依存しない崩壊条件（相手の CF で五 / 活四 / strict の
+            // ブロック非四 / ブロック後の相手即勝ち）が成立するものは、どんな手順でも
+            // 採用時の耐性検証で棄却されるので展開しない。結果は反復をまたいで記憶する。
+            if (depth == 0 and ti >= @as(usize, threat_moves.four_count)) {
+                if (context.root_cf_cache) |cache| {
+                    const move_cell = @as(u16, move.row) * BOARD_SIZE + move.col;
+                    if (cache.states[move_cell] == .unknown) {
+                        cache.states[move_cell] = if (rootThreeBrokenByCounterFour(cells, color, move, context.mode, limiter)) .broken else .ok;
+                    }
+                    if (cache.states[move_cell] == .broken) continue;
+                }
+            }
 
-        // 五連チェック — 1手で終わるので即返却（これ以上短い手順はない）
-        if (forbidden.checkFive(cells, move.row, move.col, color)) {
-            cells[move_idx] = .empty;
-            bitboard.removeStone(move.row, move.col);
-            sequence[seq_len.*] = move;
-            seq_len.* += 1;
-            // 五連で終端（受けなし）
-            if (context.collect_branches) context.out_node = g_tree_arena.addNode(move, 0, 0);
-            return true;
-        }
+            // 攻め手 1 手 = 1 ノード（#119）。予算切れなら「ここまでの best」を返す。
+            limiter.bump();
+            if (limiter.exceeded()) break;
 
-        // issue #130: 3 値なので「脅威でない手」を勝ちにできない（`isThreat` の再計算も不要）
-        const defense_positions = switch (getThreatDefensePositions(cells, move.row, move.col, color)) {
-            .unstoppable => {
+            // この脅威手の探索でアリーナへ積むノードの起点。採用されなければ巻き戻す。
+            const threat_snap = g_tree_arena.snapshot();
+            const move_idx = @as(u16, move.row) * BOARD_SIZE + move.col;
+            cells[move_idx] = color;
+            bitboard.placeStone(move.row, move.col, color);
+
+            // 五連チェック — 1手で終わるので即返却（これ以上短い手順はない）
+            if (forbidden.checkFive(cells, move.row, move.col, color)) {
                 cells[move_idx] = .empty;
                 bitboard.removeStone(move.row, move.col);
-                // 1手で終わるので即返却
                 sequence[seq_len.*] = move;
                 seq_len.* += 1;
-                // 受け不能の脅威で終端
+                // 五連で終端（受けなし）
                 if (context.collect_branches) context.out_node = g_tree_arena.addNode(move, 0, 0);
                 return true;
-            },
-            .no_threat => {
-                cells[move_idx] = .empty;
-                bitboard.removeStone(move.row, move.col);
-                continue;
-            },
-            .positions => |p| p,
-        };
-
-        // 全防御に対してVCTが継続するかチェック
-        var all_defense_leads_to_vct = true;
-        var defense_entries: [MAX_DEFENSE_ENTRIES]DefenseSeqEntry = undefined;
-        var defense_entry_count: u8 = 0;
-        var first_defense_seq: [64]Position = undefined;
-        var first_defense_seq_len: u8 = 0;
-        var has_first_defense = false;
-
-        for (0..defense_positions.len) |j| {
-            const dp = defense_positions.items[j];
-
-            if (color == .white) {
-                const fr = forbidden.checkForbiddenMove(cells, dp.row, dp.col);
-                if (fr != .none) continue;
             }
 
-            const def_idx = @as(u16, dp.row) * BOARD_SIZE + dp.col;
-            cells[def_idx] = opponent;
-            bitboard.placeStone(dp.row, dp.col, opponent);
+            // issue #130: 3 値なので「脅威でない手」を勝ちにできない（`isThreat` の再計算も不要）
+            const defense_positions = switch (getThreatDefensePositions(cells, move.row, move.col, color)) {
+                .unstoppable => {
+                    cells[move_idx] = .empty;
+                    bitboard.removeStone(move.row, move.col);
+                    // 1手で終わるので即返却
+                    sequence[seq_len.*] = move;
+                    seq_len.* += 1;
+                    // 受け不能の脅威で終端
+                    if (context.collect_branches) context.out_node = g_tree_arena.addNode(move, 0, 0);
+                    return true;
+                },
+                .no_threat => {
+                    cells[move_idx] = .empty;
+                    bitboard.removeStone(move.row, move.col);
+                    continue;
+                },
+                .positions => |p| p,
+            };
 
-            const ct = checkDefenseCounterThreat(cells, dp.row, dp.col, opponent);
+            // 全防御に対してVCTが継続するかチェック
+            var all_defense_leads_to_vct = true;
+            var defense_entries: [MAX_DEFENSE_ENTRIES]DefenseSeqEntry = undefined;
+            var defense_entry_count: u8 = 0;
+            var first_defense_seq: [64]Position = undefined;
+            var first_defense_seq_len: u8 = 0;
+            var has_first_defense = false;
 
-            if (ct == .win) {
-                cells[def_idx] = .empty;
-                bitboard.removeStone(dp.row, dp.col);
-                all_defense_leads_to_vct = false;
-                break;
-            }
+            for (0..defense_positions.len) |j| {
+                const dp = defense_positions.items[j];
 
-            // ct=four: ブロック配置
-            if (ct == .four) {
-                const block_pos = quiescence.getFourDefensePosition(cells, dp.row, dp.col, opponent).blockPos();
-                if (block_pos == null) {
+                if (color == .white) {
+                    const fr = forbidden.checkForbiddenMove(cells, dp.row, dp.col);
+                    if (fr != .none) continue;
+                }
+
+                const def_idx = @as(u16, dp.row) * BOARD_SIZE + dp.col;
+                cells[def_idx] = opponent;
+                bitboard.placeStone(dp.row, dp.col, opponent);
+
+                const ct = checkDefenseCounterThreat(cells, dp.row, dp.col, opponent);
+
+                if (ct == .win) {
                     cells[def_idx] = .empty;
                     bitboard.removeStone(dp.row, dp.col);
                     all_defense_leads_to_vct = false;
                     break;
                 }
-                const bp = block_pos.?;
 
-                const block_ok = switch (classifyBlock(cells, bp, color, depth, limiter)) {
-                    .stop => {
+                // ct=four: ブロック配置
+                if (ct == .four) {
+                    const block_pos = quiescence.getFourDefensePosition(cells, dp.row, dp.col, opponent).blockPos();
+                    if (block_pos == null) {
                         cells[def_idx] = .empty;
                         bitboard.removeStone(dp.row, dp.col);
                         all_defense_leads_to_vct = false;
                         break;
-                    },
-                    // ブロック石が五 → その場で勝ち（issue #140）。手順はブロック石で確定。
-                    .win_now => blockWinSeqResult(),
-                    .continue_search => blk: {
-                        const block_idx = @as(u16, bp.row) * BOARD_SIZE + bp.col;
-                        cells[block_idx] = color;
-                        bitboard.placeStone(bp.row, bp.col, color);
-                        const seq_result = processBlockDefensesSeq(cells, bp, color, depth, max_depth, limiter, context.collect_branches or !has_first_defense);
-                        cells[block_idx] = .empty;
-                        bitboard.removeStone(bp.row, bp.col);
-                        break :blk seq_result;
-                    },
-                };
+                    }
+                    const bp = block_pos.?;
 
-                if (block_ok.found) {
-                    if (pushDefenseEntry(&defense_entries, &defense_entry_count, context.collect_branches)) |entry| {
-                        entry.defense = dp;
-                        entry.seq[0] = bp;
-                        var si: u8 = 0;
-                        while (si < block_ok.seq_len) : (si += 1) {
-                            entry.seq[1 + si] = block_ok.seq[si];
+                    const block_ok = switch (classifyBlock(cells, bp, color, depth, limiter)) {
+                        .stop => {
+                            cells[def_idx] = .empty;
+                            bitboard.removeStone(dp.row, dp.col);
+                            all_defense_leads_to_vct = false;
+                            break;
+                        },
+                        // ブロック石が五 → その場で勝ち（issue #140）。手順はブロック石で確定。
+                        .win_now => blockWinSeqResult(),
+                        .continue_search => blk: {
+                            const block_idx = @as(u16, bp.row) * BOARD_SIZE + bp.col;
+                            cells[block_idx] = color;
+                            bitboard.placeStone(bp.row, bp.col, color);
+                            const seq_result = processBlockDefensesSeq(cells, bp, color, depth, max_depth, limiter, context.collect_branches or !has_first_defense);
+                            cells[block_idx] = .empty;
+                            bitboard.removeStone(bp.row, bp.col);
+                            break :blk seq_result;
+                        },
+                    };
+
+                    if (block_ok.found) {
+                        if (pushDefenseEntry(&defense_entries, &defense_entry_count, context.collect_branches)) |entry| {
+                            entry.defense = dp;
+                            entry.seq[0] = bp;
+                            var si: u8 = 0;
+                            while (si < block_ok.seq_len) : (si += 1) {
+                                entry.seq[1 + si] = block_ok.seq[si];
+                            }
+                            entry.seq_len = 1 + block_ok.seq_len;
+                            entry.child_branch_count = 0;
+                            entry.is_forbidden_trap = block_ok.is_forbidden_trap;
+                            // ブロック四追いは受け一意の線形手順 → 線形チェイン木
+                            entry.child_node = g_tree_arena.buildLinearChain(entry.seq[0..], entry.seq_len);
                         }
-                        entry.seq_len = 1 + block_ok.seq_len;
-                        entry.child_branch_count = 0;
-                        entry.is_forbidden_trap = block_ok.is_forbidden_trap;
-                        // ブロック四追いは受け一意の線形手順 → 線形チェイン木
-                        entry.child_node = g_tree_arena.buildLinearChain(entry.seq[0..], entry.seq_len);
-                    }
-                    if (!has_first_defense and block_ok.seq_len_valid) {
-                        first_defense_seq[0] = dp;
-                        first_defense_seq[1] = bp;
-                        var si: u8 = 0;
-                        while (si < block_ok.seq_len) : (si += 1) {
-                            first_defense_seq[2 + si] = block_ok.seq[si];
+                        if (!has_first_defense and block_ok.seq_len_valid) {
+                            first_defense_seq[0] = dp;
+                            first_defense_seq[1] = bp;
+                            var si: u8 = 0;
+                            while (si < block_ok.seq_len) : (si += 1) {
+                                first_defense_seq[2 + si] = block_ok.seq[si];
+                            }
+                            first_defense_seq_len = 2 + block_ok.seq_len;
+                            has_first_defense = true;
                         }
-                        first_defense_seq_len = 2 + block_ok.seq_len;
-                        has_first_defense = true;
                     }
+
+                    cells[def_idx] = .empty;
+                    bitboard.removeStone(dp.row, dp.col);
+
+                    if (!block_ok.found) {
+                        all_defense_leads_to_vct = false;
+                        break;
+                    }
+                    continue;
                 }
 
-                cells[def_idx] = .empty;
-                bitboard.removeStone(dp.row, dp.col);
-
-                if (!block_ok.found) {
-                    all_defense_leads_to_vct = false;
-                    break;
+                if (ct == .three) {
+                    // ct=three: VCFのみで勝てるか
+                    const vcf_depth = @min(CT_THREE_VCF_MAX_DEPTH, vcf_mod.VCF_MAX_DEPTH);
+                    if (context.collect_branches or !has_first_defense) {
+                        const vcf_result = vcf_mod.findVCFSequenceWithParent(cells, color, vcf_depth, 0, 0, limiter);
+                        if (!vcf_result.found) {
+                            cells[def_idx] = .empty;
+                            bitboard.removeStone(dp.row, dp.col);
+                            all_defense_leads_to_vct = false;
+                            break;
+                        }
+                        if (pushDefenseEntry(&defense_entries, &defense_entry_count, context.collect_branches)) |entry| {
+                            entry.defense = dp;
+                            var si: u8 = 0;
+                            while (si < vcf_result.len) : (si += 1) {
+                                entry.seq[si] = vcf_result.sequence[si];
+                            }
+                            entry.seq_len = vcf_result.len;
+                            entry.child_branch_count = 0;
+                            entry.is_forbidden_trap = vcf_result.is_forbidden_trap;
+                            // 三防御後の VCF は受け一意の線形手順 → 線形チェイン木
+                            entry.child_node = g_tree_arena.buildLinearChain(entry.seq[0..], entry.seq_len);
+                        }
+                        if (!has_first_defense) {
+                            first_defense_seq[0] = dp;
+                            var si: u8 = 0;
+                            while (si < vcf_result.len) : (si += 1) {
+                                first_defense_seq[1 + si] = vcf_result.sequence[si];
+                            }
+                            first_defense_seq_len = 1 + vcf_result.len;
+                            has_first_defense = true;
+                        }
+                    } else {
+                        if (!vcf_mod.hasVCF(cells, color, 0, limiter, vcf_depth)) {
+                            cells[def_idx] = .empty;
+                            bitboard.removeStone(dp.row, dp.col);
+                            all_defense_leads_to_vct = false;
+                            break;
+                        }
+                    }
+                    cells[def_idx] = .empty;
+                    bitboard.removeStone(dp.row, dp.col);
+                    continue;
                 }
-                continue;
-            }
 
-            if (ct == .three) {
-                // ct=three: VCFのみで勝てるか
-                const vcf_depth = @min(CT_THREE_VCF_MAX_DEPTH, vcf_mod.VCF_MAX_DEPTH);
+                // ct=none: 通常の再帰
                 if (context.collect_branches or !has_first_defense) {
-                    const vcf_result = vcf_mod.findVCFSequenceWithParent(cells, color, vcf_depth, 0, 0, limiter);
-                    if (!vcf_result.found) {
-                        cells[def_idx] = .empty;
-                        bitboard.removeStone(dp.row, dp.col);
+                    var sub_context = VCTRecursiveContext{
+                        .is_forbidden_trap = false,
+                        .collect_branches = context.collect_branches,
+                        .branches = undefined,
+                        .branch_count = 0,
+                        .mode = context.mode,
+                    };
+                    var sub_seq: [64]Position = undefined;
+                    var sub_len: u8 = 0;
+                    // 手順長の α カット（issue #122 レバー2）。
+                    // この攻め手の候補手順長は `1（攻め手）+ 1（受け手）+ sub_len` なので、
+                    // `sub_len >= best_seq_len - 2` の部分木は採用されない＝探索不要。
+                    // 収集モードは全受けを完全展開して木を作る必要があり、この節点の
+                    // 候補長は「最短の受け」で決まるため、長い受けを打ち切ると
+                    // 「受けきれない」と誤判定しうる。よって非収集モードにのみ適用する。
+                    const sub_max_len: u8 = if (context.collect_branches)
+                        SEQ_LEN_UNBOUNDED
+                    else if (best_seq_len > 2) best_seq_len - 2 else 0;
+                    const found = findVCTSequenceRecursive(cells, color, depth + 1, max_depth, limiter, &sub_seq, &sub_len, &sub_context, sub_max_len);
+
+                    cells[def_idx] = .empty;
+                    bitboard.removeStone(dp.row, dp.col);
+
+                    if (!found) {
                         all_defense_leads_to_vct = false;
                         break;
                     }
+
                     if (pushDefenseEntry(&defense_entries, &defense_entry_count, context.collect_branches)) |entry| {
                         entry.defense = dp;
                         var si: u8 = 0;
-                        while (si < vcf_result.len) : (si += 1) {
-                            entry.seq[si] = vcf_result.sequence[si];
+                        while (si < sub_len) : (si += 1) {
+                            entry.seq[si] = sub_seq[si];
                         }
-                        entry.seq_len = vcf_result.len;
-                        entry.child_branch_count = 0;
-                        entry.is_forbidden_trap = vcf_result.is_forbidden_trap;
-                        // 三防御後の VCF は受け一意の線形手順 → 線形チェイン木
-                        entry.child_node = g_tree_arena.buildLinearChain(entry.seq[0..], entry.seq_len);
+                        entry.seq_len = sub_len;
+                        entry.child_branch_count = sub_context.branch_count;
+                        var bi: u8 = 0;
+                        while (bi < sub_context.branch_count) : (bi += 1) {
+                            entry.child_branches[bi] = sub_context.branches[bi];
+                        }
+                        entry.is_forbidden_trap = sub_context.is_forbidden_trap;
+                        // ct=none: 子は再帰で構築した部分木
+                        entry.child_node = sub_context.out_node;
+                    } else if (sub_context.is_forbidden_trap) {
+                        context.is_forbidden_trap = true;
                     }
                     if (!has_first_defense) {
                         first_defense_seq[0] = dp;
                         var si: u8 = 0;
-                        while (si < vcf_result.len) : (si += 1) {
-                            first_defense_seq[1 + si] = vcf_result.sequence[si];
+                        while (si < sub_len) : (si += 1) {
+                            first_defense_seq[1 + si] = sub_seq[si];
                         }
-                        first_defense_seq_len = 1 + vcf_result.len;
+                        first_defense_seq_len = 1 + sub_len;
                         has_first_defense = true;
                     }
                 } else {
-                    if (!vcf_mod.hasVCF(cells, color, 0, limiter, vcf_depth)) {
-                        cells[def_idx] = .empty;
-                        bitboard.removeStone(dp.row, dp.col);
+                    // hasVCTでチェックのみ
+                    const vct_ok = hasVCT(cells, color, depth + 1, limiter, max_depth);
+                    cells[def_idx] = .empty;
+                    bitboard.removeStone(dp.row, dp.col);
+                    if (!vct_ok) {
                         all_defense_leads_to_vct = false;
                         break;
                     }
                 }
-                cells[def_idx] = .empty;
-                bitboard.removeStone(dp.row, dp.col);
-                continue;
             }
 
-            // ct=none: 通常の再帰
-            if (context.collect_branches or !has_first_defense) {
-                var sub_context = VCTRecursiveContext{
+            cells[move_idx] = .empty;
+            bitboard.removeStone(move.row, move.col);
+
+            var kept = false;
+            if (all_defense_leads_to_vct and defense_positions.len > 0 and has_first_defense) {
+                // この脅威手での手順長を計算
+                var candidate_seq: [64]Position = undefined;
+                var candidate_len: u8 = 0;
+                var candidate_context = VCTRecursiveContext{
                     .is_forbidden_trap = false,
                     .collect_branches = context.collect_branches,
                     .branches = undefined,
                     .branch_count = 0,
-                    .mode = context.mode,
                 };
-                var sub_seq: [64]Position = undefined;
-                var sub_len: u8 = 0;
-                // 手順長の α カット（issue #122 レバー2）。
-                // この攻め手の候補手順長は `1（攻め手）+ 1（受け手）+ sub_len` なので、
-                // `sub_len >= best_seq_len - 2` の部分木は採用されない＝探索不要。
-                // 収集モードは全受けを完全展開して木を作る必要があり、この節点の
-                // 候補長は「最短の受け」で決まるため、長い受けを打ち切ると
-                // 「受けきれない」と誤判定しうる。よって非収集モードにのみ適用する。
-                const sub_max_len: u8 = if (context.collect_branches)
-                    SEQ_LEN_UNBOUNDED
-                else if (best_seq_len > 2) best_seq_len - 2 else 0;
-                const found = findVCTSequenceRecursive(cells, color, depth + 1, max_depth, limiter, &sub_seq, &sub_len, &sub_context, sub_max_len);
+                var candidate_root: u16 = ft.TREE_TERMINAL;
 
-                cells[def_idx] = .empty;
-                bitboard.removeStone(dp.row, dp.col);
+                if (context.collect_branches and defense_entry_count > 0) {
+                    const shortest_idx = selectShortestDefense(&defense_entries, defense_entry_count);
+                    buildBranches(&defense_entries, defense_entry_count, shortest_idx, &candidate_seq, &candidate_len, move, &candidate_context);
 
-                if (!found) {
-                    all_defense_leads_to_vct = false;
-                    break;
+                    // アリーナ: この攻め手ノードを構築。defenses[0] = 最短防御（前出し）。
+                    var tree_defenses: [MAX_DEFENSE_ENTRIES]ft.TreeDefense = undefined;
+                    var ei: u8 = 0;
+                    while (ei < defense_entry_count) : (ei += 1) {
+                        tree_defenses[ei] = .{
+                            .defender = defense_entries[ei].defense,
+                            .child_node = defense_entries[ei].child_node,
+                        };
+                    }
+                    candidate_root = g_tree_arena.addNodeMainFirst(move, tree_defenses[0..defense_entry_count], shortest_idx);
+                } else {
+                    candidate_seq[0] = move;
+                    candidate_len = 1;
+                    var fi: u8 = 0;
+                    while (fi < first_defense_seq_len) : (fi += 1) {
+                        if (candidate_len < 64) {
+                            candidate_seq[candidate_len] = first_defense_seq[fi];
+                            candidate_len += 1;
+                        }
+                    }
                 }
 
-                if (pushDefenseEntry(&defense_entries, &defense_entry_count, context.collect_branches)) |entry| {
-                    entry.defense = dp;
-                    var si: u8 = 0;
-                    while (si < sub_len) : (si += 1) {
-                        entry.seq[si] = sub_seq[si];
+                // カウンターフォー耐性検証（根の攻め手のみ）: 活三を打つ段階で相手の
+                // カウンターフォーが残り手順を破壊するなら、この攻め手は VCT 不成立として
+                // 候補にしない（best / α 値を更新しない）。ここで弾くことで、他の攻め手が
+                // 非耐性候補の α 値で刈られず、反復深化も継続する。
+                // 石は攻め手・受け手とも戻した後なので盤面は根の状態。
+                //
+                // 手順非依存の崩壊条件は展開前に `root_cf_cache` で除外済みなので、ここに
+                // 来る非耐性は手順依存（`checkSequenceBreaksByCF`）のもの。手順は反復ごとに
+                // 変わりうるため初手でのメモ化はせず、反復ごとに再検証する。
+                // 採用され得ない長さの候補には検証（VCF プローブを含む）を走らせない。
+                const accepted = candidate_len < best_seq_len and
+                    (depth != 0 or isResilientToCounterFours(cells, color, candidate_seq[0..candidate_len], context.mode, limiter));
+
+                // 最短の候補を保持（α 値の更新も兼ねる）
+                if (accepted) {
+                    var ci: u8 = 0;
+                    while (ci < candidate_len) : (ci += 1) {
+                        best_seq[ci] = candidate_seq[ci];
                     }
-                    entry.seq_len = sub_len;
-                    entry.child_branch_count = sub_context.branch_count;
-                    var bi: u8 = 0;
-                    while (bi < sub_context.branch_count) : (bi += 1) {
-                        entry.child_branches[bi] = sub_context.branches[bi];
-                    }
-                    entry.is_forbidden_trap = sub_context.is_forbidden_trap;
-                    // ct=none: 子は再帰で構築した部分木
-                    entry.child_node = sub_context.out_node;
-                } else if (sub_context.is_forbidden_trap) {
-                    context.is_forbidden_trap = true;
-                }
-                if (!has_first_defense) {
-                    first_defense_seq[0] = dp;
-                    var si: u8 = 0;
-                    while (si < sub_len) : (si += 1) {
-                        first_defense_seq[1 + si] = sub_seq[si];
-                    }
-                    first_defense_seq_len = 1 + sub_len;
-                    has_first_defense = true;
-                }
-            } else {
-                // hasVCTでチェックのみ
-                const vct_ok = hasVCT(cells, color, depth + 1, limiter, max_depth);
-                cells[def_idx] = .empty;
-                bitboard.removeStone(dp.row, dp.col);
-                if (!vct_ok) {
-                    all_defense_leads_to_vct = false;
-                    break;
+                    best_seq_len = candidate_len;
+                    best_context = candidate_context;
+                    best_root = candidate_root;
+                    has_best = true;
+                    kept = true;
                 }
             }
-        }
-
-        cells[move_idx] = .empty;
-        bitboard.removeStone(move.row, move.col);
-
-        var kept = false;
-        if (all_defense_leads_to_vct and defense_positions.len > 0 and has_first_defense) {
-            // この脅威手での手順長を計算
-            var candidate_seq: [64]Position = undefined;
-            var candidate_len: u8 = 0;
-            var candidate_context = VCTRecursiveContext{
-                .is_forbidden_trap = false,
-                .collect_branches = context.collect_branches,
-                .branches = undefined,
-                .branch_count = 0,
-            };
-            var candidate_root: u16 = ft.TREE_TERMINAL;
-
-            if (context.collect_branches and defense_entry_count > 0) {
-                const shortest_idx = selectShortestDefense(&defense_entries, defense_entry_count);
-                buildBranches(&defense_entries, defense_entry_count, shortest_idx, &candidate_seq, &candidate_len, move, &candidate_context);
-
-                // アリーナ: この攻め手ノードを構築。defenses[0] = 最短防御（前出し）。
-                var tree_defenses: [MAX_DEFENSE_ENTRIES]ft.TreeDefense = undefined;
-                var ei: u8 = 0;
-                while (ei < defense_entry_count) : (ei += 1) {
-                    tree_defenses[ei] = .{
-                        .defender = defense_entries[ei].defense,
-                        .child_node = defense_entries[ei].child_node,
-                    };
-                }
-                candidate_root = g_tree_arena.addNodeMainFirst(move, tree_defenses[0..defense_entry_count], shortest_idx);
-            } else {
-                candidate_seq[0] = move;
-                candidate_len = 1;
-                var fi: u8 = 0;
-                while (fi < first_defense_seq_len) : (fi += 1) {
-                    if (candidate_len < 64) {
-                        candidate_seq[candidate_len] = first_defense_seq[fi];
-                        candidate_len += 1;
-                    }
-                }
-            }
-
-            // カウンターフォー耐性検証（根の攻め手のみ）: 活三を打つ段階で相手の
-            // カウンターフォーが残り手順を破壊するなら、この攻め手は VCT 不成立として
-            // 候補にしない（best / α 値を更新しない）。ここで弾くことで、他の攻め手が
-            // 非耐性候補の α 値で刈られず、反復深化も継続する。
-            // 石は攻め手・受け手とも戻した後なので盤面は根の状態。
-            //
-            // 手順非依存の崩壊条件は展開前に `root_cf_cache` で除外済みなので、ここに
-            // 来る非耐性は手順依存（`checkSequenceBreaksByCF`）のもの。手順は反復ごとに
-            // 変わりうるため初手でのメモ化はせず、反復ごとに再検証する。
-            // 採用され得ない長さの候補には検証（VCF プローブを含む）を走らせない。
-            const accepted = candidate_len < best_seq_len and
-                (depth != 0 or isResilientToCounterFours(cells, color, candidate_seq[0..candidate_len], context.mode, limiter));
-
-            // 最短の候補を保持（α 値の更新も兼ねる）
-            if (accepted) {
-                var ci: u8 = 0;
-                while (ci < candidate_len) : (ci += 1) {
-                    best_seq[ci] = candidate_seq[ci];
-                }
-                best_seq_len = candidate_len;
-                best_context = candidate_context;
-                best_root = candidate_root;
-                has_best = true;
-                kept = true;
+            // 採用しなかった脅威手のアリーナノードは破棄（superseded best は dead node として残り
+            // シリアライズ時の compact で除外される）
+            if (context.collect_branches and !kept) {
+                g_tree_arena.rollback(threat_snap);
             }
         }
-        // 採用しなかった脅威手のアリーナノードは破棄（superseded best は dead node として残り
-        // シリアライズ時の compact で除外される）
-        if (context.collect_branches and !kept) {
-            g_tree_arena.rollback(threat_snap);
-        }
+        if (has_best or restrict == null) break;
+        restrict = null;
     }
 
     if (has_best) {
@@ -4472,4 +4500,31 @@ test "findVCTSequenceFromFirstMove: ブロック点が黒の禁手なら偽 VCT 
 
     const result = findVCTSequenceFromFirstMove(&cells, .{ .row = 7, .col = 8 }, .black, VCT_MAX_DEPTH, 0, 0, false);
     try testing.expect(!result.found);
+}
+
+test "収集モード: 非収集で決めた攻め手だけを全受け展開し、ノード予算内で分岐付きの木を返す" {
+    // 振り返りで分岐が出なくなっていた局面（黒 11 手目）。全攻め手を全受け展開していた
+    // 旧実装は振り返りのノード予算（5M）で打ち切られ、木が付かなかった。
+    var cells = [_]Cell{.empty} ** 225;
+    const kifu = "H8 I9 I8 H7 G10 H9 F9 E8 F10 F7";
+    var it = std.mem.tokenizeScalar(u8, kifu, ' ');
+    var n: u16 = 0;
+    while (it.next()) |tok| {
+        const col: u8 = tok[0] - 'A';
+        const num = std.fmt.parseInt(u8, tok[1..], 10) catch unreachable;
+        cells[@as(u16, 15 - num) * BOARD_SIZE + col] = if (n % 2 == 0) .black else .white;
+        n += 1;
+    }
+
+    const plain = findVCTSequence(&cells, .black, 6, 0, 5_000_000, false, .lenient);
+    try testing.expect(plain.found);
+
+    const collected = findVCTSequence(&cells, .black, 6, 0, 5_000_000, true, .lenient);
+    try testing.expect(collected.found);
+    // 攻め手は非収集の探索と同じ
+    try testing.expectEqual(plain.sequence[0].row, collected.sequence[0].row);
+    try testing.expectEqual(plain.sequence[0].col, collected.sequence[0].col);
+    // 根の三に対する受けが複数載っている（一本道ではない）
+    try testing.expect(collected.tree_root != ft.TREE_TERMINAL);
+    try testing.expect(g_tree_arena.nodes[collected.tree_root].defense_count >= 2);
 }
