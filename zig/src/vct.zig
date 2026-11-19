@@ -1626,8 +1626,17 @@ fn findVCTSequenceRecursive(
     // 成立しない攻め手や浅い反復でも非収集の十数倍の仕事になるため。
     // 非収集で手順が無いなら木も無い。絞った展開が成立しなかったとき
     // （受け後の判定が非収集と収集で食い違う場合）だけ、全攻め手の展開に戻る。
+    //
+    // 仕様: 根の耐性検証は非収集が「最初の受けの手順」、収集が「最短の受けの手順」を
+    // 見るので、非収集では不成立・収集でのみ成立する局面が理論上ありうる。その場合は
+    // 木を出さない（非収集の探索＝対局エンジンの判断と揃える）。
     var restrict: ?Position = null;
+    // 絞った展開で棄却済みの攻め手（全展開に戻ったとき再展開しない）
+    var rejected: ?Position = null;
     if (context.collect_branches) {
+        // 収集モードは常に上限なしで呼ばれる前提（有限だと、最初の受け基準の
+        // 非収集の手順長が収集側より長くなって偽の不成立になりうる）。
+        std.debug.assert(max_len == SEQ_LEN_UNBOUNDED);
         var probe_context = VCTRecursiveContext{
             .is_forbidden_trap = false,
             .collect_branches = false,
@@ -1669,6 +1678,9 @@ fn findVCTSequenceRecursive(
             const move = threat_buf[ti];
             if (restrict) |only| {
                 if (move.row != only.row or move.col != only.col) continue;
+            }
+            if (rejected) |skip| {
+                if (move.row == skip.row and move.col == skip.col) continue;
             }
 
             // 根の三で、手順に依存しない崩壊条件（相手の CF で五 / 活四 / strict の
@@ -2010,6 +2022,7 @@ fn findVCTSequenceRecursive(
             }
         }
         if (has_best or restrict == null) break;
+        rejected = restrict;
         restrict = null;
     }
 
