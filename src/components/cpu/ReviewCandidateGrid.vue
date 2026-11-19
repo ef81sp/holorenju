@@ -91,7 +91,7 @@ function handleLeave(): void {
             :class="c.kind"
             aria-hidden="true"
           >
-            {{ c.rank }}
+            <span class="num-glyph">{{ c.rank }}</span>
           </span>
           <span
             class="cand-coord"
@@ -277,7 +277,6 @@ function handleLeave(): void {
   font-weight: 500;
   font-variant-numeric: tabular-nums;
   line-height: 1;
-  text-box: trim-both cap alphabetic;
 }
 
 .cand-rank.best {
@@ -353,5 +352,15 @@ function handleLeave(): void {
 .cand-flag.fukumi {
   background: var(--color-violet-light);
   color: var(--color-violet-dark);
+}
+
+/*
+ * 丸の中の数字: 字面の上下余白（ascent/descent）を切り、数字の見た目の高さで中央に置く。
+ * text-box は flex コンテナ自身には効かないため、内側のブロックに付ける。
+ */
+.num-glyph {
+  display: block;
+  line-height: 1;
+  text-box: trim-both cap alphabetic;
 }
 </style>

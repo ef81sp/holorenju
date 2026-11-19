@@ -137,7 +137,7 @@ function branchAriaLabel(moveNum: number): string {
                 class="m-num"
                 aria-hidden="true"
               >
-                {{ row.item.moveNum }}
+                <span class="num-glyph">{{ row.item.moveNum }}</span>
               </span>
               <span
                 class="m-coord"
@@ -362,7 +362,6 @@ function branchAriaLabel(moveNum: number): string {
   font-weight: 500;
   font-variant-numeric: tabular-nums;
   line-height: 1;
-  text-box: trim-both cap alphabetic;
 }
 
 .prog-move.black .m-num {
@@ -385,5 +384,15 @@ function branchAriaLabel(moveNum: number): string {
   color: var(--color-text-primary);
   line-height: 1.1;
   text-align: center;
+}
+
+/*
+ * 丸の中の数字: 字面の上下余白（ascent/descent）を切り、数字の見た目の高さで中央に置く。
+ * text-box は flex コンテナ自身には効かないため、内側のブロックに付ける。
+ */
+.num-glyph {
+  display: block;
+  line-height: 1;
+  text-box: trim-both cap alphabetic;
 }
 </style>
