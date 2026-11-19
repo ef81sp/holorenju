@@ -62,8 +62,8 @@ const showSections = computed<boolean>(() => {
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  gap: var(--size-10);
-  padding: var(--size-10);
+  gap: var(--size-8);
+  padding: var(--size-12);
   background: var(--color-bg-white);
   border-radius: var(--size-12);
   box-shadow: 0 var(--size-2) var(--size-8) rgba(0, 0, 0, 0.08);
@@ -71,9 +71,14 @@ const showSections = computed<boolean>(() => {
   min-height: 0;
 }
 
-/* セクション間の罫線（最初のセクション以外） */
-.review-eval-panel > :deep(* + *:not(:empty)) {
-  padding-top: var(--size-10);
+/*
+ * セクション間の区切り線。候補手・最善の進行の各セクションが、
+ * 自分が表示されるときだけ先頭に <hr class="panel-divider"> を出す。
+ */
+.review-eval-panel :deep(.panel-divider) {
+  flex-shrink: 0;
+  margin: 0;
+  border: none;
   border-top: 1px solid var(--color-border-light);
 }
 </style>

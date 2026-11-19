@@ -1,5 +1,6 @@
 /**
- * 候補手グリッドのスコア差（delta = searchScore − best）の表示整形
+ * 候補手グリッドのスコア差（delta = searchScore − best）の整形。
+ * カード上はランク（S/A/B/C）表示のため、この値は aria-label / title で使う
  *
  * 真値でない候補（root alpha-beta の fail-low 境界値＝上限）は「≤」を前置する
  * （review-multipv-2026-09-06.md §2.5 経路 3）。値そのものは変えない。

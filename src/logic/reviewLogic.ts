@@ -41,7 +41,8 @@ export function isOpeningMove(moveIndex: number): boolean {
  * loss最小化）の結果を丸めて採用。
  */
 const QUALITY_THRESHOLD_GOOD = 150;
-const QUALITY_THRESHOLD_INACCURACY = 400;
+/** 疑問手の上限。候補手ゲージの底（reviewCandidateDisplay）でも使う */
+export const QUALITY_THRESHOLD_INACCURACY = 400;
 const QUALITY_THRESHOLD_MISTAKE = 2500;
 
 /**
