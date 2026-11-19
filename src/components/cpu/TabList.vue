@@ -77,6 +77,13 @@ const { onKeydown } = useRovingTabindex({
       <span class="tab-label">{{ t.label }}</span>
       <span
         v-if="t.sub"
+        class="tab-sep"
+        aria-hidden="true"
+      >
+        /
+      </span>
+      <span
+        v-if="t.sub"
         class="tab-sub"
       >
         {{ t.sub }}
@@ -118,13 +125,16 @@ const { onKeydown } = useRovingTabindex({
   flex: 1 0 auto;
   min-width: var(--size-60);
   display: flex;
-  flex-direction: column;
   align-items: center;
-  padding: var(--size-4) var(--size-6) var(--size-5);
+  justify-content: center;
+  gap: var(--size-4);
+  height: var(--size-24);
+  padding: 0 var(--size-8);
+  box-sizing: border-box;
   background: var(--color-bg-gray);
   border: 1px solid var(--color-border);
   border-bottom: none;
-  border-radius: var(--size-6) var(--size-6) 0 0;
+  border-radius: var(--size-8) var(--size-8) 0 0;
   font-family: inherit;
   font-size: var(--font-size-11);
   font-weight: 500;
@@ -166,6 +176,7 @@ const { onKeydown } = useRovingTabindex({
   opacity: 1;
 }
 
+.tab .tab-sep,
 .tab .tab-sub {
   font-size: var(--font-size-9);
   font-weight: var(--font-weight-normal);
@@ -177,7 +188,7 @@ const { onKeydown } = useRovingTabindex({
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--size-6);
+  gap: var(--size-8);
   min-width: 0;
 }
 </style>

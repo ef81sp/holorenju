@@ -2,19 +2,25 @@
 /**
  * 振り返り評価パネルの「候補手」セクション
  *
- * 候補手をコンパクトなカードグリッドで表示。
- * 各カードのホバーで盤面に該当位置を 1 マークだけプレビューする
+ * 候補手をコンパクトなカードで最大 3 件表示する（最善手・自分の手は必ず含む）。
+ * 各カードは最善との差を S/A/B/C ランクで示し、数値差は aria-label / title に残す。
+ * ホバー・フォーカスで盤面に該当位置を 1 マークだけプレビューする
  * （reviewBoardPreviewStore を直接更新）。
+ *
+ * @see docs/plans/review-right-panel-redesign-2026-11-19.md
  */
 
 import { computed } from "vue";
 
-import type { EvaluatedMove, ReviewCandidate } from "@/types/review";
+import type { EvaluatedMove } from "@/types/review";
 import type { Position } from "@/types/game";
-import { SHORT_LABELS } from "@/logic/forcedTypeLabels";
-import { formatMove } from "@/logic/gameRecordParser";
-import { formatCandidateDelta } from "@/logic/reviewCandidateDelta";
 import { useReviewBoardPreviewStore } from "@/stores/reviewBoardPreviewStore";
+import {
+  type CandidateView,
+  buildCandidateViews,
+  candidateAriaLabel,
+  candidateTitle,
+} from "./composables/candidateViewModel";
 
 const props = defineProps<{
   evaluation: EvaluatedMove;
@@ -22,77 +28,9 @@ const props = defineProps<{
 
 const previewStore = useReviewBoardPreviewStore();
 
-interface CandidateView {
-  rank: number;
-  position: Position;
-  coord: string;
-  delta: number;
-  /** 整形済み delta（境界値なら「≤」付き） */
-  deltaLabel: string;
-  /** searchScore が境界値（上限）か。基準候補は常に false */
-  isBound: boolean;
-  kind: "best" | "actual" | "alt";
-  isFukumi: boolean;
-  fukumiDepth?: number;
-  opponentForcedWinShort?: string;
-}
-
-const bestCandidate = computed<ReviewCandidate | null>(() => {
-  const eval_ = props.evaluation;
-  if (eval_.candidates.length === 0) {
-    return null;
-  }
-  return (
-    eval_.candidates.find(
-      (c) =>
-        c.position.row === eval_.bestMove.row &&
-        c.position.col === eval_.bestMove.col,
-    ) ??
-    eval_.candidates[0] ??
-    null
-  );
-});
-
-const candidateViews = computed<CandidateView[]>(() => {
-  const eval_ = props.evaluation;
-  if (eval_.candidates.length === 0) {
-    return [];
-  }
-  const best = bestCandidate.value ?? eval_.candidates[0];
-  const bestSearchScore = best?.searchScore ?? 0;
-  return eval_.candidates.map((c, idx) => {
-    const isBest =
-      c.position.row === eval_.bestMove.row &&
-      c.position.col === eval_.bestMove.col;
-    const isPlayed =
-      c.position.row === eval_.position.row &&
-      c.position.col === eval_.position.col;
-    let kind: "best" | "actual" | "alt" = "alt";
-    if (isBest) {
-      kind = "best";
-    } else if (isPlayed) {
-      kind = "actual";
-    }
-    const delta = c.searchScore - bestSearchScore;
-    // 基準（最善）自身の delta は定義上 0 なので「≤」は付けない
-    const isReference = c === best;
-    const isBound = !isReference && !c.scoreExact;
-    return {
-      rank: idx + 1,
-      position: c.position,
-      coord: formatMove(c.position),
-      delta,
-      deltaLabel: formatCandidateDelta(delta, !isBound),
-      isBound,
-      kind,
-      isFukumi: c.isFukumi ?? false,
-      fukumiDepth: c.fukumiDepth,
-      opponentForcedWinShort: c.opponentForcedWin
-        ? SHORT_LABELS[c.opponentForcedWin]
-        : undefined,
-    };
-  });
-});
+const candidateViews = computed<CandidateView[]>(() =>
+  buildCandidateViews(props.evaluation),
+);
 
 function handleEnter(position: Position): void {
   previewStore.setHoveredCandidate(position);
@@ -104,6 +42,10 @@ function handleLeave(): void {
 </script>
 
 <template>
+  <hr
+    v-if="candidateViews.length > 0"
+    class="panel-divider"
+  />
   <section
     v-if="candidateViews.length > 0"
     class="panel-section cand-section"
@@ -113,59 +55,65 @@ function handleLeave(): void {
       id="review-cand-heading"
       class="panel-label"
     >
-      <span>候補手</span>
-      <span class="panel-label-count">{{ candidateViews.length }}件</span>
+      候補手
     </h3>
-    <div class="cand-scroll">
-      <ul class="cand-grid">
-        <li
-          v-for="c in candidateViews"
-          :key="`${c.position.row},${c.position.col}`"
-          class="cand-item"
+    <ul class="cand-grid">
+      <li
+        v-for="c in candidateViews"
+        :key="`${c.position.row},${c.position.col}`"
+        class="cand-item"
+      >
+        <button
+          type="button"
+          class="cand-card"
+          :class="{
+            'is-best': c.kind === 'best',
+            'is-actual': c.kind === 'actual',
+            'is-danger': c.opponentForcedWinShort,
+          }"
+          :aria-label="candidateAriaLabel(c)"
+          :title="candidateTitle(c)"
+          @mouseenter="handleEnter(c.position)"
+          @mouseleave="handleLeave"
+          @focus="handleEnter(c.position)"
+          @blur="handleLeave"
         >
-          <button
-            type="button"
-            class="cand-card"
-            :class="{
-              'is-best': c.kind === 'best',
-              'is-actual': c.kind === 'actual',
-              'is-danger': c.opponentForcedWinShort,
-            }"
-            @mouseenter="handleEnter(c.position)"
-            @mouseleave="handleLeave"
-            @focus="handleEnter(c.position)"
-            @blur="handleLeave"
+          <span
+            class="cand-rank"
+            :class="c.kind"
+            aria-hidden="true"
           >
-            <span
-              class="cand-rank"
-              :class="c.kind"
-            >
-              {{ c.rank }}
-            </span>
+            {{ c.rank }}
+          </span>
+          <span
+            class="cand-body"
+            aria-hidden="true"
+          >
             <span class="cand-coord">{{ c.coord }}</span>
             <span
-              class="cand-delta"
-              :class="c.delta === 0 && !c.isBound ? 'zero' : 'neg'"
-              :title="c.isBound ? '上限値（未確定）' : undefined"
+              class="cand-grade"
+              :class="`grade-${c.grade}`"
             >
-              {{ c.deltaLabel }}
+              {{ c.grade }}
             </span>
-            <span
-              v-if="c.opponentForcedWinShort"
-              class="cand-flag danger"
-            >
-              危{{ c.opponentForcedWinShort }}
-            </span>
-            <span
-              v-else-if="c.isFukumi"
-              class="cand-flag fukumi"
-            >
-              フクミ{{ c.fukumiDepth ? c.fukumiDepth : "" }}
-            </span>
-          </button>
-        </li>
-      </ul>
-    </div>
+          </span>
+          <span
+            v-if="c.opponentForcedWinShort"
+            class="cand-flag danger"
+            aria-hidden="true"
+          >
+            危{{ c.opponentForcedWinShort }}
+          </span>
+          <span
+            v-else-if="c.isFukumi"
+            class="cand-flag fukumi"
+            aria-hidden="true"
+          >
+            フクミ{{ c.fukumiDepth ? c.fukumiDepth : "" }}
+          </span>
+        </button>
+      </li>
+    </ul>
   </section>
 </template>
 
@@ -173,13 +121,13 @@ function handleLeave(): void {
 .panel-section {
   display: flex;
   flex-direction: column;
-  gap: var(--size-6);
+  gap: var(--size-8);
 }
 
 .panel-label {
   display: flex;
   align-items: center;
-  gap: var(--size-6);
+  gap: var(--size-8);
   margin: 0;
   font-size: var(--font-size-11);
   font-weight: 500;
@@ -189,48 +137,26 @@ function handleLeave(): void {
 
 .panel-label::before {
   content: "";
-  width: var(--size-3);
-  height: var(--size-10);
+  width: var(--size-4);
+  height: var(--size-12);
   background: var(--color-fubuki-primary);
-  border-radius: var(--size-2);
-}
-
-.panel-label-count {
-  font-weight: var(--font-weight-normal);
-  color: var(--color-text-secondary);
-  margin-left: auto;
+  border-radius: var(--size-4);
 }
 
 .cand-section {
   flex-shrink: 0;
 }
 
-.cand-scroll {
-  max-height: var(--size-150);
-  overflow-y: auto;
-  padding-right: var(--size-2);
-  margin-right: calc(var(--size-2) * -1);
-}
-
-.cand-scroll::-webkit-scrollbar {
-  width: var(--size-6);
-}
-
-.cand-scroll::-webkit-scrollbar-thumb {
-  background: var(--color-border);
-  border-radius: var(--size-3);
-}
-
-.cand-scroll::-webkit-scrollbar-track {
-  background: transparent;
-}
-
+/*
+ * 順位丸（左上）と危/フクミ（右下）がカードの角からはみ出すため、
+ * グリッドの外周に余白を取る。
+ */
 .cand-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(var(--size-56), 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--size-4);
   margin: 0;
-  padding-block: var(--size-2);
+  padding: var(--size-4) var(--size-4) var(--size-8) var(--size-4);
   list-style: none;
 }
 
@@ -251,16 +177,17 @@ function handleLeave(): void {
 .cand-card {
   position: relative;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 0;
-  padding: var(--size-12) var(--size-4) var(--size-4);
+  justify-content: center;
+  height: var(--size-36);
+  padding: var(--size-4);
+  box-sizing: border-box;
   border-radius: var(--size-8);
   border: 1px solid var(--color-border);
   background: var(--color-bg-white);
-  cursor: pointer;
   font-family: inherit;
   font-feature-settings: "tnum";
+  cursor: pointer;
   transition:
     transform 0.12s,
     border-color 0.12s,
@@ -293,10 +220,10 @@ function handleLeave(): void {
 .cand-card.is-actual::after {
   content: "";
   position: absolute;
-  top: var(--size-3);
-  right: var(--size-3);
-  width: var(--size-6);
-  height: var(--size-6);
+  top: var(--size-4);
+  right: var(--size-4);
+  width: var(--size-8);
+  height: var(--size-8);
   border-radius: 50%;
 }
 
@@ -308,20 +235,29 @@ function handleLeave(): void {
   background: var(--color-miko-primary);
 }
 
+/* 順位丸: 左上の角に重ねる。数字は字面の上下余白を切って真円の中央へ */
 .cand-rank {
   position: absolute;
-  top: var(--size-2);
-  left: var(--size-3);
-  display: inline-flex;
+  top: calc(var(--size-4) * -1);
+  left: calc(var(--size-4) * -1);
+  display: flex;
   align-items: center;
   justify-content: center;
   width: var(--size-12);
   height: var(--size-12);
+  box-sizing: border-box;
   border-radius: 50%;
   background: var(--color-text-light);
   color: var(--color-bg-white);
+  font-family:
+    system-ui,
+    -apple-system,
+    sans-serif;
   font-size: var(--font-size-9);
   font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  text-box: trim-both cap alphabetic;
 }
 
 .cand-rank.best {
@@ -332,6 +268,14 @@ function handleLeave(): void {
   background: var(--color-miko-primary);
 }
 
+/* 座標とランクを 1 グループにして下揃え・中央配置 */
+.cand-body {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--size-4);
+  margin: 0 auto;
+}
+
 .cand-coord {
   font-size: var(--font-size-13);
   font-weight: 500;
@@ -339,26 +283,37 @@ function handleLeave(): void {
   line-height: 1.1;
 }
 
-.cand-delta {
+.cand-grade {
   font-size: var(--font-size-9);
-  line-height: 1.1;
-  white-space: nowrap;
+  font-weight: 500;
+  line-height: 1.2;
 }
 
-.cand-delta.zero {
-  color: var(--color-blue-500);
+.cand-grade.grade-S {
+  color: var(--color-cyan-700);
 }
 
-.cand-delta.neg {
-  color: var(--color-miko-primary);
+.cand-grade.grade-A {
+  color: var(--color-success-dark);
 }
 
+.cand-grade.grade-B {
+  color: var(--color-warning-dark);
+}
+
+.cand-grade.grade-C {
+  color: var(--color-error-dark);
+}
+
+/* 危〜 / フクミ: 右下の角に重ねる */
 .cand-flag {
+  position: absolute;
+  right: calc(var(--size-4) * -1);
+  bottom: calc(var(--size-8) * -1);
+  padding: 0 var(--size-4);
+  border-radius: var(--size-4);
   font-size: var(--font-size-8);
-  line-height: 1.1;
-  margin-top: var(--size-1);
-  padding: 0 var(--size-3);
-  border-radius: var(--size-2);
+  line-height: var(--size-12);
   white-space: nowrap;
 }
 

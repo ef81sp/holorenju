@@ -47,15 +47,15 @@ defineExpose({
             </li>
             <li>
               <strong>好手</strong>
-              ：差80以内
+              ：差150以内
             </li>
             <li>
               <strong>疑問手</strong>
-              ：差300以内
+              ：差400以内
             </li>
             <li>
               <strong>悪手</strong>
-              ：差300超
+              ：差400超
             </li>
           </ul>
         </section>
@@ -63,8 +63,29 @@ defineExpose({
         <section class="help-section">
           <h3>候補手</h3>
           <p>
-            コンピュータが探索した候補手の上位5手をスコア順に表示します。実際に打った手が上位5手に含まれない場合は「ランク外」として末尾に追加されます。
+            コンピュータが探索した候補手を最大3手、順位順に表示します。最善手と実際に打った手は必ず含まれ、残りは上位の手で埋めます。左上の数字は探索での順位です。
           </p>
+          <p>
+            各候補手のランクは最善手とのスコア差で決まります（品質と同じ基準）。
+          </p>
+          <ul>
+            <li>
+              <strong>S</strong>
+              ：最善手と同点
+            </li>
+            <li>
+              <strong>A</strong>
+              ：差150以内
+            </li>
+            <li>
+              <strong>B</strong>
+              ：差400以内
+            </li>
+            <li>
+              <strong>C</strong>
+              ：差400超
+            </li>
+          </ul>
         </section>
 
         <section class="help-section">

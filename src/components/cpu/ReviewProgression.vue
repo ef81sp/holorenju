@@ -53,6 +53,10 @@ function branchAriaLabel(moveNum: number): string {
 </script>
 
 <template>
+  <hr
+    v-if="topTabs.length > 0"
+    class="panel-divider"
+  />
   <section
     v-if="topTabs.length > 0"
     class="panel-section tree-section"
@@ -166,13 +170,13 @@ function branchAriaLabel(moveNum: number): string {
 .panel-section {
   display: flex;
   flex-direction: column;
-  gap: var(--size-6);
+  gap: var(--size-8);
 }
 
 .panel-label {
   display: flex;
   align-items: center;
-  gap: var(--size-6);
+  gap: var(--size-8);
   margin: 0;
   font-size: var(--font-size-11);
   font-weight: 500;
@@ -182,10 +186,10 @@ function branchAriaLabel(moveNum: number): string {
 
 .panel-label::before {
   content: "";
-  width: var(--size-3);
-  height: var(--size-10);
+  width: var(--size-4);
+  height: var(--size-12);
   background: var(--color-fubuki-primary);
-  border-radius: var(--size-2);
+  border-radius: var(--size-4);
 }
 
 .panel-label-count {
@@ -208,11 +212,12 @@ function branchAriaLabel(moveNum: number): string {
 }
 
 .ctl-btn {
+  height: var(--size-28);
   font-family: inherit;
   font-size: var(--font-size-10);
   font-weight: 500;
-  padding: var(--size-5) var(--size-3);
-  border-radius: var(--size-6);
+  padding: 0 var(--size-4);
+  border-radius: var(--size-8);
   border: 1px solid var(--color-border);
   background: var(--color-bg-white);
   color: var(--color-text-primary);
@@ -262,29 +267,31 @@ function branchAriaLabel(moveNum: number): string {
 }
 
 .tree-scroll::-webkit-scrollbar {
-  width: var(--size-6);
+  width: var(--size-4);
 }
 
 .tree-scroll::-webkit-scrollbar-thumb {
   background: var(--color-border);
-  border-radius: var(--size-3);
+  border-radius: var(--size-4);
 }
 
+/* 番号丸が手順ボタンの左上の角からはみ出すため、上と左に余白を取る */
 .prog-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(var(--size-56), 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--size-4);
-  padding: var(--size-2) 0;
+  padding: var(--size-4) 0 var(--size-4) var(--size-4);
   align-content: start;
 }
 
 .prog-move {
   position: relative;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 0;
-  padding: var(--size-12) var(--size-4) var(--size-4);
+  justify-content: center;
+  height: var(--size-32);
+  padding: 0;
+  box-sizing: border-box;
   border-radius: var(--size-8);
   border: 1px solid var(--color-border);
   background: var(--color-bg-white);
@@ -334,18 +341,27 @@ function branchAriaLabel(moveNum: number): string {
   color: var(--color-bg-white);
 }
 
+/* 番号丸: 左上の角に重ねる真円。数字は字面の上下余白を切って中央へ */
 .prog-move .m-num {
   position: absolute;
-  top: var(--size-2);
-  left: var(--size-3);
-  display: inline-flex;
+  top: calc(var(--size-4) * -1);
+  left: calc(var(--size-4) * -1);
+  display: flex;
   align-items: center;
   justify-content: center;
-  width: var(--size-14);
-  height: var(--size-14);
+  width: var(--size-16);
+  height: var(--size-16);
+  box-sizing: border-box;
   border-radius: 50%;
+  font-family:
+    system-ui,
+    -apple-system,
+    sans-serif;
   font-size: var(--font-size-9);
   font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  text-box: trim-both cap alphabetic;
 }
 
 .prog-move.black .m-num {

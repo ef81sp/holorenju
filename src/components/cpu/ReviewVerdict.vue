@@ -233,20 +233,20 @@ const mode = computed<"empty" | "analyzing" | "cpu" | "player">(() => {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--size-6);
+  gap: var(--size-8);
 }
 
 .verdict-head {
   display: flex;
   align-items: center;
-  gap: var(--size-6);
+  gap: var(--size-8);
   flex-wrap: wrap;
 }
 
 .verdict-num {
   display: inline-flex;
   align-items: center;
-  gap: var(--size-6);
+  gap: var(--size-8);
   margin: 0;
   font-size: var(--font-size-16);
   font-weight: 500;
@@ -279,10 +279,11 @@ const mode = computed<"empty" | "analyzing" | "cpu" | "player">(() => {
 .tag {
   display: inline-flex;
   align-items: center;
-  padding: var(--size-2) var(--size-8);
-  border-radius: 999px;
+  padding: var(--size-4) var(--size-8);
+  border-radius: var(--size-4);
   font-size: var(--font-size-10);
   font-weight: 500;
+  line-height: 1;
   white-space: nowrap;
   color: var(--color-bg-white);
 }
@@ -307,16 +308,22 @@ const mode = computed<"empty" | "analyzing" | "cpu" | "player">(() => {
   background: var(--color-error-dark);
 }
 
+/*
+ * 「ラベル 値」を横並び・下揃えで 2 つ並べる。値が長い（-100000 等）ときは
+ * ラベルを縦に折らず、2 つ目を次の行へ回す。
+ */
 .score-block {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--size-2) var(--size-12);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--size-4) var(--size-16);
 }
 
 .score-cell {
+  flex: 1 0 auto;
   display: flex;
-  flex-direction: column;
-  gap: var(--size-1);
+  align-items: flex-end;
+  gap: var(--size-4);
+  white-space: nowrap;
 }
 
 .score-cell .label {

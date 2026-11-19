@@ -31,7 +31,10 @@ describe("gradeFromDelta", () => {
 });
 
 describe("selectDisplayCandidates", () => {
-  interface Item { id: number; required?: boolean }
+  interface Item {
+    id: number;
+    required?: boolean;
+  }
   const isRequired = (item: Item): boolean => item.required === true;
   const ids = (items: Item[]): number[] => items.map((i) => i.id);
 
