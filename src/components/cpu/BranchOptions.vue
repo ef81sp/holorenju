@@ -109,7 +109,7 @@ function onKeydown(event: KeyboardEvent, currentId: string): void {
         class="m-num"
         aria-hidden="true"
       >
-        {{ opt.item.moveNum }}
+        <span class="num-glyph">{{ opt.item.moveNum }}</span>
       </span>
       <span
         class="m-coord"
@@ -122,18 +122,19 @@ function onKeydown(event: KeyboardEvent, currentId: string): void {
 </template>
 
 <style scoped>
+/*
+ * 選択肢は独立したボタンとして並べ、点線枠で 1 つの分岐行にまとめる。
+ * 番号丸が各ボタンの左上の角からはみ出すため、枠の内側に余白を取る。
+ */
 .prog-branch {
   grid-column: 1 / -1;
   display: flex;
   align-items: stretch;
-  gap: 0;
-  padding: 0;
+  gap: var(--size-4);
+  padding: var(--size-8);
   border-radius: var(--size-8);
   background: var(--color-bg-gray);
-  border: 1px solid var(--color-border);
-  border-bottom-width: 2px;
-  border-bottom-color: var(--color-border-heavy);
-  overflow: hidden;
+  border: 1px dashed var(--color-border-heavy);
   transition:
     border-color 0.15s,
     background 0.15s,
@@ -147,11 +148,11 @@ function onKeydown(event: KeyboardEvent, currentId: string): void {
 
 .prog-branch.is-played {
   background: var(--color-bg-white);
-  border-bottom-color: var(--color-fubuki-primary);
+  border-color: var(--color-fubuki-primary);
 }
 
 .prog-branch.is-current-row {
-  border-bottom-color: var(--color-fubuki-primary);
+  border-color: var(--color-fubuki-primary);
   box-shadow: 0 var(--size-2) var(--size-8)
     color-mix(in srgb, var(--color-fubuki-primary) 25%, transparent);
 }
@@ -159,14 +160,15 @@ function onKeydown(event: KeyboardEvent, currentId: string): void {
 .prog-opt {
   position: relative;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 0;
-  padding: var(--size-12) var(--size-4) var(--size-4);
+  justify-content: center;
+  height: var(--size-32);
+  padding: 0;
   margin: 0;
-  border: none;
-  border-right: 1px solid var(--color-border);
-  background: var(--color-bg-gray);
+  box-sizing: border-box;
+  border: 1px solid var(--color-border);
+  border-radius: var(--size-8);
+  background: var(--color-bg-white);
   color: var(--color-text-primary);
   font-family: inherit;
   font-size: var(--font-size-13);
@@ -180,25 +182,9 @@ function onKeydown(event: KeyboardEvent, currentId: string): void {
     color 0.15s;
 }
 
-/*
- * 端タブの外側角はコンテナの border-radius に合わせて丸める。
- * 角を丸めないとフォーカスリング（outline-offset で内側に描画）が
- * 矩形になり、コンテナの overflow:hidden で見た目だけ角が丸い形と
- * 一致しなくなる。
- */
-.prog-opt:first-child {
-  border-top-left-radius: calc(var(--size-8) - 1px);
-  border-bottom-left-radius: calc(var(--size-8) - 1px);
-}
-
-.prog-opt:last-child {
-  border-right: none;
-  border-top-right-radius: calc(var(--size-8) - 1px);
-  border-bottom-right-radius: calc(var(--size-8) - 1px);
-}
-
+/* 選択中（枠色＋背景）と区別するため、ホバーは背景の薄い色だけ */
 .prog-opt:hover {
-  background: var(--color-bg-white);
+  background: var(--color-fubuki-bg-light);
 }
 
 .prog-opt:focus-visible {
@@ -209,41 +195,41 @@ function onKeydown(event: KeyboardEvent, currentId: string): void {
 .prog-opt.is-best-opt::after {
   content: "";
   position: absolute;
-  top: var(--size-3);
-  right: var(--size-3);
-  width: var(--size-5);
-  height: var(--size-5);
+  top: var(--size-4);
+  right: var(--size-4);
+  width: var(--size-4);
+  height: var(--size-4);
   border-radius: 50%;
   background: var(--color-blue-500);
 }
 
 .prog-opt.is-selected {
-  background: var(--color-bg-white);
+  border-color: var(--color-fubuki-primary);
+  background: var(--color-fubuki-bg-light);
   color: var(--color-fubuki-name);
 }
 
-.prog-opt.is-selected::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: calc(var(--size-2) * -1);
-  height: var(--size-2);
-  background: var(--color-fubuki-primary);
-}
-
+/* 番号丸: 左上の角に重ねる真円。数字は字面の上下余白を切って中央へ */
 .prog-opt .m-num {
   position: absolute;
-  top: var(--size-2);
-  left: var(--size-3);
-  display: inline-flex;
+  top: calc(var(--size-4) * -1);
+  left: calc(var(--size-4) * -1);
+  display: flex;
   align-items: center;
   justify-content: center;
-  width: var(--size-14);
-  height: var(--size-14);
+  width: var(--size-16);
+  height: var(--size-16);
+  box-sizing: border-box;
   border-radius: 50%;
-  font-size: var(--font-size-9);
+  font-family:
+    system-ui,
+    -apple-system,
+    sans-serif;
+  /* 丸は固定サイズなので、文字倍率をかけない固定値にしてはみ出しを防ぐ */
+  font-size: var(--size-9);
   font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
 }
 
 .prog-opt.black .m-num {
@@ -262,5 +248,15 @@ function onKeydown(event: KeyboardEvent, currentId: string): void {
   color: var(--color-text-primary);
   line-height: 1.1;
   text-align: center;
+}
+
+/*
+ * 丸の中の数字: 字面の上下余白（ascent/descent）を切り、数字の見た目の高さで中央に置く。
+ * text-box は flex コンテナ自身には効かないため、内側のブロックに付ける。
+ */
+.num-glyph {
+  display: block;
+  line-height: 1;
+  text-box: trim-both cap alphabetic;
 }
 </style>
